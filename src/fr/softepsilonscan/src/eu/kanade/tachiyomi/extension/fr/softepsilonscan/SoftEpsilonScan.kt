@@ -3,9 +3,9 @@ package eu.kanade.tachiyomi.extension.fr.softepsilonscan
 import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.extension.fr.softepsilonscan.decryption.SecretStream
-import eu.kanade.tachiyomi.extension.fr.softepsilonscan.decryption.State
-import eu.kanade.tachiyomi.extension.fr.softepsilonscan.decryption.X25519
+import keiyoushi.lib.secretstream.SecretStream
+import keiyoushi.lib.secretstream.State
+import keiyoushi.lib.secretstream.X25519
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
