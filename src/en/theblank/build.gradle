@@ -1,8 +1,12 @@
 ext {
     extName = 'The Blank'
     extClass = '.TheBlank'
-    extVersionCode = 54
+    extVersionCode = 55
     isNsfw = true
 }
 
 apply plugin: "kei.plugins.extension.legacy"
+
+dependencies {
+    implementation(project(':lib:secretstream'))
+}
