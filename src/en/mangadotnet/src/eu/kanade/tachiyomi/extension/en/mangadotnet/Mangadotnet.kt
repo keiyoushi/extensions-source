@@ -105,6 +105,8 @@ class Mangadotnet :
                 addQueryParameter("genre", "-$genre")
             }
             addQueryParameter("_routes", "pages/ViewAllPage")
+            browseTypePref()?.also { addQueryParameter("origin", it) }
+            browseStatusPref()?.also { addQueryParameter("status", it) }
         }.build()
 
         return GET(url, headers)
@@ -130,6 +132,8 @@ class Mangadotnet :
                 addQueryParameter("genre", "-$genre")
             }
             addQueryParameter("_routes", "pages/ViewAllPage")
+            browseTypePref()?.also { addQueryParameter("origin", it) }
+            browseStatusPref()?.also { addQueryParameter("status", it) }
         }.build()
 
         return GET(url, headers)
@@ -448,6 +452,12 @@ class Mangadotnet :
         Injekt.get<Application>().cacheDir.resolve("source_$id/genres_adult.json")
     }
 
+    private fun browseTypePref(): String? = preferences.getString(BROWSE_TYPE_PREF, "all")
+        ?.takeIf { it != "all" }
+
+    private fun browseStatusPref(): String? = preferences.getString(BROWSE_STATUS_PREF, "any")
+        ?.takeIf { it != "any" }
+
     private val genresLock = ReentrantLock()
 
     private data class GenreLists(
@@ -537,6 +547,23 @@ class Mangadotnet :
             adultGenrePref.setEnabled((genres.adult != null || excludedAdult.isNotEmpty()) && (newMode == "1" || newMode == "both"))
             true
         }
+        ListPreference(screen.context).apply {
+            key = BROWSE_TYPE_PREF
+            title = "Type Filter"
+            entries = arrayOf("All Types", "Manga", "Manhwa", "Manhua", "One Shot")
+            entryValues = arrayOf("", "JP", "KR", "CN", "ONESHOT")
+            setDefaultValue("")
+            summary = "Applies to Popular & Latest"
+        }.also(screen::addPreference)
+
+        ListPreference(screen.context).apply {
+            key = BROWSE_STATUS_PREF
+            title = "Status Filter"
+            entries = arrayOf("Any Status", "Ongoing", "Completed", "Hiatus")
+            entryValues = arrayOf("", "Ongoing", "Completed", "Hiatus")
+            setDefaultValue("")
+            summary = "Applies to Popular & Latest"
+        }.also(screen::addPreference)
     }
 
     private inline fun <reified T> Response.decodeRscAs(): T {
@@ -582,3 +609,5 @@ private const val NSFW_MODE = "pref_nsfw_mode"
 private const val CHAPTER_MODE = "pref_chapter_mode"
 private const val EXCLUDE_GENRE_PREF = "pref_exclude_genre"
 private const val EXCLUDE_GENRE_ADULT_PREF = "pref_exclude_genre_adult"
+private const val BROWSE_TYPE_PREF = "pref_browse_type"
+private const val BROWSE_STATUS_PREF = "pref_browse_status"
