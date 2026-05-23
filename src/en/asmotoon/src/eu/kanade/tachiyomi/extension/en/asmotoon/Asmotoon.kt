@@ -16,7 +16,7 @@ class Asmotoon :
     override val client = super
         .client
         .newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 4)
+        .rateLimitHost(baseUrl.toHttpUrl(), 3, 5)
         .build()
 
     // filtering novel entries
