@@ -78,7 +78,6 @@ object Cipher {
     private val K28 = hex("24e9e90cf319263b7f5752dccbf689cf8763fb66cee4e0c13aa47c55")
     private val K26 = hex("ac70da61e0a7a4fd1629dad78958550b22e5c7d52af8540cb627")
 
-    // @formatter:off
     private val S1 = hex(
         "b1a242690ca6d475a40085107a6d0f04" +
             "8f7214f08324669d5af5fc58e58dd122" +
@@ -135,7 +134,6 @@ object Cipher {
             "c073e89f9277d1b3034131d40b80491c" +
             "5d04988d5947a73b5e206f5329554ccd",
     )
-    // @formatter:on
 }
 
 @Serializable
