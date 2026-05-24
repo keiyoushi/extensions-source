@@ -452,9 +452,11 @@ class Mangadotnet :
         Injekt.get<Application>().cacheDir.resolve("source_$id/genres_adult.json")
     }
 
-    private fun browseTypePref(): String = preferences.getString(BROWSE_TYPE_PREF, "")
+    private fun browseTypePref(): String? = preferences.getString(BROWSE_TYPE_PREF, "")
+        ?.takeIf { it != "" }
 
-    private fun browseStatusPref(): String = preferences.getString(BROWSE_STATUS_PREF, "")
+    private fun browseStatusPref(): String? = preferences.getString(BROWSE_STATUS_PREF, "")
+        ?.takeIf { it != "" }
 
     private val genresLock = ReentrantLock()
 
