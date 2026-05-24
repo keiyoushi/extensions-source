@@ -4,6 +4,7 @@ ext {
     themePkg = 'pam'
     baseUrl = 'https://epsilonsoft.to'
     overrideVersionCode = 52
+    isNsfw = false
 }
 
 apply plugin: "kei.plugins.extension.legacy"
