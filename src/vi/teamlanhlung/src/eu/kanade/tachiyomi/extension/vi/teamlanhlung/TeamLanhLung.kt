@@ -1,8 +1,13 @@
 package eu.kanade.tachiyomi.extension.vi.teamlanhlung
 
+import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
@@ -24,15 +30,21 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class TeamLanhLung : HttpSource() {
+class TeamLanhLung :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name: String = "Team Lạnh Lùng"
 
-    override val baseUrl: String = "https://lunghihi.icu"
-
     override val lang: String = "vi"
 
+    private val defaultBaseUrl = "https://lunghihi.icu"
+
     override val supportsLatest: Boolean = true
+
+    private val preferences: SharedPreferences = getPreferences()
+
+    override val baseUrl by lazy { getPrefBaseUrl() }
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
@@ -303,7 +315,45 @@ class TeamLanhLung : HttpSource() {
 
     override fun getFilterList(): FilterList = getFilters()
 
+    // ========================= Preferences =========================
+
+    init {
+        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != defaultBaseUrl) {
+                preferences.edit()
+                    .putString(BASE_URL_PREF, defaultBaseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
+                    .apply()
+            }
+        }
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF
+            title = BASE_URL_PREF_TITLE
+            summary = BASE_URL_PREF_SUMMARY
+            setDefaultValue(defaultBaseUrl)
+            dialogTitle = BASE_URL_PREF_TITLE
+            dialogMessage = "Mặc định: $defaultBaseUrl"
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.let(screen::addPreference)
+    }
+
+    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+
     companion object {
+        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
+        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng thay đổi."
+        private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
+        private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val BASE_URL_PREF_SUMMARY =
+            "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
+
         private const val PASSWORD_WEBVIEW_MESSAGE = "Vui lòng nhập mật khẩu của chương này qua webview"
 
         private val dateFormatFull = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT).apply {
