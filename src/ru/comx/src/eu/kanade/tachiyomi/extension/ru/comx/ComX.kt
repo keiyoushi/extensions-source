@@ -75,7 +75,7 @@ class ComX :
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .rateLimit(3)

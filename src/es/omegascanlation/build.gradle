@@ -1,0 +1,10 @@
+ext {
+    extName = 'Omega Scanlation'
+    extClass = '.OmegaScanlation'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/omegascanlation'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

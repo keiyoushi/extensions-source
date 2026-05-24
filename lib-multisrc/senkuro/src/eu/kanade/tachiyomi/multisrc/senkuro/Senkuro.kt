@@ -48,7 +48,7 @@ abstract class Senkuro(
     private val apiUrl: String = preferences.getString(API_DOMAIN_PREF, API_DOMAIN_DEFAULT).toString() + "/graphql"
     override val baseUrl = if (!apiUrl.contains(API_DOMAIN_DEFAULT)) _baseUrl else "https://senkuro.me"
     override val client: OkHttpClient =
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .rateLimit(3)
             .build()
 

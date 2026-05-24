@@ -49,7 +49,7 @@ abstract class HentaiHandCommon(
     hhLangId: List<Int> = emptyList(),
     // altLangId: Int? = null
 ) : HentaiHand("HentaiHand", "https://hentaihand.com", lang, false, hhLangId) {
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor { authIntercept(it) }
         .build()
 }

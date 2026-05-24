@@ -32,8 +32,6 @@ class DigitalTeam : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client = network.cloudflareClient
-
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/reader/series", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {

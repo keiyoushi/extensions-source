@@ -32,7 +32,7 @@ class BlackToon : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder().addInterceptor { chain ->
+    override val client = network.client.newBuilder().addInterceptor { chain ->
         if (currentBaseUrlHost.isBlank()) {
             noRedirectClient.newCall(GET(baseUrl, headers)).execute().use {
                 currentBaseUrlHost = it.headers["location"]?.toHttpUrlOrNull()?.host
@@ -55,7 +55,7 @@ class BlackToon : HttpSource() {
         return@addInterceptor chain.proceed(request)
     }.build()
 
-    private val noRedirectClient = network.cloudflareClient.newBuilder()
+    private val noRedirectClient = network.client.newBuilder()
         .followRedirects(false)
         .build()
 

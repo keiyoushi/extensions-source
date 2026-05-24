@@ -1,0 +1,10 @@
+ext {
+    extName = 'KRazytoon'
+    extClass = '.Krazytoon'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/krazytoon'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

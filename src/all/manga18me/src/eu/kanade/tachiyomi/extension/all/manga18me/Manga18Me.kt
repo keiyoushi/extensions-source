@@ -21,7 +21,6 @@ open class Manga18Me(override val lang: String) : HttpSource() {
     override val name = "Manga18.me"
     override val baseUrl = "https://manga18.me"
     override val supportsLatest = true
-    override val client = network.cloudflareClient
 
     override fun headersBuilder() = Headers.Builder().apply {
         add("Referer", "$baseUrl/")

@@ -28,7 +28,7 @@ class MangoLibreria : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             // The image CDN rejects requests with the main site's Referer header.

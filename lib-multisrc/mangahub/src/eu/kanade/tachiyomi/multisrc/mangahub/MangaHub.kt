@@ -64,7 +64,7 @@ abstract class MangaHub(
         false,
     )
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::apiAuthInterceptor)
         .addNetworkInterceptor(::compatEncodingInterceptor)
         .build()

@@ -46,7 +46,7 @@ class OnlyTheBestHentai : HttpSource() {
         response
     }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(challengeInterceptor)
         .build()
 

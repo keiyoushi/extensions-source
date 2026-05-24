@@ -30,12 +30,12 @@ class MangaDemon : HttpSource() {
     override val name = "Manga Demon"
     override val baseUrl = "https://demonicscans.org"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(::thumbnailInterceptor)
         .rateLimit(2)
         .build()
 
-    private val thumbnailClient = network.cloudflareClient.newBuilder()
+    private val thumbnailClient = network.client.newBuilder()
         .rateLimit(6)
         .build()
 

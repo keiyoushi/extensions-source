@@ -32,7 +32,7 @@ class ArgosComics : HttpSource() {
 
     override val versionId: Int = 2
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3, 2)
         .build()
 

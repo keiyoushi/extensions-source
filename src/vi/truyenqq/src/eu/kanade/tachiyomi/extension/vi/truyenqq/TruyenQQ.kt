@@ -44,7 +44,7 @@ class TruyenQQ :
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
         .build()
 

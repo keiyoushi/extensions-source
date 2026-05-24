@@ -39,7 +39,7 @@ class Azuretoons :
     private var tokenExpiryTime: Long = 0L
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(2)
         .addInterceptor(::authIntercept)
         .build()
@@ -95,7 +95,7 @@ class Azuretoons :
                 password = password,
             ).toJsonString().toRequestBody("application/json".toMediaType())
             val headers = headersBuilder().set("Accept", "application/json").build()
-            val response = network.cloudflareClient.newCall(
+            val response = network.client.newCall(
                 POST("$apiUrl/auth/login", headers, body),
             ).execute()
 

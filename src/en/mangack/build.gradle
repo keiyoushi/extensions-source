@@ -1,0 +1,8 @@
+ext {
+    extName = 'Mangack'
+    extClass = '.Mangack'
+    extVersionCode = 1
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Tu Erizo Traducciones'
+    extClass = '.TuErizoTraducciones'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/tuerizotraducciones'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

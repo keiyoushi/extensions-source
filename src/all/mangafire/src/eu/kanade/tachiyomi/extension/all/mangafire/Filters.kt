@@ -62,7 +62,7 @@ open class UriTriSelectFilter(
 class TypeFilter :
     UriMultiSelectFilter(
         "Type",
-        "type",
+        "type[]",
         arrayOf(
             Pair("Manga", "manga"),
             Pair("One-Shot", "one_shot"),

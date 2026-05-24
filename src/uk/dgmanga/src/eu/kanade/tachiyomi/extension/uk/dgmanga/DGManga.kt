@@ -36,7 +36,7 @@ class DGManga :
     override val supportsLatest = true
     override val versionId = 2
     private val preferences by getPreferencesLazy()
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

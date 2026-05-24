@@ -35,7 +35,7 @@ class FlowerComics :
         .set("rsc", "1")
         .build()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .build()
 

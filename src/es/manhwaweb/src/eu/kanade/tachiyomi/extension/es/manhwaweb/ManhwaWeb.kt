@@ -31,7 +31,7 @@ class ManhwaWeb : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(2)
         .build()
 

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Glowi'
+    extClass = '.Glowi'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/glowi'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

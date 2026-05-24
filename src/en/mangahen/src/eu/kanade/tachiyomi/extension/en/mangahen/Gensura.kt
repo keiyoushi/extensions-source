@@ -30,8 +30,6 @@ class Gensura : HttpSource() {
     // MangaHen -> Gensura
     override val id = 6602595408477221375
 
-    override val client = network.cloudflareClient
-
     private var tagsList: List<String> = listOf()
 
     // Popular

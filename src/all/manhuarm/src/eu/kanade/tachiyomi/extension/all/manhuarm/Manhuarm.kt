@@ -139,7 +139,7 @@ class Manhuarm(
             return field
         }
 
-    private val clientUtils = network.cloudflareClient.newBuilder()
+    private val clientUtils = network.client.newBuilder()
         .rateLimit(3, 2, TimeUnit.SECONDS)
         .build()
 
@@ -151,7 +151,7 @@ class Manhuarm(
             else -> BingTranslator(clientUtils, headers)
         }
 
-        return network.cloudflareClient.newBuilder()
+        return network.client.newBuilder()
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(2, TimeUnit.MINUTES)
             .rateLimit(2, 1)

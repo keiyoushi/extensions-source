@@ -40,8 +40,6 @@ class YellowNote :
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
-
     private val preferences = getPreferences { preferenceMigration() }
 
     override fun headersBuilder() = super.headersBuilder()

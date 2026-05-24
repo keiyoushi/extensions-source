@@ -20,6 +20,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
+import okhttp3.Cookie
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -71,7 +72,7 @@ class Happymh :
         }
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(rewriteOctetStream)
         .build()
 
@@ -252,6 +253,19 @@ class Happymh :
         val headers = ajaxHeadersBuilder(requestId, accept = "application/json")
             .set("Referer", "$baseUrl/mangaread/$comicId/$chapterId")
             .build()
+
+        // Replicate the _ga_HVJMXGJXFJ cookie generation from the website (VQ/VB in main.*.js).
+        // gaTimestamp = 10-digit seconds timestamp + 3-digit checksum from a lookup table.
+        val gaTimestamp = generateGaTimestamp()
+        val cookie = Cookie.Builder()
+            .name("_ga_HVJMXGJXFJ")
+            .value("GS2.1.s${gaTimestamp}\$o9\$g1\$t${gaTimestamp + 99999}\$j43\$l0\$h0")
+            .domain(baseUrl.toHttpUrl().host)
+            .path("/")
+            .expiresAt(System.currentTimeMillis() + 365L * 24 * 60 * 60 * 1000)
+            .build()
+        client.cookieJar.saveFromResponse(url, listOf(cookie))
+
         return GET(url, headers)
     }
 
@@ -311,6 +325,25 @@ class Happymh :
         .add("X-Requested-Id", requestId)
 
     private fun ChapterByPageResponseData.isPageEnd(): Boolean = isEnd == 1 || items.isEmpty()
+
+    /**
+     * Corresponds to the VB() function in the website's main.*.js.
+     * Generates a 13-digit pseudo-millisecond timestamp:
+     * 1. Take the Unix timestamp in seconds (10 digits).
+     * 2. Use the last 3 digits as indices into a hardcoded lookup table.
+     * 3. Sum the 3 looked-up values, take the first 3 chars as a checksum.
+     * 4. Concatenate: seconds(10) + checksum(3) = 13-digit timestamp.
+     */
+    private fun generateGaTimestamp(): Long {
+        // Digit-to-value lookup table from the obfuscated JS source
+        val table = intArrayOf(335, 984, 248, 485, 524, 559, 486, 165, 114, 103)
+        val seconds = (System.currentTimeMillis() / 1000).toString()
+        val len = seconds.length
+        val sum = table[seconds[len - 3] - '0'] +
+            table[seconds[len - 2] - '0'] +
+            table[seconds[len - 1] - '0']
+        return (seconds + sum.toString().take(3)).toLong()
+    }
 
     companion object {
         private const val DUMMY_CHAPTER_MARK = "dummy-mark"

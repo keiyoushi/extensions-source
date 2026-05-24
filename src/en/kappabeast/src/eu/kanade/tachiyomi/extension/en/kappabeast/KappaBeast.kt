@@ -29,7 +29,7 @@ class KappaBeast : HttpSource() {
     private val cdnUrl = "https://strapi.$domain"
     private val apiUrl = "$cdnUrl/api"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(3)
         .build()
 

@@ -35,7 +35,7 @@ class ComicFury(
     override val name: String = "Comic Fury$extraName" // Used for No Text
     override val supportsLatest: Boolean = true
 
-    override val client = network.cloudflareClient.newBuilder().addInterceptor(TextInterceptor()).build()
+    override val client = network.client.newBuilder().addInterceptor(TextInterceptor()).build()
 
     /**
      * Archive is on a separate page from manga info

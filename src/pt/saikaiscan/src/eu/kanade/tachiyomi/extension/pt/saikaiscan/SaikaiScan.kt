@@ -32,7 +32,7 @@ class SaikaiScan : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimitHost(apiUrl.toHttpUrl(), 1, 2)
         .rateLimitHost(storageUrl.toHttpUrl(), 1, 1)
         .build()

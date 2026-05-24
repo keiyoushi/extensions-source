@@ -29,7 +29,7 @@ class ComicCX : HttpSource() {
 
     private val apiUrl = "$baseUrl/api"
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(DataImageInterceptor())
         .build()
 

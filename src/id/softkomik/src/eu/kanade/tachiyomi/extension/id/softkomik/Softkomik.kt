@@ -45,7 +45,7 @@ class Softkomik : HttpSource() {
         .add("rsc", "1")
         .build()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(::imageInterceptor)
         .addInterceptor(::apiAuthInterceptor)
         .build()

@@ -48,7 +48,7 @@ class Mangahub :
 
     override val baseUrl = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::confirmAgeInterceptor)
         .rateLimit(2)
         .build()
