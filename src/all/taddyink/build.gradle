@@ -1,7 +1,0 @@
-ext {
-    extName = 'Taddy INK (Webtoons)'
-    extClass = '.TaddyInkFactory'
-    extVersionCode = 2
-}
-
-apply plugin: "kei.plugins.extension.legacy"
