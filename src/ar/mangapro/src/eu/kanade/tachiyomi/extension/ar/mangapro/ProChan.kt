@@ -76,6 +76,7 @@ class ProChan : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+        .add("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/api/public/content/latest-updates".toHttpUrl().newBuilder()
@@ -153,10 +154,11 @@ class ProChan : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val parts = response.request.url.toString().split("/")
+        val parts = response.request.url.pathSegments
         val idx = parts.indexOf("public")
-        val seriesType = parts.getOrElse(idx + 1) { "manga" }
-        val seriesId = parts.getOrElse(idx + 2) { "0" }
+        val seriesType = if (idx != -1) parts.getOrNull(idx + 1) ?: "manga" else "manga"
+        val seriesId = if (idx != -1) parts.getOrNull(idx + 2) ?: "0" else "0"
+        
         val data = response.parseAs<ChaptersResponse>()
         return data.data.map { ch ->
             SChapter.create().apply {
@@ -198,51 +200,120 @@ class ProChan : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
+        val urlParts = response.request.url.pathSegments
+        val seriesIdx = urlParts.indexOf("series")
+        val seriesType = if (seriesIdx != -1) urlParts.getOrNull(seriesIdx + 1) ?: "manga" else "manga"
+        val seriesId = if (seriesIdx != -1) urlParts.getOrNull(seriesIdx + 2) ?: "0" else "0"
+        val chapterId = urlParts.getOrNull(urlParts.size - 2) ?: "0"
+
+        val apiHeaders = headers.newBuilder()
+            .set("Accept", "application/json")
+            .set("Referer", response.request.url.toString())
+            .build()
+            
+        try {
+            var currentPage = 1
+            var chapterObj: ChapterDto? = null
+            
+            while (currentPage <= 5) {
+                val apiUrl = "$baseUrl/api/public/$seriesType/$seriesId/chapters?limit=500&page=$currentPage&order=desc"
+                val apiResp = client.newCall(GET(apiUrl, apiHeaders)).execute()
+                if (!apiResp.isSuccessful) break
+                val data = apiResp.parseAs<ChaptersResponse>()
+                if (data.data.isEmpty()) break
+                
+                chapterObj = data.data.find { it.id.toString() == chapterId }
+                if (chapterObj != null) break
+                currentPage++
+            }
+            
+            if (chapterObj?.metadata != null) {
+                val pages = mutableListOf<Page>()
+                var index = 0
+                val cdnPath = chapterObj.cdnPath ?: "cdn1"
+                val baseUrlCdn = "https://$cdnPath.procomic.pro"
+                val seenUrls = mutableSetOf<String>()
+                
+                chapterObj.metadata.images.forEach { imgPath ->
+                    val fullUrl = if (imgPath.startsWith("http")) imgPath else "$baseUrlCdn$imgPath"
+                    if (seenUrls.add(fullUrl)) {
+                        pages.add(Page(index++, imageUrl = fullUrl))
+                    }
+                }
+                
+                chapterObj.metadata.maps.forEach { map ->
+                    if (map.pieces.isNotEmpty() && seenUrls.add(map.pieces.first())) {
+                        val encoded = Base64.encodeToString(
+                            json.encodeToString(
+                                ScrambledMap(
+                                    dim = map.dim,
+                                    mode = map.mode,
+                                    pieces = map.pieces,
+                                    order = map.order
+                                )
+                            ).toByteArray(Charsets.UTF_8),
+                            Base64.URL_SAFE or Base64.NO_WRAP
+                        )
+                        pages.add(Page(index++, imageUrl = "$SCRAMBLED_SCHEME$encoded"))
+                    }
+                }
+                
+                if (pages.isNotEmpty()) return pages
+            }
+        } catch (e: Exception) {
+            
+        }
+
         val html = response.body.string()
-        val urlParts = response.request.url.toString().split("/")
-        val chapterId = urlParts.getOrElse(urlParts.size - 2) { "0" }
-
-        val apiHeaders = headers.newBuilder().set("Accept", "application/json").build()
-
         var token = ""
 
         try {
             val keyResp = client.newCall(
                 GET("$baseUrl/chapter-map-session-key/$chapterId", apiHeaders)
             ).execute()
-            val keyText = keyResp.body.string()
-            val keyRegex = Regex(""""key"\s*:\s*"([^"]+)"""")
-            token = keyRegex.find(keyText)?.groups?.get(1)?.value ?: ""
-        } catch (e: Exception) {}
+            if (keyResp.isSuccessful) {
+                val keyJson = keyResp.body.string()
+                val keyRegex = Regex(""""key"\s*:\s*"([^"]+)"""")
+                token = keyRegex.find(keyJson)?.groups?.get(1)?.value ?: ""
+            }
+        } catch (e: Exception) { }
 
         if (token.isEmpty()) {
-            val jwtRegex = Regex("""eyJ[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+""")
-            token = jwtRegex.find(html)?.value ?: ""
+            token = Regex(
+                """eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+"""
+            ).find(html)?.value ?: ""
+        }
+
+        if (token.isEmpty()) {
+            token = Regex(
+                """eyJ[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+"""
+            ).find(html)?.value ?: ""
         }
 
         if (token.isEmpty()) return emptyList()
 
-        var currentSplit = 0
-        var maxSplit = 0
-        val allSplitData = mutableListOf<ChapterDeferredData>()
+        val firstResp = client.newCall(
+            GET("$baseUrl/chapter-deferred-media/$chapterId?token=$token&split=0", apiHeaders),
+        ).execute()
+        val firstResult = firstResp.parseAs<ChapterDeferredResponse>()
+        if (!firstResult.success || firstResult.data == null) return emptyList()
 
-        do {
+        val splitIndex = firstResult.data.splitIndex
+        val allSplitData = mutableListOf(firstResult.data)
+
+        for (s in 1..splitIndex) {
             try {
                 val resp = client.newCall(
-                    GET("$baseUrl/chapter-deferred-media/$chapterId?token=$token&split=$currentSplit", apiHeaders)
+                    GET("$baseUrl/chapter-deferred-media/$chapterId?token=$token&split=$s", apiHeaders),
                 ).execute()
                 val result = resp.parseAs<ChapterDeferredResponse>()
                 if (result.success && result.data != null) {
                     allSplitData.add(result.data)
-                    maxSplit = result.data.splitIndex
-                } else {
-                    break
                 }
             } catch (e: Exception) {
                 break
             }
-            currentSplit++
-        } while (currentSplit <= maxSplit)
+        }
 
         val pages = mutableListOf<Page>()
         var index = 0
@@ -286,7 +357,15 @@ class ProChan : HttpSource() {
         val totalH = map.dim.getOrElse(1) { 1200 }
         val (cols, rows) = parseMode(map.mode, map.pieces.size)
 
-        val result = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
+        val result = try {
+            Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
+        } catch (e: OutOfMemoryError) {
+            try {
+                Bitmap.createBitmap(totalW, totalH, Bitmap.Config.RGB_565)
+            } catch (e2: OutOfMemoryError) {
+                return null
+            }
+        }
         val canvas = Canvas(result)
 
         try {
@@ -297,8 +376,8 @@ class ProChan : HttpSource() {
                 val req = Request.Builder()
                     .url(pieceUrl)
                     .header("Referer", "$baseUrl/")
-                    .header("Accept", "image/avif,*/*")
-                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36")
+                    .header("Accept", "image/avif,image/webp,image/jpeg,*/*")
+                    .header("User-Agent", headers["User-Agent"] ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
                     .build()
 
                 val resp = client.newCall(req).execute()
@@ -311,16 +390,16 @@ class ProChan : HttpSource() {
 
                 val bmp = decodeAvif(bytes) ?: continue
 
-                val expectedPieceW = totalW / cols
-                val expectedPieceH = totalH / rows
+                val pieceW = totalW / cols
+                val pieceH = totalH / rows
 
                 val col = targetIdx % cols
                 val row = targetIdx / cols
 
-                val left = col * expectedPieceW
-                val top = row * expectedPieceH
+                val left = col * pieceW
+                val top = row * pieceH
 
-                val dst = Rect(left, top, left + expectedPieceW, top + expectedPieceH)
+                val dst = Rect(left, top, left + pieceW, top + pieceH)
                 val src = Rect(0, 0, bmp.width, bmp.height)
 
                 canvas.drawBitmap(bmp, src, dst, null)
@@ -328,7 +407,7 @@ class ProChan : HttpSource() {
             }
 
             val out = ByteArrayOutputStream()
-            result.compress(Bitmap.CompressFormat.JPEG, 90, out)
+            result.compress(Bitmap.CompressFormat.JPEG, 85, out)
             return out.toByteArray()
         } catch (e: Exception) {
             return null
@@ -433,6 +512,14 @@ class ProChan : HttpSource() {
         val title: String? = null,
         @SerialName("published_at") val publishedAt: String? = null,
         val lockedByCoins: Boolean? = null,
+        @SerialName("cdn_path") val cdnPath: String? = null,
+        val metadata: ChapterMetadataDto? = null
+    )
+
+    @Serializable
+    data class ChapterMetadataDto(
+        val images: List<String> = emptyList(),
+        val maps: List<PageMap> = emptyList()
     )
 
     @Serializable
