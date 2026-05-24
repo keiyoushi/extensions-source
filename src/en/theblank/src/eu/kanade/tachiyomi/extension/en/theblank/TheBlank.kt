@@ -14,7 +14,7 @@ class TheBlank : Pam("The Blank", "https://theblank.net", "en") {
     override val latestFilters = FilterList(SortFilter("Sort", sortValues, Filter.Sort.Selection(2, false)))
 
     override fun getFilterList() = FilterList(
-        Filter.Header("La recherche textuelle ignore les filtres !"),
+        Filter.Header("Text search ignores filters!"),
         Filter.Separator(),
         SortFilter("Sort", sortValues),
         GenreFilter(),
