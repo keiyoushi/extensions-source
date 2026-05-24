@@ -35,7 +35,7 @@ class TruyenGG :
 
     override val lang = "vi"
 
-    private val defaultBaseUrl = "https://foxtruyen2.com"
+    private val defaultBaseUrl = "https://truyenggvn.com"
 
     override val supportsLatest = true
 
