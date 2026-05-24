@@ -66,14 +66,6 @@ abstract class Senkuro(
                     "DESC",
                 ),
                 offset = OFFSET_COUNT * (page - 1),
-                label = SearchVariables.FiltersDto(
-                    // Senkuro eternal built-in exclude 18+ filter
-                    exclude = if (name == "Senkuro") {
-                        senkuroExcludeGenres
-                    } else {
-                        listOf()
-                    },
-                ),
             ),
         ).toJsonRequestBody()
 
@@ -183,11 +175,6 @@ abstract class Senkuro(
 
                 else -> {}
             }
-        }
-
-        // Senkuro eternal built-in exclude 18+ filter
-        if (name == "Senkuro") {
-            excludeGenres.addAll(senkuroExcludeGenres)
         }
 
         val requestBody = GraphQL(
@@ -377,7 +364,7 @@ abstract class Senkuro(
                 json.decodeFromString<PageWrapperDto<MangaTachiyomiSearchFilters>>(responseBody).data.mangaTachiyomiSearchFilters
 
             labelsList =
-                filterDto.labels.filterNot { name == "Senkuro" && senkuroExcludeGenres.contains(it.slug) }
+                filterDto.labels
                     .map { label ->
                         FilterersTriRoot(
                             label.titles.find { it.lang == "RU" }!!.content.capitalize(),
@@ -498,7 +485,6 @@ abstract class Senkuro(
         private const val API_DOMAIN_PREF = "MangaApiDomain"
         private const val API_DOMAIN_TITLE = "Домен"
         private const val API_DOMAIN_DEFAULT = "https://api.senkuro.me"
-        private val senkuroExcludeGenres = listOf("hentai", "yaoi", "yuri", "shoujo_ai", "shounen_ai", "lgbt")
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
     }
 
