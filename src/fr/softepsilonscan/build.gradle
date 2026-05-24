@@ -1,12 +1,9 @@
 ext {
     extName = 'Soft Epsilon Scan'
     extClass = '.SoftEpsilonScan'
-    extVersionCode = 53
-    isNsfw = true
+    themePkg = 'pam'
+    baseUrl = 'https://epsilonsoft.to'
+    overrideVersionCode = 52
 }
 
 apply plugin: "kei.plugins.extension.legacy"
-
-dependencies {
-    implementation(project(':lib:secretstream'))
-}

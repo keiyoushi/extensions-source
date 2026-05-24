@@ -1,12 +1,10 @@
 ext {
     extName = 'The Blank'
     extClass = '.TheBlank'
-    extVersionCode = 55
+    themePkg = 'pam'
+    baseUrl = 'https://theblank.net'
+    overrideVersionCode = 54
     isNsfw = true
 }
 
 apply plugin: "kei.plugins.extension.legacy"
-
-dependencies {
-    implementation(project(':lib:secretstream'))
-}

@@ -1,12 +1,10 @@
 ext {
     extName = 'Epsilon Scan'
     extClass = '.EpsilonScan'
-    extVersionCode = 53
+    themePkg = 'pam'
+    baseUrl = 'https://epsilonscan.to'
+    overrideVersionCode = 52
     isNsfw = true
 }
 
 apply plugin: "kei.plugins.extension.legacy"
-
-dependencies {
-    implementation(project(':lib:secretstream'))
-}
