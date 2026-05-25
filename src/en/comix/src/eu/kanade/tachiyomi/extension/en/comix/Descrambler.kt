@@ -7,7 +7,7 @@ import android.graphics.Rect
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayOutputStream
+import okio.Buffer
 
 object Descrambler {
 
@@ -37,12 +37,12 @@ object Descrambler {
         val descrambled = descramble(bitmap, seed)
         bitmap.recycle()
 
-        val output = ByteArrayOutputStream()
-        descrambled.compress(Bitmap.CompressFormat.JPEG, 90, output)
+        val output = Buffer()
+        descrambled.compress(Bitmap.CompressFormat.JPEG, 90, output.outputStream())
         descrambled.recycle()
 
         response.newBuilder()
-            .body(output.toByteArray().toResponseBody(JPEG_MEDIA))
+            .body(output.readByteString().toResponseBody(JPEG_MEDIA))
             .build()
     }
 
