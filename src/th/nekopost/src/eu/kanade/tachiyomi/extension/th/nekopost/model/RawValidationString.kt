@@ -4,9 +4,9 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class RawProjectCategory(
-    @SerialName("CateName")
-    val categoryName: String,
-    @SerialName("CateLink")
-    val categoryLink: String,
+data class RawValidationString(
+    @SerialName("String")
+    val string: String,
+    @SerialName("Valid")
+    val valid: Boolean,
 )

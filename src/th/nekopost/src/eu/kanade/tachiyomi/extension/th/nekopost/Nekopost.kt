@@ -35,7 +35,6 @@ class Nekopost : HttpSource() {
     override val name = "Nekopost"
     override val supportsLatest = true
 
-    private val projectDataEndpoint = "https://api.osemocphoto.com/frontAPI/getProjectInfo"
     private val fileHost = "https://www.osemocphoto.com"
 
     private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("th")) }
@@ -49,10 +48,10 @@ class Nekopost : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
-    private fun getStatus(status: String) = when (status) {
-        "1" -> SManga.ONGOING
-        "2" -> SManga.COMPLETED
-        "3" -> SManga.LICENSED
+    private fun getStatus(status: Int) = when (status) {
+        1 -> SManga.ONGOING
+        2 -> SManga.COMPLETED
+        3 -> SManga.LICENSED
         else -> SManga.UNKNOWN
     }
 
@@ -86,25 +85,14 @@ class Nekopost : HttpSource() {
         return when {
             projectMatch != null -> {
                 val projectId = projectMatch.groupValues[1]
-                client.newCall(GET("$projectDataEndpoint/$projectId", headers))
+                client.newCall(GET("$baseUrl/manga/$projectId", headers))
                     .asObservableSuccess()
                     .map { response ->
-                        if (response.peekBody(1024)
-                                .string()
-                                .contains("\"projectInfo\":null")
-                        ) {
+                        try {
+                            val info = extractProjectDetail(response.body.string())
+                            MangasPage(listOf(mangaFromProjectInfo(info)), false)
+                        } catch (_: Exception) {
                             MangasPage(emptyList(), false)
-                        } else {
-                            val projectInfo =
-                                response.parseAs<RawProjectInfo>()
-                            MangasPage(
-                                listOf(
-                                    mangaFromProjectInfo(
-                                        projectInfo,
-                                    ),
-                                ),
-                                false,
-                            )
                         }
                     }
             }
@@ -177,7 +165,7 @@ class Nekopost : HttpSource() {
                 SManga.create().apply {
                     url = it.pid.toString()
                     title = it.projectName
-                    status = getStatus(it.status)
+                    status = getStatus(it.status.toInt())
                     thumbnail_url =
                         buildCoverUrl(it.pid.toString(), it.coverVersion)
                     initialized = false
@@ -233,32 +221,64 @@ class Nekopost : HttpSource() {
         return if (coverVersion != null) "$base?ver=$coverVersion" else base
     }
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("$projectDataEndpoint/${manga.url}", headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/manga/${manga.url}", headers)
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
 
-    override fun mangaDetailsParse(response: Response): SManga = mangaFromProjectInfo(response.parseAs())
+    override fun mangaDetailsParse(response: Response): SManga = mangaFromProjectInfo(extractProjectDetail(response.body.string()))
 
-    override fun chapterListRequest(manga: SManga) = GET("$projectDataEndpoint/${manga.url}", headers)
+    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/manga/${manga.url}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val projectInfo = response.parseAs<RawProjectInfo>()
+        val detail = extractProjectDetail(response.body.string())
 
-        if (getStatus(projectInfo.projectInfo.status) == SManga.LICENSED) {
-            throw Exception("Licensed")
-        }
+        val projectId = detail.projectInfo.projectId.toInt()
 
-        val projectId = projectInfo.projectInfo.projectId.toInt()
-
-        return projectInfo.projectChapterList.orEmpty().map {
+        return detail.projectChapterList.orEmpty().map {
             SChapter.create().apply {
                 url = "$projectId/${it.chapterId}/${projectId}_${it.chapterId}.json"
                 name = it.chapterName
                 chapter_number = it.chapterNo.toFloat()
-                date_upload = dateFormat.parse(it.createDate)?.time ?: 0L
+                date_upload = dateFormat.parse(it.publishDate.string)?.time ?: 0L
                 scanlator = it.providerName
             }
         }
+    }
+
+    private fun extractProjectDetail(
+        content: String,
+    ): RawProjectInfo {
+        val marker = "projectDetail:"
+        val startIndex = content.indexOf(marker)
+        if (startIndex == -1) throw Exception("Invalid response")
+
+        var braceCount = 0
+        var endIndex = -1
+        val searchRange = content.substring(startIndex + marker.length)
+
+        for (i in searchRange.indices) {
+            if (searchRange[i] == '{') {
+                braceCount++
+            } else if (searchRange[i] == '}') {
+                braceCount--
+                if (braceCount == 0) {
+                    endIndex = i + 1
+                    break
+                }
+            }
+        }
+
+        if (endIndex == -1) throw Exception("Invalid response")
+        val rawBlock = searchRange.substring(0, endIndex)
+            // Uses lookbehind (?<=[{,]) to target keys following '{' or ',' so it doesn't break web URLs
+            .replace(Regex("(?<=[{,])\\s*([a-zA-Z0-9_]+)\\s*:"), "\"$1\":")
+
+        val jsonParser = Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+        }
+
+        return jsonParser.decodeFromString<RawProjectInfo>(rawBlock)
     }
 
     override fun pageListRequest(chapter: SChapter) = GET("$fileHost/collectManga/${chapter.url}", headers)

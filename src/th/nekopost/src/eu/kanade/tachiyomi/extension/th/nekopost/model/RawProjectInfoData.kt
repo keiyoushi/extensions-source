@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class RawProjectInfoData(
-    @SerialName("projectId")
+    @SerialName("pid")
     val projectId: String,
     @SerialName("projectName")
     val projectName: String,
@@ -20,9 +20,9 @@ data class RawProjectInfoData(
     @SerialName("info")
     val info: String,
     @SerialName("status")
-    val status: String,
+    val status: Int,
     @SerialName("flgMature")
     val flgMature: String,
     @SerialName("releaseDate")
-    val releaseDate: String,
+    val releaseDate: RawValidationString,
 )
