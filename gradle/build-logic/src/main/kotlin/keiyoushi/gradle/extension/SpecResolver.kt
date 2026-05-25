@@ -5,8 +5,8 @@ import keiyoushi.gradle.extension.codegen.ResolvedExtension
 import keiyoushi.gradle.extension.codegen.ResolvedSource
 import keiyoushi.gradle.extension.codegen.generateSourceId
 import keiyoushi.gradle.extension.dsl.BaseUrlSpec
+import keiyoushi.gradle.extension.dsl.DeeplinkSpec
 import keiyoushi.gradle.extension.dsl.ExtensionSpec
-import keiyoushi.gradle.extension.dsl.ThemeDeeplinkSpec
 import keiyoushi.gradle.extension.dsl.defaultUrl
 import keiyoushi.gradle.extensions.baseVersionCode
 import keiyoushi.gradle.utils.assertWithoutFlag
@@ -30,7 +30,7 @@ fun Project.resolveExtensionSpec(spec: ExtensionSpec, pkg: String): ResolvedSpec
     }
     val themePaths = themeProject
         ?.extensions
-        ?.findByType(ThemeDeeplinkSpec::class.java)
+        ?.findByType(DeeplinkSpec::class.java)
         ?.pathPatterns
         ?.orNull
         .orEmpty()
@@ -123,6 +123,7 @@ private fun keiyoushi.gradle.extension.dsl.SourceSpec.resolve(themePaths: List<S
     return ResolvedSource(
         name = name.get(),
         lang = lang.get(),
+        isConfigurable = configurableSource.getOrElse(false),
         versionId = versionId,
         id = effectiveId,
         baseUrl = baseUrl,

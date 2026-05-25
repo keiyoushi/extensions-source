@@ -12,6 +12,7 @@ extension {
     source {
         name = "AllManga"
         lang = "en"
+        configurableSource = true
         id = 4709139914729853090
         baseUrl(
             mirrorUrls(

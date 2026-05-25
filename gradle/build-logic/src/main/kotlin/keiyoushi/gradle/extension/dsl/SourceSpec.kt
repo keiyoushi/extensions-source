@@ -10,6 +10,7 @@ abstract class SourceSpec @Inject constructor(
 ) {
     abstract val name: Property<String>
     abstract val lang: Property<String>
+    abstract val configurableSource: Property<Boolean>
     abstract val versionId: Property<Int>
     abstract val id: Property<Long>
     internal abstract val resolvedBaseUrl: Property<BaseUrlSpec>

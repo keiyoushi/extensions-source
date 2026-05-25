@@ -1,5 +1,5 @@
 import com.android.build.api.dsl.LibraryExtension
-import keiyoushi.gradle.extension.dsl.ThemeDeeplinkSpec
+import keiyoushi.gradle.extension.dsl.DeeplinkSpec
 import keiyoushi.gradle.extensions.alias
 import keiyoushi.gradle.extensions.compileOnly
 import keiyoushi.gradle.extensions.implementation
@@ -43,7 +43,7 @@ class PluginMultiSrc : Plugin<Project> {
             implementation(project(":core"))
         }
 
-        extensions.create("themeDeeplink", ThemeDeeplinkSpec::class.java)
+        extensions.create("themeDeeplink", DeeplinkSpec::class.java)
     }
 }
 

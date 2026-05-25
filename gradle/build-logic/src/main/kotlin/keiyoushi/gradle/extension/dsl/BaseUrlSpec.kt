@@ -26,21 +26,9 @@ val BaseUrlSpec.defaultUrl: String
         is BaseUrlSpec.Custom -> defaultUrl
     }
 
-class MirrorBuilder {
-    private val urls = mutableListOf<String>()
-    fun mirror(url: String) { urls.add(url) }
-    internal fun build(): BaseUrlSpec.Mirrors {
-        require(urls.isNotEmpty()) { "mirrorUrls must have at least one entry" }
-        return BaseUrlSpec.Mirrors(urls.toList())
-    }
-}
-
 fun mirrorUrls(vararg urls: String): BaseUrlSpec.Mirrors {
     require(urls.isNotEmpty()) { "mirrorUrls must have at least one entry" }
     return BaseUrlSpec.Mirrors(urls.toList())
 }
-
-fun mirrorUrls(block: MirrorBuilder.() -> Unit): BaseUrlSpec.Mirrors =
-    MirrorBuilder().apply(block).build()
 
 fun customBaseUrl(default: String): BaseUrlSpec.Custom = BaseUrlSpec.Custom(default)

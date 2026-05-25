@@ -56,6 +56,26 @@ class PluginSpotless : Plugin<Project> {
     }
 }
 
+private object ExtensionSystemCheck {
+    fun create(): FormatterStep = FormatterStep.create(
+        "new-extension-system-check",
+        State(),
+        State::toFormatter,
+    )
+
+    private class State : Serializable {
+        fun toFormatter() = FormatterFunc { content ->
+            if ("ConfigurableSource" in content) {
+                throw AssertionError(
+                    "Extensions using the new system must not implement ConfigurableSource directly. " +
+                        "Use PreferenceSource instead.",
+                )
+            }
+            content
+        }
+    }
+}
+
 private object RandomUACheck {
     fun create(): FormatterStep = FormatterStep.create(
         "randomua-requires-getMangaUrl",

@@ -4,8 +4,8 @@ import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import keiyoushi.gradle.extension.codegen.GenerateExtensionManifestTask
 import keiyoushi.gradle.extension.codegen.GenerateSourceTask
 import keiyoushi.gradle.extension.codegen.ResolvedExtension
+import keiyoushi.gradle.extension.dsl.DeeplinkSpec
 import keiyoushi.gradle.extension.dsl.ExtensionSpec
-import keiyoushi.gradle.extension.dsl.ThemeDeeplinkSpec
 import keiyoushi.gradle.tasks.GenerateKeepRulesTask
 import org.gradle.api.Project
 import org.gradle.api.provider.Property
@@ -34,17 +34,6 @@ fun Project.registerGenerateSourceTask(
     tasks.register("generateSource", GenerateSourceTask::class.java) {
         this.resolvedExtension.set(resolvedExtension)
         this.outputDir.set(layout.buildDirectory.dir("generated/source/kei"))
-        this.sourceDir.set(file("src"))
-
-        val themeName = spec.theme.orNull
-        if (themeName != null) {
-            val themePath = ":lib-multisrc:$themeName"
-            evaluationDependsOn(themePath)
-            val themeProject = findProject(themePath)
-            if (themeProject != null) {
-                this.themeDir.set(themeProject.file("src"))
-            }
-        }
     }
 
 fun Project.wireVariantApi(
@@ -86,7 +75,7 @@ fun Project.wireVariantApi(
                 evaluationDependsOn(themePath)
                 findProject(themePath)
                     ?.extensions
-                    ?.findByType(ThemeDeeplinkSpec::class.java)
+                    ?.findByType(DeeplinkSpec::class.java)
                     ?.pathPatterns
                     ?.orNull
                     ?.isNotEmpty()

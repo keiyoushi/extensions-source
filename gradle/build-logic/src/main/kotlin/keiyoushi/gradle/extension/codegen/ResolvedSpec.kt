@@ -20,6 +20,7 @@ data class ResolvedExtension(
 data class ResolvedSource(
     val name: String,
     val lang: String,
+    val isConfigurable: Boolean,
     val versionId: Int,
     val id: Long,
     val baseUrl: BaseUrlSpec,
