@@ -1,8 +1,11 @@
 package eu.kanade.tachiyomi.extension.vi.vihentai
 
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
@@ -29,15 +33,22 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class ViHentai : HttpSource() {
+class ViHentai : HttpSource(), ConfigurableSource {
 
     override val name = "ViHentai"
-
-    override val baseUrl = "https://vi-hentai.pro"
 
     override val lang = "vi"
 
     override val supportsLatest = true
+
+    private val preferences = getPreferences()
+
+    override val baseUrl: String
+        get() {
+            val index = preferences.getString(DOMAIN_PREF, "0")!!.toInt()
+                .coerceAtMost(domains.size - 1)
+            return domains[index]
+        }
 
     override val client = network.client.newBuilder()
         .rateLimit(5)
@@ -281,6 +292,19 @@ class ViHentai : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
+    // =============================== Preferences ==========================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = DOMAIN_PREF
+            title = "Preferred Domain"
+            entries = domains
+            entryValues = Array(domains.size) { it.toString() }
+            summary = "%s"
+            setDefaultValue("0")
+        }.also(screen::addPreference)
+    }
+
     // ============================= Utilities ==============================
 
     private fun Element.extractBackgroundImage(): String? {
@@ -301,3 +325,9 @@ class ViHentai : HttpSource() {
         private val PASSWORD_REGEX = Regex("""input\.value\s*=\s*'([^']+)'""")
     }
 }
+
+private val domains = arrayOf(
+    "https://vi-hentai.moe",  // domain chính
+    "https://vi-hentai.pro",  // mirror (dùng khi bị chặn)
+)
+private const val DOMAIN_PREF = "domain_pref"
