@@ -35,94 +35,80 @@ class RimuScans :
         .add("Referer", "$baseUrl/")
         .add("Accept", "application/json, text/plain, */*")
 
-    // Popular
+    // =============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/api/manga".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("limit", "24")
-            .addQueryParameter("sortBy", "popular")
-            .build()
-        return GET(url, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/series?sort=rating&page=$page", headers)
 
-    override fun popularMangaParse(response: Response): MangasPage = mangaPageParse(response)
+    override fun popularMangaParse(response: Response): MangasPage = seriesParse(response)
 
-    // Latest
+    // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/api/manga".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("limit", "24")
-            .addQueryParameter("sortBy", "latest")
-            .build()
-        return GET(url, headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/series?page=$page", headers)
 
-    override fun latestUpdatesParse(response: Response): MangasPage = mangaPageParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage = seriesParse(response)
 
-    // Search
+    // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/api/manga".toHttpUrl().newBuilder().apply {
-            addQueryParameter("page", page.toString())
-            addQueryParameter("limit", "24")
+        val url = "$baseUrl/api/series".toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
                 addQueryParameter("search", query)
-            }
-            filters.forEach { filter ->
-                when (filter) {
-                    is OrderByFilter -> addQueryParameter("sortBy", filter.toUriPart())
-
-                    is GenreFilter -> {
-                        filter.state
-                            .filter { it.state }
-                            .forEach { addQueryParameter("genres", it.name) }
+            } else {
+                filters.forEach { filter ->
+                    when (filter) {
+                        is SortFilter -> filter.toUriPart().takeIf { it.isNotEmpty() && it != "updated" }
+                            ?.let { addQueryParameter("sort", it) }
+                        is TypeFilter -> filter.toUriPart().takeIf { it.isNotEmpty() }
+                            ?.let { addQueryParameter("types", it) }
+                        is StatusFilter ->
+                            filter.state
+                                .filterIsInstance<StatusCheckBox>()
+                                .filter { it.state }
+                                .joinToString(",") { it.value }
+                                .takeIf { it.isNotEmpty() }
+                                ?.let { addQueryParameter("status", it) }
+                        is MinChaptersFilter -> filter.toUriPart().takeIf { it.isNotEmpty() }
+                            ?.let { addQueryParameter("min_chapters", it) }
+                        is PremiumOnlyFilter -> if (filter.state) addQueryParameter("premium", "1")
+                        is GenreFilter ->
+                            filter.state
+                                .filter { it.state }
+                                .joinToString(",") { it.name }
+                                .takeIf { it.isNotEmpty() }
+                                ?.let { addQueryParameter("genres", it) }
+                        else -> {}
                     }
-
-                    is StatusFilter -> {
-                        if (filter.state != 0) {
-                            addQueryParameter("status", filter.toUriPart())
-                        }
-                    }
-
-                    is TypeFilter -> {
-                        if (filter.state != 0) {
-                            addQueryParameter("type", filter.toUriPart())
-                        }
-                    }
-
-                    else -> {}
                 }
             }
+            addQueryParameter("page", page.toString())
         }.build()
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = mangaPageParse(response)
+    override fun searchMangaParse(response: Response): MangasPage = seriesParse(response)
 
-    private fun mangaPageParse(response: Response): MangasPage {
-        val result = response.parseAs<MangaListDto>()
-        val mangas = result.mangas.map { it.toSManga(baseUrl) }
-        return MangasPage(mangas, result.pagination.hasNextPage)
+    override fun getFilterList(): FilterList = getRimuFilterList(baseUrl, client, headers)
+
+    private fun seriesParse(response: Response): MangasPage {
+        val dto = response.parseAs<SeriesListDto>()
+        val mangas = dto.series.map { it.toSManga(baseUrl) }
+        return MangasPage(mangas, dto.hasMore)
     }
 
-    // Details
+    // =========================== Manga Details ============================
+
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = (baseUrl + manga.url).toHttpUrl().pathSegments.last()
-        val url = "$baseUrl/api/manga".toHttpUrl().newBuilder()
-            .addQueryParameter("slug", slug)
-            .build()
-        return GET(url, headers)
+        val slug = manga.url.substringAfter("/manga/")
+        return GET("$baseUrl/api/manga?slug=$slug", headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val result = response.parseAs<MangaDetailsWrapperDto>()
-        return result.manga.toSManga(baseUrl)
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDetailsWrapperDto>().manga.toSManga(baseUrl)
 
-    // Chapters
+    // ============================== Chapters ==============================
+
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
@@ -131,21 +117,21 @@ class RimuScans :
         val showPremium = preferences.getBoolean(SHOW_PREMIUM_KEY, SHOW_PREMIUM_DEFAULT)
 
         return result.manga.chapters
-            .filter { showPremium || it.type != "PREMIUM" }
+            .filter { showPremium || !it.type.equals("PREMIUM", ignoreCase = true) }
             .map { it.toSChapter(result.manga.slug) }
             .reversed()
     }
 
-    // Pages
+    // =============================== Pages ================================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val segments = (baseUrl + chapter.url).toHttpUrl().pathSegments
-        val mangaSlug = segments[1]
-        val chapterNumber = segments.last()
-
+        // chapter.url = "/read/{slug}/{number}"
+        val parts = chapter.url.removePrefix("/read/").split('/', limit = 2)
+        val slug = parts[0]
+        val number = parts.getOrNull(1).orEmpty()
         val url = "$baseUrl/api/manga".toHttpUrl().newBuilder()
-            .addQueryParameter("slug", mangaSlug)
-            .fragment(chapterNumber)
+            .addQueryParameter("slug", slug)
+            .fragment(number)
             .build()
         return GET(url, headers)
     }
@@ -153,35 +139,29 @@ class RimuScans :
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<MangaDetailsWrapperDto>()
         val chapterNumber = response.request.url.fragment?.toDoubleOrNull()
-            ?: throw Exception("Chapter number not found in request")
+            ?: throw Exception("Numéro de chapitre absent de la requête")
 
         val chapter = result.manga.chapters.find { it.number == chapterNumber }
-            ?: throw Exception("Chapter not found")
+            ?: throw Exception("Chapitre introuvable")
 
-        if (chapter.type == "PREMIUM" && chapter.images.isEmpty()) {
-            throw Exception("This chapter is premium. Please read it on the website.")
+        if (chapter.type.equals("PREMIUM", ignoreCase = true) && chapter.images.isEmpty()) {
+            throw Exception("Ce chapitre est premium. Lisez-le sur le site.")
         }
 
-        return chapter.images.map { image ->
-            Page(image.order - 1, imageUrl = baseUrl + image.url)
+        return chapter.images.sortedBy { it.order }.mapIndexed { i, img ->
+            Page(i, imageUrl = img.url.toAbsoluteUrl(baseUrl))
         }
     }
 
     override fun imageUrlParse(response: Response): String = ""
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
-
-    // Filters
-
-    override fun getFilterList() = getFilters()
-
-    // Preferences
+    // ============================ Preferences =============================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         CheckBoxPreference(screen.context).apply {
             key = SHOW_PREMIUM_KEY
-            title = "Show premium chapters"
-            summary = "Show paid chapters (identified by 🔒) in the list."
+            title = "Afficher les chapitres premium"
+            summary = "Afficher les chapitres payants (identifiés par 🔒) dans la liste."
             setDefaultValue(SHOW_PREMIUM_DEFAULT)
         }.also(screen::addPreference)
     }
