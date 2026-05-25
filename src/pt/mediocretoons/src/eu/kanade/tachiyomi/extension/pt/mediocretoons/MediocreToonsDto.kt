@@ -6,7 +6,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonNames
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -14,10 +13,10 @@ import java.util.TimeZone
 
 @Serializable
 data class MediocrePaginationDto(
-    @JsonNames("currentPage", "pagina_atual") val currentPage: Int? = null,
-    @JsonNames("totalPages", "paginas") val totalPages: Int = 0,
-    @JsonNames("totalItems", "total") val totalItems: Int = 0,
-    @JsonNames("itemsPerPage", "itens_por_pagina") val itemsPerPage: Int = 0,
+    val currentPage: Int? = null,
+    val totalPages: Int = 0,
+    val totalItems: Int = 0,
+    val itemsPerPage: Int = 0,
 ) {
     val hasNextPage: Boolean get() = totalPages > (currentPage ?: 0)
     val hasPreviousPage: Boolean get() = 1 < (currentPage ?: 0)
@@ -25,37 +24,47 @@ data class MediocrePaginationDto(
 
 @Serializable
 data class MediocreListDto<T>(
-    @JsonNames("data", "items") val data: T,
+    val data: T,
     val pagination: MediocrePaginationDto? = null,
 )
 
 @Serializable
 data class MediocreTagDto(
     val id: Int = 0,
-    @JsonNames("nome", "tag_nome") val name: String = "",
-)
+    @SerialName("tag_id") val tagId: Int = 0,
+    val nome: String = "",
+    @SerialName("tag_nome") val tagName: String = "",
+) {
+    val name: String get() = tagName.ifEmpty { nome }
+}
 
 @Serializable
 data class MediocreFormatDto(
-    @JsonNames("id", "formt_id") val id: Int = 0,
-    @JsonNames("nome", "formt_nome") val name: String = "",
-)
+    val id: Int = 0,
+    @SerialName("formt_id") val formatId: Int = 0,
+    val nome: String = "",
+    @SerialName("formt_nome") val formatName: String = "",
+) {
+    val name: String get() = formatName.ifEmpty { nome }
+}
 
 @Serializable
 data class MediocreStatusDto(
     val id: Int = 0,
-    @JsonNames("nome", "status_nome") val name: String = "",
-)
+    val nome: String = "",
+) {
+    val name: String get() = nome
+}
 
 @Serializable
 data class MediocreChapterSimpleDto(
-    @JsonNames("id", "cap_id") val id: Int = 0,
-    @JsonNames("nome", "cap_nome") val name: String = "",
-    @JsonNames("numero", "cap_num") val number: Float? = null,
-    @JsonNames("imagem", "cap_imagem") val image: String? = null,
-    @JsonNames("lancado_em", "cap_lancado_em", "publicado_em") val releasedAt: String? = null,
-    @JsonNames("criado_em", "cap_criado_em") val createdAt: String? = null,
-    @JsonNames("descricao", "cap_desc") val description: String? = null,
+    @SerialName("cap_id") val id: Int = 0,
+    @SerialName("cap_nome") val name: String = "",
+    @SerialName("cap_num") val number: Float? = null,
+    @SerialName("cap_imagem") val image: String? = null,
+    @SerialName("cap_lancado_em") val releasedAt: String? = null,
+    @SerialName("cap_criado_em") val createdAt: String? = null,
+    @SerialName("cap_desc") val description: String? = null,
     @SerialName("tem_paginas") val hasPages: Boolean = false,
     val totallinks: Int = 0,
     @SerialName("lido") val read: Boolean = false,
@@ -64,34 +73,43 @@ data class MediocreChapterSimpleDto(
 
 @Serializable
 data class MediocreMangaDto(
-    @JsonNames("id", "obr_id") val id: Int = 0,
+    val id: Int = 0,
+    @SerialName("obr_id") val obraId: Int = 0,
     val slug: String? = null,
-    @JsonNames("nome", "obr_nome") val name: String = "",
-    @JsonNames("descricao", "obr_descricao") val description: String? = null,
-    @JsonNames("imagem", "obr_imagem") val image: String? = null,
+    val nome: String = "",
+    @SerialName("obr_nome") val obraName: String = "",
+    @SerialName("obr_descricao") val description: String? = null,
+    val imagem: String? = null,
+    @SerialName("obr_imagem") val obraImage: String? = null,
     val tags: List<MediocreTagDto> = emptyList(),
     val status: MediocreStatusDto? = null,
     @SerialName("obr_status") val statusName: String? = null,
-    @JsonNames("total_capitulos", "capitulos_count", "total_capitulos_ativos") val totalChapters: Int = 0,
+    @SerialName("total_capitulos") val totalChapters: Int = 0,
+    @SerialName("capitulos_count") val chaptersCount: Int = 0,
+    @SerialName("total_capitulos_ativos") val activeChaptersCount: Int = 0,
     @SerialName("capitulos") val chapters: List<MediocreChapterSimpleDto> = emptyList(),
-)
+) {
+    val mangaId: Int get() = obraId.takeIf { it != 0 } ?: id
+    val name: String get() = obraName.ifEmpty { nome }
+    val image: String? get() = obraImage ?: imagem
+}
 
 @Serializable
 data class MediocrePageSrcDto(
-    @JsonNames("src", "url") val src: String = "",
+    @SerialName("url") val src: String = "",
     val ordem: Int = 0,
 )
 
 @Serializable
 data class MediocreChapterDetailDto(
-    @JsonNames("id", "cap_id") val id: Int = 0,
-    @JsonNames("uuid", "cap_uuid") val uuid: String? = null,
-    @JsonNames("nome", "cap_nome") val name: String = "",
-    @JsonNames("numero", "cap_num") val number: Float? = null,
-    @JsonNames("imagem", "cap_imagem") val image: String? = null,
-    @JsonNames("paginas", "paginas2") val pages: List<MediocrePageSrcDto> = emptyList(),
-    @JsonNames("lancado_em", "cap_lancado_em") val releasedAt: String? = null,
-    @JsonNames("criado_em", "cap_criado_em") val createdAt: String? = null,
+    @SerialName("cap_id") val id: Int = 0,
+    @SerialName("cap_uuid") val uuid: String? = null,
+    @SerialName("cap_nome") val name: String = "",
+    @SerialName("cap_num") val number: Float? = null,
+    @SerialName("cap_imagem") val image: String? = null,
+    @SerialName("paginas") val pages: List<MediocrePageSrcDto> = emptyList(),
+    @SerialName("cap_lancado_em") val releasedAt: String? = null,
+    @SerialName("cap_criado_em") val createdAt: String? = null,
     @SerialName("obra") val manga: MediocreMangaDto? = null,
 )
 
@@ -101,11 +119,11 @@ fun MediocreMangaDto.toSManga(isDetails: Boolean = false): SManga {
         thumbnail_url = image?.let {
             when {
                 it.startsWith("http") -> it
-                else -> "${MediocreToons.CDN_URL}/obras/${this@toSManga.id}/$it"
+                else -> "${MediocreToons.CDN_URL}/obras/${this@toSManga.mangaId}/$it"
             }
         }
         initialized = isDetails
-        url = "/obra/$id"
+        url = "/obra/$mangaId"
         genre = tags.joinToString { it.name }
     }
 
@@ -132,7 +150,7 @@ fun MediocreChapterSimpleDto.toSChapter(): SChapter = SChapter.create().apply {
 }
 
 fun MediocreChapterDetailDto.toPageList(): List<Page> {
-    val obraId = manga?.id ?: 0
+    val obraId = manga?.mangaId ?: 0
     val chapterNumber = number?.toString()?.removeSuffix(".0") ?: name
     return pages.sortedWith(compareBy<MediocrePageSrcDto> { it.ordem }.thenBy { it.src }).mapIndexed { idx, p ->
         val imageUrl = when {
@@ -157,7 +175,7 @@ fun List<MediocrePageSrcDto>.toPageList(): List<Page> = sortedWith(compareBy<Med
     }
 
 fun MediocreChapterDetailDto.toCdnPageListUrl(): String? {
-    val obraId = manga?.id ?: return null
+    val obraId = manga?.mangaId ?: return null
     val chapterUuid = uuid ?: return null
     val chapterNumber = number?.toString()?.removeSuffix(".0") ?: return null
     return "${MediocreToons.CDN_URL}/obras/$obraId/capitulos/$chapterNumber/$chapterUuid.json"
