@@ -30,9 +30,9 @@ import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ProChan : HttpSource() {
+class ProComic : HttpSource() {
 
-    override val name = "ProCchan"
+    override val name = "ProComic"
     override val baseUrl = "https://procomic.pro"
     override val lang = "ar"
     override val supportsLatest = true
@@ -76,7 +76,6 @@ class ProChan : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-        .add("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/api/public/content/latest-updates".toHttpUrl().newBuilder()
@@ -154,11 +153,10 @@ class ProChan : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val parts = response.request.url.pathSegments
+        val parts = response.request.url.toString().split("/")
         val idx = parts.indexOf("public")
-        val seriesType = if (idx != -1) parts.getOrNull(idx + 1) ?: "manga" else "manga"
-        val seriesId = if (idx != -1) parts.getOrNull(idx + 2) ?: "0" else "0"
-        
+        val seriesType = parts.getOrElse(idx + 1) { "manga" }
+        val seriesId = parts.getOrElse(idx + 2) { "0" }
         val data = response.parseAs<ChaptersResponse>()
         return data.data.map { ch ->
             SChapter.create().apply {
@@ -200,97 +198,15 @@ class ProChan : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val urlParts = response.request.url.pathSegments
-        val seriesIdx = urlParts.indexOf("series")
-        val seriesType = if (seriesIdx != -1) urlParts.getOrNull(seriesIdx + 1) ?: "manga" else "manga"
-        val seriesId = if (seriesIdx != -1) urlParts.getOrNull(seriesIdx + 2) ?: "0" else "0"
-        val chapterId = urlParts.getOrNull(urlParts.size - 2) ?: "0"
-
-        val apiHeaders = headers.newBuilder()
-            .set("Accept", "application/json")
-            .set("Referer", response.request.url.toString())
-            .build()
-            
-        try {
-            var currentPage = 1
-            var chapterObj: ChapterDto? = null
-            
-            while (currentPage <= 5) {
-                val apiUrl = "$baseUrl/api/public/$seriesType/$seriesId/chapters?limit=500&page=$currentPage&order=desc"
-                val apiResp = client.newCall(GET(apiUrl, apiHeaders)).execute()
-                if (!apiResp.isSuccessful) break
-                val data = apiResp.parseAs<ChaptersResponse>()
-                if (data.data.isEmpty()) break
-                
-                chapterObj = data.data.find { it.id.toString() == chapterId }
-                if (chapterObj != null) break
-                currentPage++
-            }
-            
-            if (chapterObj?.metadata != null) {
-                val pages = mutableListOf<Page>()
-                var index = 0
-                val cdnPath = chapterObj.cdnPath ?: "cdn1"
-                val baseUrlCdn = "https://$cdnPath.procomic.pro"
-                val seenUrls = mutableSetOf<String>()
-                
-                chapterObj.metadata.images.forEach { imgPath ->
-                    val fullUrl = if (imgPath.startsWith("http")) imgPath else "$baseUrlCdn$imgPath"
-                    if (seenUrls.add(fullUrl)) {
-                        pages.add(Page(index++, imageUrl = fullUrl))
-                    }
-                }
-                
-                chapterObj.metadata.maps.forEach { map ->
-                    if (map.pieces.isNotEmpty() && seenUrls.add(map.pieces.first())) {
-                        val encoded = Base64.encodeToString(
-                            json.encodeToString(
-                                ScrambledMap(
-                                    dim = map.dim,
-                                    mode = map.mode,
-                                    pieces = map.pieces,
-                                    order = map.order
-                                )
-                            ).toByteArray(Charsets.UTF_8),
-                            Base64.URL_SAFE or Base64.NO_WRAP
-                        )
-                        pages.add(Page(index++, imageUrl = "$SCRAMBLED_SCHEME$encoded"))
-                    }
-                }
-                
-                if (pages.isNotEmpty()) return pages
-            }
-        } catch (e: Exception) {
-            
-        }
-
         val html = response.body.string()
-        var token = ""
+        val urlParts = response.request.url.toString().split("/")
+        val chapterId = urlParts.getOrElse(urlParts.size - 2) { "0" }
 
-        try {
-            val keyResp = client.newCall(
-                GET("$baseUrl/chapter-map-session-key/$chapterId", apiHeaders)
-            ).execute()
-            if (keyResp.isSuccessful) {
-                val keyJson = keyResp.body.string()
-                val keyRegex = Regex(""""key"\s*:\s*"([^"]+)"""")
-                token = keyRegex.find(keyJson)?.groups?.get(1)?.value ?: ""
-            }
-        } catch (e: Exception) { }
+        val token = Regex(
+            """eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+""",
+        ).find(html)?.value ?: return emptyList()
 
-        if (token.isEmpty()) {
-            token = Regex(
-                """eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+"""
-            ).find(html)?.value ?: ""
-        }
-
-        if (token.isEmpty()) {
-            token = Regex(
-                """eyJ[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+"""
-            ).find(html)?.value ?: ""
-        }
-
-        if (token.isEmpty()) return emptyList()
+        val apiHeaders = headers.newBuilder().set("Accept", "application/json").build()
 
         val firstResp = client.newCall(
             GET("$baseUrl/chapter-deferred-media/$chapterId?token=$token&split=0", apiHeaders),
@@ -355,43 +271,33 @@ class ProChan : HttpSource() {
     private fun reconstructPage(map: ScrambledMap): ByteArray? {
         val totalW = map.dim.getOrElse(0) { 800 }
         val totalH = map.dim.getOrElse(1) { 1200 }
+
         val (cols, rows) = parseMode(map.mode, map.pieces.size)
 
-        val result = try {
-            Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
-        } catch (e: OutOfMemoryError) {
-            try {
-                Bitmap.createBitmap(totalW, totalH, Bitmap.Config.RGB_565)
-            } catch (e2: OutOfMemoryError) {
-                return null
-            }
-        }
-        val canvas = Canvas(result)
-
+        val bitmaps = arrayOfNulls<Bitmap>(map.pieces.size)
         try {
-            for (targetIdx in map.pieces.indices) {
-                val srcIdx = map.order.getOrElse(targetIdx) { targetIdx }
-                val pieceUrl = map.pieces.getOrNull(srcIdx) ?: continue
-
+            for (i in map.pieces.indices) {
                 val req = Request.Builder()
-                    .url(pieceUrl)
+                    .url(map.pieces[i])
                     .header("Referer", "$baseUrl/")
-                    .header("Accept", "image/avif,image/webp,image/jpeg,*/*")
-                    .header("User-Agent", headers["User-Agent"] ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                    .header("Accept", "image/avif,*/*")
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36")
                     .build()
-
                 val resp = client.newCall(req).execute()
-                if (!resp.isSuccessful) {
-                    resp.close()
-                    continue
-                }
                 val bytes = resp.body.bytes()
                 resp.close()
+                bitmaps[i] = decodeAvif(bytes)
+            }
 
-                val bmp = decodeAvif(bytes) ?: continue
+            val result = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(result)
 
-                val pieceW = totalW / cols
-                val pieceH = totalH / rows
+            for (targetIdx in map.pieces.indices) {
+                val srcIdx = map.order.getOrElse(targetIdx) { targetIdx }
+                val bmp = bitmaps[srcIdx] ?: continue
+
+                val pieceW = bmp.width
+                val pieceH = bmp.height
 
                 val col = targetIdx % cols
                 val row = targetIdx / cols
@@ -399,20 +305,25 @@ class ProChan : HttpSource() {
                 val left = col * pieceW
                 val top = row * pieceH
 
-                val dst = Rect(left, top, left + pieceW, top + pieceH)
-                val src = Rect(0, 0, bmp.width, bmp.height)
+                val dst = Rect(
+                    left,
+                    top,
+                    left + pieceW,
+                    top + pieceH
+                )
 
-                canvas.drawBitmap(bmp, src, dst, null)
-                bmp.recycle()
+                canvas.drawBitmap(bmp, null, dst, null)
             }
 
             val out = ByteArrayOutputStream()
-            result.compress(Bitmap.CompressFormat.JPEG, 85, out)
+            result.compress(Bitmap.CompressFormat.JPEG, 90, out)
+            result.recycle()
+            bitmaps.forEach { it?.recycle() }
+
             return out.toByteArray()
         } catch (e: Exception) {
+            bitmaps.forEach { it?.recycle() }
             return null
-        } finally {
-            result.recycle()
         }
     }
 
@@ -512,14 +423,6 @@ class ProChan : HttpSource() {
         val title: String? = null,
         @SerialName("published_at") val publishedAt: String? = null,
         val lockedByCoins: Boolean? = null,
-        @SerialName("cdn_path") val cdnPath: String? = null,
-        val metadata: ChapterMetadataDto? = null
-    )
-
-    @Serializable
-    data class ChapterMetadataDto(
-        val images: List<String> = emptyList(),
-        val maps: List<PageMap> = emptyList()
     )
 
     @Serializable
