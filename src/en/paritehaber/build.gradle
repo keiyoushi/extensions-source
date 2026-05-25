@@ -3,7 +3,7 @@ ext {
     extClass = '.Paritehaber'
     themePkg = 'madara'
     baseUrl = 'https://www.paritehaber.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
