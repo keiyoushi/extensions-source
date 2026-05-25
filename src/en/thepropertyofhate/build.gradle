@@ -2,6 +2,7 @@ ext {
     extName = 'The Property of Hate'
     extClass = '.ThePropertyOfHate'
     extVersionCode = 5
+    isNsfw = false
 }
 
 apply plugin: "kei.plugins.extension.legacy"

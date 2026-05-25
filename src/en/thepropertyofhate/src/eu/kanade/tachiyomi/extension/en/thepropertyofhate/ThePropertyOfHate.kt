@@ -32,13 +32,37 @@ class ThePropertyOfHate : HttpSource() {
             url = baseUrl
         }
 
+    // ========================= Popular =========================
+
     override fun fetchPopularManga(page: Int) = Observable.just(MangasPage(listOf(manga), false))!!
+
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
+
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    // ========================= Latest =========================
+
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    // ========================= Search =========================
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    // ========================= Details =========================
 
     // write the data again to avoid bugs in backup restore
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(this.manga.also { it.initialized = true })!!
 
     // needed for the webview
     override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl, headers)
+
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
+
+    // ========================= Chapters =========================
 
     override fun chapterListRequest(manga: SManga) = GET("$baseUrl/TPoH/", headers)
 
@@ -81,23 +105,11 @@ class ThePropertyOfHate : HttpSource() {
         return chapters.reversed()
     }
 
+    // ========================= Pages =========================
+
     override fun pageListParse(response: Response) = response.asJsoup()
         .select("select.jumpbox option:not([style*=bold]):not([value=-1])")
         .mapIndexed { num, opt -> Page(num, opt.absUrl("value")) }
 
     override fun imageUrlParse(response: Response): String = response.asJsoup().selectFirst(".comic_comic > img")!!.absUrl("src")
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw Exception("Search functionality is not available.")
 }
