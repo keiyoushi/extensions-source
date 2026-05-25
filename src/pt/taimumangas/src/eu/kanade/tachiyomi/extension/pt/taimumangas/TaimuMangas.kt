@@ -28,8 +28,6 @@ class TaimuMangas : HttpSource() {
 
     override val supportsLatest = true
 
-    override val id: Long = 7322255162372562944
-
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
