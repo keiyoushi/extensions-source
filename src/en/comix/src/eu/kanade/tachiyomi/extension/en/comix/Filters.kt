@@ -57,6 +57,7 @@ class Filters {
             "Sci-Fi" to "24",
             "Ecchi" to "87265",
             "Horror" to "15",
+            "Harem" to "40",
             "Girls Love" to "13",
             "Isekai" to "16",
             "Hentai" to "87266",
