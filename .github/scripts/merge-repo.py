@@ -2,7 +2,12 @@ import html
 import sys
 import json
 from pathlib import Path
+import re
 import shutil
+
+from google.protobuf import json_format
+
+import index_pb2
 
 REMOTE_REPO: Path = Path.cwd()
 LOCAL_REPO: Path = REMOTE_REPO.parent.joinpath("main/repo")
@@ -36,6 +41,52 @@ legacy_index = [
 ]
 legacy_index.extend(local_index)
 legacy_index.sort(key=lambda x: x["pkg"])
+
+def extract_extension_lib(version: str) -> str:
+    if match := re.search(r'(\d+)\.(\d+)', version):
+        return f"{match.group(1)}.{match.group(2)}"
+
+    raise ValueError(f"Version {version} doesn't contain MAJOR.MINOR")
+
+index = index_pb2.Index(
+    name = "Keiyoushi",
+    badgeLabel = "KEI",
+    signingKey = "9add655a78e96c4ec7a53ef89dccb557cb5d767489fac5e785d671a5a75d4da2",
+    contact=index_pb2.Contact(
+        website="https://keiyoushi.github.io",
+        discord="https://discord.gg/3FbCpdKbdY"
+    ),
+    extensions=[
+        index_pb2.Extension(
+            name=extension["name"].replace("Tachiyomi: ", ""),
+            packageName=extension["pkg"],
+            resources=index_pb2.Resources(
+                apkUrl=f"https://raw.githubusercontent.com/keiyoushi/extensions/refs/heads/repo/apk/{extension["apk"]}",
+                iconUrl=f"https://raw.githubusercontent.com/keiyoushi/extensions/refs/heads/repo/icon/{extension["pkg"]}.png",
+            ),
+            extensionLib=extract_extension_lib(extension["version"]),
+            versionCode=extension["code"],
+            versionName=extension["version"],
+            sources=[
+                index_pb2.Source(
+                    id=int(source["id"]),
+                    name=source["name"],
+                    language=source["lang"],
+                    homeUrl=source["baseUrl"],
+                    contentRating=index_pb2.ContentRating.CONTENT_RATING_PORNOGRAPHIC if extension["nsfw"] == 1 else index_pb2.CONTENT_RATING_SAFE,
+                )
+                for source in extension["sources"]
+            ]
+        )
+        for extension in legacy_index
+    ]
+)
+
+with REMOTE_REPO.joinpath("index.json").open("w", encoding="utf-8") as index_file:
+    index_file.write(json_format.MessageToJson(index, always_print_fields_with_no_presence=False, preserving_proto_field_name=True))
+
+with REMOTE_REPO.joinpath("index.pb").open("wb") as index_pb_file:
+    index_pb_file.write(index.SerializeToString())
 
 with REMOTE_REPO.joinpath("index.min.json").open("w", encoding="utf-8") as index_min_file:
     json.dump(legacy_index, index_min_file, ensure_ascii=False, separators=(",", ":"))
