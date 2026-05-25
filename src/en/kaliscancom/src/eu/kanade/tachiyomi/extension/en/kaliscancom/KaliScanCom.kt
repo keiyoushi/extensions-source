@@ -26,7 +26,7 @@ class KaliScanCom :
         val mirrorPref = ListPreference(screen.context).apply {
             key = MIRROR_PREF_KEY
             title = "Mirror URL"
-            summary = "Select the domain to use. Requires app restart to take effect."
+            summary = "Select the domain to use."
             entries = MIRRORS
             entryValues = Array(MIRRORS.size) { it.toString() }
             setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
