@@ -515,6 +515,7 @@ class Mangadotnet :
             summary = "Exclude genres when browsing without 18+ content."
             this.entries = normalEntries.toTypedArray()
             entryValues = normalEntries.toTypedArray()
+            setDefaultValue(emptySet<String>())
             setEnabled((genres.normal != null || excludedNormal.isNotEmpty()) && mode == "none")
         }.also(screen::addPreference)
 
@@ -526,6 +527,7 @@ class Mangadotnet :
             summary = "Exclude genres when browsing with 18+ content."
             this.entries = adultEntries.toTypedArray()
             entryValues = adultEntries.toTypedArray()
+            setDefaultValue(emptySet<String>())
             setEnabled((genres.adult != null || excludedAdult.isNotEmpty()) && (mode == "1" || mode == "both"))
         }.also(screen::addPreference)
 
