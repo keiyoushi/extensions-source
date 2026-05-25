@@ -323,7 +323,7 @@ class MangaBall(
                         name = buildString {
                             if (translation.volume > 0) {
                                 append("Vol. ")
-                                append(translation.volume)
+                                append(translation.volume.toString().removeSuffix(".0"))
                                 append(" ")
                             }
                             val number = chapter.number.toString().removeSuffix(".0")
