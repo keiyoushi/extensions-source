@@ -26,7 +26,8 @@ private val NEXT_F_REGEX = Regex("""self\.__next_f\.push\(\s*(\[.*])\s*\)\s*;?\s
  * @param deserializer Deserializer used to convert matching nodes into [T].
  * @param results Accumulator for matched results.
  * @param firstOnly If true, stops after the first match is found.
- * @return `true` if caller should stop recursing (only when firstOnly && match found).
+ * @return `true` if traversal should stop — i.e. a matching element was found
+ * and firstOnly was true; `false` otherwise.
  */
 private fun <T> extractValueNextJs(
     payload: JsonElement,
@@ -339,7 +340,7 @@ private fun <T> Document.extractNextJsInternal(
     val results = mutableListOf<T>()
     for (payload in payloads) {
         val resolvedPayload = resolveNextJsRefs(payload, chunkCache, modelCache)
-        if (extractValueNextJs(resolvedPayload, predicate, deserializer, results, firstOnly) && firstOnly) {
+        if (extractValueNextJs(resolvedPayload, predicate, deserializer, results, firstOnly)) {
             break
         }
     }
@@ -437,7 +438,7 @@ private fun <T> String.extractNextJsRscInternal(
     val results = mutableListOf<T>()
     for (payload in extractRscPayloads(this, chunkCache, modelCache)) {
         val resolvedPayload = resolveNextJsRefs(payload, chunkCache, modelCache)
-        if (extractValueNextJs(resolvedPayload, predicate, deserializer, results, firstOnly) && firstOnly) {
+        if (extractValueNextJs(resolvedPayload, predicate, deserializer, results, firstOnly)) {
             break
         }
     }
