@@ -5,6 +5,7 @@ import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -58,7 +59,7 @@ class FairyScans :
     // ============================== Popular ==============================
 
     override fun popularMangaRequest(page: Int): Request {
-        val sortFilter = SortFilter().apply { state = eu.kanade.tachiyomi.source.model.Filter.Sort.Selection(1, false) }
+        val sortFilter = SortFilter().apply { state = Filter.Sort.Selection(1, false) }
         return searchMangaRequest(page, "", FilterList(sortFilter))
     }
 
@@ -67,7 +68,7 @@ class FairyScans :
     // ============================== Latest ===============================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val sortFilter = SortFilter().apply { state = eu.kanade.tachiyomi.source.model.Filter.Sort.Selection(0, false) }
+        val sortFilter = SortFilter().apply { state = Filter.Sort.Selection(0, false) }
         return searchMangaRequest(page, "", FilterList(sortFilter))
     }
 
