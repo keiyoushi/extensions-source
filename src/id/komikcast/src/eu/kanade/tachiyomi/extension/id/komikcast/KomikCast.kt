@@ -79,28 +79,16 @@ class KomikCast : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage = parseSeriesListResponse(response)
 
-    override fun getMangaUrl(manga: SManga): String {
-        val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
-        val slug = path[1]
-        return "$baseUrl/series/$slug"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.getSlug()}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
-        val slug = path[1]
-        return GET("$apiUrl/series/$slug", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/series/${manga.getSlug()}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<SeriesDetailResponse>()
         return result.data.toSManga()
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
-        val slug = path[1]
-        return GET("$apiUrl/series/$slug/chapters", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/series/${manga.getSlug()}/chapters", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<ChapterListResponse>()
@@ -109,28 +97,12 @@ class KomikCast : HttpSource() {
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        if (chapter.url.startsWith("/chapter/")) {
-            val slug = chapter.url.substringAfter("/chapter/").substringBefore("-chapter-")
-            val chapterIndex = chapter.url.substringAfter("-chapter-").substringBefore("-bahasa-")
-            return "$baseUrl/series/$slug/chapters/$chapterIndex"
-        }
-
-        val path = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
-        val slug = path[1]
-        val chapterIndex = path[3]
+        val (slug, chapterIndex) = chapter.getSlugAndIndex()
         return "$baseUrl/series/$slug/chapters/$chapterIndex"
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        if (chapter.url.startsWith("/chapter/")) {
-            val slug = chapter.url.substringAfter("/chapter/").substringBefore("-chapter-")
-            val chapterIndex = chapter.url.substringAfter("-chapter-").substringBefore("-bahasa-")
-            return GET("$apiUrl/series/$slug/chapters/$chapterIndex", headers)
-        }
-
-        val path = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
-        val slug = path[1]
-        val chapterIndex = path[3]
+        val (slug, chapterIndex) = chapter.getSlugAndIndex()
         return GET("$apiUrl/series/$slug/chapters/$chapterIndex", headers)
     }
 
@@ -167,5 +139,16 @@ class KomikCast : HttpSource() {
             .build()
 
         return GET(page.imageUrl!!, newHeaders)
+    }
+
+    private fun SManga.getSlug(): String = "$baseUrl$url".toHttpUrl().pathSegments[1]
+
+    private fun SChapter.getSlugAndIndex(): Pair<String, String> = if (url.startsWith("/chapter/")) {
+        val slug = url.substringAfter("/chapter/").substringBefore("-chapter-")
+        val chapterIndex = url.substringAfter("-chapter-").substringBefore("-bahasa-")
+        slug to chapterIndex
+    } else {
+        val path = "$baseUrl$url".toHttpUrl().pathSegments
+        path[1] to path[3]
     }
 }
