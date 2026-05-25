@@ -1,12 +1,16 @@
 package eu.kanade.tachiyomi.extension.pt.brscans
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.Request
 import okhttp3.Response
@@ -16,7 +20,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class BRScans : HttpSource() {
+class BRScans :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "BRScans"
 
@@ -31,6 +37,10 @@ class BRScans : HttpSource() {
             timeZone = TimeZone.getTimeZone("UTC")
         }
     }
+
+    private val preferences by getPreferencesLazy()
+
+    private val showNsfw: Boolean get() = preferences.getBoolean(SHOW_NSFW_PREF, true)
 
     // Genre caching system
     private var genreMap: Map<Int, String> = emptyMap()
@@ -65,13 +75,23 @@ class BRScans : HttpSource() {
         popularMangaParse(res)
     }
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manhwas/?page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = if (showNsfw) {
+        // Fetch the search endpoint with no query to get everything including NSFW
+        GET("$baseUrl/manhwas/search/?query=", headers)
+    } else {
+        // Default paginated list which filters out NSFW
+        GET("$baseUrl/manhwas/?page=$page", headers)
+    }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    override fun popularMangaParse(response: Response): MangasPage = if (showNsfw) {
+        val results = response.parseAs<List<ManhwaDto>>()
+        val mangas = results.map { it.toSManga(genreMap) }
+        MangasPage(mangas, false)
+    } else {
         val paginated = response.parseAs<PaginatedManhwaDto>()
         val mangas = paginated.results.map { it.toSManga(genreMap) }
         val hasNext = paginated.next != null
-        return MangasPage(mangas, hasNext)
+        MangasPage(mangas, hasNext)
     }
 
     // =============================== Latest ===============================
@@ -87,7 +107,6 @@ class BRScans : HttpSource() {
         latestUpdatesParse(res)
     }
 
-    // The backend default ordering is by recent chapter activity, which matches latest updates perfectly!
     override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
@@ -105,16 +124,17 @@ class BRScans : HttpSource() {
         searchMangaParse(res)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        // The search action on the backend is located at /manhwas/search/?query={query}
-        return GET("$baseUrl/manhwas/search/?query=${query.trim()}", headers)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/manhwas/search/?query=${query.trim()}", headers)
 
     override fun searchMangaParse(response: Response): MangasPage {
-        // The search endpoint returns a raw list (array) of ManhwaDto
         val results = response.parseAs<List<ManhwaDto>>()
-        val mangas = results.map { it.toSManga(genreMap) }
-        return MangasPage(mangas, false) // Search is currently unpaginated on the backend
+        val filteredResults = if (showNsfw) {
+            results
+        } else {
+            results.filter { !it.isNsfw }
+        }
+        val mangas = filteredResults.map { it.toSManga(genreMap) }
+        return MangasPage(mangas, false)
     }
 
     // =========================== Manga Details ============================
@@ -132,10 +152,7 @@ class BRScans : HttpSource() {
         }
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        // manga.url stores the manhwa ID
-        return GET("$baseUrl/manhwas/${manga.url}/", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/manhwas/${manga.url}/", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val dto = response.parseAs<ManhwaDto>()
@@ -144,24 +161,16 @@ class BRScans : HttpSource() {
 
     // ============================== Chapters ==============================
 
-    override fun chapterListRequest(manga: SManga): Request {
-        // The detailed manhwa response contains all its chapters
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val dto = response.parseAs<ManhwaDto>()
-        // Chapters are ordered ascending (1, 2, 3...) in the backend,
-        // so we reverse the list to show the latest chapters first.
         return dto.chapters.reversed().map { it.toSChapter(dateFormat) }
     }
 
     // =============================== Pages ================================
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        // chapter.url stores the chapter ID
-        return GET("$baseUrl/chapters/${chapter.url}/", headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/chapters/${chapter.url}/", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val dto = response.parseAs<ChapterDetailDto>()
@@ -171,4 +180,19 @@ class BRScans : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
+
+    // ============================= Settings ===============================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_NSFW_PREF
+            title = "Mostrar conteúdo adulto (+18)"
+            summary = "Habilita a listagem e visualização de manhwas adultos (+18) nos resultados."
+            setDefaultValue(true)
+        }.also(screen::addPreference)
+    }
+
+    companion object {
+        private const val SHOW_NSFW_PREF = "showNsfwPref"
+    }
 }

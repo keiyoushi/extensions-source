@@ -2,7 +2,7 @@ ext {
     extName = 'BRScans'
     extClass = '.BRScans'
     extVersionCode = 1
-    isNsfw = false
+    isNsfw = true
 }
 
 apply plugin: "kei.plugins.extension.legacy"
