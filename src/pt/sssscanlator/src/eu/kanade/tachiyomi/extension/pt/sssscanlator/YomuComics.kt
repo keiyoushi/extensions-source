@@ -163,7 +163,7 @@ class YomuComics : HttpSource() {
 
     private fun parseLibraryResponse(response: Response): MangasPage {
         val result = response.parseAs<LibraryResponseDto>()
-        val mangas = result.obras.map { it.toSManga() } + result.series.map { it.toSManga() }
+        val mangas = (result.mangas + result.series).map { it.toSManga() }
         val hasNextPage = result.pagination.page < result.pagination.totalPages
         return MangasPage(mangas, hasNextPage)
     }
@@ -190,7 +190,7 @@ class YomuComics : HttpSource() {
             url = "/obra/$mangaSlug"
         }
 
-        val chapters = payload.capitulos_lista.map { chapter ->
+        val chapters = payload.chapters.map { chapter ->
             chapter.toSChapter(mangaSlug)
         }
 

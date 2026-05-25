@@ -11,8 +11,9 @@ import java.util.TimeZone
 
 @Serializable
 class LibraryResponseDto(
-    @SerialName("obras") val obras: List<LibraryMangaDto> = emptyList(),
-    @SerialName("series") val series: List<LibraryMangaDto> = emptyList(),
+    @SerialName("obras")
+    val mangas: List<LibraryMangaDto> = emptyList(),
+    val series: List<LibraryMangaDto> = emptyList(),
     val pagination: LibraryPaginationDto = LibraryPaginationDto(),
 )
 
@@ -41,7 +42,8 @@ class SeriesPayloadDto(
     val author: String? = null,
     val artist: String? = null,
     val coverImage: String? = null,
-    val capitulos_lista: List<SeriesChapterDto> = emptyList(),
+    @SerialName("capitulos_lista")
+    val chapters: List<SeriesChapterDto> = emptyList(),
     private val slug: String? = null,
 )
 
