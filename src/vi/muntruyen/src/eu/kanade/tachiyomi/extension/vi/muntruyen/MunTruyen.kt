@@ -19,7 +19,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.util.Calendar
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 class MunTruyen :
     HttpSource(),
@@ -230,7 +232,7 @@ class MunTruyen :
             val link = element.selectFirst("a[href*=/truyen/]")!!
             setUrlWithoutDomain(link.absUrl("href"))
             name = parseChapterName(element.selectFirst("h3")!!.text())
-            date_upload = parseRelativeDate(element.selectFirst(".uk-article-meta")?.ownText())
+            date_upload = parseDate(element.selectFirst("time[datetime]")?.attr("datetime"))
         }
     }
 
@@ -239,19 +241,12 @@ class MunTruyen :
         return if (index >= 0) rawName.substring(index) else rawName
     }
 
-    private fun parseRelativeDate(date: String?): Long {
-        if (date == null) return 0L
-        val number = NUMBER_REGEX.find(date)?.value?.toIntOrNull() ?: return 0L
-        val cal = Calendar.getInstance()
-        return when {
-            "giây" in date -> cal.apply { add(Calendar.SECOND, -number) }.timeInMillis
-            "phút" in date -> cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
-            "giờ" in date -> cal.apply { add(Calendar.HOUR_OF_DAY, -number) }.timeInMillis
-            "ngày" in date -> cal.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
-            "tuần" in date -> cal.apply { add(Calendar.WEEK_OF_YEAR, -number) }.timeInMillis
-            "tháng" in date -> cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
-            "năm" in date -> cal.apply { add(Calendar.YEAR, -number) }.timeInMillis
-            else -> 0L
+    private fun parseDate(dateStr: String?): Long {
+        if (dateStr == null) return 0L
+        return try {
+            DATE_FORMAT.parse(dateStr)!!.time
+        } catch (_: Exception) {
+            0L
         }
     }
 
@@ -289,7 +284,9 @@ class MunTruyen :
         private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
         private const val BASE_URL_PREF_SUMMARY = "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
         private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
-        private val NUMBER_REGEX = Regex("""\d+""")
         private val THUMBNAIL_SIZE_REGEX = Regex("""-\d+x\d+\.""")
+        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ROOT).apply {
+            timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
+        }
     }
 }
