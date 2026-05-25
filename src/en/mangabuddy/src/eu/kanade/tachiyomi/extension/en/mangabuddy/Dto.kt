@@ -80,6 +80,7 @@ class PagePropsDto(
 
 @Serializable
 class InitialMangaDto(
+    val id: String,
     private val name: String,
     private val authors: List<EntityDto>? = null,
     private val summary: String? = null,

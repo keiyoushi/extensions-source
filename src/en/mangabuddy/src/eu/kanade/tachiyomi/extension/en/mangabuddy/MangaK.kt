@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -21,6 +22,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -124,7 +126,7 @@ class MangaK :
             }
 
             val includedGenres = mutableListOf<String>()
-            val excludedGenres = getBlacklist().toMutableList()
+            val excludedGenres = mutableListOf<String>() // Populated directly by the filter object
 
             filters.forEach { filter ->
                 when (filter) {
@@ -196,6 +198,24 @@ class MangaK :
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        if (!manga.url.contains("#")) {
+            return client.newCall(mangaDetailsRequest(manga)).asObservable().map { response ->
+                val dto = response.extractNextJs<NextJsDto> {
+                    it is JsonObject && "pageProps" in it
+                }
+
+                val id = dto?.pageProps?.initialManga?.id
+                    ?: throw Exception("Could not find manga ID for migration")
+
+                val request = GET("$apiUrl/titles/$id/chapters", headers)
+                client.newCall(request).execute().let { chapterListParse(it) }
+            }
+        }
+
+        return super.fetchChapterList(manga)
+    }
+
     override fun chapterListRequest(manga: SManga): Request {
         val id = manga.url.substringAfterLast("#")
         return GET("$apiUrl/titles/$id/chapters", headers)
@@ -224,19 +244,23 @@ class MangaK :
 
     // ============================== Filters ==============================
 
-    override fun getFilterList() = FilterList(
-        SortFilter(),
-        StatusFilter(),
-        TypeFilter(),
-        DemographicFilter(),
-        Filter.Separator(),
-        Filter.Header("Chapter Count"),
-        MinChapterFilter(),
-        MaxChapterFilter(),
-        Filter.Separator(),
-        Filter.Header("Genres (Excludes Blacklist)"),
-        GenreList(getGenreList()),
-    )
+    override fun getFilterList(): FilterList {
+        val blacklist = getBlacklist()
+
+        return FilterList(
+            SortFilter(),
+            StatusFilter(),
+            TypeFilter(),
+            DemographicFilter(),
+            Filter.Separator(),
+            Filter.Header("Chapter Count"),
+            MinChapterFilter(),
+            MaxChapterFilter(),
+            Filter.Separator(),
+            Filter.Header("Genres"),
+            GenreList(getGenreList(blacklist)),
+        )
+    }
 
     // ============================= Utilities =============================
 
