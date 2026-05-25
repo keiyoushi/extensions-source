@@ -86,9 +86,9 @@ class MunTruyen :
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotBlank()) {
-            val url = "$baseUrl/".toHttpUrl().newBuilder()
+            val pagePath = if (page > 1) "page/$page/" else ""
+            val url = "$baseUrl/$pagePath".toHttpUrl().newBuilder()
                 .addQueryParameter("s", query)
-                .apply { if (page > 1) addQueryParameter("paged", page.toString()) }
                 .build()
             return GET(url, headers)
         }
@@ -124,12 +124,13 @@ class MunTruyen :
     }
 
     private fun parseSearchPage(document: Document): MangasPage {
-        val mangaList = document.select("article").map { article ->
+        val mangaList = document.select("article:has(a[href*=/truyen/]):not(:has(a[href*=/truyen/truyen-chu]))").map { article ->
             SManga.create().apply {
                 val link = article.selectFirst("a[href*=/truyen/]")!!
                 setUrlWithoutDomain(link.absUrl("href"))
                 title = article.selectFirst("h2")!!.text()
                 thumbnail_url = article.selectFirst("img")?.absUrl("src")
+                    ?.replace(THUMBNAIL_SIZE_REGEX, ".")
             }
         }
 
@@ -146,6 +147,7 @@ class MunTruyen :
                     ?.parent()
                     ?.selectFirst("img[alt*=Ảnh bìa]")
                     ?.absUrl("src")
+                    ?.replace(THUMBNAIL_SIZE_REGEX, ".")
             }
         }
 
@@ -288,5 +290,6 @@ class MunTruyen :
         private const val BASE_URL_PREF_SUMMARY = "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
         private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
         private val NUMBER_REGEX = Regex("""\d+""")
+        private val THUMBNAIL_SIZE_REGEX = Regex("""-\d+x\d+\.""")
     }
 }
