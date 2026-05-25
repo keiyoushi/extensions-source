@@ -47,60 +47,46 @@ class TaimuMangas : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage = seriesListParse(response)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return seriesListRequest(page, query.takeIf(String::isNotBlank), filters)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = seriesListRequest(page, query.takeIf(String::isNotBlank), filters)
 
     override fun searchMangaParse(response: Response): MangasPage = seriesListParse(response)
 
     override fun getFilterList(): FilterList = getFilters()
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$API_BASE_URL/library/series/${extractCode(manga.url)}/", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$API_BASE_URL/library/series/${extractCode(manga.url)}/", headers)
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<SeriesDetailResponse>().series.toSManga()
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<SeriesDetailResponse>().series.toSManga()
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(chapterListRequest(manga)).asObservableSuccess()
-            .map { response ->
-                val chapters = mutableListOf<ChapterSummary>()
-                var chapterPage = response.parseAs<ChapterListResponse>().data
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga)).asObservableSuccess()
+        .map { response ->
+            val chapters = mutableListOf<ChapterSummary>()
+            var chapterPage = response.parseAs<ChapterListResponse>().data
 
+            chapters += chapterPage.chapters
+
+            while (chapterPage.hasNext) {
+                chapterPage = client.newCall(chapterListRequest(manga, chapterPage.currentPage + 1))
+                    .execute()
+                    .use { it.parseAs<ChapterListResponse>().data }
                 chapters += chapterPage.chapters
-
-                while (chapterPage.hasNext) {
-                    chapterPage = client.newCall(chapterListRequest(manga, chapterPage.currentPage + 1))
-                        .execute()
-                        .use { it.parseAs<ChapterListResponse>().data }
-                    chapters += chapterPage.chapters
-                }
-
-                chapters.map { it.toSChapter() }
             }
-    }
+
+            chapters.map { it.toSChapter() }
+        }
 
     override fun chapterListRequest(manga: SManga): Request = chapterListRequest(manga, 1)
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return response.parseAs<ChapterListResponse>().data.chapters.map { it.toSChapter() }
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<ChapterListResponse>().data.chapters.map { it.toSChapter() }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$API_BASE_URL/chapters/${extractCode(chapter.url)}/", headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET("$API_BASE_URL/chapters/${extractCode(chapter.url)}/", headers)
 
-    override fun pageListParse(response: Response): List<Page> {
-        return response.parseAs<ChapterDetailResponse>()
-            .chapter
-            .pages
-            .sortedBy { it.number }
-            .mapIndexed { index, page ->
-                Page(index, imageUrl = mediaUrl(page.path))
-            }
-    }
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<ChapterDetailResponse>()
+        .chapter
+        .pages
+        .sortedBy { it.number }
+        .mapIndexed { index, page ->
+            Page(index, imageUrl = mediaUrl(page.path))
+        }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
@@ -231,14 +217,12 @@ class TaimuMangas : HttpSource() {
         }
     }
 
-    private fun parseStatus(status: String?): Int {
-        return when (status?.lowercase(Locale.ROOT)) {
-            "ongoing", "em andamento" -> SManga.ONGOING
-            "completed", "complete", "finalizado" -> SManga.COMPLETED
-            "hiatus", "em hiato" -> SManga.ON_HIATUS
-            "cancelled", "canceled", "cancelado", "dropped", "abandonada" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
+    private fun parseStatus(status: String?): Int = when (status?.lowercase(Locale.ROOT)) {
+        "ongoing", "em andamento" -> SManga.ONGOING
+        "completed", "complete", "finalizado" -> SManga.COMPLETED
+        "hiatus", "em hiato" -> SManga.ON_HIATUS
+        "cancelled", "canceled", "cancelado", "dropped", "abandonada" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
     }
 
     private fun parseDate(date: String?): Long {
