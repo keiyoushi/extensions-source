@@ -19,7 +19,7 @@ class KaliScanCom :
     override val baseUrl: String
         get() {
             val index = preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)?.toIntOrNull() ?: 0
-            return MIRRORS[index.coerceAtMost(MIRRORS.size - 1)]
+            return MIRRORS[index.coerceIn(MIRRORS.indices)]
         }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
