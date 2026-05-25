@@ -33,7 +33,7 @@ class ViHentai : HttpSource() {
 
     override val name = "ViHentai"
 
-    override val baseUrl = "https://vi-hentai.moe"
+    override val baseUrl = "https://vi-hentai.pro"
 
     override val lang = "vi"
 
