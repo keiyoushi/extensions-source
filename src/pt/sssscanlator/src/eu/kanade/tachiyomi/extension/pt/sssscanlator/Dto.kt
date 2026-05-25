@@ -11,9 +11,7 @@ import java.util.TimeZone
 
 @Serializable
 class LibraryResponseDto(
-    @SerialName("obras")
-    val mangas: List<LibraryMangaDto> = emptyList(),
-    val series: List<LibraryMangaDto> = emptyList(),
+    val data: List<LibraryMangaDto> = emptyList(),
     val pagination: LibraryPaginationDto = LibraryPaginationDto(),
 )
 
@@ -42,7 +40,6 @@ class SeriesPayloadDto(
     val author: String? = null,
     val artist: String? = null,
     val coverImage: String? = null,
-    @SerialName("capitulos_lista")
     val chapters: List<SeriesChapterDto> = emptyList(),
     private val slug: String? = null,
 )
@@ -67,7 +64,13 @@ class SeriesChapterDto(
 
     companion object {
         private val RELEASE_AT_MILLIS by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZZZZZ", Locale.ROOT).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+        }
+
+        private val RELEASE_AT_SECONDS by lazy {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZZZZZ", Locale.ROOT).apply {
                 timeZone = TimeZone.getTimeZone("UTC")
             }
         }
@@ -78,20 +81,15 @@ class SeriesChapterDto(
 
         private fun parseChapterDate(releaseAt: String?, releaseDate: String?): Long {
             RELEASE_AT_MILLIS.tryParse(releaseAt).takeIf { it != 0L }?.let { return it }
+            RELEASE_AT_SECONDS.tryParse(releaseAt).takeIf { it != 0L }?.let { return it }
             return RELEASE_DATE.tryParse(releaseDate)
         }
     }
 }
 
 @Serializable
-class ChapterPageDto(
-    val chapter: ChapterImagesDto,
-)
-
-@Serializable
-class ChapterImagesDto(
-    @SerialName("imagens_lista")
-    val images: List<String>,
+class ChapterContentDto(
+    val content: List<String>,
 )
 
 private fun Double.toChapterNumberString(): String = toString().removeSuffix(".0")
