@@ -51,8 +51,7 @@ class ArgosComics : HttpSource() {
     // ======================== Latest =============================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().build()
-        return GET(url, rscHeaders)
+        return GET(baseUrl, rscHeaders)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = response.extractNextJs<LatestMangas>()!!.toMangasPage()
