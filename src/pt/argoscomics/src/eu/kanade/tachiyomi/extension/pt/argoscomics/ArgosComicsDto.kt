@@ -24,6 +24,13 @@ class MangasListDto(
 }
 
 @Serializable
+class LatestMangas(
+    private val lastUpdates: List<MangaDto>,
+) {
+    fun toMangasPage() = MangasPage(lastUpdates.map(MangaDto::toSManga), false)
+}
+
+@Serializable
 open class MangaDto(
     private val id: String,
     private val title: String,

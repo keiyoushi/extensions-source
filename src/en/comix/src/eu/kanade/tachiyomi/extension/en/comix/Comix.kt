@@ -60,7 +60,7 @@ class Comix :
             if (response.code != 404) return@addInterceptor response
 
             val url = request.url.toString()
-            val fallbacks = listOf("/i/", "/sii/", "/ii/")
+            val fallbacks = listOf("/si/", "/i/", "/sii/", "/ii/")
                 .map { url.replaceFirst(SCRAMBLE_PATH_FALLBACK_REGEX, it) }
                 .filter { it != url }
 
@@ -478,12 +478,7 @@ class Comix :
         val base = pages.baseUrl.trimEnd('/')
 
         pages.items.mapIndexed { index, img ->
-            var full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
-            if (img.s == 1) {
-                full = full.replaceFirst(SCRAMBLE_PATH_REGEX, "/s$1/")
-            } else {
-                full = full.replaceFirst(UNSCRAMBLE_PATH_REGEX, "/$1/")
-            }
+            val full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
             Page(index, imageUrl = full)
         }
     }
@@ -746,8 +741,6 @@ class Comix :
 
         private const val DEFAULT_CONTENT_RATING = "suggestive"
 
-        private val SCRAMBLE_PATH_REGEX = Regex("/(i+)/")
-        private val UNSCRAMBLE_PATH_REGEX = Regex("/s(i+)/")
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/s?i+/")
     }
 }
