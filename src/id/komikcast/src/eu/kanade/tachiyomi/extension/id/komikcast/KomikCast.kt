@@ -108,6 +108,19 @@ class KomikCast : HttpSource() {
         return result.data.map { it.toSChapter(slug) }
     }
 
+    override fun getChapterUrl(chapter: SChapter): String {
+        if (chapter.url.startsWith("/chapter/")) {
+            val slug = chapter.url.substringAfter("/chapter/").substringBefore("-chapter-")
+            val chapterIndex = chapter.url.substringAfter("-chapter-").substringBefore("-bahasa-")
+            return "$baseUrl/series/$slug/chapters/$chapterIndex"
+        }
+
+        val path = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
+        val slug = path[1]
+        val chapterIndex = path[3]
+        return "$baseUrl/series/$slug/chapters/$chapterIndex"
+    }
+
     override fun pageListRequest(chapter: SChapter): Request {
         if (chapter.url.startsWith("/chapter/")) {
             val slug = chapter.url.substringAfter("/chapter/").substringBefore("-chapter-")
