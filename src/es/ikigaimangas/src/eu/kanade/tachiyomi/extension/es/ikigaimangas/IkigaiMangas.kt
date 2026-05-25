@@ -1,6 +1,11 @@
 package eu.kanade.tachiyomi.extension.es.ikigaimangas
 
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -18,9 +23,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
@@ -31,6 +38,8 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 class IkigaiMangas :
@@ -44,7 +53,7 @@ class IkigaiMangas :
         else -> preferences.prefBaseUrl
     }
 
-    private val defaultBaseUrl: String = "https://viralikigai.melauroral.com"
+    private val defaultBaseUrl: String = "https://zonaikigai.gamesview.shop"
 
     private val fetchedDomainUrl: String by lazy {
         if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
@@ -52,7 +61,7 @@ class IkigaiMangas :
             val initClient = network.client
             val headers = super.headersBuilder().build()
             val document = initClient.newCall(GET("https://ikigaimangas.com", headers)).execute().asJsoup()
-            val scriptUrl = document.selectFirst("div[on:click]:containsOwn(Nuevo dominio)")?.attr("on:click")
+            val scriptUrl = document.selectFirst("div[on:click]:containsOwn(Ir al sitio)")?.attr("on:click")
                 ?: return@lazy preferences.prefBaseUrl
             val script = initClient.newCall(GET("https://ikigaimangas.com/build/$scriptUrl", headers)).execute().body.string()
             val domain = script.substringAfter("window.open(\"").substringBefore("\"")
@@ -199,43 +208,20 @@ class IkigaiMangas :
         return GET(apiUrl.build(), headers)
     }
 
-    val scriptUrlRegex = """from"(.*?\.js)"""".toRegex()
-    val seriesChunkRegex = """PUBLIC_BACKEND_API.*?"s_(.*?)"""".toRegex()
-
     private fun getQuerySeriesList(): List<QwikSeriesDto> {
         val baseUrl = preferences.prefBaseUrl
-        val homeDocument = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
-        val mainScript =
-            homeDocument.selectFirst("input[type=search][on:input]")?.attr("on:input")
-                ?: throw Exception("No se pudo encontrar la lista de series.")
-
-        val mainScriptData =
-            client.newCall(GET("$baseUrl/build/$mainScript", headers)).execute().body.string()
-
-        val scriptsUrls = scriptUrlRegex.findAll(mainScriptData).map { it.groupValues[1] }.toList()
-
-        scriptsUrls.forEach {
-            val scriptData =
-                client.newCall(GET("$baseUrl/build/$it", headers)).execute().body.string()
-            val seriesChunkMatch = seriesChunkRegex.find(scriptData)
-            if (seriesChunkMatch != null) {
-                val chunkId = seriesChunkMatch.groupValues[1]
-                val url = "$baseUrl/series".toHttpUrl().newBuilder()
-                    .addQueryParameter("qfunc", chunkId)
-                    .build()
-                val payload = """{"_entry":"1","_objs":["\u0002_#s_$chunkId",["0"]]}"""
-                val body = payload.toRequestBody()
-                val headers = headersBuilder()
-                    .set("X-QRL", chunkId)
-                    .set("Content-Type", "application/qwik-json")
-                    .build()
-                val response = client.newCall(POST(url.toString(), headers, body)).execute()
-                return response.parseAs<QwikData>().parseAsList<QwikSeriesDto>()
-                    .also { series -> seriesCache = series }
-            }
-        }
-
-        throw Exception("No se pudo encontrar la lista de series.")
+        val qfunc = getQfuncFromWebView(baseUrl, headers) ?: throw Exception("Ocurrio un error al obtener la lista de series")
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("qfunc", qfunc)
+            .build()
+        val payload = """{"_entry":"1","_objs":["\u0002_#s_$qfunc",["0"]]}"""
+        val body = payload.toRequestBody()
+        val headers = headersBuilder()
+            .set("X-QRL", qfunc)
+            .set("Content-Type", "application/qwik-json")
+            .build()
+        val response = client.newCall(POST(url.toString(), headers, body)).execute()
+        return response.parseAs<QwikData>().parseAsList<QwikSeriesDto>().also { seriesCache = it }
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -439,6 +425,105 @@ class IkigaiMangas :
     private inline fun <reified R> List<*>.firstInstanceOrNull(): R? = filterIsInstance<R>().firstOrNull()
 
     private enum class FiltersState { NOT_FETCHED, FETCHING, FETCHED }
+
+    private fun getQfuncFromWebView(url: String, headers: Headers): String? {
+        val latch = CountDownLatch(1)
+        val handler = Handler(Looper.getMainLooper())
+        val pool = ('a'..'z') + ('A'..'Z')
+        val interfaceName = (1..(10..20).random())
+            .map { pool.random() }
+            .joinToString("")
+        var result: String? = null
+        var webView: WebView? = null
+        handler.post {
+            webView = WebView(applicationContext).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.blockNetworkImage = true
+                settings.userAgentString = headers["User-Agent"]
+                addJavascriptInterface(
+                    object {
+                        @Suppress("unused")
+                        @JavascriptInterface
+                        fun onQfunc(value: String) {
+                            result = value
+                            latch.countDown()
+                        }
+                    },
+                    interfaceName,
+                )
+                webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView, loadedUrl: String) {
+                        super.onPageFinished(view, loadedUrl)
+                        injectFetchInterceptor(view, interfaceName)
+                        clickTargetButton(view)
+                    }
+                }
+                loadUrl(url)
+            }
+        }
+        latch.await(20, TimeUnit.SECONDS)
+        handler.post {
+            webView?.destroy()
+        }
+        return result
+    }
+
+    private fun injectFetchInterceptor(
+        webView: WebView,
+        interfaceName: String,
+    ) {
+        val script = """
+        (function () {
+            const originalFetch = window.fetch;
+            window.fetch = async function(resource, options) {
+                let url = "";
+                if (typeof resource === "string") {
+                    url = resource;
+                } else if (resource && resource.url) {
+                    url = resource.url;
+                }
+                if (url.includes("qfunc")) {
+                    const match = url.match(/[?&]qfunc=([^&]+)/);
+                    if (match) {
+                        const qfunc = decodeURIComponent(match[1]);
+                        window.$interfaceName.onQfunc(qfunc);
+                    }
+                }
+                return originalFetch.apply(this, arguments);
+            };
+        })();
+        """.trimIndent()
+
+        webView.evaluateJavascript(script, null)
+    }
+
+    private fun clickTargetButton(webView: WebView) {
+        val script = """
+        (function () {
+            let tries = 0;
+            const interval = setInterval(() => {
+                const btn = [...document.querySelectorAll('button')]
+                    .find(button =>
+                        [...button.querySelectorAll('span')]
+                            .some(span =>
+                                span.textContent?.trim().includes('Buscar...')
+                            )
+                    );
+                if (btn) {
+                    clearInterval(interval);
+                    btn.click();
+                    return;
+                }
+                tries++;
+                if (tries >= 20) {
+                    clearInterval(interval);
+                }
+            }, 500);
+        })();
+        """.trimIndent()
+        webView.evaluateJavascript(script, null)
+    }
 
     companion object {
         private const val SHOW_NSFW_PREF = "pref_show_nsfw"

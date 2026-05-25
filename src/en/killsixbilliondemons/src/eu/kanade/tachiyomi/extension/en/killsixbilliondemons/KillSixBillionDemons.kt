@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.killsixbilliondemons
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,13 +12,17 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Element
 import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
 
-class KillSixBillionDemons : HttpSource() {
+class KillSixBillionDemons :
+    HttpSource(),
+    ConfigurableSource {
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val name = "KillSixBillionDemons"
 
@@ -24,26 +32,33 @@ class KillSixBillionDemons : HttpSource() {
 
     override val supportsLatest: Boolean = false
 
-    private val authorKSBD = "Abbadon"
-    private val bookSelector: String = "#chapter option:contains(book)"
-    private val pagesOrder = "?order=ASC"
-    private val urlDateFormat = SimpleDateFormat("yyyy/MM", Locale.US)
-    private val descriptionKSBD =
-        "Q: What is this all about?\nThis is a webcomic! It’s graphic novel style, meaning it’s meant to be read in large chunks, but you can subject yourself to the agony of reading it a couple pages a week!\n" +
-            "\nQ: Do you have a twitter/tumble machine? Just who the hell draws this thing anyway?\n" +
-            "A mysterious comics goblin named Abbadon draws this mess. My twitter is @orbitaldropkick, my tumblr is orbitaldropkick.tumblr.com. If you’re feeling dangerous, you can e-mail me at ksbdabbadon@gmail.com\n" +
-            "\nQ: A webcomic, eh? When does it update?\n" +
-            "Tuesday and Friday evenings (and occasionally weekends). Sometimes it will be up quite late on those days.\n" +
-            "\nQ: Who’s this YISUN guy that keeps getting talked about?\n" +
-            "Someone has not read their Psalms and Spasms recently!\n" +
-            "\nQ: What’s this about suggestions?\n" +
-            "KSBD will periodically take suggestions, mostly on characters to stick in the background. You can also stick fanart, character ideas, concepts, and literature in the ‘Submit’ section up above. You need tumblr for this. If you want to suggest directly, the best way to do it is through the comments section below the comic! A huge chunk of minor characters have been named and inspired by reader comments so far.\n" +
-            "\nQ: Can I buy this book in a more traditional format?\n" +
-            "You absolutely can. You can get your hands on a print copy of the first and second books from Image comics in your local comics shop or anywhere else you can get comics. It looks fantastic in print and if you don’t like reading stuff online I highly recommend it."
+    private val descriptionKSBD = """
+        Q: What is this all about?
+        This is a webcomic! It’s graphic novel style, meaning it’s meant to be read in large chunks, but you can subject yourself to the agony of reading it a couple pages a week!
 
+        Q: Do you have a twitter/tumble machine? Just who the hell draws this thing anyway?
+        A mysterious comics goblin named Abbadon draws this mess. My twitter is @orbitaldropkick, my tumblr is orbitaldropkick.tumblr.com. If you’re feeling dangerous, you can e-mail me at ksbdabbadon@gmail.com
+
+        Q: A webcomic, eh? When does it update?
+        Tuesday and Friday evenings (and occasionally weekends). Sometimes it will be up quite late on those days.
+
+        Q: Who’s this YISUN guy that keeps getting talked about?
+        Someone has not read their Psalms and Spasms recently!
+
+        Q: What’s this about suggestions?
+        KSBD will periodically take suggestions, mostly on characters to stick in the background. You can also stick fanart, character ideas, concepts, and literature in the ‘Submit’ section up above. You need tumblr for this. If you want to suggest directly, the best way to do it is through the comments section below the comic! A huge chunk of minor characters have been named and inspired by reader comments so far.
+
+        Q: Can I buy this book in a more traditional format?
+        You absolutely can. You can get your hands on a print copy of the first and second books from Image comics in your local comics shop or anywhere else you can get comics. It looks fantastic in print and if you don’t like reading stuff online I highly recommend it.
+    """.trimIndent()
+
+    private fun getUrlPath(url: String): String = runCatching {
+        java.net.URI(url).path.takeUnless { it.isNullOrEmpty() }
+    }.getOrNull() ?: url
+
+    // ========================= Popular =========================
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
-    // list of books
     override fun popularMangaParse(response: Response): MangasPage = generateKSBDMangasPage()
 
     /**
@@ -57,7 +72,7 @@ class KillSixBillionDemons : HttpSource() {
      */
     private fun fetchBooksAsMangas(): List<SManga> {
         val doc = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
-        val bookElements = doc.select(bookSelector)
+        val bookElements = doc.select("#chapter option").filter { it.isBookOption }
         return bookElements.map { bookElement ->
             val bookOverviewUrl = bookElement.attr("value")
             val bookTitle = bookElement.text().substringBefore(" (")
@@ -65,8 +80,8 @@ class KillSixBillionDemons : HttpSource() {
             SManga.create().apply {
                 title = bookTitle
                 setUrlWithoutDomain(bookOverviewUrl)
-                artist = authorKSBD
-                author = authorKSBD
+                artist = AUTHOR_KSBD
+                author = AUTHOR_KSBD
                 description = descriptionKSBD
                 thumbnail_url = fetchThumbnailUrl(bookOverviewUrl)
                 status = fetchStatusForBook(bookTitle)
@@ -83,7 +98,7 @@ class KillSixBillionDemons : HttpSource() {
      */
     private fun fetchThumbnailUrl(bookOverviewUrl: String): String {
         val overviewDoc =
-            client.newCall(GET(bookOverviewUrl + pagesOrder, headers)).execute().asJsoup()
+            client.newCall(GET(bookOverviewUrl + PAGES_ORDER, headers)).execute().asJsoup()
         return overviewDoc.selectFirst(".comic-thumbnail-in-archive a img")!!.attr("src")
     }
 
@@ -99,82 +114,128 @@ class KillSixBillionDemons : HttpSource() {
         val newestPage = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
         val postTitle = newestPage.selectFirst(".post-title")?.text() ?: ""
         // title is "<book name> <page(s)>"
-        return if (postTitle.lowercase().contains(bookTitleWithoutBook.lowercase())) {
+        return if (postTitle.contains(bookTitleWithoutBook, ignoreCase = true)) {
             SManga.UNKNOWN
         } else {
             SManga.COMPLETED
         }
     }
 
-    // latest Updates not used
+    // ========================= Latest =========================
     override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
+    // ========================= Details =========================
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(fetchBooksAsMangas().find { manga.title == it.title })
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
-        fetchChapterListTR(
-            baseUrl + manga.url + pagesOrder,
-            mutableListOf(),
-        ).reversed(),
-    )
+    // ========================= Chapters =========================
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val doc = client.newCall(GET(baseUrl + manga.url, headers)).execute().asJsoup()
+        val options = doc.select("#chapter option")
 
-    /**
-     * Though this is recursive this will be optimized by the compiler into a for loop equivalent
-     * thing. This has to be done this way because the maximum number of further chapter overview
-     * pages that will be shown on one chapter overview page will at maximum be 5 enven though there
-     * might be more.
-     *
-     * @param currentUrl url of the current page / the page this algorithm will start the recursion on
-     * @param foundChapters a list of all found chapters (should be empty)
-     * @return a list of all chapters that were found under "currentUrl" and following pages
-     */
-    private tailrec fun fetchChapterListTR(
-        currentUrl: String,
-        foundChapters: MutableList<SChapter>,
-    ): MutableList<SChapter> {
-        val numberOfPreviousChapters = foundChapters.size
-        val currentPage = client.newCall(GET(currentUrl, headers)).execute().asJsoup()
-        val chaptersOnCurrentPage = currentPage.select(".post-content")
-            .mapIndexed { index, chapterElement ->
-                val chapterTitle: String = chapterElement.select(".post-title a").text()
-                val chapterUrl: String =
-                    chapterElement.select(".comic-thumbnail-in-archive a").attr("href")
-                val imageUrl =
-                    chapterElement.select(".comic-thumbnail-in-archive a img").attr("src")
+        val allOptions = options.filter { it.isValidOption }
 
-                SChapter.create().apply {
-                    setUrlWithoutDomain(chapterUrl)
-                    name = chapterTitle
-                    chapter_number = numberOfPreviousChapters + index + 1f
-                    date_upload = extractDateFromImageUrl(imageUrl)
+        val groupEnded = preferences.getBoolean(ACTIVE_CHAPTER_PREF_KEY, false)
+
+        val lastChapterIndex = allOptions.indexOfLast { !it.isBookOption }
+
+        val chapters = buildList {
+            var foundBook = false
+            var chapterIndex = 1f
+
+            for ((i, option) in allOptions.withIndex()) {
+                val text = option.text().trim()
+                val value = option.attr("value")
+
+                if (option.isBookOption) {
+                    if (foundBook) {
+                        // Reached the next book, stop gathering chapters
+                        break
+                    }
+                    val optionPath = getUrlPath(value).removeSuffix("/")
+                    val mangaPath = getUrlPath(manga.url).removeSuffix("/")
+                    if (optionPath.equals(mangaPath, ignoreCase = true)) {
+                        foundBook = true
+                    }
+                } else if (foundBook) {
+                    val chapterTitle = "Chapter ${text.substringBefore(" (").trim()}"
+                    val shouldExpand = !groupEnded || (i == lastChapterIndex)
+
+                    if (shouldExpand) {
+                        addAll(fetchActiveChapterPages(getUrlPath(value), chapterTitle, chapterIndex++))
+                    } else {
+                        add(
+                            SChapter.create().apply {
+                                setUrlWithoutDomain(value)
+                                name = chapterTitle
+                                chapter_number = chapterIndex++
+                                date_upload = 0L
+                            },
+                        )
+                    }
                 }
             }
-
-        foundChapters.addAll(chaptersOnCurrentPage)
-
-        val potentialNextPageUrl = currentPage.select(".paginav-next a").attr("href")
-        return if (potentialNextPageUrl.isEmpty()) {
-            foundChapters
-        } else {
-            fetchChapterListTR(potentialNextPageUrl, foundChapters)
         }
+
+        return Observable.just(chapters.reversed())
     }
 
     /**
-     * @param imageUrl Url the date should be got from
-     * @return date of the image upload as a long
+     * Fetches all pages of the active chapter from the website, creating individual chapter entries for each.
+     *
+     * @param chapterUrl the relative URL path of the active chapter archive
+     * @param chapterTitle the title prefix of the chapter (e.g. "Chapter 6")
+     * @param startChapterNumber the base chapter number (e.g. 6.0f)
+     * @return a list of page-based SChapter objects
      */
-    private fun extractDateFromImageUrl(imageUrl: String): Long {
-        val dateRegex = "[0-9]{4}/[0-9]{2}".toRegex()
-        val dateString = dateRegex.find(imageUrl)
-        return if (dateString?.value != null) {
-            return urlDateFormat.parse(dateString.value)?.time ?: 0L
-        } else {
-            0L
+    private fun fetchActiveChapterPages(
+        chapterUrl: String,
+        chapterTitle: String,
+        startChapterNumber: Float,
+    ): List<SChapter> = buildList {
+        fetchActiveChapterPagesTR(baseUrl + chapterUrl + PAGES_ORDER, chapterTitle, startChapterNumber, this)
+    }
+
+    /**
+     * Recursively fetches and collects pages from active chapter archive pagination.
+     *
+     * @param currentUrl the current paginated URL to scrape
+     * @param chapterTitle the title prefix of the chapter
+     * @param startChapterNumber the base chapter number
+     * @param pages mutable list where found page-chapters are accumulated
+     */
+    private tailrec fun fetchActiveChapterPagesTR(
+        currentUrl: String,
+        chapterTitle: String,
+        startChapterNumber: Float,
+        pages: MutableList<SChapter>,
+    ) {
+        val currentPage = client.newCall(GET(currentUrl, headers)).execute().asJsoup()
+
+        val links = currentPage.select(".comic-thumbnail-in-archive a")
+        for (link in links) {
+            val href = link.attr("href")
+            val title = link.attr("title").trim()
+            if (href.isNotEmpty()) {
+                val pageNum = pages.size + 1
+                val pageTitle = if (title.isNotEmpty()) "$chapterTitle - $title" else "$chapterTitle Page $pageNum"
+                pages.add(
+                    SChapter.create().apply {
+                        setUrlWithoutDomain(href)
+                        name = pageTitle
+                        chapter_number = startChapterNumber + (pageNum / 1000f)
+                        date_upload = 0L
+                    },
+                )
+            }
+        }
+
+        val potentialNextPageUrl = currentPage.select(".paginav-next a").attr("href")
+        if (potentialNextPageUrl.isNotEmpty()) {
+            fetchActiveChapterPagesTR(potentialNextPageUrl, chapterTitle, startChapterNumber, pages)
         }
     }
 
@@ -182,21 +243,52 @@ class KillSixBillionDemons : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        val chapterDoc = client.newCall(GET(baseUrl + chapter.url, headers)).execute().asJsoup()
-        val pages = chapterDoc.select("#comic img")
-            .mapIndexed { index, imageElement ->
-                val imageUrl = imageElement.attr("src")
-                Page(index + 1, "", imageUrl)
-            }
+    // ========================= Pages =========================
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.just(
+        buildList {
+            fetchPagesTR(baseUrl + chapter.url + PAGES_ORDER, this)
+        },
+    )
 
-        return Observable.just(pages)
+    /**
+     * Recursively fetches and collects comic page images for a chapter. Supports both chapter
+     * archives (with multiple thumbnails) and individual comic pages.
+     *
+     * @param currentUrl the current URL to scrape
+     * @param pages mutable list where found Page objects are accumulated
+     */
+    private tailrec fun fetchPagesTR(
+        currentUrl: String,
+        pages: MutableList<Page>,
+    ) {
+        val currentPage = client.newCall(GET(currentUrl, headers)).execute().asJsoup()
+
+        val images = currentPage.select(".comic-thumbnail-in-archive a img")
+        if (images.isNotEmpty()) {
+            for (img in images) {
+                img.attr("src").takeIf { it.isNotEmpty() }?.let { src ->
+                    val imageUrl = src.replace(wordpressThumbnailRegex, "")
+                    pages.add(Page(pages.size + 1, "", imageUrl))
+                }
+            }
+        } else {
+            currentPage.selectFirst("#comic img")?.attr("src")?.takeIf { it.isNotEmpty() }?.let { src ->
+                val imageUrl = src.replace(wordpressThumbnailRegex, "")
+                pages.add(Page(pages.size + 1, "", imageUrl))
+            }
+        }
+
+        val potentialNextPageUrl = currentPage.select(".paginav-next a").attr("href")
+        if (potentialNextPageUrl.isNotEmpty()) {
+            fetchPagesTR(potentialNextPageUrl, pages)
+        }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
+    // ========================= Search =========================
     override fun fetchSearchManga(
         page: Int,
         query: String,
@@ -206,4 +298,33 @@ class KillSixBillionDemons : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+
+    // ========================= Preferences =========================
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val activeChapterPref = SwitchPreferenceCompat(screen.context).apply {
+            key = ACTIVE_CHAPTER_PREF_KEY
+            title = "Group ended chapters"
+            summary =
+                "Group pages into chapters when they have fully ended. For the active/ongoing chapter, its pages will be listed individually."
+            setDefaultValue(false)
+        }
+        screen.addPreference(activeChapterPref)
+    }
+
+    // ========================= Helpers =========================
+    private val Element.isValidOption: Boolean
+        get() {
+            val text = text().trim()
+            return attr("value") != "0" && !text.equals("select chapter", ignoreCase = true)
+        }
+
+    private val Element.isBookOption: Boolean
+        get() = isValidOption && text().trim().substringBefore(" (").trim().toFloatOrNull() == null
+
+    companion object {
+        private const val ACTIVE_CHAPTER_PREF_KEY = "group_ended"
+        private const val AUTHOR_KSBD = "Abbadon"
+        private const val PAGES_ORDER = "?order=ASC"
+        private val wordpressThumbnailRegex = "-\\d+x\\d+(?=\\.(?:jpe?g|png|webp|gif)(?:\\?.*)?$)".toRegex(RegexOption.IGNORE_CASE)
+    }
 }
