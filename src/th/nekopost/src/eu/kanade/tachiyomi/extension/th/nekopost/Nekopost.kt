@@ -269,16 +269,10 @@ class Nekopost : HttpSource() {
         }
 
         if (endIndex == -1) throw Exception("Invalid response")
-        val rawBlock = searchRange.substring(0, endIndex)
+        return searchRange.substring(0, endIndex)
             // Uses lookbehind (?<=[{,]) to target keys following '{' or ',' so it doesn't break web URLs
             .replace(Regex("(?<=[{,])\\s*([a-zA-Z0-9_]+)\\s*:"), "\"$1\":")
-
-        val jsonParser = Json {
-            ignoreUnknownKeys = true
-            isLenient = true
-        }
-
-        return jsonParser.decodeFromString<RawProjectInfo>(rawBlock)
+            .parseAs()
     }
 
     override fun pageListRequest(chapter: SChapter) = GET("$fileHost/collectManga/${chapter.url}", headers)
