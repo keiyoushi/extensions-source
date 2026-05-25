@@ -23,7 +23,7 @@ REPO_ICON_DIR.mkdir(parents=True, exist_ok=True)
 with open("output.json", encoding="utf-8") as f:
     inspector_data = json.load(f)
 
-index_min_data = []
+index_data = []
 
 for apk in REPO_APK_DIR.iterdir():
     badging = subprocess.check_output(
@@ -58,7 +58,7 @@ for apk in REPO_APK_DIR.iterdir():
         ):
             language = source_language
 
-    common_data = {
+    extension_data = {
         "name": APPLICATION_LABEL_REGEX.search(badging).group(1),
         "pkg": package_name,
         "apk": apk.name,
@@ -66,24 +66,18 @@ for apk in REPO_APK_DIR.iterdir():
         "code": int(VERSION_CODE_REGEX.search(package_info).group(1)),
         "version": VERSION_NAME_REGEX.search(package_info).group(1),
         "nsfw": int(IS_NSFW_REGEX.search(badging).group(1)),
-    }
-    min_data = {
-        **common_data,
-        "sources": [],
-    }
-
-    for source in sources:
-        min_data["sources"].append(
+        "sources": [
             {
                 "name": source["name"],
                 "lang": source["lang"],
                 "id": source["id"],
                 "baseUrl": source["baseUrl"],
-                "versionId": source["versionId"],
             }
-        )
+            for source in sources
+        ],
+    }
 
-    index_min_data.append(min_data)
+    index_data.append(extension_data)
 
 with REPO_DIR.joinpath("index.min.json").open("w", encoding="utf-8") as index_file:
-    json.dump(index_min_data, index_file, ensure_ascii=False, separators=(",", ":"))
+    json.dump(index_data, index_file, ensure_ascii=False, separators=(",", ":"))
