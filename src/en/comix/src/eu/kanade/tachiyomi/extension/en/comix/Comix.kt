@@ -53,6 +53,8 @@ class Comix :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
+        .addInterceptor(Cipher.interceptor)
+        .addNetworkInterceptor(Descrambler.interceptor)
         .rateLimit(5)
         .build()
 
@@ -400,7 +402,10 @@ class Comix :
             .parseAs<ChapterResponse>().result.pages
         val base = result.baseUrl.trimEnd('/')
         val pages = result.items.mapIndexed { index, img ->
-            val full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
+            var full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
+            if (img.s == 1) {
+                full = full.replaceFirst(SCRAMBLE_PATH_REGEX, "/s$1/")
+            }
             Page(index, imageUrl = full)
         }
 
@@ -626,5 +631,7 @@ class Comix :
         private const val PREF_SCORE_POSITION = "pref_score_position"
 
         private const val DEFAULT_CONTENT_RATING = "suggestive"
+
+        private val SCRAMBLE_PATH_REGEX = Regex("/(i+)/")
     }
 }
