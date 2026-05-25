@@ -55,6 +55,26 @@ class Comix :
 
     override val client = network.client.newBuilder()
         .addNetworkInterceptor(Descrambler.interceptor)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+            if (response.code != 404) return@addInterceptor response
+
+            val url = request.url.toString()
+            val fallbacks = listOf("/i/", "/sii/", "/ii/")
+                .map { url.replaceFirst(SCRAMBLE_PATH_FALLBACK_REGEX, it) }
+                .filter { it != url }
+
+            if (fallbacks.isEmpty()) return@addInterceptor response
+
+            var lastResponse = response
+            for (fallbackUrl in fallbacks) {
+                lastResponse.close()
+                lastResponse = chain.proceed(request.newBuilder().url(fallbackUrl).build())
+                if (lastResponse.code != 404) break
+            }
+            lastResponse
+        }
         .rateLimit(5)
         .build()
 
@@ -382,6 +402,8 @@ class Comix :
             var full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
             if (img.s == 1) {
                 full = full.replaceFirst(SCRAMBLE_PATH_REGEX, "/s$1/")
+            } else {
+                full = full.replaceFirst(UNSCRAMBLE_PATH_REGEX, "/$1/")
             }
             Page(index, imageUrl = full)
         }
@@ -665,5 +687,7 @@ class Comix :
         private const val DEFAULT_CONTENT_RATING = "suggestive"
 
         private val SCRAMBLE_PATH_REGEX = Regex("/(i+)/")
+        private val UNSCRAMBLE_PATH_REGEX = Regex("/s(i+)/")
+        private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/s?i+/")
     }
 }
