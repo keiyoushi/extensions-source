@@ -2,9 +2,11 @@ package eu.kanade.tachiyomi.extension.en.mangadotnet
 
 import android.app.Application
 import android.util.Log
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -82,6 +84,12 @@ class Mangadotnet :
             }
         }
     }
+
+    private val officialPriorityPatterns = listOf(
+        "manga plus", "mangaplus", "viz media", "viz manga", "webtoon",
+        "tapas", "mangadex", "k manga", "kmanga", "mangaup", "manga up",
+        "comikey", "shonen jump", "shounen jump", "shonenjump", "official",
+    ).map { Regex("\\b${Regex.escape(it)}\\b") }
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
@@ -301,6 +309,8 @@ class Mangadotnet :
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = runBlocking {
         coroutineScope {
             val mode = chapterModePref()
+            val deduplicate = preferences.getBoolean(DEDUPLICATE_CHAPTERS, false)
+
             val chapters = async {
                 if (mode != "volumes") {
                     val response = client.newCall(chapterListRequest(manga)).await()
@@ -347,12 +357,57 @@ class Mangadotnet :
                 addAll(volumes.await())
             }
 
-            val hasScanlator = allChapters.any { it.scanlator != null }
-            if (hasScanlator) {
-                allChapters.forEach { it.scanlator = it.scanlator ?: "\u200B" }
+            val finalChapters = if (deduplicate && allChapters.isNotEmpty()) {
+                val prefPatterns = preferences.getString(PREFERRED_SCANLATORS, "")
+                    ?.split(",")
+                    ?.map { it.trim().lowercase() }
+                    ?.filter { it.isNotBlank() }
+                    ?.map { Regex("\\b${Regex.escape(it)}\\b") }
+                    ?: emptyList()
+
+                val prefPatternsLower = prefPatterns.map { it.pattern.lowercase() }.toSet()
+                val fullPriorityPatterns = prefPatterns + officialPriorityPatterns.filter { pattern ->
+                    pattern.pattern.lowercase() !in prefPatternsLower
+                }
+
+                val dedupedChapters = mutableListOf<SChapter>()
+                val grouped = allChapters.groupBy { it.chapter_number }
+
+                for ((chapterNum, chapterGroup) in grouped) {
+                    if (chapterNum <= 0f || chapterGroup.size == 1) {
+                        dedupedChapters.addAll(chapterGroup)
+                        continue
+                    }
+
+                    var selectedChapter: SChapter? = null
+
+                    for (pattern in fullPriorityPatterns) {
+                        val match = chapterGroup.find { ch ->
+                            ch.scanlator?.lowercase()?.let { s -> pattern.containsMatchIn(s) } == true
+                        }
+                        if (match != null) {
+                            selectedChapter = match
+                            break
+                        }
+                    }
+
+                    if (selectedChapter == null) {
+                        selectedChapter = chapterGroup.first()
+                    }
+
+                    dedupedChapters.add(selectedChapter)
+                }
+                dedupedChapters
+            } else {
+                allChapters
             }
 
-            Observable.just(allChapters)
+            val hasScanlator = finalChapters.any { it.scanlator != null }
+            if (hasScanlator) {
+                finalChapters.forEach { it.scanlator = it.scanlator ?: "\u200B" }
+            }
+
+            Observable.just(finalChapters)
         }
     }
 
@@ -506,7 +561,8 @@ class Mangadotnet :
             entryValues = arrayOf("none", "1", "both")
             setDefaultValue("none")
             summary = "%s"
-        }.also(screen::addPreference)
+        }
+        screen.addPreference(nsfwPref)
 
         ListPreference(screen.context).apply {
             key = CHAPTER_MODE
@@ -516,6 +572,28 @@ class Mangadotnet :
             setDefaultValue("chapters")
             summary = "%s\nNote: Most titles don't have volumes"
         }.also(screen::addPreference)
+
+        val dedupeSwitch = SwitchPreferenceCompat(screen.context).apply {
+            key = DEDUPLICATE_CHAPTERS
+            title = "Deduplicate Chapters"
+            summary = "Keep only one version of each chapter, preferring selected scanlators."
+            setDefaultValue(false)
+        }
+        screen.addPreference(dedupeSwitch)
+
+        val priorityPref = EditTextPreference(screen.context).apply {
+            key = PREFERRED_SCANLATORS
+            title = "Scanlator Priority"
+            summary = "Comma-separated, in order of preference. First match wins.\nOfficial Scrapers: Manga Plus, VIZ Media, Webtoon, Tapas, MangaDex, K Manga, MangaUP, Comikey, Shonen Jump"
+            setDefaultValue("VIZ Media, MANGA Plus, MangaPlus, Official, Webtoon, Tapas, MangaDex, K Manga, MangaUP, Comikey, Shonen Jump")
+            setEnabled(preferences.getBoolean(DEDUPLICATE_CHAPTERS, false))
+        }
+        screen.addPreference(priorityPref)
+
+        dedupeSwitch.setOnPreferenceChangeListener { _, newValue ->
+            priorityPref.setEnabled(newValue as Boolean)
+            true
+        }
 
         val excludedNormal = preferences.getStringSet(EXCLUDE_GENRE_PREF, emptySet())!!
         val normalEntries = genres.normal ?: excludedNormal.toList()
@@ -527,7 +605,8 @@ class Mangadotnet :
             entryValues = normalEntries.toTypedArray()
             setDefaultValue(emptySet<String>())
             setEnabled((genres.normal != null || excludedNormal.isNotEmpty()) && mode == "none")
-        }.also(screen::addPreference)
+        }
+        screen.addPreference(normalGenrePref)
 
         val excludedAdult = preferences.getStringSet(EXCLUDE_GENRE_ADULT_PREF, emptySet())!!
         val adultEntries = genres.adult ?: excludedAdult.toList()
@@ -539,7 +618,8 @@ class Mangadotnet :
             entryValues = adultEntries.toTypedArray()
             setDefaultValue(emptySet<String>())
             setEnabled((genres.adult != null || excludedAdult.isNotEmpty()) && (mode == "1" || mode == "both"))
-        }.also(screen::addPreference)
+        }
+        screen.addPreference(adultGenrePref)
 
         nsfwPref.setOnPreferenceChangeListener { _, newValue ->
             val newMode = newValue as String
@@ -547,6 +627,7 @@ class Mangadotnet :
             adultGenrePref.setEnabled((genres.adult != null || excludedAdult.isNotEmpty()) && (newMode == "1" || newMode == "both"))
             true
         }
+
         ListPreference(screen.context).apply {
             key = BROWSE_TYPE_PREF
             title = "Type Filter"
@@ -611,3 +692,5 @@ private const val EXCLUDE_GENRE_PREF = "pref_exclude_genre"
 private const val EXCLUDE_GENRE_ADULT_PREF = "pref_exclude_genre_adult"
 private const val BROWSE_TYPE_PREF = "pref_browse_type"
 private const val BROWSE_STATUS_PREF = "pref_browse_status"
+private const val DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
+private const val PREFERRED_SCANLATORS = "pref_preferred_scanlators"
