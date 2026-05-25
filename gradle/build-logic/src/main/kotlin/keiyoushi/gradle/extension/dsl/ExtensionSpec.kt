@@ -9,6 +9,7 @@ abstract class ExtensionSpec @Inject constructor(
     private val objects: ObjectFactory,
 ) {
     abstract val name: Property<String>
+    abstract val className: Property<String>
     abstract val versionCode: Property<Int>
     abstract val nsfw: Property<Boolean>
     abstract val theme: Property<String>

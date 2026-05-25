@@ -35,19 +35,10 @@ import uy.kohesive.injekt.api.get
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class AllManga :
+abstract class AllManga :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "AllManga"
-
-    override val baseUrl = "https://allmanga.to"
-
     private val apiUrl = "https://api.allanime.day/api"
-
-    override val lang = "en"
-
-    override val id = 4709139914729853090
 
     override val supportsLatest = true
 

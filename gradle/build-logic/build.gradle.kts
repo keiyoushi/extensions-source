@@ -28,7 +28,6 @@ dependencies {
     compileOnly(gradleKotlinDsl())
     compileOnly(libs.android.gradle)
     compileOnly(libs.kotlin.gradle)
-    implementation(libs.ksp.gradle)
     implementation(libs.spotless.gradle)
     implementation(libs.tapmoc.gradle)
     implementation(libs.kotlin.json)

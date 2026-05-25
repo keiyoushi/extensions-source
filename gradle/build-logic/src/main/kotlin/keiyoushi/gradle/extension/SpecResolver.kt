@@ -1,8 +1,10 @@
 package keiyoushi.gradle.extension
 
+import keiyoushi.gradle.extension.codegen.DeeplinkFilter
 import keiyoushi.gradle.extension.codegen.ResolvedExtension
 import keiyoushi.gradle.extension.codegen.ResolvedSource
 import keiyoushi.gradle.extension.codegen.generateSourceId
+import keiyoushi.gradle.extension.dsl.BaseUrlSpec
 import keiyoushi.gradle.extension.dsl.ExtensionSpec
 import keiyoushi.gradle.extension.dsl.ThemeDeeplinkSpec
 import keiyoushi.gradle.extension.dsl.defaultUrl
@@ -18,7 +20,7 @@ data class ResolvedSpec(
 )
 
 fun Project.resolveExtensionSpec(spec: ExtensionSpec, pkg: String): ResolvedSpec {
-    val extName = validateAndGetName(spec)
+    val (extName, className) = validateAndGetMetadata(spec)
     val sources = validateAndGetSources(spec)
 
     val themeProject = spec.theme.orNull?.let { themeName ->
@@ -41,20 +43,27 @@ fun Project.resolveExtensionSpec(spec: ExtensionSpec, pkg: String): ResolvedSpec
     val resolvedExtension = ResolvedExtension(
         name = extName,
         pkg = pkg,
+        className = className,
         sources = resolvedSources,
     )
 
     return ResolvedSpec(resolvedExtension, effectiveVersionCode, effectiveVersionName)
 }
 
-private fun validateAndGetName(spec: ExtensionSpec): String {
+private fun validateAndGetMetadata(spec: ExtensionSpec): Pair<String, String> {
     assertWithoutFlag(spec.name.isPresent) { "extension { name = ... } is required" }
+    assertWithoutFlag(spec.className.isPresent) { "extension { className = ... } is required" }
     assertWithoutFlag(spec.versionCode.isPresent) { "extension { versionCode = ... } is required" }
     assertWithoutFlag(spec.nsfw.isPresent) { "extension { nsfw = ... } is required" }
     val extName = spec.name.get()
     assertWithoutFlag(extName.isNotEmpty()) { "extension.name must not be empty" }
     assertWithoutFlag(extName.all { it.code < 0x180 }) { "Extension name should be romanized" }
-    return extName
+
+    val className = spec.className.get()
+    assertWithoutFlag(className.isNotEmpty()) { "extension.className must not be empty" }
+    assertWithoutFlag(className.first().isUpperCase()) { "extension.className must be PascalCase (got '$className')" }
+
+    return extName to className
 }
 
 private fun validateAndGetSources(spec: ExtensionSpec): List<keiyoushi.gradle.extension.dsl.SourceSpec> {
@@ -80,17 +89,34 @@ private fun keiyoushi.gradle.extension.dsl.SourceSpec.resolve(themePaths: List<S
     val effectiveId = if (id.isPresent) id.get() else generateSourceId(name.get(), lang.get(), versionId)
 
     val deeplink = deeplinkSpec.orNull
-    val baseDefault = baseUrl.defaultUrl
-    val uri = runCatching { URI(baseDefault) }.getOrNull()
     val explicitPaths = deeplink?.pathPatterns?.orNull.orEmpty()
     val combinedPaths = (themePaths + explicitPaths).distinct()
-    val scheme = deeplink?.scheme?.orNull ?: uri?.scheme
-    val host = deeplink?.host?.orNull ?: uri?.host
 
-    if (combinedPaths.isNotEmpty()) {
-        assertWithoutFlag(scheme != null && host != null) {
-            "source '${name.get()}' has deeplink paths but baseUrl '$baseDefault' could not be " +
-                "parsed into scheme://host; set deeplink { scheme = ...; host = ... } explicitly."
+    val resolvedDeeplinks = if (combinedPaths.isEmpty()) {
+        emptyList()
+    } else {
+        val explicitScheme = deeplink?.scheme?.orNull
+        val explicitHost = deeplink?.host?.orNull
+
+        if (explicitScheme != null && explicitHost != null) {
+            listOf(DeeplinkFilter(explicitScheme, explicitHost, combinedPaths))
+        } else {
+            // Infer from mirrors/base URL
+            val urls = when (baseUrl) {
+                is BaseUrlSpec.Static -> listOf(baseUrl.url)
+                is BaseUrlSpec.Mirrors -> baseUrl.urls
+                is BaseUrlSpec.Custom -> listOf(baseUrl.defaultUrl)
+            }
+            urls.map { url ->
+                val uri = runCatching { URI(url) }.getOrNull()
+                val scheme = explicitScheme ?: uri?.scheme
+                val host = explicitHost ?: uri?.host
+                assertWithoutFlag(scheme != null && host != null) {
+                    "source '${name.get()}' has deeplink paths but URL '$url' could not be " +
+                        "parsed into scheme://host; set deeplink { scheme = ...; host = ... } explicitly."
+                }
+                DeeplinkFilter(scheme!!, host!!, combinedPaths)
+            }
         }
     }
 
@@ -101,8 +127,6 @@ private fun keiyoushi.gradle.extension.dsl.SourceSpec.resolve(themePaths: List<S
         id = effectiveId,
         baseUrl = baseUrl,
         overrides = overrides.orNull.orEmpty(),
-        pathPatterns = combinedPaths,
-        deeplinkScheme = scheme,
-        deeplinkHost = host,
+        deeplinks = resolvedDeeplinks,
     )
 }
