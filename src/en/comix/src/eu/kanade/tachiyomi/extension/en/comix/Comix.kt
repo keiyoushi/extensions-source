@@ -3,8 +3,10 @@ package eu.kanade.tachiyomi.extension.en.comix
 import android.annotation.SuppressLint
 import android.app.Application
 import android.content.SharedPreferences
+import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
+import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -14,7 +16,6 @@ import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -53,7 +54,6 @@ class Comix :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
-        .addInterceptor(Cipher.interceptor)
         .addNetworkInterceptor(Descrambler.interceptor)
         .rateLimit(5)
         .build()
@@ -306,30 +306,14 @@ class Comix :
         val mangaSlug = manga.url.removePrefix("/")
         val hid = mangaSlug.substringBefore("-")
 
-        val token = captureToken(
+        val json = captureApiResponse(
             pageUrl = getMangaUrl(manga),
         ) { url ->
             url.encodedPath.endsWith("api/v1/manga/$hid/chapters")
         }
 
-        val allChapters = mutableListOf<Chapter>()
-        var page = 1
-        while (true) {
-            val url = apiUrl.toHttpUrl().newBuilder()
-                .addPathSegment("manga")
-                .addPathSegment(hid)
-                .addPathSegment("chapters")
-                .addQueryParameter("page", page.toString())
-                .addQueryParameter("limit", "100")
-                .addQueryParameter("order[number]", "desc")
-                .addQueryParameter("_", token)
-                .build()
-            val res = client.newCall(GET(url, headers)).awaitSuccess()
-                .parseAs<ChapterDetailsResponse>()
-            allChapters.addAll(res.result.items)
-            if (!res.result.hasNextPage()) break
-            page++
-        }
+        val res = json.parseAs<ChapterDetailsResponse>()
+        val allChapters = res.result.items.toMutableList()
 
         val finalChapters: List<Chapter> = if (deduplicate) {
             val chapterMap = LinkedHashMap<Number, Chapter>()
@@ -386,20 +370,13 @@ class Comix :
 
         val chapterId = chapter.url.substringAfterLast("/").substringBefore("-")
 
-        val token = captureToken(
+        val json = captureApiResponse(
             pageUrl = getChapterUrl(chapter),
         ) { url ->
             url.encodedPath.endsWith("api/v1/chapters/$chapterId")
         }
 
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("chapters")
-            .addPathSegment(chapterId)
-            .addQueryParameter("_", token)
-            .build()
-
-        val result = client.newCall(GET(url, headers)).awaitSuccess()
-            .parseAs<ChapterResponse>().result.pages
+        val result = json.parseAs<ChapterResponse>().result.pages
         val base = result.baseUrl.trimEnd('/')
         val pages = result.items.mapIndexed { index, img ->
             var full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
@@ -416,13 +393,22 @@ class Comix :
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun captureToken(pageUrl: String, urlMatches: (HttpUrl) -> Boolean): String {
+    @SuppressLint("SetJavaScriptEnabled", "AddJavascriptInterface")
+    private fun captureApiResponse(pageUrl: String, urlMatches: (HttpUrl) -> Boolean): String {
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
-        val tokenRef = AtomicReference<String>()
+        val responseRef = AtomicReference<String>()
         var webView: WebView? = null
         val emptyResponse = WebResourceResponse("text/plain", "utf-8", Buffer().inputStream())
+
+        val bridge = object {
+            @JavascriptInterface
+            fun onResponse(json: String) {
+                if (responseRef.compareAndSet(null, json)) {
+                    latch.countDown()
+                }
+            }
+        }
 
         val createAndLoad = {
             val view = WebView(Injekt.get<Application>())
@@ -435,7 +421,14 @@ class Comix :
                 userAgentString = headers["User-Agent"]
             }
 
+            view.addJavascriptInterface(bridge, "ExtBridge")
+
             view.webViewClient = object : WebViewClient() {
+                override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                    super.onPageStarted(view, url, favicon)
+                    view.evaluateJavascript(JS_HOOK, null)
+                }
+
                 override fun shouldInterceptRequest(
                     view: WebView,
                     request: WebResourceRequest,
@@ -444,10 +437,8 @@ class Comix :
                         ?: return emptyResponse
 
                     if (urlMatches(httpUrl)) {
-                        httpUrl.queryParameter("_")?.let { token ->
-                            if (tokenRef.compareAndSet(null, token)) {
-                                latch.countDown()
-                            }
+                        handler.post {
+                            view.evaluateJavascript(JS_HOOK, null)
                         }
                     }
 
@@ -468,11 +459,11 @@ class Comix :
             handler.post(createAndLoad)
         }
 
-        val completed = latch.await(30, TimeUnit.SECONDS)
+        val completed = latch.await(90, TimeUnit.SECONDS)
         handler.post { webView?.destroy() }
 
-        if (!completed) throw Exception("Timed out waiting for token")
-        return tokenRef.get() ?: throw Exception("Failed to capture token")
+        if (!completed) throw Exception("Timed out waiting for API response")
+        return responseRef.get() ?: throw Exception("Failed to capture API response")
     }
 
     // ============================= Settings =============================
@@ -618,6 +609,44 @@ class Comix :
     }
 
     companion object {
+        private const val JS_HOOK = """
+(function() {
+    if (window._hooked) return;
+    window._hooked = true;
+    window._items = [];
+    var op = JSON.parse;
+    JSON.parse = function(t) {
+        var r = op.call(this, t);
+        if (r && r.status === 'ok' && r.result) {
+            var items = r.result.items;
+            if (items && items.length > 0 && items[0].mangaId !== undefined) {
+                for (var i = 0; i < items.length; i++) window._items.push(items[i]);
+                var meta = r.result.meta;
+                if (meta && meta.hasNext) {
+                    setTimeout(function() {
+                        var btn = document.querySelector('.npager__nav[aria-label="Next page"]');
+                        if (btn && !btn.disabled) {
+                            btn.click();
+                        } else {
+                            var out = {status:'ok',result:{items:window._items}};
+                            try { ExtBridge.onResponse(JSON.stringify(out)); } catch(e) {}
+                            window._items = [];
+                        }
+                    }, 500);
+                } else {
+                    var out = {status:'ok',result:{items:window._items}};
+                    try { ExtBridge.onResponse(JSON.stringify(out)); } catch(e) {}
+                    window._items = [];
+                }
+            } else if (r.result.pages) {
+                try { ExtBridge.onResponse(t); } catch(e) {}
+            }
+        }
+        return r;
+    };
+})();
+"""
+
         private const val PREF_POSTER_QUALITY = "pref_poster_quality"
         private const val PREF_CONTENT_RATING = "pref_content_rating"
         private const val PREF_DEFAULT_TYPES = "pref_default_types"
