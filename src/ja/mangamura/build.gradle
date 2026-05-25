@@ -2,8 +2,8 @@ ext {
     extName = 'Manga Mura'
     extClass = '.MangaMura'
     themePkg = 'mangareader'
-    baseUrl = 'https://mangamura.net'
-    overrideVersionCode = 1
+    baseUrl = 'https://mangamura.me'
+    overrideVersionCode = 2
     isNsfw = true
 }
 
