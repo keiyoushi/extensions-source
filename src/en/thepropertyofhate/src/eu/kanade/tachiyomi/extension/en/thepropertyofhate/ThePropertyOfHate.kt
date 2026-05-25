@@ -76,11 +76,12 @@ class ThePropertyOfHate : HttpSource() {
         for (opt in options) {
             val isBold = opt.hasAttr("style") && opt.attr("style").contains("bold")
             if (isBold) {
+                val currentChapterNum = chapterNum++
                 chapters.add(
                     SChapter.create().apply {
                         setUrlWithoutDomain(opt.attr("value"))
-                        name = opt.text().trim()
-                        chapter_number = chapterNum++
+                        name = "#${currentChapterNum.toInt()} - ${opt.text().trim()}"
+                        chapter_number = currentChapterNum
                     },
                 )
             } else {
@@ -90,11 +91,12 @@ class ThePropertyOfHate : HttpSource() {
                     val pageUrl = opt.attr("value")
                     val chapterUrl = pageUrl.substringBeforeLast("/") + "/"
 
+                    val currentChapterNum = chapterNum++
                     chapters.add(
                         SChapter.create().apply {
                             setUrlWithoutDomain(chapterUrl)
-                            name = chapterName
-                            chapter_number = chapterNum++
+                            name = "#${currentChapterNum.toInt()} - $chapterName"
+                            chapter_number = currentChapterNum
                         },
                     )
                     addedActiveChapter = true
