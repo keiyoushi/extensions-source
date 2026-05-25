@@ -19,7 +19,7 @@ import java.util.Calendar
 class VinaHentai : HttpSource() {
     override val name = "VinaHentai"
     override val lang = "vi"
-    override val baseUrl = "https://vinahentai.asia"
+    override val baseUrl = "https://vinahentai.life"
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()

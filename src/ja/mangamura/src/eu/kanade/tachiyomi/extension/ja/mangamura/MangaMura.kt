@@ -8,7 +8,7 @@ import okhttp3.Request
 class MangaMura :
     MangaReader(
         "Manga Mura",
-        "https://mangamura.net",
+        "https://mangamura.me",
         "ja",
     ) {
     override val chapterIdSelect = "ja-chaps"
