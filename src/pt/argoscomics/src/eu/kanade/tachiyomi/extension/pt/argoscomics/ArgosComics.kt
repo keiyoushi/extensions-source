@@ -50,9 +50,7 @@ class ArgosComics : HttpSource() {
 
     // ======================== Latest =============================
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(baseUrl, rscHeaders)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, rscHeaders)
 
     override fun latestUpdatesParse(response: Response): MangasPage = response.extractNextJs<LatestMangas>()!!.toMangasPage()
 
