@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.manta
+package eu.kanade.tachiyomi.extension.all.manta
 
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
@@ -30,6 +30,8 @@ data class Series<T : Any>(
 
 @Serializable
 data class Title(private val title: Name) {
+    fun asString(lang: String) = title.asString(lang)
+
     override fun toString() = title.toString()
 }
 
@@ -40,6 +42,8 @@ data class Details(
     private val description: Description,
     private val creators: List<Creator>,
 ) {
+    fun getDescription(lang: String) = description.asString(lang)
+
     val artists by lazy {
         creators.filter { it.role == "Illustration" }
     }
@@ -55,7 +59,7 @@ data class Details(
 data class Episode(
     val id: Int,
     val ord: Int,
-    val data: Data?,
+    val data: EpisodeData?,
     val lockData: LockData,
     private val createdAt: String,
     val cutImages: List<Image>? = null,
@@ -63,14 +67,16 @@ data class Episode(
     val timestamp: Long
         get() = createdAt.timestamp
 
-    override fun toString() = buildString {
-        append(data?.title ?: "Episode $ord")
+    fun asString(lang: String) = buildString {
+        append(data?.title?.asString(lang) ?: "Episode $ord")
         if (lockData.isLocked) append(" 🔒")
     }
+
+    override fun toString() = asString("en")
 }
 
 @Serializable
-data class Data(val title: String? = null)
+data class EpisodeData(val title: Name? = null)
 
 @Serializable
 data class LockData(private val state: Int) {
@@ -89,11 +95,23 @@ data class Creator(
 
 @Serializable
 data class Description(
-    private val long: String,
+    private val long: String? = null,
     private val short: String? = null,
+    private val es: Translation? = null,
 ) {
+    fun asString(lang: String) = when (lang) {
+        "es" -> es?.let { listOfNotNull(it.short, it.long).joinToString("\n\n") }
+        else -> null
+    } ?: toString()
+
     override fun toString() = listOfNotNull(short, long).joinToString("\n\n")
 }
+
+@Serializable
+data class Translation(
+    val long: String? = null,
+    val short: String? = null,
+)
 
 @Serializable
 @Suppress("PrivatePropertyName")
@@ -113,11 +131,21 @@ data class Image(private val downloadUrl: String) {
 
 @Serializable
 data class Tag(private val name: Name) {
+    fun asString(lang: String) = name.asString(lang)
+
     override fun toString() = name.toString()
 }
 
 @Serializable
-data class Name(private val en: String) {
+data class Name(
+    private val en: String,
+    private val es: String? = null,
+) {
+    fun asString(lang: String) = when (lang) {
+        "es" -> es
+        else -> en
+    } ?: en
+
     override fun toString() = en
 }
 

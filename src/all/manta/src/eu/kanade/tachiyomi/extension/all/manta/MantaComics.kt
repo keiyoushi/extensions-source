@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.manta
+package eu.kanade.tachiyomi.extension.all.manta
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
@@ -15,12 +15,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 
-class MantaComics : HttpSource() {
+class MantaComics(
+    override val lang: String,
+    override val baseUrl: String,
+) : HttpSource() {
     override val name = "Manta"
-
-    override val lang = "en"
-
-    override val baseUrl = "https://manta.net"
 
     override val supportsLatest = false
 
@@ -43,7 +42,8 @@ class MantaComics : HttpSource() {
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
-        .set("Origin", baseUrl)
+        .set("Origin", "https://manta.net")
+        .set("Accept-Language", lang)
 
     // ============================== Popular ===============================
 
@@ -55,14 +55,14 @@ class MantaComics : HttpSource() {
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manta/v1/search/series?cat=New", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("https://manta.net/manta/v1/search/series?cat=New", headers)
 
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/manta/v1/search/series".toHttpUrl().newBuilder().apply {
+        val url = "https://manta.net/manta/v1/search/series".toHttpUrl().newBuilder().apply {
             if (query.isNotEmpty()) {
                 addQueryParameter("q", query)
             } else {
@@ -77,7 +77,7 @@ class MantaComics : HttpSource() {
 
     override fun searchMangaParse(response: Response) = response.parseAs<MantaResponse<List<Series<Title>>>>().data.map {
         SManga.create().apply {
-            title = it.toString()
+            title = it.data.asString(lang)
             url = it.id.toString()
             thumbnail_url = it.image.toString()
         }
@@ -87,12 +87,12 @@ class MantaComics : HttpSource() {
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/front/v1/series/${manga.url}", headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET("https://manta.net/front/v1/series/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val data = response.parseAs<MantaResponse<Series<Details>>>().data.data
-        description = data.toString()
-        genre = data.tags.joinToString()
+        description = data.getDescription(lang)
+        genre = data.tags.joinToString { it.asString(lang) }
         artist = data.artists.joinToString()
         author = data.authors.joinToString()
         status = when (data.isCompleted) {
@@ -110,7 +110,7 @@ class MantaComics : HttpSource() {
 
     override fun chapterListParse(response: Response) = response.parseAs<MantaResponse<Series<Title>>>().data.episodes!!.map {
         SChapter.create().apply {
-            name = it.toString()
+            name = it.asString(lang)
             url = it.id.toString()
             date_upload = it.timestamp
             chapter_number = it.ord.toFloat()
@@ -121,7 +121,7 @@ class MantaComics : HttpSource() {
 
     // ============================= Page List ==============================
 
-    override fun pageListRequest(chapter: SChapter) = GET("$baseUrl/front/v1/episodes/${chapter.url}", headers)
+    override fun pageListRequest(chapter: SChapter) = GET("https://manta.net/front/v1/episodes/${chapter.url}", headers)
 
     override fun pageListParse(response: Response) = response.parseAs<MantaResponse<Episode>>().data.cutImages?.mapIndexed { idx, img ->
         Page(idx, "", img.toString())
@@ -134,9 +134,9 @@ class MantaComics : HttpSource() {
     // ============================== Filters ===============================
 
     override fun getFilterList() = FilterList(
-        Filter.Header("Filters are ignored when searching"),
+        Filter.Header(if (lang == "es") "Los filtros se ignoran al buscar" else "Filters are ignored when searching"),
         Filter.Separator(),
-        Category(),
+        Category(lang),
     )
 
     // ============================= Utilities ==============================
