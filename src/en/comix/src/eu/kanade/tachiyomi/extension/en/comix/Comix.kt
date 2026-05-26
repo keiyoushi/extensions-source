@@ -56,10 +56,21 @@ class Comix :
         .addNetworkInterceptor(Descrambler.interceptor)
         .addInterceptor { chain ->
             val request = chain.request()
-            val response = chain.proceed(request)
+            var response = chain.proceed(request)
+            val url = request.url.toString()
+
+            if (response.isSuccessful && response.header("x-scramble-seed") == "0" &&
+                SCRAMBLE_PATH_FALLBACK_REGEX.containsMatchIn(url)
+            ) {
+                val altUrl = url.replaceFirst(SCRAMBLE_PATH_FALLBACK_REGEX, "/i/")
+                if (altUrl != url) {
+                    response.close()
+                    response = chain.proceed(request.newBuilder().url(altUrl).build())
+                }
+            }
+
             if (response.code != 404) return@addInterceptor response
 
-            val url = request.url.toString()
             val fallbacks = listOf("/si/", "/i/", "/sii/", "/ii/")
                 .map { url.replaceFirst(SCRAMBLE_PATH_FALLBACK_REGEX, it) }
                 .filter { it != url }
