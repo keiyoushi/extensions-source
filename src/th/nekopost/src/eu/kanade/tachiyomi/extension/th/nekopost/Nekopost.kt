@@ -19,7 +19,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.jsonInstance as kJsonInstance
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Request
@@ -28,6 +27,7 @@ import okhttp3.Response
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.utils.jsonInstance as kJsonInstance
 
 class Nekopost : HttpSource() {
 
@@ -38,7 +38,10 @@ class Nekopost : HttpSource() {
 
     private val fileHost = "https://www.osemocphoto.com"
 
-    private val jsonInstance = Json(kJsonInstance) { ignoreUnknownKeys = true; isLenient = true }
+    private val jsonInstance = Json(kJsonInstance) {
+        ignoreUnknownKeys = true
+        isLenient = true
+    }
 
     private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("th")) }
 
