@@ -55,7 +55,7 @@ class MantaComics(
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int) = GET("https://manta.net/manta/v1/search/series?cat=New", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("https://manta.net/manta/v1/search/series?cat=New&lang=$lang", headers)
 
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
@@ -63,6 +63,7 @@ class MantaComics(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "https://manta.net/manta/v1/search/series".toHttpUrl().newBuilder().apply {
+            addQueryParameter("lang", lang)
             if (query.isNotEmpty()) {
                 addQueryParameter("q", query)
             } else {
@@ -87,7 +88,7 @@ class MantaComics(
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("https://manta.net/front/v1/series/${manga.url}", headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET("https://manta.net/front/v1/series/${manga.url}?lang=$lang", headers)
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val data = response.parseAs<MantaResponse<Series<Details>>>().data.data
@@ -121,7 +122,7 @@ class MantaComics(
 
     // ============================= Page List ==============================
 
-    override fun pageListRequest(chapter: SChapter) = GET("https://manta.net/front/v1/episodes/${chapter.url}", headers)
+    override fun pageListRequest(chapter: SChapter) = GET("https://manta.net/front/v1/episodes/${chapter.url}?lang=$lang", headers)
 
     override fun pageListParse(response: Response) = response.parseAs<MantaResponse<Episode>>().data.cutImages?.mapIndexed { idx, img ->
         Page(idx, "", img.toString())
