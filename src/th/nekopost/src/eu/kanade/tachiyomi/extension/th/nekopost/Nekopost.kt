@@ -37,6 +37,8 @@ class Nekopost : HttpSource() {
 
     private val fileHost = "https://www.osemocphoto.com"
 
+    private val jsonInstance = Json { ignoreUnknownKeys = true; isLenient = true }
+
     private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("th")) }
 
     private val apiHeaders by lazy {
@@ -272,7 +274,7 @@ class Nekopost : HttpSource() {
         return searchRange.substring(0, endIndex)
             // Uses lookbehind (?<=[{,]) to target keys following '{' or ',' so it doesn't break web URLs
             .replace(Regex("(?<=[{,])\\s*([a-zA-Z0-9_]+)\\s*:"), "\"$1\":")
-            .parseAs()
+            .parseAs(jsonInstance)
     }
 
     override fun pageListRequest(chapter: SChapter) = GET("$fileHost/collectManga/${chapter.url}", headers)
