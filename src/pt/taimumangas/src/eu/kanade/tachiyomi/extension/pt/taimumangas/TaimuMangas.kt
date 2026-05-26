@@ -14,9 +14,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 
 class TaimuMangas : HttpSource() {
 
@@ -28,7 +25,7 @@ class TaimuMangas : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(2)
         .build()
 
@@ -84,9 +81,7 @@ class TaimuMangas : HttpSource() {
         .chapter
         .pages
         .sortedBy { it.number }
-        .mapIndexed { index, page ->
-            Page(index, imageUrl = mediaUrl(page.path))
-        }
+        .mapIndexed { index, page -> page.toPage(index) }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
@@ -153,114 +148,10 @@ class TaimuMangas : HttpSource() {
         )
     }
 
-    private fun SeriesSummary.toSManga(): SManga = SManga.create().apply {
-        url = code
-        title = this@toSManga.title
-        thumbnail_url = mediaUrl(cover)
-        status = parseStatus(this@toSManga.status)
-    }
-
-    private fun SeriesDetail.toSManga(): SManga = SManga.create().apply {
-        url = code
-        title = this@toSManga.title
-        thumbnail_url = mediaUrl(cover)
-        status = parseStatus(this@toSManga.status)
-        author = authors.takeIf(List<NameCode>::isNotEmpty)
-            ?.joinToString { it.name }
-            ?: this@toSManga.author?.name
-        artist = artists.takeIf(List<NameCode>::isNotEmpty)
-            ?.joinToString { it.name }
-            ?: this@toSManga.artist?.name
-        genre = genres.joinToString { it.name }
-        description = buildString {
-            synopsis?.takeIf(String::isNotBlank)?.let { append(it) }
-            alternativeNames?.takeIf(String::isNotBlank)?.let {
-                if (isNotEmpty()) append("\n\n")
-                append("Nomes alternativos: $it")
-            }
-            group?.name?.takeIf(String::isNotBlank)?.let {
-                if (isNotEmpty()) append("\n\n")
-                append("Scanlator: $it")
-            }
-        }
-    }
-
-    private fun ChapterSummary.toSChapter(): SChapter = SChapter.create().apply {
-        val number = numberText
-
-        url = code
-        chapter_number = number.toFloatOrNull() ?: -1f
-        name = buildString {
-            if (season > 1) {
-                append("S")
-                append(season)
-                append(" - ")
-            }
-            append("Capitulo ")
-            append(number)
-            title?.takeIf(String::isNotBlank)?.let {
-                append(" - ")
-                append(it)
-            }
-        }
-        date_upload = parseDate(createdAt)
-    }
-
-    private fun mediaUrl(path: String?): String? {
-        if (path.isNullOrBlank()) return null
-
-        val cleanPath = path.trim().trimStart('/')
-        return when {
-            cleanPath.startsWith("http") -> cleanPath
-            cleanPath.startsWith("media/") -> "$API_HOST/$cleanPath"
-            else -> "$MEDIA_BASE_URL/$cleanPath"
-        }
-    }
-
-    private fun parseStatus(status: String?): Int = when (status?.lowercase(Locale.ROOT)) {
-        "ongoing", "em andamento" -> SManga.ONGOING
-        "completed", "complete", "finalizado" -> SManga.COMPLETED
-        "hiatus", "em hiato" -> SManga.ON_HIATUS
-        "cancelled", "canceled", "cancelado", "dropped", "abandonada" -> SManga.CANCELLED
-        else -> SManga.UNKNOWN
-    }
-
-    private fun parseDate(date: String?): Long {
-        if (date.isNullOrBlank()) return 0L
-
-        val normalized = date.trim()
-            .replace(MICROSECONDS_REGEX, ".$1")
-            .replace(TIMEZONE_COLON_REGEX) { "${it.groupValues[1]}${it.groupValues[2]}" }
-
-        for (format in DATE_FORMATS) {
-            runCatching {
-                synchronized(format) {
-                    format.parse(normalized)?.time
-                }
-            }.getOrNull()?.let { return it }
-        }
-
-        return 0L
-    }
-
     private fun extractCode(url: String): String = url.trimEnd('/').substringAfterLast('/')
 
     companion object {
-        private const val API_HOST = "https://api.taimumangas.com"
-        private const val API_BASE_URL = "$API_HOST/api/v2"
-        private const val MEDIA_BASE_URL = "$API_HOST/media"
         private const val PAGE_SIZE = 24
         private const val CHAPTER_PAGE_SIZE = 100
-
-        private val MICROSECONDS_REGEX = Regex("""\.(\d{3})\d+""")
-        private val TIMEZONE_COLON_REGEX = Regex("""([+-]\d{2}):(\d{2})$""")
-
-        private val UTC = TimeZone.getTimeZone("UTC")
-        private val DATE_FORMATS = listOf(
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply { timeZone = UTC },
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply { timeZone = UTC },
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.ROOT),
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ROOT),
-        )
     }
 }
