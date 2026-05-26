@@ -68,7 +68,8 @@ data class Episode(
         get() = createdAt.timestamp
 
     fun asString(lang: String) = buildString {
-        append(data?.title?.asString(lang) ?: "Episode $ord")
+        val fallback = if (lang == "es") "Episodio" else "Episode"
+        append(data?.title ?: "$fallback $ord")
         if (lockData.isLocked) append(" 🔒")
     }
 
@@ -76,7 +77,7 @@ data class Episode(
 }
 
 @Serializable
-data class EpisodeData(val title: Name? = null)
+data class EpisodeData(val title: String? = null)
 
 @Serializable
 data class LockData(private val state: Int) {
