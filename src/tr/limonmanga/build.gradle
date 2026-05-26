@@ -1,8 +1,8 @@
 ext {
-    extName = 'Tenshi Manga'
-    extClass = '.TenshiManga'
+    extName = 'Limon Manga'
+    extClass = '.LimonManga'
     themePkg = 'uzaymanga'
-    overrideVersionCode = 3
+    overrideVersionCode = 1
     isNsfw = false
 }
 

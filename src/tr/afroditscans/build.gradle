@@ -3,7 +3,7 @@ ext {
     extClass = '.AfroditScans'
     themePkg = 'uzaymanga'
     baseUrl = 'https://afroditscans.com'
-    overrideVersionCode = 31
+    overrideVersionCode = 32
     isNsfw = false
 }
 

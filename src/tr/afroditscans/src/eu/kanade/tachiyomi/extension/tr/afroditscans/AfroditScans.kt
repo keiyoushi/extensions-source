@@ -8,12 +8,19 @@ import okhttp3.Response
 
 class AfroditScans :
     UzayManga(
-        "Afrodit Scans",
-        "https://afroditscans.com",
+        name = "Afrodit Scans",
+        baseUrl = "https://afroditscans.com",
         lang = "tr",
-        versionId = 1,
-        cdnUrl = "https://afroditcdn1.efsaneler.can.re",
+        versionId = 2,
     ) {
+    override fun applyUploadPrefix(url: String): String {
+        if (url.contains("/upload/")) return url
+        if (url.contains("/images/manga/")) {
+            return url.replaceFirst("/images/manga/", "/upload/images/manga/")
+        }
+        return super.applyUploadPrefix(url)
+    }
+
     override fun chapterListRequest(manga: SManga): Request {
         // Migration from Madara to UzayManga
         if (manga.url.startsWith("/manga/") && !manga.url.substringAfter("/manga/").substringBefore("/").all { it.isDigit() }) {

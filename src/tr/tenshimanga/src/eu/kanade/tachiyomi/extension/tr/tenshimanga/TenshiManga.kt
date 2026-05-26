@@ -7,6 +7,5 @@ class TenshiManga :
         name = "Tenshi Manga",
         baseUrl = "https://tenshimanga.com",
         lang = "tr",
-        versionId = 1,
-        cdnUrl = "https://tenshimangacdn4.efsaneler.can.re",
+        versionId = 2,
     )

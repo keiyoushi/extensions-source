@@ -4,9 +4,8 @@ import eu.kanade.tachiyomi.multisrc.uzaymanga.UzayManga
 
 class ElderManga :
     UzayManga(
-        "Elder Manga",
-        "https://eldermanga.com",
+        name = "Elder Manga",
+        baseUrl = "https://eldermanga.com",
         lang = "tr",
-        versionId = 1,
-        cdnUrl = "https://eldermangacdn2.efsaneler.can.re",
+        versionId = 2,
     )
