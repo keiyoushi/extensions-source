@@ -25,7 +25,7 @@ class Manta(
 
     override val baseUrl = "https://$DOMAIN/$lang"
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor { chain ->
@@ -57,9 +57,9 @@ class Manta(
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = GET("https://$DOMAIN/manta/v1/search/series?cat=New&lang=$lang", headers)
 
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     // =============================== Search ===============================
 
