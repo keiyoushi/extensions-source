@@ -17,8 +17,9 @@ import okhttp3.Response
 
 class MantaComics(
     override val lang: String,
-    override val baseUrl: String,
 ) : HttpSource() {
+
+    override val baseUrl = "https://manta.net/$lang"
     override val name = "Manta"
 
     override val supportsLatest = false
