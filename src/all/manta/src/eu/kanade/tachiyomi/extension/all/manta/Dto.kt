@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.all.manta
 
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -13,81 +16,95 @@ private inline val String?.timestamp: Long
     get() = isoDate.tryParse(this?.substringBefore('.'))
 
 @Serializable
-data class MantaResponse<T>(
+class MantaResponse<T>(
     val data: T,
     val status: Status? = null,
 )
 
 @Serializable
-data class Series<T : Any>(
+class Series<T : Any>(
     val data: T,
     val id: Int,
     val image: Cover,
     val episodes: List<Episode>? = null,
 ) {
-    override fun toString() = data.toString()
+    fun toSManga(lang: String): SManga {
+        val series = this
+        return SManga.create().apply {
+            val titleObj = when (val d = series.data) {
+                is Title -> d.title
+                is Details -> d.title
+                else -> null
+            }
+            title = titleObj?.asString(lang) ?: ""
+            url = series.id.toString()
+            thumbnail_url = series.image.toString()
+
+            if (series.data is Details) {
+                val details = series.data
+                description = details.description.toString()
+                genre = details.tags.joinToString { it.asString(lang) }
+                artist = details.creators.filter { it.role == "Illustration" }.joinToString()
+                author = details.creators.filter { it.role != "Illustration" }.ifEmpty { details.creators }.joinToString()
+                status = when (details.isCompleted) {
+                    true -> SManga.COMPLETED
+                    else -> SManga.ONGOING
+                }
+                initialized = true
+            }
+        }
+    }
 }
 
 @Serializable
-data class Title(private val title: Name) {
-    fun asString(lang: String) = title.asString(lang)
-
-    override fun toString() = title.toString()
-}
+class Title(val title: Name)
 
 @Serializable
-data class Details(
+class Details(
+    val title: Name? = null,
     val tags: List<Tag>,
     val isCompleted: Boolean? = null,
-    private val description: Description,
-    private val creators: List<Creator>,
-) {
-    fun getDescription(lang: String) = description.asString(lang)
-
-    val artists by lazy {
-        creators.filter { it.role == "Illustration" }
-    }
-
-    val authors by lazy {
-        creators.filter { it.role != "Illustration" }.ifEmpty { creators }
-    }
-
-    override fun toString() = description.toString()
-}
+    val description: Description,
+    val creators: List<Creator>,
+)
 
 @Serializable
-data class Episode(
+class Episode(
     val id: Int,
     val ord: Int,
-    val data: EpisodeData?,
+    val data: EpisodeData? = null,
     val lockData: LockData,
     private val createdAt: String,
     val cutImages: List<Image>? = null,
 ) {
-    val timestamp: Long
+    private val timestamp: Long
         get() = createdAt.timestamp
 
-    fun asString(lang: String) = buildString {
+    private fun asString(lang: String) = buildString {
         val fallback = if (lang == "es") "Episodio" else "Episode"
         append(data?.title ?: "$fallback $ord")
         if (lockData.isLocked) append(" 🔒")
     }
 
-    override fun toString() = asString("en")
+    fun toSChapter(lang: String) = SChapter.create().apply {
+        name = asString(lang)
+        url = id.toString()
+        date_upload = timestamp
+        chapter_number = ord.toFloat()
+    }
 }
 
 @Serializable
-data class EpisodeData(val title: String? = null)
+class EpisodeData(val title: String? = null)
 
 @Serializable
-data class LockData(private val state: Int) {
-    // TODO: check for more unlocked states
+class LockData(private val state: Int) {
     val isLocked: Boolean
         get() = state !in arrayOf(110, 130)
 }
 
 @Serializable
-data class Creator(
+class Creator(
     private val name: String,
     val role: String,
 ) {
@@ -95,50 +112,38 @@ data class Creator(
 }
 
 @Serializable
-data class Description(
-    private val long: String? = null,
-    private val short: String? = null,
-    private val es: Translation? = null,
+class Description(
+    val long: String? = null,
+    val short: String? = null,
 ) {
-    fun asString(lang: String) = when (lang) {
-        "es" -> es?.let { listOfNotNull(it.short, it.long).joinToString("\n\n") }
-        else -> null
-    } ?: toString()
-
     override fun toString() = listOfNotNull(short, long).joinToString("\n\n")
 }
 
 @Serializable
-data class Translation(
-    val long: String? = null,
-    val short: String? = null,
-)
-
-@Serializable
 @Suppress("PrivatePropertyName")
-data class Cover(
-    private val `1280x1840_480`: Image? = null,
-    private val `1280x1840_720`: Image? = null,
-    private val `1440x3072`: Image? = null,
-    private val `1440x1440_480`: Image? = null,
+class Cover(
+    @SerialName("1280x1840_480") private val size1: Image? = null,
+    @SerialName("1280x1840_720") private val size2: Image? = null,
+    @SerialName("1440x3072") private val size3: Image? = null,
+    @SerialName("1440x1440_480") private val size4: Image? = null,
 ) {
-    override fun toString() = (`1280x1840_480` ?: `1280x1840_720` ?: `1440x3072` ?: `1440x1440_480`)?.toString().orEmpty()
+    override fun toString() = (size1 ?: size2 ?: size3 ?: size4)?.toString().orEmpty()
 }
 
 @Serializable
-data class Image(private val downloadUrl: String) {
+class Image(private val downloadUrl: String) {
     override fun toString() = downloadUrl
 }
 
 @Serializable
-data class Tag(private val name: Name) {
+class Tag(private val name: Name) {
     fun asString(lang: String) = name.asString(lang)
 
     override fun toString() = name.toString()
 }
 
 @Serializable
-data class Name(
+class Name(
     private val en: String,
     private val es: String? = null,
 ) {
@@ -151,7 +156,7 @@ data class Name(
 }
 
 @Serializable
-data class Status(
+class Status(
     private val description: String,
     private val message: String,
 ) {

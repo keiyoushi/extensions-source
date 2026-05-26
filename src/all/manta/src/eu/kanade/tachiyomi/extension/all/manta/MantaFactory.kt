@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.source.SourceFactory
 
 class MantaFactory : SourceFactory {
     override fun createSources() = listOf(
-        MantaComics("en"),
-        MantaComics("es"),
+        Manta("en"),
+        Manta("es"),
     )
 }

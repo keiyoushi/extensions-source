@@ -2,40 +2,35 @@ package eu.kanade.tachiyomi.extension.all.manta
 
 import eu.kanade.tachiyomi.source.model.Filter
 
+private class LangText(val en: String, val es: String)
+
+private val categories = listOf(
+    LangText("Any", "Cualquiera") to "",
+    LangText("Unlimited", "Unlimited") to "tagId=359",
+    LangText("New", "Nuevo") to "tagId=288",
+    LangText("Exclusive", "Exclusiva") to "tagId=289",
+    LangText("Completed", "Terminado") to "tagId=287",
+    LangText("Event", "Evento") to "tagId=354",
+    LangText("Romantasy", "Romantasy") to "tagId=355",
+    LangText("Romance", "Romance") to "tagId=3",
+    LangText("Fantasy/Sci-Fi", "Fantasía/Ciencia Ficción") to "tagId=14",
+    LangText("Drama", "Drama") to "tagId=2",
+    LangText("Thriller", "Suspenso") to "tagId=231",
+    LangText("BL", "BL") to "tagId=16",
+    LangText("GL", "GL") to "tagId=17",
+    LangText("Nonfiction", "No ficción") to "tagId=249",
+)
+
 class Category(lang: String) :
     Filter.Select<String>(
         if (lang == "es") "Categoría" else "Category",
-        getValues(lang).map { it.first }.toTypedArray(),
+        categories.map { if (lang == "es") it.first.es else it.first.en }.toTypedArray(),
     ) {
-    companion object {
-        fun getValues(lang: String) = arrayOf(
-            Pair(if (lang == "es") "Cualquiera" else "Any", ""),
-            Pair("Unlimited", "tagId=359"),
-            Pair(if (lang == "es") "Nueva" else "New", "tagId=288"),
-            Pair(if (lang == "es") "Exclusiva" else "Exclusive", "tagId=289"),
-            Pair(if (lang == "es") "Finalizada" else "Completed", "tagId=287"),
-            Pair(if (lang == "es") "Evento" else "Event", "tagId=354"),
-            Pair(if (lang == "es") "Romantasía" else "Romantasy", "tagId=355"),
-            Pair(if (lang == "es") "Romance" else "Romance", "tagId=3"),
-            Pair(if (lang == "es") "Fantasía/Ciencia ficción" else "Fantasy/Sci-Fi", "tagId=14"),
-            Pair(if (lang == "es") "Drama" else "Drama", "tagId=2"),
-            Pair(if (lang == "es") "Suspense" else "Thriller", "tagId=231"),
-            Pair("BL", "tagId=16"),
-            Pair("GL", "tagId=17"),
-            Pair(if (lang == "es") "No ficción" else "Nonfiction", "tagId=249"),
-            Pair(if (lang == "es") "Acción y aventura" else "Action & Adventure", "tagId=361"),
-            Pair(if (lang == "es") "Comedia" else "Comedy", "tagId=13"),
-            Pair(if (lang == "es") "Histórico" else "Historical", "tagId=7"),
-            Pair("Horror", "tagId=1"),
-            Pair(if (lang == "es") "Vida escolar" else "School life", "tagId=74"),
-            Pair(if (lang == "es") "Vida cotidiana" else "Slice of life", "tagId=11"),
-            Pair(if (lang == "es") "Deportes" else "Sports", "tagId=6"),
-            Pair(if (lang == "es") "Suspense y misterio" else "Suspense & Thriller", "tagId=362"),
-        )
-    }
+    val second get() = categories[state].second
 }
 
-val List<Filter<*>>.category: Pair<String, String>
-    get() = filterIsInstance<Category>().firstOrNull()?.let {
-        Category.getValues("en")[it.state]
-    } ?: Pair("Any", "")
+class GenreFilter(lang: String) :
+    Filter.Select<String>(
+        if (lang == "es") "Género" else "Genre",
+        arrayOf(if (lang == "es") "Todos" else "All"),
+    )

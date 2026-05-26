@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.manta
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,18 +8,22 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 
-class MantaComics(
+private const val DOMAIN = "manta.net"
+
+class Manta(
     override val lang: String,
 ) : HttpSource() {
 
-    override val baseUrl = "https://manta.net/$lang"
     override val name = "Manta"
+
+    override val baseUrl = "https://$DOMAIN/$lang"
 
     override val supportsLatest = false
 
@@ -43,7 +46,7 @@ class MantaComics(
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
-        .set("Origin", "https://manta.net")
+        .set("Origin", "https://$DOMAIN")
         .set("Accept-Language", lang)
 
     // ============================== Popular ===============================
@@ -52,84 +55,60 @@ class MantaComics(
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
-    override fun fetchPopularManga(page: Int) = latestUpdatesRequest(page).fetch(::searchMangaParse)
-
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int) = GET("https://manta.net/manta/v1/search/series?cat=New&lang=$lang", headers)
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "https://manta.net/manta/v1/search/series".toHttpUrl().newBuilder().apply {
+        val url = "https://$DOMAIN/manta/v1/search/series".toHttpUrl().newBuilder().apply {
             addQueryParameter("lang", lang)
             if (query.isNotEmpty()) {
                 addQueryParameter("q", query)
             } else {
-                val category = filters.category
-                val selected = if (category.second.isEmpty()) "tagId=288" else category.second
-                val (key, value) = selected.split("=")
-                addQueryParameter(key, value)
+                val category = filters.firstInstanceOrNull<Category>()
+                val selected = category?.second ?: ""
+                if (selected.isNotEmpty()) {
+                    val (key, value) = selected.split("=")
+                    addQueryParameter(key, value)
+                } else {
+                    addQueryParameter("tagId", "288")
+                }
             }
         }.build()
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response) = response.parseAs<MantaResponse<List<Series<Title>>>>().data.map {
-        SManga.create().apply {
-            title = it.data.asString(lang)
-            url = it.id.toString()
-            thumbnail_url = it.image.toString()
-        }
-    }.let { MangasPage(it, false) }
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = searchMangaRequest(page, query, filters).fetch(::searchMangaParse)
+    override fun searchMangaParse(response: Response): MangasPage {
+        val result = response.parseAs<MantaResponse<List<Series<Title>>>>()
+        val mangas = result.data.map { it.toSManga(lang) }
+        return MangasPage(mangas, false)
+    }
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("https://manta.net/front/v1/series/${manga.url}?lang=$lang", headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET("https://$DOMAIN/front/v1/series/${manga.url}?lang=$lang", headers)
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val data = response.parseAs<MantaResponse<Series<Details>>>().data.data
-        description = data.getDescription(lang)
-        genre = data.tags.joinToString { it.asString(lang) }
-        artist = data.artists.joinToString()
-        author = data.authors.joinToString()
-        status = when (data.isCompleted) {
-            true -> SManga.COMPLETED
-            else -> SManga.ONGOING
-        }
-        initialized = true
-    }
-
-    override fun fetchMangaDetails(manga: SManga) = mangaDetailsRequest(manga).fetch(::mangaDetailsParse)
+    override fun mangaDetailsParse(response: Response) = response.parseAs<MantaResponse<Series<Details>>>().data.toSManga(lang)
 
     // ============================ Chapter List ============================
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    override fun chapterListParse(response: Response) = response.parseAs<MantaResponse<Series<Title>>>().data.episodes!!.map {
-        SChapter.create().apply {
-            name = it.asString(lang)
-            url = it.id.toString()
-            date_upload = it.timestamp
-            chapter_number = it.ord.toFloat()
-        }
+    override fun chapterListParse(response: Response) = response.parseAs<MantaResponse<Series<Details>>>().data.episodes!!.map {
+        it.toSChapter(lang)
     }.reversed()
-
-    override fun fetchChapterList(manga: SManga) = chapterListRequest(manga).fetch(::chapterListParse)
 
     // ============================= Page List ==============================
 
-    override fun pageListRequest(chapter: SChapter) = GET("https://manta.net/front/v1/episodes/${chapter.url}?lang=$lang", headers)
+    override fun pageListRequest(chapter: SChapter) = GET("https://$DOMAIN/front/v1/episodes/${chapter.url}?lang=$lang", headers)
 
     override fun pageListParse(response: Response) = response.parseAs<MantaResponse<Episode>>().data.cutImages?.mapIndexed { idx, img ->
         Page(idx, "", img.toString())
     } ?: emptyList()
-
-    override fun fetchPageList(chapter: SChapter) = pageListRequest(chapter).fetch(::pageListParse)
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
@@ -139,6 +118,7 @@ class MantaComics(
         Filter.Header(if (lang == "es") "Los filtros se ignoran al buscar" else "Filters are ignored when searching"),
         Filter.Separator(),
         Category(lang),
+        GenreFilter(lang),
     )
 
     // ============================= Utilities ==============================
@@ -146,9 +126,4 @@ class MantaComics(
     override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.url}"
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/episodes/${chapter.url}"
-
-    private fun <R> Request.fetch(parse: (Response) -> R) = client.newCall(this).asObservable().map { res ->
-        if (res.isSuccessful) return@map parse(res)
-        error(res.parseAs<MantaResponse<Unit>>().status.toString())
-    }!!
 }
