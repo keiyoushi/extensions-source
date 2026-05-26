@@ -23,6 +23,14 @@ class Category(lang: String) :
             Pair("BL", "tagId=16"),
             Pair("GL", "tagId=17"),
             Pair(if (lang == "es") "No ficción" else "Nonfiction", "tagId=249"),
+            Pair(if (lang == "es") "Acción y aventura" else "Action & Adventure", "tagId=361"),
+            Pair(if (lang == "es") "Comedia" else "Comedy", "tagId=13"),
+            Pair(if (lang == "es") "Histórico" else "Historical", "tagId=7"),
+            Pair("Horror", "tagId=1"),
+            Pair(if (lang == "es") "Vida escolar" else "School life", "tagId=74"),
+            Pair(if (lang == "es") "Vida cotidiana" else "Slice of life", "tagId=11"),
+            Pair(if (lang == "es") "Deportes" else "Sports", "tagId=6"),
+            Pair(if (lang == "es") "Suspense y misterio" else "Suspense & Thriller", "tagId=362"),
         )
     }
 }
