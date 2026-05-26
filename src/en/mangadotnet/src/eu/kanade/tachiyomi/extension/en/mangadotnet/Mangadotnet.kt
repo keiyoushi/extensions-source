@@ -564,14 +564,15 @@ class Mangadotnet :
         }
         screen.addPreference(nsfwPref)
 
-        ListPreference(screen.context).apply {
+        val chapterModePref = ListPreference(screen.context).apply {
             key = CHAPTER_MODE
             title = "Chapter List Mode"
             entries = arrayOf("Chapters only", "Volumes only", "Chapters + Volumes")
             entryValues = arrayOf("chapters", "volumes", "both")
             setDefaultValue("chapters")
             summary = "%s\nNote: Most titles don't have volumes"
-        }.also(screen::addPreference)
+        }
+        screen.addPreference(chapterModePref)
 
         val dedupeSwitch = SwitchPreferenceCompat(screen.context).apply {
             key = DEDUPLICATE_CHAPTERS
@@ -628,23 +629,25 @@ class Mangadotnet :
             true
         }
 
-        ListPreference(screen.context).apply {
+        val browseTypePref = ListPreference(screen.context).apply {
             key = BROWSE_TYPE_PREF
             title = "Type Filter"
             entries = arrayOf("All Types", "Manga", "Manhwa", "Manhua", "One Shot")
             entryValues = arrayOf("", "JP", "KR", "CN", "ONESHOT")
             setDefaultValue("")
             summary = "Applies to Popular & Latest"
-        }.also(screen::addPreference)
+        }
+        screen.addPreference(browseTypePref)
 
-        ListPreference(screen.context).apply {
+        val browseStatusPref = ListPreference(screen.context).apply {
             key = BROWSE_STATUS_PREF
             title = "Status Filter"
             entries = arrayOf("Any Status", "Ongoing", "Completed", "Hiatus")
             entryValues = arrayOf("", "Ongoing", "Completed", "Hiatus")
             setDefaultValue("")
             summary = "Applies to Popular & Latest"
-        }.also(screen::addPreference)
+        }
+        screen.addPreference(browseStatusPref)
     }
 
     private inline fun <reified T> Response.decodeRscAs(): T {
