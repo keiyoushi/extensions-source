@@ -7,7 +7,6 @@ import android.os.Looper
 import android.widget.Toast
 import eu.kanade.tachiyomi.network.POST
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonString
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
@@ -15,7 +14,6 @@ import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -148,7 +146,7 @@ internal class AuthTokenProvider(
         val body = LoginRequest(
             email = email,
             password = password,
-        ).toRequestBody(JSON_MEDIA_TYPE)
+        ).toJsonRequestBody()
 
         client.newCall(POST("$apiUrl/auth/login", loginHeaders, body)).execute().use { response ->
             if (!response.isSuccessful) return@use ""
@@ -164,6 +162,5 @@ internal class AuthTokenProvider(
         const val EMAIL_PREF = "email"
         const val PASSWORD_PREF = "password"
         private const val TOKEN_PREF = "token"
-        private val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 }
