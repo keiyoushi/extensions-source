@@ -8,10 +8,11 @@ import kotlinx.serialization.json.JsonObject
 @Serializable
 class CatalogResponseDto(
     val data: List<ResponseData>,
-    val cursorNext: JsonObject? = null, // Next page doesn't exist if it's null
+    val cursorNext: JsonObject? = null, // Next page doesn't exist if it's null. Content doesn't matter
 ) {
     val hasNextPage: Boolean get() = cursorNext?.isEmpty() == false
 }
+
 @Serializable
 class ResponseData(
     private val id: String,
@@ -38,7 +39,7 @@ class ResponseData(
 
 // ============================== Manga ===============================
 @Serializable
-data class CompleteHoneyMangaDto(
+class CompleteHoneyMangaDto(
     val id: String,
     val posterId: String,
     val title: String,
@@ -51,18 +52,18 @@ data class CompleteHoneyMangaDto(
 )
 
 @Serializable
-data class HoneyMangaChapterPagesDto(
+class HoneyMangaChapterPagesDto(
     val id: String,
     val resourceIds: Map<String, String>,
 )
 
 @Serializable
-data class HoneyMangaChapterResponseDto(
+class HoneyMangaChapterResponseDto(
     val data: List<HoneyMangaChapterDto>,
 )
 
 @Serializable
-data class HoneyMangaChapterDto(
+class HoneyMangaChapterDto(
     val id: String,
     val volume: Int,
     val chapterNum: Int,
@@ -74,7 +75,7 @@ data class HoneyMangaChapterDto(
 
 // ============================== Request body ===============================
 @Serializable
-data class SearchRequestBody(
+class SearchRequestBody(
     val page: Int,
     val pageSize: Int,
     val sort: SearchSort? = null,
@@ -82,13 +83,13 @@ data class SearchRequestBody(
 )
 
 @Serializable
-data class SearchSort(
-    val sortBy: String? = null,
-    val sortOrder: String? = null,
+class SearchSort(
+    var sortBy: String? = null,
+    var sortOrder: String? = null,
 )
 
 @Serializable
-data class SearchFilter(
+class SearchFilter(
     val filterBy: String,
     val filterOperator: String,
     val filterValue: List<String>,
