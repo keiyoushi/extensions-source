@@ -16,6 +16,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -205,6 +206,21 @@ class OnfMangas : HttpSource() {
         val pagesData = jsonString.parseAs<List<PageDto>>()
 
         return pagesData.mapIndexed { index, dto -> dto.toPage(index) }
+    }
+
+    // Decent chance for primary src to fail
+    override fun fetchImageUrl(page: Page): Observable<String> {
+        val src = page.url
+        val fallback = page.url.toHttpUrl().fragment?.removePrefix("fallback=")
+
+        if (fallback.isNullOrBlank()) return Observable.just(src)
+
+        return Observable.fromCallable {
+            val response = client.newCall(Request.Builder().head().url(src).build()).execute()
+            val success = response.isSuccessful
+            response.close()
+            if (success) src else fallback
+        }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
