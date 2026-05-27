@@ -194,10 +194,10 @@ class Emaqi :
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val parts = "$baseUrl/${chapter.url}".toHttpUrl()
-        val comicId = parts.pathSegments.first()
-        val type = parts.pathSegments[1]
-        val number = parts.pathSegments[2].toInt()
+        val parts = "$baseUrl/${chapter.url}".toHttpUrl().pathSegments
+        val comicId = parts.first()
+        val type = parts[1]
+        val number = parts[2].toInt()
         val (xHash, privateKey) = generateXHashAndKey()
         val newHeaders = headersBuilder()
             .add("X-Hash", xHash)
