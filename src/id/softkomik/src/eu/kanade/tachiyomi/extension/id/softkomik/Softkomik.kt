@@ -2,13 +2,18 @@ package eu.kanade.tachiyomi.extension.id.softkomik
 
 import android.annotation.SuppressLint
 import android.app.Application
+import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -17,6 +22,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -31,11 +37,19 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class Softkomik : HttpSource() {
+class Softkomik :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Softkomik"
-    override val baseUrl = "https://softkomik.co"
+
+    override val baseUrl by lazy {
+        preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!!
+    }
+
     override val lang = "id"
     override val supportsLatest = true
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     // session cache by URL/page route.
     private val sessionsByUrlKey = ConcurrentHashMap<String, SessionDto>()
@@ -118,7 +132,7 @@ class Softkomik : HttpSource() {
 
         val mangas = libData.data.map { manga ->
             SManga.create().apply {
-                setUrlWithoutDomain(manga.title_slug)
+                setUrlWithoutDomain(manga.title_slug.removePrefix("komik/"))
                 title = manga.title
                 thumbnail_url = "$coverUrl/${manga.gambar.removePrefix("/")}"
             }
@@ -127,15 +141,18 @@ class Softkomik : HttpSource() {
     }
 
     // ======================== Details ========================
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/${manga.url}", rscHeaders)
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val slug = manga.url.removePrefix("komik/").removePrefix("/")
+        return GET("$baseUrl/$slug", rscHeaders)
+    }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val manga = response.extractNextJs<MangaDetailsDto>()
+        val manga = response.extractNextJs<MangaDetailsEnvelopeDto>()?.data
             ?: throw Exception("Could not find manga details")
 
         val slug = response.request.url.pathSegments.lastOrNull()!!
         return SManga.create().apply {
-            setUrlWithoutDomain(slug)
+            setUrlWithoutDomain(slug.removePrefix("komik/"))
             title = manga.title
             author = manga.author
             description = manga.sinopsis
@@ -149,7 +166,10 @@ class Softkomik : HttpSource() {
         }
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"
+    override fun getMangaUrl(manga: SManga): String {
+        val slug = manga.url.removePrefix("komik/").removePrefix("/")
+        return "$baseUrl/$slug"
+    }
 
     // ======================== Chapters ========================
     override fun chapterListRequest(manga: SManga): Request {
@@ -157,7 +177,8 @@ class Softkomik : HttpSource() {
         val isRequiredLogin = requiredLoginGenres.any { keyword ->
             manga.genre.orEmpty().contains(keyword, ignoreCase = true)
         }
-        var url = "$apiUrl/komik/${manga.url}/chapter?limit=9999999"
+        val slug = manga.url.removePrefix("komik/").removePrefix("/")
+        var url = "$apiUrl/komik/$slug/chapter?limit=9999999"
         if (isRequiredLogin) {
             url += requiredLoginFragment
         }
@@ -387,7 +408,7 @@ class Softkomik : HttpSource() {
                 "$baseUrl/$slug/chapter/001"
             }
         } else if (isChapterListRequest) {
-            "$baseUrl/$slug"
+            "$baseUrl/$slug/chapter"
         } else {
             "$baseUrl/komik/list" // this for manga list with filters.
         }
@@ -536,6 +557,23 @@ class Softkomik : HttpSource() {
         GenreFilter(),
         MinChapterFilter(),
     )
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = PREF_DOMAIN_KEY
+            title = "Domain Mirror"
+            entries = PREF_DOMAIN_ENTRIES
+            entryValues = PREF_DOMAIN_ENTRY_VALUES
+            setDefaultValue(PREF_DOMAIN_DEFAULT)
+            summary = "%s"
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, "Restart Tachiyomi untuk menerapkan perubahan domain", Toast.LENGTH_LONG).show()
+                true
+            }
+        }.also(screen::addPreference)
+    }
+
     private val requiredLoginSuffix = "login-required"
     private val requiredLoginFragment = "#$requiredLoginSuffix"
     private val requiredLoginGenres = listOf("ecchi", "mature")
@@ -553,4 +591,11 @@ class Softkomik : HttpSource() {
         "https://img.softdevices.my.id/softkomik-image",
         "https://image.softkomik.com/softkomik",
     )
+
+    companion object {
+        private const val PREF_DOMAIN_KEY = "pref_domain"
+        private const val PREF_DOMAIN_DEFAULT = "https://softkomik.co"
+        private val PREF_DOMAIN_ENTRIES = arrayOf("softkomik.co", "softkomik.online")
+        private val PREF_DOMAIN_ENTRY_VALUES = arrayOf("https://softkomik.co", "https://softkomik.online")
+    }
 }

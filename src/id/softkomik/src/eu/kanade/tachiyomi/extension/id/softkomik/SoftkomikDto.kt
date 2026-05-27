@@ -19,6 +19,11 @@ data class MangaDto(
 )
 
 @Serializable
+data class MangaDetailsEnvelopeDto(
+    val data: MangaDetailsDto,
+)
+
+@Serializable
 data class MangaDetailsDto(
     val gambar: String,
     val title: String,
