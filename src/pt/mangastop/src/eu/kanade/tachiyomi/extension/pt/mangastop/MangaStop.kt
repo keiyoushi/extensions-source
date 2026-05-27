@@ -28,7 +28,7 @@ class MangaStop :
     ),
     ConfigurableSource {
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             // For covers

@@ -27,7 +27,7 @@ class ArabsHentai : HttpSource() {
     override val lang = "ar"
     private val dateFormat = SimpleDateFormat("d MMM، yyy", Locale("ar"))
     override val supportsLatest = true
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(2)
         .build()
 

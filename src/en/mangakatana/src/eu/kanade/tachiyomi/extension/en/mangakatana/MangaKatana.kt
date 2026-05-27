@@ -40,7 +40,7 @@ class MangaKatana :
     private val preferences: SharedPreferences by getPreferencesLazy()
     private val serverPreference = "SERVER_PREFERENCE"
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder().addNetworkInterceptor { chain ->
+    override val client: OkHttpClient = network.client.newBuilder().addNetworkInterceptor { chain ->
         val originalResponse = chain.proceed(chain.request())
         if (originalResponse.headers("Content-Type").contains("application/octet-stream")) {
             val orgBody = originalResponse.body.source()

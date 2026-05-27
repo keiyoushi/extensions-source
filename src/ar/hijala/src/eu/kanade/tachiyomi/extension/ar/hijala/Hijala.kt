@@ -32,7 +32,7 @@ class Hijala :
     // Site moved from ZeistManga to MangaThemesia again
     override val versionId get() = 2
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(::scrambledImageInterceptor)
         .build()
 

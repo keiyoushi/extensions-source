@@ -203,12 +203,8 @@ class ScanManga :
 
     // Pages
     private fun decodeHunter(obfuscatedJs: String): String {
-        val markers = markerManager::getMarkers
-
-        val (encoded, mask, intervalStr, optionStr) = runSafe {
-            Regex(markers().regexes.hunterObfuscation).find(obfuscatedJs)?.destructured
-                ?: error("Failed to match pattern")
-        }
+        val (encoded, mask, intervalStr, optionStr) = HUNTER_OBFUSCATION_REGEX.find(obfuscatedJs)?.destructured
+            ?: error("Failed to match obfuscation pattern")
 
         val interval = intervalStr.toInt()
         val option = optionStr.toInt()
@@ -248,7 +244,7 @@ class ScanManga :
         // Step 2: Inflate (zlib decompress)
         val inflater = Inflater()
         inflater.setInput(compressedBytes)
-        val outputBuffer = ByteArray(512 * 1024) // 512 KB buffer, should be more than enough
+        val outputBuffer = ByteArray(512 * 1024)
         val decompressedLength = inflater.inflate(outputBuffer)
         inflater.end()
 
@@ -267,26 +263,18 @@ class ScanManga :
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val markers = markerManager::getMarkers
 
-        val packedScript = runSafe { document.selectFirst(markers().selectors.packedScript)!!.data() }
+        val packedScript = document.selectFirst(PACKED_SCRIPT_SELECTOR)!!.data()
         val unpackedScript = decodeHunter(packedScript)
 
-        // parametersRegex
-        val (sml) = runSafe {
-            Regex(markers().regexes.smlParam).find(unpackedScript)?.destructured
-                ?: error("Failed to extract sml parameter.")
-        }
+        val (sml) = SML_PARAM_REGEX.find(unpackedScript)?.destructured
+            ?: error("Failed to extract sml parameter.")
 
-        val (sme) = runSafe {
-            Regex(markers().regexes.smeParam).find(unpackedScript)?.destructured
-                ?: error("Failed to extract sme parameter.")
-        }
+        val (sme) = SME_PARAM_REGEX.find(unpackedScript)?.destructured
+            ?: error("Failed to extract sme parameter.")
 
-        val (chapterId) = runSafe {
-            Regex(markers().regexes.chapterInfo).find(packedScript)?.destructured
-                ?: error("Failed to extract chapter ID.")
-        }
+        val (chapterId) = CHAPTER_INFO_REGEX.find(packedScript)?.destructured
+            ?: error("Failed to extract chapter ID.")
 
         val availableVariables = mapOf(
             "sme" to sme,
@@ -299,33 +287,27 @@ class ScanManga :
         val mediaType = "application/json; charset=UTF-8".toMediaType()
         val documentUrl = document.baseUri().toHttpUrl()
 
-        val lelResponse = runSafe {
-            val requestBody = injectVariables(markers().apiConfig.requestBody, availableVariables)
-            val pageListUrl = injectVariables(markers().apiConfig.pageListUrl, availableVariables)
-            val requestHeaders = headers.newBuilder()
-                .add("Origin", "${documentUrl.scheme}://${documentUrl.host}")
-                .add("Referer", documentUrl.toString())
-                .apply {
-                    markers().apiConfig.headers?.forEach { (key, value) ->
-                        add(key, injectVariables(value, availableVariables))
-                    }
-                }
-                .build()
+        val requestBody = injectVariables(REQUEST_BODY, availableVariables)
+        val pageListUrl = injectVariables(PAGE_LIST_URL, availableVariables)
+        val requestHeaders = headers.newBuilder()
+            .add("Origin", "${documentUrl.scheme}://${documentUrl.host}")
+            .add("Referer", documentUrl.toString())
+            .add("Token", LEL_TOKEN)
+            .build()
 
-            val pageListRequest = POST(
-                url = pageListUrl,
-                headers = requestHeaders,
-                body = requestBody.toRequestBody(mediaType),
-            )
+        val pageListRequest = POST(
+            url = pageListUrl,
+            headers = requestHeaders,
+            body = requestBody.toRequestBody(mediaType),
+        )
 
-            client.newBuilder().cookieJar(CookieJar.NO_COOKIES).build()
-                .newCall(pageListRequest).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        error("Unexpected error while fetching lel. HTTP ${response.code}")
-                    }
-                    dataAPI(response.body.string(), chapterId.toInt())
+        val lelResponse = client.newBuilder().cookieJar(CookieJar.NO_COOKIES).build()
+            .newCall(pageListRequest).execute().use { response ->
+                if (!response.isSuccessful) {
+                    error("Unexpected error while fetching lel. HTTP ${response.code}")
                 }
-        }
+                dataAPI(response.body.string(), chapterId.toInt())
+            }
 
         return lelResponse.generateImageUrls().map { Page(it.first, imageUrl = it.second) }
     }
@@ -347,7 +329,7 @@ class ScanManga :
 
         if (currentValue.isNullOrEmpty()) {
             val latch = CountDownLatch(1)
-            var returnValue = "SUMK" // Default to "IC" if something goes wrong
+            var returnValue = "SUMK"
 
             Handler(Looper.getMainLooper()).post {
                 val webView = WebView(Injekt.get<Application>())
@@ -371,7 +353,7 @@ class ScanManga :
                         """.trimIndent()
 
                         view?.evaluateJavascript(script) {
-                            returnValue = it?.removeSurrounding("\"") ?: "SUMK" // btoa("IC") = "SUMK"
+                            returnValue = it?.removeSurrounding("\"") ?: "SUMK"
                             view.stopLoading()
                             view.destroy()
                             latch.countDown()
@@ -413,26 +395,7 @@ class ScanManga :
                 preferences.edit().putString(key, newValue as String).commit()
             }
         }.also { screen.addPreference(it) }
-
-        EditTextPreference(screen.context).apply {
-            key = MarkerManager.PREF_MARKERS_JSON
-            title = "Debug: Markers JSON"
-            summary =
-                "For debugging purposes. Displays the raw JSON string of the markers used for decoding obfuscated scripts. Automatically updated when markers are refreshed."
-
-            setDefaultValue(null)
-            dialogTitle = "Markers JSON"
-            dialogMessage =
-                "This is the raw JSON string of the markers used for decoding obfuscated scripts. It is automatically updated when markers are refreshed. You can use this information for debugging purposes."
-
-            setOnPreferenceChangeListener { _, _ ->
-                // Do not allow manual changes, this is for display only
-                false
-            }
-        }.also { screen.addPreference(it) }
     }
-
-    private val markerManager by lazy { MarkerManager(client, preferences) }
 
     private fun injectVariables(template: String, variables: Map<String, String>): String {
         var result = template
@@ -442,12 +405,14 @@ class ScanManga :
         return result
     }
 
-    fun <T> runSafe(fn: () -> T): T = runCatching { fn() }.getOrElse {
-        markerManager.fetchWithRetry()
-
-        // Second attempt
-        runCatching { fn() }.getOrElse { throwable ->
-            markerManager.handleFatalFailure(throwable)
-        }
+    companion object {
+        private const val PACKED_SCRIPT_SELECTOR = "script:containsData(eval\\(function \\()"
+        private val HUNTER_OBFUSCATION_REGEX = Regex("""eval\s*\(\s*function\s*\(\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*(?:,\s*[^)]+)?\)\s*\{\s*.*?\s*\}\s*\(\s*"([^"]+)"\s*,\s*\d+\s*,\s*"([^"]+)"\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*\d+\s*\)\s*\)""")
+        private val SML_PARAM_REGEX = Regex("""sml\s*=\s*'([^']+)'""")
+        private val SME_PARAM_REGEX = Regex("""sme\s*=\s*'([^']+)'""")
+        private val CHAPTER_INFO_REGEX = Regex("""const idc = (\d+)""")
+        private const val PAGE_LIST_URL = "https://bqj.{topDomain}/lel/{chapterId}.json"
+        private const val REQUEST_BODY = """{"a":"{sme}","b":"{sml}","c":"{fingerprint}"}"""
+        private const val LEL_TOKEN = "yf"
     }
 }

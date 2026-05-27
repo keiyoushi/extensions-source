@@ -1,0 +1,8 @@
+ext {
+    extName = 'NetTruyenS (unoriginal)'
+    extClass = '.NetTruyenS'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

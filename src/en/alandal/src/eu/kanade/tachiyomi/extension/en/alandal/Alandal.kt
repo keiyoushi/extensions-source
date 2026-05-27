@@ -26,7 +26,7 @@ class Alandal : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(1)
         .build()
 

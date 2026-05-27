@@ -8,7 +8,7 @@ import java.util.concurrent.TimeUnit
 class GenzToons :
     Keyoapp(
         "Genz Toons",
-        "https://genzupdates.com",
+        "https://genztoons.org",
         "en",
     ) {
 

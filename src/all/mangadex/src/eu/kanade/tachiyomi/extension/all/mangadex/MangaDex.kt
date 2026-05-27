@@ -72,7 +72,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
         return builder
     }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(3)
         .build()
 

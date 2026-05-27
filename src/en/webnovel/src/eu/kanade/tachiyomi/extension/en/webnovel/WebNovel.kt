@@ -41,7 +41,7 @@ class WebNovel : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
         .newBuilder()
         .addNetworkInterceptor(::csrfTokenInterceptor)
         .addNetworkInterceptor(::expiredImageUrlInterceptor)

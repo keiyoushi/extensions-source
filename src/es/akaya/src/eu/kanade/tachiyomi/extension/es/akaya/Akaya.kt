@@ -35,7 +35,7 @@ class Akaya : HttpSource() {
     @Volatile
     private var csrfToken: String = ""
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
         .addInterceptor { chain ->
             val request = chain.request()

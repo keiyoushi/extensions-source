@@ -1,0 +1,10 @@
+ext {
+    extName = 'Las Profanadas Scan'
+    extClass = '.LasProfanadasScan'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/profanadasscan'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

@@ -34,7 +34,7 @@ abstract class Yanmaga(
 
     protected val json = Injekt.get<Json>()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(SpeedBinbInterceptor(json))
         .build()
 

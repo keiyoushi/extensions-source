@@ -59,7 +59,7 @@ class AsiaToon : HttpSource() {
         "Romance",
     )
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addNetworkInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, "hc_vfs" to "Y"))
         .build()
 

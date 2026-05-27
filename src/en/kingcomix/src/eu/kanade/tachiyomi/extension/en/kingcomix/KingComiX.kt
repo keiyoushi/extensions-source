@@ -29,8 +29,6 @@ class KingComiX : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
-
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
