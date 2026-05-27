@@ -22,12 +22,12 @@ class ChapterDto(
 )
 
 @Serializable
-data class PagesList(
+class PagesList(
     val pages: List<PageItem>,
 )
 
 @Serializable
-data class PageItem(
+class PageItem(
     val i: Int,
     val u: String,
 )
