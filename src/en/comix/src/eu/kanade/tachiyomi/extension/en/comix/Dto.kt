@@ -244,6 +244,7 @@ class ChapterDetailsResponse(
 @Serializable
 class Chapter(
     val id: Int,
+    val url: String = "",
     val number: Double,
     private val name: String = "",
     val votes: Int = 0,
@@ -262,7 +263,13 @@ class Chapter(
     }
 
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
-        url = "title/$mangaSlug/$id-chapter-${number.toString().removeSuffix(".0")}"
+        url = this@Chapter.url.indexOf("/title/").let { index ->
+            if (index != -1) {
+                this@Chapter.url.substring(index + 1)
+            } else {
+                "title/$mangaSlug/$id-chapter-${number.toString().removeSuffix(".0")}"
+            }
+        }
         name = buildString {
             append("Chapter ")
             append(this@Chapter.number.toString().removeSuffix(".0"))
@@ -303,22 +310,22 @@ class Chapter(
 
 @Serializable
 class ChapterResponse(
-    val result: ChapterResult? = null,
+    val result: ChapterResult,
 ) {
     @Serializable
     class ChapterResult(
-        val id: Int,
-        val pages: Pages = Pages(),
+        val pages: Pages,
     )
 
     @Serializable
     class Pages(
-        val baseUrl: String = "",
-        val items: List<PageDto> = emptyList(),
+        val baseUrl: String,
+        val items: List<PageDto>,
     )
 
     @Serializable
     class PageDto(
         val url: String,
+        val s: Int = 0,
     )
 }

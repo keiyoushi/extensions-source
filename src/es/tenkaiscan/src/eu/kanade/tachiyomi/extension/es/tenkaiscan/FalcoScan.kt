@@ -36,7 +36,7 @@ class FalcoScan : HttpSource() {
 
     private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 3)
         .build()
 

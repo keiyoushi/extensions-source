@@ -28,7 +28,7 @@ class Docomo : HttpSource() {
     private val apiUrl = "https://dxp-system.$domain"
     private val sessionUrl = "https://rs4x.mw-pf.jp"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(PublusInterceptor())
         .build()
 

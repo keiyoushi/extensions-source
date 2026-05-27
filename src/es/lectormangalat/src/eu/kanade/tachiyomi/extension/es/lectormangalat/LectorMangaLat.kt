@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 class LectorMangaLat :
     Madara(
         "LectorManga.lat",
-        "https://lectormangaa.com",
+        "https://lectormangass.com",
         "es",
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
     ),

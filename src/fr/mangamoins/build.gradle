@@ -1,8 +1,8 @@
 ext {
     extName = 'MangaMoins'
     extClass = '.MangaMoins'
-    extVersionCode = 6
+    extVersionCode = 9
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

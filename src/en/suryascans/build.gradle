@@ -2,9 +2,9 @@ ext {
     extName = 'Genz Toons'
     extClass = '.GenzToons'
     themePkg = 'keyoapp'
-    baseUrl = 'https://genzupdates.com'
-    overrideVersionCode = 31
+    baseUrl = 'https://genztoons.org'
+    overrideVersionCode = 32
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

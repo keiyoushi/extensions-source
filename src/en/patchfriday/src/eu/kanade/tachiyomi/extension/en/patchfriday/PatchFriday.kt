@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -23,8 +22,6 @@ class PatchFriday : HttpSource() {
     override val lang = "en"
 
     override val supportsLatest = false
-
-    override val client: OkHttpClient = network.cloudflareClient
 
     private fun createManga(): SManga = SManga.create().apply {
         initialized = true

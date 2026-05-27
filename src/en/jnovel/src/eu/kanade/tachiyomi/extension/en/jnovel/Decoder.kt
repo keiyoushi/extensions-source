@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.jnovel
 
 import android.util.Base64
 import keiyoushi.utils.decodeProto
+import keiyoushi.utils.rc4
 import okio.Buffer
 import okio.InflaterSource
 import okio.buffer
@@ -206,37 +207,6 @@ class Decoder {
             0xDE.toByte(),
             0xAD.toByte(),
         )
-
-        private fun rc4(key: ByteArray, data: ByteArray, skip: Int): ByteArray {
-            val s = IntArray(256) { it }
-            var j = 0
-            for (i in 0..255) {
-                j = (j + s[i] + (key[i % key.size].toInt() and 0xFF)) and 0xFF
-                val t = s[i]
-                s[i] = s[j]
-                s[j] = t
-            }
-            var a = 0
-            var b = 0
-            repeat(skip) {
-                a = (a + 1) and 0xFF
-                b = (b + s[a]) and 0xFF
-                val t = s[a]
-                s[a] = s[b]
-                s[b] = t
-            }
-            val out = ByteArray(data.size)
-            for (i in data.indices) {
-                a = (a + 1) and 0xFF
-                b = (b + s[a]) and 0xFF
-                val t = s[a]
-                s[a] = s[b]
-                s[b] = t
-                val k = (s[a] + s[b]) and 0xFF
-                out[i] = ((data[i].toInt() and 0xFF) xor s[k]).toByte()
-            }
-            return out
-        }
 
         private fun le32(b: ByteArray, off: Int): Int = (b[off].toInt() and 0xFF) or
             ((b[off + 1].toInt() and 0xFF) shl 8) or

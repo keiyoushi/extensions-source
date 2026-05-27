@@ -33,7 +33,7 @@ class DuaLeoTruyen :
     override val lang = "vi"
     override val supportsLatest = true
 
-    private val defaultBaseUrl = "https://dualeotruyendb.com"
+    private val defaultBaseUrl = "https://dualeotruyengl.com"
     private val preferences: SharedPreferences = getPreferences()
 
     override val baseUrl get() = getPrefBaseUrl()
@@ -49,7 +49,7 @@ class DuaLeoTruyen :
         }
     }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(5)
         .build()
 

@@ -1,0 +1,8 @@
+ext {
+    extName = 'ScansGG'
+    extClass = '.ScansGG'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

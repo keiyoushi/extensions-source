@@ -37,7 +37,7 @@ class WNACG :
 
     private val updateUrlInterceptor = UpdateUrlInterceptor(preferences)
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(updateUrlInterceptor)
         .build()
 

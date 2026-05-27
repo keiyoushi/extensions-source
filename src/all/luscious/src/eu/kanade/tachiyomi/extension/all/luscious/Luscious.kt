@@ -48,7 +48,7 @@ abstract class Luscious(
         .add("Referer", "$baseUrl/")
 
     override val client: OkHttpClient
-        get() = network.cloudflareClient.newBuilder()
+        get() = network.client.newBuilder()
             .addNetworkInterceptor(rewriteOctetStream)
             .build()
 

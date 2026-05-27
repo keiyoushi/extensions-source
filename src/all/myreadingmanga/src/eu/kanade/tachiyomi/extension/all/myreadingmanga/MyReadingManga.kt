@@ -33,7 +33,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("User-Agent", USER_AGENT)
         .add("X-Requested-With", randomString((1..20).random()))
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val headers = request.headers.newBuilder().apply {

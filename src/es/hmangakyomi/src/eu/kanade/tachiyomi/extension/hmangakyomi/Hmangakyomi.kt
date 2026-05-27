@@ -15,7 +15,7 @@ class Hmangakyomi :
         "https://hmangakyomi.online",
         "es",
     ) {
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::thumbnailInterceptor)
         .build()
 

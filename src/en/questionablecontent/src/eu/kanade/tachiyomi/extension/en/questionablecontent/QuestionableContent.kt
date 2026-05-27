@@ -29,7 +29,7 @@ class QuestionableContent :
     override val lang = "en"
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(TextInterceptor())
         .build()
 

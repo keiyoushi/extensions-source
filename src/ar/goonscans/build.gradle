@@ -1,0 +1,10 @@
+ext {
+    extName = 'Goon Scans'
+    extClass = '.GoonScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://goonscans.org'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

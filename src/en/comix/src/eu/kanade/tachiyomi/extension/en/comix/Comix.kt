@@ -1,11 +1,20 @@
 package eu.kanade.tachiyomi.extension.en.comix
 
+import android.annotation.SuppressLint
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
+import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -14,14 +23,22 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
+import okio.Buffer
+import org.jsoup.nodes.Document
+import rx.Observable
+import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
 
 class Comix :
     HttpSource(),
@@ -35,18 +52,27 @@ class Comix :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
-        .apply {
-            // Insert at position 0 so requests carrying PROXY_HEADER reach
-            // our interceptor BEFORE any other application interceptor.
-            // Critical for Komu (iOS): its `CallNativeHttpInterceptor`
-            // re-routes comix.to traffic through Foundation NSURLSession
-            // to match Safari's TLS fingerprint and short-circuits the
-            // chain — adding our interceptor at the END would mean it
-            // never sees the request. Placing it first is harmless on
-            // Mihon Android too (no interceptor before us cares about
-            // PROXY_HEADER, and we always pass-through unsigned reqs).
-            interceptors().add(0, WebViewProxyInterceptor)
+    override val client = network.client.newBuilder()
+        .addNetworkInterceptor(Descrambler.interceptor)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+            if (response.code != 404) return@addInterceptor response
+
+            val url = request.url.toString()
+            val fallbacks = listOf("/si/", "/i/", "/sii/", "/ii/")
+                .map { url.replaceFirst(SCRAMBLE_PATH_FALLBACK_REGEX, it) }
+                .filter { it != url }
+
+            if (fallbacks.isEmpty()) return@addInterceptor response
+
+            var lastResponse = response
+            for (fallbackUrl in fallbacks) {
+                lastResponse.close()
+                lastResponse = chain.proceed(request.newBuilder().url(fallbackUrl).build())
+                if (lastResponse.code != 404) break
+            }
+            lastResponse
         }
         .rateLimit(5)
         .build()
@@ -294,76 +320,101 @@ class Comix :
     // ============================= Chapters ==============================
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/${chapter.url}"
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val hid = manga.url.removePrefix("/").substringBefore("-")
-        val fullSlug = manga.url.removePrefix("/")
-        return chapterListRequest(hid, fullSlug, 1)
-    }
-
-    private fun chapterListRequest(mangaHash: String, mangaSlug: String, page: Int): Request {
-        // Routed through WebViewProxyInterceptor: signing + cookies live inside
-        // a hidden WebView so the request is indistinguishable from one the
-        // site's own JS would issue. The token is computed there too.
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("manga")
-            .addPathSegment(mangaHash)
-            .addPathSegment("chapters")
-            .addQueryParameter("order[number]", "desc")
-            .addQueryParameter("limit", "100")
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("mangaSlug", mangaSlug) // carried for chapterListParse
-            .build()
-
-        val proxyHeaders = headers.newBuilder()
-            .add(Signer.PROXY_HEADER, "1")
-            .build()
-        return GET(url, proxyHeaders)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
         val deduplicate = preferences.deduplicateChapters()
-        val mangaHash = response.request.url.pathSegments[3]
-        val mangaSlug = response.request.url.queryParameter("mangaSlug") ?: mangaHash // Extract slug
-        var resp: ChapterDetailsResponse = response.parseAs()
+        val mangaSlug = manga.url.removePrefix("/")
 
-        var chapterMap: LinkedHashMap<Number, Chapter>? = null
-        var chapterList: ArrayList<Chapter>? = null
+        val document = runBlocking {
+            client.newCall(GET(getMangaUrl(manga), headers)).awaitSuccess().asJsoup()
+        }
+        val payload = runInWebView(
+            document = document,
+            buildScript = { interfaceName ->
+                $$"""
+                (function () {
+                    const rewriteUrl = function (url) {
+                        if (typeof url === 'string' && url.indexOf('/chapters') !== -1 && /[?&]limit=\d+/.test(url)) {
+                            return url.replace(/([?&]limit=)\d+/, '$1100');
+                        }
+                        return url;
+                    };
+                    const originalOpen = XMLHttpRequest.prototype.open;
+                    XMLHttpRequest.prototype.open = function (method, url) {
+                        arguments[1] = rewriteUrl(url);
+                        return originalOpen.apply(this, arguments);
+                    };
 
-        if (deduplicate) {
-            chapterMap = LinkedHashMap()
-            deduplicateChapters(chapterMap, resp.result.items)
+                    const originalParse = JSON.parse;
+                    const seen = new Set();
+                    const items = [];
+                    let submitted = false;
+                    const submit = function () {
+                        if (submitted) return;
+                        submitted = true;
+                        window.$$interfaceName.passPayload(JSON.stringify(items));
+                    };
+
+                    JSON.parse = new Proxy(originalParse, {
+                        apply(target, thisArg, args) {
+                            const parsed = Reflect.apply(target, thisArg, args);
+                            try {
+                                if (
+                                    !submitted &&
+                                    parsed && parsed.result &&
+                                    Array.isArray(parsed.result.items) &&
+                                    parsed.result.items.length > 0 &&
+                                    parsed.result.items[0] &&
+                                    parsed.result.items[0].id !== undefined &&
+                                    parsed.result.items[0].mangaId !== undefined
+                                ) {
+                                    const meta = parsed.result.meta || parsed.result.pagination;
+                                    const page = (meta && meta.page) || 1;
+                                    if (!seen.has(page)) {
+                                        seen.add(page);
+                                        for (const it of parsed.result.items) items.push(it);
+                                        if (meta && meta.hasNext) {
+                                            window.$$interfaceName.resetTimer();
+                                            let tries = 0;
+                                            const iv = setInterval(function () {
+                                                const btn = document.querySelector('.mchap-foot button[aria-label*=Next]');
+                                                if (btn && !btn.disabled) {
+                                                    btn.click();
+                                                    clearInterval(iv);
+                                                } else if (++tries > 50) {
+                                                    clearInterval(iv);
+                                                    submit();
+                                                }
+                                            }, 100);
+                                        } else {
+                                            submit();
+                                        }
+                                    }
+                                }
+                            } catch (e) {}
+                            return parsed;
+                        }
+                    });
+                })();
+                """.trimIndent()
+            },
+        )
+
+        val allChapters = payload.parseAs<List<Chapter>>()
+
+        val finalChapters: List<Chapter> = if (deduplicate) {
+            val chapterMap = LinkedHashMap<Number, Chapter>()
+            deduplicateChapters(chapterMap, allChapters)
+            chapterMap.values.toList()
         } else {
-            chapterList = ArrayList(resp.result.items)
+            allChapters
         }
 
-        var page = 2
-        var hasNext = resp.result.hasNextPage()
-
-        while (hasNext) {
-            resp = client
-                .newCall(chapterListRequest(mangaHash, mangaSlug, page++))
-                .execute()
-                .parseAs()
-
-            val items = resp.result.items
-
-            if (deduplicate) {
-                deduplicateChapters(chapterMap!!, items)
-            } else {
-                chapterList!!.addAll(items)
-            }
-            hasNext = resp.result.hasNextPage()
-        }
-
-        val finalChapters: List<Chapter> =
-            if (deduplicate) {
-                chapterMap!!.values.toList()
-            } else {
-                chapterList!!
-            }
-
-        return finalChapters.map { it.toSChapter(mangaSlug) }
+        finalChapters.map { it.toSChapter(mangaSlug) }
     }
+
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
+
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     private fun deduplicateChapters(
         chapterMap: LinkedHashMap<Number, Chapter>,
@@ -397,31 +448,139 @@ class Comix :
     }
 
     // =============================== Pages ===============================
-    override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringAfterLast("/").substringBefore("-")
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("chapters")
-            .addPathSegment(chapterId)
-            .build()
-        val proxyHeaders = headers.newBuilder()
-            .add(Signer.PROXY_HEADER, "1")
-            .build()
-        return GET(url, proxyHeaders)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val res: ChapterResponse = response.parseAs()
-        val result = res.result ?: throw Exception("Chapter not found")
-        val pages = result.pages
-        if (pages.items.isEmpty()) {
-            throw Exception("No images found for chapter ${result.id}")
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        val document = runBlocking {
+            client.newCall(GET(getChapterUrl(chapter), headers)).awaitSuccess().asJsoup()
         }
-        // Page urls are relative to `pages.baseUrl`. Joining manually keeps
-        // existing absolute URLs intact (in case the API switches back).
+        val payload = runInWebView(
+            document = document,
+            buildScript = { interfaceName ->
+                """
+                (function () {
+                    const originalParse = JSON.parse;
+                    JSON.parse = new Proxy(originalParse, {
+                        apply(target, thisArg, args) {
+                            const parsed = Reflect.apply(target, thisArg, args);
+                            try {
+                                if (parsed && parsed.result && parsed.result.pages) {
+                                    window.$interfaceName.passPayload(args[0]);
+                                }
+                            } catch (e) {}
+                            return parsed;
+                        }
+                    });
+                })();
+                """.trimIndent()
+            },
+        )
+
+        val pages = payload.parseAs<ChapterResponse>().result.pages
         val base = pages.baseUrl.trimEnd('/')
-        return pages.items.mapIndexed { index, img ->
+
+        pages.items.mapIndexed { index, img ->
             val full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
             Page(index, imageUrl = full)
+        }
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
+
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun runInWebView(
+        document: Document,
+        buildScript: (interfaceName: String) -> String,
+    ): String {
+        val handler = Handler(Looper.getMainLooper())
+        val jsInterface = WebViewPayloadInterface()
+        val pool = ('a'..'z') + ('A'..'Z')
+        val interfaceName = (1..(10..20).random())
+            .map { pool.random() }
+            .joinToString("")
+        val script = buildScript(interfaceName)
+        val emptyResponse = WebResourceResponse("text/plain", "utf-8", Buffer().inputStream())
+
+        var webView: WebView? = null
+        handler.post {
+            val view = WebView(applicationContext)
+            webView = view
+
+            with(view.settings) {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                blockNetworkImage = true
+                userAgentString = headers["User-Agent"]
+            }
+            view.addJavascriptInterface(jsInterface, interfaceName)
+
+            view.webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(
+                    view: WebView,
+                    request: WebResourceRequest,
+                ): WebResourceResponse? {
+                    val httpUrl = request.url?.toString()?.toHttpUrlOrNull()
+                        ?: return super.shouldInterceptRequest(view, request)
+
+                    return if (httpUrl.host.contains("comix.to") &&
+                        (
+                            httpUrl.encodedPath.contains(".js") ||
+                                httpUrl.encodedPath.startsWith("/api/") ||
+                                httpUrl.encodedPath.startsWith("/title/")
+                            )
+                    ) {
+                        super.shouldInterceptRequest(view, request)
+                    } else {
+                        emptyResponse
+                    }
+                }
+
+                override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                    super.onPageStarted(view, url, favicon)
+                    view.evaluateJavascript(script) {}
+                }
+            }
+
+            view.loadDataWithBaseURL(document.location(), document.outerHtml(), "text/html", "utf-8", null)
+        }
+
+        val completed = try {
+            jsInterface.await(30, TimeUnit.SECONDS)
+        } finally {
+            handler.post { webView?.destroy() }
+        }
+
+        if (!completed) throw Exception("Timed out waiting for WebView payload")
+        return jsInterface.payload ?: throw Exception("Failed to capture WebView payload")
+    }
+
+    private class WebViewPayloadInterface {
+        private val signal = Semaphore(0)
+
+        @Volatile
+        var payload: String? = null
+            private set
+
+        @JavascriptInterface
+        @Suppress("UNUSED")
+        fun passPayload(data: String) {
+            if (payload == null) {
+                payload = data
+                signal.release()
+            }
+        }
+
+        @JavascriptInterface
+        @Suppress("UNUSED")
+        fun resetTimer() {
+            signal.release()
+        }
+
+        fun await(timeout: Long, unit: TimeUnit): Boolean {
+            while (payload == null) {
+                if (!signal.tryAcquire(timeout, unit)) return false
+            }
+            return true
         }
     }
 
@@ -581,5 +740,7 @@ class Comix :
         private const val PREF_SCORE_POSITION = "pref_score_position"
 
         private const val DEFAULT_CONTENT_RATING = "suggestive"
+
+        private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/s?i+/")
     }
 }

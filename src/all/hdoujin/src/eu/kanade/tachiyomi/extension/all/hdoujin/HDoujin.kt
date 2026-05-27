@@ -131,7 +131,7 @@ class HDoujin(
         latch.await(10, TimeUnit.SECONDS)
         return _clearance
     }
-    private val clearanceClient = network.cloudflareClient.newBuilder()
+    private val clearanceClient = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url

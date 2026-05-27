@@ -1,8 +1,8 @@
 ext {
     extName = 'Team Lanh Lung'
     extClass = '.TeamLanhLung'
-    extVersionCode = 28
+    extVersionCode = 30
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

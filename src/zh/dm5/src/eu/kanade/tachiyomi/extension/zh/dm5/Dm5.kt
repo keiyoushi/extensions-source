@@ -31,7 +31,7 @@ class Dm5 :
     override val lang = "zh"
     override val supportsLatest = true
     override val name = "动漫屋"
-    override val client = network.cloudflareClient.newBuilder().addInterceptor(CommentsInterceptor).build()
+    override val client = network.client.newBuilder().addInterceptor(CommentsInterceptor).build()
 
     private val preferences by getPreferencesLazy()
     override val baseUrl = preferences.getString(MIRROR_PREF, MIRROR_ENTRIES[0])!!

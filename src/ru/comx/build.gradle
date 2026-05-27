@@ -1,8 +1,8 @@
 ext {
     extName = 'Com-X'
     extClass = '.ComX'
-    extVersionCode = 36
+    extVersionCode = 37
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

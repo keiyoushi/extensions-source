@@ -1,0 +1,8 @@
+ext {
+    extName = 'Mangitto'
+    extClass = '.Mangitto'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

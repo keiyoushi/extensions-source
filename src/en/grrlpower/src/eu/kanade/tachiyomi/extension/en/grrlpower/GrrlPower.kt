@@ -37,7 +37,7 @@ class GrrlPower(
     private val currentYear = Calendar.getInstance().get(Calendar.YEAR)
     private val dateFormat = SimpleDateFormat("MMM dd yyyy", Locale.US)
 
-    override val client = network.cloudflareClient.newBuilder().addInterceptor(TextInterceptor()).build()
+    override val client = network.client.newBuilder().addInterceptor(TextInterceptor()).build()
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(
         MangasPage(

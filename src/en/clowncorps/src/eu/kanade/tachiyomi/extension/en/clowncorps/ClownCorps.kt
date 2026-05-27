@@ -36,7 +36,7 @@ class ClownCorps :
     override val name = "Clown Corps"
     override val supportsLatest = false
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(TextInterceptor())
         .build()
 

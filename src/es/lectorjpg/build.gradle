@@ -1,8 +1,8 @@
 ext {
     extName = 'LectorJPG'
     extClass = '.LectorJpg'
-    extVersionCode = 45
+    extVersionCode = 46
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

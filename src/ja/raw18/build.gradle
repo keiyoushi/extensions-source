@@ -2,9 +2,9 @@ ext {
     extName = 'Raw18'
     extClass = '.Raw18'
     themePkg = 'wpcomics'
-    baseUrl = 'https://raw18.tel'
-    overrideVersionCode = 3
+    baseUrl = 'https://raw18.cam'
+    overrideVersionCode = 4
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

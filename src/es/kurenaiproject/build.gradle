@@ -1,0 +1,10 @@
+ext {
+    extName = 'Kurenai Project'
+    extClass = '.KurenaiProject'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/kurenaiproject'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
@@ -28,8 +27,6 @@ class Mangatown : HttpSource() {
     override val lang = "en"
 
     override val supportsLatest = true
-
-    override val client: OkHttpClient = network.cloudflareClient
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("Referer", "$baseUrl/")

@@ -33,7 +33,7 @@ class Komikucc : HttpSource() {
     override val baseUrl = "https://$DOMAIN"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .connectTimeout(2.minutes)
         .readTimeout(2.minutes)
         .callTimeout(2.minutes)

@@ -29,8 +29,6 @@ class OppaiStream : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
-
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 

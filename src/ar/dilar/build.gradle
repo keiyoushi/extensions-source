@@ -1,8 +1,7 @@
 ext {
     extName = 'Dilar'
     extClass = '.Dilar'
-    themePkg = 'gmanga'
-    overrideVersionCode = 3
+    extVersionCode = 8
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

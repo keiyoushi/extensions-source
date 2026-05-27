@@ -1,8 +1,8 @@
 ext {
     extName = 'Mangahub'
     extClass = '.Mangahub'
-    extVersionCode = 21
+    extVersionCode = 22
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

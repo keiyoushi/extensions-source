@@ -14,7 +14,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -34,8 +33,6 @@ class RawUwU : HttpSource() {
             timeZone = TimeZone.getTimeZone("UTC")
         }
     }
-
-    override val client: OkHttpClient = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")

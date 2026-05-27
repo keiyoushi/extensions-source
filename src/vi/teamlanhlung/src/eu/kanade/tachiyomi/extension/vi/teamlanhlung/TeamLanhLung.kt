@@ -28,13 +28,13 @@ class TeamLanhLung : HttpSource() {
 
     override val name: String = "Team Lạnh Lùng"
 
-    override val baseUrl: String = "https://hongtruyentranh.com"
+    override val baseUrl: String = "https://nhalung.top"
 
     override val lang: String = "vi"
 
     override val supportsLatest: Boolean = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
         .build()
 

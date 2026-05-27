@@ -1,0 +1,10 @@
+ext {
+    extName = 'Señor Chofli'
+    extClass = '.SenorChofli'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/sirchofli'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

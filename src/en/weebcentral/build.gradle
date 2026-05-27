@@ -1,8 +1,8 @@
 ext {
     extName = 'Weeb Central'
     extClass = '.WeebCentral'
-    extVersionCode = 20
+    extVersionCode = 21
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

@@ -1,11 +1,11 @@
 ext {
     extName = 'Webtoons.com'
     extClass = '.WebtoonsFactory'
-    extVersionCode = 53
+    extVersionCode = 54
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
 
 dependencies {
     implementation(project(':lib:cookieinterceptor'))

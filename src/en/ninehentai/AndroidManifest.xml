@@ -3,7 +3,7 @@
 
     <application>
         <activity
-            android:name=".en.ninehentai.NineHentaiUrlActivity"
+            android:name=".en.ninehentai.UrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">

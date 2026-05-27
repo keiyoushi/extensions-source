@@ -1,0 +1,10 @@
+ext {
+    extName = 'Asuka Langley Translations'
+    extClass = '.AsukaLangleyTranslations'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/asukatranslations'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

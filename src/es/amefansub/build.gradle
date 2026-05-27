@@ -1,0 +1,10 @@
+ext {
+    extName = 'Ame Fansub'
+    extClass = '.AmeFansub'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/ame'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

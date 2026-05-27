@@ -51,7 +51,7 @@ class KManga :
         .add("Referer", "$baseUrl/")
         .add("x-kmanga-platform", "3")
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .addInterceptor { chain ->
             val request = chain.request()

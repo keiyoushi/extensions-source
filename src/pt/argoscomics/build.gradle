@@ -1,8 +1,8 @@
 ext {
     extName = 'Argos Comics'
     extClass = '.ArgosComics'
-    extVersionCode = 53
+    extVersionCode = 54
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

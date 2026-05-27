@@ -26,7 +26,7 @@ abstract class HotComics(
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addNetworkInterceptor(
             CookieInterceptor(baseUrl.removePrefix("https://"), "hc_vfs" to "Y"),
         )

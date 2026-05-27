@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
@@ -22,7 +21,7 @@ class MangaPill : HttpSource() {
     override val baseUrl = "https://mangapill.com"
     override val lang = "en"
     override val supportsLatest = true
-    override val client: OkHttpClient = network.cloudflareClient
+
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
     // Popular fetches the homepage where the "Trending Mangas" section is

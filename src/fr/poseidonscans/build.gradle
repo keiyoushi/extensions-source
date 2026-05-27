@@ -1,8 +1,8 @@
 ext {
     extName = 'Poseidon Scans'
     extClass = '.PoseidonScans'
-    extVersionCode = 50
+    extVersionCode = 51
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
