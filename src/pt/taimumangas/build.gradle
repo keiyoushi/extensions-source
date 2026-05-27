@@ -2,7 +2,7 @@ ext {
     extName = 'TaimuMangas'
     extClass = '.TaimuMangas'
     extVersionCode = 1
-    isNsfw = false
+    isNsfw = true
 }
 
 apply plugin: "kei.plugins.extension.legacy"
