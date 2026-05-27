@@ -9,7 +9,6 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Toast
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -566,11 +565,6 @@ class Softkomik :
             entryValues = PREF_DOMAIN_ENTRY_VALUES
             setDefaultValue(PREF_DOMAIN_DEFAULT)
             summary = "%s"
-
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Restart Tachiyomi untuk menerapkan perubahan domain", Toast.LENGTH_LONG).show()
-                true
-            }
         }.also(screen::addPreference)
     }
 
