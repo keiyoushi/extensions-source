@@ -79,7 +79,7 @@ class ThePropertyOfHate : HttpSource() {
                 val currentChapterNum = chapterNum++
                 chapters.add(
                     SChapter.create().apply {
-                        setUrlWithoutDomain(opt.attr("value"))
+                        setUrlWithoutDomain(opt.absUrl("value"))
                         name = "#${currentChapterNum.toInt()} - ${opt.text().trim()}"
                         chapter_number = currentChapterNum
                     },
