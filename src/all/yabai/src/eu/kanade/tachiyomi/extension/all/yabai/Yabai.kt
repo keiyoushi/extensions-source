@@ -28,7 +28,7 @@ class Yabai : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(::tokenInterceptor)
         .build()
 

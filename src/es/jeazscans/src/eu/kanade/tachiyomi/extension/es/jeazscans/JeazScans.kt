@@ -34,7 +34,7 @@ class JeazScans : HttpSource() {
 
     override val versionId = 2
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(2)
         .build()
 

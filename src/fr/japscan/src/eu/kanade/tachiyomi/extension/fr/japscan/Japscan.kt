@@ -70,7 +70,7 @@ class Japscan :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(1, 2)
         .build()
 

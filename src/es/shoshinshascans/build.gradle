@@ -1,0 +1,10 @@
+ext {
+    extName = 'ShoShinSha Scans'
+    extClass = '.ShoShinShaScans'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/shoshinshascans'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

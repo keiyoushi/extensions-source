@@ -22,8 +22,6 @@ class BRYaoi : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client = network.cloudflareClient
-
     // ====================== Popular ===============================
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", FilterList())

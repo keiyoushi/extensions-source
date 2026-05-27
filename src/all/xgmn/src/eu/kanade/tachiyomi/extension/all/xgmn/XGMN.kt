@@ -128,7 +128,7 @@ class XGMN : HttpSource() {
     override fun pageListParse(response: Response) = response.asJsoup().let { doc ->
         val prefix = doc.selectFirst(".current")!!.absUrl("href").substringBeforeLast(".html")
         val total = PAGE_SIZE_REGEX.find(doc.selectFirst(".article-title")!!.text())!!.value
-        val size = doc.select(".article-content > p[style] > img").size
+        val size = doc.select(".article-content p > img").size
         List(total.toInt()) {
             Page(
                 it,

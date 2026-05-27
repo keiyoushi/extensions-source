@@ -40,8 +40,6 @@ abstract class Iken(
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -110,26 +108,21 @@ abstract class Iken(
     // search
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (!query.startsWith("http")) {
-            return super.fetchSearchManga(page, query, filters)
+        if (query.startsWith("https://")) {
+            val mangaUrl = query.toHttpUrl()
+            if (mangaUrl.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            if (mangaUrl.pathSegments.size < 2) {
+                throw Exception("Unsupported url")
+            }
+            val slug = mangaUrl.pathSegments[1]
+            val manga = SManga.create().apply { url = slug }
+            return fetchMangaDetails(manga)
+                .map { MangasPage(listOf(it), false) }
         }
 
-        val url = query.toHttpUrl()
-        val baseHost = baseUrl.toHttpUrl().host
-
-        if (url.host != baseHost) throw Exception("Unsupported URL")
-
-        val pathSegments = url.pathSegments
-        val slug = pathSegments.getOrNull(1)
-            ?.takeIf { it.isNotBlank() }
-            ?: throw Exception("Invalid URL format")
-
-        val manga = SManga.create().apply {
-            this@apply.url = slug
-        }
-
-        return fetchMangaDetails(manga)
-            .map { MangasPage(listOf(it), false) }
+        return super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -327,8 +320,8 @@ abstract class Iken(
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url.substringBeforeLast("#")}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url.substringAfterLast("#")
-        return GET("$apiUrl/api/post?postId=$id", headers)
+        val slug = manga.url.substringBeforeLast("#")
+        return GET("$apiUrl/api/post?postSlug=$slug", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<Post<Manga>>().post.toSManga()
@@ -344,11 +337,9 @@ abstract class Iken(
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val id = response.request.url.queryParameter("postId")
-
         val data = response.parseAs<Post<ChapterListResponse>>()
 
-        launchIO { updateViews(id?.toInt()) }
+        launchIO { updateViews(data.post.id) }
 
         assert(!data.post.isNovel) { "Novels are unsupported" }
 

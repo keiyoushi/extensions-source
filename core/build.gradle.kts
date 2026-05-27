@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.serialization)
 
     alias(kei.plugins.android.base)
     alias(kei.plugins.spotless)

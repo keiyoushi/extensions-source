@@ -4,7 +4,13 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.serializer
+import kotlin.collections.emptyMap
 import kotlin.math.roundToInt
 
 @Serializable
@@ -74,8 +80,18 @@ class RelatedData(
 ) {
     @Serializable
     class RelationsData(
+        @Serializable(RelationsMapSerializer::class)
         val relations: Map<String, List<BrowseManga>> = emptyMap(),
     )
+
+    internal object RelationsMapSerializer : JsonTransformingSerializer<Map<String, List<BrowseManga>>>(
+        serializer<Map<String, List<BrowseManga>>>(),
+    ) {
+        override fun transformDeserialize(element: JsonElement): JsonElement {
+            if (element is JsonArray) return JsonObject(emptyMap())
+            return element
+        }
+    }
 }
 
 @Serializable
@@ -121,10 +137,10 @@ class Manga(
             }
         }
         author = authors?.let {
-            runCatching { it.parseAs<List<String>>().joinToString() }.getOrNull()
+            runCatching { it.parseAs<List<String>>().joinToString() }.getOrNull()?.let { "\u200B$it" }
         }
         artist = artists?.let {
-            runCatching { it.parseAs<List<String>>().joinToString() }.getOrNull()
+            runCatching { it.parseAs<List<String>>().joinToString() }.getOrNull()?.let { "\u200B\u200B$it" }
         }
         genre = buildList {
             when (this@Manga.origin) {
@@ -189,19 +205,33 @@ class Manga(
 
 @Serializable
 class Chapter(
-    val id: String,
-    val source: String,
+    val id: Int,
     @SerialName("chapter_number")
-    val number: String? = null,
+    val number: Float? = null,
+    @SerialName("volume_number")
+    val volume: Float? = null,
     @SerialName("chapter_title")
     val name: String? = null,
+    val language: String? = null,
+    @SerialName("group_id")
+    val groupId: Int? = null,
     @SerialName("group_name")
     val group: String? = null,
     @SerialName("scanlator_name")
     val scanlator: String? = null,
     @SerialName("date_added")
     val date: String? = null,
-)
+    @SerialName("page_count")
+    val pageCount: Int? = null,
+    val source: String = "user",
+    val groups: List<Group> = emptyList(),
+) {
+    @Serializable
+    class Group(
+        val id: Int,
+        val name: String,
+    )
+}
 
 @Serializable
 class Volume(
@@ -214,6 +244,7 @@ class Volume(
     val scanlator: String? = null,
     @SerialName("date_added")
     val date: String? = null,
+    val source: String = "user",
 )
 
 @Serializable

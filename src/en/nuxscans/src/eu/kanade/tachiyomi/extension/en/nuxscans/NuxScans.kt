@@ -63,7 +63,7 @@ class NuxScans : HttpSource() {
         response
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addNetworkInterceptor(bloggerMobileInterceptor) // network interceptor: runs for redirect targets too
         .addInterceptor(jsRedirectInterceptor)
         .build()

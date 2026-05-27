@@ -35,7 +35,7 @@ class Shinigami : HttpSource() {
 
     private val apiHeaders: Headers by lazy { apiHeadersBuilder().build() }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val headers = request.headers.newBuilder().apply {

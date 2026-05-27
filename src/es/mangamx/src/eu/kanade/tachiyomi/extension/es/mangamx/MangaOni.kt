@@ -36,8 +36,6 @@ class MangaOni :
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)

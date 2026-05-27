@@ -26,7 +26,7 @@ class SwordsComic : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder().addInterceptor(TextInterceptor()).build()
+    override val client: OkHttpClient = network.client.newBuilder().addInterceptor(TextInterceptor()).build()
 
     private fun createManga(): SManga = SManga.create().apply {
         title = "Swords Comic"

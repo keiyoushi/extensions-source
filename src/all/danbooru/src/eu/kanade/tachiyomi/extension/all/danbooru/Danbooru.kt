@@ -31,8 +31,6 @@ class Danbooru :
     override val lang: String = "all"
     override val supportsLatest: Boolean = true
 
-    override val client = network.cloudflareClient
-
     private val dateFormat =
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH)
 

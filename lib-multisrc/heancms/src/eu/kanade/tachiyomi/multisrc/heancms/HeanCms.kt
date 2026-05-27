@@ -22,7 +22,6 @@ import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -41,8 +40,6 @@ abstract class HeanCms(
     protected val preferences: SharedPreferences by getPreferencesLazy()
 
     override val supportsLatest = true
-
-    override val client: OkHttpClient = network.cloudflareClient
 
     protected open val useNewQueryEndpoint = false
 

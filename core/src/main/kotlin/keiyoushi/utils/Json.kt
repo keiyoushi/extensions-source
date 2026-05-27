@@ -73,3 +73,8 @@ inline fun <reified T> T.toJsonString(json: Json = jsonInstance): String = json.
  * Encodes the object to a Response Body.
  */
 inline fun <reified T> T.toJsonRequestBody(json: Json = jsonInstance): RequestBody = toJsonString(json).toRequestBody(JSON_MEDIA_TYPE)
+
+/**
+ * Encodes the object to a [JsonElement].
+ */
+inline fun <reified T> T.toJsonElement(json: Json = jsonInstance): JsonElement = json.encodeToJsonElement(serializer(), this)

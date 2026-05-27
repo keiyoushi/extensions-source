@@ -40,7 +40,7 @@ class TempleScan :
         .set("origin", baseUrl)
         .setRandomUserAgent()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(1)
         .build()
 

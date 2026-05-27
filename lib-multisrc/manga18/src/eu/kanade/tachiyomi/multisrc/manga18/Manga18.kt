@@ -29,8 +29,6 @@ abstract class Manga18(
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
-
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 

@@ -29,7 +29,7 @@ open class MMLook(
     override val lang: String get() = "zh"
     override val supportsLatest: Boolean get() = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .followRedirects(false)
         .hostnameVerifier { _, _ -> true }
         .build()

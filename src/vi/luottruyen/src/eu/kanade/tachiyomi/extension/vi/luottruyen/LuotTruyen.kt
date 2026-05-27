@@ -37,8 +37,6 @@ class LuotTruyen :
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
-
     private val preferences: SharedPreferences = getPreferences()
 
     init {

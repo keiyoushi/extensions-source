@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap
 class MeDamTruyen : HttpSource() {
     override val name = "MeDamTruyen"
     override val lang = "vi"
-    override val baseUrl = "https://saytongtai.shop"
+    override val baseUrl = "https://saytongtai.site"
     override val supportsLatest = true
 
     private val thumbnailFallbackInterceptor = Interceptor { chain ->
@@ -46,7 +46,7 @@ class MeDamTruyen : HttpSource() {
         chain.proceed(fallbackRequest)
     }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(3)
         .addInterceptor(thumbnailFallbackInterceptor)
         .build()

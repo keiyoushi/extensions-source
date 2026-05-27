@@ -28,7 +28,7 @@ class MangaParkPublisher : HttpSource() {
     private val dateFormat = SimpleDateFormat("yyyy/M/d", Locale.ROOT)
     private val apiUrl = "$baseUrl/api/chapter"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .addInterceptor { chain ->
             val request = chain.request()

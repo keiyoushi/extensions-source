@@ -40,7 +40,7 @@ class MangaOne :
 
     private var tagList: List<Tags> = emptyList()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .build()
 

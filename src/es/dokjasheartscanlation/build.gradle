@@ -1,0 +1,10 @@
+ext {
+    extName = 'Dokjasheart scanlation'
+    extClass = '.DokjasheartScanlation'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/dokjasheart'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

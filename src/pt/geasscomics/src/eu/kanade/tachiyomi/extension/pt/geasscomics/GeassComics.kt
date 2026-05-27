@@ -57,7 +57,7 @@ class GeassComics :
     private val preferences by getPreferencesLazy()
 
     override val client: OkHttpClient by lazy {
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .rateLimit(2)
             .addInterceptor { chain ->
                 val request = chain.request()
@@ -105,7 +105,7 @@ class GeassComics :
         val payload = LoginRequest(email, password).toJsonString()
         val requestBody = payload.toRequestBody(JSON_MEDIA_TYPE)
         val request = POST("$apiUrl/api/auth/login", headers, requestBody)
-        val response = network.cloudflareClient.newCall(request).execute()
+        val response = network.client.newCall(request).execute()
         if (!response.isSuccessful) {
             response.close()
             throw Exception("Login failed: ${response.code}")

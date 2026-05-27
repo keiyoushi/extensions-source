@@ -30,7 +30,7 @@ class Kiutaku : HttpSource() {
     override val supportsLatest = true
 
     override val client by lazy {
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .build()
     }

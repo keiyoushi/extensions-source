@@ -12,12 +12,10 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.SpeedBinbReader
 import keiyoushi.utils.firstInstance
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.jsonInstance
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 class Yomonga : HttpSource() {
     override val name = "Yomonga"
@@ -25,11 +23,10 @@ class Yomonga : HttpSource() {
     override val lang = "ja"
     override val supportsLatest = false
 
-    private val json = Injekt.get<Json>()
-    private val reader by lazy { SpeedBinbReader(client, headers, json, true) }
+    private val reader by lazy { SpeedBinbReader(client, headers, jsonInstance, true) }
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(SpeedBinbInterceptor(json))
+    override val client = network.client.newBuilder()
+        .addInterceptor(SpeedBinbInterceptor(jsonInstance))
         .build()
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/titles/?page_num=$page", headers)
@@ -88,11 +85,10 @@ class Yomonga : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select(".episode-list").mapNotNull {
-            val link = it.selectFirst("a.button-type1") ?: return@mapNotNull null
+        return document.select(".episode-list[data-episode_no]").map {
             SChapter.create().apply {
-                name = it.selectFirst("span")!!.text()
-                setUrlWithoutDomain(link.absUrl("href"))
+                name = it.selectFirst(".episode-name")!!.text()
+                setUrlWithoutDomain(it.selectFirst("a.button-type1")!!.absUrl("href"))
             }
         }
     }

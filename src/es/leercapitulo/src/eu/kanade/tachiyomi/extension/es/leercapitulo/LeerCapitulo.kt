@@ -29,11 +29,11 @@ class LeerCapitulo : HttpSource() {
 
     override val baseUrl = "https://www.leercapitulo.co"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 3)
         .build()
 
-    private val notRateLimitClient = network.cloudflareClient
+    private val notRateLimitClient = network.client
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")

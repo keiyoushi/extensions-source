@@ -22,7 +22,7 @@ class TonizuToon :
 
     override val mangaDetailsSelectorStatus = ".summary-heading:contains(Durum) ~ .summary-content"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addNetworkInterceptor(::loginCheckInterceptor)
         .build()
 

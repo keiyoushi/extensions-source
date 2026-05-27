@@ -29,8 +29,6 @@ open class GoDa(
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
-    override val client = network.cloudflareClient
-
     private fun getKey(link: String): String = link.substringAfter("/manga/").removeSuffix("/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/hots/page/$page", headers)
