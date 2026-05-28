@@ -12,7 +12,6 @@ import okhttp3.Response
 class NTKWebtoon : NTKBase("NTK Webtoon", "webtoon") {
     override val webViewPath = "ing"
 
-    // Popular: sorted by views via JSON API — supports infinite pagination via hasMore
     override fun popularMangaRequest(page: Int): Request {
         val url = "$rootUrl/api/works".toHttpUrl().newBuilder().apply {
             addQueryParameter("status", "ongoing")
@@ -24,7 +23,6 @@ class NTKWebtoon : NTKBase("NTK Webtoon", "webtoon") {
         return GET(url, apiHeaders)
     }
 
-    // Latest: sorted by upload date (default behavior) via JSON API — supports infinite pagination via hasMore
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$rootUrl/api/works".toHttpUrl().newBuilder().apply {
             addQueryParameter("status", "ongoing")
@@ -37,7 +35,6 @@ class NTKWebtoon : NTKBase("NTK Webtoon", "webtoon") {
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
-    // Search: text query uses HTML search endpoint; filters use JSON API with status/sort/genre params
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
             val url = "$rootUrl/search".toHttpUrl().newBuilder().apply {
