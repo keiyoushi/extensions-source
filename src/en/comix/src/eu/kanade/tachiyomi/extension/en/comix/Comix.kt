@@ -56,10 +56,22 @@ class Comix :
         .addNetworkInterceptor(Descrambler.interceptor)
         .addInterceptor { chain ->
             val request = chain.request()
-            val response = chain.proceed(request)
+
+            // Scrambled images require fetch() headers to bypass hotlink protection on cache misses
+            val isScrambled = request.url.fragment == "scrambled"
+            val initialRequest = if (isScrambled) {
+                request.newBuilder()
+                    .header("Origin", baseUrl)
+                    .header("Accept", "*/*")
+                    .build()
+            } else {
+                request
+            }
+
+            val response = chain.proceed(initialRequest)
             if (response.code != 404) return@addInterceptor response
 
-            val url = request.url.toString()
+            val url = initialRequest.url.toString()
             val fallbacks = listOf("/si/", "/i/", "/sii/", "/ii/")
                 .map { url.replaceFirst(SCRAMBLE_PATH_FALLBACK_REGEX, it) }
                 .filter { it != url }
@@ -69,7 +81,7 @@ class Comix :
             var lastResponse = response
             for (fallbackUrl in fallbacks) {
                 lastResponse.close()
-                lastResponse = chain.proceed(request.newBuilder().url(fallbackUrl).build())
+                lastResponse = chain.proceed(initialRequest.newBuilder().url(fallbackUrl).build())
                 if (lastResponse.code != 404) break
             }
             lastResponse
@@ -479,7 +491,8 @@ class Comix :
 
         pages.items.mapIndexed { index, img ->
             val full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
-            Page(index, imageUrl = full)
+            val url = if (img.s == 1) "$full#scrambled" else full
+            Page(index, imageUrl = url)
         }
     }
 
