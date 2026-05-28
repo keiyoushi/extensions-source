@@ -16,21 +16,11 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
-import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.decodeFromStream
-import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 import kotlin.collections.emptySet
+import kotlin.collections.ifEmpty
 
 class HoneyManga :
     HttpSource(),
@@ -110,11 +100,11 @@ class HoneyManga :
                         setSearchSort.sortBy = filter.selected
                         setSearchSort.sortOrder = if (filter.state?.ascending == true) "ASC" else "DESC"
                     }
-                    is GenresFilter -> { //no need to add ignored genres from preferences since they are applied to filters
+                    is GenresFilter -> { // no need to add ignored genres from preferences since they are applied to filters
                         filter.included?.let { searchFilters.add(SearchFilter("genres", "ALL", it)) }
                         filter.excluded?.let { searchFilters.add(SearchFilter("genres", "NOT_IN", it)) }
                     }
-                    is TypeFilter -> { //no need to add ignored types from preferences since they are applied to filters
+                    is TypeFilter -> { // no need to add ignored types from preferences since they are applied to filters
                         filter.included?.let { searchFilters.add(SearchFilter("type", "ALL", it)) }
                         filter.excluded?.let { searchFilters.add(SearchFilter("type", "NOT_IN", it)) }
                     }
@@ -123,7 +113,7 @@ class HoneyManga :
             }
         }
 
-        //Add ignored genres and types from preferences if it's not set by Filters (Popular/Latest tab)
+        // Add ignored genres and types from preferences if it's not set by Filters (Popular/Latest tab)
         if (blockedTypes.isNotEmpty() && !searchFilters.any { it.filterBy == "type" && it.filterOperator == "NOT_IN" }) {
             searchFilters.add(SearchFilter("type", "NOT_IN", blockedTypes.toList()))
         }
@@ -154,47 +144,30 @@ class HoneyManga :
         return GET(url, headers)
     }
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val mangaDto = response.parseAs<CompleteHoneyMangaDto>()
-        title = mangaDto.title
-        thumbnail_url = "$IMAGE_STORAGE_URL/${mangaDto.posterId}"
-        url = "$baseUrl/book/${mangaDto.id}"
-        description = mangaDto.description
-        genre = mangaDto.genresAndTags?.joinToString()
-        artist = mangaDto.artists?.joinToString()
-        author = mangaDto.authors?.joinToString()
-        status = when (mangaDto.titleStatus.orEmpty()) {
-            "Онгоінг" -> SManga.ONGOING
-            "Завершено" -> SManga.COMPLETED
-            "Покинуто" -> SManga.CANCELLED
-            "Призупинено" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+    override fun getMangaUrl(manga: SManga): String {
+        val mangaId = manga.url.substringAfterLast('/')
+        return "$baseUrl/book/$mangaId"
     }
+
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<CompleteMangaDto>().toSManga(baseUrl, IMAGE_STORAGE_URL)
 
     // ============================== Chapters ==============================
     override fun chapterListRequest(manga: SManga): Request {
-        val url = "$API_URL/v2/chapter/cursor-list"
-        val body = buildJsonObject {
-            put("mangaId", manga.url.substringAfterLast('/'))
-            put("sortOrder", "DESC")
-            put("page", "1")
-            put("pageSize", "10000") // most likely there will not be any more pageSize
-        }.toString().toRequestBody(JSON_MEDIA_TYPE)
-        return POST(url, headers, body)
+        val body = ChapterRequestBody(
+            mangaId = manga.url.substringAfterLast('/'),
+            page = 1,
+            pageSize = 10000,
+            sortOrder = "DESC",
+        ).toJsonRequestBody()
+        return POST("$API_URL/v2/chapter/cursor-list", headers, body)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.asClass<HoneyMangaChapterResponseDto>()
-        return result.data.filter { !it.isMonetized }.map {
-            val suffix = if (it.subChapterNum == 0) "" else ".${it.subChapterNum}"
-            SChapter.create().apply {
-                url = "$baseUrl/read/${it.id}/${it.mangaId}"
-                name = "Vol. ${it.volume} Ch. ${it.chapterNum}$suffix"
-                date_upload = dateFormat.tryParse(it.lastUpdated)
-            }
-        }
+    override fun getChapterUrl(chapter: SChapter): String {
+        val url = chapter.url.substringAfter("read/")
+        return "$baseUrl/read/$url"
     }
+
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<ChapterResponse>().data.mapNotNull { it.toSChapter(baseUrl) }
 
     // =============================== Pages ================================
     override fun pageListRequest(chapter: SChapter): Request {
@@ -204,13 +177,13 @@ class HoneyManga :
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val data = response.asClass<HoneyMangaChapterPagesDto>()
-        return data.resourceIds.map { (page, imageId) ->
-            Page(page.toInt(), "", "$IMAGE_STORAGE_URL/$imageId")
+        val data = response.parseAs<ChapterPages>()
+        return data.resourceIds.map { (id, imageId) ->
+            Page(index = id.toInt(), imageUrl = "$IMAGE_STORAGE_URL/$imageId")
         }
     }
 
-    override fun imageUrlParse(response: Response): String = ""
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================= Filters ==============================
     override fun getFilterList() = FilterList(
@@ -224,16 +197,11 @@ class HoneyManga :
     )
 
     // ============================= Utilities ==============================
-
     companion object {
         private const val API_URL = "https://data.api.honey-manga.com.ua"
         private const val SEARCH_API_URL = "https://search.api.honey-manga.com.ua"
         private const val IMAGE_STORAGE_URL = "https://hmvolumestorage.b-cdn.net/public-resources"
         private const val DEFAULT_PAGE_SIZE = 30
-        private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
         private const val GENRES_PREF = "pref_genres_exclude"
         private const val GENRES_PREF_TITLE = "Приховані жанри"
         private const val GENRES_PREF_DIALOG = "Виберіть жанри які потрібно сховати"
@@ -241,12 +209,6 @@ class HoneyManga :
         private const val TYPE_PREF_TITLE = "Приховані категорії"
         private const val TYPE_PREF_DIALOG = "Виберіть категорії які потрібно сховати"
         private const val DEFAULT_TYPE_BLOCK = "Новела"
-
-        private val json: Json by injectLazy()
-
-        private inline fun <reified T> Response.asClass(): T = use {
-            json.decodeFromStream(it.body.byteStream())
-        }
     }
 
     // ============================ Preferences =============================
@@ -279,7 +241,7 @@ class HoneyManga :
             title = TYPE_PREF_TITLE
             entries = types
             entryValues = types
-            summary = blockedTypes.joinToString(", ")
+            summary = blockedTypes.joinToString()
             dialogTitle = TYPE_PREF_DIALOG
             setDefaultValue(setOf(DEFAULT_TYPE_BLOCK))
 
