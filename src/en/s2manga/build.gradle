@@ -2,7 +2,7 @@ ext {
     extName = 'S2Manga'
     extClass = '.S2Manga'
     themePkg = 'madara'
-    baseUrl = 'https://s2manga.com'
+    baseUrl = 'https://s2read.com'
     overrideVersionCode = 3
     isNsfw = true
 }
