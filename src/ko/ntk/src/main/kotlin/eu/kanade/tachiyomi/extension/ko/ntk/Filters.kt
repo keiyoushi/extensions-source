@@ -1,13 +1,9 @@
 package eu.kanade.tachiyomi.extension.ko.ntk
 
 import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.source.model.FilterList
-
-inline fun <reified T> FilterList.firstInstanceOrNull(): T? = filterIsInstance<T>().firstOrNull()
 
 data class FilterOption(val name: String, val value: String)
 
-// --- SHARED ---
 internal val sortList = listOf(
     FilterOption("최신순", "new"),
     FilterOption("북마크순", "bookmark"),
@@ -16,7 +12,6 @@ internal val sortList = listOf(
 
 class GenreTriState(val genre: String) : Filter.TriState(genre)
 
-// --- MANGA FILTERS ---
 class SortFilter : Filter.Select<String>("정렬", sortList.map { it.name }.toTypedArray())
 class StatusFilter : Filter.Select<String>("상태", statusList.map { it.name }.toTypedArray())
 class GenreFilter : Filter.Group<GenreTriState>("장르", genreList.map { GenreTriState(it) })
@@ -32,7 +27,6 @@ internal val genreList = listOf(
     "호러", "시대", "로맨스", "추리", "무협", "음악", "BL",
 )
 
-// Builds the genre query param for the manga API — includes/excludes genres as comma-separated list
 fun buildGenreParam(genreFilter: GenreFilter?): String? {
     if (genreFilter == null) return null
     val genres = genreFilter.state
@@ -47,7 +41,6 @@ fun buildGenreParam(genreFilter: GenreFilter?): String? {
     return if (genres.isNotEmpty()) genres.joinToString(",") else null
 }
 
-// --- WEBTOON FILTERS ---
 class WtSortFilter : Filter.Select<String>("정렬", sortList.map { it.name }.toTypedArray())
 class WtStatusFilter : Filter.Select<String>("상태", wtStatusList.map { it.name }.toTypedArray())
 class WtCategoryFilter : Filter.Select<String>("분류", wtCatList.map { it.name }.toTypedArray())
@@ -83,7 +76,6 @@ internal val wtGenreList = listOf(
     "호러", "시대", "로맨스", "추리", "무협", "음악", "BL",
 )
 
-// Builds the genre query param for the webtoon API — uses index numbers, not genre names
 fun buildWtGenreParam(genreFilter: WtGenreFilter?): String? {
     if (genreFilter == null) return null
     val tags = genreFilter.state
@@ -95,6 +87,5 @@ fun buildWtGenreParam(genreFilter: WtGenreFilter?): String? {
                 else -> null
             }
         }
-    // OkHttp will automatically url-encode the commas into "%2C" safely
     return if (tags.isNotEmpty()) tags.joinToString(",") else null
 }
