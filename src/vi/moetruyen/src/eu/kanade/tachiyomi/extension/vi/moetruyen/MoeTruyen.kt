@@ -15,7 +15,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -49,13 +48,12 @@ class MoeTruyen :
 
     override val client = network.client.newBuilder()
         .rateLimit(3)
-        .addInterceptor(CookieInterceptor("moetruyen.net", "moetruyen_full_web" to "Moetruyen123456"))
-        .addInterceptor(CookieInterceptor("truyen.moe", "moetruyen_full_web" to "Moetruyen123456"))
         .addInterceptor(imgxInterceptor())
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+        .add("Cookie", "moetruyen_full_web=Moetruyen123456")
 
     // ============================== Popular ===============================
 
