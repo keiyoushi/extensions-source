@@ -104,7 +104,7 @@ class Mangadotnet :
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/view-all/trending.data".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/view-all/${popularModePref()}.data".toHttpUrl().newBuilder().apply {
             addAdultParam()
             if (page > 1) {
                 addQueryParameter("page", page.toString())
@@ -131,7 +131,7 @@ class Mangadotnet :
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/view-all/latest-updates.data".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/view-all/${latestModePref()}.data".toHttpUrl().newBuilder().apply {
             addAdultParam()
             if (page > 1) {
                 addQueryParameter("page", page.toString())
@@ -498,6 +498,10 @@ class Mangadotnet :
 
     private fun chapterModePref() = preferences.getString(CHAPTER_MODE, "chapters")!!
 
+    private fun popularModePref() = preferences.getString(POPULAR_MODE_PREF, "trending")!!
+
+    private fun latestModePref() = preferences.getString(LATEST_MODE_PREF, "latest-updates")!!
+
     private fun excludedGenresPref(): Set<String> {
         val mode = adultModePref()
         return if (mode == "1" || mode == "both") {
@@ -571,6 +575,26 @@ class Mangadotnet :
             summary = "%s"
         }
         screen.addPreference(nsfwPref)
+
+        val popularModePref = ListPreference(screen.context).apply {
+            key = POPULAR_MODE_PREF
+            title = "Popular Mode"
+            entries = arrayOf("Trending", "Most Tracked", "Top Rated")
+            entryValues = arrayOf("trending", "most-tracked", "top-rated")
+            setDefaultValue("trending")
+            summary = "%s"
+        }
+        screen.addPreference(popularModePref)
+
+        val latestModePref = ListPreference(screen.context).apply {
+            key = LATEST_MODE_PREF
+            title = "Latest Mode"
+            entries = arrayOf("Latest Updates", "Recently Added")
+            entryValues = arrayOf("latest-updates", "recently-added")
+            setDefaultValue("latest-updates")
+            summary = "%s"
+        }
+        screen.addPreference(latestModePref)
 
         val browseTypePref = ListPreference(screen.context).apply {
             key = BROWSE_TYPE_PREF
@@ -699,6 +723,8 @@ class Mangadotnet :
 
 private const val NSFW_MODE = "pref_nsfw_mode"
 private const val CHAPTER_MODE = "pref_chapter_mode"
+private const val POPULAR_MODE_PREF = "pref_popular_mode"
+private const val LATEST_MODE_PREF = "pref_latest_mode"
 private const val EXCLUDE_GENRE_PREF = "pref_exclude_genre"
 private const val EXCLUDE_GENRE_ADULT_PREF = "pref_exclude_genre_adult"
 private const val BROWSE_TYPE_PREF = "pref_browse_type"
