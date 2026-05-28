@@ -1,0 +1,10 @@
+ext {
+    extName = 'Tsuki No Musume Scan'
+    extClass = '.TsukiNoMusumeScan'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/tsukinomusumescan'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

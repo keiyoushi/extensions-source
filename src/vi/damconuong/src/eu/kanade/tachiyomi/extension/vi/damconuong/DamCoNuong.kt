@@ -25,7 +25,7 @@ class DamCoNuong : HttpSource() {
     override val baseUrl = "https://damconuong.lol"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(5)
         .build()
 

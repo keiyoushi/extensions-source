@@ -29,7 +29,7 @@ class Panomic : HttpSource() {
     override val baseUrl = "https://panomic1.info"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(3)
         .build()
 

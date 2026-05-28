@@ -28,8 +28,6 @@ class ZonatmoTo : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client = network.cloudflareClient
-
     override fun headersBuilder() = super.headersBuilder()
 
     private val apiHeaders: Headers by lazy {

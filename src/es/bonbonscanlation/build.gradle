@@ -1,0 +1,10 @@
+ext {
+    extName = 'Bonbon Scanlation'
+    extClass = '.BonbonScanlation'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/bonbonscanlation'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

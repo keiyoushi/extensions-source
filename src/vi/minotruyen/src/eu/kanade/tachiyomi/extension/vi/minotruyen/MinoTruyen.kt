@@ -60,7 +60,7 @@ class MinoTruyen(
     private val apiHeaders by lazy { headersBuilder().add("Origin", baseUrl).build() }
 
     override val client by lazy {
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .rateLimitHost(apiUrl.toHttpUrl(), 3)
             .addInterceptor(MinoImageInterceptor())
             .build()
@@ -307,7 +307,7 @@ class MinoTruyen(
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
 
     private fun resolveApiUrl(): String {
-        val baseClient = network.cloudflareClient
+        val baseClient = network.client
 
         try {
             val request = Request.Builder()

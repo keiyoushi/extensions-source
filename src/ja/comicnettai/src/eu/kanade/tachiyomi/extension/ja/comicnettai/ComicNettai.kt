@@ -27,7 +27,7 @@ class ComicNettai : HttpSource() {
 
     private val dateFormat = SimpleDateFormat("yyyy.MM.dd", Locale.ROOT)
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(PublusInterceptor())
         .build()
 

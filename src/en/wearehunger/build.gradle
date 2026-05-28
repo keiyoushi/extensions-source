@@ -1,10 +1,10 @@
 ext {
-    extName = 'Wearehunger'
+    extName = 'KokoMangas'
     extClass = '.Wearehunger'
     themePkg = 'madara'
-    baseUrl = 'https://www.wearehunger.site'
-    overrideVersionCode = 1
+    baseUrl = 'https://kokomangas.com'
+    overrideVersionCode = 2
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

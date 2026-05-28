@@ -1,0 +1,10 @@
+ext {
+    extName = 'Traducciones PaltaNobu'
+    extClass = '.TraduccionesPaltaNobu'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/paltanobu'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

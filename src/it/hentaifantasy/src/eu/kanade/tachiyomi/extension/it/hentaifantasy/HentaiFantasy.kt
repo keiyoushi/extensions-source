@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
@@ -24,7 +23,6 @@ class HentaiFantasy : HttpSource() {
     override val baseUrl = "https://hentaifantasy.it"
     override val lang = "it"
     override val supportsLatest = true
-    override val client: OkHttpClient = network.cloudflareClient
 
     companion object {
         private val pagesUrlPattern = Regex(""""url":"(.*?)"""")

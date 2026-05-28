@@ -1,0 +1,10 @@
+ext {
+    extName = 'The grimorio de la witch'
+    extClass = '.TheGrimorioDeLaWitch'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/tgdlw'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

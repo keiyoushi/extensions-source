@@ -45,7 +45,7 @@ class SoaiCaComic : HttpSource() {
         chain.proceed(GET(fallbackUrl, request.headers))
     }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(3)
         .addInterceptor(thumbnailFallbackInterceptor)
         .build()

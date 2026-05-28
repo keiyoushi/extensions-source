@@ -1,8 +1,8 @@
 ext {
     extName = 'VinaHentai'
     extClass = '.VinaHentai'
-    extVersionCode = 4
+    extVersionCode = 6
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

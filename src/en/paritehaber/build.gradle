@@ -3,8 +3,8 @@ ext {
     extClass = '.Paritehaber'
     themePkg = 'madara'
     baseUrl = 'https://www.paritehaber.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

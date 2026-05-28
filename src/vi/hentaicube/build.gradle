@@ -3,8 +3,8 @@ ext {
     extClass = '.HentaiCB'
     themePkg = 'madara'
     baseUrl = 'https://2tencb.pro'
-    overrideVersionCode = 27
+    overrideVersionCode = 28
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

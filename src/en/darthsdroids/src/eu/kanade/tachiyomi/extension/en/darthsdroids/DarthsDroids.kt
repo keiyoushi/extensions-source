@@ -27,7 +27,7 @@ class DarthsDroids : HttpSource() {
     override val baseUrl = "https://www.darthsanddroids.net"
     override val lang = "en"
     override val supportsLatest = false
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 10, 1, TimeUnit.SECONDS)
         .build()
 

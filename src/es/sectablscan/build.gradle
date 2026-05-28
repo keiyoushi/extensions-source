@@ -1,0 +1,10 @@
+ext {
+    extName = 'Secta BL Scan'
+    extClass = '.SectaBLScan'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/sectablscan'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

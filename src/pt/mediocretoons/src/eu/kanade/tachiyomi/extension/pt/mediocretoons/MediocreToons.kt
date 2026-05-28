@@ -40,7 +40,7 @@ class MediocreToons :
     private var cachedToken: String? = null
     private var tokenExpiryTime: Long = 0L
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(2)
         .addInterceptor(::authIntercept)
         .build()
@@ -122,7 +122,7 @@ class MediocreToons :
                 .header("Accept", "application/json")
                 .build()
 
-            val response = network.cloudflareClient.newCall(request).execute()
+            val response = network.client.newCall(request).execute()
 
             if (response.isSuccessful) {
                 val responseBody = response.body.string()

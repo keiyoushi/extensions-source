@@ -1,7 +1,8 @@
 ext {
     extName = 'Kill Six Billion Demons'
     extClass = '.KillSixBillionDemons'
-    extVersionCode = 5
+    extVersionCode = 6
+    isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

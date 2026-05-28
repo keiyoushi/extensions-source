@@ -28,7 +28,7 @@ class MissKon : HttpSource() {
     override val name = "MissKon"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 10, 1, TimeUnit.SECONDS)
         .build()
 

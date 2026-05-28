@@ -75,7 +75,7 @@ class ComX :
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .rateLimit(3)
@@ -309,8 +309,10 @@ class ComX :
         val verifyReq = Request.Builder()
             .url("$baseUrl/_v")
             .post(verifyBody)
+            .headers(headers)
             .header("X-Requested-With", "XMLHttpRequest")
             .header("Referer", challenge.request.url.toString())
+            .header("Content-Type", "application/x-www-form-urlencoded")
             .build()
         chain.proceed(verifyReq).close()
 

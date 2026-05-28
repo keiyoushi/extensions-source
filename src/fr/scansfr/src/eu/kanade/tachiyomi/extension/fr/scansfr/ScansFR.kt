@@ -39,7 +39,7 @@ class ScansFR :
 
     private val apiUrl = "https://api.scansfr.com"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

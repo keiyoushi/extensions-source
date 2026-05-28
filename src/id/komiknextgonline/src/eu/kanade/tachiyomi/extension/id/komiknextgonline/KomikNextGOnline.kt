@@ -13,7 +13,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
@@ -28,8 +27,6 @@ class KomikNextGOnline : HttpSource() {
     override val lang = "id"
 
     override val supportsLatest = false
-
-    override val client: OkHttpClient = network.cloudflareClient
 
     private val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.US)
 

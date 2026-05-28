@@ -40,7 +40,7 @@ class CyComi :
     private val jst = TimeZone.getTimeZone("Asia/Tokyo")
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .build()
 

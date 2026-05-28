@@ -26,7 +26,7 @@ class TCBScans : HttpSource() {
     override val lang = "en"
     override val supportsLatest = false
 
-    override val client = network.cloudflareClient.newBuilder().addNetworkInterceptor { chain ->
+    override val client = network.client.newBuilder().addNetworkInterceptor { chain ->
         val request = chain.request()
         val response = chain.proceed(request)
 

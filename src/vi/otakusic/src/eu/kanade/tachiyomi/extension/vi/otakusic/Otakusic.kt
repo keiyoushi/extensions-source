@@ -30,7 +30,7 @@ class Otakusic : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(3)
         .build()
 

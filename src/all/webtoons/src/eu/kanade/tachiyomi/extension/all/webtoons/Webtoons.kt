@@ -48,7 +48,7 @@ open class Webtoons(
         .set("Referer", "$mobileUrl/")
         .build()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addNetworkInterceptor(
             CookieInterceptor(
                 domain = "webtoons.com",
@@ -395,7 +395,7 @@ open class Webtoons(
             val note = document.select("div.creator_note p.author_text").text()
 
             if (note.isNotEmpty()) {
-                val creator = document.select("div.creator_note a.author_name span").text().trim()
+                val creator = document.select("div.creator_note .author_name span").text().trim()
 
                 pages += Page(
                     pages.size,

@@ -43,7 +43,7 @@ class Mangabz :
         urlSuffix = mirror.urlSuffix
 
         val cookieInterceptor = CookieInterceptor(mirror.domain, mirror.langCookie to preferences.lang)
-        client = network.cloudflareClient.newBuilder()
+        client = network.client.newBuilder()
             .rateLimit(5)
             .addNetworkInterceptor(cookieInterceptor)
             .build()

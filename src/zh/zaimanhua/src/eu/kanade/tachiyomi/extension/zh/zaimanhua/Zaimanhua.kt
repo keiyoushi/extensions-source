@@ -59,7 +59,7 @@ class Zaimanhua :
 
     private val preferences: SharedPreferences = getPreferences()
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(5)
         .addInterceptor(::authIntercept)
         .addInterceptor(::imageRetryInterceptor)

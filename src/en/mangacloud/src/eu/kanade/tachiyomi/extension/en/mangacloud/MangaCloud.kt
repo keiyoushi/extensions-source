@@ -44,7 +44,7 @@ class MangaCloud : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(1)
         .build()
 
@@ -273,7 +273,7 @@ class MangaCloud : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.parseAs<ChapterUrl>().chapterId
 
-        return GET("$API_URL/chapter2/$chapterId", headers)
+        return GET("$API_URL/chapter5/$chapterId", headers)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {

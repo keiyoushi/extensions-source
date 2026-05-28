@@ -39,7 +39,7 @@ open class Kemono(
     ConfigurableSource {
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(1)
         .addInterceptor { chain ->
             val request = chain.request()

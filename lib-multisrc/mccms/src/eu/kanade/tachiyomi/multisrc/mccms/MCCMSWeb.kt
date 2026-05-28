@@ -32,7 +32,7 @@ open class MCCMSWeb(
     }
 
     override val client by lazy {
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .addInterceptor { chain ->
                 val response = chain.proceed(chain.request())

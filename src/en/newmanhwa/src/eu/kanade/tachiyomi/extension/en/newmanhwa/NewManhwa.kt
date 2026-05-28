@@ -35,8 +35,6 @@ class NewManhwa :
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
-
     private val preferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -50,7 +48,7 @@ class NewManhwa :
     private fun popularMangaParse(document: Document): MangasPage {
         val mangas = document.select("a.series-card").map { element ->
             SManga.create().apply {
-                setUrlWithoutDomain(element.attr("href"))
+                setUrlWithoutDomain(element.attr("abs:href"))
                 title = element.selectFirst("strong")!!.text().removeTitleRank()
                 thumbnail_url = element.selectFirst("img")?.let {
                     it.attr("abs:data-src").ifEmpty { it.attr("abs:src") }
@@ -161,10 +159,12 @@ class NewManhwa :
     // ========================= Chapters =========================
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select(".chapter-list a.chapter-row").map { element ->
+        return document.select(".chapter-list .chapter-row").map { element ->
             SChapter.create().apply {
-                setUrlWithoutDomain(element.attr("href"))
-                name = element.selectFirst(".chapter-name strong")!!.text()
+                val link = element.selectFirst("a.chapter-main")!!
+
+                setUrlWithoutDomain(link.attr("abs:href"))
+                name = link.selectFirst(".chapter-name strong")!!.text()
                 date_upload = element.selectFirst(".chapter-age")?.text()?.let {
                     DATE_FORMAT.tryParse(it)
                 } ?: 0L

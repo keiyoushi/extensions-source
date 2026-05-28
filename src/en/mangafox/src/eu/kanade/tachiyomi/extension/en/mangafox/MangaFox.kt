@@ -37,7 +37,7 @@ class MangaFox : HttpSource() {
 
     override val supportsLatest: Boolean = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(1, 1)
         // Force readway=2 cookie to get all page URLs at once
         .cookieJar(
