@@ -282,14 +282,6 @@ class RaijinScans :
         val d = config["d"]!!.jsonArray
 
         fun str(index: Int) = d[index].jsonPrimitive.content
-
-        val ajaxUrl = str(M_AJAX_URL)
-        val mangaId = str(M_MANGA_ID)
-        val chapterId = str(M_CHAPTER_ID)
-        val token = str(M_TOKEN)
-        val instance = str(M_INSTANCE)
-        val action = str(M_ACTION)
-        val chapterSlug = str(M_CHAPTER_SLUG)
         val reqKeys = d[M_REQ_KEYS].jsonArray.map { it.jsonPrimitive.content }
         val resKeys = d[M_RES_KEYS].jsonArray.map { it.jsonPrimitive.content }
 
@@ -298,22 +290,23 @@ class RaijinScans :
         var cursor = ""
         var run = true
         var guard = 0
+
         while (run && guard++ < MAX_PAGE_REQUESTS) {
             val body = MultipartBody.Builder().setType(MultipartBody.FORM)
-                .addFormDataPart("action", action)
+                .addFormDataPart("action", str(M_ACTION))
                 .addFormDataPart(resKeys[0], "")
-                .addFormDataPart(resKeys[1], token)
-                .addFormDataPart(resKeys[2], mangaId)
-                .addFormDataPart(resKeys[3], chapterId)
-                .addFormDataPart(resKeys[4], chapterSlug)
-                .addFormDataPart(resKeys[5], d[1].jsonPrimitive.content)
+                .addFormDataPart(resKeys[1], str(M_TOKEN))
+                .addFormDataPart(resKeys[2], str(M_MANGA_ID))
+                .addFormDataPart(resKeys[3], str(M_CHAPTER_ID))
+                .addFormDataPart(resKeys[4], str(M_CHAPTER_SLUG))
+                .addFormDataPart(resKeys[5], str(M_TYPE))
                 .addFormDataPart(resKeys[6], offset)
                 .addFormDataPart(resKeys[7], "0")
-                .addFormDataPart(resKeys[8], instance)
+                .addFormDataPart(resKeys[8], str(M_INSTANCE))
                 .addFormDataPart(resKeys[9], cursor)
                 .build()
 
-            val root = client.newCall(POST(ajaxUrl, ajaxHeaders, body)).execute()
+            val root = client.newCall(POST(str(M_AJAX_URL) , ajaxHeaders, body)).execute()
                 .use { it.parseAs<JsonObject>() }
 
             val payload = root[reqKeys[1]]!!.jsonObject
