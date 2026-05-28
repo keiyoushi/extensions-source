@@ -313,23 +313,7 @@ class Mangadotnet :
 
             val chapters = async {
                 if (mode != "volumes") {
-                    val response = client.newCall(chapterListRequest(manga)).await()
-                    response.parseAs<List<Chapter>>()
-                        .map { chapter ->
-                            SChapter.create().apply {
-                                url = ChapterUrl(chapter.id.toString(), chapter.source, false).toJsonString()
-                                name = buildString {
-                                    val number = chapter.number?.toString()?.substringBefore(".0") ?: "0"
-                                    val name = chapter.name ?: ""
-                                    if (!name.contains(number)) append("Chapter ", number, ": ")
-                                    append(name.trim())
-                                }
-                                chapter_number = chapter.number ?: 0f
-                                scanlator = (chapter.group ?: chapter.scanlator)?.takeIf { it.isNotBlank() }
-                                date_upload = dateFormat.tryParse(chapter.date?.substringBefore("+"))
-                            }
-                        }
-                        .asReversed()
+                    fetchChaptersList(manga)
                 } else {
                     emptyList()
                 }
@@ -342,7 +326,7 @@ class Mangadotnet :
                             SChapter.create().apply {
                                 url = ChapterUrl(volume.id.toString(), volume.source, true).toJsonString()
                                 name = "Volume ${(volume.volume ?: 0f).toString().substringBefore(".0")}"
-                                chapter_number = -2f
+                                chapter_number = 0f
                                 scanlator = (volume.group ?: volume.scanlator)?.takeIf { it.isNotBlank() }
                                 date_upload = dateFormat.tryParse(volume.date?.substringBefore("+"))
                             }
@@ -352,9 +336,13 @@ class Mangadotnet :
                 }
             }
 
-            val allChapters = buildList {
-                addAll(chapters.await())
-                addAll(volumes.await())
+            val chaptersResult = chapters.await()
+            val volumesResult = volumes.await()
+
+            val allChapters = if (mode == "volumes" && volumesResult.isEmpty()) {
+                fetchChaptersList(manga)
+            } else {
+                chaptersResult + volumesResult
             }
 
             val finalChapters = if (deduplicate && allChapters.isNotEmpty()) {
@@ -409,6 +397,26 @@ class Mangadotnet :
 
             Observable.just(finalChapters)
         }
+    }
+
+    private suspend fun fetchChaptersList(manga: SManga): List<SChapter> {
+        val response = client.newCall(chapterListRequest(manga)).await()
+        return response.parseAs<List<Chapter>>()
+            .map { chapter ->
+                SChapter.create().apply {
+                    url = ChapterUrl(chapter.id.toString(), chapter.source, false).toJsonString()
+                    name = buildString {
+                        val number = chapter.number?.toString()?.substringBefore(".0") ?: "0"
+                        val name = chapter.name ?: ""
+                        if (!name.contains(number)) append("Chapter ", number, ": ")
+                        append(name.trim())
+                    }
+                    chapter_number = chapter.number ?: 0f
+                    scanlator = (chapter.group ?: chapter.scanlator)?.takeIf { it.isNotBlank() }
+                    date_upload = dateFormat.tryParse(chapter.date?.substringBefore("+"))
+                }
+            }
+            .asReversed()
     }
 
     override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/api/manga/${manga.url}/chapters/list?lang=en", headers)
@@ -570,7 +578,7 @@ class Mangadotnet :
             entries = arrayOf("Chapters only", "Volumes only", "Chapters + Volumes")
             entryValues = arrayOf("chapters", "volumes", "both")
             setDefaultValue("chapters")
-            summary = "%s\nNote: Most titles don't have volumes"
+            summary = "%s\nNote: Most titles don't have volumes. 'Volumes only' falls back to chapters if none are found."
         }
         screen.addPreference(chapterModePref)
 
@@ -585,8 +593,8 @@ class Mangadotnet :
         val priorityPref = EditTextPreference(screen.context).apply {
             key = PREFERRED_SCANLATORS
             title = "Scanlator Priority"
-            summary = "Comma-separated, in order of preference. First match wins. Supports unofficial only if scanlator name matches website. \nDefaults to official scrapers: Manga Plus, VIZ Media, Webtoon, Tapas, MangaDex, K Manga, MangaUP, Comikey, Shonen Jump"
-            setDefaultValue("")
+            summary = "Comma-separated, in order of preference. First match wins.\nOfficial Scrapers: Manga Plus, VIZ Media, Webtoon, Tapas, MangaDex, K Manga, MangaUP, Comikey, Shonen Jump"
+            setDefaultValue("VIZ Media, MANGA Plus, MangaPlus, Official, Webtoon, Tapas, MangaDex, K Manga, MangaUP, Comikey, Shonen Jump")
             setEnabled(preferences.getBoolean(DEDUPLICATE_CHAPTERS, false))
         }
         screen.addPreference(priorityPref)
