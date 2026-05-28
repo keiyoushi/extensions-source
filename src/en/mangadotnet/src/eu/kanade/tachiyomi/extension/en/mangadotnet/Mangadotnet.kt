@@ -593,7 +593,7 @@ class Mangadotnet :
         val priorityPref = EditTextPreference(screen.context).apply {
             key = PREFERRED_SCANLATORS
             title = "Scanlator Priority"
-            summary = "Comma-separated, in order of preference. First match wins.\nOfficial Scrapers: Manga Plus, VIZ Media, Webtoon, Tapas, MangaDex, K Manga, MangaUP, Comikey, Shonen Jump"
+            summary = "Comma-separated, in order of preference. First match wins. Supports unofficial only if scanlator name matches website.\nDefaults to official scrapers: Manga Plus, VIZ Media, Webtoon, Tapas, MangaDex, K Manga, MangaUP, Comikey, Shonen Jump"
             setDefaultValue("VIZ Media, MANGA Plus, MangaPlus, Official, Webtoon, Tapas, MangaDex, K Manga, MangaUP, Comikey, Shonen Jump")
             setEnabled(preferences.getBoolean(DEDUPLICATE_CHAPTERS, false))
         }
