@@ -572,6 +572,26 @@ class Mangadotnet :
         }
         screen.addPreference(nsfwPref)
 
+        val browseTypePref = ListPreference(screen.context).apply {
+            key = BROWSE_TYPE_PREF
+            title = "Type Filter"
+            entries = arrayOf("All Types", "Manga", "Manhwa", "Manhua", "One Shot")
+            entryValues = arrayOf("", "JP", "KR", "CN", "ONESHOT")
+            setDefaultValue("")
+            summary = "Applies to Popular & Latest"
+        }
+        screen.addPreference(browseTypePref)
+
+        val browseStatusPref = ListPreference(screen.context).apply {
+            key = BROWSE_STATUS_PREF
+            title = "Status Filter"
+            entries = arrayOf("Any Status", "Ongoing", "Completed", "Hiatus")
+            entryValues = arrayOf("", "Ongoing", "Completed", "Hiatus")
+            setDefaultValue("")
+            summary = "Applies to Popular & Latest"
+        }
+        screen.addPreference(browseStatusPref)
+
         val chapterModePref = ListPreference(screen.context).apply {
             key = CHAPTER_MODE
             title = "Chapter List Mode"
@@ -636,26 +656,6 @@ class Mangadotnet :
             adultGenrePref.setEnabled((genres.adult != null || excludedAdult.isNotEmpty()) && (newMode == "1" || newMode == "both"))
             true
         }
-
-        val browseTypePref = ListPreference(screen.context).apply {
-            key = BROWSE_TYPE_PREF
-            title = "Type Filter"
-            entries = arrayOf("All Types", "Manga", "Manhwa", "Manhua", "One Shot")
-            entryValues = arrayOf("", "JP", "KR", "CN", "ONESHOT")
-            setDefaultValue("")
-            summary = "Applies to Popular & Latest"
-        }
-        screen.addPreference(browseTypePref)
-
-        val browseStatusPref = ListPreference(screen.context).apply {
-            key = BROWSE_STATUS_PREF
-            title = "Status Filter"
-            entries = arrayOf("Any Status", "Ongoing", "Completed", "Hiatus")
-            entryValues = arrayOf("", "Ongoing", "Completed", "Hiatus")
-            setDefaultValue("")
-            summary = "Applies to Popular & Latest"
-        }
-        screen.addPreference(browseStatusPref)
     }
 
     private inline fun <reified T> Response.decodeRscAs(): T {
