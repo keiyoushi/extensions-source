@@ -49,8 +49,8 @@ class MoeTruyen :
 
     override val client = network.client.newBuilder()
         .rateLimit(3)
-        .addInterceptor(CookieInterceptor("moetruyen.net", "moetruyen_full_web" to "Moetruyen123456"))
-        .addInterceptor(CookieInterceptor("truyen.moe", "moetruyen_full_web" to "Moetruyen123456"))
+        .addNetworkInterceptor(CookieInterceptor("moetruyen.net", "moetruyen_full_web" to "Moetruyen123456"))
+        .addNetworkInterceptor(CookieInterceptor("truyen.moe", "moetruyen_full_web" to "Moetruyen123456"))
         .addInterceptor(imgxInterceptor())
         .build()
 
