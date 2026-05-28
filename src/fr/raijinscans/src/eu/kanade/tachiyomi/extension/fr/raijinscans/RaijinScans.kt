@@ -281,9 +281,15 @@ class RaijinScans :
         val config = String(Base64.decode(b64, Base64.DEFAULT)).parseAs<JsonObject>()
         val d = config["d"]!!.jsonArray
 
-        fun str(index: Int) = d[index].jsonPrimitive.content
-        val reqKeys = d[M_REQ_KEYS].jsonArray.map { it.jsonPrimitive.content }
-        val resKeys = d[M_RES_KEYS].jsonArray.map { it.jsonPrimitive.content }
+        //  Unscramble 'd' using permutation arr 'm' in config
+        val mPerm = config["m"]!!.jsonArray.map { it.jsonPrimitive.content.toInt() }
+        val canonical = mPerm.map { d[it] }
+
+        fun str(index: Int) = canonical[index].jsonPrimitive.content
+        fun arr(index: Int) = canonical[index].jsonArray
+
+        val reqKeys = arr(M_REQ_KEYS).map { it.jsonPrimitive.content }
+        val resKeys = arr(M_RES_KEYS).map { it.jsonPrimitive.content }
 
         val pages = mutableListOf<Page>()
         var offset = "0"
@@ -299,15 +305,16 @@ class RaijinScans :
                 .addFormDataPart(resKeys[2], str(M_MANGA_ID))
                 .addFormDataPart(resKeys[3], str(M_CHAPTER_ID))
                 .addFormDataPart(resKeys[4], str(M_CHAPTER_SLUG))
-                .addFormDataPart(resKeys[5], str(M_TYPE))
-                .addFormDataPart(resKeys[6], offset)
-                .addFormDataPart(resKeys[7], "0")
-                .addFormDataPart(resKeys[8], str(M_INSTANCE))
+                .addFormDataPart(resKeys[5], str(M_INSTANCE))
+                .addFormDataPart(resKeys[6], str(M_TYPE))
+                .addFormDataPart(resKeys[7], offset)
+                .addFormDataPart(resKeys[8], str(M_RJFR_VALUE))
                 .addFormDataPart(resKeys[9], cursor)
                 .build()
 
-            val root = client.newCall(POST(str(M_AJAX_URL) , ajaxHeaders, body)).execute()
-                .use { it.parseAs<JsonObject>() }
+            val response = client.newCall(POST(str(M_AJAX_URL), ajaxHeaders, body)).execute()
+            if (!response.isSuccessful) error("Failed to get page: ${response.code}")
+            val root = response.parseAs<JsonObject>()
 
             val payload = root[reqKeys[1]]!!.jsonObject
             val images = payload[reqKeys[2]]!!.jsonArray
@@ -345,15 +352,16 @@ class RaijinScans :
         private const val MAX_PAGE_REQUESTS = 100
 
         // Positional indices into the decoded reader manifest array.
-        private const val M_MANGA_ID = 0
-        private const val M_TYPE = 1
-        private const val M_AJAX_URL = 3
-        private const val M_REQ_KEYS = 4
-        private const val M_CHAPTER_ID = 6
-        private const val M_TOKEN = 7
-        private const val M_INSTANCE = 9
-        private const val M_RES_KEYS = 11
-        private const val M_ACTION = 13
-        private const val M_CHAPTER_SLUG = 14
+        private const val M_CHAPTER_ID = 2
+        private const val M_RJFR_VALUE = 3
+        private const val M_ACTION = 4
+        private const val M_TYPE = 5
+        private const val M_CHAPTER_SLUG = 6
+        private const val M_AJAX_URL = 7
+        private const val M_INSTANCE = 8
+        private const val M_MANGA_ID = 10
+        private const val M_RES_KEYS = 12
+        private const val M_TOKEN = 13
+        private const val M_REQ_KEYS = 14
     }
 }
