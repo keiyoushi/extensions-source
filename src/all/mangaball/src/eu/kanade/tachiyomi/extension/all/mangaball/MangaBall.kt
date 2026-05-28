@@ -321,9 +321,10 @@ class MangaBall(
                     SChapter.create().apply {
                         url = translation.id
                         name = buildString {
+                            val volume = translation.volume.toString().removeSuffix(".0")
                             if (translation.volume > 0) {
                                 append("Vol. ")
-                                append(translation.volume)
+                                append(volume)
                                 append(" ")
                             }
                             val number = chapter.number.toString().removeSuffix(".0")
