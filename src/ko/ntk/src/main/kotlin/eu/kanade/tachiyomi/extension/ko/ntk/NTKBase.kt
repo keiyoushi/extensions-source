@@ -1,5 +1,12 @@
 package eu.kanade.tachiyomi.extension.ko.ntk
 
+import android.annotation.SuppressLint
+import android.app.Application
+import android.os.Handler
+import android.os.Looper
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -18,10 +25,17 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 abstract class NTKBase(
     override val name: String,
@@ -68,9 +82,129 @@ abstract class NTKBase(
     // Detail/chapter/page requests use rootUrl directly to avoid baseUrl's content-path prefix doubling the path
     override fun mangaDetailsRequest(manga: SManga) = GET(rootUrl + manga.url, headers)
     override fun chapterListRequest(manga: SManga) = GET(rootUrl + manga.url, headers)
-    override fun pageListRequest(chapter: SChapter) = GET(rootUrl + chapter.url, headers)
+
+    // override fun pageListRequest(chapter: SChapter) = GET(rootUrl + chapter.url, headers)
+    // override fun pageListRequest(chapter: SChapter) = GET(rootUrl + chapter.url, apiHeaders)
+
+    override fun pageListRequest(chapter: SChapter) = GET(
+        url = rootUrl + chapter.url,
+        headers = headers.newBuilder().add("X-WebView-Intercept", "true").build(),
+    )
 
     // --- INTERCEPTORS ---
+
+    @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
+    private val trojanWebViewInterceptor = Interceptor { chain ->
+        val request = chain.request()
+
+        if (request.header("X-WebView-Intercept") == null) {
+            return@Interceptor chain.proceed(request)
+        }
+
+        var finalHtml: String? = null
+        var lastSeenHtml = "No HTML captured" // Our debug camera
+        val latch = CountDownLatch(1)
+        val handler = Handler(Looper.getMainLooper())
+
+        handler.post {
+            val context = Injekt.get<Application>()
+            val webView = WebView(context)
+
+            webView.settings.javaScriptEnabled = true
+            webView.settings.domStorageEnabled = true
+
+            // Give the invisible WebView a fake physical screen size (1080p)
+            webView.measure(
+                android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY),
+                android.view.View.MeasureSpec.makeMeasureSpec(1920, android.view.View.MeasureSpec.EXACTLY),
+            )
+            webView.layout(0, 0, 1080, 1920)
+
+            // 1. The Disguise: Steal the OkHttp User-Agent so we look like a real browser
+            webView.settings.userAgentString = request.header("User-Agent")
+                ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+            // 2. The Keys: Tell the WebView it's allowed to use our Cloudflare cookies
+            android.webkit.CookieManager.getInstance().setAcceptCookie(true)
+            android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
+
+            webView.addJavascriptInterface(
+                object {
+                    @JavascriptInterface
+                    fun exfiltrate(html: String) {
+                        finalHtml = html
+                        latch.countDown()
+                    }
+
+                    @JavascriptInterface
+                    fun updateDebug(html: String) {
+                        lastSeenHtml = html // Constantly records what the WebView is looking at
+                    }
+                },
+                "TrojanTunnel",
+            )
+
+            webView.webViewClient = object : WebViewClient() {
+                // This runs the millisecond the page starts loading
+                override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                    // 1. Neuter the disable-devtool script
+                    view.evaluateJavascript("window.__ntkDevtoolsPreflight = 1;", null)
+
+                    // 2. The Wiretap: Intercept the browser's fetch API
+                    val wiretapScript = """
+                        const originalFetch = window.fetch;
+                        window.fetch = async function() {
+                            const response = await originalFetch.apply(this, arguments);
+
+                            // Check if the browser is asking for the manhwa images
+                            let reqUrl = arguments[0] && arguments[0].url ? arguments[0].url : arguments[0];
+                            if (reqUrl && reqUrl.toString().includes('/api/manhwa-images')) {
+                                // Clone the JSON payload and sneak it out the tunnel!
+                                response.clone().text().then(text => {
+                                    window.TrojanTunnel.exfiltrate(text);
+                                });
+                            }
+                            return response;
+                        };
+                    """.trimIndent()
+                    view.evaluateJavascript(wiretapScript, null)
+
+                    super.onPageStarted(view, url, favicon)
+                }
+
+                // We no longer need to scrape the DOM, but we leave the debug camera running just in case
+                override fun onPageFinished(view: WebView, url: String) {
+                    val spyScript = """
+                        setInterval(function() {
+                            window.TrojanTunnel.updateDebug(document.documentElement.outerHTML);
+                        }, 500);
+                    """.trimIndent()
+                    view.evaluateJavascript(spyScript, null)
+                }
+            }
+
+            webView.loadUrl(request.url.toString())
+        }
+
+        latch.await(20, TimeUnit.SECONDS)
+
+        if (finalHtml != null) {
+            // Check if we stole JSON or HTML and set the correct media type
+            val isJson = finalHtml!!.trim().startsWith("{")
+            val mediaType = if (isJson) "application/json" else "text/html"
+
+            return@Interceptor Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(finalHtml!!.toResponseBody(mediaType.toMediaType()))
+                .build()
+        } else {
+            // 3. The Black Box: If we time out, print the last seen HTML to the crash log
+            throw Exception("Trojan timeout! WebView is stuck. Last seen HTML: \n" + lastSeenHtml.take(1500))
+        }
+    }
 
     // Strips Next.js RSC headers that would confuse the server into returning partial JSON instead of full HTML.
     // Only adds the HTML Accept header if one isn't already set (preserves Accept: application/json on API calls).
@@ -153,6 +287,7 @@ abstract class NTKBase(
             .addInterceptor(domainUpdateInterceptor)
             .addInterceptor(smartRateLimitInterceptor)
             .addInterceptor(webViewRedirectInterceptor)
+            .addInterceptor(trojanWebViewInterceptor)
             .build()
     }
 
@@ -296,10 +431,21 @@ abstract class NTKBase(
         }
     }
 
+//    override fun pageListParse(response: Response): List<Page> {
+//        val document = response.asJsoup()
+//        return document.select("div.vw-imgs img").mapIndexed { i, img ->
+//            Page(i, imageUrl = img.attr("abs:src"))
+//        }
+//    }
+
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        return document.select("div.vw-imgs img").mapIndexed { i, img ->
-            Page(i, imageUrl = img.attr("abs:src"))
+        val responseBody = response.body.string()
+        val data = json.parseToJsonElement(responseBody).jsonObject
+        val imagesArray = data["images"]!!.jsonArray
+
+        return imagesArray.mapIndexed { i, element ->
+            val imageUrl = element.jsonObject["src"]!!.jsonPrimitive.content
+            Page(i, imageUrl = imageUrl)
         }
     }
 
@@ -310,7 +456,7 @@ abstract class NTKBase(
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
             key = PREF_DOMAIN_KEY
-            title = "도메인 번호 (ntkOOO.com)"
+            title = "도메인 번호 (sbxh#.com)"
             summary = "현재 도메인 번호: ${preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)}\n숫자만 입력하세요 (예: 1, 2, 300)"
             setDefaultValue(PREF_DOMAIN_DEFAULT)
         }.also(screen::addPreference)
@@ -338,7 +484,7 @@ abstract class NTKBase(
 
     companion object {
         private const val PREF_DOMAIN_KEY = "pref_domain_key"
-        private const val PREF_DOMAIN_DEFAULT = "1"
+        private const val PREF_DOMAIN_DEFAULT = "3"
         private const val PREF_RATELIMIT_KEY = "pref_ratelimit_key"
         private const val PREF_RATELIMIT_DEFAULT = "5"
 

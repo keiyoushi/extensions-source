@@ -1,9 +1,6 @@
 package eu.kanade.tachiyomi.extension.ko.ntk
 
 import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.source.model.FilterList
-
-inline fun <reified T> FilterList.firstInstanceOrNull(): T? = filterIsInstance<T>().firstOrNull()
 
 data class FilterOption(val name: String, val value: String)
 
