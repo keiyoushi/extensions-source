@@ -35,7 +35,7 @@ class TruyenGG :
 
     override val lang = "vi"
 
-    private val defaultBaseUrl = "https://truyenggvn.com"
+    private val defaultBaseUrl = "https://foxtruyen2.com"
 
     override val supportsLatest = true
 
@@ -143,11 +143,11 @@ class TruyenGG :
     // Chapters
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select("ul.list_chap > li.item_chap").map { element ->
+        return document.select("ul.fx-chap-list > li.fx-chap-item").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
                 name = element.select("a").text()
-                date_upload = dateFormat.tryParse(element.select("span.cl99").text().trim())
+                date_upload = dateFormat.tryParse(element.select("span.fx-chap-item__date").text().trim())
             }
         }
     }
