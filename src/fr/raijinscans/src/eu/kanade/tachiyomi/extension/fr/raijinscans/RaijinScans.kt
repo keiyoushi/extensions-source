@@ -55,7 +55,9 @@ class RaijinScans :
     private val nonceRegex = """"nonce"\s*:\s*"([^"]+)"""".toRegex()
     private val numberRegex = """(\d+)""".toRegex()
     private val descriptionScriptRegex = """content\.innerHTML = `([\s\S]+?)`;""".toRegex()
-    private val manifestRegex = """=\s*"([A-Za-z0-9+/=]{40,})"""".toRegex()
+    private val manifestPushRegex =
+        """window\[(?:"|')rjfr_[^"']+(?:"|')]\[window\[(?:"|')rjfr_[^"']+(?:"|')]\.length]\s*=\s*\[([^\]]+)]""".toRegex()
+    private val manifestFragmentRegex = """"([0-9a-z])\.([A-Za-z0-9+/=]+)"""".toRegex()
     private val json: Json by lazy {
         Json {
             ignoreUnknownKeys = true
@@ -259,27 +261,39 @@ class RaijinScans :
             .add("Origin", baseUrl)
             .build()
 
-        // The reader manifest is a base64-encoded JSON array pushed onto a
-        // randomly-named window array, emitted in a <script> placed right after
-        // the page <figure> elements. All scalar fields are positional; the
-        // request/response field names are obfuscated and carried as two
-        // sub-arrays (REQ_KEYS / RES_KEYS) that change on every page load.
+        // The reader manifest is now split into ~35 base64 fragments of the form
+        // "<k>.<chunk>" (k ∈ 0-9a-y), pushed onto a randomly-named window array
+        // in a <script> right after the page <figure> elements. Sorting fragments
+        // by their leading char and concatenating yields one base64 string that
+        // decodes to [permutation, data]; logical positions in `data` are recovered
+        // via permutation.indexOf(logicalIndex).
         val manifests = document.select("figure:contains(JavaScript) + script")
-            .flatMap { script -> manifestRegex.findAll(script.data()).map { it.groupValues[1] } }
-            .map { json.parseToJsonElement(String(Base64.decode(it, Base64.DEFAULT))).jsonArray }
+            .flatMap { script -> manifestPushRegex.findAll(script.data()).map { it.groupValues[1] } }
+            .mapNotNull { pushBody ->
+                val fragments = manifestFragmentRegex.findAll(pushBody)
+                    .map { it.groupValues[1] to it.groupValues[2] }
+                    .toList()
+                if (fragments.isEmpty()) return@mapNotNull null
+                val b64 = fragments.sortedBy { it.first }.joinToString("") { it.second }
+                val outer = json.parseToJsonElement(String(Base64.decode(b64, Base64.DEFAULT))).jsonArray
+                val permutation = outer[0].jsonArray.map { it.jsonPrimitive.content.toInt() }
+                val data = outer[1].jsonArray
+                IntArray(permutation.size) { permutation.indexOf(it) } to data
+            }
 
         if (manifests.isEmpty()) {
             throw Exception("No reader manifest found. Open the chapter in WebView.")
         }
 
         val pages = mutableListOf<Page>()
-        for (manifest in manifests) {
-            fun str(index: Int) = manifest[index].jsonPrimitive.content
+        for ((logicalToPhysical, manifest) in manifests) {
+            fun str(logical: Int) = manifest[logicalToPhysical[logical]].jsonPrimitive.content
+            fun arr(logical: Int) = manifest[logicalToPhysical[logical]].jsonArray
 
             val ajaxUrl = str(M_AJAX_URL)
             val action = str(M_ACTION)
-            val reqKeys = manifest[M_REQ_KEYS].jsonArray.map { it.jsonPrimitive.content }
-            val resKeys = manifest[M_RES_KEYS].jsonArray.map { it.jsonPrimitive.content }
+            val reqKeys = arr(M_REQ_KEYS).map { it.jsonPrimitive.content }
+            val resKeys = arr(M_RES_KEYS).map { it.jsonPrimitive.content }
 
             var offset = str(M_OFFSET)
             var cursor = ""
