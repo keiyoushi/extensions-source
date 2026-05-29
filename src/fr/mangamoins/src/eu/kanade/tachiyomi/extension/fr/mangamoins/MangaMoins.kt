@@ -130,7 +130,7 @@ class MangaMoins : HttpSource() {
                     val chapterName = "Chapitre ${ch.num.toString().removeSuffix(".0")}"
                     append(chapterName)
                     val title = ch.title.unescapeHtml()
-                    if (title.isNotBlank() && !title.equals(chapterName, ignoreCase = true)) {
+                    if (title.isNotBlank() && title.lowercase() != chapterName.lowercase()) {
                         append(" - ")
                         append(title)
                     }
@@ -169,18 +169,41 @@ class MangaMoins : HttpSource() {
             val scriptUrl = "$baseUrl/includes/components/js/reader.js"
             client.newCall(GET(scriptUrl, headers)).execute().use { response ->
                 val script = response.body.string()
-                val arrayContent = ARRAY_REGEX.find(script)?.groupValues?.get(1)
-                    ?: error("Failed to find array content")
+
+                val alphabet = ALPHABET_REGEX.find(script)?.groupValues?.get(1)
+                    ?: FALLBACK_ALPHABET
+
+                val formulaMatch = FORMULA_REGEX.find(script)
+                val multiplier = formulaMatch?.groupValues?.get(1)?.toInt(16) ?: 3
+                val offset = formulaMatch?.groupValues?.get(2)?.toInt(16) ?: 7
 
                 val pathSegment = pagesBaseUrl.removeSuffix("/").substringAfterLast("/")
-                val salts = STRINGS_REGEX.findAll(arrayContent)
-                    .map { it.groupValues[1].replace(ESCAPE_REGEX) { m -> m.groupValues[1].toInt(16).toChar().toString() } }
-                    .filter { it.length >= 3 && pathSegment.contains(it) }
-                    .distinct()
-                    .toList()
+                val salts = mutableListOf<String>()
 
-                if (salts.isNotEmpty()) {
-                    cachedSalts = salts
+                HEX_ARRAY_REGEX.findAll(script).forEach { match ->
+                    val hexValues = match.groupValues[1].split(",")
+                    val decoded = hexValues.map {
+                        val v = it.trim().removePrefix("0x").toInt(16)
+                        alphabet[(v * multiplier + offset) % alphabet.length]
+                    }.joinToString("")
+
+                    if (decoded.length >= 3 && pathSegment.contains(decoded)) {
+                        salts.add(decoded)
+                    }
+                }
+
+                STRINGS_REGEX.findAll(script).forEach { match ->
+                    val s = match.groupValues[1].replace(ESCAPE_REGEX) { m ->
+                        m.groupValues[1].toInt(16).toChar().toString()
+                    }
+                    if (s.length >= 3 && pathSegment.contains(s)) {
+                        salts.add(s)
+                    }
+                }
+
+                val result = salts.distinct().sortedByDescending { it.length }
+                if (result.isNotEmpty()) {
+                    cachedSalts = result
                     lastSaltFetch = now
                 }
             }
@@ -193,7 +216,9 @@ class MangaMoins : HttpSource() {
         val data = response.parseAs<ScanResponse>()
         val salts = getSalts(data.pagesBaseUrl)
 
-        val baseUrl = salts.fold(data.pagesBaseUrl.removeSuffix("/")) { url, salt -> url.replace(salt, "") }
+        val baseUrl = salts.fold(data.pagesBaseUrl.removeSuffix("/")) { url, salt ->
+            url.replace(salt, "")
+        }
 
         return (1..data.pageNumbers).map { i ->
             val pageNum = i.toString().padStart(2, '0')
@@ -206,9 +231,12 @@ class MangaMoins : HttpSource() {
     companion object {
         private const val MANGA_PAGE_LIMIT = 20
         private val FALLBACK_SALTS = listOf("a1f", "Z0_9")
+        private const val FALLBACK_ALPHABET = "abcdefghijk-lmnopqrstuvwxyz_0123456789+"
         private const val SALT_EXPIRY = 3 * 60 * 60 * 1000L // 3 hours
 
-        private val ARRAY_REGEX = Regex("""_[a-f\d]+=\s*\[(['"].*?)]""")
+        private val ALPHABET_REGEX = Regex("""['"]([a-zA-Z0-9\-+_]{30,})['"]""")
+        private val FORMULA_REGEX = Regex("""\*0x([a-f\d]+)\+0x([a-f\d]+)""")
+        private val HEX_ARRAY_REGEX = Regex("""\[(0x[a-f\d]+(?:,0x[a-f\d]+)+)\]""")
         private val STRINGS_REGEX = Regex("""['"]([^'"]*)['"]""")
         private val ESCAPE_REGEX = Regex("""\\x([a-f\d]{2})""", RegexOption.IGNORE_CASE)
     }
