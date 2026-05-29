@@ -55,9 +55,7 @@ class RaijinScans :
     private val nonceRegex = """"nonce"\s*:\s*"([^"]+)"""".toRegex()
     private val numberRegex = """(\d+)""".toRegex()
     private val descriptionScriptRegex = """content\.innerHTML = `([\s\S]+?)`;""".toRegex()
-    private val manifestPushRegex =
-        """window\[(?:"|')rjfr_[^"']+(?:"|')]\[window\[(?:"|')rjfr_[^"']+(?:"|')]\.length]\s*=\s*\[([^\]]+)]""".toRegex()
-    private val manifestFragmentRegex = """"([0-9a-z])\.([A-Za-z0-9+/=]+)"""".toRegex()
+    private val manifestPushRegex = """push\((\{.*\})\);""".toRegex()
     private val json: Json by lazy {
         Json {
             ignoreUnknownKeys = true
@@ -243,6 +241,7 @@ class RaijinScans :
     }
 
     // ========================== Page List =============================
+
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
@@ -261,73 +260,73 @@ class RaijinScans :
             .add("Origin", baseUrl)
             .build()
 
-        // The reader manifest is now split into ~35 base64 fragments of the form
-        // "<k>.<chunk>" (k ∈ 0-9a-y), pushed onto a randomly-named window array
-        // in a <script> right after the page <figure> elements. Sorting fragments
-        // by their leading char and concatenating yields one base64 string that
-        // decodes to [permutation, data]; logical positions in `data` are recovered
-        // via permutation.indexOf(logicalIndex).
-        val manifests = document.select("figure:contains(JavaScript) + script")
-            .flatMap { script -> manifestPushRegex.findAll(script.data()).map { it.groupValues[1] } }
-            .mapNotNull { pushBody ->
-                val fragments = manifestFragmentRegex.findAll(pushBody)
-                    .map { it.groupValues[1] to it.groupValues[2] }
-                    .toList()
-                if (fragments.isEmpty()) return@mapNotNull null
-                val b64 = fragments.sortedBy { it.first }.joinToString("") { it.second }
-                val outer = json.parseToJsonElement(String(Base64.decode(b64, Base64.DEFAULT))).jsonArray
-                val permutation = outer[0].jsonArray.map { it.jsonPrimitive.content.toInt() }
-                val data = outer[1].jsonArray
-                IntArray(permutation.size) { permutation.indexOf(it) } to data
-            }
+        // window["rjfr_xxx"].push({
+        //   "m": "hex1|...",  // order of fragments
+        //   "c": {               // key-value pairs of b64 fragments
+        //     "hex1": "base64fragment1", ... }
+        // })
+        // config = m.split("|").map { key -> c[key] }.joinToString("") -> Base64 decode
 
-        if (manifests.isEmpty()) {
-            throw Exception("No reader manifest found. Open the chapter in WebView.")
-        }
+        val manifestScript = document.select("script").find { it.data().contains("rjfr_") }
+            ?: throw Exception("No reader manifest found. Open the chapter in WebView.")
+        val scriptData = manifestScript.data()
+        val match = manifestPushRegex.find(scriptData) ?: throw Exception("Invalid manifest format")
+
+        val manifestJson = match.groupValues[1].parseAs<JsonObject>()
+        val mOrder = manifestJson["m"]!!.jsonPrimitive.content.split("|")
+        val cObj = manifestJson["c"]!!.jsonObject
+        val fragments = mOrder.map { cObj[it]!!.jsonPrimitive.content }
+        val b64 = fragments.joinToString("")
+
+        val config = String(Base64.decode(b64, Base64.DEFAULT)).parseAs<JsonObject>()
+        val d = config["d"]!!.jsonArray
+
+        //  Unscramble 'd' using permutation arr 'm' in config
+        val mPerm = config["m"]!!.jsonArray.map { it.jsonPrimitive.content.toInt() }
+        val canonical = mPerm.map { d[it] }
+
+        fun str(index: Int) = canonical[index].jsonPrimitive.content
+        fun arr(index: Int) = canonical[index].jsonArray
+
+        val reqKeys = arr(M_REQ_KEYS).map { it.jsonPrimitive.content }
+        val resKeys = arr(M_RES_KEYS).map { it.jsonPrimitive.content }
 
         val pages = mutableListOf<Page>()
-        for ((logicalToPhysical, manifest) in manifests) {
-            fun str(logical: Int) = manifest[logicalToPhysical[logical]].jsonPrimitive.content
-            fun arr(logical: Int) = manifest[logicalToPhysical[logical]].jsonArray
+        var offset = "0"
+        var cursor = ""
+        var run = true
+        var guard = 0
 
-            val ajaxUrl = str(M_AJAX_URL)
-            val action = str(M_ACTION)
-            val reqKeys = arr(M_REQ_KEYS).map { it.jsonPrimitive.content }
-            val resKeys = arr(M_RES_KEYS).map { it.jsonPrimitive.content }
+        while (run && guard++ < MAX_PAGE_REQUESTS) {
+            val body = MultipartBody.Builder().setType(MultipartBody.FORM)
+                .addFormDataPart("action", str(M_ACTION))
+                .addFormDataPart(resKeys[0], "")
+                .addFormDataPart(resKeys[1], str(M_TOKEN))
+                .addFormDataPart(resKeys[2], str(M_MANGA_ID))
+                .addFormDataPart(resKeys[3], str(M_CHAPTER_ID))
+                .addFormDataPart(resKeys[4], str(M_CHAPTER_SLUG))
+                .addFormDataPart(resKeys[5], str(M_INSTANCE))
+                .addFormDataPart(resKeys[6], str(M_TYPE))
+                .addFormDataPart(resKeys[7], offset)
+                .addFormDataPart(resKeys[8], str(M_RJFR_VALUE))
+                .addFormDataPart(resKeys[9], cursor)
+                .build()
 
-            var offset = str(M_OFFSET)
-            var cursor = ""
-            var run = true
-            var guard = 0
-            while (run && guard++ < MAX_PAGE_REQUESTS) {
-                val body = MultipartBody.Builder().setType(MultipartBody.FORM)
-                    .addFormDataPart("action", action)
-                    .addFormDataPart(reqKeys[0], str(M_TOKEN))
-                    .addFormDataPart(reqKeys[1], str(M_NONCE))
-                    .addFormDataPart(reqKeys[2], str(M_MANGA_ID))
-                    .addFormDataPart(reqKeys[3], str(M_CHAPTER_ID))
-                    .addFormDataPart(reqKeys[4], str(M_CHAPTER_SLUG))
-                    .addFormDataPart(reqKeys[5], str(M_HOST))
-                    .addFormDataPart(reqKeys[6], offset)
-                    .addFormDataPart(reqKeys[7], str(M_EXTRA))
-                    .addFormDataPart(reqKeys[8], str(M_INSTANCE))
-                    .addFormDataPart(reqKeys[9], cursor)
-                    .build()
+            val response = client.newCall(POST(str(M_AJAX_URL), ajaxHeaders, body)).execute()
+            if (!response.isSuccessful) error("Failed to get page: ${response.code}")
+            val root = response.parseAs<JsonObject>()
 
-                val root = client.newCall(POST(ajaxUrl, ajaxHeaders, body)).execute()
-                    .use { it.parseAs<JsonObject>() }
+            val payload = root[reqKeys[1]]!!.jsonObject
+            val images = payload[reqKeys[2]]!!.jsonArray
 
-                val payload = root[resKeys[1]]!!.jsonObject
-
-                payload[resKeys[2]]!!.jsonArray.forEach { image ->
-                    val url = image.jsonObject[resKeys[4]]!!.jsonPrimitive.content
-                    pages.add(Page(pages.size, imageUrl = url))
-                }
-
-                offset = payload[resKeys[6]]?.jsonPrimitive?.content ?: ""
-                cursor = payload[resKeys[8]]?.jsonPrimitive?.content ?: ""
-                run = payload[resKeys[9]]?.jsonPrimitive?.boolean ?: false
+            images.forEach { image ->
+                val url = image.jsonObject[reqKeys[4]]!!.jsonPrimitive.content
+                pages.add(Page(pages.size, imageUrl = url))
             }
+
+            offset = payload[reqKeys[6]]?.jsonPrimitive?.content ?: ""
+            cursor = payload[reqKeys[8]]?.jsonPrimitive?.content ?: ""
+            run = payload[reqKeys[9]]?.jsonPrimitive?.boolean ?: false
         }
 
         return pages
@@ -353,18 +352,16 @@ class RaijinScans :
         private const val MAX_PAGE_REQUESTS = 100
 
         // Positional indices into the decoded reader manifest array.
-        private const val M_AJAX_URL = 0
-        private const val M_TOKEN = 1
-        private const val M_NONCE = 2
-        private const val M_MANGA_ID = 3
-        private const val M_CHAPTER_ID = 4
-        private const val M_CHAPTER_SLUG = 5
-        private const val M_HOST = 6
-        private const val M_INSTANCE = 7
-        private const val M_OFFSET = 8
-        private const val M_EXTRA = 9
-        private const val M_ACTION = 12
-        private const val M_REQ_KEYS = 13
-        private const val M_RES_KEYS = 14
+        private const val M_CHAPTER_ID = 2
+        private const val M_RJFR_VALUE = 3
+        private const val M_ACTION = 4
+        private const val M_TYPE = 5
+        private const val M_CHAPTER_SLUG = 6
+        private const val M_AJAX_URL = 7
+        private const val M_INSTANCE = 8
+        private const val M_MANGA_ID = 10
+        private const val M_RES_KEYS = 12
+        private const val M_TOKEN = 13
+        private const val M_REQ_KEYS = 14
     }
 }
