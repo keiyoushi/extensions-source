@@ -40,6 +40,10 @@ class GroupDto(
 @Serializable
 class PageDto(
     private val src: String,
+    private val fallback: String?,
 ) {
-    fun toPage(index: Int) = Page(index, imageUrl = src)
+    fun toPage(index: Int) = Page(
+        index = index,
+        url = if (!fallback.isNullOrBlank()) "$src#fallback=$fallback" else src,
+    )
 }
