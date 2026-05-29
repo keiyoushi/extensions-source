@@ -130,7 +130,7 @@ class Yorai : HttpSource() {
         return chapters.chapters.filter { it.sourceName == chapters.defaultSource }.map {
             SChapter.create().apply {
                 url = "${chapters.slug}|${it.number}"
-                name = it.title
+                name = it.title.takeIf { it.isNotEmpty() } ?: "Chapter ${it.number.toInt()}"
                 chapter_number = it.number
                 scanlator = chapters.defaultSource
             }
