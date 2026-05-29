@@ -76,6 +76,13 @@ class Yorai : HttpSource() {
         return GET(url, headers)
     }
 
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/comic/${manga.url}"
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val (slug, number) = chapter.url.split("|")
+        return "$baseUrl/comic/$slug/chapter/$number"
+    }
+
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.parseAs<Browse>()
 
@@ -84,7 +91,7 @@ class Yorai : HttpSource() {
             return MangasPage(
                 comics.map {
                     SManga.create().apply {
-                        url = "/comic/${it.slug}"
+                        url = it.slug
                         title = it.title
                         thumbnail_url = baseUrl + it.coverUrl
                     }
@@ -96,7 +103,7 @@ class Yorai : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, rscHeaders)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), rscHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val detailsBody = response.body.string()
@@ -122,7 +129,7 @@ class Yorai : HttpSource() {
 
         return chapters.chapters.filter { it.sourceName == chapters.defaultSource }.map {
             SChapter.create().apply {
-                url = "/comic/${chapters.slug}/chapter/${it.number}"
+                url = "${chapters.slug}|${it.number}"
                 name = it.title
                 chapter_number = it.number
                 scanlator = chapters.defaultSource
@@ -131,7 +138,7 @@ class Yorai : HttpSource() {
     }
 
     // Pages
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, rscHeaders)
+    override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
         val data = response.extractNextJs<ChapterPages>()
