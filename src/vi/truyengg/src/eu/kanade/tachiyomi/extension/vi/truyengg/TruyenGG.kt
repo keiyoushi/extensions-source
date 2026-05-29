@@ -154,7 +154,7 @@ class TruyenGG :
             SChapter.create().apply {
                 setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
                 name = element.select("a").text()
-                date_upload = dateFormat.tryParse(element.select("span.fx-chap-item__date").text().trim())
+                date_upload = dateFormat.tryParse(element.selectFirst("span.fx-chap-item__date").text())
             }
         }
     }
