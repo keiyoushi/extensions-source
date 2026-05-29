@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.ja.piccoma
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,17 +12,22 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 
-class Piccoma : HttpSource() {
+class Piccoma :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Piccoma"
     override val baseUrl = "https://piccoma.com"
     override val lang = "ja"
     override val supportsLatest = true
 
+    private val preferences by getPreferencesLazy()
     private val xHeaders = headersBuilder()
         .set("X-Requested-With", "XMLHttpRequest")
         .build()
@@ -81,7 +89,9 @@ class Piccoma : HttpSource() {
         }
 
         val result = response.parseAs<SearchResponseDto>()
-        val mangas = result.data.products.map { it.toSManga() }
+        val mangas = result.data.products
+            .filter { it.isAudio != 1 && it.isAnime != 1 }
+            .map { it.toSManga() }
         val currentPage = response.request.url.queryParameter("page")!!.toInt()
         val hasNextPage = currentPage < result.data.totalPage
         return MangasPage(mangas, hasNextPage)
@@ -105,15 +115,13 @@ class Piccoma : HttpSource() {
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}/episodes?etype=E", headers)
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        val chapterDocument = client.newCall(GET("$baseUrl${manga.url}/episodes?etype=E", headers)).execute().asJsoup()
+        val chapterMangaTitle = chapterDocument.selectFirst(".PCM-headTitle_name")?.text()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val episodes = document.selectFirst("ul#js_episodeList")!!
-        val mangaTitle = document.selectFirst(".PCM-headTitle_name")?.text()
-
-        return episodes.select("li").map {
-            val link = it.selectFirst("a")!!
+        val chapterList = chapterDocument.selectFirst("ul#js_episodeList")?.select("li").orEmpty().mapNotNull {
+            val link = it.selectFirst("a") ?: return@mapNotNull null
             val productId = link.attr("data-product_id")
             val episodeId = link.attr("data-episode_id")
             val titleElement = it.selectFirst("div.PCM-epList_title h2")?.text()
@@ -123,28 +131,59 @@ class Piccoma : HttpSource() {
             val isWaitFree = statusElement?.selectFirst(".PCM-epList_status_waitfree") != null
             val isZeroPlus = statusElement?.selectFirst(".PCM-epList_status_zeroPlus") != null
 
+            if (hideLocked && (isPoint || isWaitFree || isZeroPlus)) return@mapNotNull null
+
             val icon = when {
                 isPoint -> "🔒 "
                 isWaitFree || isZeroPlus -> "➡️ "
                 else -> ""
             }
 
-            var chapterName = titleElement
-            if (mangaTitle != null) {
-                chapterName = chapterName?.replace(mangaTitle, "")?.trim()
-            }
+            val chapterName = titleElement?.stripMangaTitle(chapterMangaTitle)
 
             SChapter.create().apply {
                 url = "/web/viewer/$productId/$episodeId"
                 name = "$icon$chapterName"
             }
-        }.reversed()
+        }
+
+        val volumeDocument = client.newCall(GET("$baseUrl${manga.url}/episodes?etype=V", headers)).execute().asJsoup()
+        val volumeMangaTitle = volumeDocument.selectFirst(".PCM-headTitle_name")?.text()
+
+        val volumeList = volumeDocument.selectFirst("ul#js_volumeList")?.select("li").orEmpty().mapNotNull {
+            val freeBtn = it.selectFirst(".PCM-prdVol_freeBtn")
+            val buyBtn = it.selectFirst(".PCM-prdVol_buyBtn")
+            val trialBtn = it.selectFirst(".PCM-prdVol_trialBtn")
+
+            if (hideLocked && freeBtn == null && (buyBtn != null || trialBtn != null)) return@mapNotNull null
+            val btn = (freeBtn ?: trialBtn ?: buyBtn ?: it.selectFirst("[data-episode_id]")) ?: return@mapNotNull null
+            val icon = when {
+                freeBtn != null -> ""
+                trialBtn != null -> "🔒 (Preview) "
+                buyBtn != null -> "🔒 "
+                else -> ""
+            }
+
+            val productId = btn.attr("data-product_id")
+            val episodeId = btn.attr("data-episode_id")
+            val titleElement = it.selectFirst("div.PCM-prdVol_title h2")?.text()
+            val chapterName = titleElement?.stripMangaTitle(volumeMangaTitle)
+
+            SChapter.create().apply {
+                url = "/web/viewer/$productId/$episodeId"
+                name = "$icon$chapterName"
+            }
+        }
+
+        return Observable.just((volumeList + chapterList).reversed())
     }
+
+    private fun String.stripMangaTitle(mangaTitle: String?) = if (mangaTitle != null) replace(mangaTitle, "").trim() else this
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val script = document.selectFirst("script:containsData(var _pdata_)")?.data()
-            ?: throw Exception("Log in via Webview and purchase this chapter to read.")
+            ?: throw Exception("Log in via Webview and purchase this product to read.")
 
         val pDataJson = script.substringAfter("var _pdata_ =")
             .substringBefore("var _rcm_")
@@ -168,11 +207,22 @@ class Piccoma : HttpSource() {
         RankingFilter(),
     )
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_PREF_KEY
+            title = "Hide Locked Chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
     companion object {
         private val TITLE_REGEX = Regex("""['"]?title['"]?\s*:\s*['"].*?['"],?""")
         private val UNQUOTED_KEY_REGEX = Regex("""([{,]\s*)([a-zA-Z0-9_]+)\s*:""")
         private val TRAILING_COMMA_REGEX = Regex(""",\s*([}\]])""")
+        private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
     }
 
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

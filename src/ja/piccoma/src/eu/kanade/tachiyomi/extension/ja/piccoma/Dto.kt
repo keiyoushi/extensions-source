@@ -21,6 +21,8 @@ class SearchProductDto(
     private val id: Int,
     private val title: String,
     private val img: String?,
+    @SerialName("is_audio") val isAudio: Int?,
+    @SerialName("is_anime") val isAnime: Int?,
 ) {
     fun toSManga() = SManga.create().apply {
         url = "/web/product/$id"
