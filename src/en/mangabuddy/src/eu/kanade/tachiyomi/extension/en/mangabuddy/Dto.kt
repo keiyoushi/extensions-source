@@ -55,14 +55,13 @@ class ChapterDataDto(
 @Serializable
 class ChapterItemDto(
     private val url: String,
-    private val name: String,
+    val name: String,
     @SerialName("updated_at") private val updatedAt: String? = null,
-    @SerialName("chapter_number") private val chapterNumber: Float? = null,
+    @SerialName("chapter_number") val chapterNumber: Float? = null,
 ) {
     fun toSChapter(dateFormat: SimpleDateFormat) = SChapter.create().apply {
         url = this@ChapterItemDto.url
         name = this@ChapterItemDto.name
-        chapter_number = chapterNumber ?: -1f
         date_upload = dateFormat.tryParse(updatedAt)
     }
 }
