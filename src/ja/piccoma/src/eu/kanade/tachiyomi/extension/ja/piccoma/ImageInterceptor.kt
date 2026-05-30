@@ -11,36 +11,31 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
-import kotlin.math.ceil
 
 class ImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val url = request.url
-
-        val isScrambled = url.fragment == "scrambled"
-        if (!isScrambled) {
-            return chain.proceed(request)
-        }
-
         val response = chain.proceed(request)
-        val body = response.body.source()
-        val bitmap = BitmapFactory.decodeStream(body.inputStream())
+        val url = request.url
+        val fragment = url.fragment
 
+        if (fragment.isNullOrEmpty() || fragment != "scrambled" || !response.isSuccessful) return response
+
+        val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
         val seed = extractSeed(url)
-        val result = unscrambleImg(bitmap, seed, bitmap.width, bitmap.height)
+        val result = unscrambleImg(bitmap, seed)
         bitmap.recycle()
         val buffer = Buffer()
         result.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
         result.recycle()
 
         return response.newBuilder()
-            .body(buffer.asResponseBody("image/jpeg".toMediaType(), buffer.size))
+            .body(buffer.asResponseBody(MEDIA_TYPE, buffer.size))
             .build()
     }
 
     private fun extractSeed(url: HttpUrl): String {
-        val checksum = url.pathSegments.let { it.getOrNull(it.size - 2) }
+        val checksum = url.pathSegments[3]
         val expiration = url.queryParameter("expires")!!
 
         var sum = 0
@@ -48,7 +43,7 @@ class ImageInterceptor : Interceptor {
             sum += char.digitToInt()
         }
 
-        val residualIndex = sum % checksum!!.length
+        val residualIndex = sum % checksum.length
         val rotated = checksum.takeLast(residualIndex) + checksum.dropLast(residualIndex)
 
         return dd(rotated)
@@ -66,8 +61,7 @@ class ImageInterceptor : Interceptor {
         val bytes = s.toByteArray(Charsets.UTF_8)
         for (i in bytes.indices) {
             if ((mask shr i) and 1 == 1) {
-                val b = bytes[i].toInt()
-                bytes[i] = (b + 1 - ((b shl 1) and 2)).toByte()
+                bytes[i] = (bytes[i].toInt() xor 1).toByte()
             }
         }
         return String(bytes, Charsets.UTF_8)
@@ -75,47 +69,49 @@ class ImageInterceptor : Interceptor {
 
     private class Point(val x: Int, val y: Int)
 
-    private fun unscrambleImg(bitmap: Bitmap, seed: String, width: Int, height: Int): Bitmap {
+    private fun unscrambleImg(bitmap: Bitmap, seed: String): Bitmap {
+        val width = bitmap.width
+        val height = bitmap.height
         val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
+
         val tileSize = 50
         val tileGroups = mutableMapOf<String, MutableList<Point>>()
 
-        val columns = ceil(width.toDouble() / tileSize).toInt()
-        val rows = ceil(height.toDouble() / tileSize).toInt()
+        val columns = (width + tileSize - 1) / tileSize
+        val rows = (height + tileSize - 1) / tileSize
         val tileCount = columns * rows
 
         for (index in 0 until tileCount) {
-            val row = index / columns
-            val col = index % columns
-            val x = col * tileSize
-            val y = row * tileSize
+            val x = (index % columns) * tileSize
+            val y = (index / columns) * tileSize
             val w = if (x + tileSize > width) width - x else tileSize
             val h = if (y + tileSize > height) height - y else tileSize
-
-            val key = "$w-$h"
-            val list = tileGroups.getOrPut(key) { mutableListOf() }
-            list.add(Point(x, y))
+            tileGroups.getOrPut("$w-$h") { mutableListOf() }.add(Point(x, y))
         }
+
+        val srcRect = Rect()
+        val destRect = Rect()
 
         for ((_, tiles) in tileGroups) {
             val rng = SeedRandom(seed)
-
-            val shuffledTiles = rng.shuffle(tiles.toMutableList())
+            val shuffledTiles = rng.shuffle(tiles)
+            val first = tiles[0]
+            val w = if (first.x + tileSize > width) width - first.x else tileSize
+            val h = if (first.y + tileSize > height) height - first.y else tileSize
 
             for (i in tiles.indices) {
                 val dest = tiles[i]
                 val src = shuffledTiles[i]
-
-                val w = if (dest.x + tileSize > width) width - dest.x else tileSize
-                val h = if (dest.y + tileSize > height) height - dest.y else tileSize
-
-                val srcRect = Rect(src.x, src.y, src.x + w, src.y + h)
-                val destRect = Rect(dest.x, dest.y, dest.x + w, dest.y + h)
-
+                srcRect.set(src.x, src.y, src.x + w, src.y + h)
+                destRect.set(dest.x, dest.y, dest.x + w, dest.y + h)
                 canvas.drawBitmap(bitmap, srcRect, destRect, null)
             }
         }
         return result
+    }
+
+    companion object {
+        private val MEDIA_TYPE = "image/jpeg".toMediaType()
     }
 }
