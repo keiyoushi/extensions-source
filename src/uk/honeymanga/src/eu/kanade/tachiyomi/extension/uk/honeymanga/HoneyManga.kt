@@ -114,10 +114,10 @@ class HoneyManga :
         }
 
         // Add ignored genres and types from preferences if it's not set by Filters (Popular/Latest tab)
-        if (blockedTypes.isNotEmpty() && !searchFilters.any { it.filterBy == "type" && it.filterOperator == "NOT_IN" }) {
+        if (filters.isNullOrEmpty() && blockedTypes.isNotEmpty() && !searchFilters.any { it.filterBy == "type" && it.filterOperator == "NOT_IN" }) {
             searchFilters.add(SearchFilter("type", "NOT_IN", blockedTypes.toList()))
         }
-        if (blockedGenres.isNotEmpty() && !searchFilters.any { it.filterBy == "genres" && it.filterOperator == "NOT_IN" }) {
+        if (filters.isNullOrEmpty() && blockedGenres.isNotEmpty() && !searchFilters.any { it.filterBy == "genres" && it.filterOperator == "NOT_IN" }) {
             searchFilters.add(SearchFilter("genres", "NOT_IN", blockedGenres.toList()))
         }
 
@@ -176,12 +176,7 @@ class HoneyManga :
         return GET(url, headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<ChapterPages>()
-        return data.resourceIds.map { (id, imageId) ->
-            Page(index = id.toInt(), imageUrl = "$IMAGE_STORAGE_URL/$imageId")
-        }
-    }
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<ChapterPages>().toPageList(IMAGE_STORAGE_URL)
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 

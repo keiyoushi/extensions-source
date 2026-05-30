@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.uk.honeymanga
 
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
@@ -31,12 +32,8 @@ class ResponseData(
     private val genres: List<String>? = emptyList(),
 ) {
     fun toSManga(baseUrl: String, imageUrl: String, blockedTypes: Set<String>? = emptySet(), blockedGenres: Set<String>? = emptySet()): SManga? {
-        if (blockedTypes != null && blockedTypes.contains(type)) {
-            return null
-        }
-        if (blockedGenres != null && genres != null && blockedGenres.intersect(genres.toSet()).isNotEmpty()) {
-            return null
-        }
+        if (blockedTypes?.contains(type) == true) return null
+        if (blockedGenres?.intersect(genres?.toSet().orEmpty())?.isNotEmpty() == true) return null
 
         return SManga.create().apply {
             title = this@ResponseData.title
@@ -66,7 +63,7 @@ class CompleteMangaDto(
         description = this@CompleteMangaDto.description
         genre = buildList {
             add(type)
-            genresAndTags?.map { it }?.let { addAll(it) }
+            addAll(genresAndTags.orEmpty())
         }.joinToString()
         artist = artists?.joinToString()
         author = authors?.joinToString()
@@ -115,8 +112,12 @@ class ChapterResponseList(
 // ============================== Pages ===============================
 @Serializable
 class ChapterPages(
-    val resourceIds: Map<String, String>,
-)
+    private val resourceIds: Map<Int, String>,
+) {
+    fun toPageList(imageUrl: String): List<Page> = resourceIds.map { (index, imageId) ->
+        Page(index = index, imageUrl = "$imageUrl/$imageId")
+    }
+}
 
 // ============================== Search Request ===============================
 @Serializable
