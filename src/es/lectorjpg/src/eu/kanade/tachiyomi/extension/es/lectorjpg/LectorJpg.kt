@@ -32,7 +32,7 @@ class LectorJpg : HttpSource() {
 
     override val baseUrl = "https://visorjpg.lat"
 
-    private val apiUrl = "https://panel.visorjpg.lat"
+    private val apiUrl = "https://api.visorjpg.lat"
 
     override val supportsLatest = true
 
@@ -49,7 +49,7 @@ class LectorJpg : HttpSource() {
     private val latestMangaCursor = LimitedCache<Int, String?>()
     private val searchMangaCursor = LimitedCache<SearchKey, String?>()
 
-    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/front/home/trending", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/home/trending", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<SeriesQueryDto>()
@@ -59,7 +59,7 @@ class LectorJpg : HttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request {
         val cursor = latestMangaCursor[page - 1] ?: createLatestCursor()
-        val url = "$apiUrl/front/home/lastest-updates".toHttpUrl().newBuilder()
+        val url = "$apiUrl/home/lastest-updates".toHttpUrl().newBuilder()
             .addQueryParameter("cursor", cursor)
             .fragment(page.toString())
 
@@ -84,7 +84,7 @@ class LectorJpg : HttpSource() {
         val searchKey = SearchKey(page - 1, query, genresParam)
 
         val cursor = searchMangaCursor[searchKey] ?: ""
-        val url = "$apiUrl/front/search".toHttpUrl().newBuilder()
+        val url = "$apiUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("cursor", cursor)
             .addQueryParameter("name", query)
             .fragment(page.toString())

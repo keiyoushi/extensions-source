@@ -1,9 +1,7 @@
 ext {
     extName = 'Fairy Scans'
     extClass = '.FairyScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://fairyscans.com'
-    overrideVersionCode = 0
+    extVersionCode = 33
     isNsfw = true
 }
 
