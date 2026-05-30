@@ -11,11 +11,16 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 
 class RimuScans :
     HttpSource(),
@@ -33,7 +38,6 @@ class RimuScans :
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-        .add("Accept", "application/json, text/plain, */*")
 
     // =============================== Popular ==============================
 
@@ -96,56 +100,63 @@ class RimuScans :
     }
 
     // =========================== Manga Details ============================
+    // The site dropped its JSON detail API; details, chapters and pages are now
+    // read from the Next.js (App Router) server payload embedded in the pages.
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.substringAfter("/manga/")
-        return GET("$baseUrl/api/manga?slug=$slug", headers)
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        val ld = document.select("script[type=application/ld+json]")
+            .map { it.data() }
+            .firstOrNull { "\"ComicSeries\"" in it }
+            ?.parseAs<ComicSeriesLd>()
+            ?: throw Exception("Détails introuvables")
+
+        // First two badges before the title are the type and the status.
+        val badges = document.selectFirst("h1")
+            ?.previousElementSibling()
+            ?.select("span")
+            ?.map { it.text().trim() }
+            .orEmpty()
+
+        return ld.toSManga(baseUrl, badges.getOrNull(0), badges.getOrNull(1))
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDetailsWrapperDto>().manga.toSManga(baseUrl)
-
     // ============================== Chapters ==============================
-
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAs<MangaDetailsWrapperDto>()
+        val document = response.asJsoup()
+        val slug = response.request.url.pathSegments.last()
         val showPremium = preferences.getBoolean(SHOW_PREMIUM_KEY, SHOW_PREMIUM_DEFAULT)
 
-        return result.manga.chapters
+        return collectChapters(document)
+            .distinctBy { it.number }
             .filter { showPremium || !it.type.equals("PREMIUM", ignoreCase = true) }
-            .map { it.toSChapter(result.manga.slug) }
-            .reversed()
+            .sortedByDescending { it.number }
+            .map { it.toSChapter(slug) }
     }
 
     // =============================== Pages ================================
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        // chapter.url = "/read/{slug}/{number}"
-        val parts = chapter.url.removePrefix("/read/").split('/', limit = 2)
-        val slug = parts[0]
-        val number = parts.getOrNull(1).orEmpty()
-        val url = "$baseUrl/api/manga".toHttpUrl().newBuilder()
-            .addQueryParameter("slug", slug)
-            .fragment(number)
-            .build()
-        return GET(url, headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<MangaDetailsWrapperDto>()
-        val chapterNumber = response.request.url.fragment?.toDoubleOrNull()
+        val chapterNumber = response.request.url.pathSegments.last().toDoubleOrNull()
             ?: throw Exception("Numéro de chapitre absent de la requête")
 
-        val chapter = result.manga.chapters.find { it.number == chapterNumber }
+        val chapters = collectChapters(response.asJsoup())
+        val chapter = chapters.firstOrNull { it.number == chapterNumber && it.images.isNotEmpty() }
+            ?: chapters.firstOrNull { it.number == chapterNumber }
             ?: throw Exception("Chapitre introuvable")
 
-        if (chapter.type.equals("PREMIUM", ignoreCase = true) && chapter.images.isEmpty()) {
-            throw Exception("Ce chapitre est premium. Lisez-le sur le site.")
+        if (chapter.images.isEmpty()) {
+            if (chapter.type.equals("PREMIUM", ignoreCase = true)) {
+                throw Exception("Ce chapitre est premium. Lisez-le sur le site.")
+            }
+            throw Exception("Aucune image trouvée pour ce chapitre")
         }
 
         return chapter.images.sortedBy { it.order }.mapIndexed { i, img ->
@@ -154,6 +165,30 @@ class RimuScans :
     }
 
     override fun imageUrlParse(response: Response): String = ""
+
+    /**
+     * Collects every chapter object found in the page's Next.js flight data. Walks the whole
+     * payload tree (the predicate always returns `false`) collecting each matching object.
+     *
+     * The flight payload deduplicates chapters across components: the full list array holds some
+     * chapters only as string references (e.g. `$25:props:children:1:props:chapters:0`) that point
+     * back into a smaller "recent" array. Collecting at the object level instead of requiring whole
+     * arrays of objects recovers every chapter regardless of which array materialises it.
+     */
+    private fun collectChapters(document: Document): List<NextChapterDto> {
+        val chapters = mutableListOf<NextChapterDto>()
+        document.extractNextJs<JsonElement>(
+            predicate = { element ->
+                if (element is JsonObject && "number" in element && "type" in element) {
+                    runCatching { element.parseAs<NextChapterDto>() }
+                        .getOrNull()
+                        ?.let(chapters::add)
+                }
+                false
+            },
+        )
+        return chapters
+    }
 
     // ============================ Preferences =============================
 

@@ -41,66 +41,64 @@ class GenresDto(
     val genres: List<String> = emptyList(),
 )
 
-// ----- /api/manga?slug=X (details) -----
+// ----- /manga/{slug} JSON-LD (details) -----
 
 @Serializable
-class MangaDetailsWrapperDto(
-    val manga: MangaDto,
-)
-
-@Serializable
-class MangaDto(
-    val slug: String,
-    val title: String,
-    val alternativeTitles: List<String> = emptyList(),
-    val description: String,
-    val cover: String,
-    val status: String,
-    val author: String? = null,
-    val artist: String? = null,
-    val type: String,
-    val genres: List<String> = emptyList(),
-    val chapters: List<ChapterDto> = emptyList(),
+class ComicSeriesLd(
+    val name: String = "",
+    val description: String = "",
+    val image: String = "",
+    val alternateName: List<String> = emptyList(),
+    val author: PersonLd? = null,
+    val illustrator: PersonLd? = null,
+    val genre: List<String> = emptyList(),
 ) {
-    fun toSManga(baseUrl: String) = SManga.create().apply {
-        url = "/manga/$slug"
-        title = this@MangaDto.title
-        thumbnail_url = cover.toAbsoluteUrl(baseUrl)
+    fun toSManga(baseUrl: String, typeLabel: String?, statusLabel: String?) = SManga.create().apply {
+        title = name
+        thumbnail_url = image.toAbsoluteUrl(baseUrl)
         description = buildString {
-            val desc = this@MangaDto.description.trim()
+            val desc = this@ComicSeriesLd.description.trim()
             if (desc.isNotEmpty()) append(desc)
-            val alts = alternativeTitles.filter { it.isNotBlank() }
+            val alts = alternateName.filter { it.isNotBlank() }
             if (alts.isNotEmpty()) {
                 if (isNotEmpty()) append("\n\n")
                 append("Titres alternatifs : ")
                 append(alts.joinToString(", "))
             }
         }.ifEmpty { null }
-        author = this@MangaDto.author?.trim()?.takeIf { it.isNotEmpty() }
-        artist = this@MangaDto.artist?.trim()?.takeIf { it.isNotEmpty() }
-        status = when (this@MangaDto.status.lowercase()) {
-            "ongoing", "en cours" -> SManga.ONGOING
-            "completed", "terminé", "termine" -> SManga.COMPLETED
-            "on hiatus", "hiatus", "en pause" -> SManga.ON_HIATUS
-            "cancelled", "annulé", "annule" -> SManga.CANCELLED
+        author = this@ComicSeriesLd.author?.name?.trim()?.takeIf { it.isNotEmpty() }
+        artist = illustrator?.name?.trim()?.takeIf { it.isNotEmpty() }
+        status = when (statusLabel?.lowercase()) {
+            "en cours", "ongoing" -> SManga.ONGOING
+            "terminé", "termine", "completed" -> SManga.COMPLETED
+            "en pause", "hiatus", "on hiatus" -> SManga.ON_HIATUS
+            "annulé", "annule", "abandonné", "abandonne", "cancelled" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
-        genre = (listOfNotNull(type.toTypeLabel()) + genres).joinToString(", ")
+        genre = (listOfNotNull(typeLabel.toTypeLabel()) + this@ComicSeriesLd.genre).joinToString(", ")
     }
 
-    private fun String.toTypeLabel(): String? = when (lowercase()) {
-        "webtoon" -> "Manhwa"
+    private fun String?.toTypeLabel(): String? = when (this?.lowercase()) {
+        "webtoon", "manhwa" -> "Manhwa"
+        "manhua" -> "Manhua"
         "manga" -> "Manga"
-        else -> null
+        else -> this
     }
 }
 
 @Serializable
-class ChapterDto(
+class PersonLd(
+    val name: String = "",
+)
+
+// ----- Next.js flight data: chapters (listing) & reader (pages) -----
+
+@Serializable
+class NextChapterDto(
     val number: Double,
-    val title: String,
-    val releaseDate: String,
-    val type: String,
+    val title: String = "",
+    val releaseDate: String? = null,
+    val type: String = "NORMAL",
     val images: List<ImageDto> = emptyList(),
 ) {
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
