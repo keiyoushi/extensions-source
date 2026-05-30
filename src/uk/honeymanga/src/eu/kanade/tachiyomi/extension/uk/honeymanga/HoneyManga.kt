@@ -87,29 +87,27 @@ class HoneyManga :
         val blockedTypes = blockTypes()
         val blockedGenres = blockGenres()
 
-        filters?.let {
-            filters.forEach { filter ->
-                when (filter) {
-                    is TranslationFilter -> filter.selected?.let { searchFilters.add(SearchFilter("translationStatus", "EQUAL", listOf(it))) }
-                    is StatusFilter -> filter.selected?.let { searchFilters.add(SearchFilter("titleStatus", "EQUAL", listOf(it))) }
-                    is TagsFilter -> {
-                        filter.included?.let { searchFilters.add(SearchFilter("tags", "ALL", it)) }
-                        filter.excluded?.let { searchFilters.add(SearchFilter("tags", "NOT_IN", it)) }
-                    }
-                    is OrderBy -> {
-                        setSearchSort.sortBy = filter.selected
-                        setSearchSort.sortOrder = if (filter.state?.ascending == true) "ASC" else "DESC"
-                    }
-                    is GenresFilter -> { // no need to add ignored genres from preferences since they are applied to filters
-                        filter.included?.let { searchFilters.add(SearchFilter("genres", "ALL", it)) }
-                        filter.excluded?.let { searchFilters.add(SearchFilter("genres", "NOT_IN", it)) }
-                    }
-                    is TypeFilter -> { // no need to add ignored types from preferences since they are applied to filters
-                        filter.included?.let { searchFilters.add(SearchFilter("type", "ALL", it)) }
-                        filter.excluded?.let { searchFilters.add(SearchFilter("type", "NOT_IN", it)) }
-                    }
-                    else -> {}
+        filters?.forEach { filter ->
+            when (filter) {
+                is TranslationFilter -> filter.selected?.let { searchFilters.add(SearchFilter("translationStatus", "EQUAL", listOf(it))) }
+                is StatusFilter -> filter.selected?.let { searchFilters.add(SearchFilter("titleStatus", "EQUAL", listOf(it))) }
+                is TagsFilter -> {
+                    filter.included?.let { searchFilters.add(SearchFilter("tags", "ALL", it)) }
+                    filter.excluded?.let { searchFilters.add(SearchFilter("tags", "NOT_IN", it)) }
                 }
+                is OrderBy -> {
+                    setSearchSort.sortBy = filter.selected
+                    setSearchSort.sortOrder = if (filter.state?.ascending == true) "ASC" else "DESC"
+                }
+                is GenresFilter -> { // no need to add ignored genres from preferences since they are applied to filters
+                    filter.included?.let { searchFilters.add(SearchFilter("genres", "ALL", it)) }
+                    filter.excluded?.let { searchFilters.add(SearchFilter("genres", "NOT_IN", it)) }
+                }
+                is TypeFilter -> { // no need to add ignored types from preferences since they are applied to filters
+                    filter.included?.let { searchFilters.add(SearchFilter("type", "ALL", it)) }
+                    filter.excluded?.let { searchFilters.add(SearchFilter("type", "NOT_IN", it)) }
+                }
+                else -> {}
             }
         }
 

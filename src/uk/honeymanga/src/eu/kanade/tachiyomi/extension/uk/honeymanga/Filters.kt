@@ -53,9 +53,7 @@ internal class OrderBy :
 internal class GenresFilter(blockedGenres: Set<String>) : TriStateGroup("Жанри", options) {
     init {
         state.forEach { filter ->
-            if (blockedGenres.contains(filter.id)) {
-                filter.state = 2
-            }
+            if (blockedGenres.contains(filter.id)) { filter.state = 2 }
         }
     }
     companion object {
@@ -111,9 +109,7 @@ internal class GenresFilter(blockedGenres: Set<String>) : TriStateGroup("Жан�
 internal class TypeFilter(blockedTypes: Set<String>) : TriStateGroup("Тип", options) {
     init {
         state.forEach { filter ->
-            if (blockedTypes.contains(filter.id)) {
-                filter.state = 2
-            }
+            if (blockedTypes.contains(filter.id)) { filter.state = 2 }
         }
     }
     companion object {
