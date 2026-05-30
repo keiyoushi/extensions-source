@@ -1,0 +1,13 @@
+ext {
+	extName = 'ProComic'
+	extClass = '.ProComic'
+	extVersionCode = 10
+	isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"
+
+dependencies {
+    compileOnly("com.github.tachiyomiorg:image-decoder:41c059e540")
+    implementation(project(":lib:cookieinterceptor"))
+}
