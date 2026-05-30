@@ -139,6 +139,11 @@ class MangaK :
                         }
                     }
                     is SortFilter -> addQueryParameter("sort", filter.selected)
+                    is ContentRatingFilter -> {
+                        if (filter.selected.isNotBlank()) {
+                            addQueryParameter("content_rating", filter.selected)
+                        }
+                    }
                     is StatusFilter -> {
                         if (filter.selected.isNotBlank()) {
                             addQueryParameter("status", filter.selected)
@@ -151,19 +156,18 @@ class MangaK :
                     }
                     is DemographicFilter -> {
                         if (filter.selected.isNotBlank()) {
-                            // Demographics are handled as genres on this site
-                            includedGenres.add(filter.selected)
+                            addQueryParameter("demographic", filter.selected)
                         }
                     }
                     else -> {}
                 }
             }
 
+            filters.firstInstanceOrNull<AuthorFilter>()?.state?.takeIf { it.isNotBlank() }?.let {
+                addQueryParameter("author", it)
+            }
             filters.firstInstanceOrNull<MinChapterFilter>()?.state?.takeIf { it.isNotBlank() }?.let {
                 addQueryParameter("min_ch", it)
-            }
-            filters.firstInstanceOrNull<MaxChapterFilter>()?.state?.takeIf { it.isNotBlank() }?.let {
-                addQueryParameter("max_ch", it)
             }
 
             if (includedGenres.isNotEmpty()) {
@@ -256,13 +260,13 @@ class MangaK :
 
         return FilterList(
             SortFilter(),
+            ContentRatingFilter(),
             StatusFilter(),
             TypeFilter(),
             DemographicFilter(),
             Filter.Separator(),
-            Filter.Header("Chapter Count"),
+            AuthorFilter(),
             MinChapterFilter(),
-            MaxChapterFilter(),
             Filter.Separator(),
             Filter.Header("Genres"),
             GenreList(getGenreList(blacklist)),
