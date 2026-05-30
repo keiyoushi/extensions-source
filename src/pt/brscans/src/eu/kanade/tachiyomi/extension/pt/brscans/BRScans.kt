@@ -14,8 +14,6 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.Request
 import okhttp3.Response
-import rx.Observable
-import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -26,7 +24,9 @@ class BRScans :
 
     override val name = "BRScans"
 
-    override val baseUrl = "https://e5oer7ngt8.execute-api.sa-east-1.amazonaws.com/dev"
+    override val baseUrl = "https://brscans.vercel.app"
+
+    private val apiUrl = "https://e5oer7ngt8.execute-api.sa-east-1.amazonaws.com/dev"
 
     override val lang = "pt-BR"
 
@@ -46,66 +46,43 @@ class BRScans :
     private var genreMap: Map<Int, String> = emptyMap()
     private var genreMapFetched = false
 
+    @Synchronized
     private fun fetchGenreMap() {
         if (genreMapFetched) return
         try {
-            val req = GET("$baseUrl/manhwas/genres/", headers)
-            val res = client.newCall(req).execute()
-            if (res.isSuccessful) {
+            client.newCall(GET("$apiUrl/manhwas/genres/", headers)).execute().use { res ->
                 val genres = res.parseAs<List<GenreDto>>()
                 genreMap = genres.associate { it.id to it.name }
                 genreMapFetched = true
             }
-            res.close()
-        } catch (e: Exception) {
-            // Silently ignore or log to avoid blocking the main flow
-        }
+        } catch (_: Exception) {}
     }
 
     // ============================== Popular ===============================
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
-        fetchGenreMap()
-        val req = popularMangaRequest(page)
-        val res = client.newCall(req).execute()
-        if (!res.isSuccessful) {
-            res.close()
-            throw IOException("Erro HTTP ${res.code} ao buscar mangás populares")
-        }
-        popularMangaParse(res)
-    }
-
     override fun popularMangaRequest(page: Int): Request = if (showNsfw) {
         // Fetch the search endpoint with no query to get everything including NSFW
-        GET("$baseUrl/manhwas/search/?query=", headers)
+        GET("$apiUrl/manhwas/search/?query=", headers)
     } else {
         // Default paginated list which filters out NSFW
-        GET("$baseUrl/manhwas/?page=$page", headers)
+        GET("$apiUrl/manhwas/?page=$page", headers)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = if (showNsfw) {
-        val results = response.parseAs<List<ManhwaDto>>()
-        val mangas = results.map { it.toSManga(genreMap) }
-        MangasPage(mangas, false)
-    } else {
-        val paginated = response.parseAs<PaginatedManhwaDto>()
-        val mangas = paginated.results.map { it.toSManga(genreMap) }
-        val hasNext = paginated.next != null
-        MangasPage(mangas, hasNext)
+    override fun popularMangaParse(response: Response): MangasPage {
+        fetchGenreMap()
+        return if (showNsfw) {
+            val results = response.parseAs<List<ManhwaDto>>()
+            val mangas = results.map { it.toSManga(genreMap) }
+            MangasPage(mangas, false)
+        } else {
+            val paginated = response.parseAs<PaginatedManhwaDto>()
+            val mangas = paginated.results.map { it.toSManga(genreMap) }
+            val hasNext = paginated.next != null
+            MangasPage(mangas, hasNext)
+        }
     }
 
     // =============================== Latest ===============================
-
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = Observable.fromCallable {
-        fetchGenreMap()
-        val req = latestUpdatesRequest(page)
-        val res = client.newCall(req).execute()
-        if (!res.isSuccessful) {
-            res.close()
-            throw IOException("Erro HTTP ${res.code} ao buscar últimos lançamentos")
-        }
-        latestUpdatesParse(res)
-    }
 
     override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
@@ -113,20 +90,10 @@ class BRScans :
 
     // =============================== Search ===============================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
-        fetchGenreMap()
-        val req = searchMangaRequest(page, query, filters)
-        val res = client.newCall(req).execute()
-        if (!res.isSuccessful) {
-            res.close()
-            throw IOException("Erro HTTP ${res.code} ao realizar busca")
-        }
-        searchMangaParse(res)
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/manhwas/search/?query=${query.trim()}", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$apiUrl/manhwas/search/?query=${query.trim()}", headers)
 
     override fun searchMangaParse(response: Response): MangasPage {
+        fetchGenreMap()
         val results = response.parseAs<List<ManhwaDto>>()
         val filteredResults = if (showNsfw) {
             results
@@ -139,24 +106,14 @@ class BRScans :
 
     // =========================== Manga Details ============================
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.fromCallable {
-        fetchGenreMap()
-        val req = mangaDetailsRequest(manga)
-        val res = client.newCall(req).execute()
-        if (!res.isSuccessful) {
-            res.close()
-            throw IOException("Erro HTTP ${res.code} ao buscar detalhes do mangá")
-        }
-        mangaDetailsParse(res).apply {
-            initialized = true
-        }
-    }
-
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/manhwas/${manga.url}/", headers)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/manhwas/${manga.url}/", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
+        fetchGenreMap()
         val dto = response.parseAs<ManhwaDto>()
-        return dto.toSManga(genreMap)
+        return dto.toSManga(genreMap).apply {
+            initialized = true
+        }
     }
 
     // ============================== Chapters ==============================
@@ -170,7 +127,7 @@ class BRScans :
 
     // =============================== Pages ================================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/chapters/${chapter.url}/", headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/chapters/${chapter.url}/", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val dto = response.parseAs<ChapterDetailDto>()
