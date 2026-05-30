@@ -11,9 +11,8 @@ import java.util.TimeZone
 
 @Serializable
 class LibraryResponseDto(
-    @SerialName("obras")
+    @SerialName("acervo")
     val mangas: List<LibraryMangaDto> = emptyList(),
-    val series: List<LibraryMangaDto> = emptyList(),
     val pagination: LibraryPaginationDto = LibraryPaginationDto(),
 )
 
