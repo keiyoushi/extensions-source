@@ -5,8 +5,8 @@ import eu.kanade.tachiyomi.source.model.Filter
 class Genre(name: String, val value: String, state: Int = STATE_IGNORE) : Filter.TriState(name, state)
 class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres)
 
+class AuthorFilter : Filter.Text("Author")
 class MinChapterFilter : Filter.Text("Min Chapters")
-class MaxChapterFilter : Filter.Text("Max Chapters")
 
 open class SelectFilter(
     displayName: String,
@@ -23,11 +23,26 @@ class SortFilter :
         arrayOf(
             Pair("Latest Updated", "latest"),
             Pair("Recently Added", "newest"),
-            Pair("Most Popular", "popular"),
+            Pair("Most Followed", "popular"),
             Pair("Highest Rating", "rating"),
-            Pair("Most Viewed", "views"),
+            Pair("Most Viewed: Today", "views_today"),
+            Pair("Most Viewed: 7 Days", "views_7days"),
+            Pair("Most Viewed: 30 Days", "views_30days"),
+            Pair("Most Viewed: All Time", "views"),
             Pair("Most Chapters", "chapters"),
             Pair("A-Z", "alphabetical"),
+        ),
+    )
+
+class ContentRatingFilter :
+    SelectFilter(
+        "Content Rating",
+        arrayOf(
+            Pair("Any", ""),
+            Pair("Safe", "safe"),
+            Pair("Suggestive", "suggestive"),
+            Pair("Erotica", "erotica"),
+            Pair("Pornographic", "pornographic"),
         ),
     )
 
@@ -35,7 +50,7 @@ class StatusFilter :
     SelectFilter(
         "Status",
         arrayOf(
-            Pair("All Status", ""),
+            Pair("Any", ""),
             Pair("Ongoing", "ongoing"),
             Pair("Completed", "completed"),
             Pair("Hiatus", "hiatus"),
@@ -47,7 +62,7 @@ class TypeFilter :
     SelectFilter(
         "Type",
         arrayOf(
-            Pair("All Types", ""),
+            Pair("Any", ""),
             Pair("Manga", "manga"),
             Pair("Manhwa", "manhwa"),
             Pair("Manhua", "manhua"),
@@ -58,7 +73,9 @@ class DemographicFilter :
     SelectFilter(
         "Demographics",
         arrayOf(
-            Pair("All Demographics", ""),
+            Pair("Any", ""),
+            Pair("Boy (Shounen + Seinen)", "shounen,seinen"),
+            Pair("Girl (Shoujo + Josei)", "shoujo,josei"),
             Pair("Shounen", "shounen"),
             Pair("Shoujo", "shoujo"),
             Pair("Seinen", "seinen"),
