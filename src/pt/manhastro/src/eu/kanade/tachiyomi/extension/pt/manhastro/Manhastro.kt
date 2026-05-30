@@ -57,7 +57,7 @@ class Manhastro :
         .cache(
             Cache(
                 directory = File(Injekt.get<Application>().externalCacheDir, "network_cache_${name.lowercase()}"),
-                maxSize = 10L * 1024 * 1024, // 10 MiB
+                maxSize = 20L * 1024 * 1024, // 20 MiB
             ),
         )
         .addNetworkInterceptor { chain ->
@@ -131,9 +131,8 @@ class Manhastro :
         val selectedGenres = genreFilter?.state?.filter { it.state }?.map { it.value } ?: emptyList()
         if (selectedGenres.isNotEmpty()) {
             mangas = mangas.filter { manga ->
-                val mangaGenres = parseGenres(manga.generos)
                 selectedGenres.all { genre ->
-                    mangaGenres.any { it.equals(genre, ignoreCase = true) }
+                    manga.generos.any { it.equals(genre, ignoreCase = true) }
                 }
             }
         }
@@ -147,9 +146,12 @@ class Manhastro :
             else -> mangas
         }
 
-        MangasPage(mangas.map { it.toSManga() }, false)
-    }!!
+        val start = (page - 1) * PER_PAGE
+        val end = minOf(start + PER_PAGE, mangas.size)
 
+        val sliced = mangas.subList(start, end)
+        MangasPage(sliced.map { it.toSManga() }, end < mangas.size)
+    }!!
 
     private fun String.normalize(): String = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
         .replace(Regex("[\\p{InCombiningDiacriticalMarks}]"), "")
