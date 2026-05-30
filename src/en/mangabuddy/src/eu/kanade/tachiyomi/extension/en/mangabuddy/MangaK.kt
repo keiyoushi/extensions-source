@@ -221,7 +221,14 @@ class MangaK :
         return GET("$apiUrl/titles/$id/chapters", headers)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<ChapterListResponseDto>().chapters.map { it.toSChapter(dateFormat) }
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val chapters = response.parseAs<ChapterListResponseDto>().chapters
+
+        return chapters.sortedWith(
+            compareByDescending<ChapterItemDto> { extractChapterNumber(it.name) }
+                .thenByDescending { it.chapterNumber ?: 0f },
+        ).map { it.toSChapter(dateFormat) }
+    }
 
     // =============================== Pages ===============================
 
@@ -282,5 +289,24 @@ class MangaK :
     companion object {
         private const val PREF_BLACKLIST_KEY = "pref_blacklist"
         private val IMAGE_FALLBACK_REGEX = "rx\\.qvzr[a-z]\\.org".toRegex()
+
+        private val CHAPTER_NUMBER_REGEX = Regex("""\b(?:chapter|ch|c|ep|episode)\s*([\d.]+)""")
+        private val START_NUMBER_REGEX = Regex("""^([\d.]+)""")
+
+        private fun extractChapterNumber(name: String): Float {
+            val nameLower = name.lowercase()
+            if ("prologue" in nameLower) return 0f
+            if ("oneshot" in nameLower || "one shot" in nameLower) return 0f
+
+            CHAPTER_NUMBER_REGEX.find(nameLower)?.let {
+                return it.groupValues[1].toFloatOrNull() ?: -1f
+            }
+
+            START_NUMBER_REGEX.find(nameLower)?.let {
+                return it.groupValues[1].toFloatOrNull() ?: -1f
+            }
+
+            return -1f
+        }
     }
 }
