@@ -39,6 +39,18 @@ abstract class SelectFilter(
     val selected get() = options[state].second.takeUnless { it.isBlank() }
 }
 
+internal class MultiValueOption(name: String, val value: String) : Filter.CheckBox(name)
+
+internal abstract class MultiValueFilter(
+    name: String,
+    options: List<String>,
+) : Filter.Group<MultiValueOption>(
+    name = name,
+    state = options.map { MultiValueOption(it, it) },
+) {
+    val active get() = state.filter { it.state }.map { it.value }.takeUnless { it.isEmpty() }
+}
+
 internal class OrderBy :
     OrderByFilter(
         "Сортувати за",
@@ -108,11 +120,27 @@ internal class GenresFilter(blockedGenres: Set<String>) : TriStateGroup("Жан�
     }
 }
 
-internal class TypeFilter(blockedTypes: Set<String>) : TriStateGroup("Тип", options) {
+internal class TypeFilter :
+    SelectFilter(
+        "Тип (відобразити)",
+        listOf(
+            "Всі типи" to "",
+            "Артбук" to "Артбук",
+            "Вебкомікс" to "Вебкомікс",
+            "Графічний роман" to "Графічний роман",
+            "Мальопис" to "Мальопис",
+            "Манхва" to "Манхва",
+            "Маньхва" to "Маньхва",
+            "Манґа" to "Манґа",
+            "Новела" to "Новела",
+        ),
+    )
+
+internal class HideTypeFilter(blockedTypes: Set<String>) : MultiValueFilter("Тип (приховати)", options) {
     init {
         state.forEach { filter ->
-            if (blockedTypes.contains(filter.id)) {
-                filter.state = 2
+            if (blockedTypes.contains(filter.value)) {
+                filter.state = true
             }
         }
     }

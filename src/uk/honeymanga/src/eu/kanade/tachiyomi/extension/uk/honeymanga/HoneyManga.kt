@@ -103,10 +103,10 @@ class HoneyManga :
                     filter.included?.let { searchFilters.add(SearchFilter("genres", "ALL", it)) }
                     filter.excluded?.let { searchFilters.add(SearchFilter("genres", "NOT_IN", it)) }
                 }
-                is TypeFilter -> { // no need to add ignored types from preferences since they are applied to filters
-                    filter.included?.let { searchFilters.add(SearchFilter("type", "ALL", it)) }
-                    filter.excluded?.let { searchFilters.add(SearchFilter("type", "NOT_IN", it)) }
+                is HideTypeFilter -> { // no need to add ignored types from preferences since they are applied to filters
+                    filter.active?.let { searchFilters.add(SearchFilter("type", "NOT_IN", it)) }
                 }
+                is TypeFilter -> filter.selected?.let { searchFilters.add(SearchFilter("type", "EQUAL", listOf(it))) }
                 else -> {}
             }
         }
@@ -180,10 +180,12 @@ class HoneyManga :
 
     // ============================= Filters ==============================
     override fun getFilterList() = FilterList(
-        Filter.Header("Примітка: Фільтри ігноруються при пошуку за назвою"),
         OrderBy(),
-        TypeFilter(blockTypes()),
+        TypeFilter(),
+        HideTypeFilter(blockTypes()),
+        Filter.Separator(),
         GenresFilter(blockGenres()),
+        Filter.Separator(),
         TagsFilter(),
         StatusFilter(),
         TranslationFilter(),
@@ -229,7 +231,7 @@ class HoneyManga :
 
         MultiSelectListPreference(screen.context).apply {
             val blockedTypes = blockTypes()
-            val types = TypeFilter.options.toTypedArray()
+            val types = HideTypeFilter.options.toTypedArray()
             key = TYPE_PREF
             title = TYPE_PREF_TITLE
             entries = types
