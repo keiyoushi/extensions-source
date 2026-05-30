@@ -34,6 +34,7 @@ class StatusFilter :
             "Completed" to "completed",
             "Hiatus" to "hiatus",
             "Dropped" to "dropped",
+            "Axed" to "axed",
         ),
     )
 
@@ -59,12 +60,15 @@ class GenresFilter :
             "Comedy" to "comedy",
             "Crazy MC" to "crazy-mc",
             "Demon" to "demon",
+            "Drama" to "drama",
             "Dungeons" to "dungeons",
             "Fantasy" to "fantasy",
             "Game" to "game",
             "Genius MC" to "genius-mc",
             "Isekai" to "isekai",
+            "Kuchikuchi" to "kuchikuchi",
             "Magic" to "magic",
+            "Martial Arts" to "martial-arts",
             "Murim" to "murim",
             "Mystery" to "mystery",
             "Necromancer" to "necromancer",
