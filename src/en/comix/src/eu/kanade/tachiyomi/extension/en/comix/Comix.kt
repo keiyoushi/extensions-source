@@ -57,21 +57,10 @@ class Comix :
         .addInterceptor { chain ->
             val request = chain.request()
 
-            // Scrambled images require fetch() headers to bypass hotlink protection on cache misses
-            val isScrambled = request.url.fragment == "scrambled"
-            val initialRequest = if (isScrambled) {
-                request.newBuilder()
-                    .header("Origin", baseUrl)
-                    .header("Accept", "*/*")
-                    .build()
-            } else {
-                request
-            }
-
-            val response = chain.proceed(initialRequest)
+            val response = chain.proceed(request)
             if (response.code != 404) return@addInterceptor response
 
-            val url = initialRequest.url.toString()
+            val url = request.url.toString()
             val fallbacks = listOf("/si/", "/i/", "/sii/", "/ii/")
                 .map { url.replaceFirst(SCRAMBLE_PATH_FALLBACK_REGEX, it) }
                 .filter { it != url }
@@ -81,7 +70,7 @@ class Comix :
             var lastResponse = response
             for (fallbackUrl in fallbacks) {
                 lastResponse.close()
-                lastResponse = chain.proceed(initialRequest.newBuilder().url(fallbackUrl).build())
+                lastResponse = chain.proceed(request.newBuilder().url(fallbackUrl).build())
                 if (lastResponse.code != 404) break
             }
             lastResponse
@@ -89,7 +78,10 @@ class Comix :
         .rateLimit(5)
         .build()
 
-    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("Origin", baseUrl)
+        .add("Accept", "*/*")
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
