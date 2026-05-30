@@ -1,7 +1,7 @@
 ext {
     extName = 'BRScans'
     extClass = '.BRScans'
-    extVersionCode = 2
+    extVersionCode = 1
     isNsfw = true
 }
 
