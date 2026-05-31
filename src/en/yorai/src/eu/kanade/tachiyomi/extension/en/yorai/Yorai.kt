@@ -1,28 +1,22 @@
 package eu.kanade.tachiyomi.extension.en.yorai
 
-import androidx.preference.ListPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.getPreferences
+import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.Locale.getDefault
 
-class Yorai :
-    HttpSource(),
-    ConfigurableSource {
+class Yorai : HttpSource() {
 
     override val name = "Yorai"
     override val baseUrl = "https://yorai.io"
@@ -30,24 +24,23 @@ class Yorai :
     val apiUrl = "$baseUrl/api"
     override val lang = "en"
     override val supportsLatest = true
-    private val preferences = getPreferences()
-    private fun quality() = preferences.getString(PREF_SOURCE_QUALITY, "default")
+    override val versionId = 2
 
-    companion object {
-        private const val PREF_SOURCE_QUALITY = "pref_source_quality"
-    }
+    private val rscHeaders = headersBuilder()
+        .set("rsc", "1")
+        .build()
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/manga/browse?page=$page&sort=popular", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/comics/browse?page=$page&sort=views", headers)
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/manga/browse?page=$page&sort=updated_at", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/comics/browse?page=$page", headers)
 
     // Search
     override fun getFilterList(): FilterList = getFilters()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$apiUrl/manga/browse".toHttpUrl().newBuilder().apply {
+        val url = "$apiUrl/comics/browse".toHttpUrl().newBuilder().apply {
             val tags: MutableList<String> = mutableListOf()
             val genres: MutableList<String> = mutableListOf()
             filters.forEach { filter ->
@@ -65,35 +58,42 @@ class Yorai :
                     }
 
                     is StatusFilter -> {
-                        addQueryParameter("status", filter.selected)
+                        addQueryParameter("statuses", filter.selected)
                     }
 
                     is TypeFilter -> {
-                        addQueryParameter("type", filter.selected)
+                        addQueryParameter("types", filter.selected)
                     }
 
                     else -> {}
                 }
             }
             addQueryParameter("page", page.toString())
-            addQueryParameter("genre", genres.joinToString(","))
-            addQueryParameter("search", query)
+            addQueryParameter("genres", genres.joinToString(","))
+            addQueryParameter("q", query)
         }.build()
 
         return GET(url, headers)
+    }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/comic/${manga.url}"
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val (slug, number) = chapter.url.split("|")
+        return "$baseUrl/comic/$slug/chapter/$number"
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.parseAs<Browse>()
 
         with(data) {
-            val hasNextPage = pagination.page <= pagination.totalPages
+            val hasNextPage = page <= totalPages
             return MangasPage(
-                series.map {
+                comics.map {
                     SManga.create().apply {
-                        url = "/manga/${it.id}"
+                        url = it.slug
                         title = it.title
-                        thumbnail_url = baseUrl + it.coverImage
+                        thumbnail_url = baseUrl + it.coverUrl
                     }
                 },
                 hasNextPage,
@@ -103,78 +103,49 @@ class Yorai :
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(apiUrl + manga.url, headers)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), rscHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val data = response.parseAs<DetailSeries>()
-        val genres = data.genres.joinToString(", ") { g ->
-            g.replace("_", " ")
-                .replaceFirstChar { if (it.isLowerCase()) it.titlecase(getDefault()) else it.toString() }
+        val detailsBody = response.body.string()
+
+        val desc = detailsBody.extractNextJsRsc<Description> {
+            it is JsonObject && it["name"]?.jsonPrimitive?.content == "description"
         }
-        val tags = data.tags.joinToString(", ") { "⟡$it" }
+
+        val tags = detailsBody.extractNextJsRsc<List<Tag>>()?.map { it.name } ?: emptyList()
+
         return SManga.create().apply {
-            author = data.author
-            artist = data.artist
-            genre = "$genres, $tags, ${data.type}"
-            description = buildString {
-                data.description?.let { append(it, "\n") }
-                data.year?.let { append("Released: $it") }
-            }
-            status = when (data.status) {
-                "releasing" -> SManga.ONGOING
-                "completed" -> SManga.COMPLETED
-                "cancelled" -> SManga.CANCELLED
-                "hiatus" -> SManga.ON_HIATUS
-                else -> SManga.UNKNOWN
-            }
+            status = if (detailsBody.contains("releasing")) SManga.ONGOING else SManga.COMPLETED
+            genre = tags.joinToString(", ") { "⟡$it" }
+            description = desc?.content
         }
     }
     // Chapters
 
-    override fun chapterListRequest(manga: SManga) = GET(apiUrl + manga.url + "/chapters", headers)
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chapters = response.parseAs<Chapters>()
+        val chapters = response.extractNextJs<Chapters>()!!
 
-        return chapters.chapters.asReversed().map {
-            val q = getQualityName(it)
+        return chapters.chapters.filter { it.sourceName == chapters.defaultSource }.map {
             SChapter.create().apply {
-                url = "/manga/${chapters.seriesId}/chapters/${it.number}?source=" + if (q.id == it.defaultSource) "" else q.id
-                name = it.title
+                url = "${chapters.slug}|${it.number}"
+                name = it.title.takeIf { it.isNotEmpty() } ?: "Chapter ${it.number.toInt()}"
                 chapter_number = it.number
-                date_upload = dateFormat.tryParse(it.releaseDate)
-                scanlator = if (q.id == it.defaultSource) null else q.name
+                scanlator = chapters.defaultSource
             }
         }
     }
 
     // Pages
-    override fun pageListRequest(chapter: SChapter): Request = GET(apiUrl + chapter.url, headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<DetailedChapter>().pages
-        return data.map {
-            Page(it.number, imageUrl = baseUrl + it.url)
+        val data = response.extractNextJs<ChapterPages>()
+        return data!!.imageUrls.mapIndexed { index, url ->
+            Page(index, imageUrl = baseUrl + url)
         }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    // Settings
-    private fun getQualityName(entry: Chapters.Chapter): Chapters.Chapter.Source {
-        val default = entry.sources.firstOrNull { it.id == entry.defaultSource }
-        return entry.sources.firstOrNull { it.quality == quality() } ?: default!!
-    }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = PREF_SOURCE_QUALITY
-            title = "Source Quality"
-            summary = "Select Source Quality"
-            entries = arrayOf("Default", "Medium")
-            entryValues = arrayOf("default", "medium")
-            setDefaultValue("default")
-        }.also(screen::addPreference)
-    }
 }

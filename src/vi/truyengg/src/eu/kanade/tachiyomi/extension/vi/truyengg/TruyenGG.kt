@@ -39,9 +39,18 @@ class TruyenGG :
 
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences = getPreferences()
+    private val preferences: SharedPreferences = getPreferences {
+        getString(BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != defaultBaseUrl) {
+                edit()
+                    .putString(BASE_URL_PREF, defaultBaseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
+                    .apply()
+            }
+        }
+    }
 
-    override val baseUrl by lazy { getPrefBaseUrl() }
+    override val baseUrl get() = getPrefBaseUrl()
 
     override val id: Long = 1458993267006200127
 
@@ -118,18 +127,16 @@ class TruyenGG :
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val document = response.asJsoup()
         title = document.select("h1[itemprop=name]").text()
-        author = document.selectFirst("p:contains(Tác Giả) + p")?.text()
-        genre = document.select("a.clblue").joinToString { it.text() }
-        description = document.select("div.story-detail-info").joinToString {
-            it.wholeText().trim()
-        }
-        thumbnail_url = document.selectFirst(".thumbblock img")?.absUrl("src")
-        status = parseStatus(document.select("p:contains(Trạng Thái) + p").text())
+        author = document.selectFirst("span:contains(Tác Giả) + span")?.text()
+        genre = document.select(".fx-genres a").joinToString { it.text() }
+        description = document.selectFirst("div.fx-synopsis div")?.wholeText()?.trim()
+        thumbnail_url = document.selectFirst(".fx-cover img")?.absUrl("src")
+        status = parseStatus(document.select(".fx-status").text())
     }
 
     private fun parseStatus(status: String?): Int {
-        val ongoingWords = listOf("Đang Cập Nhật", "Đang Tiến Hành")
-        val completedWords = listOf("Hoàn Thành", "Đã Hoàn Thành")
+        val ongoingWords = listOf("Đang Cập Nhật", "Đang Tiến Hành", "Còn tiếp")
+        val completedWords = listOf("Hoàn Thành", "Đã Hoàn Thành", "Hoàn")
         val hiatusWords = listOf("Tạm ngưng", "Tạm hoãn")
         return when {
             status == null -> SManga.UNKNOWN
@@ -143,11 +150,11 @@ class TruyenGG :
     // Chapters
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select("ul.list_chap > li.item_chap").map { element ->
+        return document.select("ul.fx-chap-list li.fx-chap-item").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
                 name = element.select("a").text()
-                date_upload = dateFormat.tryParse(element.select("span.cl99").text().trim())
+                date_upload = dateFormat.tryParse(element.selectFirst("span.fx-chap-item__date")?.text())
             }
         }
     }
@@ -269,16 +276,6 @@ class TruyenGG :
     )
 
     // Preferences
-    init {
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != defaultBaseUrl) {
-                preferences.edit()
-                    .putString(BASE_URL_PREF, defaultBaseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
-                    .apply()
-            }
-        }
-    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
@@ -290,7 +287,7 @@ class TruyenGG :
             dialogMessage = "Default: $defaultBaseUrl"
 
             setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                Toast.makeText(screen.context, NOTIFICATION_SHOW, Toast.LENGTH_LONG).show()
                 true
             }
         }.let(screen::addPreference)
@@ -300,7 +297,7 @@ class TruyenGG :
 
     companion object {
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng thay đổi."
+        private const val NOTIFICATION_SHOW = "Tên miền đã được thay đổi."
         private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
         private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val BASE_URL_PREF_SUMMARY =

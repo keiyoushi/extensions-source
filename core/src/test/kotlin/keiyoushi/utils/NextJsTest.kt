@@ -84,4 +84,23 @@ class NextJsTest {
         assertEquals(mapOf("a" to 1, "b" to 2), c!!.items)
         assertEquals(listOf(10, 20, 30), c.tags)
     }
+
+    @Serializable
+    data class Chapter(val number: Int, val title: String)
+
+    @Serializable
+    data class FullList(val mangaTitle: String, val chapters: List<Chapter>)
+
+    @Test
+    fun realFlightPathRefsFixture() {
+        // full.chapters[0] is emitted as a path reference ($0:preview:0) to the shared object
+        // first written under preview[0]; it must resolve to the full chapter, not stay a string.
+        val full = fixture("pathrefs").extractNextJsRsc<FullList>()
+        assertNotNull(full)
+        full!!
+        assertEquals("My Manga", full.mangaTitle)
+        assertEquals(listOf(3, 1), full.chapters.map { it.number })
+        assertEquals("Newest", full.chapters[0].title) // resolved via $0:preview:0
+        assertEquals("Oldest", full.chapters[1].title)
+    }
 }

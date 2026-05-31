@@ -17,12 +17,19 @@ data class SearchVariables(
     val query: String? = null,
     val type: FiltersDto? = null,
     val status: FiltersDto? = null,
+    val rating: FiltersDto? = null,
+    val format: FiltersDto? = null,
     val translationStatus: FiltersDto? = null,
     val label: FiltersDto? = null,
-    val format: FiltersDto? = null,
-    val rating: FiltersDto? = null,
+    val orderBy: OrderDto? = null,
     val offset: Int? = null,
 ) {
+    @Serializable
+    data class OrderDto(
+        val field: String? = null,
+        val direction: String? = null,
+    )
+
     @Serializable
     data class FiltersDto(
         val include: List<String>? = null,
@@ -36,20 +43,22 @@ val SEARCH_QUERY: String = buildQuery {
             %query: String,
             %type: MangaTachiyomiSearchTypeFilter,
             %status: MangaTachiyomiSearchStatusFilter,
+            %rating: MangaTachiyomiSearchRatingFilter,
+            %format: MangaTachiyomiSearchFormatFilter,
             %translationStatus: MangaTachiyomiSearchTranslationStatusFilter,
-            %label: MangaTachiyomiSearchGenreFilter,
-            %format: MangaTachiyomiSearchGenreFilter,
-            %rating: MangaTachiyomiSearchTagFilter,
+            %label: MangaTachiyomiSearchLabelFilter,
+            %orderBy: MangaTachiyomiOrder,
             %offset: Int,
         ) {
             mangaTachiyomiSearch(
                 query:%query,
                 type: %type,
                 status: %status,
+                rating: %rating,
+                format: %format,
                 translationStatus: %translationStatus,
                 label: %label,
-                format: %format,
-                rating: %rating,
+                orderBy: %orderBy,
                 offset: %offset,
             ) {
                 mangas {

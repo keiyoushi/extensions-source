@@ -30,45 +30,43 @@ class Filters {
             }
         }
 
-        // Site's curated list of 30 genres (matches the Genres section in the
+        // Site's curated list of 31 genres (matches the Genres section in the
         // browse panel exactly). Narrative tags like "Aliens" or "School Life"
         // used to live here too, but they belong under Tags and are searched
         // by name rather than enumerated.
-        // Order mirrors the site's "Content preferences" modal (popularity-
-        // ranked, not alphabetical). Used by both the GenreFilter in the
-        // search sheet and the Blocked Genres source-level preference, so
-        // both surfaces are consistent with the website.
+        // Order mirrors the site's "Content preferences" modal.
         fun getGenres() = arrayOf(
-            "Romance" to "23",
-            "Drama" to "11",
-            "Comedy" to "9",
-            "Fantasy" to "12",
-            "Slice of Life" to "25",
             "Action" to "6",
-            "Boys Love" to "8",
-            "Adventure" to "7",
             "Adult" to "87264",
-            "Smut" to "87268",
-            "Psychological" to "22",
-            "Mystery" to "20",
-            "Historical" to "14",
-            "Mature" to "87267",
-            "Tragedy" to "29",
-            "Sci-Fi" to "24",
-            "Ecchi" to "87265",
-            "Horror" to "15",
-            "Girls Love" to "13",
-            "Isekai" to "16",
-            "Hentai" to "87266",
-            "Thriller" to "28",
-            "Sports" to "26",
+            "Adventure" to "7",
+            "Boys Love" to "8",
+            "Comedy" to "9",
             "Crime" to "10",
-            "Philosophical" to "21",
-            "Mecha" to "18",
-            "Wuxia" to "30",
-            "Medical" to "19",
-            "Superhero" to "27",
+            "Drama" to "11",
+            "Ecchi" to "87265",
+            "Fantasy" to "12",
+            "Girls Love" to "13",
+            "Harem" to "40",
+            "Hentai" to "87266",
+            "Historical" to "14",
+            "Horror" to "15",
+            "Isekai" to "16",
             "Magical Girls" to "17",
+            "Mature" to "87267",
+            "Mecha" to "18",
+            "Medical" to "19",
+            "Mystery" to "20",
+            "Philosophical" to "21",
+            "Psychological" to "22",
+            "Romance" to "23",
+            "Sci-Fi" to "24",
+            "Slice of Life" to "25",
+            "Smut" to "87268",
+            "Sports" to "26",
+            "Superhero" to "27",
+            "Thriller" to "28",
+            "Tragedy" to "29",
+            "Wuxia" to "30",
         )
 
         // The 9 site formats (matches the Formats section in the browse panel).
@@ -84,13 +82,12 @@ class Filters {
             "Web Comic" to "93171",
         )
 
-        // Order mirrors the site's "Content preferences" modal:
-        // Shounen, Shoujo, Seinen, Josei. IDs are API-tied and unchanged.
+        // Order mirrors the site's "Content preferences" modal.
         fun getDemographics() = arrayOf(
-            Pair("Shounen", "2"),
-            Pair("Shoujo", "1"),
-            Pair("Seinen", "4"),
             Pair("Josei", "3"),
+            Pair("Seinen", "4"),
+            Pair("Shoujo", "1"),
+            Pair("Shounen", "2"),
         )
 
         // Same set TypeFilter exposes in the search filter sheet — duplicated
@@ -235,8 +232,8 @@ class Filters {
             "Status",
             "statuses[]",
             arrayOf(
-                Pair("Finished", "finished"),
                 Pair("Releasing", "releasing"),
+                Pair("Finished", "finished"),
                 Pair("On Hiatus", "on_hiatus"),
                 Pair("Discontinued", "discontinued"),
                 Pair("Not Yet Released", "not_yet_released"),

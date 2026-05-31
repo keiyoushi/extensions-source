@@ -18,6 +18,7 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 class ComicKFan : HttpSource() {
 
@@ -26,7 +27,9 @@ class ComicKFan : HttpSource() {
     override val lang = "en"
     override val supportsLatest = true
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.ROOT)
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssSSSSSS'Z'", Locale.ROOT).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")

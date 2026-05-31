@@ -282,29 +282,31 @@ class PhiliaScans :
 
         // Fallback for RSC/Next.js JSON payloads where pages are lazy-loaded.
         if (pagesMap.isEmpty() || pagesMap.size < totalPages) {
-            document.select("script:not([src])").forEach { script ->
-                val data = script.data()
-                if ("self.__next_f.push" !in data) return@forEach
+            val flightString = buildString {
+                document.select("script:not([src])").forEach { script ->
+                    val data = script.data()
+                    if ("self.__next_f.push" !in data) return@forEach
 
-                val match = nextFlightRegex.find(data) ?: return@forEach
-                try {
-                    val arr = jsonInstance.parseToJsonElement(match.groupValues[1]).jsonArray
-                    val content = arr.getOrNull(1)?.jsonPrimitive?.contentOrNull ?: return@forEach
+                    val match = nextFlightRegex.find(data) ?: return@forEach
+                    try {
+                        val arr = jsonInstance.parseToJsonElement(match.groupValues[1]).jsonArray
+                        val content = arr.getOrNull(1)?.jsonPrimitive?.contentOrNull ?: return@forEach
+                        append(content)
+                    } catch (_: Exception) {}
+                }
+            }
 
-                    // The content payload holds chunks separated by line breaks.
-                    content.split('\n').forEach { line ->
-                        val colonIdx = line.indexOf(':')
-                        if (colonIdx != -1) {
-                            val jsonStr = line.substring(colonIdx + 1)
-                            if (jsonStr.startsWith("[") || jsonStr.startsWith("{")) {
-                                try {
-                                    val element = jsonInstance.parseToJsonElement(jsonStr)
-                                    element.findPages(pagesMap)
-                                } catch (_: Exception) {}
-                            }
-                        }
+            flightString.split('\n').forEach { line ->
+                val colonIdx = line.indexOf(':')
+                if (colonIdx != -1) {
+                    val jsonStr = line.substring(colonIdx + 1)
+                    if (jsonStr.startsWith("[") || jsonStr.startsWith("{")) {
+                        try {
+                            val element = jsonInstance.parseToJsonElement(jsonStr)
+                            element.findPages(pagesMap)
+                        } catch (_: Exception) {}
                     }
-                } catch (_: Exception) {}
+                }
             }
         }
 

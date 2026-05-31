@@ -50,6 +50,10 @@ class RawINU :
 
     private val apiEndpoint = "$baseUrl/app/manga/controllers"
 
+    override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
+        thumbnail_url = thumbnail_url?.removeSurrounding("'")
+    }
+
     // =========================== Manga Details ============================
     override val infoElementSelector = "div.card-body div.row"
 
