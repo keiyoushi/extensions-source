@@ -232,14 +232,12 @@ class Catoons : HttpSource() {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    fun decodeSvelte(data: JsonArray): JsonElement =
-        resolve(data, data[0])
+    fun decodeSvelte(data: JsonArray): JsonElement = resolve(data, data[0])
 
-    private fun dereference(data: JsonArray, index: Int): JsonElement =
-        when (val value = data[index]) {
-            is JsonArray, is JsonObject -> resolve(data, value)
-            else -> value
-        }
+    private fun dereference(data: JsonArray, index: Int): JsonElement = when (val value = data[index]) {
+        is JsonArray, is JsonObject -> resolve(data, value)
+        else -> value
+    }
 
     private fun resolveReference(data: JsonArray, element: JsonElement): JsonElement {
         val index = (element as? JsonPrimitive)?.intOrNull
@@ -255,16 +253,15 @@ class Catoons : HttpSource() {
         }
     }
 
-    private fun resolve(data: JsonArray, element: JsonElement): JsonElement =
-        when (element) {
-            is JsonArray -> JsonArray(element.map { resolveReference(data, it) })
-            is JsonObject -> buildJsonObject {
-                element.forEach { (key, value) ->
-                    put(key, resolveReference(data, value))
-                }
+    private fun resolve(data: JsonArray, element: JsonElement): JsonElement = when (element) {
+        is JsonArray -> JsonArray(element.map { resolveReference(data, it) })
+        is JsonObject -> buildJsonObject {
+            element.forEach { (key, value) ->
+                put(key, resolveReference(data, value))
             }
-            else -> element
         }
+        else -> element
+    }
 
     companion object {
         private val DETAILS_CHUNK_REGEX = """/_app/remote/([^/]+)/getSerieDetails""".toRegex()
