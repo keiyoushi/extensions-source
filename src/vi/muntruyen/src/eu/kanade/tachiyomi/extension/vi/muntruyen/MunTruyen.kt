@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -243,11 +244,7 @@ class MunTruyen :
 
     private fun parseDate(dateStr: String?): Long {
         if (dateStr == null) return 0L
-        return try {
-            DATE_FORMAT.parse(dateStr)!!.time
-        } catch (_: Exception) {
-            0L
-        }
+        return DATE_FORMAT.tryParse(dateStr)
     }
 
     // ============================== Pages =================================
