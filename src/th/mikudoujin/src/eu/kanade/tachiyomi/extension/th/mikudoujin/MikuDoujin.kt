@@ -148,7 +148,8 @@ class MikuDoujin : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("div#v-pills-tabContent img.lazy").mapIndexed { i, img ->
+        val query = "div#v-pills-tabContent img.lazy, div#v-pills-tabContent img.page-img"
+        return document.select(query).mapIndexed { i, img ->
             val url = if (img.hasAttr("data-src")) {
                 img.attr("abs:data-src")
             } else {

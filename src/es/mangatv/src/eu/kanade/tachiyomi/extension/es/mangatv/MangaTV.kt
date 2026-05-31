@@ -24,6 +24,7 @@ class MangaTV :
     ) {
 
     override val seriesDescriptionSelector = "b:contains(Sinopsis) + span"
+    override fun chapterListSelector() = "#chapterlist ul.clstyle li:has(.dt a)"
 
     override fun pageListParse(document: Document): List<Page> {
         val unpackedScript = document.selectFirst("script:containsData(eval)")!!.data()
