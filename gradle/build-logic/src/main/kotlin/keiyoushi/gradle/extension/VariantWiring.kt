@@ -69,7 +69,7 @@ fun Project.wireVariantApi(
 
             // Read spec directly: onVariants runs inside AGP's afterEvaluate, before ours,
             // so bridge values aren't populated yet.
-            val sourceDeeplinks = spec.sources.orNull?.any { it.deeplinkSpec.isPresent } ?: false
+            val sourceDeeplinks = spec.sources.orNull?.any { it.specs.orNull?.isNotEmpty() == true } ?: false
             val themeDeeplinks = spec.theme.orNull?.let { themeName ->
                 val themePath = ":lib-multisrc:$themeName"
                 evaluationDependsOn(themePath)

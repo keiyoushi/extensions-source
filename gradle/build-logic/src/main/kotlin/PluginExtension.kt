@@ -32,7 +32,7 @@ class PluginExtension : Plugin<Project> {
             alias(kei.plugins.spotless)
         }
 
-        val spec = extensions.create("extension", ExtensionSpec::class.java)
+        val spec = extensions.create("keiyoushi", ExtensionSpec::class.java)
         val pkg = derivePackage()
         val applicationIdSuffix = "${project.parent?.name}.${project.name}"
 
@@ -60,7 +60,7 @@ class PluginExtension : Plugin<Project> {
             bridges.versionCode.set(resolved.effectiveVersionCode)
             bridges.versionName.set(resolved.effectiveVersionName)
             bridges.appName.set("Tachiyomi: ${resolved.extension.name}")
-            bridges.nsfw.set(if (spec.nsfw.get()) "1" else "0")
+            bridges.nsfw.set(if (resolved.extension.isNsfw) "1" else "0")
 
             manifestTask.configure {
                 filters.set(

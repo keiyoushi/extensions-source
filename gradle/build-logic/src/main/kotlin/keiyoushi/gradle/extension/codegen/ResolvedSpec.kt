@@ -1,6 +1,7 @@
 package keiyoushi.gradle.extension.codegen
 
 import keiyoushi.gradle.extension.dsl.BaseUrlSpec
+import keiyoushi.gradle.extension.dsl.ContentRating
 import keiyoushi.gradle.extension.dsl.OverrideValue
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
@@ -14,12 +15,14 @@ data class ResolvedExtension(
     val pkg: String,
     val className: String,
     val sources: List<ResolvedSource>,
+    val isNsfw: Boolean,
 ) : JvmSerializable
 
 @Serializable
 data class ResolvedSource(
     val name: String,
     val lang: String,
+    val contentRating: ContentRating,
     val isConfigurable: Boolean,
     val versionId: Int,
     val id: Long,

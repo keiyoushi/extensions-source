@@ -45,13 +45,21 @@ abstract class GenerateSourceTask : DefaultTask() {
     ): String {
         val needsSystemPrefs = source.baseUrl !is BaseUrlSpec.Static
         val implementConfigurable = source.isConfigurable || needsSystemPrefs
+        val constructorArgs = buildConstructorArgs(source)
 
         return buildString {
             appendLine("package $pkg")
             appendLine()
             appendImports(this, listOf(source), needsConfigurable = implementConfigurable)
             appendLine()
-            append("class $generatedClassName : $className()")
+            append("class $generatedClassName")
+            if (constructorArgs.isEmpty()) {
+                append(" : $className()")
+            } else {
+                appendLine(" : $className(")
+                appendLine("    $constructorArgs")
+                append(")")
+            }
             if (implementConfigurable) append(", ConfigurableSource")
             appendLine(" {")
             appendSourceBody(this, source, indent = "    ")
@@ -86,8 +94,16 @@ abstract class GenerateSourceTask : DefaultTask() {
                 val suffix = suffixes[index]
                 val needsSystemPrefs = source.baseUrl !is BaseUrlSpec.Static
                 val implementConfigurable = source.isConfigurable || needsSystemPrefs
+                val constructorArgs = buildConstructorArgs(source)
 
-                append("private class ${generatedClassName}_$suffix : $className()")
+                append("private class ${generatedClassName}_$suffix")
+                if (constructorArgs.isEmpty()) {
+                    append(" : $className()")
+                } else {
+                    appendLine(" : $className(")
+                    appendLine("    $constructorArgs")
+                    append(")")
+                }
                 if (implementConfigurable) append(", ConfigurableSource")
                 appendLine(" {")
                 appendSourceBody(this, source, indent = "    ")
@@ -95,6 +111,18 @@ abstract class GenerateSourceTask : DefaultTask() {
                 appendLine()
             }
         }
+    }
+
+    private fun buildConstructorArgs(source: ResolvedSource): String {
+        return source.overrides.map { (name, value) ->
+            val v = when (value) {
+                is OverrideValue.IntV -> "${value.v}"
+                is OverrideValue.LongV -> "${value.v}L"
+                is OverrideValue.BoolV -> "${value.v}"
+                is OverrideValue.Str -> "\"${value.v}\""
+            }
+            "$name = $v"
+        }.joinToString(",\n    ")
     }
 
     private fun appendImports(
@@ -159,7 +187,9 @@ abstract class GenerateSourceTask : DefaultTask() {
                 builder.appendLine("${indent}private val mirrorPrefs = MirrorPreferences(")
                 builder.appendLine("${indent}    preferences = preferences,")
                 builder.appendLine("${indent}    mirrors = arrayOf(")
-                baseUrl.urls.forEach { builder.appendLine("${indent}        \"$it\",") }
+                baseUrl.mirrors.forEach { mirror ->
+                    builder.appendLine("${indent}        \"${mirror.label}\" to \"${mirror.url}\",")
+                }
                 builder.appendLine("${indent}    ),")
                 builder.appendLine("${indent})")
                 builder.appendLine()
@@ -189,16 +219,6 @@ abstract class GenerateSourceTask : DefaultTask() {
                 }
                 builder.appendLine("${indent}}")
             }
-        }
-
-        source.overrides.forEach { (name, value) ->
-            val v = when (value) {
-                is OverrideValue.IntV -> "${value.v}"
-                is OverrideValue.LongV -> "${value.v}L"
-                is OverrideValue.BoolV -> "${value.v}"
-                is OverrideValue.Str -> "\"${value.v}\""
-            }
-            builder.appendLine("${indent}override val $name = $v")
         }
     }
 
