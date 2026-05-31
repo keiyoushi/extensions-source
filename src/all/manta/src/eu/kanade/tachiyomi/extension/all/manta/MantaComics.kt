@@ -17,7 +17,7 @@ import okhttp3.Response
 
 private const val DOMAIN = "manta.net"
 
-abstract class MantaComics(
+open class MantaComics(
     override val lang: String,
 ) : HttpSource() {
     override val name = "Manta"

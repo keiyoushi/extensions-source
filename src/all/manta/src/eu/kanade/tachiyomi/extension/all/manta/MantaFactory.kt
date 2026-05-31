@@ -7,6 +7,6 @@ class MantaFactory : SourceFactory {
         object : MantaComics("en") {
             override val id: Long = 8753096034341798862L
         },
-        object : MantaComics("es") {},
+        MantaComics("es"),
     )
 }
