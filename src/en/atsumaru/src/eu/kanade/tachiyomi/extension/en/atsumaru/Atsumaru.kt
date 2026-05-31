@@ -59,6 +59,7 @@ class Atsumaru : HttpSource() {
     override fun getFilterList() = FilterList(
         Filter.Separator(),
         GenreFilter(getGenresList()),
+        TagsFilter(getTagsList()),
         TypeFilter(getTypesList()),
         StatusFilter(getStatusList()),
         YearFilter(),
@@ -77,6 +78,8 @@ class Atsumaru : HttpSource() {
 
             val includedGenres = mutableListOf<String>()
             val excludedGenres = mutableListOf<String>()
+            val includedTags = mutableListOf<String>()
+            val excludedTags = mutableListOf<String>()
             val typesList = mutableListOf<String>()
             val statuses = mutableListOf<String>()
             var year: Int? = null
@@ -92,6 +95,15 @@ class Atsumaru : HttpSource() {
                             when (state.state) {
                                 Filter.TriState.STATE_INCLUDE -> includedGenres.add(filter.genreIds[index])
                                 Filter.TriState.STATE_EXCLUDE -> excludedGenres.add(filter.genreIds[index])
+                            }
+                        }
+                    }
+
+                    is TagsFilter -> {
+                        filter.state.forEachIndexed { index, state ->
+                            when (state.state) {
+                                Filter.TriState.STATE_INCLUDE -> includedTags.add(filter.tagIds[index])
+                                Filter.TriState.STATE_EXCLUDE -> excludedTags.add(filter.tagIds[index])
                             }
                         }
                     }
@@ -141,6 +153,13 @@ class Atsumaru : HttpSource() {
             }
             if (excludedGenres.isNotEmpty()) {
                 filterBy.add("genreIds:!=[${excludedGenres.joinToString(",") { "`$it`" }}]")
+            }
+
+            if (includedTags.isNotEmpty()) {
+                filterBy.add(includedTags.joinToString(" && ") { "tagIds:=`$it`" })
+            }
+            if (excludedTags.isNotEmpty()) {
+                filterBy.add("tagIds:!=[${excludedTags.joinToString(",") { "`$it`" }}]")
             }
 
             if (typesList.isNotEmpty()) {
