@@ -273,12 +273,7 @@ class Happymh :
         // If n == 1, the image is from next chapter
         .filter { it.n == 0 }
         .mapIndexed { index, it ->
-            // Strip q=... for large images (> 16383px) to avoid WebpExceedRange error
-            val url = if (it.width > 16383 || it.height > 16383) {
-                it.url.substringBefore("?q=")
-            } else {
-                it.url
-            }
+            val url = it.url.substringBefore("?q=")
             Page(index, "", url)
         }
 

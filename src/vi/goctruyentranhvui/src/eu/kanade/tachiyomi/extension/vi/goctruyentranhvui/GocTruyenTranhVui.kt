@@ -43,7 +43,7 @@ class GocTruyenTranhVui :
 
     override val lang = "vi"
 
-    private val defaultBaseUrl = "https://goctruyentranhvuiiiiiiiiii.site"
+    private val defaultBaseUrl = "https://goctruyentranhvui30.com"
 
     override val baseUrl get() = getPrefBaseUrl()
 

@@ -57,7 +57,7 @@ class Manhastro :
         .cache(
             Cache(
                 directory = File(Injekt.get<Application>().externalCacheDir, "network_cache_${name.lowercase()}"),
-                maxSize = 10L * 1024 * 1024, // 10 MiB
+                maxSize = 20L * 1024 * 1024, // 20 MiB
             ),
         )
         .addNetworkInterceptor { chain ->
@@ -122,9 +122,8 @@ class Manhastro :
         val selectedTypes = typeFilter?.state?.filter { it.state }?.map { it.value } ?: emptyList()
         if (selectedTypes.isNotEmpty()) {
             mangas = mangas.filter { manga ->
-                val mangaGenres = parseGenres(manga.generos)
                 selectedTypes.any { type ->
-                    mangaGenres.any { it.equals(type, ignoreCase = true) }
+                    manga.generos.any { it.equals(type, ignoreCase = true) }
                 }
             }
         }
@@ -132,9 +131,8 @@ class Manhastro :
         val selectedGenres = genreFilter?.state?.filter { it.state }?.map { it.value } ?: emptyList()
         if (selectedGenres.isNotEmpty()) {
             mangas = mangas.filter { manga ->
-                val mangaGenres = parseGenres(manga.generos)
                 selectedGenres.all { genre ->
-                    mangaGenres.any { it.equals(genre, ignoreCase = true) }
+                    manga.generos.any { it.equals(genre, ignoreCase = true) }
                 }
             }
         }
@@ -148,22 +146,12 @@ class Manhastro :
             else -> mangas
         }
 
-        MangasPage(mangas.map { it.toSManga() }, false)
+        val start = (page - 1) * PER_PAGE
+        val end = minOf(start + PER_PAGE, mangas.size)
+
+        val sliced = mangas.subList(start, end)
+        MangasPage(sliced.map { it.toSManga() }, end < mangas.size)
     }!!
-
-    private fun parseGenres(generos: String?): List<String> {
-        if (generos.isNullOrBlank()) return emptyList()
-
-        return try {
-            generos.parseAs<List<String>>()
-        } catch (_: Exception) {
-            if (generos.contains(",")) {
-                generos.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-            } else {
-                listOf(generos.trim()).filter { it.isNotEmpty() }
-            }
-        }
-    }
 
     private fun String.normalize(): String = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
         .replace(Regex("[\\p{InCombiningDiacriticalMarks}]"), "")
@@ -264,7 +252,7 @@ class Manhastro :
             displayTitle
         }
         description = displayDescription
-        genre = parseGenres(generos).joinToString()
+        genre = generos.joinToString()
         thumbnail_url = thumbnailUrl
         status = SManga.UNKNOWN
     }
@@ -285,5 +273,6 @@ class Manhastro :
     companion object {
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
         private const val ENGLISH_TITLE_PREF = "englishTitlePref"
+        private const val PER_PAGE = 30
     }
 }

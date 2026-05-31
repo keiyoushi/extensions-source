@@ -13,7 +13,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:host="goctruyentranhvuiiiiiiiiii.site" />
+                <data android:host="goctruyentranhvui30.com" />
                 <data android:scheme="https" />
 
                 <data android:pathPattern="/truyen/..*" />

@@ -1,0 +1,8 @@
+ext {
+    extName = 'MunTruyen'
+    extClass = '.MunTruyen'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"
