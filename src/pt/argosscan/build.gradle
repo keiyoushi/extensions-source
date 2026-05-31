@@ -1,8 +1,8 @@
 ext {
     extName = 'Argos Scan'
     extClass = '.ArgosScan'
-    extVersionCode = 27
+    extVersionCode = 28
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

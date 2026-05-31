@@ -1,11 +1,11 @@
 ext {
 	extName = 'Manga Ball'
 	extClass = '.MangaBallFactory'
-	extVersionCode = 2
+	extVersionCode = 3
 	isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
 
 dependencies {
     implementation(project(":lib:cookieinterceptor"))

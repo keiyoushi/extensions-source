@@ -1,8 +1,8 @@
 ext {
     extName = 'Luminare Translations'
     extClass = '.LuminareTranslations'
-    extVersionCode = 2
+    extVersionCode = 3
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

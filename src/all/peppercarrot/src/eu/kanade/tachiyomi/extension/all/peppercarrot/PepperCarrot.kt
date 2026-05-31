@@ -225,7 +225,9 @@ class PepperCarrot :
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val urls = document.select(".webcomic-page img").map { it.attr("src") }
+        val urls =
+            document.select(".webcomic-page img").map { it.attr("src") } +
+                document.select(".mft-cv-image").map { it.attr("src") }
         val thumbnail =
             if (urls[0].contains("miniFantasyTheater", true)) {
                 emptyList()

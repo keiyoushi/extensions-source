@@ -2,9 +2,9 @@ ext {
     extName = 'Aarlas'
     extClass = '.Aarlas'
     themePkg = 'zeistmanga'
-    baseUrl = 'https://www.arlas.my.id'
-    overrideVersionCode = 1
+    baseUrl = 'https://aarlas.blogspot.com'
+    overrideVersionCode = 2
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

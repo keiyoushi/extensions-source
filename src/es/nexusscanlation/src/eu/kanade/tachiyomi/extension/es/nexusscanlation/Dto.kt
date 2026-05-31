@@ -17,6 +17,7 @@ class CatalogMetaDto(
 
 @Serializable
 class CatalogEntryDto(
+    val id: String,
     val slug: String,
     val titulo: String,
     @SerialName("portada_url")
@@ -31,6 +32,7 @@ class SeriesPayloadDto(
 
 @Serializable
 class SeriesDto(
+    val id: String,
     val slug: String,
     val titulo: String,
     @SerialName("portada_url")
@@ -51,18 +53,26 @@ class NameDto(
 class ChapterEntryDto(
     val slug: String,
     val numero: Float,
+    val titulo: String? = null,
     @SerialName("published_at")
     val publishedAt: String? = null,
+    @SerialName("es_premium")
+    val esPremium: Boolean = false,
 )
 
+// API may wrap chapter pages inside "data"
 @Serializable
-class ChapterPagesPayloadDto(
+class ChapterPagesWrapperDto(
     val data: ChapterPagesDto? = null,
 )
 
+// The chapter pages data (used both as root and inside "data" wrapper)
 @Serializable
 class ChapterPagesDto(
     val paginas: List<PageEntryDto>? = null,
+    @SerialName("es_premium")
+    val esPremium: Boolean = false,
+    val locked: Boolean = false,
 )
 
 @Serializable

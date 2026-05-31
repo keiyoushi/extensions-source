@@ -3,13 +3,14 @@ package eu.kanade.tachiyomi.extension.ja.mangagun
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import okhttp3.Request
-import org.jsoup.nodes.Document
+import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Calendar
@@ -41,6 +42,15 @@ class MangaGun : FMReader("NihonKuni", "https://$DOMAIN", "ja") {
     override fun latestUpdatesRequest(page: Int): Request = mangaRequest("last_update", page)
 
     override fun popularMangaSelector() = "div.manga-grid div.manga-card"
+
+    override fun popularMangaNextPageSelector() = ".page-link.next"
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
+        val hasNextPage = document.select(popularMangaNextPageSelector()).first()?.hasAttr("href") ?: false
+        return MangasPage(mangas, hasNextPage)
+    }
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         element.selectFirst(".manga-title")!!.let {
@@ -114,7 +124,8 @@ class MangaGun : FMReader("NihonKuni", "https://$DOMAIN", "ja") {
         return chapterDate.timeInMillis
     }
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val images = document.select("img[id~=page\\d+]")
 
         return images.mapIndexed { index, element ->

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Hentai Crot'
+    extClass = '.HentaiCrot'
+    themePkg = 'oceanwp'
+    baseUrl = 'https://hentaicrot.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

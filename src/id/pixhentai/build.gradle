@@ -1,0 +1,10 @@
+ext {
+    extName = 'Pix Hentai'
+    extClass = '.PixHentai'
+    themePkg = 'oceanwp'
+    baseUrl = 'https://pixhentai.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

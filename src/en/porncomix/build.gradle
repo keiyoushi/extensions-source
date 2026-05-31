@@ -2,8 +2,8 @@ ext {
     extName = 'PornComix'
     extClass = '.PornComix'
     baseUrl = 'https://bestporncomix.com'
-    extVersionCode = 48
+    extVersionCode = 49
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

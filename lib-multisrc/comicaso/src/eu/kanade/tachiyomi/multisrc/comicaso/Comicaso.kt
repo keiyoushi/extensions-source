@@ -9,8 +9,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -24,8 +24,6 @@ abstract class Comicaso(
 ) : HttpSource() {
 
     override val supportsLatest = true
-
-    override val client = network.cloudflareClient
 
     override val versionId = 2
 
@@ -77,6 +75,8 @@ abstract class Comicaso(
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.isNotEmpty()) {
             val url = when {
+                query.startsWith("https://") ->
+                    query.trim()
                 query.startsWith(URL_SEARCH_PREFIX) ->
                     query.removePrefix(URL_SEARCH_PREFIX).trim()
                 query.contains("://") ->
@@ -85,6 +85,10 @@ abstract class Comicaso(
             }
 
             if (url != null) {
+                val httpUrl = url.toHttpUrl()
+                if (httpUrl.host != baseUrl.toHttpUrl().host) {
+                    throw Exception("Unsupported url")
+                }
                 val mangaSlug = url.substringAfter("/komik/").substringBefore("/")
                 return fetchMangaDetails(SManga.create().apply { this.url = mangaSlug })
                     .map { MangasPage(listOf(it), false) }
@@ -173,14 +177,18 @@ abstract class Comicaso(
 
     // =============================== Pages ================================
 
+    override fun pageListRequest(chapter: SChapter): Request {
+        val mangaSlug = chapter.url.substringAfter("/komik/").substringBefore("/")
+        val chapterSlug = chapter.url.substringBeforeLast("/").substringAfterLast("/")
+
+        return GET("$baseUrl/wp-json/comic/v1/manga/$mangaSlug/chapter/$chapterSlug/", headers)
+    }
+
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        return document.select("img.mjv2-page-image")
-            .map { it.attr("abs:src").ifEmpty { it.attr("abs:data-src") } }
-            .distinct()
-            .mapIndexed { index, imageUrl ->
-                Page(index, document.location(), imageUrl)
-            }
+        val result = response.parseAs<ChapterImagesDto>()
+        return result.images.mapIndexed { index, imageUrl ->
+            Page(index, "", imageUrl)
+        }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()

@@ -48,7 +48,7 @@ class MangaFire(
     override val supportsLatest = true
     private val preferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor)
         .rateLimit(2)
         .apply {
@@ -78,7 +78,6 @@ class MangaFire(
     // disable suggested mangas on Komikku
     // we don't want to spawn N webviews for N search token
     override val disableRelatedMangasBySearch = true
-    override val supportsRelatedMangas = false
 
     // ============================== Popular ===============================
 
@@ -125,7 +124,7 @@ class MangaFire(
             addQueryParameter("page", page.toString())
 
             if (stdQuery.isNotBlank()) {
-                val vrf = vrfCache.get(stdQuery)
+                val vrf = vrfCache[stdQuery]
                     ?: runBlocking {
                         webViewHelper.loadInWebView(
                             url = "$baseUrl/home",
@@ -186,7 +185,7 @@ class MangaFire(
     private fun searchMangaSelector() = ".original.card-lg .unit .inner"
 
     private fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        element.selectFirst(".info > a")!!.let {
+        element.selectFirst(".info > a")!!.let { it: Element ->
             setUrlWithoutDomain(it.attr("href"))
             title = it.ownText()
         }
@@ -197,8 +196,8 @@ class MangaFire(
 
     override fun getFilterList() = FilterList(
         TypeFilter(),
-        GenreFilter(),
         GenreModeFilter(),
+        GenreFilter(),
         StatusFilter(),
         YearFilter(),
         MinChapterFilter(),
@@ -225,16 +224,46 @@ class MangaFire(
                     append(it.joinToString("\n\n"))
                 }
 
-                selectFirst("h6")?.let {
+                selectFirst("h6")?.let { it: Element ->
                     append("\n\nAlternative title: ${it.text()}")
+                }
+
+                val minInfo = selectFirst(".min-info")
+                minInfo?.selectFirst("a[href*=/type/]")?.text()?.trim()?.takeIf { it.isNotBlank() }?.let {
+                    append("\nType: $it")
+                }
+                selectFirst(".meta span:contains(Published) + span")?.text()?.trim()?.takeIf { it.isNotBlank() }?.let {
+                    append("\nPublished: $it")
+                }
+                selectFirst(".meta span:contains(Mangazine) + span")?.text()?.trim()?.takeIf { it.isNotBlank() }?.let {
+                    append("\nMagazines: $it")
+                }
+                minInfo?.selectFirst("span:has(b:contains(MAL))")?.text()?.replace(" MAL", "")?.trim()?.takeIf { it.isNotBlank() }?.let {
+                    append("\nMAL Score: $it")
+                }
+                minInfo?.selectFirst(".fa-folder-bookmark")?.parent()?.text()?.trim()?.takeIf { it.isNotBlank() }?.let {
+                    append("\nBookmarks: $it")
                 }
             }.trim()
 
-            selectFirst(".meta")?.let {
+            selectFirst(".meta")?.let { it: Element ->
                 author = it.selectFirst("span:contains(Author:) + span")?.text()
                 val type = it.selectFirst("span:contains(Type:) + span")?.text()
                 val genres = it.selectFirst("span:contains(Genres:) + span")?.text()
                 genre = listOfNotNull(type, genres).joinToString()
+            }
+        }
+    }
+
+    override fun relatedMangaListParse(response: Response): List<SManga> {
+        val document = response.asJsoup()
+        return document.select(".original a.unit").mapNotNull { element: Element ->
+            SManga.create().apply {
+                element.attr("href").takeIf(String::isNotBlank)
+                    ?.let { setUrlWithoutDomain(it) } ?: return@mapNotNull null
+                element.selectFirst(".info h6")?.text()?.takeIf(String::isNotBlank)
+                    ?.let { title = it } ?: return@mapNotNull null
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
         }
     }

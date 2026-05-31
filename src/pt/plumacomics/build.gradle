@@ -1,8 +1,8 @@
 ext {
     extName = 'Pluma Comics'
     extClass = '.PlumaComics'
-    extVersionCode = 45
+    extVersionCode = 46
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

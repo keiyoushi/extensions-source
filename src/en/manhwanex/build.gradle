@@ -1,0 +1,10 @@
+ext {
+    extName = 'ManhwaNex'
+    extClass = '.ManhwaNex'
+    themePkg = 'madara'
+    baseUrl = 'https://manhwanex.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

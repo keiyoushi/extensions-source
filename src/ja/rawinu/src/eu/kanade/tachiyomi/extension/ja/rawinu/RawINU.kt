@@ -13,7 +13,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 private const val DOMAIN = "rawinu.com"
@@ -51,6 +50,10 @@ class RawINU :
 
     private val apiEndpoint = "$baseUrl/app/manga/controllers"
 
+    override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
+        thumbnail_url = thumbnail_url?.removeSurrounding("'")
+    }
+
     // =========================== Manga Details ============================
     override val infoElementSelector = "div.card-body div.row"
 
@@ -73,7 +76,8 @@ class RawINU :
     }
 
     // =============================== Pages ================================
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val id = document.selectFirst("input[name=chapter]#chapter")!!.attr("value")
         val req = client.newCall(GET("$apiEndpoint/cont.imagesChap.php?cid=$id", headers)).execute()
 

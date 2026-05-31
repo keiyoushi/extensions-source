@@ -1,7 +1,7 @@
 plugins {
-    id("lib-android")
+    alias(kei.plugins.library)
 }
 
 dependencies {
-    compileOnly("com.github.tachiyomiorg:image-decoder:e08e9be535")
+    compileOnlyApi("com.github.tachiyomiorg:image-decoder:e08e9be535")
 }

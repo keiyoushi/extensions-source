@@ -18,7 +18,6 @@ import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -28,17 +27,11 @@ class AnimeSama : HttpSource() {
 
     override val name = "AnimeSama"
 
-    override val baseUrl = "https://anime-sama.pw"
+    override val baseUrl = "https://anime-sama.to"
 
     override val lang = "fr"
 
     override val supportsLatest = true
-
-    private val interceptor = Interceptor(network.cloudflareClient, baseUrl, headers)
-
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .addInterceptor(interceptor)
-        .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept-Language", "fr-FR")
@@ -182,7 +175,7 @@ class AnimeSama : HttpSource() {
         thumbnail_url = document.selectFirst("#coverOeuvre")?.absUrl("src")
     }
 
-    override fun getMangaUrl(manga: SManga): String = "${interceptor.getBaseUrl() ?: baseUrl}${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     // ========================= Chapters =========================
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -284,7 +277,7 @@ class AnimeSama : HttpSource() {
         return parsedChapterList
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "${interceptor.getBaseUrl() ?: baseUrl}${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     // ========================= Pages =========================
     override fun pageListParse(response: Response): List<Page> {
@@ -304,7 +297,7 @@ class AnimeSama : HttpSource() {
         val imageCount = apiNbChapImgJson[chapter] ?: 0
 
         return (1..imageCount).map { index ->
-            Page(index, imageUrl = "${interceptor.getBaseUrl() ?: baseUrl}/s2/scans/$title/$chapter/$index.jpg")
+            Page(index, imageUrl = "$baseUrl/s2/scans/$title/$chapter/$index.jpg")
         }
     }
 

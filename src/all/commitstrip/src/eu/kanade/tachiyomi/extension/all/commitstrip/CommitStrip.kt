@@ -6,12 +6,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -20,12 +19,14 @@ import java.util.Locale
 abstract class CommitStrip(
     override val lang: String,
     private val siteLang: String,
-) : ParsedHttpSource() {
+) : HttpSource() {
 
     override val name = "Commit Strip"
     override val baseUrl = "https://www.commitstrip.com"
 
     override val supportsLatest = false
+
+    private val dateFormat by lazy { SimpleDateFormat("yyyy/MM/dd", Locale.US) }
 
     // Helper
 
@@ -55,24 +56,24 @@ abstract class CommitStrip(
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         // have one manga entry for each year
-        return (currentYear downTo 2012)
-            .map { createManga(it) }
-            .let { Observable.just(MangasPage(it, false))!! }
+        val mangas = (currentYear downTo 2012).map { createManga(it) }
+        return Observable.just(MangasPage(mangas, false))
     }
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(1).map { mangaList ->
-        mangaList.copy(mangaList.mangas.filter { it.title.contains(query) })
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(1).map { mangaPage ->
+        val filtered = mangaPage.mangas.filter { it.title.contains(query, ignoreCase = true) }
+        MangasPage(filtered, false)
     }
 
     // Details
 
-    override fun fetchMangaDetails(manga: SManga) = Observable.just(
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(
         manga.apply {
             initialized = true
         },
-    )!!
+    )
 
     // Open in WebView
 
@@ -80,102 +81,71 @@ abstract class CommitStrip(
 
     // Chapters
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        // create a new call to parse the no of pages in the site
-        // example responseString - Page 1 of 11
-        val responseString = client.newCall(GET(manga.url, headers)).execute().run {
-            asJsoup().selectFirst(".wp-pagenavi .pages")?.text() ?: "1"
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+        val pages = client.newCall(GET(manga.url, headers)).execute().use { response ->
+            val responseString = response.asJsoup().selectFirst(".wp-pagenavi .pages")?.text() ?: "1"
+            pageRegex.findAll(responseString).lastOrNull()?.value?.toInt() ?: 1
         }
-        // use regex to get the last number (i.e. 11 above)
-        val pages = Regex("\\d+").findAll(responseString).last().value.toInt()
 
-        return (1..pages).map {
-            val response = chapterListRequest(manga, it)
-            chapterListParse(response)
-        }.let { Observable.just(it.flatten()) }
-    }
+        val chapters = (1..pages).flatMap { page ->
+            client.newCall(GET("${manga.url}/page/$page", headers)).execute().use { response ->
+                if (!response.isSuccessful) throw Exception("HTTP error ${response.code}")
+                response.asJsoup().select(".excerpt a").map { element ->
+                    SChapter.create().apply {
+                        url = "$baseUrl/$siteLang" + element.attr("href").substringAfter(baseUrl)
 
-    private fun chapterListRequest(manga: SManga, page: Int): Response = client.newCall(GET("${manga.url}/page/$page", headers)).execute().run {
-        if (!isSuccessful) {
-            close()
-            throw Exception("HTTP error $code")
+                        // get the chapter date from the url
+                        val dateStr = dateRegex.find(url)?.value
+                        date_upload = dateFormat.tryParse(dateStr)
+
+                        name = element.select("span").text()
+                    }
+                }
+            }
+        }.distinctBy { it.url }
+
+        val total = chapters.size
+        chapters.forEachIndexed { index, chapter ->
+            chapter.chapter_number = (total - index).toFloat()
         }
-        this
-    }
 
-    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed().distinct().mapIndexed { index, chapter ->
-        chapter.apply { chapter_number = index.toFloat() }
-    }
-
-    override fun chapterListSelector() = ".excerpt a"
-
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        url = "$baseUrl/$siteLang" + element.attr("href").substringAfter(baseUrl)
-
-        // get the chapter date from the url
-        val date = Regex("\\d{4}\\/\\d{2}\\/\\d{2}").find(url)?.value
-        val parsedDate = date?.let { SimpleDateFormat("yyyy/MM/dd", Locale.US).parse(it) }
-        date_upload = parsedDate?.time ?: 0L
-
-        name = element.select("span").text()
+        chapters
     }
 
     // Page
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(GET(chapter.url, headers)).execute().run {
-        asJsoup().select(".entry-content p img").attr("src")
-    }.let {
-        Observable.just(listOf(Page(0, "", it)))
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        client.newCall(GET(chapter.url, headers)).execute().use { response ->
+            val imageUrl = response.asJsoup().selectFirst(".entry-content p img")?.attr("abs:src") ?: ""
+            listOf(Page(0, imageUrl = imageUrl))
+        }
     }
 
     // Unsupported
 
-    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
-
-    override fun popularMangaSelector() = throw UnsupportedOperationException()
-
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
-
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun searchMangaSelector() = throw UnsupportedOperationException()
-
-    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
-
-    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(document: Document) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private const val LOGO_EN = "https://i.imgur.com/HODJlt9.jpg"
-
         private const val LOGO_FR = "https://i.imgur.com/I7ps9zS.jpg"
-
         private const val AUTHOR_EN = "Mark Nightingale"
-
         private const val AUTHOR_FR = "Thomas Gx"
-
         private const val ARTIST = "Etienne Issartial"
-
         private const val SUMMARY_EN = "The blog relating the daily life of web agency developers."
-
         private const val SUMMARY_FR = "Le blog qui raconte la vie des codeurs"
-
         private const val NOTE = "\n\nNote: This entry includes all the chapters published in"
+
+        private val dateRegex = Regex("""\d{4}/\d{2}/\d{2}""")
+        private val pageRegex = Regex("""\d+""")
 
         private val currentYear by lazy {
             Calendar.getInstance()[Calendar.YEAR]

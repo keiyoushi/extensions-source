@@ -12,7 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
-import okhttp3.OkHttpClient
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -28,8 +28,6 @@ class Kuaikanmanhua : HttpSource() {
     override val lang = "zh-Hans"
 
     override val supportsLatest = true
-
-    override val client: OkHttpClient = network.cloudflareClient
 
     private val apiUrl = "https://api.kkmh.com"
 
@@ -92,6 +90,15 @@ class Kuaikanmanhua : HttpSource() {
     // Search
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            val id = when (url.host) {
+                "m.kuaikanmanhua.com" -> url.pathSegments[1]
+                "www.kuaikanmanhua.com" -> url.pathSegments[2]
+                else -> throw Exception("Unsupported url")
+            }
+            return fetchSearchManga(page, "$TOPIC_ID_SEARCH_PREFIX$id", filters)
+        }
         if (query.startsWith(TOPIC_ID_SEARCH_PREFIX)) {
             val newQuery = query.removePrefix(TOPIC_ID_SEARCH_PREFIX)
             return client.newCall(GET("$apiUrl/v1/topics/$newQuery"))

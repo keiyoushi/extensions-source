@@ -3,8 +3,8 @@ ext {
     extClass = '.KissmangaIn'
     themePkg = 'madara'
     baseUrl = 'https://kissmanga.in'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

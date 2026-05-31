@@ -1,0 +1,10 @@
+ext {
+    extName = 'OctopusManga'
+    extClass = '.OctopusManga'
+    themePkg = 'madara'
+    baseUrl = 'https://octopusmanga.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

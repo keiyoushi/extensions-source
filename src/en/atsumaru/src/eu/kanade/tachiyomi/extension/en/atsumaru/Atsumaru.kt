@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.atsumaru
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,11 +10,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
 class Atsumaru : HttpSource() {
@@ -30,7 +26,7 @@ class Atsumaru : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(2)
         .build()
 
@@ -73,94 +69,124 @@ class Atsumaru : HttpSource() {
     )
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val jsonPayload = buildSearchRequest(page - 1, filters, query)
-        val jsonString = Json.encodeToString(
-            SearchRequest.serializer(),
-            jsonPayload,
-        )
-        val requestBody = jsonString.toRequestBody("application/json".toMediaType())
+        val url = "$baseUrl/collections/manga/documents/search".toHttpUrl().newBuilder().apply {
+            addQueryParameter("q", query.ifEmpty { "*" })
 
-        return POST("$baseUrl/api/explore/filteredView", apiHeaders, requestBody)
-    }
+            val filterBy = mutableListOf<String>()
+            filterBy.add("hidden:!=true")
 
-    private fun buildSearchRequest(page: Int, filters: FilterList, query: String): SearchRequest {
-        val selectedGenres = mutableListOf<String>()
-        val typesList = mutableListOf<String>()
-        val statuses = mutableListOf<String>()
-        var year: Int? = null
-        var minChapters: Int? = null
-        var showAdult = false
-        var officialTranslation = false
-        var sortBy = "popularity"
+            val includedGenres = mutableListOf<String>()
+            val excludedGenres = mutableListOf<String>()
+            val typesList = mutableListOf<String>()
+            val statuses = mutableListOf<String>()
+            var year: Int? = null
+            var minChapters: Int? = null
+            var showAdult = false
+            var officialTranslation = false
+            var sortBy = ""
 
-        filters.forEach { filter ->
-            when (filter) {
-                is GenreFilter -> {
-                    filter.state.forEachIndexed { index, checkBox ->
-                        if (checkBox.state) {
-                            selectedGenres.add(filter.genreIds[index])
+            filters.forEach { filter ->
+                when (filter) {
+                    is GenreFilter -> {
+                        filter.state.forEachIndexed { index, state ->
+                            when (state.state) {
+                                Filter.TriState.STATE_INCLUDE -> includedGenres.add(filter.genreIds[index])
+                                Filter.TriState.STATE_EXCLUDE -> excludedGenres.add(filter.genreIds[index])
+                            }
                         }
                     }
-                }
 
-                is TypeFilter -> {
-                    filter.state.forEachIndexed { index, checkBox ->
-                        if (checkBox.state) {
-                            typesList.add(filter.ids[index])
+                    is TypeFilter -> {
+                        filter.state.forEachIndexed { index, checkBox ->
+                            if (checkBox.state) {
+                                typesList.add(filter.ids[index])
+                            }
                         }
                     }
-                }
 
-                is StatusFilter -> {
-                    filter.state.forEachIndexed { index, checkBox ->
-                        if (checkBox.state) {
-                            statuses.add(filter.ids[index])
+                    is StatusFilter -> {
+                        filter.state.forEachIndexed { index, checkBox ->
+                            if (checkBox.state) {
+                                statuses.add(filter.ids[index])
+                            }
                         }
                     }
-                }
 
-                is YearFilter -> {
-                    if (filter.state.isNotEmpty()) year = filter.state.toIntOrNull()
-                }
+                    is YearFilter -> {
+                        if (filter.state.isNotEmpty()) year = filter.state.toIntOrNull()
+                    }
 
-                is MinChaptersFilter -> {
-                    if (filter.state.isNotEmpty()) minChapters = filter.state.toIntOrNull()
-                }
+                    is MinChaptersFilter -> {
+                        if (filter.state.isNotEmpty()) minChapters = filter.state.toIntOrNull()
+                    }
 
-                is SortFilter -> {
-                    sortBy = SortFilter.VALUES[filter.state!!.index]
-                }
+                    is SortFilter -> {
+                        sortBy = SortFilter.VALUES[filter.state!!.index]
+                    }
 
-                is AdultFilter -> {
-                    showAdult = filter.state
-                }
+                    is AdultFilter -> {
+                        showAdult = filter.state
+                    }
 
-                is OfficialFilter -> {
-                    officialTranslation = filter.state
-                }
+                    is OfficialFilter -> {
+                        officialTranslation = filter.state
+                    }
 
-                else -> {}
+                    else -> {}
+                }
             }
-        }
 
-        val types = typesList.ifEmpty {
-            listOf("Manga", "Manwha", "Manhua", "OEL")
-        }
+            if (includedGenres.isNotEmpty()) {
+                filterBy.add(includedGenres.joinToString(" && ") { "genreIds:=`$it`" })
+            }
+            if (excludedGenres.isNotEmpty()) {
+                filterBy.add("genreIds:!=[${excludedGenres.joinToString(",") { "`$it`" }}]")
+            }
 
-        return SearchRequest(
-            page = page,
-            filter = SearchFilter(
-                search = query.ifEmpty { null },
-                types = types,
-                status = statuses.ifEmpty { null },
-                includedTags = selectedGenres.ifEmpty { null },
-                year = year,
-                minChapters = minChapters,
-                showAdult = showAdult,
-                officialTranslation = officialTranslation,
-                sortBy = sortBy,
-            ),
-        )
+            if (typesList.isNotEmpty()) {
+                filterBy.add("type:=[${typesList.joinToString(",") { "`$it`" }}]")
+            }
+
+            if (statuses.isNotEmpty()) {
+                filterBy.add("status:=[${statuses.joinToString(",") { "`$it`" }}]")
+            }
+
+            year?.let {
+                filterBy.add("releaseYear:=[$it]")
+            }
+
+            minChapters?.let {
+                filterBy.add("chapterCount:>=$it")
+            }
+
+            if (!showAdult) {
+                filterBy.add("isAdult:=$showAdult")
+            }
+
+            if (officialTranslation) {
+                filterBy.add("officialTranslation:=$officialTranslation")
+            }
+
+            filterBy.add("(mbContentRating:=[`Safe`,`Suggestive`,`Erotica`] || mbContentRating:!=*)")
+            filterBy.add("views:>0")
+
+            addQueryParameter("filter_by", filterBy.joinToString(" && "))
+
+            if (sortBy.isNotEmpty()) {
+                addQueryParameter("sort_by", sortBy)
+            }
+
+            if (query.isNotEmpty()) {
+                addQueryParameter("query_by", "title,englishTitle,otherNames,authors")
+                addQueryParameter("query_by_weights", "4,3,2,1")
+                addQueryParameter("num_typos", "4,3,2,1")
+            }
+
+            addQueryParameter("page", page.toString())
+            addQueryParameter("per_page", "40")
+        }.build()
+
+        return GET(url, apiHeaders)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -183,6 +209,10 @@ class Atsumaru : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaObjectDto>().mangaPage.toSManga(baseUrl)
 
+    override fun relatedMangaListRequest(manga: SManga) = mangaDetailsRequest(manga)
+
+    override fun relatedMangaListParse(response: Response) = response.parseAs<MangaObjectDto>().mangaPage.recommendations(baseUrl)
+
     // ============================== Chapters ==============================
 
     override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/api/manga/allChapters?mangaId=${manga.url}", apiHeaders)
@@ -192,8 +222,8 @@ class Atsumaru : HttpSource() {
 
         val scanlatorMap = try {
             val detailsRequest = mangaDetailsRequest(SManga.create().apply { url = mangaId })
-            client.newCall(detailsRequest).execute().use {
-                it.parseAs<MangaObjectDto>().mangaPage.scanlators?.associate { it.id to it.name }
+            client.newCall(detailsRequest).execute().use { detailResponse ->
+                detailResponse.parseAs<MangaObjectDto>().mangaPage.scanlators?.associate { it.id to it.name }
             }.orEmpty()
         } catch (_: Exception) {
             emptyMap()
@@ -203,7 +233,11 @@ class Atsumaru : HttpSource() {
 
         return data.chapters.map {
             it.toSChapter(mangaId, it.scanlationMangaId?.let { id -> scanlatorMap[id] })
-        }
+        }.sortedWith(
+            compareByDescending<SChapter> { it.chapter_number }
+                .thenBy { it.scanlator }
+                .thenByDescending { it.date_upload },
+        )
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -228,7 +262,7 @@ class Atsumaru : HttpSource() {
             page.image.startsWith("//") -> "https:${page.image}"
             else -> "$baseUrl/static/${page.image.removePrefix("/").removePrefix("static/")}"
         }
-        Page(index, imageUrl = imageUrl.replaceFirst(Regex("^https?:?//"), "https://"))
+        Page(index, imageUrl = imageUrl.replaceFirst(PROTOCOL_REGEX, "https://"))
     }
 
     override fun imageRequest(page: Page): Request {
@@ -241,4 +275,8 @@ class Atsumaru : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    companion object {
+        private val PROTOCOL_REGEX = Regex("^https?:?//")
+    }
 }

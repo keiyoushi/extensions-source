@@ -6,19 +6,19 @@ class SortFilter :
     Filter.Sort(
         name = "Sort",
         values = sortOrders.map { it.first }.toTypedArray(),
-        state = Selection(0, false),
+        state = Selection(2, false),
     ) {
-    val sort get() = sortOrders[state?.index ?: 0].second
+    val sort get() = sortOrders[state?.index ?: 2].second
     val ascending get() = state?.ascending ?: false
 }
 
 private val sortOrders = listOf(
     "Relevance" to "relevance",
-    "Alphabetical" to "Alphabetical",
+    "Alphabetical" to "alphabetical",
     "Latest Update" to "latest",
     "Total Chapters" to "chapters",
     "Most Viewed" to "views",
-    "Most Bookmarked" to "bookmarks",
+    "Most Tracked" to "tracked",
     "Top Rated" to "rating",
 )
 
@@ -34,30 +34,40 @@ private val status = listOf(
     "Any Status" to null,
     "Ongoing" to "Ongoing",
     "Completed" to "Completed",
+    "Hiatus" to "Hiatus",
 )
 
+class TypeCheckBox(name: String, val value: String) : Filter.CheckBox(name)
+
 class TypeFilter :
-    Filter.Select<String>(
-        name = "Type",
-        values = types.map { it.first }.toTypedArray(),
+    Filter.Group<TypeCheckBox>(
+        "Type",
+        types.map { TypeCheckBox(it.first, it.second) },
     ) {
-    val selected get() = types[state].second
+    val checked get() = state.filter { it.state }.map { it.value }
 }
 
 private val types = listOf(
-    "All" to null,
     "Manga" to "JP",
     "Manhwa" to "KR",
     "Manhua" to "CN",
     "One Shot" to "ONESHOT",
 )
 
-class CheckBoxFilter(name: String) : Filter.CheckBox(name)
+class AuthorFilter : Filter.Text("Author")
 
-class GenreFilter(genreValues: List<String>) :
-    Filter.Group<CheckBoxFilter>(
+class ArtistFilter : Filter.Text("Artist")
+
+class TriStateFilter(name: String, val value: String = name, state: Int = STATE_IGNORE) : Filter.TriState(name, state)
+
+class GenreFilter(genreValues: List<String>, excluded: Set<String>) :
+    Filter.Group<TriStateFilter>(
         name = "Genre",
-        state = genreValues.map { CheckBoxFilter(it) },
+        state = genreValues.map { genre ->
+            val state = if (genre in excluded) TriState.STATE_EXCLUDE else TriState.STATE_IGNORE
+            TriStateFilter(genre, state = state)
+        },
     ) {
-    val checked get() = state.filter { it.state }.map { it.name }
+    val included get() = state.filter { it.isIncluded() }.map { it.value }
+    val excluded get() = state.filter { it.isExcluded() }.map { it.value }
 }

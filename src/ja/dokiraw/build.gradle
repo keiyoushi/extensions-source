@@ -1,10 +1,10 @@
 ext {
     extName = 'Dokiraw'
     extClass = '.Dokiraw'
-    baseUrl = 'https://dokiraw.tech'
+    baseUrl = 'https://dokiraw.team'
     themePkg = 'liliana'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

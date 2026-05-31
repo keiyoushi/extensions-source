@@ -51,7 +51,7 @@ class KManga :
         .add("Referer", "$baseUrl/")
         .add("x-kmanga-platform", "3")
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .addInterceptor { chain ->
             val request = chain.request()
@@ -143,6 +143,14 @@ class KManga :
 
     // Search
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val titleId = url.pathSegments[1]
+            return fetchSearchManga(page, "$PREFIX_SEARCH$titleId", filters)
+        }
         if (query.startsWith(PREFIX_SEARCH)) {
             val titleId = query.removePrefix(PREFIX_SEARCH)
             fetchMangaDetails(

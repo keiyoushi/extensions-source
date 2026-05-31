@@ -1,11 +1,11 @@
 ext {
-    extName = "DRE Comics"
+    extName = "DreComi+"
     extClass = ".DreComics"
-    extVersionCode = 2
-    isNsfw = false
+    extVersionCode = 3
+    isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
 
 dependencies {
     implementation(project(":lib:clipstudioreader"))

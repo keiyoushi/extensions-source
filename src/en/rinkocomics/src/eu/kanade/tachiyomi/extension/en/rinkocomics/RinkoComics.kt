@@ -40,8 +40,6 @@ class RinkoComics :
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
-
     private val preferences by getPreferencesLazy()
 
     private var genresList: List<Genre> = emptyList()
@@ -49,9 +47,25 @@ class RinkoComics :
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request = GET(comicsUrl(page).build(), headers)
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
-    override fun popularMangaParse(response: Response): MangasPage = parseComicsPage(response)
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+
+        val entries = document.select(".comics-flex-pinned a.pinned-comic-card").mapNotNull { card ->
+            val url = card.attr("abs:href").trim()
+            if (url.isBlank()) return@mapNotNull null
+            val title = card.selectFirst(".pinned-comic-title")?.text()?.trim() ?: return@mapNotNull null
+
+            SManga.create().apply {
+                setUrlWithoutDomain(url)
+                this.title = title
+                thumbnail_url = card.selectFirst(".comic-thumbnail img")?.let { imageFromElement(it) }
+            }
+        }
+
+        return MangasPage(entries, false)
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = GET(
         comicsUrl(page)

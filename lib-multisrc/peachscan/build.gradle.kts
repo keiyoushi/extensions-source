@@ -1,9 +1,11 @@
+import keiyoushi.gradle.extensions.baseVersionCode
+
 plugins {
-    id("lib-multisrc")
+    alias(kei.plugins.multisrc)
 }
 
-baseVersionCode = 9
+baseVersionCode = 10
 
 dependencies {
-    implementation(project(":lib:zipinterceptor"))
+    api(project(":lib:zipinterceptor"))
 }

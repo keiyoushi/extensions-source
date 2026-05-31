@@ -1,10 +1,8 @@
 ext {
     extName = 'Jeaz Scans'
     extClass = '.JeazScans'
-    themePkg = 'madara'
-    baseUrl = 'https://lectorhub.j5z.xyz'
-    overrideVersionCode = 18
+    extVersionCode = 66
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

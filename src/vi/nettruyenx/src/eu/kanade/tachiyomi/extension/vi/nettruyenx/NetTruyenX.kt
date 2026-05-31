@@ -2,7 +2,8 @@ package eu.kanade.tachiyomi.extension.vi.nettruyenx
 
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.source.model.SManga
-import org.jsoup.nodes.Document
+import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -17,7 +18,8 @@ class NetTruyenX :
     override val popularPath = "truyen-tranh-hot"
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val document = response.asJsoup()
         document.select("article#item-detail").let { info ->
             author = info.select("li.author p.col-xs-8").text()
             status = info.select("li.status p.col-xs-8").text().toStatus()

@@ -4,170 +4,285 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import kotlinx.serialization.json.Json
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
-import java.text.ParseException
-import java.text.SimpleDateFormat
-import java.util.*
 
-class XAsiatAlbums : ParsedHttpSource() {
-    override val baseUrl = "https://www.xasiat.com/albums"
+class XAsiatAlbums : HttpSource() {
+
+    override val baseUrl = "https://www.xasiat.com"
     override val lang = "all"
     override val name = "XAsiat Albums"
     override val supportsLatest = true
 
-    private val mainUrl = "https://www.xasiat.com"
+    // Mutable map seeded from initialCategories; new tags discovered while
+    // browsing album detail pages are added here at runtime.
+    private val categories = initialCategories.toMutableMap()
 
-    private val json: Json by injectLazy()
+    // --- Headers ----------------------------------------------------------
 
-    override fun headersBuilder() = super.headersBuilder()
+    // Used for HTML / API requests only.  Images are fetched with imageHeaders
+    // so we don't send XMLHttpRequest to the CDN (which can cause 403s).
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+        .add("X-Requested-With", "XMLHttpRequest")
 
-    // Latest
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-    override fun latestUpdatesRequest(page: Int) = searchQuery("albums/", "list_albums_common_albums_list", page, mapOf(Pair("sort_by", "post_date")))
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
-    override fun mangaDetailsRequest(manga: SManga) = GET("${mainUrl}${manga.url}", headers)
-
-    // Popular
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.attr("abs:href"))
-        title = element.attr("title")
-        thumbnail_url = element.select(".thumb").attr("data-original")
-        status = SManga.COMPLETED
-        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+    // Plain headers for image fetches – no XMLHttpRequest sentinel.
+    private val imageHeaders: Headers by lazy {
+        super.headersBuilder()
+            .add("Referer", "$baseUrl/")
+            .build()
     }
 
-    override fun popularMangaNextPageSelector(): String = ".load-more"
+    // --- Popular / Latest -------------------------------------------------
 
-    override fun popularMangaRequest(page: Int) = searchQuery("albums/", "list_albums_common_albums_list", page, mapOf(Pair("sort_by", "album_viewed_week")))
-
-    private fun searchQuery(path: String, blockId: String, page: Int, others: Map<String, String>): Request = GET(
-        mainUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments(path)
-            addQueryParameter("mode", "async")
-            addQueryParameter("function", "get_block")
-            addQueryParameter("block_id", blockId)
-            addQueryParameter("from", page.toString())
-            others.forEach { addQueryParameter(it.key, it.value) }
-            addQueryParameter("_", System.currentTimeMillis().toString())
-        }.build(),
-        headers,
+    override fun popularMangaRequest(page: Int): Request = searchQuery(
+        path = "albums/",
+        blockId = "list_albums_common_albums_list",
+        page = page,
+        params = mapOf("sort_by" to "album_viewed_week"),
     )
-    override fun popularMangaSelector(): String = ".list-albums a"
 
-    // Search
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun latestUpdatesRequest(page: Int): Request = searchQuery(
+        path = "albums/",
+        blockId = "list_albums_common_albums_list",
+        page = page,
+        params = mapOf("sort_by" to "post_date"),
+    )
+
+    // --- Search -----------------------------------------------------------
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val filterList = if (filters.isEmpty()) getFilterList() else filters
+        val categoryFilter = filters.firstInstanceOrNull<UriPartFilter>()
 
-        val categoryFilter = filterList.findInstance<UriPartFilter>()
         return when {
-            query.isNotEmpty() -> searchQuery("search/search/", "list_albums_albums_list_search_result", page, mutableMapOf(Pair("q", query), Pair("from_albums", page.toString())))
-            categoryFilter?.state != 0 -> searchQuery(categoryFilter!!.toUriPart(), "list_albums_common_albums_list", page, mutableMapOf(Pair("q", query)))
+            query.isNotBlank() -> searchQuery(
+                path = "search/search/",
+                blockId = "list_albums_albums_list_search_result",
+                page = page,
+                params = mapOf("q" to query),
+            )
+
+            categoryFilter != null && categoryFilter.state > 0 -> searchQuery(
+                path = categoryFilter.toUriPart(),
+                blockId = "list_albums_common_albums_list",
+                page = page,
+                params = emptyMap(),
+            )
+
             else -> latestUpdatesRequest(page)
         }
     }
-    override fun searchMangaSelector() = popularMangaSelector()
 
-    // Details
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.select(".entry-title").text()
-        description = document.select("meta[og:description]").attr("og:description")
-        genre = getTags(document).joinToString(", ")
-        status = SManga.COMPLETED
-        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+    // Shared async-block request builder used by popular / latest / search.
+    private fun searchQuery(
+        path: String,
+        blockId: String,
+        page: Int,
+        params: Map<String, String>,
+    ): Request {
+        val offset = ((page - 1) * ITEMS_PER_PAGE) + 1
+
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments(path.removePrefix("/").removeSuffix("/"))
+            addQueryParameter("mode", "async")
+            addQueryParameter("function", "get_block")
+            addQueryParameter("block_id", blockId)
+            addQueryParameter("from", offset.toString())
+
+            // Search endpoint requires a separate from_albums parameter.
+            if (blockId.contains("search")) {
+                addQueryParameter("from_albums", offset.toString())
+            }
+
+            params.forEach { (key, value) -> addQueryParameter(key, value) }
+
+            // Cache-busting timestamp expected by the site.
+            addQueryParameter("_", System.currentTimeMillis().toString())
+        }.build()
+
+        return GET(url, headers)
     }
 
-    private fun getTags(document: Element): List<String> = document.select(".info-content a").map { a ->
-        val link = a.attr("href").split(".com/")[1]
-        val tag = a.text()
-        if (tag.isNotEmpty()) {
-            categories[tag] = link
+    // --- Parse helpers ----------------------------------------------------
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+
+        val mangas = document.select(".list-albums .item a[href]")
+            .mapNotNull { link ->
+                val url = link.attr("abs:href")
+                if (url.isBlank() || !url.contains("/albums/")) return@mapNotNull null
+
+                SManga.create().apply {
+                    setUrlWithoutDomain(url)
+                    title = link.attr("title").ifBlank {
+                        link.selectFirst("img")?.attr("alt").orEmpty()
+                    }
+                    thumbnail_url = link.selectFirst("img")?.let { img ->
+                        img.attr("abs:data-original").ifBlank { img.attr("abs:src") }
+                    }
+                    status = SManga.COMPLETED
+                    update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+                }
+            }
+            .distinctBy { it.url }
+
+        // Primary: look for a Next link.  Fallback: full page of results
+        // implies there is a next page (avoids missing pages when the site
+        // uses icon-only pagination buttons).
+        val hasNextPage = document.select(".pagination a[href], .pages a[href], .pager a[href]")
+            .any { it.text().contains("Next", ignoreCase = true) } ||
+            mangas.size >= ITEMS_PER_PAGE
+
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+
+    // --- Manga details ----------------------------------------------------
+
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(resolveUrl(manga.url), headers)
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            title = document.selectFirst(".entry-title")?.text().orEmpty()
+            description = document.selectFirst("meta[property=og:description]")
+                ?.attr("content").orEmpty()
+            thumbnail_url = document.selectFirst("meta[property=og:image]")
+                ?.attr("content")
+            genre = getTags(document).joinToString(", ")
+            status = SManga.COMPLETED
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
-        tag
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(
-        Request.Builder().apply {
-            url(manga.thumbnail_url.toString())
-            method("HEAD", null)
-        }.build(),
-    ).asObservableSuccess().map { response ->
-        val lastModified = response.headers["last-modified"]
-        listOf(
+    // Extracts tags from the detail page and registers any new ones so they
+    // appear in the category filter during the current session.
+    private fun getTags(document: Document): List<String> = document.select(".info-content a").mapNotNull { a ->
+        val tag = a.text().trim()
+        val href = a.attr("abs:href")
+
+        if (tag.isNotBlank() && href.contains("/albums/")) {
+            val link = href.substringAfter(".com/").removeSuffix("/")
+            if (link.isNotBlank()) categories[tag] = link
+            tag
+        } else {
+            null
+        }
+    }
+
+    // --- Chapter list -----------------------------------------------------
+
+    override fun chapterListRequest(manga: SManga): Request = GET(resolveUrl(manga.url), headers)
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val requestUrl = response.request.url.toString()
+        return listOf(
             SChapter.create().apply {
-                url = "${mainUrl}${manga.url}"
+                url = if (requestUrl.startsWith(baseUrl)) {
+                    requestUrl.removePrefix(baseUrl)
+                } else {
+                    requestUrl
+                }
                 name = "Photobook"
-                date_upload = getDate(lastModified.toString())
+                date_upload = System.currentTimeMillis()
             },
         )
     }
 
-    override fun chapterListSelector() = ""
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
+    // --- Page list --------------------------------------------------------
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url)
+    // Album detail pages deliver ALL images on a single page (confirmed from live site:
+    // even 98-image albums show every image at once with no internal pagination).
+    // We override fetchPageList purely to use imageHeaders (no X-Requested-With) for
+    // the initial page fetch; the real work is done by parseImagePages below.
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(GET(resolveUrl(chapter.url), headers))
+        .asObservableSuccess()
+        .map { response ->
+            parseImagePages(response.asJsoup())
+                .distinct()
+                .mapIndexed { index, imageUrl -> Page(index = index, imageUrl = imageUrl) }
+        }
 
-    // Pages
-    override fun pageListParse(document: Document): List<Page> = document.select("a.item").mapIndexed { i, it ->
-        Page(i, imageUrl = it.attr("href"))
+    override fun pageListParse(response: Response): List<Page> = parseImagePages(response.asJsoup())
+        .distinct()
+        .mapIndexed { index, imageUrl -> Page(index = index, imageUrl = imageUrl) }
+
+    // Extracts image URLs from a gallery document.
+    //
+    // Confirmed live site structure (May 2026):
+    //   <a href="/get_image/2/{32-char-hash}/sources/{dir}/{albumId}/{imageId}.jpg/">
+    //     <img src="data:image/gif;base64,..." />   ← JS lazy-load placeholder
+    //   </a>
+    //
+    // Key points:
+    //  • The href ends with ".jpg/" (trailing slash) so endsWith(".jpg") would FAIL.
+    //    Only url.contains("/get_image/") reliably matches these URLs.
+    //  • The <img> never has a data-original attribute; the real URL is on the <a>.
+    //  • DO NOT use a[href*='/albums/'] — that would also match the "Related Albums"
+    //    section at the bottom of the page.
+    private fun parseImagePages(document: Document): List<String> = document
+        .select("a.item[href], a[href*='/get_image/']")
+        .mapNotNull { it.attr("abs:href").takeIf { u -> u.isNotBlank() } }
+        .filter { it.contains("/get_image/") }
+        .distinct()
+
+    // Resolves a (possibly relative or protocol-relative) URL to an absolute one.
+    private fun resolveUrl(url: String): String = when {
+        url.startsWith("http") -> url
+        url.startsWith("//") -> "https:$url"
+        else -> baseUrl + url
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    // Not used – images are either direct or followed via OkHttp redirect.
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // Filters
+    // Use plain imageHeaders (no X-Requested-With) for image fetches.
+    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, imageHeaders)
+
+    // --- Filters ----------------------------------------------------------
+
     override fun getFilterList(): FilterList {
-        val filters = mutableListOf<Filter<*>>(
-            Filter.Header("NOTE: Only one filter will be applied!"),
+        // "None" is pinned at index 0 (maps to empty string); all other
+        // entries are sorted alphabetically.  This guarantees that
+        // `categoryFilter.state > 0` correctly identifies a real category.
+        val sorted = categories
+            .filterKeys { it != "None" }
+            .map { Pair(it.key, it.value) }
+            .distinctBy { it.first }
+            .sortedBy { it.first.lowercase() }
+
+        val pairList = (listOf(Pair("None", "")) + sorted).toTypedArray()
+
+        return FilterList(
+            Filter.Header("Tags update dynamically after opening albums"),
             Filter.Separator(),
-            UriPartFilter("Category", categories.entries.toTypedArray()),
+            UriPartFilter("Category", pairList),
         )
-        return FilterList(filters)
-    }
-
-    open class UriPartFilter(
-        displayName: String,
-        private val valuePair: Array<MutableMap.MutableEntry<String, String>>,
-    ) : Filter.Select<String>(displayName, valuePair.map { it.key }.toTypedArray()) {
-        fun toUriPart() = valuePair[state].value
-    }
-
-    private var categories = mutableMapOf(
-        Pair("All", "albums"),
-        Pair("Gravure Idols", "albums/categories/gravure-idols"),
-        Pair("JAV & AV Models", "albums/categories/jav"),
-        Pair("South Korea", "albums/categories/korea"),
-        Pair("China & Taiwan", "albums/categories/china-taiwan"),
-        Pair("Amateur", "albums/categories/amateur3"),
-        Pair("Western Girls", "albums/categories/western-girls"),
-    )
-
-    private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
-
-    private fun getDate(str: String): Long = try {
-        DATE_FORMAT.parse(str)?.time ?: 0L
-    } catch (e: ParseException) {
-        0L
     }
 
     companion object {
-        private val DATE_FORMAT by lazy {
-            SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
-        }
+        private const val ITEMS_PER_PAGE = 12
     }
 }
+
+// Extension helper to avoid repeating the image-extension check.
+private fun String.looksLikeImage(): Boolean = endsWith(".jpg", ignoreCase = true) ||
+    endsWith(".jpeg", ignoreCase = true) ||
+    endsWith(".png", ignoreCase = true) ||
+    endsWith(".webp", ignoreCase = true) ||
+    contains("/get_image/")

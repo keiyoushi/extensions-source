@@ -26,6 +26,7 @@ import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.tagsFetched
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -120,11 +121,11 @@ class Koharu(
             .build()
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
         .build()
 
-    private val clearanceClient = network.cloudflareClient.newBuilder()
+    private val clearanceClient = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url
@@ -272,6 +273,12 @@ class Koharu(
     // Search
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
+        query.startsWith("https://") -> {
+            val url = query.toHttpUrl()
+            val id = "${url.pathSegments[1]}/${url.pathSegments[2]}"
+            fetchSearchManga(page, "$PREFIX_ID_KEY_SEARCH$id", filters)
+        }
+
         query.startsWith(PREFIX_ID_KEY_SEARCH) -> {
             val ipk = query.removePrefix(PREFIX_ID_KEY_SEARCH)
             val response = client.newCall(GET("$apiBooksUrl/detail/$ipk", lazyHeaders)).execute()
@@ -450,6 +457,15 @@ class Koharu(
     override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, lazyHeaders)
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    override fun relatedMangaListRequest(manga: SManga) = POST("$apiBooksUrl/detail/${manga.url}", lazyHeaders)
+
+    override suspend fun fetchRelatedMangaList(manga: SManga) = clearanceClient.newCall(relatedMangaListRequest(manga))
+        .awaitSuccess()
+        .use { response ->
+            val data = response.parseAs<MangaData>()
+            data.similar.map(::getManga)
+        }
 
     // Settings
 

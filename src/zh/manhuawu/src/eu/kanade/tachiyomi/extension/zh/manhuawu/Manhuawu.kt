@@ -1,5 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.manhuawu
 
-import eu.kanade.tachiyomi.multisrc.mccms.MCCMS
+import eu.kanade.tachiyomi.multisrc.mccms.MCCMSWeb
 
-class Manhuawu : MCCMS("漫画屋", "https://www.mhua5.com")
+class Manhuawu : MCCMSWeb("漫画屋", "https://www.mhua5.com")

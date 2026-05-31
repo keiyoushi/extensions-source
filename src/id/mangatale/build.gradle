@@ -2,9 +2,9 @@ ext {
     extName = 'Ikiru'
     extClass = '.Ikiru'
     themePkg = 'natsuid'
-    baseUrl = 'https://03.ikiru.wtf'
-    overrideVersionCode = 45
+    baseUrl = 'https://05.ikiru.wtf'
+    overrideVersionCode = 46
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

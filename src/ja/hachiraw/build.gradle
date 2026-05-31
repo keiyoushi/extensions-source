@@ -1,8 +1,8 @@
 ext {
     extName = "Hachiraw"
     extClass = ".Hachiraw"
-    extVersionCode = 1
+    extVersionCode = 3
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

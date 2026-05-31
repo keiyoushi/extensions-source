@@ -3,8 +3,8 @@ ext {
     extClass = '.RichtoScan'
     themePkg = 'madara'
     baseUrl = 'https://r1.richtoon.top'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

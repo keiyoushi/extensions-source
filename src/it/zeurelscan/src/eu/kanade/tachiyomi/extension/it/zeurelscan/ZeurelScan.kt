@@ -118,7 +118,7 @@ class ZeurelScan : HttpSource() {
         .map(::pageListParse)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val list = response.asJsoup().select("div.chapter")
+        val list = response.asJsoup().select("div.chapter:has(a)")
         var lastChapter = 0f
         return list.map {
             val str = it.selectFirst("a")!!.wholeOwnText().substringAfter("#")

@@ -1,10 +1,8 @@
 ext {
     extName = 'Fairy Scans'
     extClass = '.FairyScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://fairyscans.com'
-    overrideVersionCode = 0
+    extVersionCode = 33
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

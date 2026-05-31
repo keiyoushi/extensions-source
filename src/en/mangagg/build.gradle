@@ -3,8 +3,8 @@ ext {
     extClass = '.MangaGG'
     themePkg = 'madara'
     baseUrl = 'https://mangagg.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

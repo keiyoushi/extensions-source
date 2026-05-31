@@ -2,8 +2,8 @@ ext {
     extName = 'ComicK Fanmade'
     extClass = '.ComicKFan'
     baseUrl = 'https://comickfan.com'
-    extVersionCode = 1
+    extVersionCode = 2
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

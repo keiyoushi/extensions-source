@@ -3,11 +3,11 @@ ext {
     extClass = '.MangaCrab'
     themePkg = 'madara'
     baseUrl = 'https://mangacrab.org'
-    overrideVersionCode = 21
+    overrideVersionCode = 22
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
 
 dependencies {
     implementation(project(':lib:randomua'))

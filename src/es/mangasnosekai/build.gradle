@@ -3,11 +3,11 @@ ext {
     extClass = '.MangasNoSekai'
     themePkg = 'madara'
     baseUrl = 'https://mangasnosekai.com'
-    overrideVersionCode = 16
+    overrideVersionCode = 18
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
 
 dependencies {
     implementation(project(":lib:synchrony"))

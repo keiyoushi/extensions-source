@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.synchrony.Deobfuscator
-import kotlinx.serialization.decodeFromString
+import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -151,13 +151,10 @@ class MangasNoSekai :
         return POST(baseUrl + url, xhrHeaders, form.build())
     }
 
-    private val altChapterListSelector = "body > div > div"
-
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         launchIO { countViews(document) }
 
-        val mangaSlug = response.request.url.toString().substringAfter(baseUrl).removeSuffix("/")
         val coreScript = document.selectFirst("script#wp-manga-js")!!.attr("abs:src")
         val coreScriptBody = Deobfuscator.deobfuscateScript(client.newCall(GET(coreScript, headers)).execute().body.string())
             ?: throw Exception("No se pudo deobfuscar el script")
@@ -179,38 +176,30 @@ class MangasNoSekai :
                 ?.let { ALT_MANGA_ID_REGEX.find(it)?.groupValues?.get(1) }
             ?: throw Exception("No se pudo obtener el id del manga")
 
-        val chapterElements = mutableListOf<Element>()
+        val chapterList = mutableListOf<SChapter>()
         var page = 1
         do {
-            val xhrRequest = altChapterRequest(url, mangaId, page, objects)
-            val xhrResponse = client.newCall(xhrRequest).execute()
-            if (!xhrResponse.isSuccessful) {
-                throw Exception("HTTP ${xhrResponse.code}: Intente iniciar sesión en WebView")
+            val request = altChapterRequest(url, mangaId, page, objects)
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) {
+                throw Exception("HTTP ${response.code}: Intente iniciar sesión en WebView")
             }
-            val xhrBody = xhrResponse.body.string()
-            if (xhrBody.startsWith("{")) {
-                return chaptersFromJson(xhrBody, mangaSlug)
-            }
-            val xhrDocument = Jsoup.parse(xhrBody)
-            chapterElements.addAll(xhrDocument.select(altChapterListSelector))
+            val result = response.parseAs<ChapterWrapper>()
+            chapterList.addAll(result.chapters.map { it.toSChapter() })
             page++
-        } while (xhrDocument.select(altChapterListSelector).isNotEmpty())
+        } while (result.hasNextPage())
 
-        return chapterElements.map(::altChapterFromElement)
+        return chapterList
     }
 
-    private fun altChapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-        name = element.select("div.text-sm").text()
-        date_upload = element.selectFirst("time")?.text()?.let {
-            parseChapterDate(it)
-        } ?: 0
+    private fun Chapter.toSChapter() = SChapter.create().apply {
+        name = this@toSChapter.name
+        val cleanDate = Jsoup.parseBodyFragment(this@toSChapter.date).wholeText()
+        date_upload = parseChapterDate(cleanDate)
+        setUrlWithoutDomain(this@toSChapter.url.removeSuffix("/"))
     }
 
-    private fun chaptersFromJson(jsonString: String, mangaSlug: String): List<SChapter> {
-        val result = json.decodeFromString<PayloadDto>(jsonString)
-        return result.manga.first().chapters.map { it.toSChapter(mangaSlug) }
-    }
+    override fun pageListRequest(chapter: SChapter): Request = super.pageListRequest(chapter.apply { url = "$url/" })
 
     companion object {
         val ACTION_REGEX = """function\s+.*?[\s\S]*?\.ajax;?[\s\S]*?(?:'?url'?:\s*'([^']*)')(?:[\s\S]*?'?data'?:\s*\{([^}]*)\})?""".toRegex()

@@ -1,11 +1,11 @@
 ext {
     extName = 'YellowNote'
     extClass = '.YellowNote'
-    extVersionCode = 4
+    extVersionCode = 6
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
 
 dependencies {
     implementation(project(':lib:i18n'))

@@ -1,8 +1,8 @@
 ext {
     extName = 'NineAnime'
     extClass = '.NineAnime'
-    extVersionCode = 5
+    extVersionCode = 6
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

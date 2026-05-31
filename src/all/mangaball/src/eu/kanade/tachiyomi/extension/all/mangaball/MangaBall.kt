@@ -45,7 +45,7 @@ class MangaBall(
     override val supportsLatest = true
     private val preferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addNetworkInterceptor(
             CookieInterceptor(domain, "show18PlusContent" to hideNsfwPreference().not().toString()),
         )
@@ -321,9 +321,10 @@ class MangaBall(
                     SChapter.create().apply {
                         url = translation.id
                         name = buildString {
+                            val volume = translation.volume.toString().removeSuffix(".0")
                             if (translation.volume > 0) {
                                 append("Vol. ")
-                                append(translation.volume)
+                                append(volume)
                                 append(" ")
                             }
                             val number = chapter.number.toString().removeSuffix(".0")

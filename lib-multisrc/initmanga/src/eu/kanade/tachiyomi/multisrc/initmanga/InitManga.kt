@@ -64,7 +64,37 @@ abstract class InitManga(
         genres: List<Genre>,
     ) : Filter.Group<Genre>(name, genres)
 
+    protected open class TypeFilter(name: String, options: Array<String>) : Filter.Select<String>(name, options)
+
+    protected open class StatusFilter(name: String, options: Array<String>) : Filter.Select<String>(name, options)
+
+    protected open class AgeRatingFilter(name: String, options: Array<String>) : Filter.Select<String>(name, options)
+
+    protected open class RatingMinFilter(name: String, options: Array<String>) : Filter.Select<String>(name, options)
+
+    protected open class RatingMaxFilter(name: String, options: Array<String>) : Filter.Select<String>(name, options)
+
+    protected open class SortFilter(name: String, options: Array<String>) : Filter.Select<String>(name, options)
+
     protected var genrelist: List<GenreData>? = null
+
+    protected open val typeFilterOptions = arrayOf("Tüm", "Çizgi Roman", "Roman", "Tek Bölümlük")
+    protected open val typeValues = arrayOf("", "comic", "novel", "oneshot")
+
+    protected open val statusFilterOptions = arrayOf("Tüm Durumlar", "Devam Ediyor", "Sezon F.", "Final", "Kaynak Ara Verdi", "Güncel", "Bırakıldı")
+    protected open val statusValues = arrayOf("", "ongoing", "season_end", "completed", "source_hiatus", "caught_up", "dropped")
+
+    protected open val ageRatingFilterOptions = arrayOf("Her Yaş", "13+", "16+", "18+")
+    protected open val ageRatingValues = arrayOf("", "13+", "16+", "18+")
+
+    protected open val ratingMinFilterOptions = arrayOf("Min", "1★", "2★", "3★", "4★", "5★")
+    protected open val ratingMinValues = arrayOf("0", "1", "2", "3", "4", "5")
+
+    protected open val ratingMaxFilterOptions = arrayOf("Maks", "1★", "2★", "3★", "4★", "5★")
+    protected open val ratingMaxValues = arrayOf("6", "1", "2", "3", "4", "5")
+
+    protected open val sortFilterOptions = arrayOf("Son Güncellenenler", "En Yeni", "En Eski", "En Çok Görüntüleme", "Günlük Görüntülemeler", "Haftalık Görüntüleme", "Aylık Görüntülemeler", "En Yüksek Puan", "En Çok Efsun", "En Çok Takipçi")
+    protected open val sortValues = arrayOf("updated", "new", "old", "views", "views_day", "views_week", "views_month", "rating", "power", "follow")
 
     private val uploadDateFormatter by lazy {
         SimpleDateFormat("d MMMM yyyy HH:mm", Locale("tr"))
@@ -110,21 +140,28 @@ abstract class InitManga(
 
         if (!genrelist.isNullOrEmpty()) {
             filters.add(
-                Filter.Header("Not: Birden fazla kategori seçilirse sadece ilki kullanılır"),
-            )
-            filters.add(
                 GenreListFilter("Kategoriler", getGenreList()),
             )
         } else {
             filters.add(
-                Filter.Header("Kategoriler yükleniyor..."),
+                Filter.Header("Kategorileri yüklemek için sıfırlaya basın"),
             )
         }
+
+        if (typeFilterOptions.isNotEmpty()) filters.add(TypeFilter("Tür", typeFilterOptions))
+        if (statusFilterOptions.isNotEmpty()) filters.add(StatusFilter("Durum", statusFilterOptions))
+        if (ageRatingFilterOptions.isNotEmpty()) filters.add(AgeRatingFilter("Yaş Sınırı", ageRatingFilterOptions))
+        if (ratingMinFilterOptions.isNotEmpty()) filters.add(RatingMinFilter("Min. Puan", ratingMinFilterOptions))
+        if (ratingMaxFilterOptions.isNotEmpty()) filters.add(RatingMaxFilter("Maks. Puan", ratingMaxFilterOptions))
+        if (sortFilterOptions.isNotEmpty()) filters.add(SortFilter("Şuna Göre Sırala", sortFilterOptions))
 
         return FilterList(filters)
     }
 
-    override fun popularMangaSelector() = "div.uk-panel"
+    override fun popularMangaSelector() = "div.manga-item-grid > div.uk-panel.uk-position-relative, " +
+        "div.manga-item-grid > div.uk-panel:not(.manga-item-ranking):not(.user-item-info), " +
+        "div.uk-panel.uk-position-relative, " +
+        "div.uk-panel:not(.manga-item-ranking):not(.user-item-info)"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         val linkElement = element.selectFirst("h3 a, div.uk-overflow-hidden a")
@@ -142,9 +179,17 @@ abstract class InitManga(
         }
     }
 
-    override fun popularMangaNextPageSelector() = "a:contains(Sonraki), a.next, #next-link a, li#next-link"
+    override fun popularMangaNextPageSelector() = "head link[rel=next], link[rel=next], " +
+        "ul.uk-pagination li:not(.uk-disabled) a[aria-label=\"Sonraki sayfa\"], " +
+        "ul.uk-pagination li:not(.uk-disabled) a[aria-label=\"Next page\"], " +
+        "ul.uk-pagination li:not(.uk-disabled) a:has([uk-pagination-next]), " +
+        "ul.uk-pagination li#next-link:not(.uk-disabled) a, " +
+        "a:contains(Sonraki sayfa), a:contains(Next page), a.next"
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/$latestUrlSlug/page/$page/", headers)
+    override fun latestUpdatesRequest(page: Int): Request {
+        val path = if (page == 1) "" else "page/$page/"
+        return GET("$baseUrl/$latestUrlSlug/$path", headers)
+    }
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -154,8 +199,14 @@ abstract class InitManga(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val genreFilter = filters.findInstance<GenreListFilter>()
-        val selectedGenres = genreFilter?.state?.filter { it.state }.orEmpty()
+        val typeFilter = filters.findInstance<TypeFilter>()
+        val statusFilter = filters.findInstance<StatusFilter>()
+        val ageRatingFilter = filters.findInstance<AgeRatingFilter>()
+        val ratingMinFilter = filters.findInstance<RatingMinFilter>()
+        val ratingMaxFilter = filters.findInstance<RatingMaxFilter>()
+        val sortFilter = filters.findInstance<SortFilter>()
 
+        val selectedGenres = genreFilter?.state?.filter { it.state }.orEmpty()
         val selectedGenre = selectedGenres.firstOrNull()
 
         if (selectedGenre != null && query.isEmpty()) {
@@ -180,6 +231,13 @@ abstract class InitManga(
         val urlBuilder = "$baseUrl/wp-json/initlise/v1/search".toHttpUrl().newBuilder()
         urlBuilder.addQueryParameter("term", query)
         urlBuilder.addQueryParameter("page", page.toString())
+
+        typeFilter?.state?.let { if (it > 0) urlBuilder.addQueryParameter("type", typeValues[it]) }
+        statusFilter?.state?.let { if (it > 0) urlBuilder.addQueryParameter("status", statusValues[it]) }
+        ageRatingFilter?.state?.let { if (it > 0) urlBuilder.addQueryParameter("age_rating", ageRatingValues[it]) }
+        ratingMinFilter?.state?.let { urlBuilder.addQueryParameter("rating_min", ratingMinValues[it]) }
+        ratingMaxFilter?.state?.let { urlBuilder.addQueryParameter("rating_max", ratingMaxValues[it]) }
+        sortFilter?.state?.let { urlBuilder.addQueryParameter("sort", sortValues[it]) }
 
         val url = urlBuilder.build()
         return GET(url, headers)
@@ -238,13 +296,47 @@ abstract class InitManga(
                 select("a, span").remove()
             }
             .text()
-        genre = document.select("div#genre-tags a").joinToString { it.text() }
-        thumbnail_url = document.selectFirst("div.single-thumb img")?.attr("abs:src")
+
+        val altName = document.selectFirst("span#comic-othername")?.text()
+        if (!altName.isNullOrBlank()) {
+            description += "\n\nAlternatif Başlık: $altName"
+        }
+
+        genre = document.select("div.uk-flex.uk-flex-nowrap.uk-flex-left.uk-grid-small.uk-grid span.uk-label-contest").joinToString { it.text().removePrefix("#").trim() }
+        if (genre.isNullOrEmpty()) {
+            genre = document.select("div#genre-tags a").joinToString { it.text() }
+        }
+
+        author = document.select("div.manga-info-details:contains(Yazar) a").text()
+        if (author.isNullOrEmpty()) {
+            author = document.select("div.manga-info-details:contains(Yazar)").text().substringAfter("Yazar:").substringBefore("Çizer:").trim()
+        }
+
+        artist = document.select("div.manga-info-details:contains(Çizer) a").text()
+        if (artist.isNullOrEmpty()) {
+            artist = document.select("div.manga-info-details:contains(Çizer)").text().substringAfter("Çizer:").substringBefore("Durum:").trim()
+        }
+
+        val statusText = (
+            document.selectFirst("span#manga-status, div.manga-status-ribbons span.manga-status-ribbon__text")?.text()
+                ?: document.select("div.manga-info-details:contains(Durum)").text().substringAfter("Durum:")
+            ).lowercase()
+
+        status = when {
+            statusText.contains("güncel") || statusText.contains("devam") || statusText.contains("ongoing") -> SManga.ONGOING
+            statusText.contains("tamamland") || statusText.contains("bitti") || statusText.contains("completed") || (statusText.contains("final") && !statusText.contains("sezon")) -> SManga.COMPLETED
+            statusText.contains("ara ver") || statusText.contains("sezon") || statusText.contains("hiatus") -> SManga.ON_HIATUS
+            statusText.contains("bırakıldı") || statusText.contains("iptal") || statusText.contains("dropped") || statusText.contains("cancel") -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
+
+        thumbnail_url = document.selectFirst("div.story-cover-wrap img")?.attr("abs:src")
+            ?: document.selectFirst("div.single-thumb img")?.attr("abs:src")
             ?: document.selectFirst("a.story-cover img")?.attr("abs:src")
 
         val siteTitle = document.selectFirst("h1")?.text()
         val mangaTitle = document.selectFirst("h2.uk-h3")?.text()
-        title = if (!mangaTitle.isNullOrBlank()) mangaTitle else siteTitle!!
+        title = if (!siteTitle.isNullOrBlank()) siteTitle else mangaTitle!!
     }
 
     override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
@@ -287,19 +379,14 @@ abstract class InitManga(
         val rawName = element.select("h3").text().trim()
 
         name = rawName.substringAfterLast("–").substringAfterLast("-").trim()
+        if (name.isBlank()) {
+            name = rawName
+        }
 
-        val dateStr = element.select("span[uk-tooltip]").attr("uk-tooltip")
-            .substringAfter("title:")
-            .substringBefore(";")
-            .trim()
+        val dateStr = element.select("time").attr("datetime")
 
         date_upload = runCatching {
-            if (dateStr.isNotEmpty()) {
-                uploadDateFormatter.tryParse(dateStr)
-            } else {
-                val fallbackDate = element.select("time").attr("datetime")
-                fallbackDateFormatter.tryParse(fallbackDate)
-            }
+            fallbackDateFormatter.tryParse(dateStr)
         }.getOrNull() ?: 0L
     }
 

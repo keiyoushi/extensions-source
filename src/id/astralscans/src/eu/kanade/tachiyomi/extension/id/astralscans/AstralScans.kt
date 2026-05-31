@@ -18,13 +18,13 @@ class AstralScans : MangaThemesia("Astral Scans", "https://astralscans.top", "id
     override fun chapterListRequest(manga: SManga): Request {
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
-            .addFormDataPart("chapter_action", "generate_list") // Updated parameter from HAR
+            .addFormDataPart("manga_req", "ping")
             .build()
 
         return POST(
             url = baseUrl + manga.url,
             headers = headersBuilder()
-                .add("X-Req-With", "XMLHttpRequest") // Updated header from HAR
+                .add("X-Requested-With", "XMLHttpRequest")
                 .build(),
             body = body,
         )
@@ -33,40 +33,38 @@ class AstralScans : MangaThemesia("Astral Scans", "https://astralscans.top", "id
     override fun chapterListParse(response: Response): List<SChapter> {
         val responseString = response.body.string()
 
-        // 1. New Anti-Scraper Logic (ASTRAL_HTML|||<encoded_payload>)
-        if (responseString.startsWith("ASTRAL_HTML|||")) {
-            val encoded = responseString.substringAfter("ASTRAL_HTML|||")
+        if (responseString.startsWith("ASTRAL_")) {
+            val parts = responseString.split("|||")
 
-            if (encoded.isNotEmpty()) {
+            if (parts.size >= 3) {
                 try {
-                    // Step 1 & 2: Base64 Decode -> ROT13 = Raw HTML
-                    val decodedBytes = Base64.decode(encoded, Base64.DEFAULT)
-                    val decodedString = String(decodedBytes, Charsets.UTF_8)
-                    val rawHtml = rot13(decodedString)
+                    val rawHtml = String(Base64.decode(parts[1], Base64.DEFAULT), Charsets.UTF_8)
+                    val dynamicDataAttr = parts[2]
 
                     val document = Jsoup.parse(rawHtml)
+                    val chapters = document.select("[$dynamicDataAttr]").mapNotNull { element ->
+                        val isTrap = element.hasClass("trap") ||
+                            element.attr("class").contains("trap") ||
+                            element.closest("[class*=trap]") != null
 
-                    // Step 3: Extract from decrypted HTML
-                    val chapters = document.select(".chp-box").map { element ->
+                        if (isTrap) {
+                            return@mapNotNull null
+                        }
+
                         SChapter.create().apply {
-                            // Step 4: The URL inside data-u is Base64 encoded
-                            val dataU = element.attr("data-u")
-                            val chapterUrl = String(Base64.decode(dataU, Base64.DEFAULT), Charsets.UTF_8)
+                            val encodedUrl = element.attr(dynamicDataAttr)
+                            val chapterUrl = String(Base64.decode(encodedUrl, Base64.DEFAULT), Charsets.UTF_8)
                             setUrlWithoutDomain(chapterUrl)
 
-                            name = element.selectFirst(".chp-num")?.text() ?: "Chapter"
-
-                            val dateStr = element.selectFirst(".chp-date")?.text()
-                            date_upload = dateStr?.parseChapterDate() ?: 0L
+                            name = element.selectFirst("span[class^=n_]")?.text() ?: "Chapter"
+                            date_upload = element.selectFirst("span[class^=d_]")?.text()?.parseChapterDate() ?: 0L
                         }
                     }
 
                     if (chapters.isNotEmpty()) {
                         return chapters
                     }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                } catch (_: Exception) {}
             }
         }
 
@@ -91,13 +89,4 @@ class AstralScans : MangaThemesia("Astral Scans", "https://astralscans.top", "id
         name = element.selectFirst(".ch-title, .epl-num, .chapternum")?.text() ?: ""
         date_upload = element.selectFirst(".ch-date, .chapterdate")?.text()?.parseChapterDate() ?: 0L
     }
-
-    private fun rot13(text: String): String = text.map {
-        if (it.isLetter()) {
-            val base = if (it.isUpperCase()) 'A' else 'a'
-            ((it.code - base.code + 13) % 26 + base.code).toChar()
-        } else {
-            it
-        }
-    }.joinToString("")
 }

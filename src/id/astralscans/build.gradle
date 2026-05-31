@@ -3,8 +3,8 @@ ext {
     extClass = '.AstralScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://astralscans.top'
-    overrideVersionCode = 6
+    overrideVersionCode = 7
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

@@ -1,8 +1,8 @@
 ext {
     extName = 'The Blank'
     extClass = '.TheBlank'
-    extVersionCode = 53
+    extVersionCode = 54
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Break Scan'
+    extClass = '.BreakScan'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/breakscan'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

@@ -1,4 +1,4 @@
-﻿package eu.kanade.tachiyomi.extension.ru.inkstory
+package eu.kanade.tachiyomi.extension.ru.inkstory
 
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
@@ -46,7 +46,7 @@ class InkStory :
     }
     private val secretKeyLock = Any()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageDecryptInterceptor())
         .build()
 
@@ -758,6 +758,7 @@ class InkStory :
         private val CHAPTER_DATE_FORMATS = listOf(
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.ROOT),
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX", Locale.ROOT),
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSSX", Locale.ROOT),
         ).onEach { it.timeZone = TimeZone.getTimeZone("UTC") }
 
         private val SECRET_KEY_REGEX = "\"secret-key\",\"([^\"]+)\"".toRegex()

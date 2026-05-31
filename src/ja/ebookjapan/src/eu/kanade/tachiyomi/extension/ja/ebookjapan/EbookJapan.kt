@@ -41,7 +41,7 @@ class EbookJapan :
     private val preferences: SharedPreferences by getPreferencesLazy()
     private val perPage = 50
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .addNetworkInterceptor(CookieInterceptor(domain, "ebaf" to "1"))
         .addInterceptor { chain ->

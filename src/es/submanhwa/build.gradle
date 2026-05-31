@@ -1,8 +1,8 @@
 ext {
     extName = 'Submanhwa'
     extClass = '.Submanhwa'
-    extVersionCode = 6
+    extVersionCode = 8
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

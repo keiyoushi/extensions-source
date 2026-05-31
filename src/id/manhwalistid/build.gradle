@@ -2,9 +2,9 @@ ext {
     extName = 'Manhwa List'
     extClass = '.ManhwaList'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://manhwalist02.site'
-    overrideVersionCode = 5
+    baseUrl = 'https://manhwalist02.asia'
+    overrideVersionCode = 6
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

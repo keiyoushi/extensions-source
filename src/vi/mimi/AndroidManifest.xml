@@ -16,7 +16,7 @@
                 <data android:host="mimimoe.moe" />
                 <data android:scheme="https" />
 
-                <data android:pathPattern="/g/..*" />
+                <data android:pathPattern="/manga/..*" />
             </intent-filter>
         </activity>
     </application>

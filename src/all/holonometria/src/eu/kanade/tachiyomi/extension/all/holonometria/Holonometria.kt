@@ -6,19 +6,17 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Holonometria(
     override val lang: String,
     private val langPath: String = "$lang/",
-) : ParsedHttpSource() {
+) : HttpSource() {
 
     override val name = "HOLONOMETRIA"
 
@@ -28,64 +26,90 @@ class Holonometria(
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/${langPath}alt/holonometria/manga/", headers)
 
-    override fun popularMangaSelector() = ".manga__item"
-    override fun popularMangaNextPageSelector() = null
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        title = element.select(".manga__title").text()
-        thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+        val mangas = document.select(".manga__item").map { element ->
+            SManga.create().apply {
+                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+                title = element.select(".manga__title").text()
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+            }
+        }
+
+        return MangasPage(mangas, false)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET("$baseUrl/${langPath}alt/holonometria/manga/#${query.trim()}", headers)
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val search = response.request.url.fragment!!
+        val search = response.request.url.fragment ?: ""
 
-        val entries = document.select(searchMangaSelector())
-            .map(::searchMangaFromElement)
+        val entries = document.select(".manga__item")
+            .map { element ->
+                SManga.create().apply {
+                    setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+                    title = element.select(".manga__title").text()
+                    thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+                }
+            }
             .filter { it.title.contains(search, true) }
 
         return MangasPage(entries, false)
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.select(".alt-nav__met-sub-link.is-current").text()
-        thumbnail_url = document.select(".manga-detail__thumb img").attr("abs:src")
-        description = document.select(".manga-detail__caption").text()
-        val info = document.select(".manga-detail__person").html().split("<br>")
-        author = info.firstOrNull { desc -> manga.any { desc.contains(it, true) } }
-            ?.substringAfter("：")
-            ?.substringAfter(":")
-            ?.trim()
-            ?.replace("&amp;", "&")
-        artist = info.firstOrNull { desc -> script.any { desc.contains(it, true) } }
-            ?.substringAfter("：")
-            ?.substringAfter(":")
-            ?.trim()
-            ?.replace("&amp;", "&")
+        return SManga.create().apply {
+            title = document.select(".alt-nav__met-sub-link.is-current").text()
+            thumbnail_url = document.select(".manga-detail__thumb img").attr("abs:src")
+            description = document.select(".manga-detail__caption").text()
+
+            val info = document.select(".manga-detail__person").html().split("<br>")
+
+            author = info.firstOrNull { desc -> manga.any { desc.contains(it, true) } }
+                ?.substringAfter("：")
+                ?.substringAfter(":")
+                ?.trim()
+                ?.replace("&amp;", "&")
+
+            artist = info.firstOrNull { desc -> script.any { desc.contains(it, true) } }
+                ?.substringAfter("：")
+                ?.substringAfter(":")
+                ?.trim()
+                ?.replace("&amp;", "&")
+        }
     }
 
     override fun chapterListRequest(manga: SManga) = GET("$baseUrl/${manga.url}", headers)
 
-    override fun chapterListSelector() = ".manga-detail__list .manga-detail__list-item"
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
 
-    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
-
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        name = element.select(".manga-detail__list-title").text()
-        date_upload = dateFormat.tryParse(element.selectFirst(".manga-detail__list-date")?.text())
+        return document.select(".manga-detail__list .manga-detail__list-item").map { element ->
+            SChapter.create().apply {
+                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+                name = element.select(".manga-detail__list-title").text()
+                date_upload = dateFormat.tryParse(element.selectFirst(".manga-detail__list-date")?.text())
+            }
+        }.reversed()
     }
 
-    override fun pageListParse(document: Document): List<Page> = document.select(".manga-detail__swiper-wrapper img").mapIndexed { idx, img ->
-        Page(idx, "", img.attr("abs:src"))
-    }.reversed()
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+
+        return document.select(".manga-detail__swiper-wrapper img").mapIndexed { idx, img ->
+            Page(idx, imageUrl = img.attr("abs:src"))
+        }.reversed()
+    }
+
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     companion object {
         private val manga = listOf("manga", "gambar", "漫画")
@@ -95,10 +119,4 @@ class Holonometria(
             SimpleDateFormat("yyyy.MM.dd", Locale.ENGLISH)
         }
     }
-
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 }

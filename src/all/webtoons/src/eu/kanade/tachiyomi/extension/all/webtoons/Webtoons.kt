@@ -48,7 +48,7 @@ open class Webtoons(
         .set("Referer", "$mobileUrl/")
         .build()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addNetworkInterceptor(
             CookieInterceptor(
                 domain = "webtoons.com",
@@ -124,6 +124,22 @@ open class Webtoons(
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val titleNo = url.queryParameter("title_no")
+                ?: throw Exception("Unsupported url")
+            val path = url.pathSegments
+            if (path.size < 3) {
+                throw Exception("Unsupported url")
+            }
+            val urlLang = path[0]
+            val type = path[1]
+            return fetchSearchManga(page, "$ID_SEARCH_PREFIX$type:$urlLang:$titleNo", filters)
+        }
+
         if (query.startsWith(ID_SEARCH_PREFIX)) {
             val (_, type, lang, titleNo) = query.split(":", limit = 4)
             val tmpManga = SManga.create().apply {
@@ -379,7 +395,7 @@ open class Webtoons(
             val note = document.select("div.creator_note p.author_text").text()
 
             if (note.isNotEmpty()) {
-                val creator = document.select("div.creator_note a.author_name span").text().trim()
+                val creator = document.select("div.creator_note .author_name span").text().trim()
 
                 pages += Page(
                     pages.size,

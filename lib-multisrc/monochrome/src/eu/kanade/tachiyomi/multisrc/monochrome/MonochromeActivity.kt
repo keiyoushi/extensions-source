@@ -14,20 +14,15 @@ import kotlin.system.exitProcess
 class MonochromeActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val segments = intent?.data?.pathSegments
-        if (segments != null && segments.size > 1) {
-            val activity = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", UUID_QUERY + segments[1])
-                putExtra("filter", packageName)
-            }
-            try {
-                startActivity(activity)
-            } catch (ex: ActivityNotFoundException) {
-                Log.e("MonochromeActivity", ex.message, ex)
-            }
-        } else {
-            Log.e("MonochromeActivity", "Failed to parse URI from intent: $intent")
+        val activity = Intent().apply {
+            action = "eu.kanade.tachiyomi.SEARCH"
+            putExtra("query", intent.data.toString())
+            putExtra("filter", packageName)
+        }
+        try {
+            startActivity(activity)
+        } catch (ex: ActivityNotFoundException) {
+            Log.e("MonochromeActivity", ex.message, ex)
         }
         finish()
         exitProcess(0)

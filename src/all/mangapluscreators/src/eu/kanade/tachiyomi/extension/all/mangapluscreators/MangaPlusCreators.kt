@@ -99,6 +99,24 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
 
     // SEARCH Section
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host !in listOf("mangaplus-creators.jp", "medibang.com")) {
+                throw Exception("Unsupported url")
+            }
+            val pathIndex = if (url.host == "medibang.com") 1 else 0
+            val idIndex = pathIndex + 1
+            if (url.pathSegments.size <= idIndex) {
+                throw Exception("Unsupported url")
+            }
+            val newQuery = when (url.pathSegments[pathIndex]) {
+                "episodes" -> PREFIX_EPISODE_ID_SEARCH + url.pathSegments[idIndex]
+                "authors" -> PREFIX_AUTHOR_ID_SEARCH + url.pathSegments[idIndex]
+                "titles" -> PREFIX_TITLE_ID_SEARCH + url.pathSegments[idIndex]
+                else -> throw Exception("Unsupported url")
+            }
+            return fetchSearchManga(page, newQuery, filters)
+        }
         // TODO: HTTPSource::fetchSearchManga is deprecated? super.getSearchManga
         if (query.startsWith(PREFIX_TITLE_ID_SEARCH)) {
             val titleContentId = query.removePrefix(PREFIX_TITLE_ID_SEARCH)

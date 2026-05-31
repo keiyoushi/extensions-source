@@ -70,13 +70,42 @@ class Japscan :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(1, 2)
         .build()
 
     private val captchaRegex = """window\.__captcha\s*=\s*\{\s*needed\s*:\s*true\s*,?""".toRegex()
 
     companion object {
+        private val CHAPTER_PATH_TYPES = setOf("manga", "manhua", "manhwa", "bd", "comic")
+        private val HIDDEN_STYLE_TOKENS = listOf(
+            "display:none",
+            "visibility:hidden",
+            "opacity:0",
+            "width:0",
+            "height:0",
+            "pointer-events:none",
+            "clip-path:inset(100%",
+            "clip:rect(0,0,0,0",
+            "font-size:0",
+            "text-indent:-",
+        )
+
+        // Match styles that visually remove an element while leaving it in the DOM:
+        //  - large absolute offset (3+ digits) via top/bottom/left/right or `inset:` shorthand
+        //  - `transform: translate / translateX / translateY / translate3d` with a 3+ digit offset
+        //  - `transform: scale(0)` / `scale3d(0,...)` (collapsed to nothing)
+        //  - `transform: matrix(0,0,0,0,...)` (also collapsed)
+        //  - `max-width:0` / `max-height:0` (mirror of the existing width:0/height:0 tokens)
+        // 3 digits is enough to be off-screen even with viewport units (200vh, 999vw, …)
+        // while still tolerating fine adjustments like top:-1px or right:99px.
+        private val OFFSCREEN_OFFSET_REGEX = Regex(
+            """(?:top|bottom|left|right|inset):-?\d{3,}""" +
+                """|transform:translate(?:3d|x|y)?\([^)]*-?\d{3,}""" +
+                """|transform:scale(?:3d)?\(0[,)]""" +
+                """|transform:matrix\(0,0,0,0""" +
+                """|max-(?:width|height):0""",
+        )
         val dateFormat by lazy {
             SimpleDateFormat("dd MMM yyyy", Locale.US)
         }
@@ -232,9 +261,76 @@ class Japscan :
     // JapScan sometimes uploads some "spoiler preview" chapters, containing 2 or 3 untranslated pictures taken from a raw. Sometimes they also upload full RAWs/US versions and replace them with a translation as soon as available.
     // Those have a span.badge "SPOILER" or "RAW". The additional pseudo selector makes sure to exclude these from the chapter list.
 
-    override fun chapterFromElement(element: Element): SChapter {
-        // Only search for a tag with any attribute containing manga/manhua/manhwa
-        val urlPairs = (element.getElementsContainingText("Chapitre") + element.getElementsContainingText("Volume"))
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        val mangaSlug = extractMangaSlug(response.request.url)
+        val chapters = document.select(chapterListSelector()).mapNotNull { el ->
+            runCatching { parseChapter(el, mangaSlug) }.getOrNull()
+        }
+        return filterOutlierChapters(chapters)
+    }
+
+    // Defense in depth: if a honeypot ever slips past the per-row hidden-style
+    // heuristics, its URL number is wildly out of range (e.g. 483181 vs. real 1181).
+    // Drop the upper cluster when consecutive chapter numbers jump by more than 1000.
+    private fun filterOutlierChapters(chapters: List<SChapter>): List<SChapter> {
+        val withNum = chapters.mapNotNull { ch ->
+            val n = ch.url.trimEnd('/').substringAfterLast('/').toLongOrNull() ?: return@mapNotNull null
+            ch to n
+        }
+        if (withNum.size < 2) return chapters
+        val sorted = withNum.sortedBy { it.second }
+        var gapIdx = -1
+        var gapSize = 0L
+        for (i in 1 until sorted.size) {
+            val g = sorted[i].second - sorted[i - 1].second
+            if (g > gapSize) {
+                gapSize = g
+                gapIdx = i
+            }
+        }
+        if (gapSize <= 1000) return chapters
+        val keep = sorted.take(gapIdx).map { it.first }.toSet()
+        return chapters.filter { it in keep }
+    }
+
+    private fun extractMangaSlug(url: okhttp3.HttpUrl): String? {
+        val segments = url.pathSegments.filter { it.isNotEmpty() }
+        val typeIdx = segments.indexOfFirst { it in CHAPTER_PATH_TYPES }
+        if (typeIdx == -1 || typeIdx + 1 >= segments.size) return null
+        return segments[typeIdx + 1].takeIf { it.isNotEmpty() }
+    }
+
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
+
+    private fun isHidden(el: Element): Boolean {
+        if (el.hasClass("d-none")) return true
+        if (el.hasAttr("hidden")) return true
+        if (el.attr("aria-hidden").equals("true", ignoreCase = true)) return true
+        val style = el.attr("style").replace(" ", "").lowercase()
+        if (HIDDEN_STYLE_TOKENS.any { style.contains(it) }) return true
+        if (OFFSCREEN_OFFSET_REGEX.containsMatchIn(style)) return true
+        return false
+    }
+
+    private fun isHiddenWithin(el: Element, root: Element): Boolean {
+        var cur: Element? = el
+        while (cur != null && cur !== root) {
+            if (isHidden(cur)) return true
+            cur = cur.parent()
+        }
+        return false
+    }
+
+    private fun parseChapter(element: Element, mangaSlug: String?): SChapter {
+        // Only search for a tag with any attribute containing manga/manhua/manhwa.
+        // Skip elements that are visually hidden — Japscan hides honeypots with
+        // class="d-none", inline display/visibility/opacity:0, zero size, or by
+        // positioning them way off-screen. The visible chapter row never carries
+        // any of these, so to evade detection Japscan would have to make the
+        // honeypots visible to humans too.
+        val allUrlPairs = (element.getElementsContainingText("Chapitre") + element.getElementsContainingText("Volume"))
+            .filterNot { isHiddenWithin(it, element) }
             .mapNotNull { el ->
                 // Find the first attribute whose value matches the chapter URL pattern
                 val attrMatch = el.attributes().asList().firstOrNull { attr ->
@@ -251,28 +347,41 @@ class Japscan :
                 }
             }
             .distinctBy { it.second }
+
+        // Filter out anti-scraping honeypots by binding name, slug and URL number together:
+        // a real chapter URL is /<type>/<mangaSlug>/<chapterNum>/, with the same slug as the
+        // manga page and a chapter number that appears in the chapter's name ("Chapitre N: ...").
+        // Stripping non-digits from the name handles half-chapters like "Chapitre 1100.5" + /11005/.
+        // Honeypots use a different slug (e.g. /manga/cv/N/) with sequential numbers that match a
+        // fake "Chapitre N" label, so name/number alone is not enough — slug check is what stops them.
+        val filtered = allUrlPairs
+            .filter { (name, url, _) ->
+                val segments = url.split('/').filter { it.isNotEmpty() }
+                if (segments.size != 3) return@filter false
+                if (segments[0] !in CHAPTER_PATH_TYPES) return@filter false
+                if (mangaSlug != null && segments[1] != mangaSlug) return@filter false
+                val urlNum = url.trimEnd('/').substringAfterLast('/')
+                if (!urlNum.all { it.isDigit() }) return@filter false
+                val chapterNum = Regex("""(?i)chapitre\s+([\d.]+)""").find(name)
+                    ?.groupValues?.get(1)?.replace(".", "")
+                    ?: name.split(Regex("[^0-9.]+")).filter { it.isNotEmpty() }
+                        .lastOrNull()?.replace(".", "")
+                    ?: return@filter false
+                chapterNum == urlNum
+            }
+
+        // Fall back to the unfiltered list in case the heuristics are too aggressive.
+        // Defense in depth: when the slug filter is unavailable, prefer the longest URL — real
+        // slugs (e.g. "one-piece") are usually longer than honeypot slugs (e.g. "cv").
+        val urlPairs = (filtered.ifEmpty { allUrlPairs })
             .sortedWith(
                 compareByDescending<Triple<String, String, Boolean>> { it.third }
-                    .thenBy { it.second.length },
-            ) // Prefer non-href first, then shorter URLs
+                    .thenByDescending { it.second.length },
+            ) // Prefer non-href first, then longer URLs
             .map { Pair(it.first, it.second) }
 
-        var foundPair: Pair<String, String>? = urlPairs.firstOrNull()
-        // var log = urlPairs.size.toString() + " URLs found:\n"
-        // for ((name, url) in urlPairs) {
-        //     val testUrl = internalBaseUrl + url
-        //     val response = client.newCall(GET(testUrl, headers)).execute()
-        //     log += "$name: $testUrl => ${response}\n"
-        //     if (response.isSuccessful) {
-        //         foundPair = Pair(name, url)
-        //         response.close()
-        //         break
-        //     }
-        //     response.close()
-        // }
-        if (foundPair == null) {
-            throw Exception("Impossible de trouver l'URL du chapitre")
-        }
+        val foundPair = urlPairs.firstOrNull()
+            ?: throw Exception("Impossible de trouver l'URL du chapitre")
 
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(foundPair.second)
@@ -351,24 +460,6 @@ class Japscan :
             innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             innerWv.addJavascriptInterface(jsInterface, interfaceName)
 
-            /*innerWv.webChromeClient = object : WebChromeClient() {
-                override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-                    Log.println(
-                        when (consoleMessage.messageLevel()!!) {
-                            ConsoleMessage.MessageLevel.TIP -> Log.VERBOSE
-                            ConsoleMessage.MessageLevel.DEBUG -> Log.DEBUG
-                            ConsoleMessage.MessageLevel.LOG -> Log.INFO
-                            ConsoleMessage.MessageLevel.WARNING -> Log.WARN
-                            ConsoleMessage.MessageLevel.ERROR -> Log.ERROR
-                        },
-                        "Japscan",
-                        "${consoleMessage.sourceId()}:${consoleMessage.lineNumber()} ${consoleMessage.message()}",
-                    )
-
-                    return super.onConsoleMessage(consoleMessage)
-                }
-            }*/
-
             innerWv.webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     super.onPageStarted(view, url, favicon)
@@ -381,6 +472,30 @@ class Japscan :
                                     setTimeout(() => waitForRC(callback), 100);
                                 }
                             }
+
+                            // Hook atob — Japscan delivers the chapter payload as a base64-encoded
+                            // JSON whose `cc` array contains the c4.japscan.foo image URLs. The
+                            // payload no longer goes through String.replace, so atob is the only
+                            // reliable interception point.
+                            const originalAtob = window.atob;
+                            window.atob = function(str) {
+                                const result = originalAtob.call(this, str);
+                                try {
+                                    let utf8 = result;
+                                    try {
+                                        utf8 = decodeURIComponent(
+                                            Array.from(result, c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+                                        );
+                                    } catch (e) { return result; }
+                                    if (utf8.indexOf('c4.japscan.foo') !== -1 && !window.__createCalled) {
+                                        try {
+                                            const parsed = JSON.parse(utf8);
+                                            waitForRC(() => create(parsed));
+                                        } catch (e) { /* not JSON */ }
+                                    }
+                                } catch (e) { /* swallow */ }
+                                return result;
+                            };
 
                             const originalReplace = String.prototype.replace;
 
@@ -440,9 +555,36 @@ class Japscan :
                               return found;
                             }
 
+                            // Pick the array whose elements look like CDN image URLs.
+                            // Japscan's payload also embeds a path-segments array (e.g.
+                            // ["manga","one-piece","1181"]) that findFirstArray would otherwise grab.
+                            function findImageArray(obj) {
+                              let found = null;
+                              (function visit(value) {
+                                if (found) return;
+                                if (Array.isArray(value) && value.length > 0 &&
+                                    value.every(v => typeof v === 'string' && v.indexOf('c4.japscan.foo') !== -1)) {
+                                  found = value;
+                                  return;
+                                }
+                                if (value && typeof value === 'object') {
+                                  for (const k in value) {
+                                    if (Object.prototype.hasOwnProperty.call(value, k)) {
+                                      visit(value[k]);
+                                      if (found) return;
+                                    }
+                                  }
+                                }
+                              })(obj);
+                              return found;
+                            }
+
                             function create(parsed) {
-                                let arr = findFirstArray(parsed)
-                                const arrLen = arr.length;
+                                if (window.__createCalled) return;
+                                let arr = findImageArray(parsed) || findFirstArray(parsed);
+                                const arrLen = arr ? arr.length : -1;
+                                if (!arr || arr.length === 0) return;
+                                window.__createCalled = true;
                                 const chapterMatch = location.pathname.match(/\/(\d+)(?:\/|$)/);
                                 const chapterNum = chapterMatch ? Number(chapterMatch[1]) : null;
                                 let candidate = null;
@@ -470,6 +612,14 @@ class Japscan :
                             }
                         """.trimIndent(),
                     ) {}
+                }
+
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    // Force-keep the WebView "alive" so its JS timers don't get suspended while
+                    // we're detached. resumeTimers is global to all WebViews in the process.
+                    view?.onResume()
+                    view?.resumeTimers()
                 }
             }
 
@@ -556,12 +706,5 @@ class Japscan :
                 return
             }
         }
-
-        /*
-        @JavascriptInterface
-        @Suppress("UNUSED")
-        fun log(txt: String) {
-            Log.e("Japscan", txt)
-        }*/
     }
 }

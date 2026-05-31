@@ -12,17 +12,11 @@ fun getFilters(): FilterList = FilterList(
 )
 
 /** Filters **/
-
 internal class GenreFilter(name: String, genreList: List<Pair<String, String>>, state: Int = 0) : SelectFilter(name, genreList, state)
-
 internal class SortFilter(name: String, sortList: List<Pair<String, String>>, state: Int = 0) : SelectFilter(name, sortList, state)
-
 internal class CompletedFilter(name: String) : CheckBoxFilter(name)
-
 internal class RawFilter(name: String) : CheckBoxFilter(name)
-
 internal open class CheckBoxFilter(name: String, val value: String = "") : Filter.CheckBox(name)
-
 internal open class SelectFilter(name: String, private val vals: List<Pair<String, String>>, state: Int = 0) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
     fun getValue() = vals[state].second
 }
@@ -70,7 +64,6 @@ private val getGenresList: List<Pair<String, String>> = listOf(
     Pair("Family", "family"),
     Pair("Magic", "magic"),
 )
-
 private val getSortsList: List<Pair<String, String>> = listOf(
     Pair("Latest", "latest"),
     Pair("A-Z", "alphabet"),

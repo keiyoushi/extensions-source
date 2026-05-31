@@ -44,7 +44,7 @@ class BlossomManhwa(
     private val apiCryptoHelper = CryptoHelper(baseUrl, secretKey, encryptKey, imageKey)
 
     override val client: OkHttpClient =
-        network.cloudflareClient.newBuilder().addInterceptor(apiCryptoHelper)
+        network.client.newBuilder().addInterceptor(apiCryptoHelper)
             .addInterceptor { chain ->
                 val request = chain.request()
                 val response = chain.proceed(request)

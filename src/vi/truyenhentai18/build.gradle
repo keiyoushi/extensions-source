@@ -1,8 +1,8 @@
 ext {
     extName = "Truyen Hentai 18+"
     extClass = ".TruyenHentai18"
-    extVersionCode = 9
+    extVersionCode = 10
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

@@ -8,7 +8,7 @@ class HDoujinFactory : SourceFactory {
         HDoujin("en", "english"),
         HDoujin("es", "spanish"),
         HDoujin("ja", "japanese"),
-        HDoujin("kr", "korean"),
+        HDoujin("ko", "korean"),
         HDoujin("zh", "chinese"),
     )
 }

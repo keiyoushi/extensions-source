@@ -27,8 +27,6 @@ class DongmanManhua : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    override val client = network.cloudflareClient
-
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/dailySchedule", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {

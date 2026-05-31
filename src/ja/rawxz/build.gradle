@@ -2,8 +2,8 @@ ext {
     extName = 'RawZO'
     extClass = '.RawXZ'
     baseUrl = 'https://rawzo.net'
-    extVersionCode = 50
+    extVersionCode = 51
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

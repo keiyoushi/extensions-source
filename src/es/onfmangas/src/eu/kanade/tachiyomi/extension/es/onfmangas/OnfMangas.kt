@@ -11,9 +11,12 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -25,8 +28,32 @@ class OnfMangas : HttpSource() {
     override val lang = "es"
     override val supportsLatest = true
 
+    val tokenRegex = Regex("""var token="([^"]+)"""")
+
+    override val client = super.client.newBuilder()
+        .addInterceptor(::onfTokenInterceptor)
+        .build()
+
+    private fun onfTokenInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+
+        val body = response.peekBody(8192).string()
+        val token = tokenRegex.find(body)?.groupValues?.get(1) ?: return response
+
+        response.close()
+        val cookie = Cookie.parse(request.url, "__onf_chk=$token; path=/")
+        client.cookieJar.saveFromResponse(request.url, listOfNotNull(cookie))
+
+        return chain.proceed(request)
+    }
+
+    // Mimic a standard desktop browser to bypass Cloudflare WAF 403s
     override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0")
+        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+        .set("Accept-Language", "en-US,en;q=0.9")
+        .set("Sec-Fetch-Site", "none")
 
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {
@@ -40,15 +67,17 @@ class OnfMangas : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(".manga-grid .manga-card").mapNotNull { element ->
+        val mangas = document.select("a.pop-podium-card, a.pop-card").mapNotNull { element ->
             SManga.create().apply {
-                title = element.selectFirst(".manga-title")?.text()
+                title = element.selectFirst(".pop-podium-name, .pop-name")?.text()
                     ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+
                 setUrlWithoutDomain(
-                    element.selectFirst("a")?.attr("abs:href")
-                        ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null,
+                    element.attr("abs:href")
+                        .takeIf { it.isNotEmpty() } ?: return@mapNotNull null,
                 )
-                thumbnail_url = element.selectFirst(".card-cover img")?.attr("abs:src")
+
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
         }
         return MangasPage(mangas, false)
@@ -86,7 +115,12 @@ class OnfMangas : HttpSource() {
         val genero = filters.firstInstanceOrNull<GenreFilter>()?.selected ?: "0"
 
         url.addQueryParameter("tab", tab)
-        url.addQueryParameter("genero", genero)
+
+        // The website expects "generos[0]" instead of "genero"
+        // Also skip adding it entirely if the default "Todas las categorías" (0) is selected
+        if (genero != "0") {
+            url.addQueryParameter("generos[0]", genero)
+        }
 
         return GET(url.build(), headers)
     }
@@ -106,7 +140,7 @@ class OnfMangas : HttpSource() {
             title = document.selectFirst(".manga-title")?.text()
                 ?.takeIf { it.isNotEmpty() }
                 ?: throw Exception("Could not parse manga title")
-            author = document.selectFirst("div:contains(Autor:) b")?.text()
+            author = document.selectFirst(".author-link")?.text()
             description = document.selectFirst(".manga-description")?.text()
             genre = document.select(".genre-tag").joinToString { it.text() }
             thumbnail_url = document.selectFirst(".manga-poster")?.attr("abs:src")
@@ -147,7 +181,6 @@ class OnfMangas : HttpSource() {
             }
             chapters.add(parentChapter)
 
-            // Inject joint/alternative scanlator versions if they exist
             dto.getOtherVersions()?.forEach { otherVersion ->
                 chapters.add(
                     otherVersion.toSChapter(dto).apply {
@@ -173,6 +206,21 @@ class OnfMangas : HttpSource() {
         val pagesData = jsonString.parseAs<List<PageDto>>()
 
         return pagesData.mapIndexed { index, dto -> dto.toPage(index) }
+    }
+
+    // Decent chance for primary src to fail
+    override fun fetchImageUrl(page: Page): Observable<String> {
+        val src = page.url
+        val fallback = page.url.toHttpUrl().fragment?.removePrefix("fallback=")
+
+        if (fallback.isNullOrBlank()) return Observable.just(src)
+
+        return Observable.fromCallable {
+            val response = client.newCall(Request.Builder().head().url(src).build()).execute()
+            val success = response.isSuccessful
+            response.close()
+            if (success) src else fallback
+        }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()

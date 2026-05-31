@@ -15,104 +15,116 @@ class Filters {
             Calendar.getInstance()[Calendar.YEAR]
         }
 
-        private fun getYearsArray(includeOlder: Boolean): Array<Pair<String, String>> {
-            val years = (currentYear downTo 1990).map { it.toString() to it.toString() }
-            return if (includeOlder) {
-                (years + ("Older" to "older")).toTypedArray()
+        // The site allows entries published anywhere from 1928 up to the year
+        // after the current one (it gets used for upcoming releases).
+        private const val OLDEST_YEAR = 1928
+
+        private fun getYearsArray(forFromFilter: Boolean): Array<Pair<String, String>> {
+            val newest = currentYear + 1
+            val years = (newest downTo OLDEST_YEAR).map { it.toString() to it.toString() }
+            val any = "Any" to ""
+            return if (forFromFilter) {
+                (years + any).toTypedArray()
             } else {
-                years.toTypedArray()
+                (listOf(any) + years).toTypedArray()
             }
         }
 
+        // Site's curated list of 31 genres (matches the Genres section in the
+        // browse panel exactly). Narrative tags like "Aliens" or "School Life"
+        // used to live here too, but they belong under Tags and are searched
+        // by name rather than enumerated.
+        // Order mirrors the site's "Content preferences" modal.
         fun getGenres() = arrayOf(
-            Pair("Action", "6"),
-            Pair("Adult", "87264"),
-            Pair("Adventure", "7"),
-            Pair("Boys Love", "8"),
-            Pair("Comedy", "9"),
-            Pair("Crime", "10"),
-            Pair("Drama", "11"),
-            Pair("Ecchi", "87265"),
-            Pair("Fantasy", "12"),
-            Pair("Girls Love", "13"),
-            Pair("Hentai", "87266"),
-            Pair("Historical", "14"),
-            Pair("Horror", "15"),
-            Pair("Isekai", "16"),
-            Pair("Magical Girls", "17"),
-            Pair("Mature", "87267"),
-            Pair("Mecha", "18"),
-            Pair("Medical", "19"),
-            Pair("Mystery", "20"),
-            Pair("Philosophical", "21"),
-            Pair("Psychological", "22"),
-            Pair("Romance", "23"),
-            Pair("Sci-Fi", "24"),
-            Pair("Slice of Life", "25"),
-            Pair("Smut", "87268"),
-            Pair("Sports", "26"),
-            Pair("Superhero", "27"),
-            Pair("Thriller", "28"),
-            Pair("Tragedy", "29"),
-            Pair("Wuxia", "30"),
-            Pair("Aliens", "31"),
-            Pair("Animals", "32"),
-            Pair("Cooking", "33"),
-            Pair("Cross Dressing", "34"),
-            Pair("Delinquents", "35"),
-            Pair("Demons", "36"),
-            Pair("Genderswap", "37"),
-            Pair("Ghosts", "38"),
-            Pair("Gyaru", "39"),
-            Pair("Harem", "40"),
-            Pair("Incest", "41"),
-            Pair("Loli", "42"),
-            Pair("Mafia", "43"),
-            Pair("Magic", "44"),
-            Pair("Martial Arts", "45"),
-            Pair("Military", "46"),
-            Pair("Monster Girls", "47"),
-            Pair("Monsters", "48"),
-            Pair("Music", "49"),
-            Pair("Ninja", "50"),
-            Pair("Office Workers", "51"),
-            Pair("Police", "52"),
-            Pair("Post-Apocalyptic", "53"),
-            Pair("Reincarnation", "54"),
-            Pair("Reverse Harem", "55"),
-            Pair("Samurai", "56"),
-            Pair("School Life", "57"),
-            Pair("Shota", "58"),
-            Pair("Supernatural", "59"),
-            Pair("Survival", "60"),
-            Pair("Time Travel", "61"),
-            Pair("Traditional Games", "62"),
-            Pair("Vampires", "63"),
-            Pair("Video Games", "64"),
-            Pair("Villainess", "65"),
-            Pair("Virtual Reality", "66"),
-            Pair("Zombies", "67"),
+            "Action" to "6",
+            "Adult" to "87264",
+            "Adventure" to "7",
+            "Boys Love" to "8",
+            "Comedy" to "9",
+            "Crime" to "10",
+            "Drama" to "11",
+            "Ecchi" to "87265",
+            "Fantasy" to "12",
+            "Girls Love" to "13",
+            "Harem" to "40",
+            "Hentai" to "87266",
+            "Historical" to "14",
+            "Horror" to "15",
+            "Isekai" to "16",
+            "Magical Girls" to "17",
+            "Mature" to "87267",
+            "Mecha" to "18",
+            "Medical" to "19",
+            "Mystery" to "20",
+            "Philosophical" to "21",
+            "Psychological" to "22",
+            "Romance" to "23",
+            "Sci-Fi" to "24",
+            "Slice of Life" to "25",
+            "Smut" to "87268",
+            "Sports" to "26",
+            "Superhero" to "27",
+            "Thriller" to "28",
+            "Tragedy" to "29",
+            "Wuxia" to "30",
         )
 
+        // The 9 site formats (matches the Formats section in the browse panel).
+        fun getFormats() = arrayOf(
+            "4-Koma" to "93164",
+            "Adaptation" to "93167",
+            "Anthology" to "93165",
+            "Award Winning" to "93166",
+            "Doujinshi" to "93168",
+            "Full Color" to "93172",
+            "Long Strip" to "93170",
+            "Oneshot" to "93169",
+            "Web Comic" to "93171",
+        )
+
+        // Order mirrors the site's "Content preferences" modal.
         fun getDemographics() = arrayOf(
-            Pair("Shoujo", "1"),
-            Pair("Shounen", "2"),
             Pair("Josei", "3"),
             Pair("Seinen", "4"),
+            Pair("Shoujo", "1"),
+            Pair("Shounen", "2"),
+        )
+
+        // Same set TypeFilter exposes in the search filter sheet — duplicated
+        // here as a public getter so source-level preferences (in Comix.kt)
+        // can present the identical pick list.
+        fun getTypes() = arrayOf(
+            Pair("Manga", "manga"),
+            Pair("Manhwa", "manhwa"),
+            Pair("Manhua", "manhua"),
+            Pair("Other", "other"),
         )
     }
 
     fun getFilterList() = FilterList(
+        // Order mirrors the site's filter panel.
         SortFilter(getSortables()),
-        StatusFilter(),
-        GenreFilter(getGenres()),
+        ContentRatingFilter(),
         TypeFilter(),
+        Filter.Separator(),
+        Filter.Header("Tags — comma separated"),
+        TagsFilter(),
+        Filter.Header("Match: AND requires every selection, OR matches any"),
+        MatchModeFilter(),
+        GenreFilter(getGenres()),
+        FormatFilter(getFormats()),
+        Filter.Separator(),
         DemographicFilter(getDemographics()),
+        StatusFilter(),
         MinChapterFilter(),
         Filter.Separator(),
         Filter.Header("Release Year"),
         YearFromFilter(),
         YearToFilter(),
+        Filter.Separator(),
+        Filter.Header("Author / Artist — comma separated"),
+        AuthorFilter(),
+        ArtistFilter(),
     )
 
     private open class UriPartFilter(
@@ -136,7 +148,7 @@ class Filters {
     private open class UriMultiSelectFilter(
         name: String,
         private val param: String,
-        private val vals: Array<Pair<String, String>>,
+        vals: Array<Pair<String, String>>,
     ) : Filter.Group<UriMultiSelectOption>(
         name,
         vals.map { UriMultiSelectOption(it.first, it.second) },
@@ -155,7 +167,7 @@ class Filters {
     private open class UriTriSelectFilter(
         name: String,
         private val param: String,
-        private val vals: Array<Pair<String, String>>,
+        vals: Array<Pair<String, String>>,
     ) : Filter.Group<UriTriSelectOption>(
         name,
         vals.map { UriTriSelectOption(it.first, it.second) },
@@ -171,8 +183,11 @@ class Filters {
         }
     }
 
-    private class DemographicFilter(val demographics: Array<Pair<String, String>>) :
-        UriTriSelectFilter(
+    // The site's API silently ignores `-id` / `demographics_ex[]` for this
+    // field, so a TriState exclusion would never actually exclude anything.
+    // Match the website which only offers include / off.
+    private class DemographicFilter(demographics: Array<Pair<String, String>>) :
+        UriMultiSelectFilter(
             "Demographic",
             "demographics[]",
             demographics,
@@ -182,28 +197,43 @@ class Filters {
         UriMultiSelectFilter(
             "Type",
             "types[]",
-            arrayOf(
-                Pair("Manga", "manga"),
-                Pair("Manhwa", "manhwa"),
-                Pair("Manhua", "manhua"),
-                Pair("Other", "other"),
-            ),
+            getTypes(),
         )
 
-    private class GenreFilter(genres: Array<Pair<String, String>>) :
-        UriTriSelectFilter(
-            "Genres",
-            "genres[]",
-            genres,
-        )
+    // Genres, Formats, and Tags all share the same `genres_in[]` /
+    // `genres_ex[]` API parameters; the site only splits them apart for the UI.
+    private abstract class TermGroupFilter(
+        title: String,
+        options: Array<Pair<String, String>>,
+    ) : Filter.Group<UriTriSelectOption>(
+        title,
+        options.map { UriTriSelectOption(it.first, it.second) },
+    ),
+        UriFilter {
+        override fun addToUri(builder: HttpUrl.Builder) {
+            state.filter { it.state == TriState.STATE_INCLUDE }
+                .forEach { builder.addQueryParameter("genres_in[]", it.value) }
+            state.filter { it.state == TriState.STATE_EXCLUDE }
+                .forEach { builder.addQueryParameter("genres_ex[]", it.value) }
+        }
+    }
+
+    private class GenreFilter(genres: Array<Pair<String, String>>) : TermGroupFilter("Genres", genres)
+
+    private class FormatFilter(formats: Array<Pair<String, String>>) : TermGroupFilter("Formats", formats)
+
+    // Tags accept arbitrary names — the catalogue has hundreds, so we don't
+    // try to enumerate them. Comix.searchMangaRequest resolves each name to an
+    // ID through /api/v1/tags/search and adds the corresponding `genres_in[]`.
+    class TagsFilter : Filter.Text("Tags")
 
     private class StatusFilter :
         UriMultiSelectFilter(
             "Status",
             "statuses[]",
             arrayOf(
-                Pair("Finished", "finished"),
                 Pair("Releasing", "releasing"),
+                Pair("Finished", "finished"),
                 Pair("On Hiatus", "on_hiatus"),
                 Pair("Discontinued", "discontinued"),
                 Pair("Not Yet Released", "not_yet_released"),
@@ -213,17 +243,66 @@ class Filters {
     private class YearFromFilter :
         UriPartFilter(
             "From",
-            "release_year[from]",
-            getYearsArray(includeOlder = true),
-            "older",
+            "year_from",
+            getYearsArray(forFromFilter = true),
+            "",
         )
 
     private class YearToFilter :
         UriPartFilter(
             "To",
-            "release_year[to]",
-            getYearsArray(includeOlder = false),
+            "year_to",
+            getYearsArray(forFromFilter = false),
+            "",
+        ) {
+        override fun addToUri(builder: HttpUrl.Builder) {
+            // The "Any" option intentionally keeps the parameter unset so the
+            // site doesn't cap the results at a particular year.
+            if (state != 0) super.addToUri(builder)
+        }
+    }
+
+    // Author/Artist accept names; the site filters by ID, so the request
+    // builder doesn't add anything here. Comix.searchMangaRequest resolves
+    // the name to one or more IDs via /api/v1/tags/search and appends the
+    // `authors[]` / `artists[]` parameters there.
+    class AuthorFilter : Filter.Text("Author")
+
+    class ArtistFilter : Filter.Text("Artist")
+
+    // Controls how Tags/Genres/Formats selections combine. The site sends a
+    // single `genres_mode` parameter that applies to the whole bucket; we
+    // mirror that, defaulting to AND like the site does.
+    private class MatchModeFilter :
+        UriPartFilter(
+            "Match",
+            "genres_mode",
+            arrayOf(
+                "All (AND)" to "and",
+                "Any (OR)" to "or",
+            ),
         )
+
+    // The site filters by an inclusive cap: passing "suggestive" returns safe
+    // and suggestive titles, "erotica" adds those too, and so on.
+    private class ContentRatingFilter :
+        UriPartFilter(
+            "Content rating",
+            "content_rating",
+            arrayOf(
+                "Use preference" to "",
+                "Safe only" to "safe",
+                "Up to Suggestive" to "suggestive",
+                "Up to Erotica" to "erotica",
+                "Up to Pornographic" to "pornographic",
+            ),
+        ) {
+        override fun addToUri(builder: HttpUrl.Builder) {
+            // Index 0 is "Use preference" — let the source-level setting drive
+            // the parameter instead of the manual filter.
+            if (state != 0) super.addToUri(builder)
+        }
+    }
 
     private class MinChapterFilter :
         Filter.Text("Minimum Chapter Length"),
@@ -245,13 +324,16 @@ class Filters {
 
     private fun getSortables() = arrayOf(
         Sortable("Best Match", "relevance"),
-        Sortable("Popular", "views_30d"),
-        Sortable("Updated Date", "chapter_updated_at"),
-        Sortable("Created Date", "created_at"),
+        Sortable("Latest update", "chapter_updated_at"),
+        Sortable("Recently added", "created_at"),
         Sortable("Title", "title"),
         Sortable("Year", "year"),
-        Sortable("Total Views", "views_total"),
-        Sortable("Most Follows", "follows_total"),
+        Sortable("Highest rated", "score"),
+        Sortable("Most viewed · 7 days", "views_7d"),
+        Sortable("Most viewed · 30 days", "views_30d"),
+        Sortable("Most viewed · 90 days", "views_90d"),
+        Sortable("Most viewed · all time", "views_total"),
+        Sortable("Most followed", "follows_total"),
     )
 
     private class SortFilter(private val sortables: Array<Sortable>) :

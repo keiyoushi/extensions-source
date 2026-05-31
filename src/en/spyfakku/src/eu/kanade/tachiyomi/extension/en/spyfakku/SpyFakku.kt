@@ -65,7 +65,7 @@ class SpyFakku :
 
     private val json: Json by injectLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         // add referer in interceptor due to domain change preference
         .addNetworkInterceptor { chain ->
             val request = chain.request().newBuilder()
@@ -228,18 +228,28 @@ class SpyFakku :
 
         if (response1.isSuccessful) {
             add = response1.parseAs<ShortHentai>()
+            response1.close()
         } else {
+            response1.close()
             var response: Response = client.newCall(mangaDetailsRequest(manga)).execute()
             var attempts = 0
             while (attempts < 3 && response.code != 200) {
                 try {
+                    response.close()
                     response = client.newCall(mangaDetailsRequest(manga)).execute()
                 } catch (_: Exception) {
                 } finally {
                     attempts++
                 }
             }
-            add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
+
+            try {
+                add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
+            } catch (e: Exception) {
+                throw Exception("Failed to fetch manga details: ${e.message}")
+            } finally {
+                response.close()
+            }
         }
 
         return Observable.just(
@@ -276,8 +286,8 @@ class SpyFakku :
 
                         try {
                             releasedAt?.let {
-                                releasedAtFormat.parse(it)?.let {
-                                    append("Released: ", dateReformat.format(it.time), "\n")
+                                releasedAtFormat.parse(it)?.let { date ->
+                                    append("Released: ", dateReformat.format(date.time), "\n")
                                 }
                             }
                         } catch (_: Exception) {
@@ -285,8 +295,8 @@ class SpyFakku :
 
                         try {
                             createdAt?.let {
-                                createdAtFormat.parse(it)?.let {
-                                    append("Added: ", dateReformat.format(it.time), "\n")
+                                createdAtFormat.parse(it)?.let { date ->
+                                    append("Added: ", dateReformat.format(date.time), "\n")
                                 }
                             }
                         } catch (_: Exception) {
@@ -328,18 +338,28 @@ class SpyFakku :
 
         if (response1.isSuccessful) {
             add = response1.parseAs<ShortHentai>()
+            response1.close()
         } else {
+            response1.close()
             var response: Response = client.newCall(chapterListRequest2(manga)).execute()
             var attempts = 0
             while (attempts < 3 && response.code != 200) {
                 try {
+                    response.close()
                     response = client.newCall(mangaDetailsRequest(manga)).execute()
                 } catch (_: Exception) {
                 } finally {
                     attempts++
                 }
             }
-            add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
+
+            try {
+                add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
+            } catch (e: Exception) {
+                throw Exception("Failed to fetch chapter list: ${e.message}")
+            } finally {
+                response.close()
+            }
         }
         return Observable.just(
             listOf(
@@ -365,14 +385,25 @@ class SpyFakku :
             val response1 = client.newCall(pageListRequest(chapter)).execute()
             if (response1.isSuccessful) {
                 val hentai = response1.parseAs<Hentai>()
+                response1.close()
                 return Observable.just(
                     List(hentai.pages) { index ->
                         Page(index, imageUrl = "$baseImageUrl/${hentai.hash}/${index + 1}")
                     },
                 )
             }
+            response1.close()
             val response = client.newCall(pageListRequest2(chapter)).execute()
-            val add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
+
+            val add: ShortHentai
+            try {
+                add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
+            } catch (e: Exception) {
+                throw Exception("Failed to fetch page list: ${e.message}")
+            } finally {
+                response.close()
+            }
+
             return Observable.just(
                 List(add.pages) { index ->
                     Page(index, imageUrl = "$baseImageUrl/${add.hash}/${index + 1}")
@@ -407,7 +438,7 @@ class SpyFakku :
         val length = Random.nextInt(4, 9)
         val string = StringBuilder(length)
 
-        for (i in 0 until length) {
+        repeat(length) {
             string.append(charset.random())
         }
 
@@ -426,6 +457,8 @@ class SpyFakku :
             setDefaultValue("0")
         }.also(screen::addPreference)
     }
+
+    override val supportsRelatedMangas = false
 }
 
 private const val MIRROR_PREF_KEY = "pref_mirror"

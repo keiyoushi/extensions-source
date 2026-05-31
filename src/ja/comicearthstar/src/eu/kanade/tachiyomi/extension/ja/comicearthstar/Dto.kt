@@ -4,24 +4,11 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
-@Suppress("Unused")
-@Serializable
-class Payload<T>(
-    val operationName: String,
-    val variables: T,
-    val query: String,
-)
-
 @Serializable
 object EmptyVariables
 
 @Serializable
 class LatestResponse(
-    val data: LatestData,
-)
-
-@Serializable
-class LatestData(
     val serialGroup: LatestSerialGroup,
 )
 
@@ -50,11 +37,6 @@ class LatestSeries(
 
 @Serializable
 class SearchResponse(
-    val data: SearchData,
-)
-
-@Serializable
-class SearchData(
     val searchSeries: SearchSeries,
 )
 
@@ -88,11 +70,6 @@ class FirstEpisode(
 
 @Serializable
 class SeriesResponse(
-    val data: SeriesData,
-)
-
-@Serializable
-class SeriesData(
     val serialGroup: SeriesEntries,
 )
 

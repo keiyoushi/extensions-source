@@ -1,36 +1,21 @@
 package eu.kanade.tachiyomi.extension.de.mangatube
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.parseAs
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
-import java.text.ParseException
-import java.text.SimpleDateFormat
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class MangaTube : ParsedHttpSource() {
+class MangaTube : HttpSource() {
 
     override val name = "Manga Tube"
 
@@ -40,134 +25,121 @@ class MangaTube : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .connectTimeout(1, TimeUnit.MINUTES)
-        .readTimeout(1, TimeUnit.MINUTES)
-        .writeTimeout(1, TimeUnit.MINUTES)
-        .build()
+    override val client: OkHttpClient by lazy {
+        val baseClient = network.client.newBuilder()
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(1, TimeUnit.MINUTES)
+            .writeTimeout(1, TimeUnit.MINUTES)
+            .build()
 
-    private val xhrHeaders: Headers = headersBuilder().add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8").build()
+        baseClient.newBuilder()
+            .addInterceptor(ChallengeInterceptor(baseUrl, headers, baseClient, network.client.cookieJar))
+            .build()
+    }
 
-    private val json: Json by injectLazy()
+    private val apiHeaders: Headers = headersBuilder().add("Accept", "application/json").build()
 
     // Popular
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = client.newCall(popularMangaRequest(page))
-        .asObservableSuccess()
-        .map { response ->
-            parseMangaFromJson(response, page < 96)
-        }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/home/top-manga", apiHeaders)
 
-    override fun popularMangaRequest(page: Int): Request {
-        val rbodyContent = "action=load_series_list_entries&parameter%5Bpage%5D=$page&parameter%5Bletter%5D=&parameter%5Bsortby%5D=popularity&parameter%5Border%5D=asc"
-        return POST("$baseUrl/ajax", xhrHeaders, rbodyContent.toRequestBody(null))
+    override fun popularMangaParse(response: Response): MangasPage {
+        val result = response.parseAs<TopMangaResponse>()
+        return MangasPage(result.mangas, false)
     }
-
-    // popular uses "success" as a key, search uses "suggestions"
-    // for future reference: if adding filters, advanced search might use a different key
-    private fun parseMangaFromJson(response: Response, hasNextPage: Boolean): MangasPage {
-        var titleKey = "manga_title"
-        val mangas = json.decodeFromString<JsonObject>(response.body.string())
-            .let { it["success"] ?: it["suggestions"].also { titleKey = "value" } }!!
-            .jsonArray
-            .map { json ->
-                SManga.create().apply {
-                    title = json.jsonObject[titleKey]!!.jsonPrimitive.content
-                    url = "/series/${json.jsonObject["manga_slug"]!!.jsonPrimitive.content}"
-                    thumbnail_url = json.jsonObject["covers"]!!.jsonArray[0].jsonObject["img_name"]!!.jsonPrimitive.content
-                }
-            }
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    override fun popularMangaSelector() = throw UnsupportedOperationException()
-
-    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/?page=$page", headers)
-
-    override fun latestUpdatesSelector() = "div#series-updates div.series-update:not([style\$=none])"
-
-    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        element.select("a.series-name").let {
-            title = it.text()
-            setUrlWithoutDomain(it.attr("href"))
-        }
-        thumbnail_url = element.select("div.cover img").attr("abs:data-original")
+    override fun latestUpdatesRequest(page: Int): Request {
+        val offset = (page - 1) * LATEST_PAGE_SIZE
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments("api/home/updates")
+            .addQueryParameter("offset", offset.toString())
+            .build()
+            .toString()
+        return GET(url, apiHeaders)
     }
 
-    override fun latestUpdatesNextPageSelector() = "button#load-more-updates"
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val result = response.parseAs<LatestUpdatesResponse>()
+        val requestedOffset = response.request.url.queryParameter("offset")?.toIntOrNull() ?: 0
+        return MangasPage(result.mangas, requestedOffset < LATEST_PAGE_SIZE * 2)
+    }
 
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val rbodyContent = "action=search_query&parameter%5Bquery%5D=$query"
-        return POST("$baseUrl/ajax", xhrHeaders, rbodyContent.toRequestBody(null))
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments("api/manga/quick-search")
+            .addQueryParameter("query", query)
+            .build()
+            .toString()
+        return GET(url, apiHeaders)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = parseMangaFromJson(response, false)
-
-    override fun searchMangaSelector() = throw UnsupportedOperationException()
-
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage {
+        val result = response.parseAs<QuickSearchResponse>()
+        return MangasPage(result.mangas, false)
+    }
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        document.select("div.series-detailed div.row").first()!!.let { info ->
-            author = info.select("li:contains(Autor:) a").joinToString { it.text() }
-            artist = info.select("li:contains(Artist:) a").joinToString { it.text() }
-            status = info.select("li:contains(Offiziel)").firstOrNull()?.ownText().toStatus()
-            genre = info.select(".genre-list a").joinToString { it.text() }
-            thumbnail_url = info.select("img").attr("abs:data-original")
-        }
-        description = document.select("div.series-footer h4 ~ p").joinToString("\n\n") { it.text() }
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val slug = manga.url.substringAfterLast("/")
+        return GET("$baseUrl/api/manga/$slug", mangaApiHeaders(slug))
     }
 
-    private fun String?.toStatus() = when {
-        this == null -> SManga.UNKNOWN
-        this.contains("laufend", ignoreCase = true) -> SManga.ONGOING
-        this.contains("abgeschlossen", ignoreCase = true) -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDetailsResponse>().toSManga()
 
     // Chapters
 
-    override fun chapterListSelector() = "ul.chapter-list li"
+    override fun chapterListRequest(manga: SManga): Request {
+        val slug = manga.url.substringAfterLast("/")
+        return GET("$baseUrl/api/manga/$slug/chapters", mangaApiHeaders(slug))
+    }
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        element.select("a[title]").let {
-            name = "${it.select("b").text()} ${it.select("span:not(.btn)").joinToString(" ") { span -> span.text() }}"
-            setUrlWithoutDomain(it.attr("href"))
-        }
-        date_upload = element.select("p.chapter-date").text().let {
-            try {
-                SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).parse(it.substringAfter(" "))?.time ?: 0L
-            } catch (_: ParseException) {
-                0L
-            }
-        }
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val slug = response.request.url.pathSegments[2]
+        return response.parseAs<MangaChaptersResponse>().toSChapters(slug)
     }
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> {
-        val script = document.select("script:containsData(current_chapter:)").first()!!.data()
-        val imagePath = Regex("""img_path: '(.*)'""").find(script)?.groupValues?.get(1)
-            ?: throw Exception("Couldn't find image path")
-        val jsonArray = Regex("""pages: (\[.*]),""").find(script)?.groupValues?.get(1)
-            ?: throw Exception("Couldn't find JSON array")
-
-        return json.decodeFromString<JsonArray>(jsonArray).mapIndexed { i, json ->
-            Page(i, "", imagePath + json.jsonObject["file_name"]!!.jsonPrimitive.content)
+    override fun pageListRequest(chapter: SChapter): Request {
+        val (slug, apiPath) = when {
+            chapter.url.startsWith("/api/manga/") -> {
+                val slug = chapter.url.substringAfter("/api/manga/").substringBefore("/chapter/")
+                slug to chapter.url
+            }
+            chapter.url.startsWith("/series/") -> {
+                val slug = chapter.url.substringAfter("/series/").substringBefore("/read/")
+                val chapterId = chapter.url.substringAfter("/read/").substringBefore("/").toLong()
+                slug to "/api/manga/$slug/chapter/$chapterId"
+            }
+            else -> error("Unsupported chapter url: ${chapter.url}")
         }
+        val requestUrl = "$baseUrl$apiPath"
+        return GET(requestUrl, mangaApiHeaders(slug))
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun pageListParse(response: Response): List<Page> = try {
+        response.parseAs<ChapterDetailsResponse>().pages
+            .sortedBy { it.page }
+            .mapIndexed { index, page ->
+                Page(index, imageUrl = page.imageUrl)
+            }
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
+
+    companion object {
+        private const val LATEST_PAGE_SIZE = 40
+    }
+
+    private fun mangaApiHeaders(slug: String): Headers = apiHeaders.newBuilder()
+        .add("Referer", "$baseUrl/series/$slug")
+        .add("Use-Parameter", "manga_slug")
+        .build()
 }

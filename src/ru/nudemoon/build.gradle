@@ -1,8 +1,8 @@
 ext {
     extName = 'Nude-Moon'
     extClass = '.Nudemoon'
-    extVersionCode = 26
+    extVersionCode = 28
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

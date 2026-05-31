@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.galleryadults
 
+import keiyoushi.utils.tryParse
 import org.jsoup.nodes.Element
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 
@@ -137,12 +137,6 @@ private fun parseRelativeDate(date: String): Long {
 
         else -> 0L
     }
-}
-
-private fun SimpleDateFormat.tryParse(string: String): Long = try {
-    parse(string)?.time ?: 0L
-} catch (_: ParseException) {
-    0L
 }
 
 class WordSet(private vararg val words: String) {

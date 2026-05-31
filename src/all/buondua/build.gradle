@@ -1,11 +1,11 @@
 ext {
     extName = 'Buon Dua'
     extClass = '.BuonDua'
-    extVersionCode = 7
+    extVersionCode = 9
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
 
 dependencies {
     implementation(project(":lib:randomua"))

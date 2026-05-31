@@ -36,7 +36,7 @@ class TeamX :
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.client
         .newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)

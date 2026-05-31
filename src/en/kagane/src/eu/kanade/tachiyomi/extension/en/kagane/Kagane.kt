@@ -73,7 +73,7 @@ class Kagane :
 
     private val preferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(::refreshTokenInterceptor)
         // fix disk cache
         .apply {
@@ -273,52 +273,66 @@ class Kagane :
 
     override fun searchMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<SearchDto>()
-        val sources = if (!preferences.showSource) {
-            emptyMap()
-        } else {
-            metadata?.sources?.associate { it.sourceId to it.title }
-                ?: try {
-                    val sourceResponse = metadataClient.newCall(
-                        POST(
-                            "$apiUrl/api/v2/sources/list",
-                            apiHeaders,
-                            buildJsonObject { put("source_types", null) }.toJsonString()
-                                .toRequestBody("application/json".toMediaType()),
-                        ),
-                    ).execute()
-
-                    if (sourceResponse.isSuccessful) {
-                        sourceResponse.parseAs<SourcesDto>().sources.associate { it.sourceId to it.title }
-                    } else {
-                        emptyMap()
-                    }
-                } catch (e: Exception) {
-                    Log.w(name, "Failed to load sources", e)
-                    emptyMap()
-                }
-        }
+        val sources = getSourcesMap()
         val mangas = dto.content.map { it.toSManga(apiUrl, preferences.showSource, sources) }
         return MangasPage(mangas, hasNextPage = dto.hasNextPage())
     }
 
+    private fun getSourcesMap(): Map<String, String> = if (!preferences.showSource) {
+        emptyMap()
+    } else {
+        metadata?.sources?.associate { it.sourceId to it.title }
+            ?: try {
+                getSourcesResponse().use { response ->
+                    response.takeIf { it.isSuccessful }
+                        ?.parseAs<SourcesDto>()?.sources
+                }
+                    ?.associate { it.sourceId to it.title }
+                    ?: emptyMap()
+            } catch (e: Exception) {
+                Log.w(name, "Failed to load sources", e)
+                emptyMap()
+            }
+    }
+
+    private fun getSourcesResponse(): Response = metadataClient.newCall(
+        POST(
+            "$apiUrl/api/v2/sources/list",
+            apiHeaders,
+            buildJsonObject { put("source_types", null) }.toJsonString()
+                .toRequestBody("application/json".toMediaType()),
+        ),
+    ).execute()
+
     // =========================== Manga Details ============================
+
+    override fun relatedMangaListRequest(manga: SManga) = mangaDetailsRequest(manga)
+
+    override fun relatedMangaListParse(response: Response): List<SManga> {
+        val dto = response.parseAs<DetailsDto>()
+        val trackerId = dto.trackerId?.takeIf(String::isNotBlank) ?: return emptyList()
+        val trackerRequest = GET("$apiUrl/api/v2/trackers/$trackerId/series", apiHeaders)
+        val series = client.newCall(trackerRequest).execute().use { resp ->
+            if (!resp.isSuccessful) return emptyList()
+            resp.parseAs<TrackerDto>().series
+        }
+        val sources = getSourcesMap()
+        return series
+            .map { it.toSManga(apiUrl, preferences.showSource, sources) }
+    }
 
     override fun mangaDetailsParse(response: Response): SManga {
         val dto = response.parseAs<DetailsDto>()
         val sourceName = dto.sourceId?.let { sourceId ->
             metadata?.sources?.firstOrNull { it.sourceId == sourceId }?.title
                 ?: try {
-                    metadataClient.newCall(
-                        POST(
-                            "$apiUrl/api/v2/sources/list",
-                            apiHeaders,
-                            buildJsonObject { put("source_types", null) }.toJsonString()
-                                .toRequestBody("application/json".toMediaType()),
-                        ),
-                    ).execute().takeIf { it.isSuccessful }
-                        ?.parseAs<SourcesDto>()?.sources
+                    getSourcesResponse().use { response ->
+                        response.takeIf { it.isSuccessful }
+                            ?.parseAs<SourcesDto>()?.sources
+                    }
                         ?.firstOrNull { it.sourceId == sourceId }?.title
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    Log.w(name, "Failed to load sources", e)
                     null
                 }
         }
@@ -823,26 +837,24 @@ class Kagane :
     private fun fetchMetadata() {
         kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
             try {
-                val genreResponse = metadataClient.newCall(
+                val genres = metadataClient.newCall(
                     GET("$apiUrl/api/v2/genres/list", apiHeaders),
-                ).execute()
-                val tagsResponse = metadataClient.newCall(
+                ).execute().use { resp ->
+                    if (!resp.isSuccessful) return@use null
+                    resp.parseAs<List<GenreDto>>().associate { it.id to it.genreName }
+                }
+                val tags = metadataClient.newCall(
                     GET("$apiUrl/api/v2/tags/list", apiHeaders),
-                ).execute()
-                val sourcesResponse = metadataClient.newCall(
-                    POST(
-                        "$apiUrl/api/v2/sources/list",
-                        apiHeaders,
-                        buildJsonObject { put("source_types", null) }.toJsonString()
-                            .toRequestBody("application/json".toMediaType()),
-                    ),
-                ).execute()
+                ).execute().use { resp ->
+                    if (!resp.isSuccessful) return@use null
+                    resp.parseAs<List<TagDto>>().associate { it.id to it.tagName }
+                }
+                val sources = getSourcesResponse().use { resp ->
+                    if (!resp.isSuccessful) return@use null
+                    resp.parseAs<SourcesDto>().sources
+                }
 
-                if (genreResponse.isSuccessful && tagsResponse.isSuccessful && sourcesResponse.isSuccessful) {
-                    val genres = genreResponse.parseAs<List<GenreDto>>().associate { it.id to it.genreName }
-                    val tags = tagsResponse.parseAs<List<TagDto>>().associate { it.id to it.tagName }
-                    val sources = sourcesResponse.parseAs<SourcesDto>().sources
-
+                if (genres != null && tags != null && sources != null) {
                     metadata = MetadataDto(genres, tags, sources)
                     Log.d(name, "Metadata fetched and updated")
                 } else {

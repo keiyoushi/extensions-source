@@ -1,10 +1,9 @@
 ext {
     extName = 'New Manhwa'
     extClass = '.NewManhwa'
-    themePkg = 'mangathemesia'
     baseUrl = 'https://newmanhwa.com'
-    overrideVersionCode = 0
+    extVersionCode = 34
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

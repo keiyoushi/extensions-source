@@ -5,13 +5,14 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
-import androidx.preference.SwitchPreferenceCompat
+import androidx.preference.MultiSelectListPreference
 
 const val PREF_POPULAR_MANGA_DISPLAY = "POPULAR_MANGA_DISPLAY"
 const val PREF_RATE_LIMIT = "RATE_LIMIT"
-const val PREF_NOTICE = "NOTICE"
+const val PREF_DESCRIPTION = "DESCRIPTION"
 
 val RATE_LIMIT_REGEX = Regex("^\\d+/\\d+$")
+val DEFAULT_SET = setOf("A", "B", "C")
 
 fun preferencesInternal(context: Context, pref: SharedPreferences) = arrayOf(
     ListPreference(context).apply {
@@ -65,10 +66,13 @@ fun preferencesInternal(context: Context, pref: SharedPreferences) = arrayOf(
             }
         }
     },
-    SwitchPreferenceCompat(context).apply {
-        key = PREF_NOTICE
-        title = "顯示作品公告"
-        summary = "如果有，則在簡介里顯示該作品的公告通知"
-        setDefaultValue(true)
+    MultiSelectListPreference(context).apply {
+        key = PREF_DESCRIPTION
+        title = "作品信息顯示偏好"
+        summary = "設定作品簡介中需要顯示的額外信息"
+        dialogTitle = "勾選需要顯示的信息"
+        entries = arrayOf("作品公告", "作品别名", "跳轉連結")
+        entryValues = arrayOf("A", "B", "C")
+        setDefaultValue(DEFAULT_SET)
     },
 )

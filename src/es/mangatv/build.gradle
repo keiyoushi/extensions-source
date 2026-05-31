@@ -3,11 +3,11 @@ ext {
     extClass = '.MangaTV'
     themePkg = 'mangathemesia'
     baseUrl = 'https://mangatv.net'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
 
 dependencies {
     implementation(project(':lib:unpacker'))

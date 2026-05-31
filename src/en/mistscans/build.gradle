@@ -3,8 +3,8 @@ ext {
     extClass = '.MistScans'
     themePkg = 'keyoapp'
     baseUrl = 'https://mistscans.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

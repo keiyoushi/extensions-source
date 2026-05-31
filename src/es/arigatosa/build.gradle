@@ -1,0 +1,10 @@
+ext {
+    extName = 'Arigato S.A'
+    extClass = '.ArigatoSA'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/arigatosa'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

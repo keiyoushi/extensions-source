@@ -35,7 +35,7 @@ class TaoSect : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 
@@ -135,6 +135,18 @@ class TaoSect : HttpSource() {
         val projectList = projectsResult.map(::popularMangaFromObject)
 
         return MangasPage(projectList, hasNextPage)
+    }
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val projectSlug = url.pathSegments[1]
+            return fetchSearchManga(page, "$SLUG_PREFIX_SEARCH$projectSlug", filters)
+        }
+        return super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {

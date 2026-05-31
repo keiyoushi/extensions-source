@@ -3,131 +3,199 @@ package eu.kanade.tachiyomi.extension.all.junmeitu
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import org.jsoup.select.Evaluator
-import uy.kohesive.injekt.injectLazy
+import java.text.SimpleDateFormat
+import java.util.Locale
 
-class Junmeitu : ParsedHttpSource() {
+class Junmeitu : HttpSource() {
     override val lang = "all"
     override val name = "Junmeitu"
     override val supportsLatest = true
     override val id = 4721197766605490540
 
-    private val json: Json by injectLazy()
-
-    // old pref ["MIRROR_all" => arrayOf("https://junmeitu.com", "https://meijuntu.com")]
     override val baseUrl = "https://meijuntu.com"
 
-    // Latest
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        manga.thumbnail_url = element.select("img").attr("abs:src")
-        manga.title = element.select("p").text()
-        manga.setUrlWithoutDomain(element.select("a").attr("abs:href"))
-        return manga
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/beauty/index-$page.html", headers)
+
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/beauty/hot-$page.html", headers)
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(".pic-list > ul > li").map { element ->
+            SManga.create().apply {
+                title = element.select("p").text()
+                thumbnail_url = element.select("img").attr("abs:src")
+                setUrlWithoutDomain(element.select("a").attr("abs:href"))
+            }
+        }
+        val hasNextPage = document.selectFirst("span + a  + a") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
-    override fun latestUpdatesNextPageSelector() = "span + a  + a"
-
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/beauty/index-$page.html")
-
-    override fun latestUpdatesSelector() = ".pic-list > ul > li"
-
-    // Popular
-    override fun popularMangaFromElement(element: Element) = latestUpdatesFromElement(element)
-    override fun popularMangaNextPageSelector() = latestUpdatesNextPageSelector()
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/beauty/hot-$page.html")
-    override fun popularMangaSelector() = latestUpdatesSelector()
-
-    // Search
-    override fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
-    override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val tagFilter = filters.findInstance<TagFilter>()
-        val modelFilter = filters.findInstance<ModelFilter>()
-        val groupFilter = filters.findInstance<GroupFilter>()
-        val categoryFilter = filters.findInstance<CategoryFilter>()
-        val sortFilter = filters.findInstance<SortFilter>()
+        val tagFilter = filters.firstInstanceOrNull<TagFilter>()
+        val modelFilter = filters.firstInstanceOrNull<ModelFilter>()
+        val groupFilter = filters.firstInstanceOrNull<GroupFilter>()
+        val categoryFilter = filters.firstInstanceOrNull<CategoryFilter>()
+        val sortFilter = filters.firstInstanceOrNull<SortFilter>()
+
         return when {
-            query.isNotEmpty() -> GET("$baseUrl/search/$query-$page.html")
-            tagFilter!!.state.isNotEmpty() -> GET("$baseUrl/tags/${tagFilter.state}-${categoryFilter!!.selected}-$page.html")
-            modelFilter!!.state.isNotEmpty() -> GET("$baseUrl/model/${modelFilter.state}-$page.html")
-            groupFilter!!.state.isNotEmpty() -> GET("$baseUrl/xzjg/${groupFilter.state}-$page.html")
-            categoryFilter!!.state != 0 -> GET("$baseUrl/${categoryFilter.slug}/${sortFilter!!.selected}-$page.html")
-            sortFilter!!.state != 0 -> GET("$baseUrl/${categoryFilter.slug}/${sortFilter.selected}-$page.html")
+            query.isNotEmpty() -> GET("$baseUrl/search/$query-$page.html", headers)
+            tagFilter != null && tagFilter.state.isNotEmpty() -> GET("$baseUrl/tags/${tagFilter.state}-${categoryFilter?.selected ?: "6"}-$page.html", headers)
+            modelFilter != null && modelFilter.state.isNotEmpty() -> GET("$baseUrl/model/${modelFilter.state}-$page.html", headers)
+            groupFilter != null && groupFilter.state.isNotEmpty() -> GET("$baseUrl/xzjg/${groupFilter.state}-$page.html", headers)
+            categoryFilter != null && categoryFilter.state != 0 -> GET("$baseUrl/${categoryFilter.slug}/${sortFilter?.selected ?: "index"}-$page.html", headers)
+            sortFilter != null && sortFilter.state != 0 -> GET("$baseUrl/${categoryFilter?.slug ?: "beauty"}/${sortFilter.selected}-$page.html", headers)
             else -> latestUpdatesRequest(page)
         }
     }
-    override fun searchMangaSelector() = latestUpdatesSelector()
 
-    // Details
-    override fun mangaDetailsParse(document: Document): SManga {
-        val manga = SManga.create()
-        manga.title = document.selectFirst(".news-title,.title")!!.text()
-        manga.description = "${document.select(".news-info, .picture-details")
-            .joinToString { it.text() }}\n" + document.select(".introduce").text()
-        manga.genre = document.select(".relation_tags > a").joinToString { it.text() }
-        manga.status = SManga.COMPLETED
-        return manga
-    }
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun chapterFromElement(element: Element): SChapter {
-        val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain(element.select(".position a:last-child").attr("abs:href"))
-        chapter.name = "Gallery"
-        return chapter
-    }
-
-    override fun chapterListSelector() = "div.position"
-
-    // Pages
-    override fun pageListParse(document: Document): List<Page> {
-        val numPages = document.select(".pages > a:nth-last-of-type(2)").text().toIntOrNull()
-        val newsBody = document.selectFirst(Evaluator.Class("news-body"))
-        if (newsBody == null) {
-            val prefix = document.location().run {
-                val index = lastIndexOf('.') // .html
-                baseUrl + "/ajax_" + substring(baseUrl.length + 1, index) + '-'
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            title = document.selectFirst(".news-title, .title")?.text() ?: ""
+            description = buildString {
+                append(document.select(".news-info, .picture-details").joinToString(" ") { it.text() })
+                append("\n")
+                append(document.select(".introduce").text())
             }
-            val postfix = document.selectFirst("body > script")!!.data().run {
-                val script = substringAfterLast("pc_cid = ")
-                val categoryId = script.substringBefore(';')
-                val contentId = script.substringAfter("pc_id = ").substringBeforeLast(';')
-                ".html?ajax=1&catid=$categoryId&conid=$contentId"
-            }
-            return (1..numPages!!).map { Page(it - 1, "$prefix$it$postfix") }
-        } else {
-            return newsBody.select(Evaluator.Tag("img")).mapIndexed { index, it ->
-                val imgUrl = when {
-                    it.hasAttr("data-original") -> it.attr("abs:data-original")
-                    it.hasAttr("data-src") -> it.attr("abs:data-src")
-                    it.hasAttr("data-lazy-src") -> it.attr("abs:data-lazy-src")
-                    else -> it.attr("abs:src")
-                }
-                Page(index, imageUrl = imgUrl)
-            }
+            genre = document.select(".relation_tags > a").joinToString(", ") { it.text() }
+            status = SManga.COMPLETED
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        val page: PageDto = json.decodeFromString(response.body.string())
-        val img = Jsoup.parseBodyFragment(page.pic).body().child(0)
-        return img.attr("src")
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        val chapter = SChapter.create().apply {
+            val urlElement = document.selectFirst(".position a:last-child")
+            val href = urlElement?.attr("abs:href")
+            setUrlWithoutDomain(if (!href.isNullOrEmpty()) href else response.request.url.toString())
+            name = "Gallery"
+
+            val dateText = document.select(".picture-details span.gao:contains(日期)").text().substringAfter("日期:").trim()
+            date_upload = dateFormat.tryParse(dateText)
+        }
+        return listOf(chapter)
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val pages = mutableListOf<Page>()
 
-    // Filters
+        val newsBody = document.selectFirst(".news-body")
+        if (newsBody != null) {
+            newsBody.select("img").forEachIndexed { index, img ->
+                val imgUrl = img.attr("abs:data-original").takeIf { it.isNotEmpty() }
+                    ?: img.attr("abs:data-src").takeIf { it.isNotEmpty() }
+                    ?: img.attr("abs:data-lazy-src").takeIf { it.isNotEmpty() }
+                    ?: img.attr("abs:src")
+                pages.add(Page(index, imageUrl = imgUrl))
+            }
+            return pages
+        }
+
+        val numPagesText = document.select(".pages > a:nth-last-of-type(2)").text()
+        val numPages = numPagesText.toIntOrNull()
+            ?: document.select(".pages a").mapNotNull { it.text().toIntOrNull() }.maxOrNull()
+            ?: 1
+
+        val scriptData = document.select("script").find { it.data().contains("pc_cid") }?.data()
+
+        if (scriptData != null) {
+            val categoryId = scriptData.substringAfter("pc_cid = ").substringBefore(';').trim()
+            val contentId = scriptData.substringAfter("pc_id = ").substringBefore(';').trim()
+
+            val urlObj = response.request.url
+            val cat = urlObj.pathSegments.getOrNull(0) ?: "beauty"
+            val slugFull = urlObj.pathSegments.lastOrNull() ?: ""
+            val slug = slugFull.substringBefore(".html").substringBeforeLast("-")
+
+            val ajaxUrlBase = urlObj.newBuilder().apply {
+                if (urlObj.pathSize > 0) setPathSegment(0, "ajax_$cat")
+                removeAllQueryParameters("ajax")
+                removeAllQueryParameters("catid")
+                removeAllQueryParameters("conid")
+                addQueryParameter("ajax", "1")
+                addQueryParameter("catid", categoryId)
+                addQueryParameter("conid", contentId)
+            }.build()
+
+            val firstImage = document.selectFirst(".pictures img")?.let { img ->
+                img.attr("abs:data-original").takeIf { it.isNotEmpty() }
+                    ?: img.attr("abs:data-src").takeIf { it.isNotEmpty() }
+                    ?: img.attr("abs:data-lazy-src").takeIf { it.isNotEmpty() }
+                    ?: img.attr("abs:src")
+            }
+
+            if (!firstImage.isNullOrEmpty()) {
+                pages.add(Page(0, imageUrl = firstImage))
+            } else {
+                val pageUrl = ajaxUrlBase.newBuilder()
+                    .setPathSegment(ajaxUrlBase.pathSize - 1, "$slug-1.html")
+                    .build()
+                    .toString()
+                pages.add(Page(0, url = pageUrl))
+            }
+
+            for (i in 2..numPages) {
+                val pageUrl = ajaxUrlBase.newBuilder()
+                    .setPathSegment(ajaxUrlBase.pathSize - 1, "$slug-$i.html")
+                    .build()
+                    .toString()
+                pages.add(Page(i - 1, url = pageUrl))
+            }
+        } else {
+            val urlObj = response.request.url
+            val slugFull = urlObj.pathSegments.lastOrNull() ?: ""
+            val slug = slugFull.substringBefore(".html").substringBeforeLast("-")
+
+            for (i in 1..numPages) {
+                val pageUrl = urlObj.newBuilder()
+                    .setPathSegment(urlObj.pathSize - 1, "$slug${if (i > 1) "-$i" else ""}.html")
+                    .build()
+                    .toString()
+                pages.add(Page(i - 1, url = pageUrl))
+            }
+        }
+
+        return pages
+    }
+
+    override fun imageUrlParse(response: Response): String {
+        val contentType = response.header("Content-Type") ?: ""
+        if (contentType.contains("application/json", ignoreCase = true) || response.request.url.queryParameter("ajax") == "1") {
+            val pageDto = response.parseAs<Dto>()
+            val img = Jsoup.parseBodyFragment(pageDto.pic, baseUrl).selectFirst("img")
+            return img?.attr("abs:src") ?: throw Exception("Image not found in AJAX response")
+        }
+
+        val document = response.asJsoup()
+        val img = document.selectFirst(".pictures img")
+        return img?.let { element ->
+            element.attr("abs:data-original").takeIf { it.isNotEmpty() }
+                ?: element.attr("abs:data-src").takeIf { it.isNotEmpty() }
+                ?: element.attr("abs:data-lazy-src").takeIf { it.isNotEmpty() }
+                ?: element.attr("abs:src")
+        } ?: throw Exception("Image not found in HTML response")
+    }
+
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("NOTE: Ignored if using text search!"),
         Filter.Header("NOTE: Filter are weird for this extension!"),
@@ -138,32 +206,4 @@ class Junmeitu : ParsedHttpSource() {
         CategoryFilter(getCategoryFilter(), 0),
         SortFilter(getSortFilter(), 0),
     )
-
-    class SelectFilterOption(val name: String, val value: String = name)
-    abstract class SelectFilter(name: String, private val options: List<SelectFilterOption>, default: Int = 0) : Filter.Select<String>(name, options.map { it.name }.toTypedArray(), default) {
-        val selected: String
-            get() = options[state].value
-        val slug: String
-            get() = options[state].name
-    }
-
-    class TagFilter : Filter.Text("Tag")
-    class ModelFilter : Filter.Text("Model")
-    class GroupFilter : Filter.Text("Group")
-    class CategoryFilter(options: List<SelectFilterOption>, default: Int) : SelectFilter("Category", options, default)
-    class SortFilter(options: List<SelectFilterOption>, default: Int) : SelectFilter("Sort", options, default)
-
-    private fun getCategoryFilter() = listOf(
-        SelectFilterOption("beauty", "6"),
-        SelectFilterOption("handsome", "5"),
-        SelectFilterOption("news", "30"),
-        SelectFilterOption("street", "32"),
-    )
-
-    private fun getSortFilter() = listOf(
-        SelectFilterOption("default", "index"),
-        SelectFilterOption("hot"),
-    )
-
-    private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 }

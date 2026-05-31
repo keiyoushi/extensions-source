@@ -1,0 +1,10 @@
+ext {
+    extName = 'AntiPatreon Scan'
+    extClass = '.AntipatreonScan'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/antipatreon'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

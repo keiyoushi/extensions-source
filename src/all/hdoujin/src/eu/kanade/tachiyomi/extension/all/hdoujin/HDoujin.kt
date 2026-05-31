@@ -47,6 +47,11 @@ class HDoujin(
 
     override val name = "HDoujin"
 
+    override val id: Long = when (lang) {
+        "ko" -> 8377507648400729012L
+        else -> super.id
+    }
+
     override val supportsLatest = true
     private val preferences = getPreferences()
     private fun quality() = preferences.getString(PREF_IMAGE_RES, "1280")!!
@@ -126,7 +131,7 @@ class HDoujin(
         latch.await(10, TimeUnit.SECONDS)
         return _clearance
     }
-    private val clearanceClient = network.cloudflareClient.newBuilder()
+    private val clearanceClient = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url

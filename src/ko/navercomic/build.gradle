@@ -1,8 +1,8 @@
 ext {
     extName = 'Naver Comic'
     extClass = '.NaverComicFactory'
-    extVersionCode = 6
+    extVersionCode = 7
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

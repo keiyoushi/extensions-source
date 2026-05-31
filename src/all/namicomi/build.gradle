@@ -1,11 +1,11 @@
 ext {
     extName = 'NamiComi'
     extClass = '.NamiComiFactory'
-    extVersionCode = 4
+    extVersionCode = 5
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
 
 dependencies {
     implementation(project(":lib:i18n"))

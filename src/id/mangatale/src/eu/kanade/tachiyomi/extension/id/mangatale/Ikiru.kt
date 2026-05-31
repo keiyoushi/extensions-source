@@ -8,7 +8,7 @@ class Ikiru :
     NatsuId(
         "Ikiru",
         "id",
-        "https://03.ikiru.wtf",
+        "https://05.ikiru.wtf",
     ) {
     // Formerly "MangaTale"
     override val id = 1532456597012176985

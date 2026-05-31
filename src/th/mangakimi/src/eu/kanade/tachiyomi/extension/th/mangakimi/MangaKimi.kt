@@ -7,15 +7,16 @@ import android.graphics.Rect
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.lib.unpacker.Unpacker
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 import org.jsoup.nodes.Document
-import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -38,38 +39,59 @@ class MangaKimi :
     override val pageSelector = "div#readerarea img, #readerarea div.displayImage + script:containsData(p,a,c,k,e,d)"
 
     override fun pageListParse(document: Document): List<Page> {
-        countViews(document)
-
         val location = document.location()
 
-        super.pageListParse(document).takeIf { it.isNotEmpty() }?.let { return it }
+        val pages = document.select(pageSelector).mapNotNull { element ->
+            try {
+                if (element.tagName() == "img") {
+                    val url = element.imgAttr()
+                    url.ifEmpty { null }
+                } else {
+                    val unpackedScript = Unpacker.unpack(element.data())
+                    if (unpackedScript.isEmpty()) return@mapNotNull null
 
-        return document.select(pageSelector).mapIndexed { i, img ->
-            if (img.tagName() == "img") {
-                Page(i, location, img.imgAttr())
-            } else {
-                val unpackedScript = Unpacker.unpack(img.data())
-                val blockWidth = blockWidthRegex.find(unpackedScript)!!.groupValues[1].toInt()
-                val blockHeight = blockHeightRegex.find(unpackedScript)!!.groupValues[1].toInt()
-                val matrix = unpackedScript.substringAfter("[")
-                    .substringBefore("];")
-                    .let { "[$it]" }
-                val scrambledImageUrl = unpackedScript.substringAfter("url(")
-                    .substringBefore(");")
+                    val blockWidth = blockWidthRegex.find(unpackedScript)?.groupValues?.get(1)?.toInt() ?: 0
+                    val blockHeight = blockHeightRegex.find(unpackedScript)?.groupValues?.get(1)?.toInt() ?: 0
 
-                val data = ScramblingData(
-                    blockWidth = blockWidth,
-                    blockHeight = blockHeight,
-                    matrix = json.decodeFromString(matrix),
-                )
+                    val matrixStr = unpackedScript.substringAfter("[", "").substringBefore("];", "")
+                    if (matrixStr.isEmpty()) return@mapNotNull null
 
-                Page(i, location, "$scrambledImageUrl#${json.encodeToString(data)}")
+                    val matrix = "[$matrixStr]".parseAs<List<List<Double>>>()
+
+                    val scrambledImageUrl = unpackedScript.substringAfter("url(")
+                        .substringBefore(");")
+                        .trim('\'', '"')
+
+                    if (scrambledImageUrl.isEmpty()) return@mapNotNull null
+
+                    val data = ScramblingData(
+                        blockWidth = blockWidth,
+                        blockHeight = blockHeight,
+                        matrix = matrix,
+                    )
+
+                    "$scrambledImageUrl#${data.toJsonString()}"
+                }
+            } catch (_: Exception) {
+                null
             }
+        }.mapIndexed { i, url ->
+            Page(i, location, url)
         }
+
+        // We only call countViews if we parsed pages directly to avoid double counting
+        // since the super fallback also calls it.
+        if (pages.isNotEmpty()) {
+            countViews(document)
+            return pages
+        }
+
+        // Fallback to super method if no pages are found (e.g., for JSON image lists)
+        return super.pageListParse(document)
     }
 
-    private val blockWidthRegex = Regex("""width:\s*"?\s*\+?\s*(\d+)\s*\+?\s*"?px;""")
-    private val blockHeightRegex = Regex("""height:\s*"?\s*\+?\s*(\d+)\s*\+?\s*"?px;""")
+    private val blockWidthRegex = Regex("""width:\s*["']?\s*\+?\s*(\d+)\s*\+?\s*["']?px;""")
+    private val blockHeightRegex = Regex("""height:\s*["']?\s*\+?\s*(\d+)\s*\+?\s*["']?px;""")
 
     @Serializable
     class ScramblingData(
@@ -82,13 +104,22 @@ class MangaKimi :
         val request = chain.request()
         val response = chain.proceed(request)
 
-        if (request.url.fragment.isNullOrEmpty()) {
+        val fragment = request.url.fragment
+        if (fragment.isNullOrEmpty()) {
             return response
         }
 
-        val scramblingData = json.decodeFromString<ScramblingData>(request.url.fragment!!)
+        val scramblingData = try {
+            fragment.parseAs<ScramblingData>()
+        } catch (_: Exception) {
+            return response
+        }
 
-        val scrambledImg = BitmapFactory.decodeStream(response.body.byteStream())
+        val responseBody = response.body
+        val scrambledImg = responseBody.byteStream().use {
+            BitmapFactory.decodeStream(it)
+        } ?: throw IOException("Failed to decode descrambling image")
+
         val descrambledImg = Bitmap.createBitmap(scrambledImg.width, scrambledImg.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(descrambledImg)
 
@@ -108,11 +139,14 @@ class MangaKimi :
             canvas.drawBitmap(scrambledImg, srcRect, destRect, null)
         }
 
-        val output = ByteArrayOutputStream()
-        descrambledImg.compress(Bitmap.CompressFormat.JPEG, 90, output)
+        val buffer = Buffer()
+        descrambledImg.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
 
-        val image = output.toByteArray()
-        val body = image.toResponseBody("image/jpeg".toMediaType())
+        // Free native memory early
+        scrambledImg.recycle()
+        descrambledImg.recycle()
+
+        val body = buffer.asResponseBody("image/jpeg".toMediaType())
 
         return response.newBuilder()
             .body(body)

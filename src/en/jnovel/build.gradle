@@ -1,0 +1,14 @@
+ext {
+    extName = 'J-Novel'
+    extClass = '.JNovel'
+    extVersionCode = 2
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"
+
+dependencies {
+    implementation("org.kotlincrypto.hash:blake2:0.8.0") {
+        exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib"
+    }
+}

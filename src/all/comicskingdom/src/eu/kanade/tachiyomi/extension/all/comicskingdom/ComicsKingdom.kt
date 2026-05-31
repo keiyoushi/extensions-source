@@ -292,7 +292,7 @@ class ComicsKingdom(override val lang: String) :
             title = "Compact chapters"
             summary =
                 "Unchecking this will make each daily/weekly upload into a chapter which can be very slow because some comics have 8000+ uploads"
-            isChecked = true
+            setDefaultValue(true)
         }
 
         screen.addPreference(compactpref)

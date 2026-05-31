@@ -7,8 +7,7 @@ import android.graphics.Rect
 import com.drew.imaging.ImageMetadataReader
 import com.drew.metadata.exif.ExifSubIFDDirectory
 import eu.kanade.tachiyomi.network.GET
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -16,14 +15,11 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
-import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 
 class VizImageInterceptor : Interceptor {
-
-    private val json: Json by injectLazy()
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
@@ -33,7 +29,7 @@ class VizImageInterceptor : Interceptor {
         }
 
         val imageUrl = imageUrlParse(response)
-        val imageResponse = chain.proceed(imageRequest(imageUrl))
+        val imageResponse = chain.proceed(imageRequest(imageUrl, chain.request().header("User-Agent")))
 
         if (!imageResponse.isSuccessful) {
             imageResponse.close()
@@ -47,15 +43,19 @@ class VizImageInterceptor : Interceptor {
             .build()
     }
 
-    private fun imageUrlParse(response: Response): String = response.use { json.decodeFromString<VizPageUrlDto>(it.body.string()) }
+    private fun imageUrlParse(response: Response): String = response.parseAs<PageUrlDto>()
         .data?.values?.firstOrNull() ?: throw IOException(FAILED_TO_FETCH_PAGE_URL)
 
-    private fun imageRequest(url: String): Request {
+    private fun imageRequest(url: String, userAgent: String?): Request {
         val headers = Headers.Builder()
             .add("Accept", "*/*")
             .add("Origin", "https://www.viz.com")
             .add("Referer", "https://www.viz.com/")
-            .add("User-Agent", Viz.USER_AGENT)
+            .apply {
+                if (userAgent != null) {
+                    add("User-Agent", userAgent)
+                }
+            }
             .build()
 
         return GET(url, headers)
@@ -75,6 +75,8 @@ class VizImageInterceptor : Interceptor {
             ?: return byteOutputStream.toByteArray().toResponseBody(contentType)
 
         val input = BitmapFactory.decodeStream(byteInputStreamForImage)
+            ?: return byteOutputStream.toByteArray().toResponseBody(contentType)
+
         val width = input.width
         val height = input.height
         val newWidth = (width - WIDTH_CUT).coerceAtLeast(imageData.width)
@@ -141,10 +143,14 @@ class VizImageInterceptor : Interceptor {
             )
         }
 
-        return ByteArrayOutputStream()
+        val bytes = ByteArrayOutputStream()
             .apply { result.compress(Bitmap.CompressFormat.JPEG, 95, this) }
             .toByteArray()
-            .toResponseBody(JPEG_MEDIA_TYPE)
+
+        input.recycle()
+        result.recycle()
+
+        return bytes.toResponseBody(JPEG_MEDIA_TYPE)
     }
 
     private fun Canvas.drawImage(
@@ -179,7 +185,7 @@ class VizImageInterceptor : Interceptor {
         ImageData(metaWidth, metaHeight, metaUniqueId)
     }
 
-    private data class ImageData(val width: Int, val height: Int, val uniqueId: String) {
+    private class ImageData(val width: Int, val height: Int, val uniqueId: String) {
         val key: List<Int> by lazy {
             uniqueId.split(":")
                 .map { it.toInt(16) }

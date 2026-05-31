@@ -1,11 +1,11 @@
 ext {
     extName = 'Piccoma'
     extClass = '.Piccoma'
-    extVersionCode = 1
-    isNsfw = false
+    extVersionCode = 2
+    isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
 
 dependencies {
     implementation(project(":lib:seedrandom"))

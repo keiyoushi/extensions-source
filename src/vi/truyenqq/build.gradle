@@ -1,7 +1,7 @@
 ext {
     extName = 'TruyenQQ'
     extClass = '.TruyenQQ'
-    extVersionCode = 22
+    extVersionCode = 23
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

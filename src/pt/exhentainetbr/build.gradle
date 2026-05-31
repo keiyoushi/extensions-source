@@ -1,8 +1,8 @@
 ext {
     extName = 'ExHentai.net.br'
     extClass = '.ExHentaiNetBR'
-    extVersionCode = 1
+    extVersionCode = 3
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

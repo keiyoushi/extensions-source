@@ -7,7 +7,7 @@ import java.util.Locale
 class KoreliScans :
     MangaThemesia(
         "Koreli Scans",
-        "https://nabimanga.com",
+        "https://www.nabicix.com",
         "tr",
         dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
     )

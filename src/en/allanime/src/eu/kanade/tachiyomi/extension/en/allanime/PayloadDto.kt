@@ -46,13 +46,5 @@ class IDVariables(
 @Serializable
 class ChapterListVariables(
     private val id: String,
-    private val chapterNumStart: Float,
-    private val chapterNumEnd: Float,
-)
-
-@Serializable
-class PageListVariables(
-    private val id: String,
-    private val chapterNum: String,
-    private val translationType: String,
+    private val showId: String,
 )

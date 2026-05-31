@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.kuramanga
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,7 +10,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.Serializable
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -49,7 +47,7 @@ class KuraManga : HttpSource() {
         val mangas = document.select(".popular-glide .manga-card").mapNotNull { element ->
             val titleEl = element.selectFirst(".manga-title") ?: return@mapNotNull null
             SManga.create().apply {
-                title = titleEl.text().trim()
+                title = titleEl.text()
                 url = "/" + element.attr("href").removePrefix("/")
                 thumbnail_url = element.selectFirst("img.manga-thumb")?.attr("abs:src")
             }
@@ -65,7 +63,7 @@ class KuraManga : HttpSource() {
         val mangas = document.select(".update-list .update-row").mapNotNull { element ->
             val link = element.selectFirst("a.update-series-link") ?: return@mapNotNull null
             SManga.create().apply {
-                title = link.text().trim()
+                title = link.text()
                 url = "/" + link.attr("href").removePrefix("/")
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
@@ -112,13 +110,7 @@ class KuraManga : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val searchResponse = response.parseAs<SearchResponse>()
-        val mangas = searchResponse.data.map { dto ->
-            SManga.create().apply {
-                title = dto.title
-                url = "/${dto.normalized_title}"
-                thumbnail_url = dto.cover_image_url
-            }
-        }
+        val mangas = searchResponse.data.map { it.toSManga() }
         val offset = response.request.url.queryParameter("offset")?.toInt() ?: 0
         val hasNextPage = (searchResponse.data.size == PAGE_SIZE) && (offset + searchResponse.data.size < searchResponse.total)
         return MangasPage(mangas, hasNextPage)
@@ -128,11 +120,11 @@ class KuraManga : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst("h1.manga-title")!!.text().trim()
-            description = document.selectFirst(".summary-inner")?.text()?.trim()
+            title = document.selectFirst("h1.manga-title")!!.text()
+            description = document.selectFirst(".summary-inner")?.text()
             author = document.selectFirst(".meta-grid div:contains(Author:)")?.text()?.substringAfter("Author:")?.trim()
             artist = document.selectFirst(".meta-grid div:contains(Artist:)")?.text()?.substringAfter("Artist:")?.trim()
-            genre = document.select(".genre-list a.genre-chip").joinToString { it.text().trim() }
+            genre = document.select(".genre-list a.genre-chip").joinToString { it.text() }
             status = document.selectFirst(".meta-grid div:contains(Status:)")?.text()?.substringAfter("Status:")?.trim()?.lowercase().parseStatus()
             thumbnail_url = document.selectFirst("meta[property='og:image']")?.attr("content")
         }
@@ -151,9 +143,9 @@ class KuraManga : HttpSource() {
         return document.select(".chapter-list .chapter-item").mapNotNull { element ->
             val link = element.selectFirst("a") ?: return@mapNotNull null
             SChapter.create().apply {
-                name = link.text().trim()
+                name = link.text()
                 url = "/" + link.attr("href").removePrefix("/")
-                date_upload = dateFormat.tryParse(element.selectFirst("time")?.text()?.trim())
+                date_upload = dateFormat.tryParse(element.selectFirst("time")?.text())
             }
         }
     }
@@ -161,11 +153,8 @@ class KuraManga : HttpSource() {
     // =============================== Pages ================================
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val script = document.selectFirst("script[type='application/ld+json']:containsData(ComicStory)")
-            ?: throw Exception("Images not found")
-
-        return script.data().parseAs<ChapterPageDto>().image.mapIndexed { index, url ->
-            Page(index, "", url)
+        return document.select("#chapterImages img").mapIndexed { index, img ->
+            Page(index, imageUrl = img.attr("abs:src"))
         }
     }
 
@@ -179,48 +168,9 @@ class KuraManga : HttpSource() {
     )
 
     // ============================== Private ===============================
-    private val dateFormat by lazy {
-        SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH)
-    }
+    private val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH)
 
     companion object {
         private const val PAGE_SIZE = 10
     }
-
-    // =============================== DTOs =================================
-    @Serializable
-    private data class SearchResponse(
-        val data: List<MangaDto>,
-        val total: Int,
-    )
-
-    @Serializable
-    private data class MangaDto(
-        val id: Int,
-        val title: String,
-        val cover_image_url: String? = null,
-        val normalized_title: String,
-    )
-
-    @Serializable
-    private data class ChapterPageDto(
-        val image: List<String>,
-    )
-
-    // =========================== Filter Classes ===========================
-    private abstract class SelectFilter(name: String, val vals: Array<String>) : Filter.Select<String>(name, vals)
-
-    private class StatusFilter(name: String, vals: Array<String>) : SelectFilter(name, vals)
-
-    private class GenreFilter(name: String, genres: List<Genre>) : Filter.Group<Genre>(name, genres)
-
-    private class Genre(name: String) : Filter.CheckBox(name)
-
-    private class AdultFilter(name: String) : Filter.CheckBox(name, true)
-
-    private val statusList = arrayOf("All", "Ongoing", "Completed", "On_hold", "Upcoming")
-
-    private val genreNames = listOf(
-        "Action", "Adaptation", "Adult", "Adventure", "BL", "Borderline H", "College life", "Comedy", "Crime", "Drama", "Ecchi", "Explicit Sex", "Fantasy", "GL", "Gender Bender", "Harem", "Historical", "Horror", "Isekai", "Josei", "Loli", "Magic", "Magical", "Manhua", "Manhwa", "Martial Arts", "Mature", "Mystery", "Office Workers", "Psychological", "Reincarnation", "Revenge", "Romance", "School Life", "Sci-Fi", "Seinen", "Shoujo", "Shounen", "Slice of Life", "Smut", "Sport", "Supernatural", "Survival", "Thriller", "Time travel", "Tragedy", "Uncensored", "Vampire", "Violence", "Webtoons", "Yuri",
-    )
 }
