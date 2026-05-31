@@ -163,7 +163,7 @@ class YomuComics : HttpSource() {
 
     private fun parseLibraryResponse(response: Response): MangasPage {
         val result = response.parseAs<LibraryResponseDto>()
-        val mangas = (result.mangas + result.series).map { it.toSManga() }
+        val mangas = result.mangas.map(LibraryMangaDto::toSManga)
         val hasNextPage = result.pagination.page < result.pagination.totalPages
         return MangasPage(mangas, hasNextPage)
     }
