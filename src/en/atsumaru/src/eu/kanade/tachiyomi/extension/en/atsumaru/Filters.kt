@@ -49,15 +49,15 @@ internal class MinChaptersFilter : Filter.Text("Minimum Chapters")
 internal class SortFilter :
     Filter.Sort(
         "Sort By",
-        arrayOf("Popularity", "Trending", "Date Added", "Release Date", "Top Rated"),
+        arrayOf("Popularity", "Trending", "Date Added", "Release Date", "Top Rated", "Title"),
         Selection(0, false),
     ) {
     companion object {
-        val VALUES = arrayOf("views:desc", "trending:desc", "dateAdded:desc", "released:desc", "avgRating:desc")
+        val VALUES = arrayOf("views", "trending", "dateAdded", "released", "avgRating", "title")
     }
 }
 
-internal class AdultFilter : Filter.CheckBox("Show Adult Content", false)
+internal class AdultFilter(state: Boolean) : Filter.CheckBox("Show Adult Content", state)
 
 internal class OfficialFilter : Filter.CheckBox("Only Official Translations", false)
 
