@@ -204,6 +204,18 @@ class MangaK :
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         if (!manga.url.contains("#")) {
+            val idFromDesc = manga.description
+                ?.substringAfterLast("Manga ID: ", "")
+                ?.substringBefore("\n")
+                ?.trim()
+
+            // If the ID was previously saved into the description, bypass the details request
+            if (!idFromDesc.isNullOrEmpty()) {
+                val request = GET("$apiUrl/titles/$idFromDesc/chapters", headers)
+                return client.newCall(request).asObservable().map { chapterListParse(it) }
+            }
+
+            // Fallback for uninitialized manga
             return client.newCall(mangaDetailsRequest(manga)).asObservable().map { response ->
                 val dto = response.extractNextJs<NextJsDto> {
                     it is JsonObject && "pageProps" in it
@@ -228,10 +240,16 @@ class MangaK :
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = response.parseAs<ChapterListResponseDto>().chapters
 
-        return chapters.sortedWith(
-            compareByDescending<ChapterItemDto> { extractChapterNumber(it.name) }
-                .thenByDescending { it.chapterNumber ?: 0f },
-        ).map { it.toSChapter(dateFormat) }
+        // The website uses the API's `chapter_number` field as an internal sorting index,
+        // not the actual chapter number. This dictates the site's canonical reading order,
+        // allowing them to correctly interleave volume extras and side stories between main chapters.
+        // Because we rely on this index for sorting, it triggers Mihon's "Missing Chapters"
+        // warning whenever the site's custom order jumps around numerically.
+        //
+        // TODO: Investigate a better way to handle chapter sorting and numbering to maintain
+        // the site's chronological reading order without causing sequence warnings in the app.
+        return chapters.sortedByDescending { it.chapterNumber ?: 0f }
+            .map { it.toSChapter(dateFormat) }
     }
 
     // =============================== Pages ===============================
@@ -293,24 +311,5 @@ class MangaK :
     companion object {
         private const val PREF_BLACKLIST_KEY = "pref_blacklist"
         private val IMAGE_FALLBACK_REGEX = "rx\\.qvzr[a-z]\\.org".toRegex()
-
-        private val CHAPTER_NUMBER_REGEX = Regex("""\b(?:chapter|ch|c|ep|episode)\s*([\d.]+)""")
-        private val START_NUMBER_REGEX = Regex("""^([\d.]+)""")
-
-        private fun extractChapterNumber(name: String): Float {
-            val nameLower = name.lowercase()
-            if ("prologue" in nameLower) return 0f
-            if ("oneshot" in nameLower || "one shot" in nameLower) return 0f
-
-            CHAPTER_NUMBER_REGEX.find(nameLower)?.let {
-                return it.groupValues[1].toFloatOrNull() ?: -1f
-            }
-
-            START_NUMBER_REGEX.find(nameLower)?.let {
-                return it.groupValues[1].toFloatOrNull() ?: -1f
-            }
-
-            return -1f
-        }
     }
 }
