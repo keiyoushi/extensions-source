@@ -59,6 +59,8 @@ object Descrambler {
         val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
 
+        canvas.drawBitmap(bitmap, 0f, 0f, null)
+
         for (srcIdx in 0 until NUM_TILES) {
             val dstIdx = perm[srcIdx]
             val srcCol = srcIdx % GRID_COLS

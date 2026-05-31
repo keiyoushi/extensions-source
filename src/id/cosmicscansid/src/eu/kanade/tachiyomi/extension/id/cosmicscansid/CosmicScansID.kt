@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit
 class CosmicScansID :
     MangaThemesia(
         "CosmicScans.id",
-        "https://lc6.cosmicscans.asia",
+        "https://lc1.cosmicscans.to",
         "id",
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
     ),

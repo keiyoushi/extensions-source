@@ -8,7 +8,7 @@ import java.util.Locale
 class MoonDaisyScans :
     MangaThemesia(
         "Moon Daisy Scans",
-        "https://moondaisyscans.lol",
+        "https://moondaisyscans.site",
         "tr",
         dateFormat = SimpleDateFormat("MMMM d, yyy", Locale("tr")),
     ) {

@@ -17,14 +17,13 @@ data class MangaDto(
     private val descricao: String? = null,
     @SerialName("descricao_brasil") private val descricaoBrasil: String? = null,
     private val imagem: String? = null,
-    private val capa: String? = null,
-    val generos: String? = null,
+    val generos: List<String> = emptyList(),
     @SerialName("views_mes") private val viewsMes: String? = null,
     @SerialName("qnt_capitulo") val qntCapitulo: Int? = null,
 ) {
     val displayTitle: String get() = tituloBrasil?.takeIf { it.isNotBlank() } ?: titulo
     val displayDescription: String? get() = descricaoBrasil?.takeIf { it.isNotBlank() } ?: descricao
-    val thumbnailUrl: String? get() = (imagem?.takeIf { it.isNotBlank() } ?: capa)?.let {
+    val thumbnailUrl: String? get() = imagem?.let {
         if (it.startsWith("http")) it else "https://$it"
     }
     val popularity: Int get() = viewsMes?.toIntOrNull() ?: 0
