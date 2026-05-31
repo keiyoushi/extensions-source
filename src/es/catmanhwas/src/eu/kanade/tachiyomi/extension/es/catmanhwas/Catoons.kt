@@ -18,6 +18,12 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -25,6 +31,10 @@ import okhttp3.Request
 import okhttp3.Response
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.collections.component1
+import kotlin.collections.component2
+import kotlin.collections.forEach
+import kotlin.collections.map
 
 class Catoons : HttpSource() {
 
@@ -72,7 +82,7 @@ class Catoons : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val dataNode = response.parseAs<SvelteDataDto>().getDataNode()
-        val data = SvelteParser(dataNode).parseAs<BrowseDto>()
+        val data = decodeSvelte(dataNode).parseAs<BrowseDto>()
         return MangasPage(data.series.map { it.toSManga() }, data.hasNextPage())
     }
 
@@ -100,7 +110,7 @@ class Catoons : HttpSource() {
             .build()
 
         val result = client.newCall(GET(url, headers)).execute().parseAs<SvelteResultDto>().getResult()
-        return SvelteParser(result.jsonArray).parseAs<DetailsDto>()
+        return decodeSvelte(result.jsonArray).parseAs<DetailsDto>()
     }
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -124,7 +134,7 @@ class Catoons : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaSlug = response.request.url.fragment!!
         val result = response.parseAs<SvelteResultDto>().getResult()
-        var chapterListData = SvelteParser(result.jsonArray).parseAs<ChapterDataDto>()
+        var chapterListData = decodeSvelte(result.jsonArray).parseAs<ChapterDataDto>()
 
         val chapterList = chapterListData.data.map { it.toSChapter(mangaSlug) }.toMutableList()
 
@@ -132,7 +142,7 @@ class Catoons : HttpSource() {
             val nextPageRequest = paginatedChapterListRequest(mangaSlug, chapterListData.pagination.currentPage + 1)
             val nextPageResponse = client.newCall(nextPageRequest).execute()
             val nextPageResult = nextPageResponse.parseAs<SvelteResultDto>().getResult()
-            chapterListData = SvelteParser(nextPageResult.jsonArray).parseAs<ChapterDataDto>()
+            chapterListData = decodeSvelte(nextPageResult.jsonArray).parseAs<ChapterDataDto>()
             chapterList.addAll(chapterListData.data.map { it.toSChapter(mangaSlug) })
         }
 
@@ -221,6 +231,40 @@ class Catoons : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    fun decodeSvelte(data: JsonArray): JsonElement =
+        resolve(data, data[0])
+
+    private fun dereference(data: JsonArray, index: Int): JsonElement =
+        when (val value = data[index]) {
+            is JsonArray, is JsonObject -> resolve(data, value)
+            else -> value
+        }
+
+    private fun resolveReference(data: JsonArray, element: JsonElement): JsonElement {
+        val index = (element as? JsonPrimitive)?.intOrNull
+
+        return if (
+            index != null &&
+            !element.isString &&
+            index in data.indices
+        ) {
+            dereference(data, index)
+        } else {
+            resolve(data, element)
+        }
+    }
+
+    private fun resolve(data: JsonArray, element: JsonElement): JsonElement =
+        when (element) {
+            is JsonArray -> JsonArray(element.map { resolveReference(data, it) })
+            is JsonObject -> buildJsonObject {
+                element.forEach { (key, value) ->
+                    put(key, resolveReference(data, value))
+                }
+            }
+            else -> element
+        }
 
     companion object {
         private val DETAILS_CHUNK_REGEX = """/_app/remote/([^/]+)/getSerieDetails""".toRegex()
