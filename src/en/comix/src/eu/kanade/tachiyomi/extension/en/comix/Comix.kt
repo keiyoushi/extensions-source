@@ -37,6 +37,7 @@ import okhttp3.Response
 import okio.Buffer
 import org.jsoup.nodes.Document
 import rx.Observable
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 
@@ -51,32 +52,53 @@ class Comix :
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
+    private val chapterFallbackUrls = ConcurrentHashMap<String, List<String>>()
+    private val fallbackLoadedManga = ConcurrentHashMap.newKeySet<String>()
 
     override val client = network.client.newBuilder()
         .addNetworkInterceptor(Descrambler.interceptor)
         .addInterceptor { chain ->
             val request = chain.request()
-
-            val response = chain.proceed(request)
-            if (response.code != 404) return@addInterceptor response
+            val response = try {
+                chain.proceed(request)
+            } catch (e: java.io.IOException) {
+                var lastError = e
+                var lastResponse: Response? = null
+                for (fallbackUrl in imagePathFallbackUrls(request.url.toString())) {
+                    lastResponse?.close()
+                    try {
+                        lastResponse = chain.proceed(request.newBuilder().url(fallbackUrl).build())
+                        if (lastResponse.code !in IMAGE_PATH_FALLBACK_STATUS_CODES) {
+                            return@addInterceptor lastResponse
+                        }
+                    } catch (fallbackError: java.io.IOException) {
+                        lastResponse?.close()
+                        lastResponse = null
+                        lastError = fallbackError
+                    }
+                }
+                lastResponse?.let { return@addInterceptor it }
+                throw lastError
+            }
+            if (response.code !in IMAGE_PATH_FALLBACK_STATUS_CODES) return@addInterceptor response
 
             val url = request.url.toString()
-            val fallbacks = listOf("/si/", "/i/", "/sii/", "/ii/")
-                .map { url.replaceFirst(SCRAMBLE_PATH_FALLBACK_REGEX, it) }
-                .filter { it != url }
-
-            if (fallbacks.isEmpty()) return@addInterceptor response
+            val fallbacks = imagePathFallbackUrls(url)
 
             var lastResponse = response
             for (fallbackUrl in fallbacks) {
                 lastResponse.close()
                 lastResponse = chain.proceed(request.newBuilder().url(fallbackUrl).build())
-                if (lastResponse.code != 404) break
+                if (lastResponse.code !in IMAGE_PATH_FALLBACK_STATUS_CODES) break
             }
             lastResponse
         }
         .rateLimit(5)
         .build()
+
+    private fun imagePathFallbackUrls(url: String) = IMAGE_PATH_FALLBACKS
+        .map { url.replaceFirst(SCRAMBLE_PATH_FALLBACK_REGEX, it) }
+        .filter { it != url }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -84,6 +106,8 @@ class Comix :
         .add("Accept", "*/*")
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headers)
 
     // ============================== Popular ==============================
     override fun popularMangaRequest(page: Int): Request {
@@ -327,9 +351,21 @@ class Comix :
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
         val deduplicate = preferences.deduplicateChapters()
         val mangaSlug = manga.url.removePrefix("/")
+        val allChapters = fetchAllChapters(getMangaUrl(manga))
 
+        val finalChapters: List<Chapter> = if (deduplicate) {
+            cacheFallbackUrls(mangaSlug, allChapters)
+            LinkedHashMap<Number, Chapter>().also { deduplicateChapters(it, allChapters) }.values.toList()
+        } else {
+            allChapters
+        }
+
+        finalChapters.map { it.toSChapter(mangaSlug) }
+    }
+
+    private fun fetchAllChapters(mangaUrl: String): List<Chapter> {
         val document = runBlocking {
-            client.newCall(GET(getMangaUrl(manga), headers)).awaitSuccess().asJsoup()
+            client.newCall(GET(mangaUrl, headers)).awaitSuccess().asJsoup()
         }
         val payload = runInWebView(
             document = document,
@@ -362,20 +398,21 @@ class Comix :
                         apply(target, thisArg, args) {
                             const parsed = Reflect.apply(target, thisArg, args);
                             try {
+                                const result = parsed && parsed.result ? parsed.result : parsed;
                                 if (
                                     !submitted &&
-                                    parsed && parsed.result &&
-                                    Array.isArray(parsed.result.items) &&
-                                    parsed.result.items.length > 0 &&
-                                    parsed.result.items[0] &&
-                                    parsed.result.items[0].id !== undefined &&
-                                    parsed.result.items[0].mangaId !== undefined
+                                    result &&
+                                    Array.isArray(result.items) &&
+                                    result.items.length > 0 &&
+                                    result.items[0] &&
+                                    result.items[0].id !== undefined &&
+                                    result.items[0].mangaId !== undefined
                                 ) {
-                                    const meta = parsed.result.meta || parsed.result.pagination;
+                                    const meta = result.meta || result.pagination;
                                     const page = (meta && meta.page) || 1;
                                     if (!seen.has(page)) {
                                         seen.add(page);
-                                        for (const it of parsed.result.items) items.push(it);
+                                        for (const it of result.items) items.push(it);
                                         if (meta && meta.hasNext) {
                                             window.$$interfaceName.resetTimer();
                                             let tries = 0;
@@ -403,17 +440,35 @@ class Comix :
             },
         )
 
-        val allChapters = payload.parseAs<List<Chapter>>()
+        return payload.parseAs<List<Chapter>>()
+    }
 
-        val finalChapters: List<Chapter> = if (deduplicate) {
-            val chapterMap = LinkedHashMap<Number, Chapter>()
-            deduplicateChapters(chapterMap, allChapters)
-            chapterMap.values.toList()
-        } else {
-            allChapters
+    private fun cacheFallbackUrls(mangaSlug: String, allChapters: List<Chapter>) {
+        val chapterMap = LinkedHashMap<Number, Chapter>()
+        deduplicateChapters(chapterMap, allChapters)
+        val groupedChapters = allChapters.groupBy { it.number }
+
+        chapterMap.values.forEach { selected ->
+            val selectedUrl = selected.toChapterPath(mangaSlug)
+            val fallbackUrls = groupedChapters[selected.number].orEmpty()
+                .filter { it.id != selected.id }
+                .map { it.toChapterPath(mangaSlug) }
+
+            if (fallbackUrls.isNotEmpty()) {
+                chapterFallbackUrls[selectedUrl] = fallbackUrls
+            } else {
+                chapterFallbackUrls.remove(selectedUrl)
+            }
         }
+        fallbackLoadedManga.add(mangaSlug)
+    }
 
-        finalChapters.map { it.toSChapter(mangaSlug) }
+    private fun Chapter.toChapterPath(mangaSlug: String): String = url.indexOf("/title/").let { index ->
+        if (index != -1) {
+            url.substring(index + 1)
+        } else {
+            "title/$mangaSlug/$id-chapter-${number.toString().removeSuffix(".0")}"
+        }
     }
 
     override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
@@ -453,8 +508,41 @@ class Comix :
 
     // =============================== Pages ===============================
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        runCatching { fetchPagesForChapterUrl(chapter.url) }.getOrElse { error ->
+            val fallbackUrls = chapterFallbackUrls[chapter.url]
+                ?: loadFallbackChapterUrls(chapter.url)
+
+            fallbackUrls.forEach { fallbackUrl ->
+                runCatching { fetchPagesForChapterUrl(fallbackUrl) }
+                    .getOrNull()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { return@fromCallable it }
+            }
+
+            throw error
+        }
+    }
+
+    private fun loadFallbackChapterUrls(chapterUrl: String): List<String> {
+        val mangaSlug = chapterUrl.removePrefix("title/").substringBefore("/")
+        if (mangaSlug.isEmpty()) return emptyList()
+
+        if (!fallbackLoadedManga.add(mangaSlug)) {
+            return chapterFallbackUrls[chapterUrl].orEmpty()
+        }
+
+        runCatching {
+            fetchAllChapters("$baseUrl/title/$mangaSlug")
+        }.onSuccess { allChapters ->
+            cacheFallbackUrls(mangaSlug, allChapters)
+        }
+
+        return chapterFallbackUrls[chapterUrl].orEmpty()
+    }
+
+    private fun fetchPagesForChapterUrl(chapterUrl: String): List<Page> {
         val document = runBlocking {
-            client.newCall(GET(getChapterUrl(chapter), headers)).awaitSuccess().asJsoup()
+            client.newCall(GET("$baseUrl/$chapterUrl", headers)).awaitSuccess().asJsoup()
         }
         val payload = runInWebView(
             document = document,
@@ -466,8 +554,13 @@ class Comix :
                         apply(target, thisArg, args) {
                             const parsed = Reflect.apply(target, thisArg, args);
                             try {
-                                if (parsed && parsed.result && parsed.result.pages) {
-                                    window.$interfaceName.passPayload(args[0]);
+                                const payload = parsed && parsed.result && parsed.result.pages
+                                    ? parsed
+                                    : parsed && parsed.pages
+                                        ? { result: parsed }
+                                        : null;
+                                if (payload) {
+                                    window.$interfaceName.passPayload(JSON.stringify(payload));
                                 }
                             } catch (e) {}
                             return parsed;
@@ -481,12 +574,13 @@ class Comix :
         val pages = payload.parseAs<ChapterResponse>().result.pages
         val base = pages.baseUrl.trimEnd('/')
 
-        pages.items.mapIndexed { index, img ->
+        return pages.items.mapIndexed { index, img ->
             val full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
-            val url = if (img.s == 1) "$full#scrambled" else full
-            Page(index, imageUrl = url)
+            Page(index, url = chapterUrl, imageUrl = full.withImagePath())
         }
     }
+
+    private fun String.withImagePath(): String = replaceFirst(SCRAMBLE_PATH_FALLBACK_REGEX, "/i/")
 
     override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
 
@@ -504,6 +598,9 @@ class Comix :
             .map { pool.random() }
             .joinToString("")
         val script = buildScript(interfaceName)
+        val injectedHtml = document.clone().also { cloned ->
+            cloned.head().prependElement("script").append(script)
+        }.outerHtml()
         val emptyResponse = WebResourceResponse("text/plain", "utf-8", Buffer().inputStream())
 
         var webView: WebView? = null
@@ -527,9 +624,15 @@ class Comix :
                     val httpUrl = request.url?.toString()?.toHttpUrlOrNull()
                         ?: return super.shouldInterceptRequest(view, request)
 
-                    return if (httpUrl.host.contains("comix.to") &&
+                    val allowedHost = httpUrl.host.contains("comix.to") ||
+                        httpUrl.host.contains("cloudflare.com") ||
+                        httpUrl.host.contains("challenges.cloudflare.com")
+
+                    return if (allowedHost &&
                         (
-                            httpUrl.encodedPath.contains(".js") ||
+                            httpUrl.host.contains("cloudflare.com") ||
+                                httpUrl.host.contains("challenges.cloudflare.com") ||
+                                httpUrl.encodedPath.contains(".js") ||
                                 httpUrl.encodedPath.startsWith("/api/") ||
                                 httpUrl.encodedPath.startsWith("/title/")
                             )
@@ -544,13 +647,18 @@ class Comix :
                     super.onPageStarted(view, url, favicon)
                     view.evaluateJavascript(script) {}
                 }
+
+                override fun onPageFinished(view: WebView, url: String?) {
+                    super.onPageFinished(view, url)
+                    view.evaluateJavascript(script) {}
+                }
             }
 
-            view.loadDataWithBaseURL(document.location(), document.outerHtml(), "text/html", "utf-8", null)
+            view.loadDataWithBaseURL(document.location(), injectedHtml, "text/html", "utf-8", null)
         }
 
         val completed = try {
-            jsInterface.await(30, TimeUnit.SECONDS)
+            jsInterface.await(90, TimeUnit.SECONDS)
         } finally {
             handler.post { webView?.destroy() }
         }
@@ -745,6 +853,9 @@ class Comix :
         private const val PREF_SCORE_POSITION = "pref_score_position"
 
         private const val DEFAULT_CONTENT_RATING = "suggestive"
+
+        private val IMAGE_PATH_FALLBACKS = listOf("/si/", "/i/", "/sii/", "/ii/")
+        private val IMAGE_PATH_FALLBACK_STATUS_CODES = setOf(404, 502)
 
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/s?i+/")
     }
