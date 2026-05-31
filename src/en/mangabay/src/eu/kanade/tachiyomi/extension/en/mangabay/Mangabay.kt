@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.applicationContext
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -46,7 +47,11 @@ class Mangabay : HttpSource() {
             if (response.code == 404 && fragment != null && fragment.startsWith(FALLBACK_PREFIX)) {
                 response.close()
                 val fallbackUrl = fragment.removePrefix(FALLBACK_PREFIX)
-                chain.proceed(request.newBuilder().url(fallbackUrl).build())
+                chain.proceed(
+                    request.newBuilder()
+                        .url(fallbackUrl)
+                        .build(),
+                )
             } else {
                 response
             }
@@ -57,12 +62,16 @@ class Mangabay : HttpSource() {
                 return@addNetworkInterceptor chain.proceed(request)
             }
             val mangaId = request.url.pathSegments.getOrNull(1).orEmpty()
-            val kept = request.header("Cookie")
+            val existingCookies = request.header("Cookie")
                 ?.split("; ")
                 ?.filter { it.isNotEmpty() && !it.startsWith("adult=") }
                 .orEmpty()
-            val merged = (kept + "adult=$mangaId").joinToString("; ")
-            chain.proceed(request.newBuilder().header("Cookie", merged).build())
+            val finalCookies = (existingCookies + "adult=$mangaId").joinToString("; ")
+            chain.proceed(
+                request.newBuilder()
+                    .header("Cookie", finalCookies)
+                    .build(),
+            )
         }
         .build()
 
@@ -106,13 +115,13 @@ class Mangabay : HttpSource() {
 
         val urlBuilder = baseUrl.toHttpUrl().newBuilder()
         val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
-        val filtersApplied = genreFilter?.state?.any { it.state } == true
+        val filtersApplied = genreFilter?.state?.all { it.isIgnored() } == false
 
         if (filtersApplied) {
             urlBuilder.addPathSegment("ComicList")
             genreFilter.addToUrl(urlBuilder)
         } else {
-            urlBuilder.addPathSegment("comix-read")
+            urlBuilder.addPathSegment("comix")
         }
         if (page > 1) {
             urlBuilder.addPathSegment("page")
@@ -121,7 +130,7 @@ class Mangabay : HttpSource() {
         urlBuilder.addPathSegment("")
         val url = urlBuilder.build()
 
-        val sort = filters.firstInstanceOrNull<SortFilter>() ?: SortFilter()
+        val sort = filters.firstInstance<SortFilter>()
         if (sort.getSort().isEmpty()) {
             return GET(url, headers)
         }
@@ -196,11 +205,17 @@ class Mangabay : HttpSource() {
             val type = document.select("div.page__meta-pills > span.page__meta-pill")
                 .firstOrNull { !it.hasClass("page__meta-pill--status") }
                 ?.text()
-                ?.let(::originToType)
-                ?: "Manga"
+                ?.let {
+                    when (it.lowercase()) {
+                        "korean" -> "Manhwa"
+                        "chinese" -> "Manhua"
+                        "japanese" -> "Manga"
+                        else -> it
+                    }
+                }
             val tagGenres = document.select("div.page__tags > a")
                 .map { it.text().replaceFirstChar(Char::uppercaseChar) }
-            genre = (listOf(type) + tagGenres).joinToString()
+            genre = (listOfNotNull(type) + tagGenres).joinToString()
 
             status = when (document.selectFirst("span.page__meta-pill--status")?.text()?.lowercase()) {
                 "ongoing" -> SManga.ONGOING
@@ -212,14 +227,9 @@ class Mangabay : HttpSource() {
         }
     }
 
-    private fun originToType(origin: String): String = when (origin.lowercase()) {
-        "korean" -> "Manhwa"
-        "chinese" -> "Manhua"
-        "japanese" -> "Manga"
-        else -> origin
-    }
-
     override fun chapterListParse(response: Response): List<SChapter> = extractData(response)?.parseAs<ChapterListDto>()?.toSChapterList() ?: emptyList()
+
+    override val disableRelatedMangasBySearch = true
 
     override fun relatedMangaListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
