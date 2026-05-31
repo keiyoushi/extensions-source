@@ -1,0 +1,2 @@
+:N1780140562198.1553
+0:{"preview":[{"number":3,"title":"Newest"},{"number":2,"title":"Middle"}],"full":{"mangaTitle":"My Manga","chapters":["$0:preview:0",{"number":1,"title":"Oldest"}]}}

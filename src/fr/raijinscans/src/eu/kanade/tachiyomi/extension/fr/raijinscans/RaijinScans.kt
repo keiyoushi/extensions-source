@@ -17,7 +17,9 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -281,15 +283,49 @@ class RaijinScans :
         val config = String(Base64.decode(b64, Base64.DEFAULT)).parseAs<JsonObject>()
         val d = config["d"]!!.jsonArray
 
-        //  Unscramble 'd' using permutation arr 'm' in config
-        val mPerm = config["m"]!!.jsonArray.map { it.jsonPrimitive.content.toInt() }
-        val canonical = mPerm.map { d[it] }
+        /* Trying to parse needed things from shuffled list 'd'
+         * 00000               : Manga ID
+         * "rjfr-ChapterId-randomhex": Instance ID (ignored, exists in html)
+         * 000000              : Chapter ID (ignored, exists in above)
+         * "000000000000..."   : Token (64 chars hex)
+         * ["rj..", ...]       : reqKeys (11), response navigation
+         * ["rj...", ...]      : resKeys (10), request params
+         * "rjfr_..."          : Form action
+         * 0                   : Offset
+         * 0|chapter-0|n-a     : Chapter slug or num (ignored, exists locally)
+         * "local"             : Instance (ignored)
+         * 80                  : Unknown (ignored)
+         * "https://..."       : Ajax endpoint (ignored, hardcore)
+         * ""                  : Unknown (ignored)
+         * 0                   : Type (ignored)
+         * "preload-image..."  : (ignored)
+         */
 
-        fun str(index: Int) = canonical[index].jsonPrimitive.content
-        fun arr(index: Int) = canonical[index].jsonArray
+        // As reqKeys seems always larger than resKeys
+        val (reqKeys, resKeys) = d
+            .filterIsInstance<JsonArray>()
+            .sortedByDescending(JsonArray::size)
+            .map { array -> array.map { it.jsonPrimitive.content } }
 
-        val reqKeys = arr(M_REQ_KEYS).map { it.jsonPrimitive.content }
-        val resKeys = arr(M_RES_KEYS).map { it.jsonPrimitive.content }
+        val token = d.filterIsInstance<JsonPrimitive>()
+            .first { it.content.length == 64 }
+            .content
+
+        val action = d.find {
+            it is JsonPrimitive && it.content.startsWith("rjfr_")
+        }?.jsonPrimitive!!.content
+
+        val chapterSlug = response.request.url.pathSegments.last { it.isNotEmpty() }
+
+        val rjfrValue = document.select("[data-rj-free-reader-root]").attr("data-rj-free-reader-root")
+
+        val chapterId = rjfrValue.split("-").get(1)
+
+        val numbers = d.filter { it is JsonPrimitive && it.content.toIntOrNull() != null }
+            .map { it.jsonPrimitive.content }
+            .filter { it != chapterId }
+
+        val mangaId = numbers.maxBy { it.toInt() }
 
         val pages = mutableListOf<Page>()
         var offset = "0"
@@ -299,20 +335,21 @@ class RaijinScans :
 
         while (run && guard++ < MAX_PAGE_REQUESTS) {
             val body = MultipartBody.Builder().setType(MultipartBody.FORM)
-                .addFormDataPart("action", str(M_ACTION))
+                .addFormDataPart("action", action)
                 .addFormDataPart(resKeys[0], "")
-                .addFormDataPart(resKeys[1], str(M_TOKEN))
-                .addFormDataPart(resKeys[2], str(M_MANGA_ID))
-                .addFormDataPart(resKeys[3], str(M_CHAPTER_ID))
-                .addFormDataPart(resKeys[4], str(M_CHAPTER_SLUG))
-                .addFormDataPart(resKeys[5], str(M_INSTANCE))
-                .addFormDataPart(resKeys[6], str(M_TYPE))
+                .addFormDataPart(resKeys[1], token)
+                .addFormDataPart(resKeys[2], mangaId)
+                .addFormDataPart(resKeys[3], chapterId)
+                .addFormDataPart(resKeys[4], chapterSlug)
+                .addFormDataPart(resKeys[5], "local")
+                .addFormDataPart(resKeys[6], "0")
                 .addFormDataPart(resKeys[7], offset)
-                .addFormDataPart(resKeys[8], str(M_RJFR_VALUE))
+                .addFormDataPart(resKeys[8], rjfrValue)
                 .addFormDataPart(resKeys[9], cursor)
                 .build()
 
-            val response = client.newCall(POST(str(M_AJAX_URL), ajaxHeaders, body)).execute()
+            val response = client.newCall(POST("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, body)).execute()
+
             if (!response.isSuccessful) error("Failed to get page: ${response.code}")
             val root = response.parseAs<JsonObject>()
 
@@ -350,18 +387,5 @@ class RaijinScans :
         private const val SHOW_PREMIUM_KEY = "show_premium_chapters"
         private const val SHOW_PREMIUM_DEFAULT = false
         private const val MAX_PAGE_REQUESTS = 100
-
-        // Positional indices into the decoded reader manifest array.
-        private const val M_CHAPTER_ID = 2
-        private const val M_RJFR_VALUE = 3
-        private const val M_ACTION = 4
-        private const val M_TYPE = 5
-        private const val M_CHAPTER_SLUG = 6
-        private const val M_AJAX_URL = 7
-        private const val M_INSTANCE = 8
-        private const val M_MANGA_ID = 10
-        private const val M_RES_KEYS = 12
-        private const val M_TOKEN = 13
-        private const val M_REQ_KEYS = 14
     }
 }
