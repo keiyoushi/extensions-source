@@ -55,7 +55,7 @@ class ChapterDataDto(
 @Serializable
 class ChapterItemDto(
     private val url: String,
-    val name: String,
+    private val name: String,
     @SerialName("updated_at") private val updatedAt: String? = null,
     @SerialName("chapter_number") val chapterNumber: Float? = null,
 ) {
@@ -90,7 +90,12 @@ class InitialMangaDto(
     fun toSManga() = SManga.create().apply {
         title = name
         author = authors?.joinToString { it.name }
-        description = summary
+        description = buildString {
+            if (!summary.isNullOrBlank()) {
+                append(summary).append("\n\n")
+            }
+            append("Manga ID: ").append(id)
+        }
         genre = genres?.joinToString { it.name }
         status = this@InitialMangaDto.status.toStatus()
         thumbnail_url = cover
