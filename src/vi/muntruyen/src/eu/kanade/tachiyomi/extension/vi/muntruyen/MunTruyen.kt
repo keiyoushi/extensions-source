@@ -242,10 +242,7 @@ class MunTruyen :
         return if (index >= 0) rawName.substring(index) else rawName
     }
 
-    private fun parseDate(dateStr: String?): Long {
-        if (dateStr == null) return 0L
-        return DATE_FORMAT.tryParse(dateStr)
-    }
+    private fun parseDate(dateStr: String?): Long = DATE_FORMAT.tryParse(dateStr)
 
     // ============================== Pages =================================
 
