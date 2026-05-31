@@ -59,7 +59,7 @@ class MangaDto(
         "ongoing" -> SManga.ONGOING
         "completed" -> SManga.COMPLETED
         "hiatus" -> SManga.ON_HIATUS
-        "dropped" -> SManga.CANCELLED
+        "dropped", "axed" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
 }
@@ -69,7 +69,7 @@ class GenreDto(
     val name: String,
 )
 
-val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply {
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply {
     timeZone = TimeZone.getTimeZone("UTC")
 }
 
