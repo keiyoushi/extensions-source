@@ -25,14 +25,20 @@ class MangaList(
     private val pagination: Pagination,
     val allGenres: List<String> = emptyList(),
 ) {
-    fun hasNextPage() = pagination.current < pagination.total
+    fun hasNextPage() = when {
+        pagination.current != null && pagination.total != null -> pagination.current < pagination.total
+        pagination.nextCursor != null -> true
+        else -> false
+    }
 
     @Serializable
     class Pagination(
         @SerialName("total_pages")
-        val total: Int,
+        val total: Int? = null,
         @SerialName("current_page")
-        val current: Int,
+        val current: Int? = null,
+        @SerialName("next_cursor")
+        val nextCursor: String? = null,
     )
 }
 

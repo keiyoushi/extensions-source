@@ -326,5 +326,6 @@ class ChapterResponse(
     @Serializable
     class PageDto(
         val url: String,
+        val s: Int = 0,
     )
 }
