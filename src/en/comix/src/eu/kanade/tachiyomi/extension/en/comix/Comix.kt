@@ -56,6 +56,7 @@ class Comix :
         .addNetworkInterceptor(Descrambler.interceptor)
         .addInterceptor { chain ->
             val request = chain.request()
+
             val response = chain.proceed(request)
             if (response.code != 404) return@addInterceptor response
 
@@ -77,7 +78,10 @@ class Comix :
         .rateLimit(5)
         .build()
 
-    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("Origin", baseUrl)
+        .add("Accept", "*/*")
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
@@ -479,7 +483,8 @@ class Comix :
 
         pages.items.mapIndexed { index, img ->
             val full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
-            Page(index, imageUrl = full)
+            val url = if (img.s == 1) "$full#scrambled" else full
+            Page(index, imageUrl = url)
         }
     }
 

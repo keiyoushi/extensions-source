@@ -41,6 +41,20 @@ const models = {
     tags: new Set([10, 20, 30]),
     nested: new Map([["list", new Set(["x", "y"])]]),
   },
+  // A shared object reference appearing twice: React outlines the first occurrence and
+  // emits the second as a path reference ($<id>:preview:0) into the model where it was
+  // first written. Mirrors RimuScans, whose full chapter list references its 3 newest
+  // chapters (already written by the preview component) by path.
+  pathrefs: (() => {
+    const newest = { number: 3, title: "Newest" };
+    return {
+      preview: [newest, { number: 2, title: "Middle" }],
+      full: {
+        mangaTitle: "My Manga",
+        chapters: [newest, { number: 1, title: "Oldest" }],
+      },
+    };
+  })(),
 };
 
 function renderToString(model) {
