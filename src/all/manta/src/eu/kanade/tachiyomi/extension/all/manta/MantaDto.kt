@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.manta
+package eu.kanade.tachiyomi.extension.all.manta
 
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
@@ -13,28 +13,35 @@ private inline val String?.timestamp: Long
     get() = isoDate.tryParse(this?.substringBefore('.'))
 
 @Serializable
-data class MantaResponse<T>(
+class MantaResponse<T>(
     val data: T,
     val status: Status? = null,
 )
 
 @Serializable
-data class Series<T : Any>(
+class Series<T : Any>(
     val data: T,
     val id: Int,
     val image: Cover,
     val episodes: List<Episode>? = null,
 ) {
+    fun asString(lang: String) = when (data) {
+        is Title -> data.asString(lang)
+        is Details -> data.asString(lang)
+        else -> data.toString()
+    }
+
     override fun toString() = data.toString()
 }
 
 @Serializable
-data class Title(private val title: Name) {
+class Title(private val title: Name) {
+    fun asString(lang: String) = title.asString(lang)
     override fun toString() = title.toString()
 }
 
 @Serializable
-data class Details(
+class Details(
     val tags: List<Tag>,
     val isCompleted: Boolean? = null,
     private val description: Description,
@@ -48,14 +55,16 @@ data class Details(
         creators.filter { it.role != "Illustration" }.ifEmpty { creators }
     }
 
+    fun asString(lang: String) = description.asString(lang)
+
     override fun toString() = description.toString()
 }
 
 @Serializable
-data class Episode(
+class Episode(
     val id: Int,
     val ord: Int,
-    val data: Data?,
+    val data: EpisodeData?,
     val lockData: LockData,
     private val createdAt: String,
     val cutImages: List<Image>? = null,
@@ -63,24 +72,31 @@ data class Episode(
     val timestamp: Long
         get() = createdAt.timestamp
 
-    override fun toString() = buildString {
-        append(data?.title ?: "Episode $ord")
+    fun asString(lang: String) = buildString {
+        val episodeTitle = data?.title
+        if (episodeTitle != null) {
+            append(episodeTitle)
+        } else {
+            append(if (lang == "es") "Episodio" else "Episode")
+            append(" $ord")
+        }
         if (lockData.isLocked) append(" 🔒")
     }
+
+    override fun toString() = asString("en")
 }
 
 @Serializable
-data class Data(val title: String? = null)
+class EpisodeData(val title: String? = null)
 
 @Serializable
-data class LockData(private val state: Int) {
-    // TODO: check for more unlocked states
+class LockData(private val state: Int) {
     val isLocked: Boolean
         get() = state !in arrayOf(110, 130)
 }
 
 @Serializable
-data class Creator(
+class Creator(
     private val name: String,
     val role: String,
 ) {
@@ -88,16 +104,17 @@ data class Creator(
 }
 
 @Serializable
-data class Description(
+class Description(
     private val long: String,
     private val short: String? = null,
 ) {
-    override fun toString() = listOfNotNull(short, long).joinToString("\n\n")
+    fun asString(lang: String) = listOfNotNull(short, long).joinToString("\n\n")
+
+    override fun toString() = asString("en")
 }
 
 @Serializable
-@Suppress("PrivatePropertyName")
-data class Cover(
+class Cover(
     private val `1280x1840_480`: Image? = null,
     private val `1280x1840_720`: Image? = null,
     private val `1440x3072`: Image? = null,
@@ -107,22 +124,27 @@ data class Cover(
 }
 
 @Serializable
-data class Image(private val downloadUrl: String) {
+class Image(private val downloadUrl: String) {
     override fun toString() = downloadUrl
 }
 
 @Serializable
-data class Tag(private val name: Name) {
+class Tag(private val name: Name) {
+    fun asString(lang: String) = name.asString(lang)
     override fun toString() = name.toString()
 }
 
 @Serializable
-data class Name(private val en: String) {
-    override fun toString() = en
+class Name(
+    private val en: String? = null,
+    private val es: String? = null,
+) {
+    fun asString(lang: String) = if (lang == "es") es ?: en.orEmpty() else en ?: es.orEmpty()
+    override fun toString() = en ?: es ?: ""
 }
 
 @Serializable
-data class Status(
+class Status(
     private val description: String,
     private val message: String,
 ) {
