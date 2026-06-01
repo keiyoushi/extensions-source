@@ -10,7 +10,7 @@ class Decoder {
         val words = data.toLeIntArray()
         setKeys(key, iv)
         decryptOnMemory(words)
-        return words.toLeByteArray().copyOf(data.size)
+        return words.toLeByteArray(data.size)
     }
 
     private fun setKeys(key: IntArray, iv: IntArray) {
@@ -162,10 +162,17 @@ class Decoder {
         return result
     }
 
-    private fun IntArray.toLeByteArray(): ByteArray {
-        val result = ByteArray(size * 4)
+    private fun IntArray.toLeByteArray(byteSize: Int): ByteArray {
+        val result = ByteArray(byteSize)
+        val full = byteSize / 4
         val buffer = ByteBuffer.wrap(result).order(ByteOrder.LITTLE_ENDIAN)
-        for (value in this) buffer.putInt(value)
+        for (i in 0 until full) buffer.putInt(this[i])
+        val rem = byteSize and 3
+        if (rem != 0) {
+            val last = this[full]
+            val base = full * 4
+            for (b in 0 until rem) result[base + b] = (last ushr (b * 8)).toByte()
+        }
         return result
     }
 

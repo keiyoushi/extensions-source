@@ -16,7 +16,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
-import java.io.IOException
+import okio.BufferedSource
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.ceil
@@ -68,8 +68,7 @@ class ImageInterceptor : Interceptor {
                 .headers(authHeaders)
                 .addPageHeaders(batchIndices, maxIndex, includeExcludeRanges = true)
                 .build(),
-        ).body.bytes().imagePage(targetOffset)
-            ?: throw IOException("image page $targetOffset")
+        ).use { it.body.source().readImagePage(targetOffset) }
 
         val image: ByteArray
         val order: List<Int>
@@ -140,8 +139,7 @@ class ImageInterceptor : Interceptor {
                 .headers(authHeaders)
                 .addPageHeaders(batchIndices, maxIndex, includeExcludeRanges = true)
                 .build(),
-        ).body.bytes().headerPage(targetOffset)
-            ?: throw IOException("header page $targetOffset")
+        ).use { it.body.source().readHeaderPage(targetOffset) }
     }
 
     private fun viewerUrl(contentId: String, path: String) = "$VIEWER_URL/$contentId/$path".toHttpUrl().newBuilder()
@@ -166,43 +164,26 @@ class ImageInterceptor : Interceptor {
         .build()
 
     // [u32 LE pageSize][pageBytes] frames
-    private fun ByteArray.imagePage(targetOffset: Int): ByteArray? {
-        var pos = 0
-        var index = 0
-        while (pos + 4 <= size) {
-            val pageSize = leInt(pos)
-            pos += 4
-            if (pageSize < 0 || pos + pageSize > size) return null
-            if (index++ == targetOffset) return copyOfRange(pos, pos + pageSize)
-            pos += pageSize
-        }
-        return null
+    private fun BufferedSource.readImagePage(targetOffset: Int): ByteArray {
+        repeat(targetOffset) { skip(readIntLe().toLong()) }
+        return readByteArray(readIntLe().toLong())
     }
 
     // /header stream: [u32 metaSize][metaJson][u32 pageSize][serializablePage]
     // inside page [u32 headerSize][20-byte MAC][encryptedHeader] ending at headerSize + 4
-    private fun ByteArray.headerPage(targetOffset: Int): ByteArray? {
-        var pos = 0
-        var index = 0
-        while (pos + 4 <= size) {
-            val metaSize = leInt(pos)
-            pos += 4
-            if (metaSize < 0 || pos + metaSize + 4 > size) return null
-            pos += metaSize
-            val pageSize = leInt(pos)
-            pos += 4
-            if (pageSize < 0 || pos + pageSize > size) return null
-            if (index++ == targetOffset) return sliceEncryptedHeader(copyOfRange(pos, pos + pageSize))
-            pos += pageSize
+    private fun BufferedSource.readHeaderPage(targetOffset: Int): ByteArray {
+        repeat(targetOffset) {
+            skip(readIntLe().toLong())
+            skip(readIntLe().toLong())
         }
-        return null
+        skip(readIntLe().toLong())
+        return sliceEncryptedHeader(readByteArray(readIntLe().toLong()))
     }
 
-    private fun sliceEncryptedHeader(page: ByteArray): ByteArray? {
-        if (page.size < HEADER_SIZE_PREFIX) return null
+    private fun sliceEncryptedHeader(page: ByteArray): ByteArray {
         val start = HEADER_SIZE_PREFIX + MAC_SIZE
         val end = page.leInt(0) + HEADER_SIZE_PREFIX
-        return if (start <= end && end <= page.size) page.copyOfRange(start, end) else null
+        return page.copyOfRange(start, end)
     }
 
     private fun ByteArray.leInt(offset: Int): Int = (this[offset].toInt() and 0xFF) or
@@ -258,25 +239,13 @@ class ImageInterceptor : Interceptor {
     }
 
     private fun shuffle(indices: List<Int>, contentId: String, envV: Int): List<Int> {
-        val preShared = listOf(19, 20, 14, 1, 5, 2, 4, 15, 9, 17, 8, 16, 18, 11, 10, 7, 12, 6, 13, 3)
-        val seeds = contentId.filter { it in '1'..'9' }.map { it.toString().toInt() }.toMutableList()
-
-        repeat(envV) {
-            if (seeds.isNotEmpty()) seeds.add(seeds.removeAt(0))
-        }
-
-        val randsGen = sequence {
-            var si = 0
-            var pi = 0
-            while (true) {
-                yield(preShared[si % preShared.size] + seeds[pi % seeds.size])
-                si++
-                pi++
-            }
-        }.iterator()
-
+        val preShared = intArrayOf(19, 20, 14, 1, 5, 2, 4, 15, 9, 17, 8, 16, 18, 11, 10, 7, 12, 6, 13, 3)
+        val seeds = contentId.mapNotNull { if (it in '1'..'9') it - '0' else null }
+        if (seeds.isEmpty()) return indices
+        var pi = envV % seeds.size
+        var si = 0
         return indices
-            .map { randsGen.next() to it }
+            .map { idx -> (preShared[si++ % preShared.size] + seeds[pi++ % seeds.size]) to idx }
             .sortedWith(compareBy({ it.first }, { it.second }))
             .map { it.second }
     }
