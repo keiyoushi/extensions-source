@@ -86,6 +86,20 @@ class Comix :
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
+    // wowpic hosts can return an invalid variant (seed=0 / empty body) when Origin=comix.to.
+    override fun imageRequest(page: Page): Request {
+        val imageUrl = page.imageUrl ?: return super.imageRequest(page)
+        val imageHost = imageUrl.substringBefore('#').toHttpUrlOrNull()?.host.orEmpty()
+        val requestHeaders = if (imageHost.isNotEmpty() && !imageHost.contains("comix.to")) {
+            headersBuilder()
+                .removeAll("Origin")
+                .build()
+        } else {
+            headers
+        }
+        return GET(imageUrl, requestHeaders)
+    }
+
     // ============================== Popular ==============================
     override fun popularMangaRequest(page: Int): Request {
         val url = apiUrl.toHttpUrl().newBuilder().apply {
