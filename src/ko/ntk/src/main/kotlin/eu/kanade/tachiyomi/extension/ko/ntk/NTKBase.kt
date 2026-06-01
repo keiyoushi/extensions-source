@@ -105,6 +105,7 @@ abstract class NTKBase(
             webView.addJavascriptInterface(
                 object {
                     @JavascriptInterface
+                    @Suppress("unused")
                     fun exfiltrate(html: String) {
                         finalHtml = html
                         latch.countDown()
@@ -113,33 +114,45 @@ abstract class NTKBase(
                 "TrojanTunnel",
             )
 
+            val wiretapScript = """
+                window.__ntkDevtoolsPreflight = 1;
+                const originalFetch = window.fetch;
+                window.fetch = async function() {
+                    const response = await originalFetch.apply(this, arguments);
+                    let reqUrl = arguments[0] && arguments[0].url ? arguments[0].url : arguments[0];
+                    if (reqUrl && reqUrl.toString().match(/\/api\/(manhwa|webtoon)-images/)) {
+                        response.clone().text().then(text => {
+                            window.TrojanTunnel.exfiltrate(text);
+                        });
+                    }
+                    return response;
+                };
+            """.trimIndent()
+
+            val chapterUrl = request.url.toString()
+            var preloadDone = false
+
             webView.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String) {
+                    if (!preloadDone) {
+                        preloadDone = true
+                        view.loadUrl(chapterUrl)
+                    }
+                    super.onPageFinished(view, url)
+                }
+
                 override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
-                    view.evaluateJavascript("window.__ntkDevtoolsPreflight = 1;", null)
-
-                    val wiretapScript = """
-                        const originalFetch = window.fetch;
-                        window.fetch = async function() {
-                            const response = await originalFetch.apply(this, arguments);
-                            let reqUrl = arguments[0] && arguments[0].url ? arguments[0].url : arguments[0];
-                            if (reqUrl && reqUrl.toString().match(/\/api\/(manhwa|webtoon)-images/)) {
-                                response.clone().text().then(text => {
-                                    window.TrojanTunnel.exfiltrate(text);
-                                });
-                            }
-                            return response;
-                        };
-                    """.trimIndent()
-                    view.evaluateJavascript(wiretapScript, null)
-
+                    if (preloadDone) {
+                        view.evaluateJavascript(wiretapScript, null)
+                    }
                     super.onPageStarted(view, url, favicon)
                 }
             }
 
-            webView.loadUrl(request.url.toString())
+            webView.loadUrl(rootUrl)
         }
 
-        latch.await(20, TimeUnit.SECONDS)
+        latch.await(30, TimeUnit.SECONDS)
 
         finalHtml?.let {
             val isJson = it.trim().startsWith("{")
@@ -184,10 +197,24 @@ abstract class NTKBase(
         response
     }
 
+    private val imageRefererInterceptor = Interceptor { chain ->
+        val request = chain.request()
+        if (!request.url.host.matches(Regex("""sbxh\d+\.com"""))) {
+            chain.proceed(
+                request.newBuilder()
+                    .header("Referer", "$rootUrl/")
+                    .build(),
+            )
+        } else {
+            chain.proceed(request)
+        }
+    }
+
     override val client: OkHttpClient by lazy {
         network.cloudflareClient.newBuilder()
             .addInterceptor(headerCleanerInterceptor)
             .addInterceptor(domainUpdateInterceptor)
+            .addInterceptor(imageRefererInterceptor)
             .addInterceptor(trojanWebViewInterceptor)
             .build()
     }
@@ -204,6 +231,9 @@ abstract class NTKBase(
         val title: String? = null,
         val workTitle: String? = null,
         val thumbnailUrl: String? = null,
+        val coverUrl: String? = null,
+        val imageUrl: String? = null,
+        val thumbnail: String? = null,
         val genre: String? = null,
         val author: String? = null,
     )
@@ -235,8 +265,8 @@ abstract class NTKBase(
         val mangas = data.works.map { work ->
             SManga.create().apply {
                 url = "/$contentKind/${work.sourceWorkId}"
-                title = work.title ?: ""
-                thumbnail_url = work.thumbnailUrl
+                title = work.workTitle ?: work.title ?: ""
+                thumbnail_url = work.thumbnailUrl ?: work.coverUrl ?: work.imageUrl ?: work.thumbnail
                 genre = work.genre
             }
         }
@@ -289,7 +319,7 @@ abstract class NTKBase(
                 SManga.create().apply {
                     url = "/$contentKind/${card.sourceWorkId}"
                     title = card.workTitle ?: card.title ?: ""
-                    thumbnail_url = card.thumbnailUrl
+                    thumbnail_url = card.thumbnailUrl ?: card.coverUrl ?: card.imageUrl ?: card.thumbnail
                     genre = card.genre
                     author = card.author
                 }
@@ -340,6 +370,7 @@ abstract class NTKBase(
                 setUrlWithoutDomain(element.select("a.ep-row-v2-link").attr("href"))
                 name = element.select("div.ep-row-v2-title strong").text()
                 date_upload = dateFormat.tryParse(element.select("span.ep-row-v2-date").text())
+                scanlator = if (element.selectFirst("span.ep-price-badge") != null) "🔒" else null
             }
         }
     }
