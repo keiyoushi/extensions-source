@@ -10,7 +10,7 @@ private val isoDate by lazy {
 }
 
 private inline val String?.timestamp: Long
-    get() = isoDate.tryParse(this?.substringBefore('.'))
+    get() = isoDate.tryParse(this?.substringBefore('.')?.substringBefore('+')?.substringBefore('Z'))
 
 @Serializable
 class MantaResponse<T>(
@@ -64,13 +64,14 @@ class Details(
 class Episode(
     val id: Int,
     val ord: Int,
-    val data: EpisodeData?,
-    val lockData: LockData,
-    private val createdAt: String,
+    val data: EpisodeData? = null,
+    private val lockData: LockData? = null,
+    private val openAt: String? = null,
+    private val createdAt: String? = null,
     val cutImages: List<Image>? = null,
 ) {
     val timestamp: Long
-        get() = createdAt.timestamp
+        get() = openAt.timestamp.takeIf { it != 0L } ?: createdAt.timestamp
 
     fun asString(lang: String) = buildString {
         val episodeTitle = data?.title
@@ -80,7 +81,7 @@ class Episode(
             append(if (lang == "es") "Episodio" else "Episode")
             append(" $ord")
         }
-        if (lockData.isLocked) append(" 🔒")
+        if (lockData?.isLocked == true) append(" 🔒")
     }
 
     override fun toString() = asString("en")
@@ -90,9 +91,9 @@ class Episode(
 class EpisodeData(val title: String? = null)
 
 @Serializable
-class LockData(private val state: Int) {
+class LockData(private val state: Int? = null) {
     val isLocked: Boolean
-        get() = state !in arrayOf(110, 130)
+        get() = state != null && state !in arrayOf(110, 130)
 }
 
 @Serializable
