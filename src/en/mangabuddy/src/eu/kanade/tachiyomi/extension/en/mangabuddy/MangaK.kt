@@ -207,8 +207,7 @@ class MangaK :
 
     // `chapter.url` may be relative or already absolute depending on the API response,
     // so resolve it against baseUrl instead of blindly concatenating.
-    override fun getChapterUrl(chapter: SChapter): String =
-        baseUrl.toHttpUrl().resolve(chapter.url)?.toString() ?: (baseUrl + chapter.url)
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl.toHttpUrl().resolve(chapter.url)?.toString() ?: (baseUrl + chapter.url)
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         if (!manga.url.contains("#")) {
