@@ -18,6 +18,7 @@ import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import java.io.IOException
 import java.util.UUID.randomUUID
 
 class ReaderStore :
@@ -33,6 +34,14 @@ class ReaderStore :
     override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .addNetworkInterceptor(CookieInterceptor(DOMAIN, listOf("safeSearch" to """{"safeAdultGenreFlg":false,"safeNonCherryFlg":false,"safeBLGenreFlg":false,"safeTLGenreFlg":false,"safeBikiniGenreFlg":false}""", "agelimit_auth" to "true")))
+        .addInterceptor {
+            val request = it.request()
+            val response = it.proceed(request)
+            if (response.code == 500 && request.url.encodedPath == "/front-api/viewer/") {
+                throw IOException("Log in via WebView and purchase this product to read.")
+            }
+            response
+        }
         .build()
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", FilterList(SortFilter().apply { state = 1 }))
@@ -139,7 +148,7 @@ class ReaderStore :
 
         val base = "$VIEWER_URL/${result.browserContentsId}"
         val metaData = client.newCall(GET("$base/$PATH_META".toHttpUrl(), newHeaders)).execute().parseAs<MetaResponse>().data
-        val maxIndex = metaData.page.all - 1
+        val maxIndex = metaData.page.all?.minus(1) ?: throw Exception("Novels are not supported!")
         val cipherKey = extractCipherKey(client.newCall(GET("$base/$PATH_DECRYPT", newHeaders)).execute().body.string())
 
         return (0..maxIndex).map {
@@ -155,7 +164,7 @@ class ReaderStore :
 
     // /decrypt worker: 'var e = [int, int, int, int]'
     private fun extractCipherKey(workerJs: String): String {
-        val keyArray = HEADER_KEY_ASSIGNMENT.find(workerJs)?.value
+        val keyArray = HEADER_KEY.find(workerJs)?.value
             ?: FOUR_INT_ARRAY.findAll(workerJs).map { it.value }.firstOrNull {
                 it.trim('[', ']').split(",").map(String::trim) != IV_DIGITS
             }
@@ -173,7 +182,7 @@ class ReaderStore :
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
-        private val HEADER_KEY_ASSIGNMENT = Regex("""\be\s*=\s*\[\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+\s*]""")
+        private val HEADER_KEY = Regex("""\be\s*=\s*\[\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+\s*]""")
         private val FOUR_INT_ARRAY = Regex("""\[\s*\d+\s*(?:,\s*\d+\s*){3}]""")
         private val NUMBER = Regex("""\d+""")
         private val IV_DIGITS = listOf("0", "1", "2", "3")

@@ -51,8 +51,8 @@ class MangaResponseItem(
     private val title: Title,
     private val authors: List<Author>?,
     private val floor: Floor?,
-    private val price: Price,
-    private val browserView: BrowserView,
+    private val price: Price?,
+    private val browserView: BrowserView?,
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
         title = this@MangaResponseItem.title.titleNm
@@ -69,15 +69,15 @@ class MangaResponseItem(
     }
 
     val isLocked: Boolean
-        get() = price.priceIncludeTax > 0 && !browserView.isBrowseSample
+        get() = price?.priceIncludeTax != 0 && browserView?.isBrowseSample == false && detail.paidVersionAid == null
 
     val isPreview: Boolean
-        get() = price.priceIncludeTax > 0 && browserView.isBrowseSample
+        get() = price?.priceIncludeTax != 0 && browserView?.isBrowseSample == true && detail.paidVersionAid == null
 
     fun toSChapter(): SChapter = SChapter.create().apply {
         val lock = if (isLocked) "🔒 " else ""
         val preview = if (isPreview) "🔒 (Preview) " else ""
-        url = if (isPreview) "$aid#1" else aid
+        url = detail.paidVersionAid ?: if (isPreview) "$aid#1" else aid
         name = lock + preview + detail.contentsNm
         date_upload = dateFormat.tryParse(detail.originalPublicDt)
         chapter_number = title.titleIndexSeqNo?.toFloat() ?: -1f
@@ -99,6 +99,7 @@ class Detail(
     val rsThumbnailM: String?,
     val rsThumbnailS: String?,
     val adultLevel: Int?,
+    val paidVersionAid: String?,
     val titleExplanationLong: String?,
     val originalPublicDt: String?,
 )
@@ -126,12 +127,12 @@ class Genre(
 
 @Serializable
 class Price(
-    val priceIncludeTax: Int,
+    val priceIncludeTax: Int?,
 )
 
 @Serializable
 class BrowserView(
-    val isBrowseSample: Boolean,
+    val isBrowseSample: Boolean?,
 )
 
 @Serializable
@@ -159,7 +160,7 @@ class MetaData(
 
 @Serializable
 class Page(
-    val all: Int,
+    val all: Int?,
 )
 
 @Serializable
