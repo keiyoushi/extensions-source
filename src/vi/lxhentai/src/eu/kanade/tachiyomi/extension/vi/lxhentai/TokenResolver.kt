@@ -23,37 +23,95 @@ object TokenResolver {
     @Serializable
     class Result(val token: String = "", val srcs: List<String> = emptyList())
 
-    private const val TIMEOUT_SECONDS = 45L
-    private const val INITIAL_POLL_DELAY_MS = 2_000L
+    private const val TIMEOUT_SECONDS = 15L
+    private const val MAX_ATTEMPTS = 3
+    private const val INITIAL_POLL_DELAY_MS = 1_000L
+    private const val PUZZLE_STABLE_MS = 1_500
+    private const val PUZZLE_FALLBACK_MS = 5_000
     private const val POLL_INTERVAL_MS = 500L
     private const val CACHE_TTL_MS = 60_000L
     private const val WEBVIEW_WIDTH = 1080
     private const val WEBVIEW_HEIGHT = 1920
+    private val WEBVIEW_TOKEN_REGEX = Regex("""\;\s*wv\)""")
 
     private val cache = ConcurrentHashMap<String, Pair<Result, Long>>()
 
     // evaluateJavascript returns the JSON representation of the returned JS value.
     // An object literal becomes `{"token":"...","srcs":[...]}` and an empty string
     // becomes `""`, which the poll loop treats as "not ready yet".
+    //
+    // The site renders real content images inside puzzle-container divs (canvas tiles)
+    // after fetching them via fetch(). Ad/watermark images fail CORS (the CDN only
+    // returns Access-Control-Allow-Origin for real content), so they never get a
+    // puzzle-container. We use this to filter out ads — the same way the browser does.
+    //
+    // Flow: wait for actionToken → wait for puzzle-containers to stabilise → return
+    // only the URLs whose containers have a puzzle child. If no puzzles appear within
+    // PUZZLE_FALLBACK_MS after the token is seen, fall back to returning all URLs.
     private val TOKEN_EXTRACTION_JS = """
         (function(){
             try {
                 var t = (typeof window.actionToken !== 'undefined' && window.actionToken) ? String(window.actionToken) : '';
-                var s = (Array.isArray(window.__imgSrcs)) ? window.__imgSrcs.filter(function(x){return typeof x === 'string' && x.length > 0;}) : [];
-                if (t && s.length > 0) {
-                    return {token: t, srcs: s};
+                var s = (Array.isArray(window.__imgSrcs)) ? window.__imgSrcs : [];
+                if (!t || s.length === 0) return '';
+
+                var containers = document.querySelectorAll('[id=image-container][data-idx]');
+                var puzzleCount = 0;
+                var filtered = [];
+                for (var i = 0; i < containers.length; i++) {
+                    var c = containers[i];
+                    var idx = parseInt(c.getAttribute('data-idx'), 10);
+                    if (c.querySelector('[id^="puzzle-container"]') && s[idx] && s[idx].length > 0) {
+                        puzzleCount++;
+                        filtered.push(s[idx]);
+                    }
                 }
+
+                if (puzzleCount > 0) {
+                    if (puzzleCount >= containers.length) {
+                        return {token: t, srcs: filtered};
+                    }
+                    var prev = window.__prevPuzzleCount || 0;
+                    if (puzzleCount !== prev) {
+                        window.__prevPuzzleCount = puzzleCount;
+                        window.__puzzleStableTime = Date.now();
+                        return '';
+                    }
+                    if (Date.now() - (window.__puzzleStableTime || 0) < $PUZZLE_STABLE_MS) return '';
+                    return {token: t, srcs: filtered};
+                }
+
+                if (!window.__tokenSeenAt) window.__tokenSeenAt = Date.now();
+                if (Date.now() - window.__tokenSeenAt > $PUZZLE_FALLBACK_MS) {
+                    var all = s.filter(function(x){return typeof x === 'string' && x.length > 0;});
+                    if (all.length > 0) return {token: t, srcs: all};
+                }
+                return '';
             } catch(e) {}
             return '';
         })();
     """.trimIndent()
 
-    @SuppressLint("SetJavaScriptEnabled")
     fun resolve(chapterUrl: String): Result {
         cache[chapterUrl]?.let { (cached, ts) ->
             if (System.currentTimeMillis() - ts < CACHE_TTL_MS) return cached
         }
 
+        var lastError: IOException? = null
+        repeat(MAX_ATTEMPTS) {
+            try {
+                val res = resolveOnce(chapterUrl)
+                cache[chapterUrl] = res to System.currentTimeMillis()
+                return res
+            } catch (e: IOException) {
+                lastError = e
+            }
+        }
+        throw lastError!!
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun resolveOnce(chapterUrl: String): Result {
         val context = Injekt.get<Application>()
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
@@ -81,6 +139,9 @@ object TokenResolver {
                 blockNetworkImage = false
                 mediaPlaybackRequiresUserGesture = false
             }
+
+            wv.settings.userAgentString = wv.settings.userAgentString
+                .replace(WEBVIEW_TOKEN_REGEX, ")")
 
             CookieManager.getInstance().setAcceptCookie(true)
             CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
@@ -123,7 +184,6 @@ object TokenResolver {
             throw IOException("Mở chương trong WebView để giải Cloudflare.")
         }
 
-        cache[chapterUrl] = finalResult to System.currentTimeMillis()
         return finalResult
     }
 }

@@ -39,7 +39,7 @@ abstract class PeachScan(
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.client
         .newBuilder()
         .addInterceptor(ZipInterceptor()::zipImageInterceptor)
         .build()

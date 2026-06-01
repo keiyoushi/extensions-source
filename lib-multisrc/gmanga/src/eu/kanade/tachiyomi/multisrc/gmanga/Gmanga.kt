@@ -35,8 +35,6 @@ abstract class Gmanga(
 
     protected val json: Json by injectLazy()
 
-    override val client = network.cloudflareClient
-
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Weeping Angel'
+    extClass = '.WeepingAngel'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/weepingangel'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

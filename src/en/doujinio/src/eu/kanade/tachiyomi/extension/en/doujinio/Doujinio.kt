@@ -27,7 +27,7 @@ class Doujinio : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .build()
 

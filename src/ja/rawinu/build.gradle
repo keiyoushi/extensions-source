@@ -3,11 +3,11 @@ ext {
     extClass = '.RawINU'
     themePkg = 'fmreader'
     baseUrl = 'https://rawinu.com'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
 
 dependencies {
     implementation(project(":lib:cookieinterceptor"))

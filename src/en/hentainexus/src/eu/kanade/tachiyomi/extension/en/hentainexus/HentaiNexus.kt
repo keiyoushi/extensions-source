@@ -37,7 +37,7 @@ class HentaiNexus : HttpSource() {
     override val supportsLatest = false
 
     // Images on this site go through the free Jetpack Photon CDN.
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1)
         .build()
 

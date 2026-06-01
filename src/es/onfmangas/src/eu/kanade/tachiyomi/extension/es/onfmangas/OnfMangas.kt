@@ -11,9 +11,12 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -25,16 +28,32 @@ class OnfMangas : HttpSource() {
     override val lang = "es"
     override val supportsLatest = true
 
+    val tokenRegex = Regex("""var token="([^"]+)"""")
+
+    override val client = super.client.newBuilder()
+        .addInterceptor(::onfTokenInterceptor)
+        .build()
+
+    private fun onfTokenInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+
+        val body = response.peekBody(8192).string()
+        val token = tokenRegex.find(body)?.groupValues?.get(1) ?: return response
+
+        response.close()
+        val cookie = Cookie.parse(request.url, "__onf_chk=$token; path=/")
+        client.cookieJar.saveFromResponse(request.url, listOfNotNull(cookie))
+
+        return chain.proceed(request)
+    }
+
     // Mimic a standard desktop browser to bypass Cloudflare WAF 403s
     override fun headersBuilder() = super.headersBuilder()
-        .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-        .add("Accept-Language", "es-MX,es;q=0.9,en-US;q=0.8,en;q=0.7")
-        .add("DNT", "1")
-        .add("Upgrade-Insecure-Requests", "1")
-        .add("Sec-Fetch-Dest", "document")
-        .add("Sec-Fetch-Mode", "navigate")
-        .add("Sec-Fetch-Site", "same-origin")
-        .add("Sec-Fetch-User", "?1")
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0")
+        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+        .set("Accept-Language", "en-US,en;q=0.9")
+        .set("Sec-Fetch-Site", "none")
 
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {
@@ -187,6 +206,21 @@ class OnfMangas : HttpSource() {
         val pagesData = jsonString.parseAs<List<PageDto>>()
 
         return pagesData.mapIndexed { index, dto -> dto.toPage(index) }
+    }
+
+    // Decent chance for primary src to fail
+    override fun fetchImageUrl(page: Page): Observable<String> {
+        val src = page.url
+        val fallback = page.url.toHttpUrl().fragment?.removePrefix("fallback=")
+
+        if (fallback.isNullOrBlank()) return Observable.just(src)
+
+        return Observable.fromCallable {
+            val response = client.newCall(Request.Builder().head().url(src).build()).execute()
+            val success = response.isSuccessful
+            response.close()
+            if (success) src else fallback
+        }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()

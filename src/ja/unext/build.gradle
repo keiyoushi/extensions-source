@@ -1,8 +1,8 @@
 ext {
     extName = 'U-NEXT'
     extClass = '.UNext'
-    extVersionCode = 2
+    extVersionCode = 3
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

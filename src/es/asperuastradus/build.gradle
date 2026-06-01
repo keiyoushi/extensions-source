@@ -1,0 +1,10 @@
+ext {
+    extName = 'Asperuas Tradus'
+    extClass = '.AsperuasTradus'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/asperuastradus'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

@@ -30,10 +30,11 @@ class Filters {
             }
         }
 
-        // Site's curated list of 30 genres (matches the Genres section in the
+        // Site's curated list of 31 genres (matches the Genres section in the
         // browse panel exactly). Narrative tags like "Aliens" or "School Life"
         // used to live here too, but they belong under Tags and are searched
         // by name rather than enumerated.
+        // Order mirrors the site's "Content preferences" modal.
         fun getGenres() = arrayOf(
             "Action" to "6",
             "Adult" to "87264",
@@ -45,6 +46,7 @@ class Filters {
             "Ecchi" to "87265",
             "Fantasy" to "12",
             "Girls Love" to "13",
+            "Harem" to "40",
             "Hentai" to "87266",
             "Historical" to "14",
             "Horror" to "15",
@@ -80,11 +82,22 @@ class Filters {
             "Web Comic" to "93171",
         )
 
+        // Order mirrors the site's "Content preferences" modal.
         fun getDemographics() = arrayOf(
-            Pair("Shoujo", "1"),
-            Pair("Shounen", "2"),
             Pair("Josei", "3"),
             Pair("Seinen", "4"),
+            Pair("Shoujo", "1"),
+            Pair("Shounen", "2"),
+        )
+
+        // Same set TypeFilter exposes in the search filter sheet — duplicated
+        // here as a public getter so source-level preferences (in Comix.kt)
+        // can present the identical pick list.
+        fun getTypes() = arrayOf(
+            Pair("Manga", "manga"),
+            Pair("Manhwa", "manhwa"),
+            Pair("Manhua", "manhua"),
+            Pair("Other", "other"),
         )
     }
 
@@ -184,12 +197,7 @@ class Filters {
         UriMultiSelectFilter(
             "Type",
             "types[]",
-            arrayOf(
-                Pair("Manga", "manga"),
-                Pair("Manhwa", "manhwa"),
-                Pair("Manhua", "manhua"),
-                Pair("Other", "other"),
-            ),
+            getTypes(),
         )
 
     // Genres, Formats, and Tags all share the same `genres_in[]` /
@@ -224,8 +232,8 @@ class Filters {
             "Status",
             "statuses[]",
             arrayOf(
-                Pair("Finished", "finished"),
                 Pair("Releasing", "releasing"),
+                Pair("Finished", "finished"),
                 Pair("On Hiatus", "on_hiatus"),
                 Pair("Discontinued", "discontinued"),
                 Pair("Not Yet Released", "not_yet_released"),

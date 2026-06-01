@@ -18,10 +18,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.GraphQLErrorInterceptor
+import keiyoushi.utils.GraphQLException
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.graphQLGet
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.parseGraphQLAs
+import keiyoushi.utils.persistedQueryExtension
 import keiyoushi.utils.toJsonString
-import okhttp3.CacheControl
+import okhttp3.CacheControl.Companion.FORCE_NETWORK
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -42,86 +47,63 @@ class UNext :
 
     private val apiUrl = "https://cc.$domain"
     private val preferences: SharedPreferences by getPreferencesLazy()
+    private val apiHeaders = headersBuilder()
+        .set("Content-Type", "application/json")
+        .add("Apollographql-Client-Name", "cosmo")
+        .build()
 
     // Paid chapters redirect to the app on mobile UA, but are readable with desktop UA
     override fun headersBuilder() = super.headersBuilder()
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36")
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36")
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
+        .addInterceptor(GraphQLErrorInterceptor())
         .addInterceptor(ImageInterceptor())
-        .addInterceptor { chain ->
-            var request = chain.request()
-            var response = chain.proceed(request)
-            var retryCount = 0
-
-            // API request for details sometimes gives "PersistedQueryNotFound" but works after 1-2 retries
-            while (retryCount < 5 && request.url.host == "cc.unext.jp" && response.isSuccessful) {
-                val contentType = response.body.contentType()
-                if (contentType?.subtype == "json") {
-                    val bodyString = response.peekBody(Long.MAX_VALUE).string()
-                    if (bodyString.contains("PersistedQueryNotFound")) {
-                        response.close()
-                        retryCount++
-                        request = request.newBuilder().build()
-                        response = chain.proceed(request)
-                        continue
-                    }
-                }
-                break
-            }
-            response
-        }
         .build()
 
-    override fun popularMangaRequest(page: Int): Request {
-        val payload = Payload(
-            "cosmo_getBookRanking",
-            PopularVariables("D_C_COMIC", page, 20),
-            Payload.Extensions(
-                Payload.Extensions.PersistedQuery(1, POPULAR_QUERY_HASH),
-            ),
-        )
-        return apiRequest(payload)
-    }
+    override fun popularMangaRequest(page: Int): Request = graphQLGet(
+        apiUrl,
+        apiHeaders,
+        operationName = "cosmo_getBookRanking",
+        variables = PopularVariables("D_C_COMIC", page, 20),
+        extensions = persistedQueryExtension(POPULAR_QUERY_HASH),
+        cache = FORCE_NETWORK,
+    )
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<PopularResponse>().data.bookRanking
+        val result = response.parseGraphQLAs<PopularResponse>().bookRanking
         val mangas = result.books.map { it.bookSakuhin.toSManga() }
         val hasNextPage = result.pageInfo.let { it.page * it.pageSize < it.results }
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val payload = Payload(
-            "cosmo_getNewBooks",
-            LatestVariables("TAG0000014500", page, 20),
-            Payload.Extensions(
-                Payload.Extensions.PersistedQuery(1, LATEST_QUERY_HASH),
-            ),
-        )
-        return apiRequest(payload)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = graphQLGet(
+        apiUrl,
+        apiHeaders,
+        operationName = "cosmo_getNewBooks",
+        variables = LatestVariables("TAG0000014500", page, 20),
+        extensions = persistedQueryExtension(LATEST_QUERY_HASH),
+        cache = FORCE_NETWORK,
+    )
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseAs<LatestResponse>().data.newBooks
+        val result = response.parseGraphQLAs<LatestResponse>().newBooks
         val mangas = result.books.map { it.toSManga() }
         val hasNextPage = result.pageInfo.let { it.page * it.pageSize < it.results }
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val payload = Payload(
-            "cosmo_bookFreewordSearch",
-            SearchVariables(query, page, 20, null, "RECOMMEND"),
-            Payload.Extensions(
-                Payload.Extensions.PersistedQuery(1, SEARCH_QUERY_HASH),
-            ),
-        )
-        return apiRequest(payload)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = graphQLGet(
+        apiUrl,
+        apiHeaders,
+        operationName = "cosmo_bookFreewordSearch",
+        variables = SearchVariables(query, page, 20, null, "RECOMMEND"),
+        extensions = persistedQueryExtension(SEARCH_QUERY_HASH),
+        cache = FORCE_NETWORK,
+    )
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<SearchResponse>().data.search
+        val result = response.parseGraphQLAs<SearchResponse>().search
         val mangas = result.books.map { it.toSManga() }
         val hasNextPage = result.pageInfo.let { it.page * it.pageSize < it.results }
         return MangasPage(mangas, hasNextPage)
@@ -129,34 +111,34 @@ class UNext :
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val bookSakuhinCode = (baseUrl + manga.url).toHttpUrl().pathSegments.last()
-        val payload = Payload(
-            "cosmo_bookTitleDetail",
-            DetailsVariables(bookSakuhinCode, "TOTAL", 2, 5),
-            Payload.Extensions(
-                Payload.Extensions.PersistedQuery(1, DETAILS_QUERY_HASH),
-            ),
+        return graphQLGet(
+            apiUrl,
+            apiHeaders,
+            operationName = "cosmo_bookTitleDetail",
+            variables = DetailsVariables(bookSakuhinCode, "TOTAL", 2, 5),
+            extensions = persistedQueryExtension(DETAILS_QUERY_HASH),
+            cache = FORCE_NETWORK,
         )
-        return apiRequest(payload)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<DetailsResponse>().data.bookTitle.toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = response.parseGraphQLAs<DetailsResponse>().bookTitle.toSManga()
 
     override fun chapterListRequest(manga: SManga): Request {
         val bookSakuhinCode = (baseUrl + manga.url).toHttpUrl().pathSegments.last()
-        val payload = Payload(
-            "cosmo_bookTitleBooks",
-            ChapterListVariables(bookSakuhinCode, 1, 9999),
-            Payload.Extensions(
-                Payload.Extensions.PersistedQuery(1, CHAPTER_LIST_QUERY_HASH),
-            ),
+        return graphQLGet(
+            apiUrl,
+            apiHeaders,
+            operationName = "cosmo_bookTitleBooks",
+            variables = ChapterListVariables(bookSakuhinCode, 1, 9999),
+            extensions = persistedQueryExtension(CHAPTER_LIST_QUERY_HASH),
+            cache = FORCE_NETWORK,
         )
-        return apiRequest(payload)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val variables = response.request.url.queryParameter("variables")!!
         val sakuhinCode = variables.parseAs<ChapterListVariables>().bookSakuhinCode
-        val data = response.parseAs<ChapterListResponse>().data.bookTitleBooks.books
+        val data = response.parseGraphQLAs<ChapterListResponse>().bookTitleBooks.books
         val hidePaid = preferences.getBoolean(HIDE_PAID_PREF, false)
         return data
             .filterNot { hidePaid && it.isFree != true && it.isPurchased != true && it.rightsExpirationDatetime == null }
@@ -171,18 +153,21 @@ class UNext :
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
         val bookFileCode = (baseUrl + chapter.url).toHttpUrl().fragment
 
-        val payload = Payload(
-            "cosmo_getBookPlaylistUrl",
-            PageListVariables(bookFileCode!!),
-            Payload.Extensions(
-                Payload.Extensions.PersistedQuery(1, PLAYLIST_QUERY_HASH),
+        val playlistData = client.newCall(
+            graphQLGet(
+                apiUrl,
+                apiHeaders,
+                operationName = "cosmo_getBookPlaylistUrl",
+                variables = PageListVariables(bookFileCode!!),
+                extensions = persistedQueryExtension(PLAYLIST_QUERY_HASH),
+                cache = FORCE_NETWORK,
             ),
-        )
-
-        val apiRequest = apiRequest(payload)
-        val playlistData = client.newCall(apiRequest).execute()
-        val playlistParse = playlistData.parseAs<PlaylistResponse>().data?.playlistUrl
-            ?: throw Exception("This chapter is locked. Log in via WebView and rent or purchase this chapter to read.")
+        ).execute()
+        val playlistParse = try {
+            playlistData.parseGraphQLAs<PlaylistResponse>().playlistUrl
+        } catch (_: GraphQLException) {
+            throw Exception("Log in via WebView and rent or purchase this chapter to read.")
+        }
 
         var keys: Map<String, String>? = null
 
@@ -252,7 +237,7 @@ class UNext :
         // Request viewer URL to populate signed cookies
         var html: String? = null
         try {
-            val request = GET(url, headers, CacheControl.FORCE_NETWORK)
+            val request = GET(url, headers, FORCE_NETWORK)
             client.newCall(request).execute().use { response ->
                 html = response.body.string()
             }
@@ -311,20 +296,6 @@ class UNext :
     }
 
     override fun imageUrlParse(response: Response): String = response.request.url.toString()
-
-    private inline fun <reified T> apiRequest(payload: Payload<T>): Request {
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("operationName", payload.operationName)
-            .addQueryParameter("variables", payload.variables.toJsonString())
-            .addQueryParameter("extensions", payload.extensions.toJsonString())
-            .build()
-
-        val newHeaders = super.headersBuilder()
-            .set("Content-Type", "application/json")
-            .build()
-
-        return GET(url.toString(), newHeaders, CacheControl.FORCE_NETWORK)
-    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {

@@ -27,7 +27,7 @@ class MangaMoins : HttpSource() {
 
     private val apiUrl = "$baseUrl/api/v1"
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -130,7 +130,7 @@ class MangaMoins : HttpSource() {
                     val chapterName = "Chapitre ${ch.num.toString().removeSuffix(".0")}"
                     append(chapterName)
                     val title = ch.title.unescapeHtml()
-                    if (title.isNotBlank() && !title.equals(chapterName, ignoreCase = true)) {
+                    if (title.isNotBlank() && title.lowercase() != chapterName.lowercase()) {
                         append(" - ")
                         append(title)
                     }
@@ -156,35 +156,70 @@ class MangaMoins : HttpSource() {
         return GET(url, headers)
     }
 
-    private var cachedSalt: String? = null
+    private var cachedSalts: List<String> = emptyList()
     private var lastSaltFetch: Long = 0
 
-    private fun getSalt(): String {
+    private fun getSalts(pagesBaseUrl: String): List<String> {
         val now = System.currentTimeMillis()
-        if (cachedSalt != null && now - lastSaltFetch < SALT_EXPIRY) {
-            return cachedSalt!!
+        if (cachedSalts.isNotEmpty() && now - lastSaltFetch < SALT_EXPIRY) {
+            return cachedSalts
         }
 
-        val salt = try {
+        try {
             val scriptUrl = "$baseUrl/includes/components/js/reader.js"
-            val response = client.newCall(GET(scriptUrl, headers)).execute()
-            val script = response.body.string()
-            val saltRegex = """\d+[a-zA-Z]{2,}Plop""".toRegex()
-            saltRegex.find(script)?.value ?: SALT
-        } catch (e: Exception) {
-            SALT // Fallback to hardcoded salt on error
-        }
+            client.newCall(GET(scriptUrl, headers)).execute().use { response ->
+                val script = response.body.string()
 
-        cachedSalt = salt
-        lastSaltFetch = now
-        return salt
+                val alphabet = ALPHABET_REGEX.find(script)?.groupValues?.get(1)
+                    ?: FALLBACK_ALPHABET
+
+                val formulaMatch = FORMULA_REGEX.find(script)
+                val multiplier = formulaMatch?.groupValues?.get(1)?.toInt(16) ?: 3
+                val offset = formulaMatch?.groupValues?.get(2)?.toInt(16) ?: 7
+
+                val pathSegment = pagesBaseUrl.removeSuffix("/").substringAfterLast("/")
+                val salts = mutableListOf<String>()
+
+                HEX_ARRAY_REGEX.findAll(script).forEach { match ->
+                    val hexValues = match.groupValues[1].split(",")
+                    val decoded = hexValues.map {
+                        val v = it.trim().removePrefix("0x").toInt(16)
+                        alphabet[(v * multiplier + offset) % alphabet.length]
+                    }.joinToString("")
+
+                    if (decoded.length >= 3 && pathSegment.contains(decoded)) {
+                        salts.add(decoded)
+                    }
+                }
+
+                STRINGS_REGEX.findAll(script).forEach { match ->
+                    val s = match.groupValues[1].replace(ESCAPE_REGEX) { m ->
+                        m.groupValues[1].toInt(16).toChar().toString()
+                    }
+                    if (s.length >= 3 && pathSegment.contains(s)) {
+                        salts.add(s)
+                    }
+                }
+
+                val result = salts.distinct().sortedByDescending { it.length }
+                if (result.isNotEmpty()) {
+                    cachedSalts = result
+                    lastSaltFetch = now
+                }
+            }
+        } catch (_: Exception) { }
+
+        return cachedSalts.ifEmpty { FALLBACK_SALTS }
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val data = response.parseAs<ScanResponse>()
-        val salt = getSalt()
-        // Remove the dynamic salt prefix from the last path segment
-        val baseUrl = data.pagesBaseUrl.removeSuffix("/").replace("/$salt", "/")
+        val salts = getSalts(data.pagesBaseUrl)
+
+        val baseUrl = salts.fold(data.pagesBaseUrl.removeSuffix("/")) { url, salt ->
+            url.replace(salt, "")
+        }
+
         return (1..data.pageNumbers).map { i ->
             val pageNum = i.toString().padStart(2, '0')
             Page(i - 1, imageUrl = "$baseUrl/$pageNum.webp")
@@ -195,7 +230,14 @@ class MangaMoins : HttpSource() {
 
     companion object {
         private const val MANGA_PAGE_LIMIT = 20
-        private const val SALT = "4445xcPlop"
+        private val FALLBACK_SALTS = listOf("a1f", "Z0_9")
+        private const val FALLBACK_ALPHABET = "abcdefghijk-lmnopqrstuvwxyz_0123456789+"
         private const val SALT_EXPIRY = 3 * 60 * 60 * 1000L // 3 hours
+
+        private val ALPHABET_REGEX = Regex("""['"]([a-zA-Z0-9\-+_]{30,})['"]""")
+        private val FORMULA_REGEX = Regex("""\*0x([a-f\d]+)\+0x([a-f\d]+)""")
+        private val HEX_ARRAY_REGEX = Regex("""\[(0x[a-f\d]+(?:,0x[a-f\d]+)+)\]""")
+        private val STRINGS_REGEX = Regex("""['"]([^'"]*)['"]""")
+        private val ESCAPE_REGEX = Regex("""\\x([a-f\d]{2})""", RegexOption.IGNORE_CASE)
     }
 }

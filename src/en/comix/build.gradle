@@ -1,8 +1,8 @@
 ext {
     extName = 'Comix'
     extClass = '.Comix'
-    extVersionCode = 15
+    extVersionCode = 24
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

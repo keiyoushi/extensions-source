@@ -1,0 +1,10 @@
+ext {
+    extName = 'Traducciones Muy Lentas'
+    extClass = '.TraduccionesMuyLentas'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/tmlentas'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

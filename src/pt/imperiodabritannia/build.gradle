@@ -3,8 +3,8 @@ ext {
     extClass = '.ImperioDaBritannia'
     themePkg = 'mangotheme'
     baseUrl = 'https://imperiodabritannia.net'
-    overrideVersionCode = 52
+    overrideVersionCode = 53
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

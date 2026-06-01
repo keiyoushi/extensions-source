@@ -37,7 +37,7 @@ class Cmoa :
     private val reader by lazy { SpeedBinbReader(client, headers, jsonInstance, true) } // 1.7070.1001 SBC
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(SpeedBinbInterceptor(jsonInstance))
         .addNetworkInterceptor(CookieInterceptor(domain, listOf("safesearch" to "0", "R18user" to "1")))
         .build()

@@ -1,10 +1,8 @@
 ext {
     extName = 'Lmtos'
     extClass = '.Lmtos'
-    themePkg = 'madara'
-    baseUrl = 'https://www.lmtos.com'
-    overrideVersionCode = 2
+    extVersionCode = 53
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

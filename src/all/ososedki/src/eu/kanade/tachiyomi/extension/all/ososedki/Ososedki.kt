@@ -29,7 +29,7 @@ class Ososedki : HttpSource() {
     override val lang = "all"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(::imageFallbackInterceptor)
         .build()
 

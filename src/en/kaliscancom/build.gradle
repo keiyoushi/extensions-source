@@ -1,10 +1,10 @@
 ext {
-    extName = 'KaliScan.com'
+    extName = 'KaliScan'
     extClass = '.KaliScanCom'
     themePkg = 'madtheme'
     baseUrl = 'https://kaliscan.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

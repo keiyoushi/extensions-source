@@ -24,7 +24,7 @@ class DigitalComicMuseum : HttpSource() {
     override val name = "Digital Comic Museum"
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::errorIntercept)
         .build()
 

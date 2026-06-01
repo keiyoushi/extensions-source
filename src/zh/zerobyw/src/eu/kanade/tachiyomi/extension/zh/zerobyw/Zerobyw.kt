@@ -27,7 +27,7 @@ class Zerobyw :
 
     private val preferences = getPreferences { clearOldBaseUrl() }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(UpdateUrlInterceptor(preferences))
         .build()
 

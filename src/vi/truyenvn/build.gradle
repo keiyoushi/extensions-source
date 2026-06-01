@@ -2,9 +2,9 @@ ext {
     extName = 'TruyenVN'
     extClass = '.TruyenVN'
     themePkg = 'madara'
-    baseUrl = 'https://truyenvn.shop'
-    overrideVersionCode = 16
+    baseUrl = 'https://truyenvn.sbs'
+    overrideVersionCode = 17
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

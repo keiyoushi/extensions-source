@@ -1,0 +1,10 @@
+ext {
+    extName = 'CathalTraducciones'
+    extClass = '.CathalTraducciones'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/cathaltl'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

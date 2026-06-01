@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import okhttp3.Headers
 import kotlin.random.Random
 
-class AquaManga : Madara("Aqua Manga", "https://aquareader.net", "en") {
+class AquaManga : Madara("Aqua Manga", "https://aquareader.org", "en") {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

@@ -3,7 +3,7 @@ ext {
     extClass = '.Manhuawu'
     themePkg = 'mccms'
     baseUrl = 'https://www.mhua5.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

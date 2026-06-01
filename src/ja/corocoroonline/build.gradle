@@ -1,8 +1,8 @@
 ext {
     extName = 'Corocoro Online'
     extClass = '.CorocoroOnline'
-    extVersionCode = 9
+    extVersionCode = 10
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

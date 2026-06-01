@@ -47,7 +47,7 @@ class KuroMangas :
     override val client by lazy {
         val token = getToken()
         val cdnHost = cdnUrl.toHttpUrl().host
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .rateLimit(2)
             .apply {
                 if (token.isNotEmpty()) {
@@ -242,7 +242,7 @@ class KuroMangas :
         }.toString()
         val requestBody = payload.toRequestBody(JSON_MEDIA_TYPE)
         val request = POST("$apiUrl/auth/login", headers, requestBody)
-        val response = network.cloudflareClient.newCall(request).execute()
+        val response = network.client.newCall(request).execute()
         if (!response.isSuccessful) {
             response.close()
             throw Exception("Login failed: ${response.code}")

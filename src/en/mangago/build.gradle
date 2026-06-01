@@ -1,11 +1,11 @@
 ext {
     extName = 'Mangago'
     extClass = '.Mangago'
-    extVersionCode = 32
+    extVersionCode = 33
     isNsfw = true
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
 
 dependencies {
     implementation(project(':lib:cookieinterceptor'))

@@ -36,7 +36,7 @@ class TruyenQQ :
 
     override val lang: String = "vi"
 
-    private val defaultBaseUrl = "https://truyenqqno.com"
+    private val defaultBaseUrl = "https://truyenqqko.com"
 
     override val supportsLatest: Boolean = true
 
@@ -44,7 +44,7 @@ class TruyenQQ :
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
         .build()
 

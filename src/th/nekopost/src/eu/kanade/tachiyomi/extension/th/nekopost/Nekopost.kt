@@ -21,7 +21,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
@@ -35,7 +34,6 @@ class Nekopost : HttpSource() {
     override val lang = "th"
     override val name = "Nekopost"
     override val supportsLatest = true
-    override val client: OkHttpClient = network.cloudflareClient
 
     private val projectDataEndpoint = "https://api.osemocphoto.com/frontAPI/getProjectInfo"
     private val fileHost = "https://www.osemocphoto.com"

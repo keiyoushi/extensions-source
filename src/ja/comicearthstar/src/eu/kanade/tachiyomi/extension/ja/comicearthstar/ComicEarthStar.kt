@@ -1,15 +1,14 @@
 package eu.kanade.tachiyomi.extension.ja.comicearthstar
 
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
+import keiyoushi.utils.GraphQLErrorInterceptor
 import keiyoushi.utils.firstInstance
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonString
+import keiyoushi.utils.graphQLPost
+import keiyoushi.utils.parseGraphQLAs
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.util.Calendar
 import java.util.TimeZone
@@ -23,12 +22,11 @@ class ComicEarthStar :
     private val apiUrl = "$baseUrl/graphql"
     private val jst = TimeZone.getTimeZone("Asia/Tokyo")
 
-    override val supportsLatest = false
+    override val client = super.client.newBuilder()
+        .addInterceptor(GraphQLErrorInterceptor())
+        .build()
 
-    private inline fun <reified T> apiRequest(operationName: String, variables: T, query: String): Request {
-        val payload = Payload(operationName, variables, query).toJsonString().toRequestBody()
-        return POST(apiUrl, headers, payload)
-    }
+    override val supportsLatest = false
 
     override fun popularMangaRequest(page: Int): Request {
         val cal = Calendar.getInstance(jst)
@@ -51,11 +49,11 @@ class ComicEarthStar :
             "latestUpdatedUntil" to dateFormat.format(until),
         )
 
-        return apiRequest("Earthstar_LatestUpdates", variables, LATEST_QUERY)
+        return graphQLPost(apiUrl, headers, LATEST_QUERY, "Earthstar_LatestUpdates", variables)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val results = response.parseAs<LatestResponse>().data.serialGroup.latestUpdatedSeriesEpisodes.map { it.toSManga() }
+        val results = response.parseGraphQLAs<LatestResponse>().serialGroup.latestUpdatedSeriesEpisodes.map { it.toSManga() }
         return MangasPage(results, false)
     }
 
@@ -64,19 +62,19 @@ class ComicEarthStar :
             val variables = mapOf(
                 "keyword" to query,
             )
-            return apiRequest("Common_Search", variables, SEARCH_QUERY).newBuilder().tag("search").build()
+            return graphQLPost(apiUrl, headers, SEARCH_QUERY, "Common_Search", variables).newBuilder().tag("search").build()
         }
 
         val filter = filters.firstInstance<CategoryFilter>()
-        return apiRequest(filter.type, EmptyVariables, filter.value)
+        return graphQLPost(apiUrl, headers, filter.value, filter.type, EmptyVariables)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val tag = response.request.tag()
         val mangas = if (tag == "search") {
-            response.parseAs<SearchResponse>().data.searchSeries.edges.map { it.node.toSManga() }
+            response.parseGraphQLAs<SearchResponse>().searchSeries.edges.map { it.node.toSManga() }
         } else {
-            response.parseAs<SeriesResponse>().data.serialGroup.seriesSlice.seriesList.map { it.toSManga() }
+            response.parseGraphQLAs<SeriesResponse>().serialGroup.seriesSlice.seriesList.map { it.toSManga() }
         }
 
         return MangasPage(mangas, false)

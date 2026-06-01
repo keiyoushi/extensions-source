@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.firstInstanceOrNull
@@ -23,13 +24,14 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
 import okhttp3.Headers
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+
+private const val DOMAIN = "doujindesu.tv"
 
 class DoujinDesu :
     HttpSource(),
@@ -40,7 +42,12 @@ class DoujinDesu :
     override val baseUrl by lazy { preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!! }
     override val lang = "id"
     override val supportsLatest = true
-    override val client: OkHttpClient = network.cloudflareClient
+
+    override val client = super.client.newBuilder()
+        // If this cookie name isn't present, ch.php causes a 304 Set-Cookie of it and then redirection back to /
+        // No value validation presently, so set the hex part to 0s.
+        .addNetworkInterceptor(CookieInterceptor(DOMAIN, "sec_v_session" to "verified_human_0000000000000"))
+        .build()
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -312,6 +319,7 @@ class DoujinDesu :
             .build()
 
         val postResponse = client.newCall(POST("$baseUrl/themes/ajax/ch.php", headers, body)).execute()
+
         return postResponse.asJsoup().select("img").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))
         }
@@ -320,7 +328,7 @@ class DoujinDesu :
     companion object {
         private val PREF_DOMAIN_KEY = "preferred_domain_name_v${AppInfo.getVersionName()}"
         private const val PREF_DOMAIN_TITLE = "Mengganti BaseUrl"
-        private const val PREF_DOMAIN_DEFAULT = "https://doujindesu.tv"
+        private const val PREF_DOMAIN_DEFAULT = "https://$DOMAIN"
         private const val PREF_DOMAIN_SUMMARY = "Mengganti domain default dengan domain yang berbeda"
 
         private val chapterListRegex = Regex("""\d+[-–]?\d*\..+<br>""", RegexOption.IGNORE_CASE)

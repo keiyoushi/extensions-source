@@ -31,7 +31,7 @@ class ComicFuz : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor)
         .addNetworkInterceptor { chain ->
             val response = chain.proceed(chain.request())

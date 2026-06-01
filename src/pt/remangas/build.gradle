@@ -1,8 +1,8 @@
 ext {
     extName = 'NoxManga'
     extClass = '.NoxManga'
-    extVersionCode = 51
+    extVersionCode = 52
     isNsfw = false
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"

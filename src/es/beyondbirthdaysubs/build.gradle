@@ -1,0 +1,10 @@
+ext {
+    extName = 'Beyond Birthday Subs'
+    extClass = '.BeyondBirthdaySubs'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/beyondbirthdaysubs'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

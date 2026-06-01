@@ -16,7 +16,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.nio.charset.Charset
@@ -38,8 +37,6 @@ class Toonkor :
     override val lang = "ko"
 
     override val supportsLatest = true
-
-    override val client: OkHttpClient = network.cloudflareClient
 
     private val webtoonsRequestPath = "/%EC%9B%B9%ED%88%B0"
     private val latestRequestModifier = "?fil=%EC%B5%9C%EC%8B%A0"

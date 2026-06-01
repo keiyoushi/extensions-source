@@ -38,7 +38,7 @@ class LuraToon :
 
     private val json: Json by injectLazy()
 
-    override val client = network.cloudflareClient
+    override val client = network.client
         .newBuilder()
         .addInterceptor(::loggedVerifyInterceptor)
         .addInterceptor(LuraZipInterceptor()::zipImageInterceptor)

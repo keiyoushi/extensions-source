@@ -37,7 +37,7 @@ class Webcomics :
         .setRandomUserAgent()
         .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(3)
         .addInterceptor { chain ->
             val request = chain.request()
@@ -61,7 +61,7 @@ class Webcomics :
 
     private var userAgentList: UserAgentList? = null
 
-    private fun getDesktopUA(): UserAgentList = userAgentList ?: network.cloudflareClient.newCall(GET(UA_DB_URL))
+    private fun getDesktopUA(): UserAgentList = userAgentList ?: network.client.newCall(GET(UA_DB_URL))
         .execute().parseAs<UserAgentList>().also {
             userAgentList = it
         }

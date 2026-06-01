@@ -60,34 +60,51 @@ class BiliManga :
             setUrlWithoutDomain(url ?: getChapterUrlByContext(i, this@mapToChapter))
         }
     }
+
     private fun String.toHalfWidthDigits(): String = this.map { if (it in '０'..'９') it - 65248 else it }.joinToString("")
 
+    private fun buildDescription(doc: Document): String {
+        val configs = pref.getStringSet(PREF_DESCRIPTION, DEFAULT_SET)!!
+        val desc = StringBuilder(doc.selectFirst("#bookSummary > content")!!.formatText("\n\n\n"))
+        for (item in configs) {
+            when (item) {
+                "A" -> {
+                    desc.insert(
+                        0,
+                        doc.selectFirst(".notice")?.let { "> ${it.formatText("\n")}\n\n" }
+                            ?.replace(URL_REGEX, "<$0>")
+                            ?: "",
+                    )
+                }
+
+                "B" -> {
+                    desc.append(
+                        doc.selectFirst(".backupname")?.let { "\n\n\n***别名**：${it.text()}* " } ?: "",
+                    )
+                }
+
+                "C" -> {
+                    desc.append(
+                        doc.select(".book-detail-btn .btn-group-cell > a").find { it.text() == "輕小說" }
+                            ?.attr("href")?.substringAfter('?')
+                            ?.let { "\n\n\n***[跳轉至「哔哩轻小说」上的同名小說](https://www.bilinovel.com/novel/$it.html)*** " }
+                            ?: "",
+                    )
+                }
+            }
+        }
+        return desc.toString()
+    }
+
     companion object {
-        val URL_REGEX = Regex("https?://(?:www\\.)?([-a-zA-Z0-9@:%._+~#=]{2,256}\\.[a-z]{2,6}\\b)*(/[/\\w.-]*)*[?]*(.+)*", RegexOption.IGNORE_CASE)
+        val URL_REGEX =
+            Regex("https?://(?:www\\.)?([-a-zA-Z0-9@:%._+~#=]{2,256}\\.[a-z]{2,6}\\b)*(/[/\\w.-]*)*[?]*(.+)*", RegexOption.IGNORE_CASE)
         val NEWLINE_REGEX = Regex("(?:\n\r\n)+")
-        val META_REGEX = Regex("連載|完結|收藏|推薦|热度")
+        val META_REGEX = Regex("收藏|推薦|連載中|已完結")
         val DATE_REGEX = Regex("\\d{4}-\\d{1,2}-\\d{1,2}")
         val PAGE_REGEX = Regex("第(\\d+)/(\\d+)页")
         val MANGA_ID_REGEX = Regex("/detail/(\\d+)\\.html")
         val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.CHINESE)
-    }
-
-    private fun hasNextPage(doc: Document, size: Int): Boolean {
-        val url = doc.location()
-        return when {
-            url.contains("filter") -> {
-                val total = doc.selectFirst("#pagelink > .last")!!.text().toInt()
-                val cur = doc.selectFirst("#pagelink > strong")!!.text().toInt()
-                cur < total
-            }
-
-            url.contains("search") -> {
-                val find = PAGE_REGEX.find(doc.selectFirst("#pagelink > span")!!.text())!!
-                find.groups[1]!!.value.toInt() < find.groups[1]!!.value.toInt()
-            }
-
-            else -> size == 50
-        }
     }
 
     private fun getChapterUrlByContext(i: Int, els: Elements) = when (i) {
@@ -111,7 +128,23 @@ class BiliManga :
                 title = img.attr("alt")
             }
         }
-        MangasPage(mangas, hasNextPage(doc, mangas.size))
+        val hasNextPage = with(doc.location()) {
+            when {
+                contains("filter") -> {
+                    val total = doc.selectFirst("#pagelink > .last")?.text()?.toInt()
+                    val cur = doc.selectFirst("#pagelink > strong")?.text()?.toInt()
+                    total != null && cur != null && cur < total
+                }
+
+                contains("search") -> {
+                    val find = doc.selectFirst("#pagelink > span")?.text()?.let(PAGE_REGEX::find)
+                    find != null && find.groups[1]!!.value.toInt() < find.groups[2]!!.value.toInt()
+                }
+
+                else -> mangas.size == 50
+            }
+        }
+        MangasPage(mangas, hasNextPage)
     }
 
     // Latest Page
@@ -124,7 +157,8 @@ class BiliManga :
 
     override fun getFilterList() = buildFilterList()
 
-    // https://www.bilimanga.net/filter/lastupdate_1_0_0_0_0_0_0_1_0.html
+    // /lastupdate_1_1_1_1_1_1_1_1_0_2026_2027.html
+    // /${Sort}_${Theme}_${Status}_${Anime}_${Region}_${Type}_${Time}_${Novel}_${page}_0_${Year}_${Award}.html
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.startsWith(baseUrl) && MANGA_ID_REGEX.matches(query.substring(baseUrl.length))) return GET(query, headers)
         val url = baseUrl.toHttpUrl().newBuilder()
@@ -132,7 +166,7 @@ class BiliManga :
             url.addPathSegment("search").addPathSegment("${query}_$page.html")
         } else {
             url.addPathSegment("filter")
-                .addPathSegment("${filters[4]}_${filters[1]}_${filters[7]}_${filters[5]}_${filters[3]}_${filters[2]}_${filters[8]}_${filters[6]}_${page}_0.html")
+                .addPathSegment("${filters[5]}_${filters[1]}_${filters[9]}_${filters[6]}_${filters[3]}_${filters[2]}_${filters[10]}_${filters[7]}_${page}_0_${filters[4]}_${filters[8]}.html")
         }
         return GET(url.build(), headers)
     }
@@ -148,21 +182,17 @@ class BiliManga :
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val doc = response.asJsoup()
-        val meta = doc.selectFirst(".book-meta")!!.text().split("|")
-        val extra = meta.filterNot(META_REGEX::containsMatchIn)
-        val notice = doc.selectFirst(".notice")?.takeIf { pref.getBoolean(PREF_NOTICE, true) }
-            ?.let { "> ${it.formatText("\n")}\n\n" }?.replace(URL_REGEX, "<$0>") ?: ""
-        val desc = doc.selectFirst("#bookSummary > content")!!.formatText("\n\n\n")
-        val bkname = doc.selectFirst(".backupname")?.let { "\n\n\n***别名**：${it.text()}* " } ?: ""
+        val meta = doc.select(".book-meta em").map(Element::text)
+        val (main, extra) = meta.partition(META_REGEX::containsMatchIn)
         setUrlWithoutDomain(doc.location())
         title = doc.selectFirst(".book-title")!!.text()
         thumbnail_url = doc.selectFirst(".book-cover")!!.attr("src")
-        description = notice + desc + bkname
+        description = buildDescription(doc)
         artist = doc.selectFirst(".authorname")?.text()
         author = doc.selectFirst(".illname")?.text() ?: artist
-        status = when (meta.firstOrNull()) {
-            "連載" -> SManga.ONGOING
-            "完結" -> SManga.COMPLETED
+        status = when (main.lastOrNull()) {
+            "連載中" -> SManga.ONGOING
+            "已完結" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
         genre = (doc.select(".tag-small").map(Element::text) + extra).joinToString()
@@ -186,11 +216,11 @@ class BiliManga :
 
     // Manga View Page
 
-    override fun pageListParse(response: Response) = response.asJsoup().let {
-        val images = it.select(".imagecontent")
+    override fun pageListParse(response: Response) = response.asJsoup().let { doc ->
+        val images = doc.select(".imagecontent")
         check(images.isNotEmpty()) {
-            it.selectFirst("#acontentz")?.let { e ->
-                if ("電腦端" in e.text()) "不支持電腦端查看，請在高級設置中更換移動端UA標識" else "漫畫可能已下架或需要足夠的權限"
+            doc.selectFirst("#acontentz")?.let {
+                if ("電腦端" in it.text()) "不支持電腦端查看，請在高級設置中更換移動端UA標識" else "漫畫可能已下架或需要足夠的權限"
             } ?: "章节鏈接错误"
         }
         images.mapIndexed { i, image ->

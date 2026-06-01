@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonString
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -29,7 +28,6 @@ class PlumaComics : HttpSource() {
 
     override val client = super.client.newBuilder()
         .rateLimit(3, 1)
-        .addInterceptor(ImageDecryptInterceptor())
         .build()
 
     override val versionId = 5
@@ -114,18 +112,18 @@ class PlumaComics : HttpSource() {
         val document = response.asJsoup()
         val chapter = document.extractNextJs<ChapterDto>() ?: throw IOException("Capítulo não encontrado")
 
-        return List(document.select("#chapter-pages canvas").size) { index ->
-            Page(index, imageUrl = "$baseUrl/api/read/${chapter.chapterId}/${index + 1}?v=2#${chapter.toJsonString()}")
-        }
-    }
+        val response = client.newCall(
+            GET(
+                "$baseUrl/api/viewer/bootstrap?c=${chapter.chapterId}",
+                headers,
+            ),
+        ).execute()
 
-    override fun imageRequest(page: Page): Request {
-        val url = page.imageUrl!!.toHttpUrl()
-        val dto = url.fragment!!.parseAs<ChapterDto>()
-        val imageHeaders = headers.newBuilder()
-            .set("X-Pluma-Token", dto.chapterToken)
-            .build()
-        return GET(url, imageHeaders)
+        val pages = response.parseAs<PagesList>()
+
+        return pages.pages.map { page ->
+            Page(page.i, imageUrl = "$baseUrl/${page.u}")
+        }
     }
 
     override fun imageUrlParse(response: Response): String = ""

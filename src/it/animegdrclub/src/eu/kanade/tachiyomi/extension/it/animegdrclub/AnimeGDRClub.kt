@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
@@ -20,7 +19,6 @@ class AnimeGDRClub : HttpSource() {
     override val baseUrl = "http://www.agcscanlation.it/"
     override val lang = "it"
     override val supportsLatest = true
-    override val client: OkHttpClient = network.cloudflareClient
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/serie.php", headers)
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/", headers)

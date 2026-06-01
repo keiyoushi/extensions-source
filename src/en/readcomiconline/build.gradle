@@ -1,10 +1,10 @@
 ext {
     extName = 'ReadComicOnline'
     extClass = '.Readcomiconline'
-    extVersionCode = 41
+    extVersionCode = 43
 }
 
-apply from: "$rootDir/common.gradle"
+apply plugin: "kei.plugins.extension.legacy"
 
 dependencies {
     implementation project(':lib:randomua')

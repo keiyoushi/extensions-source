@@ -1,0 +1,10 @@
+ext {
+    extName = 'Okami.Scan'
+    extClass = '.OkamiScan'
+    themePkg = 'lectormoe'
+    baseUrl = 'https://capibaratraductor.com/okami'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

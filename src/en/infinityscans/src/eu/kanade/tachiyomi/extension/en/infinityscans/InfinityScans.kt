@@ -31,7 +31,7 @@ class InfinityScans : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(WebviewInterceptor(baseUrl))
         .rateLimit(1)
         .build()

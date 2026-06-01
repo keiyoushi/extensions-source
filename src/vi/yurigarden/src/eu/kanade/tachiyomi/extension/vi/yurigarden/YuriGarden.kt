@@ -57,7 +57,7 @@ class YuriGarden :
         .add("Origin", baseUrl)
         .apply { webViewUserAgent?.let { set("User-Agent", it) } }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageDescrambler())
         .rateLimitHost(apiUrl.toHttpUrl(), 15, 1, TimeUnit.MINUTES)
         .build()

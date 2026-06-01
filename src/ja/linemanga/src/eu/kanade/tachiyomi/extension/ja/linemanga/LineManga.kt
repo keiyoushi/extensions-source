@@ -36,7 +36,7 @@ class LineManga :
     private val timestamp: String
         get() = System.currentTimeMillis().toString()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .addInterceptor {
             val request = it.request()
