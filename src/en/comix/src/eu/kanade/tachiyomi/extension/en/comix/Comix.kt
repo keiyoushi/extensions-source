@@ -9,6 +9,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
@@ -326,6 +327,7 @@ class Comix :
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
         val deduplicate = preferences.deduplicateChapters()
+        val blacklist = preferences.scanlatorBlacklist()
         val mangaSlug = manga.url.removePrefix("/")
 
         val document = runBlocking {
@@ -405,12 +407,29 @@ class Comix :
 
         val allChapters = payload.parseAs<List<Chapter>>()
 
-        val finalChapters: List<Chapter> = if (deduplicate) {
-            val chapterMap = LinkedHashMap<Number, Chapter>()
-            deduplicateChapters(chapterMap, allChapters)
-            chapterMap.values.toList()
+        // Filter out groups specified in the blacklist first
+        val filteredChapters = if (blacklist.isNotEmpty()) {
+            allChapters.filter { ch ->
+                val scanlatorName = when {
+                    ch.group != null -> ch.group.name
+                    ch.isOfficial -> "Official"
+                    else -> "Unknown"
+                }
+                val nameNormalized = scanlatorName.trim().lowercase()
+                val idStr = ch.group?.id?.toString()
+
+                nameNormalized !in blacklist && idStr !in blacklist
+            }
         } else {
             allChapters
+        }
+
+        val finalChapters: List<Chapter> = if (deduplicate) {
+            val chapterMap = LinkedHashMap<Number, Chapter>()
+            deduplicateChapters(chapterMap, filteredChapters)
+            chapterMap.values.toList()
+        } else {
+            filteredChapters
         }
 
         finalChapters.map { it.toSChapter(mangaSlug) }
@@ -661,6 +680,14 @@ class Comix :
             setDefaultValue(false)
         }.let(screen::addPreference)
 
+        EditTextPreference(screen.context).apply {
+            key = PREF_SCANLATOR_BLACKLIST
+            title = "Scanlator Blacklist"
+            summary = "Filter out chapters from specific groups. Comma-separated list of group names or group IDs (e.g., 'Violet Scans, 307')."
+            dialogTitle = "Exclude groups"
+            setDefaultValue("")
+        }.let(screen::addPreference)
+
         SwitchPreferenceCompat(screen.context).apply {
             key = ALTERNATIVE_NAMES_IN_DESCRIPTION
             title = "Show Alternative Names in Description"
@@ -698,6 +725,12 @@ class Comix :
     private fun SharedPreferences.posterQuality() = getString(PREF_POSTER_QUALITY, "large")
 
     private fun SharedPreferences.deduplicateChapters() = getBoolean(DEDUPLICATE_CHAPTERS, false)
+
+    private fun SharedPreferences.scanlatorBlacklist(): Set<String> = getString(PREF_SCANLATOR_BLACKLIST, "")
+        ?.split(",")
+        ?.map { it.trim().lowercase() }
+        ?.filter { it.isNotEmpty() }
+        ?.toSet() ?: emptySet()
 
     private fun SharedPreferences.alternativeNamesInDescription() = getBoolean(ALTERNATIVE_NAMES_IN_DESCRIPTION, false)
 
@@ -739,6 +772,7 @@ class Comix :
         private const val PREF_BLOCKED_GENRES = "pref_blocked_genres"
         private const val LEGACY_HIDE_NSFW_PREF = "nsfw_pref"
         private const val DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
+        private const val PREF_SCANLATOR_BLACKLIST = "pref_scanlator_blacklist"
         private const val ALTERNATIVE_NAMES_IN_DESCRIPTION = "pref_alt_names_in_description"
         private const val PREF_SHOW_EXTRA_INFO = "pref_show_extra_info"
         private const val PREF_SHOW_TAGS_IN_GENRES = "pref_show_tags_in_genres"
