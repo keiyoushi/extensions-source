@@ -38,7 +38,7 @@ class OcrUrlInterceptor(private val headers: Headers) {
             webview.addJavascriptInterface(
                 object {
                     @JavascriptInterface
-                    fun onFetch(url: String, body: String, headersJson: String) {
+                    fun onIntercept(url: String, body: String, headersJson: String) {
                         if (ocrRequest == null && url.contains("fetch-ocr.php")) {
                             val headerMap = mutableMapOf<String, String>()
                             try {
@@ -66,7 +66,7 @@ class OcrUrlInterceptor(private val headers: Headers) {
             webview.loadUrl(url, headers.toMultimap().mapValues { it.value.first() })
         }
 
-        latch.await(10, TimeUnit.SECONDS)
+        latch.await(15, TimeUnit.SECONDS)
 
         handler.post {
             webView?.apply {
@@ -81,7 +81,7 @@ class OcrUrlInterceptor(private val headers: Headers) {
     private fun injectScript(view: WebView?) {
         val utilities = """
             const origin = Math.random;
-            const proxy = () => 0.01 + origin() * 0.09;
+            const proxy = () => 0.12 + origin() * 0.87;
 
             Object.setPrototypeOf(proxy, Object.getPrototypeOf(origin));
             Object.defineProperties(proxy, {
@@ -124,10 +124,42 @@ class OcrUrlInterceptor(private val headers: Headers) {
                         const headers = serializeHeaders(options.headers);
 
                         if (window.$bridgeName) {
-                            window.$bridgeName.onFetch(url, body.toString(), headers);
+                            window.$bridgeName.onIntercept(url, body.toString(), headers);
                         }
                     }
                     return nativeFetch.apply(this, arguments);
+                };
+
+                const nativeXHR = window.XMLHttpRequest;
+                window.XMLHttpRequest = function() {
+                    const xhr = new nativeXHR();
+                    const nativeOpen = xhr.open;
+                    const nativeSend = xhr.send;
+                    const nativeSetRequestHeader = xhr.setRequestHeader;
+                    let method, url;
+                    const headers = {};
+
+                    xhr.open = function() {
+                        method = arguments[0];
+                        url = arguments[1];
+                        return nativeOpen.apply(this, arguments);
+                    };
+
+                    xhr.setRequestHeader = function(name, value) {
+                        headers[name] = value;
+                        return nativeSetRequestHeader.apply(this, arguments);
+                    };
+
+                    xhr.send = function(body) {
+                        if (url && url.includes('fetch-ocr.php')) {
+                            if (window.$bridgeName) {
+                                window.$bridgeName.onIntercept(url, body ? body.toString() : "", JSON.stringify(headers));
+                            }
+                        }
+                        return nativeSend.apply(this, arguments);
+                    };
+
+                    return xhr;
                 };
             })();
             """.trimIndent(),
