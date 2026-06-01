@@ -12,7 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
-import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -53,13 +53,19 @@ class ReaderStore :
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val sort = filters.firstInstance<SortFilter>()
         val url = "$API_URL/search/detail/".toHttpUrl().newBuilder().apply {
             addQueryParameter("q", query)
             addQueryParameter("page", page.toString())
-            addQueryParameter("sort", sort.value)
             addQueryParameter("cs", "search_keyword")
             addQueryParameter("safeAdult", "false")
+            addFilter("sort", filters.firstInstanceOrNull<SortFilter>())
+            addFilter("release", filters.firstInstanceOrNull<ReleaseFilter>())
+            addFilter("genre", filters.firstInstanceOrNull<GenreFilter>())
+            addFilter("sale", filters.firstInstanceOrNull<SaleFilter>())
+            addFilter("saleStatus", filters.firstInstanceOrNull<SaleStatusFilter>())
+            addFilter("exclude", filters.firstInstanceOrNull<ExcludeFilter>())
+            addFilter("priceMin", filters.firstInstanceOrNull<PriceMinFilter>())
+            addFilter("priceMax", filters.firstInstanceOrNull<PriceMaxFilter>())
         }.build()
         return GET(url, headers)
     }
@@ -68,6 +74,14 @@ class ReaderStore :
         Filter.Header("Note: Search and active filters are applied together"),
         Filter.Header("Note: Novels are not supported!"),
         SortFilter(),
+        GenreFilter(),
+        ReleaseFilter(),
+        SaleFilter(),
+        SaleStatusFilter(),
+        ExcludeFilter(),
+        Filter.Separator(),
+        PriceMinFilter(),
+        PriceMaxFilter(),
     )
 
     override fun searchMangaParse(response: Response): MangasPage {
