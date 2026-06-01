@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.kunmanga
+package eu.kanade.tachiyomi.extension.en.kunmangaonline
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import kotlinx.serialization.SerialName
