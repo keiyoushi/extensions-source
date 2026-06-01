@@ -1,9 +1,10 @@
 package eu.kanade.tachiyomi.extension.th.nekopost.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class RawProjectSummaryList(
-    val code: Int,
-    val listChapter: List<RawProjectSummary>?,
+class RawValidString(
+    @SerialName("String")
+    val value: String,
 )
