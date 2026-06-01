@@ -12,3 +12,4 @@ gen
 generated-src/
 .kotlin
 *.jks
+gradle/gradle-daemon-jvm.properties

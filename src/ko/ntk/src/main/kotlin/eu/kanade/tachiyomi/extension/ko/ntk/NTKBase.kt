@@ -80,103 +80,79 @@ abstract class NTKBase(
         }
 
         var finalHtml: String? = null
-        val maxAttempts = 2
+        val latch = CountDownLatch(1)
+        val handler = Handler(Looper.getMainLooper())
 
-        for (attempt in 1..maxAttempts) {
-            val latch = CountDownLatch(1)
-            val handler = Handler(Looper.getMainLooper())
-            var webView: WebView? = null
+        handler.post {
+            val context = Injekt.get<Application>()
+            val webView = WebView(context)
 
-            handler.post {
-                val context = Injekt.get<Application>()
-                webView = WebView(context)
+            webView.settings.javaScriptEnabled = true
+            webView.settings.domStorageEnabled = true
 
-                webView?.settings?.javaScriptEnabled = true
-                webView?.settings?.domStorageEnabled = true
+            webView.measure(
+                android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY),
+                android.view.View.MeasureSpec.makeMeasureSpec(1920, android.view.View.MeasureSpec.EXACTLY),
+            )
+            webView.layout(0, 0, 1080, 1920)
 
-                webView?.measure(
-                    android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY),
-                    android.view.View.MeasureSpec.makeMeasureSpec(1920, android.view.View.MeasureSpec.EXACTLY),
-                )
-                webView?.layout(0, 0, 1080, 1920)
+            webView.settings.userAgentString = request.header("User-Agent")
+                ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-                webView?.settings?.userAgentString = request.header("User-Agent")
-                    ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            android.webkit.CookieManager.getInstance().setAcceptCookie(true)
+            android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
 
-                android.webkit.CookieManager.getInstance().setAcceptCookie(true)
-                android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(webView!!, true)
-
-                webView?.addJavascriptInterface(
-                    object {
-                        @JavascriptInterface
-                        @Suppress("unused")
-                        fun exfiltrate(html: String) {
-                            finalHtml = html
-                            latch.countDown()
-                        }
-                    },
-                    "TrojanTunnel",
-                )
-
-                val wiretapScript = """
-                    window.__ntkDevtoolsPreflight = 1;
-                    const originalFetch = window.fetch;
-                    window.fetch = async function() {
-                        const response = await originalFetch.apply(this, arguments);
-                        let reqUrl = arguments[0] && arguments[0].url ? arguments[0].url : arguments[0];
-                        if (reqUrl && reqUrl.toString().match(/\/api\/(manhwa|webtoon)-images/)) {
-                            response.clone().text().then(text => {
-                                try {
-                                    let data = JSON.parse(text);
-                                    if (data && data.images) {
-                                        window.TrojanTunnel.exfiltrate(text);
-                                    }
-                                } catch (e) {}
-                            });
-                        }
-                        return response;
-                    };
-                """.trimIndent()
-
-                val chapterUrl = request.url.toString()
-                var preloadDone = false
-
-                webView?.webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView, url: String) {
-                        if (!preloadDone) {
-                            preloadDone = true
-                            view.loadUrl(chapterUrl)
-                        }
-                        super.onPageFinished(view, url)
+            webView.addJavascriptInterface(
+                object {
+                    @JavascriptInterface
+                    @Suppress("unused")
+                    fun exfiltrate(html: String) {
+                        finalHtml = html
+                        latch.countDown()
                     }
+                },
+                "TrojanTunnel",
+            )
 
-                    override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
-                        if (preloadDone) {
-                            view.evaluateJavascript(wiretapScript, null)
-                        }
-                        super.onPageStarted(view, url, favicon)
+            val wiretapScript = """
+                window.__ntkDevtoolsPreflight = 1;
+                const originalFetch = window.fetch;
+                window.fetch = async function() {
+                    const response = await originalFetch.apply(this, arguments);
+                    let reqUrl = arguments[0] && arguments[0].url ? arguments[0].url : arguments[0];
+                    if (reqUrl && reqUrl.toString().match(/\/api\/(manhwa|webtoon)-images/)) {
+                        response.clone().text().then(text => {
+                            window.TrojanTunnel.exfiltrate(text);
+                        });
                     }
+                    return response;
+                };
+            """.trimIndent()
+
+            val chapterUrl = request.url.toString()
+            var preloadDone = false
+
+            webView.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String) {
+                    if (!preloadDone) {
+                        preloadDone = true
+                        view.loadUrl(chapterUrl)
+                    }
+                    super.onPageFinished(view, url)
                 }
 
-                if (attempt == 1) {
-                    webView?.loadUrl(rootUrl)
-                } else {
-                    preloadDone = true
-                    webView?.loadUrl(chapterUrl)
+                override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                    if (preloadDone) {
+                        view.evaluateJavascript(wiretapScript, null)
+                    }
+                    super.onPageStarted(view, url, favicon)
                 }
             }
 
-            latch.await(15, TimeUnit.SECONDS)
-
-            handler.post {
-                webView?.stopLoading()
-                webView?.destroy()
-            }
-
-            if (finalHtml != null) {
-                break
-            }
+            webView.loadUrl(rootUrl)
         }
+
+        latch.await(30, TimeUnit.SECONDS)
 
         finalHtml?.let {
             val isJson = it.trim().startsWith("{")
