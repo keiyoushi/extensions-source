@@ -48,7 +48,7 @@ class ImageInterceptor : Interceptor {
 
         val imageResponse = chain.proceed(
             Request.Builder()
-                .url(url.newBuilder().fragment(null).build())
+                .url(url)
                 .headers(authHeaders)
                 .addPageHeaders(listOf(pageIndex), maxIndex)
                 .build(),
@@ -60,7 +60,7 @@ class ImageInterceptor : Interceptor {
             ?: listOf(pageIndex)
         val targetOffset = batchIndices.indexOf(pageIndex).coerceAtLeast(0)
         val meta = imageResponse.data.meta[targetOffset]
-        val envV = cdnUrl.queryParameter(PARAM_VERSION)?.toInt() ?: 1
+        val envV = cdnUrl.queryParameter("v")?.toInt() ?: 1
 
         val rawImage = chain.proceed(
             Request.Builder()
@@ -307,7 +307,6 @@ class ImageInterceptor : Interceptor {
 
         const val MIME_WEBP = "image/webp"
         const val TYPE_COMIC = "comic"
-        const val PARAM_VERSION = "v"
 
         val CIPHER_IV = intArrayOf(0, 1, 2, 3)
         val WEBP_MEDIA_TYPE = MIME_WEBP.toMediaType()
