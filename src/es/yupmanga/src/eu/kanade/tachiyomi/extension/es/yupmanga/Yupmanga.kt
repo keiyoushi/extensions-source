@@ -34,7 +34,7 @@ class Yupmanga : HttpSource() {
 
     // Cached CSRF token and data-k value, populated by the token interceptor during normal browsing flow.
     private var csrfToken: String = ""
-    private var dataK: String = ""
+    private var kScript: String = ""
     private var dataV: String = ""
     private var anchorScript: String = ""
 
@@ -48,7 +48,9 @@ class Yupmanga : HttpSource() {
             TOKEN_REGEX.find(html)?.groupValues?.get(1)?.let { csrfToken = it }
             TOKEN_META_REGEX.find(html)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }?.let { csrfToken = it }
             csrfToken = TOKEN_JS_REGEX.decodeChars(html)
-            dataK = DATAK_REGEX.decodeChars(html)
+
+            Jsoup.parse(html).selectFirst("script:containsData(dataset.k)")?.let { kScript = it.html() }
+
             dataV = DATAV_REGEX.decodeChars(html)
             ANCHOR_SCRIPT_REGEX.find(html)?.groupValues?.get(1)?.let { anchorScript = it }
         }
@@ -233,6 +235,21 @@ class Yupmanga : HttpSource() {
             throw Exception("Error fetching challenge")
         }
 
+        val dataK = QuickJs.create().use {
+            it.evaluate(
+                """
+            var mockElem = { dataset: {} };
+            var document = {
+                getElementById: function(id) {
+                    return mockElem;
+                }
+            };
+            $kScript
+            mockElem.dataset.k || "";
+                """.trimIndent(),
+            )
+        }
+
         // Broad mocking to avoid "cannot read property" crashes in QuickJs evaluation.
         val answer = QuickJs.create().use {
             it.evaluate(
@@ -363,7 +380,6 @@ class Yupmanga : HttpSource() {
         private val TOKEN_REGEX = """id=["']csrf_token["']\s+value=["']([^"']+)["']""".toRegex()
         private val TOKEN_META_REGEX = """name=["']csrf-token["'][^>]*?content=["']([^"']+)["']""".toRegex()
         private val TOKEN_JS_REGEX = """(?:_token|csrf-token).*?String\.fromCharCode\(([^)]+)\)""".toRegex()
-        private val DATAK_REGEX = """_sp\.dataset\.k\s*=\s*String\.fromCharCode\(([^)]+)\)""".toRegex()
         private val DATAV_REGEX = """['"]data-v['"].*?String\.fromCharCode\(([^)]+)\)""".toRegex()
         private val ANCHOR_SCRIPT_REGEX = """<script>\s*(\(\s*function\(\)\s*\{\s*document\.querySelector\(':root'\)[\s\S]*?\}\s*\)\(\);?)\s*</script>""".toRegex()
     }
