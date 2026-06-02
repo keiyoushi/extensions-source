@@ -1,12 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.harimanga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
-
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import eu.kanade.tachiyomi.source.model.FilterList
 
 class Harimanga :
     Madara(
@@ -26,7 +25,6 @@ class Harimanga :
         query: String,
         filters: FilterList,
     ): Request {
-
         val url = "$baseUrl/home/${searchPage(page)}".toHttpUrl().newBuilder()
 
         url.addQueryParameter("s", query)
@@ -35,21 +33,25 @@ class Harimanga :
         // keep Madara filters working (important)
         filters.forEach { filter ->
             when (filter) {
-                is AuthorFilter -> if (filter.state.isNotBlank())
+                is AuthorFilter -> if (filter.state.isNotBlank()) {
                     url.addQueryParameter("author", filter.state)
+                }
 
-                is ArtistFilter -> if (filter.state.isNotBlank())
+                is ArtistFilter -> if (filter.state.isNotBlank()) {
                     url.addQueryParameter("artist", filter.state)
+                }
 
-                is YearFilter -> if (filter.state.isNotBlank())
+                is YearFilter -> if (filter.state.isNotBlank()) {
                     url.addQueryParameter("release", filter.state)
+                }
 
                 is StatusFilter -> filter.state.forEach {
                     if (it.state) url.addQueryParameter("status[]", it.id)
                 }
 
-                is OrderByFilter -> if (filter.state != 0)
+                is OrderByFilter -> if (filter.state != 0) {
                     url.addQueryParameter("m_orderby", filter.toUriPart())
+                }
 
                 is AdultContentFilter ->
                     url.addQueryParameter("adult", filter.toUriPart())
