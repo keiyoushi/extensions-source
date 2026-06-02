@@ -41,6 +41,8 @@ abstract class NTKBase(
 ) : HttpSource(),
     ConfigurableSource {
 
+    private val json = Json { ignoreUnknownKeys = true }
+
     protected val apiHeaders
         get() = headers.newBuilder()
             .set("Accept", "application/json")
@@ -52,6 +54,12 @@ abstract class NTKBase(
 
     protected val rootUrl: String
         get() {
+            if (preferences.getInt(PREF_DOMAIN_MIGRATION_KEY, 0) < 1) {
+                preferences.edit()
+                    .putString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)
+                    .putInt(PREF_DOMAIN_MIGRATION_KEY, 1)
+                    .apply()
+            }
             val stored = preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!!
             val domainNumber = stored.trimStart('0').ifEmpty { "0" }
             if (domainNumber != stored) {
@@ -71,7 +79,7 @@ abstract class NTKBase(
         headers = headers.newBuilder().add("X-WebView-Intercept", "true").build(),
     )
 
-    @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
+    @SuppressLint("SetJavaScriptEnabled", "AddJavascriptInterface")
     private val trojanWebViewInterceptor = Interceptor { chain ->
         val request = chain.request()
 
@@ -85,28 +93,29 @@ abstract class NTKBase(
         for (attempt in 1..maxAttempts) {
             val latch = CountDownLatch(1)
             val handler = Handler(Looper.getMainLooper())
-            var webView: WebView? = null
+            var webViewRef: WebView? = null
 
             handler.post {
                 val context = Injekt.get<Application>()
-                webView = WebView(context)
+                val webView = WebView(context)
+                webViewRef = webView
 
-                webView?.settings?.javaScriptEnabled = true
-                webView?.settings?.domStorageEnabled = true
+                webView.settings.javaScriptEnabled = true
+                webView.settings.domStorageEnabled = true
 
-                webView?.measure(
+                webView.measure(
                     android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY),
                     android.view.View.MeasureSpec.makeMeasureSpec(1920, android.view.View.MeasureSpec.EXACTLY),
                 )
-                webView?.layout(0, 0, 1080, 1920)
+                webView.layout(0, 0, 1080, 1920)
 
-                webView?.settings?.userAgentString = request.header("User-Agent")
+                webView.settings.userAgentString = request.header("User-Agent")
                     ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
                 android.webkit.CookieManager.getInstance().setAcceptCookie(true)
-                android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(webView!!, true)
+                android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
 
-                webView?.addJavascriptInterface(
+                webView.addJavascriptInterface(
                     object {
                         @JavascriptInterface
                         @Suppress("unused")
@@ -141,7 +150,7 @@ abstract class NTKBase(
                 val chapterUrl = request.url.toString()
                 var preloadDone = false
 
-                webView?.webViewClient = object : WebViewClient() {
+                webView.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, url: String) {
                         if (!preloadDone) {
                             preloadDone = true
@@ -159,23 +168,21 @@ abstract class NTKBase(
                 }
 
                 if (attempt == 1) {
-                    webView?.loadUrl(rootUrl)
+                    webView.loadUrl(rootUrl)
                 } else {
                     preloadDone = true
-                    webView?.loadUrl(chapterUrl)
+                    webView.loadUrl(chapterUrl)
                 }
             }
 
             latch.await(15, TimeUnit.SECONDS)
 
             handler.post {
-                webView?.stopLoading()
-                webView?.destroy()
+                webViewRef?.stopLoading()
+                webViewRef?.destroy()
             }
 
-            if (finalHtml != null) {
-                break
-            }
+            if (finalHtml != null) break
         }
 
         finalHtml?.let {
@@ -264,7 +271,7 @@ abstract class NTKBase(
 
     @Serializable
     private data class PageImagesResponse(
-        val images: List<PageImage>,
+        val images: List<PageImage> = emptyList(),
     )
 
     @Serializable
@@ -334,8 +341,7 @@ abstract class NTKBase(
             }
         }
 
-        val jsonArrayStr = unescaped.substring(arrayStart, arrayEnd)
-        val cards = json.decodeFromString<List<Work>>(jsonArrayStr)
+        val cards = json.decodeFromString<List<Work>>(unescaped.substring(arrayStart, arrayEnd))
 
         val seen = mutableSetOf<String>()
         val mangas = cards.mapNotNull { card ->
@@ -401,6 +407,7 @@ abstract class NTKBase(
 
     override fun pageListParse(response: Response): List<Page> {
         val data = response.parseAs<PageImagesResponse>()
+        if (data.images.isEmpty()) throw Exception("Failed to load images, please retry")
         return data.images.mapIndexed { i, image ->
             Page(i, imageUrl = image.src)
         }
@@ -418,9 +425,9 @@ abstract class NTKBase(
     }
 
     companion object {
-        private val json = Json { ignoreUnknownKeys = true }
         private const val PREF_DOMAIN_KEY = "pref_domain_key"
-        private const val PREF_DOMAIN_DEFAULT = "3"
+        private const val PREF_DOMAIN_DEFAULT = "4"
+        private const val PREF_DOMAIN_MIGRATION_KEY = "pref_domain_migration"
         const val PAGE_SIZE = 49
     }
 }
