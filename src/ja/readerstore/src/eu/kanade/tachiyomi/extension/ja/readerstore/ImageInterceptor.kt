@@ -127,7 +127,7 @@ class ImageInterceptor : Interceptor {
         maxIndex: Int,
         targetOffset: Int,
     ): ByteArray {
-        val headerUrl = viewerUrl(contentId, PATH_HEADER)
+        val headerUrl = "$VIEWER_URL/$contentId/header".toHttpUrl().newBuilder()
             .addQueryParameter(PARAM_INDICES, batchIndices.joinToString(","))
             .addQueryParameter(PARAM_CODE, QUALITY_HIGH)
             .addQueryParameter(PARAM_ACCEPT, ACCEPT_FORMATS)
@@ -141,8 +141,6 @@ class ImageInterceptor : Interceptor {
                 .build(),
         ).use { it.body.source().readHeaderPage(targetOffset) }
     }
-
-    private fun viewerUrl(contentId: String, path: String) = "$VIEWER_URL/$contentId/$path".toHttpUrl().newBuilder()
 
     private fun Request.Builder.addPageHeaders(
         indices: List<Int>,

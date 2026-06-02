@@ -6,10 +6,6 @@ const val API_URL = "$BASE_URL/front-api"
 const val VIEWER_URL = "https://viewer.$DOMAIN/viewer"
 
 const val PATH_IMAGE_URL = "image_url"
-const val PATH_META = "meta"
-const val PATH_HEADER = "header"
-const val PATH_DECRYPT = "decrypt"
-const val PATH_OPEN = "open"
 
 const val PARAM_INDICES = "indices"
 const val PARAM_CODE = "code"

@@ -129,7 +129,7 @@ class ReaderStore :
             .addQueryParameter("redirectPathForReadEnd", "")
             .build()
         val response = client.newCall(GET(url, headers)).execute().parseAs<TokenResponse>().token
-        val chapterUrl = "$VIEWER_URL/$PATH_OPEN".toHttpUrl().newBuilder()
+        val chapterUrl = "$VIEWER_URL/open".toHttpUrl().newBuilder()
             .addQueryParameter("uuid", response.uuid)
             .addQueryParameter("iid", response.browserContentsId)
             .addQueryParameter("auth_token", response.authToken)
@@ -161,9 +161,9 @@ class ReaderStore :
             .build()
 
         val base = "$VIEWER_URL/${result.browserContentsId}"
-        val metaData = client.newCall(GET("$base/$PATH_META".toHttpUrl(), newHeaders)).execute().parseAs<MetaResponse>().data
+        val metaData = client.newCall(GET("$base/meta".toHttpUrl(), newHeaders)).execute().parseAs<MetaResponse>().data
         val maxIndex = metaData.page.all?.minus(1) ?: throw Exception("Novels are not supported!")
-        val cipherKey = extractCipherKey(client.newCall(GET("$base/$PATH_DECRYPT", newHeaders)).execute().body.string())
+        val cipherKey = extractCipherKey(client.newCall(GET("$base/decrypt", newHeaders)).execute().body.string())
 
         return (0..maxIndex).map {
             val url = "$base/$PATH_IMAGE_URL".toHttpUrl().newBuilder()
