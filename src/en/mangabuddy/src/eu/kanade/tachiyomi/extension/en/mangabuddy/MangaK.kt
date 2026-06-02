@@ -211,7 +211,7 @@ class MangaK :
 
             // If the ID was previously saved into the description, bypass the details request
             if (!idFromDesc.isNullOrEmpty()) {
-                val request = GET("$apiUrl/titles/$idFromDesc/chapters", headers)
+                val request = GET("$apiUrl/titles/$idFromDesc/chapters?cv=${System.currentTimeMillis()}", headers)
                 return client.newCall(request).asObservable().map { chapterListParse(it) }
             }
 
@@ -224,7 +224,7 @@ class MangaK :
                 val id = dto?.pageProps?.initialManga?.id
                     ?: throw Exception("Could not find manga ID for migration")
 
-                val request = GET("$apiUrl/titles/$id/chapters", headers)
+                val request = GET("$apiUrl/titles/$id/chapters?cv=${System.currentTimeMillis()}", headers)
                 client.newCall(request).execute().let { chapterListParse(it) }
             }
         }
@@ -234,7 +234,7 @@ class MangaK :
 
     override fun chapterListRequest(manga: SManga): Request {
         val id = manga.url.substringAfterLast("#")
-        return GET("$apiUrl/titles/$id/chapters", headers)
+        return GET("$apiUrl/titles/$id/chapters?cv=${System.currentTimeMillis()}", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {

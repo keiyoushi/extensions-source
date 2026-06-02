@@ -17,10 +17,10 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -281,51 +281,38 @@ class RaijinScans :
         val b64 = fragments.joinToString("")
 
         val config = String(Base64.decode(b64, Base64.DEFAULT)).parseAs<JsonObject>()
-        val d = config["d"]!!.jsonArray
+        val shuffled = config["d"]!!.jsonArray
+        val perm = config["m"]!!.jsonArray.map { it.jsonPrimitive.int }
 
-        /* Trying to parse needed things from shuffled list 'd'
-         * 00000               : Manga ID
-         * "rjfr-ChapterId-randomhex": Instance ID (ignored, exists in html)
-         * 000000              : Chapter ID (ignored, exists in above)
-         * "000000000000..."   : Token (64 chars hex)
-         * ["rj..", ...]       : reqKeys (11), response navigation
-         * ["rj...", ...]      : resKeys (10), request params
-         * "rjfr_..."          : Form action
-         * 0                   : Offset
-         * 0|chapter-0|n-a     : Chapter slug or num (ignored, exists locally)
-         * "local"             : Instance (ignored)
-         * 80                  : Unknown (ignored)
-         * "https://..."       : Ajax endpoint (ignored, hardcore)
-         * ""                  : Unknown (ignored)
-         * 0                   : Type (ignored)
-         * "preload-image..."  : (ignored)
+        // The config is shuffled: 'm' is a permutation that descrambles 'd' into its
+        // canonical layout via ordered[m[i]] = d[i] (the same logic the reader JS uses).
+        // Reading fixed positions of the descrambled array is robust to the two key arrays
+        // changing length (which previously broke a size-based heuristic and caused HTTP 400).
+        val ordered = arrayOfNulls<JsonElement>(shuffled.size)
+        perm.forEachIndexed { i, p -> ordered[p] = shuffled[i] }
+        fun at(index: Int): JsonElement = ordered.getOrNull(index)
+            ?: throw Exception("Reader manifest layout changed. Open the chapter in WebView.")
+
+        /* Canonical layout of the descrambled array:
+         *  2  : Token (64 hex chars)
+         *  3  : Instance ID
+         *  4  : Manga ID
+         *  5  : Chapter number/slug (== last URL segment)
+         *  7  : Root ("rjfr-<mangaId>-<chapterId>", also in the DOM)
+         * 12  : Form action ("rjfr_...")
+         * 13  : reqKeys  - request form field names
+         * 14  : respKeys - response field names
+         * others (0,1,6,8,9,10,11) are the ajax url / constants / ignored values.
          */
-
-        // As reqKeys seems always larger than resKeys
-        val (reqKeys, resKeys) = d
-            .filterIsInstance<JsonArray>()
-            .sortedByDescending(JsonArray::size)
-            .map { array -> array.map { it.jsonPrimitive.content } }
-
-        val token = d.filterIsInstance<JsonPrimitive>()
-            .first { it.content.length == 64 }
-            .content
-
-        val action = d.find {
-            it is JsonPrimitive && it.content.startsWith("rjfr_")
-        }?.jsonPrimitive!!.content
+        val token = at(2).jsonPrimitive.content
+        val instanceId = at(3).jsonPrimitive.content
+        val mangaId = at(4).jsonPrimitive.content
+        val action = at(12).jsonPrimitive.content
+        val reqKeys = at(13).jsonArray.map { it.jsonPrimitive.content }
+        val respKeys = at(14).jsonArray.map { it.jsonPrimitive.content }
 
         val chapterSlug = response.request.url.pathSegments.last { it.isNotEmpty() }
-
         val rjfrValue = document.select("[data-rj-free-reader-root]").attr("data-rj-free-reader-root")
-
-        val chapterId = rjfrValue.split("-").get(1)
-
-        val numbers = d.filter { it is JsonPrimitive && it.content.toIntOrNull() != null }
-            .map { it.jsonPrimitive.content }
-            .filter { it != chapterId }
-
-        val mangaId = numbers.maxBy { it.toInt() }
 
         val pages = mutableListOf<Page>()
         var offset = "0"
@@ -336,16 +323,16 @@ class RaijinScans :
         while (run && guard++ < MAX_PAGE_REQUESTS) {
             val body = MultipartBody.Builder().setType(MultipartBody.FORM)
                 .addFormDataPart("action", action)
-                .addFormDataPart(resKeys[0], "")
-                .addFormDataPart(resKeys[1], token)
-                .addFormDataPart(resKeys[2], mangaId)
-                .addFormDataPart(resKeys[3], chapterId)
-                .addFormDataPart(resKeys[4], chapterSlug)
-                .addFormDataPart(resKeys[5], "local")
-                .addFormDataPart(resKeys[6], "0")
-                .addFormDataPart(resKeys[7], offset)
-                .addFormDataPart(resKeys[8], rjfrValue)
-                .addFormDataPart(resKeys[9], cursor)
+                .addFormDataPart(reqKeys[0], "")
+                .addFormDataPart(reqKeys[1], token)
+                .addFormDataPart(reqKeys[2], instanceId)
+                .addFormDataPart(reqKeys[3], mangaId)
+                .addFormDataPart(reqKeys[4], chapterSlug)
+                .addFormDataPart(reqKeys[5], "local")
+                .addFormDataPart(reqKeys[6], "0")
+                .addFormDataPart(reqKeys[7], offset)
+                .addFormDataPart(reqKeys[8], rjfrValue)
+                .addFormDataPart(reqKeys[9], cursor)
                 .build()
 
             val response = client.newCall(POST("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, body)).execute()
@@ -353,17 +340,17 @@ class RaijinScans :
             if (!response.isSuccessful) error("Failed to get page: ${response.code}")
             val root = response.parseAs<JsonObject>()
 
-            val payload = root[reqKeys[1]]!!.jsonObject
-            val images = payload[reqKeys[2]]!!.jsonArray
+            val payload = root[respKeys[1]]!!.jsonObject
+            val images = payload[respKeys[2]]!!.jsonArray
 
             images.forEach { image ->
-                val url = image.jsonObject[reqKeys[4]]!!.jsonPrimitive.content
+                val url = image.jsonObject[respKeys[4]]!!.jsonPrimitive.content
                 pages.add(Page(pages.size, imageUrl = url))
             }
 
-            offset = payload[reqKeys[6]]?.jsonPrimitive?.content ?: ""
-            cursor = payload[reqKeys[8]]?.jsonPrimitive?.content ?: ""
-            run = payload[reqKeys[9]]?.jsonPrimitive?.boolean ?: false
+            offset = payload[respKeys[7]]?.jsonPrimitive?.content ?: ""
+            cursor = payload[respKeys[8]]?.jsonPrimitive?.content ?: ""
+            run = payload[respKeys[9]]?.jsonPrimitive?.boolean ?: false
         }
 
         return pages

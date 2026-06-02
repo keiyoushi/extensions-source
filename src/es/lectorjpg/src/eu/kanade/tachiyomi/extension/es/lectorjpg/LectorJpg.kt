@@ -139,11 +139,15 @@ class LectorJpg : HttpSource() {
         }
     }
 
+    private val pagesRegex = """images:(\[.*?])""".toRegex()
+
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("div.grid > img").mapIndexed { i, element ->
-            Page(i, imageUrl = element.attr("abs:src"))
-        }
+        val scripts = document.select("script:containsData(svelteKit)").joinToString("\n") { it.data() }
+        val match = pagesRegex.find(scripts) ?: return emptyList()
+        val pagesJson = match.groupValues[1]
+        val imageUrls = pagesJson.parseAs<List<String>>()
+        return imageUrls.mapIndexed { i, url -> Page(i, imageUrl = url) }
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()

@@ -1,7 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.atsumaru
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,12 +12,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class Atsumaru : HttpSource() {
+class Atsumaru :
+    HttpSource(),
+    ConfigurableSource {
 
     override val versionId = 2
 
@@ -30,6 +36,8 @@ class Atsumaru : HttpSource() {
         .rateLimit(2)
         .build()
 
+    val prefs by getPreferencesLazy()
+
     private fun apiHeadersBuilder() = headersBuilder().apply {
         add("Accept", "*/*")
         add("Referer", baseUrl)
@@ -40,7 +48,7 @@ class Atsumaru : HttpSource() {
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/infinite/trending?page=${page - 1}&types=Manga,Manwha,Manhua,OEL", apiHeaders)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/infinite/trending?page=${page - 1}&types=Manga,Manwha,Manhua,OEL${get18Mode()}", apiHeaders)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<BrowseMangaDto>().items
@@ -50,7 +58,7 @@ class Atsumaru : HttpSource() {
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/infinite/recentlyUpdated?page=${page - 1}&types=Manga,Manwha,Manhua,OEL", apiHeaders)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/infinite/recentlyUpdated?page=${page - 1}&types=Manga,Manwha,Manhua,OEL${get18Mode()}", apiHeaders)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
@@ -59,12 +67,13 @@ class Atsumaru : HttpSource() {
     override fun getFilterList() = FilterList(
         Filter.Separator(),
         GenreFilter(getGenresList()),
+        TagsFilter(getTagsList()),
         TypeFilter(getTypesList()),
         StatusFilter(getStatusList()),
         YearFilter(),
         MinChaptersFilter(),
         SortFilter(),
-        AdultFilter(),
+        AdultFilter(get18Mode().isNotEmpty()),
         OfficialFilter(),
     )
 
@@ -77,6 +86,8 @@ class Atsumaru : HttpSource() {
 
             val includedGenres = mutableListOf<String>()
             val excludedGenres = mutableListOf<String>()
+            val includedTags = mutableListOf<String>()
+            val excludedTags = mutableListOf<String>()
             val typesList = mutableListOf<String>()
             val statuses = mutableListOf<String>()
             var year: Int? = null
@@ -92,6 +103,15 @@ class Atsumaru : HttpSource() {
                             when (state.state) {
                                 Filter.TriState.STATE_INCLUDE -> includedGenres.add(filter.genreIds[index])
                                 Filter.TriState.STATE_EXCLUDE -> excludedGenres.add(filter.genreIds[index])
+                            }
+                        }
+                    }
+
+                    is TagsFilter -> {
+                        filter.state.forEachIndexed { index, state ->
+                            when (state.state) {
+                                Filter.TriState.STATE_INCLUDE -> includedTags.add(filter.tagIds[index])
+                                Filter.TriState.STATE_EXCLUDE -> excludedTags.add(filter.tagIds[index])
                             }
                         }
                     }
@@ -121,11 +141,12 @@ class Atsumaru : HttpSource() {
                     }
 
                     is SortFilter -> {
-                        sortBy = SortFilter.VALUES[filter.state!!.index]
+                        val direction = if (filter.state!!.ascending) "asc" else "desc"
+                        sortBy = SortFilter.VALUES[filter.state!!.index] + ':' + direction
                     }
 
                     is AdultFilter -> {
-                        showAdult = filter.state
+                        showAdult = filter.state || get18Mode().isNotEmpty()
                     }
 
                     is OfficialFilter -> {
@@ -141,6 +162,13 @@ class Atsumaru : HttpSource() {
             }
             if (excludedGenres.isNotEmpty()) {
                 filterBy.add("genreIds:!=[${excludedGenres.joinToString(",") { "`$it`" }}]")
+            }
+
+            if (includedTags.isNotEmpty()) {
+                filterBy.add(includedTags.joinToString(" && ") { "tagIds:=`$it`" })
+            }
+            if (excludedTags.isNotEmpty()) {
+                filterBy.add("tagIds:!=[${excludedTags.joinToString(",") { "`$it`" }}]")
             }
 
             if (typesList.isNotEmpty()) {
@@ -276,7 +304,21 @@ class Atsumaru : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
+    fun get18Mode(): String {
+        val isEnabled = prefs.getBoolean(PREF_SHOW_18, false)
+        return if (isEnabled) "&adult=1" else ""
+    }
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SHOW_18
+            title = "Toggle adult mode"
+            summaryOff = "Safe (default)"
+            summaryOn = "+18"
+        }.let(screen::addPreference)
+    }
     companion object {
+        private val PREF_SHOW_18 = "pref_18_mode"
+
         private val PROTOCOL_REGEX = Regex("^https?:?//")
     }
 }
