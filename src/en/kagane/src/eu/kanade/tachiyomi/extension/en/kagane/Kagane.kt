@@ -63,7 +63,7 @@ class Kagane :
 
     override val name = "Kagane"
 
-    private val domain = "kagane.org"
+    private val domain = "kagane.to"
     private val apiUrl = "https://yuzuki.$domain"
     override val baseUrl = "https://$domain"
 
@@ -97,7 +97,7 @@ class Kagane :
                 .build(),
         )
 
-        if (response.code == 401 || response.code == 507) {
+        if (response.code == 401 || response.code == 403 || response.code == 507) {
             response.close()
             val challenge = try {
                 getChallengeResponse(chapterId)
@@ -393,10 +393,17 @@ class Kagane :
         accessToken = challengeResp.accessToken
         cacheUrl = challengeResp.cacheUrl
 
-        val pages = challengeResp.pages.map { page ->
-            val pageUrl = "$cacheUrl/api/v2/books/file".toHttpUrl().newBuilder().apply {
+        val isNewApi = challengeResp.manifest != null
+        val pageList = challengeResp.manifest?.pages ?: challengeResp.pages ?: emptyList()
+
+        val pages = pageList.map { page ->
+            val pageUrl = "$cacheUrl/api/v2/books/${if (isNewApi) "page" else "file"}".toHttpUrl().newBuilder().apply {
                 addPathSegment(chapterId)
-                addPathSegment(page.pageUuid)
+                if (isNewApi) {
+                    addPathSegment("${page.pageUuid}.${page.ext ?: "jxl"}")
+                } else {
+                    addPathSegment(page.pageUuid)
+                }
                 addQueryParameter("token", accessToken)
                 addQueryParameter("is_datasaver", preferences.dataSaver.toString())
             }.build().toString()
@@ -416,23 +423,48 @@ class Kagane :
 
     private fun getIntegrityToken(): String {
         if (integrityExp < System.currentTimeMillis()) {
+            // Make a GET request to the base URL first to ensure Cloudflare is bypassed on a normal HTML page.
+            // Bypassing Cloudflare directly on the POST /api/integrity endpoint can cause the WebView to crash.
+            client.newCall(GET("$baseUrl/", headers)).execute().close()
+
             val res = client.newCall(
                 POST(
-                    "https://kagane.org/api/integrity",
-                    headers,
+                    "$baseUrl/api/integrity",
+                    apiHeaders,
                     body = "".toRequestBody("application/json".toMediaType()),
                 ),
-            ).execute().parseAs<IntegrityDto>()
-            integrityToken = res.token
-            integrityExp = res.exp * 1000
+            ).execute()
+
+            val dto = res.parseAs<IntegrityDto>()
+            integrityToken = dto.token
+            integrityExp = dto.exp * 1000
         }
 
         return integrityToken
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
     private fun getChallengeResponse(chapterId: String): ChallengeDto {
         val integrityToken = getIntegrityToken()
+
+        val challengeUrl =
+            "$apiUrl/api/v2/books/$chapterId".toHttpUrl().newBuilder()
+                .addQueryParameter("is_datasaver", preferences.dataSaver.toString())
+                .build()
+
+        val challengeBody = "{}".toRequestBody("application/json".toMediaType())
+
+        val headers = apiHeaders.newBuilder().add("x-integrity-token", integrityToken).build()
+
+        val response = client.newCall(POST(challengeUrl.toString(), headers, challengeBody)).execute()
+        if (!response.isSuccessful) {
+            response.close()
+            return getChallengeResponseWithDrm(chapterId, integrityToken)
+        }
+
+        return response.parseAs<ChallengeDto>()
+    }
+
+    private fun getChallengeResponseWithDrm(chapterId: String, integrityToken: String): ChallengeDto {
         val f = ":$chapterId".sha256().sliceArray(0 until 16)
 
         val challenge = if (preferences.wvd.isNotBlank()) {
@@ -462,6 +494,7 @@ class Kagane :
         return cdm.getLicenseChallenge(pssh)
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
     private fun getChallengeWebview(f: ByteArray, chapterId: String): String {
         val interfaceName = "jsInterface"
         val html = """
