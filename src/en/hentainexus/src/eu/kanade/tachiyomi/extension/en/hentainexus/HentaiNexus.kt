@@ -34,7 +34,7 @@ class HentaiNexus : HttpSource() {
 
     override val baseUrl = "https://hentainexus.com"
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     // Images on this site go through the free Jetpack Photon CDN.
     override val client = network.client.newBuilder()
