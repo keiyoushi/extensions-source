@@ -268,8 +268,11 @@ class Mangadotnet :
                         }
                     }
                     is TypeFilter -> {
-                        filter.checked.forEach { origin ->
-                            addQueryParameter("origin", origin)
+                        val checked = filter.checked
+                        if (checked.isNotEmpty() && checked.toSet() != allOrigins) {
+                            checked.forEach { origin ->
+                                addQueryParameter("origin", origin)
+                            }
                         }
                     }
                     is DemographicFilter -> {
@@ -558,7 +561,7 @@ class Mangadotnet :
 
     private fun chapterModePref() = preferences.getString(CHAPTER_MODE, "chapters")!!
 
-    private fun popularModePref() = preferences.getString(POPULAR_MODE_PREF, "trending")!!
+    private fun popularModePref() = preferences.getString(POPULAR_MODE_PREF, "most-tracked")!!
 
     private fun latestModePref() = preferences.getString(LATEST_MODE_PREF, "latest-updates")!!
 
@@ -577,7 +580,10 @@ class Mangadotnet :
 
     private fun excludedTypesPref(): Set<String> = preferences.getStringSet(BROWSE_TYPE_PREF, emptySet())!!
 
-    private fun includedTypes(): Set<String> = allOrigins - excludedTypesPref()
+    private fun includedTypes(): Set<String> {
+        val included = allOrigins - excludedTypesPref()
+        return if (included.isEmpty() || included == allOrigins) emptySet() else included
+    }
 
     private fun browseStatusPref(): String? = preferences.getString(BROWSE_STATUS_PREF, "")
         ?.takeIf { it != "" }
