@@ -27,8 +27,8 @@ class Komiic :
     HttpSource(),
     ConfigurableSource {
     override val name = "Komiic"
-    override val baseUrl = "https://komiic.com"
     override val lang = "zh"
+    override val baseUrl = "https://komiic.com"
     override val supportsLatest = true
     override val client = network.client.newBuilder()
         .addInterceptor { chain ->
@@ -61,19 +61,28 @@ class Komiic :
         preferencesInternal(screen.context).forEach(screen::addPreference)
     }
 
+    companion object {
+        val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+    }
+
     // Customize ===================================================================================
 
     private val SManga.id get() = url.substringAfterLast("/")
     private val SChapter.id get() = url.substringAfterLast("/")
 
-    private fun RequestBody.request() = POST(apiUrl, headers, this)
+    private fun RequestBody.request(fragment: String? = null): Request {
+        val extra = fragment?.let { "#$it" } ?: ""
+        return POST("$apiUrl/api/query$extra", headers, this)
+    }
     private fun Response.parse() = parseAs<ResponseDto>().getData()
 
     // Popular Manga ===============================================================================
 
     override fun popularMangaRequest(page: Int): Request {
         val pagination = Pagination((page - 1) * PAGE_SIZE, OrderBy.MONTH_VIEWS)
-        return listingQuery(ListingVariables(pagination)).request()
+        return commonQuery(ListingVariables(pagination)).request()
     }
 
     override fun popularMangaParse(response: Response) = parseListing(response.parse())
@@ -82,7 +91,7 @@ class Komiic :
 
     override fun latestUpdatesRequest(page: Int): Request {
         val pagination = Pagination((page - 1) * PAGE_SIZE, OrderBy.DATE_UPDATED)
-        return listingQuery(ListingVariables(pagination)).request()
+        return commonQuery(ListingVariables(pagination)).request()
     }
 
     override fun latestUpdatesParse(response: Response) = parseListing(response.parse())
@@ -98,7 +107,7 @@ class Komiic :
                 throw Exception("Unsupported url")
             }
             val id = url.pathSegments[1]
-            return fetchSearchManga(page, "$PREFIX_ID_SEARCH$id", filters)
+            return fetchSearchManga(page, PREFIX_ID_SEARCH + id, filters)
         }
         return super.fetchSearchManga(page, query, filters)
     }
@@ -119,7 +128,7 @@ class Komiic :
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
-    override fun mangaDetailsRequest(manga: SManga) = mangaQuery(manga.id).request()
+    override fun mangaDetailsRequest(manga: SManga) = mangaDetailQuery(manga.id).request()
 
     override fun mangaDetailsParse(response: Response) = response.parse().comicById!!.toSManga()
 
@@ -127,12 +136,12 @@ class Komiic :
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url + "/images/all"
 
-    override fun chapterListRequest(manga: SManga) = mangaQuery(manga.id).request()
+    override fun chapterListRequest(manga: SManga) = chaptersQuery(manga.id).request(manga.id)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.parse()
         val chapters = data.chaptersByComicId!!.toMutableList()
-        when (preferences.getString(CHAPTER_FILTER_PREF, "all")!!) {
+        when (pref.getString(CHAPTER_FILTER_PREF, "all")) {
             "chapter" -> chapters.retainAll { it.type == "chapter" }
             "book" -> chapters.retainAll { it.type == "book" }
             else -> {}
@@ -141,11 +150,8 @@ class Komiic :
             compareByDescending<ChapterDto> { it.type }
                 .thenByDescending { it.serial.toFloatOrNull() },
         )
-        val mangaUrl = data.comicById!!.url
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
-        return chapters.map { it.toSChapter(mangaUrl, dateFormat) }
+        val mangaUrl = "/comic/${response.request.url.fragment}"
+        return chapters.map { it.toSChapter(mangaUrl, DATE_FORMAT) }
     }
 
     // Page List ===================================================================================

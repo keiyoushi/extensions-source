@@ -12,9 +12,13 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 
-private fun buildQuery(query: String): String = query.trimIndent()
-    .replace("#{body}", COMIC_BODY.trimIndent())
-    .replace("%", "$")
+private fun buildQuery(query: String): String {
+    val allCategory = categories.takeIf { it.isEmpty() }?.let { "allCategory { id name }" } ?: ""
+    return query.trimIndent()
+        .replace("#{body}", COMIC_BODY.trimIndent())
+        .replace("#{category}", allCategory.trimIndent())
+        .replace("%", "$")
+}
 
 private const val COMIC_BODY =
     """
@@ -52,26 +56,25 @@ fun parseListing(data: DataDto): MangasPage {
     return MangasPage(entries, hasNextPage)
 }
 
-fun listingQuery(variables: ListingVariables): RequestBody {
-    if (variables.pagination.orderBy == OrderBy.MONTH_VIEWS) return popularQuery(variables)
+fun commonQuery(variables: ListingVariables): RequestBody {
+    val operation = if (variables.pagination.orderBy == OrderBy.DATE_UPDATED) "recentUpdate" else "hotComics"
     val query = buildQuery(
         """
-        query comicByCategories(%categoryId: [ID!]!, %pagination: Pagination!) {
-          comics: comicByCategories(categoryId: %categoryId, pagination: %pagination) #{body}
-          allCategory { id name }
+        query commonQuery(%pagination: Pagination!) {
+          comics: $operation(pagination: %pagination) #{body}
+          #{category}
         }
         """,
     )
     return buildRequestBody(query, variables.encode())
 }
 
-private fun popularQuery(variables: ListingVariables): RequestBody {
-    if (variables.categoryId.isNotEmpty()) throw Exception("“本月最夯”不能篩選類型")
+fun listingQuery(variables: ListingVariables): RequestBody {
     val query = buildQuery(
         """
-        query hotComics(%pagination: Pagination!) {
-          comics: hotComics(pagination: %pagination) #{body}
-          allCategory { id name }
+        query comicByCategories(%categoryId: [ID!]!, %pagination: Pagination!) {
+          comics: comicByCategories(categoryId: %categoryId, pagination: %pagination) #{body}
+          #{category}
         }
         """,
     )
@@ -85,7 +88,7 @@ fun searchQuery(keyword: String): RequestBody {
           searchComicsAndAuthors(keyword: %keyword) {
             comics #{body}
           }
-          allCategory { id name }
+          #{category}
         }
         """,
     )
@@ -111,11 +114,24 @@ fun idsQuery(id: String): RequestBody {
     return buildRequestBody(query, variables)
 }
 
-fun mangaQuery(id: String): RequestBody {
+fun mangaDetailQuery(id: String): RequestBody {
+    val query = buildQuery(
+        """
+        query comicById(%comicId: ID!) {
+          comicById(comicId: %comicId) #{body}
+        }
+        """,
+    )
+    val variables = buildJsonObject {
+        put("comicId", id)
+    }
+    return buildRequestBody(query, variables)
+}
+
+fun chaptersQuery(id: String): RequestBody {
     val query = buildQuery(
         """
         query chapterByComicId(%comicId: ID!) {
-          comicById(comicId: %comicId) #{body}
           chaptersByComicId(comicId: %comicId) {
             id
             serial
