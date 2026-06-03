@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -24,6 +25,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import tachiyomi.decoder.ImageDecoder
@@ -282,6 +284,28 @@ class ProComic : HttpSource() {
                 // Ignore
             }
         }
+
+        // --- كود دعم النظام الجديد بدأ من هنا ---
+        if (pages.isEmpty()) {
+            try {
+                // نرسل طلب POST لمعرفة الصفحات باستخدام النظام الجديد (Proxy Plan)
+                val body = "{}".toRequestBody("application/json".toMediaType())
+                val proxyReq = POST("$baseUrl/chapter-map-proxy-plan/$chapterId", apiHeaders, body)
+                val proxyResp = client.newCall(proxyReq).execute()
+
+                if (proxyResp.isSuccessful) {
+                    val proxyData = proxyResp.parseAs<ProxyPlanResponse>()
+                    val map = proxyData.data?.map
+                    if (map != null && map.pieces.isNotEmpty()) {
+                        val absolutePieces = map.pieces.map { if (it.startsWith("http")) it else "$cdnBase$it" }
+                        processMap(map.dim, map.mode, absolutePieces, map.order, map.token, pages, seenUrls)
+                    }
+                }
+            } catch (e: Exception) {
+                // في حال فشل النظام الجديد، سيتم تخطيه
+            }
+        }
+        // --- نهاية الكود الجديد ---
 
         return pages
     }
@@ -546,9 +570,7 @@ class ProComic : HttpSource() {
             val p = if (clean.contains("x")) clean.split("x") else clean.split("_")
             Pair(p.getOrNull(0)?.toIntOrNull() ?: 1, p.getOrNull(1)?.toIntOrNull() ?: 1)
         }
-        // Vertical in their map means slices are vertical columns -> arrange side by side (cols = count, rows = 1)
         mode.startsWith("vertical_") -> Pair(mode.removePrefix("vertical_").toIntOrNull() ?: pieceCount, 1)
-        // Horizontal means slices are horizontal rows -> arrange top to bottom (cols = 1, rows = count)
         mode.startsWith("horizontal_") -> Pair(1, mode.removePrefix("horizontal_").toIntOrNull() ?: pieceCount)
         else -> Pair(1, pieceCount)
     }
@@ -674,4 +696,16 @@ data class DeferredPageMap(
     val order: List<Int> = emptyList(),
     val token: String = "",
     val method: String = "",
+)
+
+// --- كلاسات جديدة لدعم النظام الجديد ---
+@Serializable
+data class ProxyPlanResponse(
+    val success: Boolean = false,
+    val data: ProxyPlanData? = null,
+)
+
+@Serializable
+data class ProxyPlanData(
+    val map: DeferredPageMap? = null,
 )
