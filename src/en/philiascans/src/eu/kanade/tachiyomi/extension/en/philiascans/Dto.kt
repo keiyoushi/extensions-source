@@ -74,7 +74,7 @@ class ChapterResponse(
 
 @Serializable
 class ChapterItem(
-    private val number: String?,
+    private val number: String,
     private val title: String?,
     private val slug: String,
     private val publishedAt: String?,
@@ -89,7 +89,7 @@ class ChapterItem(
         val lock = if (isLocked) "🔒 " else ""
         name = lock + (title?.takeIf { it.isNotBlank() } ?: "Chapter $number")
         date_upload = dateFormat.tryParse(publishedAt)
-        chapter_number = number?.toFloat() ?: -1f
+        chapter_number = number.toFloat()
     }
 }
 
