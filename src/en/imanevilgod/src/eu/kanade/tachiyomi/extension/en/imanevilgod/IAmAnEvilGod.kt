@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
 import org.jsoup.Jsoup
 
@@ -25,7 +26,7 @@ class IAmAnEvilGod : HttpSource() {
         val manga = SManga.create().apply {
             title = "I'm An Evil God"
             url = "/"
-            status = SManga.ONGOING
+            status = SManga.UNKNOWN
         }
         return MangasPage(listOf(manga), false)
     }
@@ -43,7 +44,7 @@ class IAmAnEvilGod : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         title = "I'm An Evil God"
         url = "/"
-        status = SManga.ONGOING
+        status = SManga.UNKNOWN
         description = "Across the realms, the manliest and most handsome evil god in history! " +
             "Xie Yan crosses over and falls into the vixen's lair..."
     }
@@ -70,7 +71,7 @@ class IAmAnEvilGod : HttpSource() {
     override fun pageListRequest(chapter: SChapter) = GET(chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val doc = Jsoup.parse(response.body.string())
+        val doc = response.asJsoup()
         // Chapter pages are <img> tags inside the post content
         return doc.select("div.entry-content img")
             .mapIndexed { index, el ->
