@@ -1,14 +1,17 @@
 package eu.kanade.tachiyomi.extension.pt.littletyrant
 
+import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
+import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
@@ -82,7 +85,19 @@ class LittleTyrant :
 
     // =============================== Pages =================================
 
-    override val pageListParseSelector = ".reading-content img"
+    private val b64Pages = Regex("""var pages = \[(.*?)\];""")
+
+    override fun pageListParse(response: Response): List<Page> {
+        val doc = response.asJsoup()
+        launchIO { countViews(doc) }
+
+        val match = b64Pages.find(doc.select("script").joinToString("\n") { it.data() })
+
+        return match?.groupValues?.get(1)?.split(",")?.mapIndexed { i, it ->
+            val imageUrl = String(Base64.decode(it.trim().trim('\''), Base64.DEFAULT))
+            Page(i, imageUrl = imageUrl)
+        } ?: emptyList()
+    }
 
     companion object {
         private val CHAPTER_NUMBER_REGEX = """\d+(?:\.\d+)?""".toRegex()
