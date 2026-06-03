@@ -1,17 +1,17 @@
-package eu.kanade.tachiyomi.extension.zh.happymh.dto
+package eu.kanade.tachiyomi.extension.zh.happymh
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 // Popular / Latest / Search pages
 @Serializable
-data class PopularResponseDto(val data: PopularData)
+class PopularResponseDto(val data: PopularData)
 
 @Serializable
-data class PopularData(val items: List<MangaDto>, val isEnd: Boolean)
+class PopularData(val items: List<MangaDto>, val isEnd: Boolean)
 
 @Serializable
-data class MangaDto(
+class MangaDto(
     val name: String,
     @SerialName("manga_code") val code: String,
     val cover: String,
@@ -40,10 +40,13 @@ class ChapterByPageResponse(
 
 // Pages
 @Serializable
-data class PageListResponseDto(val data: PageListData)
+class PageListResponseDto(val data: PageListData)
 
 @Serializable
-data class PageListData(val scans: List<PageDto>) {
-    @Serializable
-    data class PageDto(val n: Int, val url: String)
-}
+class PageListData(
+    val scans: String,
+    val isEncode: Boolean,
+)
+
+@Serializable
+data class PageDto(val n: Int, val url: String)
