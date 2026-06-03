@@ -67,12 +67,10 @@ class HentaiNexus : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage = parseResponse(response)
 
-    override fun popularMangaRequest(page: Int): Request {
-        return if (page > 1) {
-            searchMangaRequest(page - 1, "sort:popular", getFilterList())
-        } else {
-            GET(baseUrl + POPULAR_NOW_PATH, headers)
-        }
+    override fun popularMangaRequest(page: Int): Request = if (page > 1) {
+        searchMangaRequest(page - 1, "sort:popular", getFilterList())
+    } else {
+        GET(baseUrl + POPULAR_NOW_PATH, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage = parseResponse(response)
