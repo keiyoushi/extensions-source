@@ -47,7 +47,7 @@ jobs:
         run: |
           python ./.github/scripts/generate-build-matrices.py "$NX_BASE" Release
 
-build:
+  build:
     name: Build ProComic Extension
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -81,7 +81,7 @@ build:
           path: "**/*.apk"
           retention-days: 1
 
-publish:
+  publish:
     name: Publish extension repo
     needs: [prepare, build]
     if: "github.repository == 'keiyoushi/extensions-source'"
