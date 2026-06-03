@@ -31,7 +31,7 @@ class IAmAnEvilGod : HttpSource() {
         return MangasPage(listOf(manga), false)
     }
 
-    override fun latestUpdatesRequest(page: Int) = popularMangaRequest(page)
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Not used")
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = popularMangaRequest(page)
