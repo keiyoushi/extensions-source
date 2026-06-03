@@ -60,9 +60,23 @@ class ArtistFilter : Filter.Text("Artist")
 
 class TriStateFilter(name: String, val value: String = name, state: Int = STATE_IGNORE) : Filter.TriState(name, state)
 
+class DemographicFilter(excluded: Set<String> = emptySet()) :
+    Filter.Group<TriStateFilter>(
+        name = "Demographics",
+        state = demographics.map { demo ->
+            val state = if (demo in excluded) TriState.STATE_EXCLUDE else TriState.STATE_IGNORE
+            TriStateFilter(demo, state = state)
+        },
+    ) {
+    val included get() = state.filter { it.isIncluded() }.map { it.value }
+    val excluded get() = state.filter { it.isExcluded() }.map { it.value }
+}
+
+private val demographics = listOf("Josei", "Seinen", "Shoujo", "Shounen")
+
 class GenreFilter(genreValues: List<String>, excluded: Set<String>) :
     Filter.Group<TriStateFilter>(
-        name = "Genre",
+        name = "Genres",
         state = genreValues.map { genre ->
             val state = if (genre in excluded) TriState.STATE_EXCLUDE else TriState.STATE_IGNORE
             TriStateFilter(genre, state = state)
