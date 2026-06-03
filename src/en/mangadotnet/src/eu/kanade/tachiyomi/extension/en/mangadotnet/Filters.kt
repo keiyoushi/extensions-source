@@ -13,9 +13,9 @@ class SortFilter :
 }
 
 private val sortOrders = listOf(
-    "Relevance" to "relevance",
-    "Alphabetical" to "alphabetical",
+    "Relevance" to "",
     "Latest Update" to "latest",
+    "Alphabetical" to "alphabetical",
     "Total Chapters" to "chapters",
     "Most Viewed" to "views",
     "Most Tracked" to "tracked",
@@ -41,7 +41,7 @@ class TypeCheckBox(name: String, val value: String) : Filter.CheckBox(name)
 
 class TypeFilter :
     Filter.Group<TypeCheckBox>(
-        "Type",
+        "Types",
         types.map { TypeCheckBox(it.first, it.second) },
     ) {
     val checked get() = state.filter { it.state }.map { it.value }

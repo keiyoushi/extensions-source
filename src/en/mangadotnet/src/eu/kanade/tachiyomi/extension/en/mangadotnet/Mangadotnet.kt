@@ -651,7 +651,7 @@ class Mangadotnet :
             title = "Popular Mode"
             entries = arrayOf("Most Tracked", "Top Rated")
             entryValues = arrayOf("most-tracked", "top-rated")
-            setDefaultValue("trending")
+            setDefaultValue("most-tracked")
             summary = "%s"
         }
         screen.addPreference(popularModePref)
