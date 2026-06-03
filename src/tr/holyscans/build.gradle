@@ -1,10 +1,8 @@
 ext {
     extName = 'Holy Scans'
     extClass = '.HolyScans'
-    themePkg = 'madara'
-    baseUrl = 'https://holyscans.com.tr'
-    overrideVersionCode = 0
-    isNsfw = false
+    extVersionCode = 51
+    isNsfw = true
 }
 
 apply plugin: "kei.plugins.extension.legacy"
