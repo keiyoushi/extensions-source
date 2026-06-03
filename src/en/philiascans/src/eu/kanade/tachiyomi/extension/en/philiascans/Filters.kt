@@ -16,7 +16,6 @@ open class CheckBoxGroup(displayName: String, options: Array<Pair<String, String
 
 fun Builder.addFilter(param: String, filter: SelectFilter?) = filter?.value?.takeIf(String::isNotBlank)?.let { addQueryParameter(param, it) }
 
-
 fun Builder.addFilter(param: String, filter: CheckBoxGroup?) = filter?.checked?.forEach { addQueryParameter(param, it) }
 
 class SortFilter :
