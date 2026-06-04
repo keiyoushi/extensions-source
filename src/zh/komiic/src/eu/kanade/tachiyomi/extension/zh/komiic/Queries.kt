@@ -36,6 +36,7 @@ private const val COMIC_BODY =
         id
         name
       }
+      warnings
     }
     """
 

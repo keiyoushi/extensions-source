@@ -41,6 +41,7 @@ class MangaDto(
     private val imageUrl: String,
     private val authors: List<ItemDto>,
     private val categories: List<ItemDto>,
+    private val warnings: List<String>,
 ) {
     val url get() = "/comic/$id"
 
@@ -49,7 +50,7 @@ class MangaDto(
         title = this@MangaDto.title
         thumbnail_url = this@MangaDto.imageUrl
         author = this@MangaDto.authors.joinToString(" · ") { it.name }
-        genre = this@MangaDto.categories.joinToString { it.name }
+        genre = (this@MangaDto.categories.map(ItemDto::name) + warnings).joinToString()
         description = this@MangaDto.description
         status = when (this@MangaDto.status) {
             "ONGOING" -> SManga.ONGOING
