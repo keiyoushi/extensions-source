@@ -22,7 +22,7 @@ import java.util.Locale
 class TheManga : HttpSource() {
 
     override val name = "TheManga"
-    override val baseUrl = "https://themanga.my.id"
+    override val baseUrl = "https://themanga.site"
     override val lang = "id"
     override val supportsLatest = true
 
