@@ -289,9 +289,19 @@ class ComX :
         challenge.close()
 
         var nonce = 0L
+        var powHash: String?
+        var powNonce: Long
         val md = MessageDigest.getInstance("SHA-256")
         val start = System.currentTimeMillis()
-        while (md.digest("$token:$nonce".toByteArray())[0] != 0.toByte()) {
+        while (true) {
+            val hash = md.digest("$token:$nonce".toByteArray())
+            val hexHash = hash.joinToString("") { "%02x".format(it) }
+
+            if (hexHash.startsWith("00")) {
+                powHash = hexHash
+                powNonce = nonce
+                break
+            }
             nonce++
             if (nonce > 1_000_000L) throw IOException("Antibot challenge failed: PoW exhausted")
         }
@@ -304,6 +314,8 @@ class ComX :
             .add("screen_w", "390").add("screen_h", "844").add("screen_cd", "24")
             .add("wgv", "Apple Inc.").add("wgr", "Apple GPU")
             .add("tz", "-180").add("dpr", "3").add("cdp", "0").add("cdpf", "")
+            .add("pow_nonce", powNonce.toString())
+            .add("pow_hash", powHash)
             .build()
 
         val verifyReq = Request.Builder()
