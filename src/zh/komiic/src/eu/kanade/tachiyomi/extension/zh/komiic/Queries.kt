@@ -108,9 +108,7 @@ fun idsQuery(id: String): RequestBody {
         """,
     )
     val variables = buildJsonObject {
-        putJsonArray("comicIds") {
-            add(id)
-        }
+        putJsonArray("comicIds") { add(id) }
     }
     return buildRequestBody(query, variables)
 }
@@ -129,7 +127,7 @@ fun mangaDetailQuery(id: String): RequestBody {
     return buildRequestBody(query, variables)
 }
 
-fun chaptersQuery(id: String): RequestBody {
+fun chapterListQuery(id: String): RequestBody {
     val query = buildQuery(
         """
         query chapterByComicId(%comicId: ID!) {

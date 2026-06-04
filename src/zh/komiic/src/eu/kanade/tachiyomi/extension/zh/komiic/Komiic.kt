@@ -19,9 +19,6 @@ import okhttp3.RequestBody
 import okhttp3.Response
 import rx.Observable
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 
 class Komiic :
     HttpSource(),
@@ -58,12 +55,6 @@ class Komiic :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         preferencesInternal(screen.context).forEach(screen::addPreference)
-    }
-
-    companion object {
-        val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
     }
 
     // Customize ===================================================================================
@@ -103,7 +94,7 @@ class Komiic :
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
             if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
+                throw Exception("不支持这个 URL")
             }
             val id = url.pathSegments[1]
             return fetchSearchManga(page, PREFIX_ID_SEARCH + id, filters)
@@ -111,13 +102,13 @@ class Komiic :
         return super.fetchSearchManga(page, query, filters)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.startsWith(PREFIX_ID_SEARCH)) {
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = if (query.startsWith(PREFIX_ID_SEARCH)) {
         idsQuery(query.removePrefix(PREFIX_ID_SEARCH)).request()
     } else if (query.isNotBlank()) {
         searchQuery(query).request()
     } else {
         val variables = ListingVariables(Pagination((page - 1) * PAGE_SIZE))
-        for (filter in filters) if (filter is KomiicFilter) filter.apply(variables)
+        filters.filterIsInstance<KomiicFilter>().forEach { it.apply(variables) }
         listingQuery(variables).request()
     }
 
@@ -135,7 +126,7 @@ class Komiic :
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url + "/images/all"
 
-    override fun chapterListRequest(manga: SManga) = chaptersQuery(manga.id).request(manga.id)
+    override fun chapterListRequest(manga: SManga) = chapterListQuery(manga.id).request(manga.id)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.parse()
@@ -146,22 +137,19 @@ class Komiic :
             else -> {}
         }
         chapters.sortWith(
-            compareByDescending<ChapterDto> { it.type }
-                .thenByDescending { it.serial.toFloatOrNull() },
+            compareByDescending<ChapterDto> { it.type }.thenByDescending { it.serial.toFloatOrNull() },
         )
         val mangaUrl = "/comic/${response.request.url.fragment}"
-        return chapters.map { it.toSChapter(mangaUrl, DATE_FORMAT) }
+        return chapters.map { it.toSChapter(mangaUrl) }
     }
 
     // Page List ===================================================================================
 
-    override fun pageListRequest(chapter: SChapter): Request = pageListQuery(chapter.id).request().newBuilder()
-        .tag(String::class.java, chapter.url)
-        .build()
+    override fun pageListRequest(chapter: SChapter) = pageListQuery(chapter.id).request(chapter.url)
 
     override fun pageListParse(response: Response): List<Page> {
         val data = response.parse()
-        val chapterUrl = response.request.tag(String::class.java)!!
+        val chapterUrl = response.request.url.fragment!!
         return data.imagesByChapterId!!.mapIndexed { index, image ->
             Page(index, "$chapterUrl/page/${index + 1}", "$baseUrl/api/image/${image.kid}")
         }
@@ -169,10 +157,8 @@ class Komiic :
 
     // Image =======================================================================================
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
-        .addHeader("accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-        .addHeader("referer", page.url)
-        .build()
+    override fun imageRequest(page: Page) = super.imageRequest(page).newBuilder()
+        .addHeader("accept", "*/*").addHeader("referer", page.url).build()
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }

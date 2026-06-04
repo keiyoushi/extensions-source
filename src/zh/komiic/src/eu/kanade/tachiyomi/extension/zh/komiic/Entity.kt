@@ -2,9 +2,8 @@ package eu.kanade.tachiyomi.extension.zh.komiic
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import kotlin.time.Instant
 
 @Serializable
 class ResponseDto(private val data: DataDto?, private val errors: List<ErrorDto>?) {
@@ -49,8 +48,8 @@ class MangaDto(
         url = this@MangaDto.url
         title = this@MangaDto.title
         thumbnail_url = this@MangaDto.imageUrl
-        author = this@MangaDto.authors.joinToString(" · ") { it.name }
-        genre = (this@MangaDto.categories.map(ItemDto::name) + warnings).joinToString()
+        author = this@MangaDto.authors.joinToString("，") { it.name }
+        genre = this@MangaDto.categories.map(ItemDto::name).plus(warnings).joinToString()
         description = this@MangaDto.description
         status = when (this@MangaDto.status) {
             "ONGOING" -> SManga.ONGOING
@@ -69,7 +68,7 @@ class ChapterDto(
     private val size: Int,
     private val dateCreated: String,
 ) {
-    fun toSChapter(mangaUrl: String, dateFormat: SimpleDateFormat) = SChapter.create().apply {
+    fun toSChapter(mangaUrl: String) = SChapter.create().apply {
         url = "$mangaUrl/chapter/${this@ChapterDto.id}"
         name = when (this@ChapterDto.type) {
             "chapter" -> "第 ${this@ChapterDto.serial} 話"
@@ -77,7 +76,7 @@ class ChapterDto(
             else -> this@ChapterDto.serial
         }
         scanlator = "${this@ChapterDto.size}P"
-        date_upload = dateFormat.tryParse(this@ChapterDto.dateCreated)
+        date_upload = Instant.parse(this@ChapterDto.dateCreated).toEpochMilliseconds()
         chapter_number = this@ChapterDto.serial.toFloatOrNull() ?: -1f
     }
 }
