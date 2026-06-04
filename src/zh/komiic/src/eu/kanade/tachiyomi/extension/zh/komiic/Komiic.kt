@@ -54,8 +54,7 @@ class Komiic :
         if (!response.isSuccessful) throw IOException("刷新 Token 失敗：HTTP ${response.code}")
     }
 
-    private val apiUrl = "$baseUrl/api/query"
-    private val preferences by getPreferencesLazy()
+    private val pref by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         preferencesInternal(screen.context).forEach(screen::addPreference)
@@ -74,7 +73,7 @@ class Komiic :
 
     private fun RequestBody.request(fragment: String? = null): Request {
         val extra = fragment?.let { "#$it" } ?: ""
-        return POST("$apiUrl/api/query$extra", headers, this)
+        return POST("$baseUrl/api/query$extra", headers, this)
     }
     private fun Response.parse() = parseAs<ResponseDto>().getData()
 

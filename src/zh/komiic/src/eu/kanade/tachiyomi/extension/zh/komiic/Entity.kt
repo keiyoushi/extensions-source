@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.komiic
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 
@@ -47,7 +48,7 @@ class MangaDto(
         url = this@MangaDto.url
         title = this@MangaDto.title
         thumbnail_url = this@MangaDto.imageUrl
-        author = this@MangaDto.authors.joinToString { it.name }
+        author = this@MangaDto.authors.joinToString(" · ") { it.name }
         genre = this@MangaDto.categories.joinToString { it.name }
         description = this@MangaDto.description
         status = when (this@MangaDto.status) {
@@ -68,15 +69,14 @@ class ChapterDto(
     private val dateCreated: String,
 ) {
     fun toSChapter(mangaUrl: String, dateFormat: SimpleDateFormat) = SChapter.create().apply {
-        val (suffix, typeName) = when (val type = this@ChapterDto.type) {
-            "chapter" -> Pair("話", "連載")
-            "book" -> Pair("卷", "單行本")
-            else -> throw Exception("未知章節類型：$type")
-        }
         url = "$mangaUrl/chapter/${this@ChapterDto.id}"
-        name = "${this@ChapterDto.serial}$suffix（${this@ChapterDto.size}P）"
-        scanlator = typeName
-        date_upload = dateFormat.parse(this@ChapterDto.dateCreated)!!.time
+        name = when (this@ChapterDto.type) {
+            "chapter" -> "第 ${this@ChapterDto.serial} 話"
+            "book" -> "第 ${this@ChapterDto.serial} 卷"
+            else -> this@ChapterDto.serial
+        }
+        scanlator = "${this@ChapterDto.size}P"
+        date_upload = dateFormat.tryParse(this@ChapterDto.dateCreated)
         chapter_number = this@ChapterDto.serial.toFloatOrNull() ?: -1f
     }
 }
