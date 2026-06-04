@@ -23,7 +23,8 @@ class PhiliaScans :
     HttpSource(),
     ConfigurableSource {
     override val name = "Philia Scans"
-    override val baseUrl = "https://philiascans.org"
+    private val domain = "philiascans.org"
+    override val baseUrl = "https://$domain"
     override val lang = "en"
     override val supportsLatest = true
     override val versionId = 5
@@ -121,7 +122,7 @@ class PhiliaScans :
         val drmResponse = client.newCall(GET("$apiUrl/chapters/${result.chapter.id}/get-drm?session=${openResponse.sessionId}", readerHeaders)).execute().parseAs<DrmResponse>()
 
         return result.chapter.pages.sortedBy { it.position }.mapIndexed { i, page ->
-            val imageUrl = if (page.url.startsWith(baseUrl)) page.url else "$baseUrl/${page.url}"
+            val imageUrl = if (page.url.startsWith(baseUrl) || page.url.startsWith("https://media.$domain")) page.url else "$baseUrl/${page.url}"
             Page(i, imageUrl = "$imageUrl#$isScrambled;${page.mime};${pageKeyResponse.chapterKeyB64};${pageKeyResponse.gridSize};${openResponse.payloadA};${drmResponse.payloadB};$i")
         }
     }
