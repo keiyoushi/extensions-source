@@ -268,7 +268,7 @@ class Zenko :
             entryValues = tags.map { it.second }.toTypedArray()
             summary = tags.filter { it.second in hiddenCategories() }
                 .joinToString { it.first }
-                .ifEmpty { SITE_AGE_PREF_ALL }
+                .ifEmpty { SITE_AGE_PREF_ALL } + SITE_PREF_EXPLANATION
             dialogTitle = SITE_CATEGORIES_PREF_DIALOG
             setDefaultValue(setOf(SITE_CATEGORIES_DEFAULT))
 
@@ -277,7 +277,7 @@ class Zenko :
                 val selected = values as Set<String>
                 this.summary = tags.filter { it.second in selected }
                     .joinToString { it.first }
-                    .ifEmpty { SITE_AGE_PREF_ALL }
+                    .ifEmpty { SITE_AGE_PREF_ALL } + SITE_PREF_EXPLANATION
                 true
             }
         }.let(screen::addPreference)
@@ -318,12 +318,13 @@ class Zenko :
         private const val LANGUAGE_PREF_TITLE = "Вибір мови на обкладинці"
         private const val SITE_AGE_PREF = "site_age_categories"
         private const val SITE_AGE_PREF_TITLE = "Вікові обмеження"
-        private const val SITE_AGE_PREF_DIALOG = "Контент з обраними обмеженнями *буде* відображатися"
+        private const val SITE_AGE_PREF_DIALOG = "Контент з обраними віковими обмеженнями буде відображатися"
         private const val SITE_AGE_PREF_ALL = "Всі категорії (без обмежень)"
         private const val SITE_TOAST_WARNING = "Якщо мова обкладинки не змінилася, очистіть базу даних у програмі (Налаштування -> Додатково -> Очистити базу даних)"
         private const val SITE_CATEGORIES_PREF = "site_hidden_categories"
         private const val SITE_CATEGORIES_PREF_TITLE = "Приховані категорії"
         private const val SITE_CATEGORIES_PREF_DIALOG = "Оберіть категорії які не будуть відображатися"
         private const val SITE_CATEGORIES_DEFAULT = "RANOBE"
+        private const val SITE_PREF_EXPLANATION = "\n\nⓘ Усі налаштування приховування та відображення контенту застосовуються до пошуку за назвою, \"Популярне\" та \"Новинки\".\nПошук без обмежень можливий у \"Фільтри\""
     }
 }
