@@ -13,7 +13,9 @@ import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -162,9 +164,21 @@ class YomuComics : HttpSource() {
     // Utils
 
     private fun parseLibraryResponse(response: Response): MangasPage {
-        val result = response.parseAs<LibraryResponseDto>()
-        val mangas = result.mangas.map(LibraryMangaDto::toSManga)
-        val hasNextPage = result.pagination.page < result.pagination.totalPages
+        val resultString = response.body.string()
+        val pagination = resultString.parseAs<LibraryResponseDto>().pagination
+
+        // mangas field name changes frequently
+        val mangasList = resultString
+            .parseAs<JsonElement>()
+            .jsonObject.values
+            .firstNotNullOfOrNull { v ->
+                (v as? JsonArray)?.runCatching {
+                    map { it.parseAs<LibraryMangaDto>() }
+                }?.getOrNull()
+            } ?: emptyList()
+
+        val mangas = mangasList.map(LibraryMangaDto::toSManga)
+        val hasNextPage = pagination.page < pagination.totalPages
         return MangasPage(mangas, hasNextPage)
     }
 
