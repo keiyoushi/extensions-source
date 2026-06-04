@@ -3,7 +3,7 @@ ext {
     extClass = '.ReYume'
     themePkg = 'zeistmanga'
     baseUrl = 'https://www.re-yume.my.id'
-    overrideVersionCode = 27
+    overrideVersionCode = 28
     isNsfw = false
 }
 
