@@ -62,6 +62,8 @@ class Mangadotnet :
     override val supportsLatest = true
 
     override val client = network.cloudflareClient
+
+    // ============================== Setup ===============================
     private val preferences = getPreferences {
         val oldChapterKey = "pref_fetch_volume"
         if (contains(oldChapterKey)) {
@@ -83,6 +85,33 @@ class Mangadotnet :
                 }
             }
         }
+
+        if (all[BROWSE_TYPE_PREF] is String) {
+            val value = all[BROWSE_TYPE_PREF] as String
+            if (value.isNotEmpty()) {
+                edit().putStringSet(BROWSE_TYPE_PREF, setOf("JP", "KR", "CN", "ONESHOT") - value).apply()
+            } else {
+                edit().remove(BROWSE_TYPE_PREF).apply()
+            }
+        }
+
+        val demographics = setOf("Josei", "Seinen", "Shoujo", "Shounen")
+        val normalExcluded = getStringSet(EXCLUDE_GENRE_PREF, emptySet()) ?: emptySet()
+        val adultExcluded = getStringSet(EXCLUDE_GENRE_ADULT_PREF, emptySet()) ?: emptySet()
+        val migratedDemos = (normalExcluded + adultExcluded).intersect(demographics)
+
+        if (migratedDemos.isNotEmpty()) {
+            val existingDemos = getStringSet(EXCLUDE_DEMOGRAPHIC_PREF, emptySet()) ?: emptySet()
+            edit()
+                .putStringSet(EXCLUDE_DEMOGRAPHIC_PREF, existingDemos + migratedDemos)
+                .putStringSet(EXCLUDE_GENRE_PREF, normalExcluded - demographics)
+                .putStringSet(EXCLUDE_GENRE_ADULT_PREF, adultExcluded - demographics)
+                .apply()
+        }
+
+        if (getString(POPULAR_MODE_PREF, null) == "trending") {
+            edit().putString(POPULAR_MODE_PREF, "most-tracked").apply()
+        }
     }
 
     private val officialPriorityPatterns = listOf(
@@ -94,6 +123,8 @@ class Mangadotnet :
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
+    private val demographicNames = setOf("Josei", "Seinen", "Shoujo", "Shounen")
+
     private fun HttpUrl.Builder.addAdultParam(): HttpUrl.Builder {
         when (adultModePref()) {
             "none" -> addQueryParameter("adult", "0")
@@ -103,6 +134,7 @@ class Mangadotnet :
         return this
     }
 
+    // ============================== Popular ==============================
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/view-all/${popularModePref()}.data".toHttpUrl().newBuilder().apply {
             addAdultParam()
@@ -112,8 +144,13 @@ class Mangadotnet :
             excludedGenresPref().forEach { genre ->
                 addQueryParameter("genre", "-$genre")
             }
+            excludedDemographicsPref().forEach { demo ->
+                addQueryParameter("genre", "-$demo")
+            }
             addQueryParameter("_routes", "pages/ViewAllPage")
-            browseTypePref()?.also { addQueryParameter("origin", it) }
+            includedTypes().forEach { origin ->
+                addQueryParameter("origin", origin)
+            }
             browseStatusPref()?.also { addQueryParameter("status", it) }
         }.build()
 
@@ -130,6 +167,7 @@ class Mangadotnet :
         )
     }
 
+    // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$baseUrl/view-all/${latestModePref()}.data".toHttpUrl().newBuilder().apply {
             addAdultParam()
@@ -139,8 +177,13 @@ class Mangadotnet :
             excludedGenresPref().forEach { genre ->
                 addQueryParameter("genre", "-$genre")
             }
+            excludedDemographicsPref().forEach { demo ->
+                addQueryParameter("genre", "-$demo")
+            }
             addQueryParameter("_routes", "pages/ViewAllPage")
-            browseTypePref()?.also { addQueryParameter("origin", it) }
+            includedTypes().forEach { origin ->
+                addQueryParameter("origin", origin)
+            }
             browseStatusPref()?.also { addQueryParameter("status", it) }
         }.build()
 
@@ -149,6 +192,7 @@ class Mangadotnet :
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
+    // =============================== Search ===============================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("\u200B\u200B")) {
             val name = query.removePrefix("\u200B\u200B")
@@ -224,8 +268,19 @@ class Mangadotnet :
                         }
                     }
                     is TypeFilter -> {
-                        filter.checked.forEach { origin ->
-                            addQueryParameter("origin", origin)
+                        val checked = filter.checked
+                        if (checked.isNotEmpty() && checked.toSet() != allOrigins) {
+                            checked.forEach { origin ->
+                                addQueryParameter("origin", origin)
+                            }
+                        }
+                    }
+                    is DemographicFilter -> {
+                        filter.included.forEach { demo ->
+                            addQueryParameter("genre", demo)
+                        }
+                        filter.excluded.forEach { demo ->
+                            addQueryParameter("genre", "-$demo")
                         }
                     }
                     is GenreFilter -> {
@@ -260,6 +315,7 @@ class Mangadotnet :
             SortFilter(),
             StatusFilter(),
             TypeFilter(),
+            DemographicFilter(excludedDemographicsPref()),
             AuthorFilter(),
             ArtistFilter(),
         )
@@ -267,10 +323,13 @@ class Mangadotnet :
         val genres = getGenreLists()
         val genreList = if (adultModePref().let { it == "1" || it == "both" }) genres.adult else genres.normal
         if (genreList != null) {
-            filters.add(GenreFilter(genreList, excludedGenresPref()))
+            val filteredGenres = genreList
+                .filter { it !in demographicNames }
+                .sortedBy { it.lowercase(Locale.ROOT) }
+            filters.add(4, GenreFilter(filteredGenres, excludedGenresPref()))
         } else {
-            filters.add(Filter.Separator())
-            filters.add(Filter.Header("Press 'reset' to load genres"))
+            filters.add(4, Filter.Separator())
+            filters.add(5, Filter.Header("Press 'reset' to load genres"))
         }
 
         return FilterList(filters)
@@ -283,6 +342,7 @@ class Mangadotnet :
         return MangasPage(data.mangaList.map { it.toSManga(baseUrl) }, data.hasNextPage())
     }
 
+    // ============================== Details ==============================
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/manga/${manga.url}.data?_routes=pages/MangaDetailPage", headers)
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
@@ -306,6 +366,7 @@ class Mangadotnet :
         }.map { it.toSManga(baseUrl) }
     }
 
+    // ============================= Chapters ==============================
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = runBlocking {
         coroutineScope {
             val mode = chapterModePref()
@@ -425,6 +486,7 @@ class Mangadotnet :
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
+    // =============================== Pages ===============================
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterUrl = chapter.url.parseAs<ChapterUrl>()
 
@@ -494,13 +556,16 @@ class Mangadotnet :
             )
     }
 
+    // =========================== Preferences =============================
     private fun adultModePref(): String = preferences.getString(NSFW_MODE, "none")!!
 
     private fun chapterModePref() = preferences.getString(CHAPTER_MODE, "chapters")!!
 
-    private fun popularModePref() = preferences.getString(POPULAR_MODE_PREF, "trending")!!
+    private fun popularModePref() = preferences.getString(POPULAR_MODE_PREF, "most-tracked")!!
 
     private fun latestModePref() = preferences.getString(LATEST_MODE_PREF, "latest-updates")!!
+
+    private fun excludedDemographicsPref(): Set<String> = preferences.getStringSet(EXCLUDE_DEMOGRAPHIC_PREF, emptySet())!!
 
     private fun excludedGenresPref(): Set<String> {
         val mode = adultModePref()
@@ -511,6 +576,19 @@ class Mangadotnet :
         }
     }
 
+    private val allOrigins = setOf("JP", "KR", "CN", "ONESHOT")
+
+    private fun excludedTypesPref(): Set<String> = preferences.getStringSet(BROWSE_TYPE_PREF, emptySet())!!
+
+    private fun includedTypes(): Set<String> {
+        val included = allOrigins - excludedTypesPref()
+        return if (included.isEmpty() || included == allOrigins) emptySet() else included
+    }
+
+    private fun browseStatusPref(): String? = preferences.getString(BROWSE_STATUS_PREF, "")
+        ?.takeIf { it != "" }
+
+    // =========================== Genre Cache =============================
     private val genreCacheNormalFile: File by lazy {
         Injekt.get<Application>().cacheDir.resolve("source_$id/genres_normal.json")
     }
@@ -518,12 +596,6 @@ class Mangadotnet :
     private val genreCacheAdultFile: File by lazy {
         Injekt.get<Application>().cacheDir.resolve("source_$id/genres_adult.json")
     }
-
-    private fun browseTypePref(): String? = preferences.getString(BROWSE_TYPE_PREF, "")
-        ?.takeIf { it != "" }
-
-    private fun browseStatusPref(): String? = preferences.getString(BROWSE_STATUS_PREF, "")
-        ?.takeIf { it != "" }
 
     private val genresLock = ReentrantLock()
 
@@ -562,9 +634,13 @@ class Mangadotnet :
         }
     }
 
+    // ============================= Settings ==============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val mode = adultModePref()
         val genres = getGenreLists()
+
+        val excludedNormal = preferences.getStringSet(EXCLUDE_GENRE_PREF, emptySet())!!
+        val excludedAdult = preferences.getStringSet(EXCLUDE_GENRE_ADULT_PREF, emptySet())!!
 
         val nsfwPref = ListPreference(screen.context).apply {
             key = NSFW_MODE
@@ -579,9 +655,9 @@ class Mangadotnet :
         val popularModePref = ListPreference(screen.context).apply {
             key = POPULAR_MODE_PREF
             title = "Popular Mode"
-            entries = arrayOf("Trending", "Most Tracked", "Top Rated")
-            entryValues = arrayOf("trending", "most-tracked", "top-rated")
-            setDefaultValue("trending")
+            entries = arrayOf("Most Tracked", "Top Rated")
+            entryValues = arrayOf("most-tracked", "top-rated")
+            setDefaultValue("most-tracked")
             summary = "%s"
         }
         screen.addPreference(popularModePref)
@@ -596,13 +672,13 @@ class Mangadotnet :
         }
         screen.addPreference(latestModePref)
 
-        val browseTypePref = ListPreference(screen.context).apply {
+        val browseTypePref = MultiSelectListPreference(screen.context).apply {
             key = BROWSE_TYPE_PREF
-            title = "Type Filter"
-            entries = arrayOf("All Types", "Manga", "Manhwa", "Manhua", "One Shot")
-            entryValues = arrayOf("", "JP", "KR", "CN", "ONESHOT")
-            setDefaultValue("")
-            summary = "Applies to Popular & Latest"
+            title = "Type Blacklist"
+            entries = arrayOf("Manga", "Manhwa", "Manhua", "One Shot")
+            entryValues = arrayOf("JP", "KR", "CN", "ONESHOT")
+            setDefaultValue(emptySet<String>())
+            summary = "Exclude types from Popular & Latest."
         }
         screen.addPreference(browseTypePref)
 
@@ -648,8 +724,20 @@ class Mangadotnet :
             true
         }
 
-        val excludedNormal = preferences.getStringSet(EXCLUDE_GENRE_PREF, emptySet())!!
-        val normalEntries = genres.normal ?: excludedNormal.toList()
+        val demographicPref = MultiSelectListPreference(screen.context).apply {
+            key = EXCLUDE_DEMOGRAPHIC_PREF
+            title = "Demographic Blacklist"
+            summary = "Exclude demographics when browsing."
+            entries = arrayOf("Josei", "Seinen", "Shoujo", "Shounen")
+            entryValues = arrayOf("Josei", "Seinen", "Shoujo", "Shounen")
+            setDefaultValue(emptySet<String>())
+        }
+        screen.addPreference(demographicPref)
+
+        val normalEntries = genres.normal
+            ?.filter { it !in demographicNames }
+            ?.sortedBy { it.lowercase(Locale.ROOT) }
+            ?: excludedNormal.filter { it !in demographicNames }.toList().sortedBy { it.lowercase(Locale.ROOT) }
         val normalGenrePref = MultiSelectListPreference(screen.context).apply {
             key = EXCLUDE_GENRE_PREF
             title = "Genre Blacklist"
@@ -661,8 +749,10 @@ class Mangadotnet :
         }
         screen.addPreference(normalGenrePref)
 
-        val excludedAdult = preferences.getStringSet(EXCLUDE_GENRE_ADULT_PREF, emptySet())!!
-        val adultEntries = genres.adult ?: excludedAdult.toList()
+        val adultEntries = genres.adult
+            ?.filter { it !in demographicNames }
+            ?.sortedBy { it.lowercase(Locale.ROOT) }
+            ?: excludedAdult.filter { it !in demographicNames }.toList().sortedBy { it.lowercase(Locale.ROOT) }
         val adultGenrePref = MultiSelectListPreference(screen.context).apply {
             key = EXCLUDE_GENRE_ADULT_PREF
             title = "Genre Blacklist (Adult Mode)"
@@ -682,6 +772,7 @@ class Mangadotnet :
         }
     }
 
+    // ========================= RSC Decoder ===============================
     private inline fun <reified T> Response.decodeRscAs(): T {
         val flat = parseAs<JsonArray>()
         val decoded = decodeRsc(flat)
@@ -717,6 +808,7 @@ class Mangadotnet :
         return resolve(0)
     }
 
+    // ========================== Unsupported ==============================
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
@@ -731,3 +823,4 @@ private const val BROWSE_TYPE_PREF = "pref_browse_type"
 private const val BROWSE_STATUS_PREF = "pref_browse_status"
 private const val DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
 private const val PREFERRED_SCANLATORS = "pref_preferred_scanlators"
+private const val EXCLUDE_DEMOGRAPHIC_PREF = "pref_exclude_demographic"
