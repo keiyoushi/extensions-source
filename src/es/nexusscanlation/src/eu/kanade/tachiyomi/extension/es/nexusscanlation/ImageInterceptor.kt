@@ -3,10 +3,12 @@ package eu.kanade.tachiyomi.extension.es.nexusscanlation
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Rect
 import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayOutputStream
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 
 class ImageInterceptor : Interceptor {
 
@@ -31,16 +33,9 @@ class ImageInterceptor : Interceptor {
                 )
             }
 
-        val body = response.body ?: return response
-        val contentType = body.contentType()
+        val body = response.body
 
-        val imageBytes = body.bytes()
-
-        val bitmap = BitmapFactory.decodeByteArray(
-            imageBytes,
-            0,
-            imageBytes.size,
-        ) ?: return response
+        val bitmap = body.byteStream().use { BitmapFactory.decodeStream(it) } ?: return response
 
         val decoded = descramble(
             bitmap = bitmap,
@@ -48,17 +43,19 @@ class ImageInterceptor : Interceptor {
             rows = rows,
             seed = seed,
         )
+        bitmap.recycle()
 
-        val output = ByteArrayOutputStream()
+        val buffer = Buffer()
 
         decoded.compress(
             Bitmap.CompressFormat.PNG,
             90,
-            output,
+            buffer.outputStream(),
         )
+        decoded.recycle()
 
         return response.newBuilder()
-            .body(output.toByteArray().toResponseBody(contentType))
+            .body(buffer.asResponseBody("image/png".toMediaType()))
             .build()
     }
 
@@ -86,31 +83,38 @@ class ImageInterceptor : Interceptor {
 
         val canvas = Canvas(result)
 
+        val srcRect = Rect()
+        val dstRect = Rect()
+
         for (srcIndex in 0 until count) {
             val srcX = (srcIndex % cols) * tileWidth
             val srcY = (srcIndex / cols) * tileHeight
-
-            val tile = Bitmap.createBitmap(
-                bitmap,
-                srcX,
-                srcY,
-                tileWidth,
-                tileHeight,
-            )
 
             val dstIndex = permutation[srcIndex]
 
             val dstX = (dstIndex % cols) * tileWidth
             val dstY = (dstIndex / cols) * tileHeight
 
-            canvas.drawBitmap(
-                tile,
-                dstX.toFloat(),
-                dstY.toFloat(),
-                null,
+            srcRect.set(
+                srcX,
+                srcY,
+                srcX + tileWidth,
+                srcY + tileHeight,
             )
 
-            tile.recycle()
+            dstRect.set(
+                dstX,
+                dstY,
+                dstX + tileWidth,
+                dstY + tileHeight,
+            )
+
+            canvas.drawBitmap(
+                bitmap,
+                srcRect,
+                dstRect,
+                null,
+            )
         }
 
         return result
