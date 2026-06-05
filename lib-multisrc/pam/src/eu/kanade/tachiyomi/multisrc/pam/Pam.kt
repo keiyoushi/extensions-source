@@ -39,6 +39,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
@@ -65,7 +66,7 @@ abstract class Pam(
             }
         }
         .addInterceptor(::imageInterceptor)
-        .rateLimit(1)
+        .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 
     private val thumbnailClient = network.client
