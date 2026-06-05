@@ -55,8 +55,8 @@ class KamiComic : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotBlank()) {
-            val url = "$baseUrl/wp-json/initlise/v1/search".toHttpUrl().newBuilder()
-                .addQueryParameter("term", query)
+            val url = (if (page == 1) baseUrl else "$baseUrl/page/$page/").toHttpUrl().newBuilder()
+                .addQueryParameter("s", query)
                 .build()
             return GET(url, headers)
         }
@@ -76,47 +76,40 @@ class KamiComic : HttpSource() {
         return latestUpdatesRequest(page)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val url = response.request.url.toString()
-
-        if (url.contains("/wp-json/initlise/v1/search")) {
-            val results = response.parseAs<List<SearchResult>>()
-
-            val mangaList = results
-                .filter { it.url != null }
-                .map { result ->
-                    SManga.create().apply {
-                        setUrlWithoutDomain(result.url!!.removePrefix(baseUrl))
-                        title = result.title!!.replace(MARK_REGEX, "$1")
-                        thumbnail_url = result.thumb
-                            ?.replace(THUMB_SIZE_REGEX, "")
-                    }
-                }
-
-            return MangasPage(mangaList, false)
-        }
-
-        return parseMangaListPage(response.asJsoup())
-    }
+    override fun searchMangaParse(response: Response): MangasPage = parseMangaListPage(response.asJsoup())
 
     override fun getFilterList(): FilterList = getFilters()
 
     // ============================== Parsing ===============================
 
     private fun parseMangaListPage(document: Document): MangasPage {
-        val mangaList = document.select("a.uk-link-heading[href*=/truyen/]").map { link ->
+        val mangaList = document.select("a.uk-link-heading[href*=/truyen/]").mapNotNull { link ->
+            val mangaUrl = link.absUrl("href")
+            if (mangaUrl.isNovelUrl()) return@mapNotNull null
+
             val panel = link.closest(".uk-panel") ?: link.parent()!!
             SManga.create().apply {
-                setUrlWithoutDomain(link.absUrl("href"))
+                setUrlWithoutDomain(mangaUrl)
                 title = link.text()
                 thumbnail_url = panel.selectFirst("img")?.absUrl("src")
+                    ?.removeThumbnailSizeSuffix()
             }
         }
 
-        val hasNextPage = document.selectFirst("li#next-link:not(.uk-disabled)") != null
+        val hasNextPage = document.select("ul.uk-pagination a[aria-label='Trang sau'][href]")
+            .any { link -> link.attr("href") != "#" && link.parent()?.hasClass("uk-disabled") != true }
 
         return MangasPage(mangaList, hasNextPage)
     }
+
+    private fun String.isNovelUrl(): Boolean {
+        val path = removePrefix(baseUrl)
+            .substringBefore("?")
+            .substringBefore("#")
+        return path.startsWith("/truyen/novel", ignoreCase = true)
+    }
+
+    private fun String.removeThumbnailSizeSuffix(): String = replace(THUMB_SIZE_REGEX) { it.groupValues[1] }
 
     // =============================== Details ==============================
 
@@ -252,10 +245,9 @@ class KamiComic : HttpSource() {
 
         private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
 
-        private val MARK_REGEX = Regex("""<mark>(.*?)</mark>""")
         private val NUMBER_REGEX = Regex("""\d+""")
         private val PAGE_NUMBER_REGEX = Regex("""/page/(\d+)/""")
-        private val THUMB_SIZE_REGEX = Regex("""-\d+x\d+""")
+        private val THUMB_SIZE_REGEX = Regex("""-150x150(\.\w+)$""")
         private val CHAPTER_NAME_REGEX = Regex("""Chương \d+.*""")
     }
 }
