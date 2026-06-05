@@ -14,13 +14,10 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 private fun buildQuery(query: String): String {
     val allCategory = categories.takeIf { it.isEmpty() }?.let { "allCategory { id name }" } ?: ""
-    return query.trimIndent()
-        .replace("#{body}", COMIC_BODY.trimIndent())
-        .replace("#{category}", allCategory.trimIndent())
-        .replace("%", "$")
+    return query.replace("#{category}", allCategory).trimIndent()
 }
 
-private const val COMIC_BODY =
+private val COMIC_BODY =
     """
     {
       id
@@ -38,7 +35,7 @@ private const val COMIC_BODY =
       }
       warnings
     }
-    """
+    """.trimIndent()
 
 private fun buildRequestBody(query: String, variables: JsonObject): RequestBody {
     val body = buildJsonObject {
@@ -60,9 +57,9 @@ fun parseListing(data: DataDto): MangasPage {
 fun commonQuery(variables: ListingVariables): RequestBody {
     val operation = if (variables.pagination.orderBy == OrderBy.DATE_UPDATED) "recentUpdate" else "hotComics"
     val query = buildQuery(
-        """
-        query commonQuery(%pagination: Pagination!) {
-          comics: $operation(pagination: %pagination) #{body}
+        $$"""
+        query commonQuery($pagination: Pagination!) {
+          comics: $$operation(pagination: $pagination) $$COMIC_BODY
           #{category}
         }
         """,
@@ -72,9 +69,9 @@ fun commonQuery(variables: ListingVariables): RequestBody {
 
 fun listingQuery(variables: ListingVariables): RequestBody {
     val query = buildQuery(
-        """
-        query comicByCategories(%categoryId: [ID!]!, %pagination: Pagination!) {
-          comics: comicByCategories(categoryId: %categoryId, pagination: %pagination) #{body}
+        $$"""
+        query comicByCategories($categoryId: [ID!]!, $pagination: Pagination!) {
+          comics: comicByCategories(categoryId: $categoryId, pagination: $pagination) $$COMIC_BODY
           #{category}
         }
         """,
@@ -84,10 +81,10 @@ fun listingQuery(variables: ListingVariables): RequestBody {
 
 fun searchQuery(keyword: String): RequestBody {
     val query = buildQuery(
-        """
-        query searchComicAndAuthorQuery(%keyword: String!) {
-          searchComicsAndAuthors(keyword: %keyword) {
-            comics #{body}
+        $$"""
+        query searchComicAndAuthorQuery($keyword: String!) {
+          searchComicsAndAuthors(keyword: $keyword) {
+            comics $$COMIC_BODY
           }
           #{category}
         }
@@ -101,9 +98,9 @@ fun searchQuery(keyword: String): RequestBody {
 
 fun idsQuery(id: String): RequestBody {
     val query = buildQuery(
-        """
-        query comicByIds(%comicIds: [ID]!) {
-          comics: comicByIds(comicIds: %comicIds) #{body}
+        $$"""
+        query comicByIds($comicIds: [ID]!) {
+          comics: comicByIds(comicIds: $comicIds) $$COMIC_BODY
         }
         """,
     )
@@ -115,9 +112,9 @@ fun idsQuery(id: String): RequestBody {
 
 fun mangaDetailQuery(id: String): RequestBody {
     val query = buildQuery(
-        """
-        query comicById(%comicId: ID!) {
-          comicById(comicId: %comicId) #{body}
+        $$"""
+        query comicById($comicId: ID!) {
+          comicById(comicId: $comicId) $$COMIC_BODY
         }
         """,
     )
@@ -129,9 +126,9 @@ fun mangaDetailQuery(id: String): RequestBody {
 
 fun chapterListQuery(id: String): RequestBody {
     val query = buildQuery(
-        """
-        query chapterByComicId(%comicId: ID!) {
-          chaptersByComicId(comicId: %comicId) {
+        $$"""
+        query chapterByComicId($comicId: ID!) {
+          chaptersByComicId(comicId: $comicId) {
             id
             serial
             type
@@ -149,9 +146,9 @@ fun chapterListQuery(id: String): RequestBody {
 
 fun pageListQuery(chapterId: String): RequestBody {
     val query = buildQuery(
-        """
-        query imagesByChapterId(%chapterId: ID!) {
-          imagesByChapterId(chapterId: %chapterId) {
+        $$"""
+        query imagesByChapterId($chapterId: ID!) {
+          imagesByChapterId(chapterId: $chapterId) {
             kid
           }
         }
