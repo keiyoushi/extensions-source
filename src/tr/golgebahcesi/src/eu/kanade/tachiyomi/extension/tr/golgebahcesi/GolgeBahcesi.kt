@@ -1,31 +1,278 @@
 package eu.kanade.tachiyomi.extension.tr.golgebahcesi
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import org.jsoup.nodes.Document
+import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
+import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
-class GolgeBahcesi :
-    MangaThemesia(
-        "Gölge Bahçesi",
-        "https://golgebahcesi.com",
-        "tr",
-        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
-    ) {
-    private var captchaUrl: String? = null
+class GolgeBahcesi : HttpSource() {
 
-    override fun getMangaUrl(manga: SManga): String = captchaUrl?.also { captchaUrl = null }
-        ?: super.getMangaUrl(manga)
+    override val name = "Gölge Bahçesi"
+    override val baseUrl = "https://golgebahcesi.com"
+    private val apiBaseUrl = "https://api.golgebahcesi.com/api"
+    override val lang = "tr"
+    override val supportsLatest = true
 
-    override fun pageListParse(document: Document): List<Page> {
-        if (document.selectFirst("#readerarea form, #readerarea input[value=Doğrula]") != null) {
-            captchaUrl = document.selectFirst("#readerarea form")
-                ?.attr("abs:action")
-                ?: "$baseUrl/kontrol/"
-            throw Exception("WebView'da captcha çözün.")
-        }
-        return super.pageListParse(document)
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("Origin", baseUrl)
+
+    override fun popularMangaRequest(page: Int): Request = GET("$apiBaseUrl/series?page=$page&limit=24&sort=popular", headers)
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val result = response.parseAs<SeriesListResponse>()
+        val mangas = result.data.map { it.toSManga() }
+        val hasNextPage = result.pagination?.let { it.currentPage < it.totalPages } ?: false
+        return MangasPage(mangas, hasNextPage)
     }
+
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiBaseUrl/series?page=$page&limit=24&sort=updatedAt", headers)
+
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val sort = filters.firstInstanceOrNull<SortFilter>()?.toUriPart() ?: "default"
+        val status = filters.firstInstanceOrNull<StatusFilter>()?.toUriPart() ?: ""
+        val type = filters.firstInstanceOrNull<TypeFilter>()?.toUriPart() ?: ""
+        val genre = filters.firstInstanceOrNull<GenreFilter>()?.toUriPart() ?: ""
+        val minChapters = filters.firstInstanceOrNull<MinChaptersFilter>()?.state?.toString()?.takeIf { it.isNotBlank() } ?: ""
+
+        val url = "$apiBaseUrl/series?page=$page&limit=24&sort=$sort".toHttpUrl().newBuilder()
+        if (query.isNotBlank()) url.addQueryParameter("search", query)
+        if (status.isNotBlank()) url.addQueryParameter("status", status)
+        if (type.isNotBlank()) url.addQueryParameter("type", type)
+        if (genre.isNotBlank()) url.addQueryParameter("genre", genre)
+        if (minChapters.isNotBlank()) url.addQueryParameter("minChapters", minChapters)
+
+        return GET(url.build(), headers)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val result = response.parseAs<SeriesListResponse>()
+        val mangas = result.data.map { it.toSManga() }
+        val hasNextPage = result.pagination?.let { it.currentPage < it.totalPages } ?: false
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
+
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiBaseUrl/series/${manga.url}", headers)
+
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<SeriesDto>().toSManga()
+
+    override fun chapterListRequest(manga: SManga): Request = GET("$apiBaseUrl/series/${manga.url}/chapters", headers)
+
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<List<ChapterDto>>().map { chapter ->
+        SChapter.create().apply {
+            url = "${chapter.id}/${chapter.seriesSlug}/${chapter.slug}"
+            name = chapter.title
+            chapter_number = chapter.number
+            date_upload = parseDate(chapter.releaseDate ?: chapter.createdAt)
+        }
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val parts = chapter.url.split("/")
+        val seriesSlug = parts.getOrNull(1) ?: ""
+        val chapterSlug = parts.getOrNull(2) ?: ""
+        return "$baseUrl/manga/$seriesSlug/bolum/$chapterSlug"
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterId = chapter.url.substringBefore("/")
+        return GET("$apiBaseUrl/chapters/$chapterId", headers)
+    }
+
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<ChapterDto>().pages.map { page ->
+        Page(page.index, imageUrl = page.url)
+    }
+
+    override fun getFilterList() = FilterList(
+        SortFilter(),
+        StatusFilter(),
+        TypeFilter(),
+        GenreFilter(),
+        MinChaptersFilter(),
+    )
+
+    private class SortFilter :
+        Filter.Select<String>(
+            "Sıralama",
+            arrayOf("Varsayılan", "En Yeni", "Popüler", "Puan", "A-Z", "En Eski"),
+        ) {
+        fun toUriPart() = arrayOf("default", "updatedAt", "popular", "rating", "name", "createdAt")[state]
+    }
+
+    private class StatusFilter :
+        Filter.Select<String>(
+            "Durum",
+            arrayOf("Tümü", "Devam Ediyor", "Tamamlandı", "Ara Verildi", "Bırakıldı"),
+        ) {
+        fun toUriPart() = arrayOf("", "ONGOING", "COMPLETED", "HIATUS", "DROPPED")[state]
+    }
+
+    private class TypeFilter :
+        Filter.Select<String>(
+            "Format",
+            arrayOf("Tümü", "Manhwa", "Manhua", "Manga"),
+        ) {
+        fun toUriPart() = arrayOf("", "MANHWA", "MANHUA", "MANGA")[state]
+    }
+
+    private class GenreFilter :
+        Filter.Select<String>(
+            "Tür",
+            arrayOf(
+                "Tümü",
+                "Aksiyon",
+                "Fantastik",
+                "Harem",
+                "Komedi",
+                "Macera",
+                "Bilim Kurgu",
+                "Dövüş Sanatları",
+                "Shounen",
+                "Doğaüstü",
+                "Dram",
+                "Romantizm",
+                "Seinen",
+                "Sistem",
+                "Tarihsel",
+                "Aşırı Güçlü",
+                "İkinci Şans",
+                "İntikam",
+                "Murim",
+                "Yeniden Doğuş",
+                "Gizli Kimlik",
+                "Okul",
+                "Süper Güçler",
+                "Süper Kahramanlar",
+                "Okul Hayatı",
+                "Komplo",
+                "Gerilim",
+                "Karanlık Fantezi",
+                "Korku",
+                "Manhwa",
+                "Büyü",
+                "Genç",
+                "Modern",
+                "Gerileme",
+                "Yaşamdan Kesitler",
+                "Dahi Mc",
+                "Şiddet",
+                "Drama",
+                "Fantezi",
+                "Olgun",
+                "Psikolojik",
+                "Romantik",
+                "Fantazi",
+                "Canavar",
+                "Dedektif",
+                "Gizem",
+                "Kıyamet",
+                "Lise",
+                "Ecchi",
+                "Manga",
+                "İsekai",
+                "Reenkarnasyon",
+                "Supernatural",
+                "Dövüş",
+                "Trajedi",
+                "Oyun",
+                "Sanal Gerçeklik",
+                "makine",
+            ),
+        ) {
+        fun toUriPart() = arrayOf(
+            "",
+            "Aksiyon",
+            "Fantastik",
+            "Harem",
+            "Komedi",
+            "Macera",
+            "Bilim Kurgu",
+            "Dövüş Sanatları",
+            "Shounen",
+            "Doğaüstü",
+            "Dram",
+            "Romantizm",
+            "Seinen",
+            "Sistem",
+            "Tarihsel",
+            "Aşırı Güçlü",
+            "İkinci Şans",
+            "İntikam",
+            "Murim",
+            "Yeniden Doğuş",
+            "Gizli Kimlik",
+            "Okul",
+            "Süper Güçler",
+            "Süper Kahramanlar",
+            "Okul Hayatı",
+            "Komplo",
+            "Gerilim",
+            "Karanlık Fantezi",
+            "Korku",
+            "Manhwa",
+            "Büyü",
+            "Genç",
+            "Modern",
+            "Gerileme",
+            "Yaşamdan Kesitler",
+            "Dahi Mc",
+            "Şiddet",
+            "Drama",
+            "Fantezi",
+            "Olgun",
+            "Psikolojik",
+            "Romantik",
+            "Fantazi",
+            "Canavar",
+            "Dedektif",
+            "Gizem",
+            "Kıyamet",
+            "Lise",
+            "Ecchi",
+            "Manga",
+            "İsekai",
+            "Reenkarnasyon",
+            "Supernatural",
+            "Dövüş",
+            "Trajedi",
+            "Oyun",
+            "Sanal Gerçeklik",
+            "makine",
+        )[state]
+    }
+
+    private class MinChaptersFilter :
+        Filter.Text(
+            "Minimum Bölüm",
+            "",
+        )
+
+    private val dateFormat by lazy {
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+    }
+
+    private fun parseDate(dateStr: String?): Long = dateFormat.tryParse(dateStr)
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    override fun imageUrlRequest(page: Page): Request = throw UnsupportedOperationException()
 }
