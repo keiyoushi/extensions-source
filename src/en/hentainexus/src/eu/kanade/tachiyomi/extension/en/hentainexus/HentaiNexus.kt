@@ -34,7 +34,7 @@ class HentaiNexus : HttpSource() {
 
     override val baseUrl = "https://hentainexus.com"
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     // Images on this site go through the free Jetpack Photon CDN.
     override val client = network.client.newBuilder()
@@ -46,12 +46,7 @@ class HentaiNexus : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun popularMangaRequest(page: Int) = GET(
-        baseUrl + (if (page > 1) "/page/$page" else ""),
-        headers,
-    )
-
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun parseResponse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select(".container .column").map { element ->
             SManga.create().apply {
@@ -60,13 +55,25 @@ class HentaiNexus : HttpSource() {
                 thumbnail_url = element.selectFirst(".card-image img")?.absUrl("src")
             }
         }
-        val hasNextPage = document.selectFirst("a.pagination-next[href]") != null
+        val isPopularNow = response.request.url.encodedPath == POPULAR_NOW_PATH
+        val hasNextPage = isPopularNow || document.selectFirst("a.pagination-next[href]") != null
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = GET(
+        baseUrl + (if (page > 1) "/page/$page" else ""),
+        headers,
+    )
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = parseResponse(response)
+
+    override fun popularMangaRequest(page: Int): Request = if (page > 1) {
+        searchMangaRequest(page - 1, "sort:popular", getFilterList())
+    } else {
+        GET(baseUrl + POPULAR_NOW_PATH, headers)
+    }
+
+    override fun popularMangaParse(response: Response): MangasPage = parseResponse(response)
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
@@ -100,7 +107,7 @@ class HentaiNexus : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    override fun searchMangaParse(response: Response) = parseResponse(response)
 
     private val tagCountRegex = Regex("""\s*\([\d,]+\)$""")
 
@@ -196,5 +203,6 @@ class HentaiNexus : HttpSource() {
 
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
+        const val POPULAR_NOW_PATH = "/explore/hot"
     }
 }

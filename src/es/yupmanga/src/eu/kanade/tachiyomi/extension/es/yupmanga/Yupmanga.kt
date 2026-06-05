@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.es.yupmanga
 
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
+import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
@@ -32,7 +34,7 @@ class Yupmanga : HttpSource() {
 
     // Cached CSRF token and data-k value, populated by the token interceptor during normal browsing flow.
     private var csrfToken: String = ""
-    private var dataK: String = ""
+    private var kScript: String = ""
     private var dataV: String = ""
     private var anchorScript: String = ""
 
@@ -45,27 +47,11 @@ class Yupmanga : HttpSource() {
 
             TOKEN_REGEX.find(html)?.groupValues?.get(1)?.let { csrfToken = it }
             TOKEN_META_REGEX.find(html)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }?.let { csrfToken = it }
-            TOKEN_JS_REGEX.find(html)?.groupValues?.get(1)?.let { match ->
-                csrfToken = match.split(",").mapNotNull {
-                    val clean = it.trim()
-                    if (clean.startsWith("0x", ignoreCase = true)) {
-                        clean.substring(2).toIntOrNull(16)?.toChar()
-                    } else {
-                        clean.toIntOrNull()?.toChar()
-                    }
-                }.joinToString("")
-            }
-            DATAK_REGEX.find(html)?.groupValues?.get(1)?.let { dataK = it }
-            DATAV_REGEX.find(html)?.groupValues?.get(1)?.let { match ->
-                dataV = match.split(",").mapNotNull {
-                    val clean = it.trim()
-                    if (clean.startsWith("0x", ignoreCase = true)) {
-                        clean.substring(2).toIntOrNull(16)?.toChar()
-                    } else {
-                        clean.toIntOrNull()?.toChar()
-                    }
-                }.joinToString("")
-            }
+            csrfToken = TOKEN_JS_REGEX.decodeChars(html)
+
+            Jsoup.parse(html).selectFirst("script:containsData(dataset.k)")?.let { kScript = it.html() }
+
+            dataV = DATAV_REGEX.decodeChars(html)
             ANCHOR_SCRIPT_REGEX.find(html)?.groupValues?.get(1)?.let { anchorScript = it }
         }
         response
@@ -249,6 +235,21 @@ class Yupmanga : HttpSource() {
             throw Exception("Error fetching challenge")
         }
 
+        val dataK = QuickJs.create().use {
+            it.evaluate(
+                """
+            var mockElem = { dataset: {} };
+            var document = {
+                getElementById: function(id) {
+                    return mockElem;
+                }
+            };
+            $kScript
+            mockElem.dataset.k || "";
+                """.trimIndent(),
+            )
+        }
+
         // Broad mocking to avoid "cannot read property" crashes in QuickJs evaluation.
         val answer = QuickJs.create().use {
             it.evaluate(
@@ -283,6 +284,15 @@ class Yupmanga : HttpSource() {
                         setProperty: function(prop, val) {
                             cssVars[prop] = val;
                         }
+                    },
+                    shadowRoot: {
+                        querySelector: function(_) {
+                            return {
+                                dataset: {
+                                    k: "$dataK"
+                                }
+                            };
+                        }
                     }
                 };
                 var document = {
@@ -304,13 +314,14 @@ class Yupmanga : HttpSource() {
             )?.toString()
         } ?: throw Exception("Failed to solve challenge")
 
-        val chapterTokenUrl = "$baseUrl/ajax/get_reader_token.php".toHttpUrl().newBuilder()
-            .addQueryParameter("chapter", chapterId)
-            .addQueryParameter("challenge_id", challenge.challengeId)
-            .addQueryParameter("answer", answer)
+        val formBody = FormBody.Builder()
+            .add("chapter", chapterId)
+            .add("challenge_id", challenge.challengeId)
+            .add("answer", answer)
             .build()
+        val request = POST("$baseUrl/ajax/get_reader_token.php", apiHeaders, formBody)
 
-        val tokenDto = client.newCall(GET(chapterTokenUrl, apiHeaders)).execute().parseAs<TokenDto>()
+        val tokenDto = client.newCall(request).execute().parseAs<TokenDto>()
         if (!tokenDto.success || tokenDto.token.isNullOrEmpty()) {
             throw Exception("Información desactualizada. Refresque la lista de capítulos.")
         }
@@ -356,11 +367,19 @@ class Yupmanga : HttpSource() {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
+    private fun Regex.decodeChars(html: String): String = find(html)?.groupValues?.get(1)?.split(",")?.mapNotNull {
+        val clean = it.trim()
+        if (clean.startsWith("0x", ignoreCase = true)) {
+            clean.substring(2).toIntOrNull(16)?.toChar()
+        } else {
+            clean.toIntOrNull()?.toChar()
+        }
+    }?.joinToString("") ?: ""
+
     companion object {
         private val TOKEN_REGEX = """id=["']csrf_token["']\s+value=["']([^"']+)["']""".toRegex()
         private val TOKEN_META_REGEX = """name=["']csrf-token["'][^>]*?content=["']([^"']+)["']""".toRegex()
         private val TOKEN_JS_REGEX = """(?:_token|csrf-token).*?String\.fromCharCode\(([^)]+)\)""".toRegex()
-        private val DATAK_REGEX = """id=["']app-cfg["']\s+data-k=["']([^"']+)["']""".toRegex()
         private val DATAV_REGEX = """['"]data-v['"].*?String\.fromCharCode\(([^)]+)\)""".toRegex()
         private val ANCHOR_SCRIPT_REGEX = """<script>\s*(\(\s*function\(\)\s*\{\s*document\.querySelector\(':root'\)[\s\S]*?\}\s*\)\(\);?)\s*</script>""".toRegex()
     }

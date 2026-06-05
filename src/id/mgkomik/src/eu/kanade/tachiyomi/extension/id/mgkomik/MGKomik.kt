@@ -25,7 +25,6 @@ class MGKomik :
     override val mangaSubString = "komik"
 
     override fun headersBuilder() = super.headersBuilder().apply {
-        set("Sec-Fetch-Site", "same-origin")
         set("Upgrade-Insecure-Requests", "1")
         set("Referer", "$baseUrl/")
         set("Sec-Fetch-Site", "none")
@@ -40,7 +39,7 @@ class MGKomik :
 
             chain.proceed(request.newBuilder().headers(headers).build())
         }
-        .rateLimit(9, 2)
+        .rateLimit(2)
         .build()
 
     // ================================== Popular ======================================
