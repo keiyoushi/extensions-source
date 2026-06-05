@@ -45,7 +45,6 @@ class Yokai : ZeistManga("Yokai", "https://yokai-team.blogspot.com", "ar") {
                     val text = element.text().trim()
                     name = text
                     chapter_number = text.substringBefore(' ').toFloatOrNull() ?: 1F
-                    date_upload = 0L
                 }
             }
 
