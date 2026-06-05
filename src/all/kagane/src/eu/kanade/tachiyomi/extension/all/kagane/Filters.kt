@@ -1,6 +1,6 @@
-package eu.kanade.tachiyomi.extension.en.kagane
+package eu.kanade.tachiyomi.extension.all.kagane
 
-import eu.kanade.tachiyomi.extension.en.kagane.Kagane.Companion.CONTENT_RATINGS
+import eu.kanade.tachiyomi.extension.all.kagane.Kagane.Companion.CONTENT_RATINGS
 import eu.kanade.tachiyomi.source.model.Filter
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObjectBuilder

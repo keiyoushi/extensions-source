@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.kagane
+package eu.kanade.tachiyomi.extension.all.kagane
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -288,15 +288,21 @@ class ChallengeDto(
     val accessToken: String,
     @SerialName("cache_url")
     val cacheUrl: String,
-    val pages: List<PageDto>,
+    val manifest: ManifestDto? = null,
+)
+
+@Serializable
+class ManifestDto(
+    val pages: List<PageDto> = emptyList(),
 )
 
 @Serializable
 class PageDto(
-    @SerialName("page_number")
+    @SerialName("page_no")
     val pageNumber: Int,
-    @SerialName("page_uuid")
+    @SerialName("page_id")
     val pageUuid: String,
+    val ext: String? = null,
 )
 
 @Serializable

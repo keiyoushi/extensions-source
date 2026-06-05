@@ -1,25 +1,11 @@
-package eu.kanade.tachiyomi.extension.en.kagane
+package eu.kanade.tachiyomi.extension.all.kagane
 
-import android.annotation.SuppressLint
-import android.app.Application
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
-import android.util.Base64
 import android.util.Log
-import android.view.View
-import android.webkit.JavascriptInterface
-import android.webkit.PermissionRequest
-import android.webkit.WebChromeClient
-import android.webkit.WebView
-import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.extension.en.kagane.wv.Cdm
-import eu.kanade.tachiyomi.extension.en.kagane.wv.ProtectionSystemHeaderBox
-import eu.kanade.tachiyomi.extension.en.kagane.wv.parsePssh
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -49,25 +35,18 @@ import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import okio.IOException
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.nio.charset.StandardCharsets
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
-class Kagane :
-    HttpSource(),
+abstract class Kagane(
+    final override val lang: String,
+    private val kaganeLangs: List<String> = listOf(lang),
+) : HttpSource(),
     ConfigurableSource {
 
     override val name = "Kagane"
 
-    private val domain = "kagane.org"
+    private val domain = "kagane.to"
     private val apiUrl = "https://yuzuki.$domain"
     override val baseUrl = "https://$domain"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 
@@ -97,7 +76,7 @@ class Kagane :
                 .build(),
         )
 
-        if (response.code == 401 || response.code == 507) {
+        if (response.code == 401 || response.code == 403 || response.code == 507) {
             response.close()
             val challenge = try {
                 getChallengeResponse(chapterId)
@@ -179,7 +158,7 @@ class Kagane :
                         tagsMatchAll = if (filter.state) true else null
                     }
 
-                    else -> { }
+                    else -> {}
                 }
             }
 
@@ -246,6 +225,11 @@ class Kagane :
 
                     else -> {}
                 }
+            }
+
+            // Add languages specific to this source instance
+            putJsonArray("content_lang") {
+                kaganeLangs.forEach { add(it) }
             }
         }
             .toJsonString()
@@ -374,14 +358,6 @@ class Kagane :
         add("Referer", "$baseUrl/")
     }.build()
 
-    private fun getCertificate(url: String): String = client.newCall(GET(url, apiHeaders)).execute()
-        .body.bytes()
-        .toBase64()
-
-    private val windvineCertificate by lazy { getCertificate("$apiUrl/api/v2/static/bin.bin") }
-
-    private val fairPlayCertificate by lazy { getCertificate("$apiUrl/api/v2/static/crt.crt") }
-
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         if (chapter.url.contains(";")) {
             throw Exception("Outdated chapter URL. Please refresh the chapter list")
@@ -393,17 +369,18 @@ class Kagane :
         accessToken = challengeResp.accessToken
         cacheUrl = challengeResp.cacheUrl
 
-        val pages = challengeResp.pages.map { page ->
-            val pageUrl = "$cacheUrl/api/v2/books/file".toHttpUrl().newBuilder().apply {
+        val pageList = challengeResp.manifest?.pages ?: emptyList()
+
+        val pages = pageList.map { page ->
+            val pageUrl = "$cacheUrl/api/v2/books/page".toHttpUrl().newBuilder().apply {
                 addPathSegment(chapterId)
-                addPathSegment(page.pageUuid)
+                addPathSegment("${page.pageUuid}.${page.ext ?: "jxl"}")
                 addQueryParameter("token", accessToken)
                 addQueryParameter("is_datasaver", preferences.dataSaver.toString())
             }.build().toString()
 
             Page(page.pageNumber, url = pageUrl, imageUrl = pageUrl)
         }
-        Log.d("pages", "${pages.map { it.imageUrl }}")
         return Observable.just(pages)
     }
 
@@ -416,9 +393,11 @@ class Kagane :
 
     private fun getIntegrityToken(): String {
         if (integrityExp < System.currentTimeMillis()) {
+            client.newCall(GET("$baseUrl/", headers)).execute().close()
+
             val res = client.newCall(
                 POST(
-                    "https://kagane.org/api/integrity",
+                    "$baseUrl/api/integrity",
                     headers,
                     body = "".toRequestBody("application/json".toMediaType()),
                 ),
@@ -430,204 +409,25 @@ class Kagane :
         return integrityToken
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
     private fun getChallengeResponse(chapterId: String): ChallengeDto {
         val integrityToken = getIntegrityToken()
-        val f = ":$chapterId".sha256().sliceArray(0 until 16)
-
-        val challenge = if (preferences.wvd.isNotBlank()) {
-            getChallengeWvd(f)
-        } else {
-            getChallengeWebview(f, chapterId)
-        }
 
         val challengeUrl =
             "$apiUrl/api/v2/books/$chapterId".toHttpUrl().newBuilder()
                 .addQueryParameter("is_datasaver", preferences.dataSaver.toString())
                 .build()
-        val challengeBody = buildJsonObject {
-            put("challenge", challenge)
-        }.toJsonString().toRequestBody("application/json".toMediaType())
+
+        val challengeBody = "{}".toRequestBody("application/json".toMediaType())
 
         val headers = apiHeaders.newBuilder().add("x-integrity-token", integrityToken).build()
 
-        return client.newCall(POST(challengeUrl.toString(), headers, challengeBody)).execute()
-            .parseAs<ChallengeDto>()
-    }
-
-    private fun getChallengeWvd(f: ByteArray): String {
-        val cdm = Cdm.fromData(preferences.wvd)
-        val pssh = parsePssh(getPssh(f)).content as? ProtectionSystemHeaderBox
-            ?: throw Exception("Failed to parse pssh")
-        return cdm.getLicenseChallenge(pssh)
-    }
-
-    private fun getChallengeWebview(f: ByteArray, chapterId: String): String {
-        val interfaceName = "jsInterface"
-        val html = """
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <title>Title</title>
-            </head>
-            <body>
-                <script>
-                    function detectDRMSupport() {
-                        return "WebKitMediaKeys" in window ? "fairplay" : "MediaKeys" in window && "function" == typeof navigator.requestMediaKeySystemAccess ? "widevine" : null
-                    }
-
-                    function base64ToArrayBuffer(base64) {
-                        var binaryString = atob(base64);
-                        var bytes = new Uint8Array(binaryString.length);
-                        for (var i = 0; i < binaryString.length; i++) {
-                            bytes[i] = binaryString.charCodeAt(i);
-                        }
-                        return bytes.buffer;
-                    }
-
-                    async function getData() {
-                        let widevine = detectDRMSupport() !== 'fairplay';
-                        const g = base64ToArrayBuffer(widevine ? "$windvineCertificate" : "$fairPlayCertificate");
-                        let t = widevine ? await navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{
-                            initDataTypes: ["cenc"],
-                            audioCapabilities: [],
-                            videoCapabilities: [{
-                                contentType: 'video/mp4; codecs="avc1.42E01E"'
-                            }]
-                        }]) : await navigator.requestMediaKeySystemAccess("com.apple.fps", [{
-                            initDataTypes: ["skd"],
-                            audioCapabilities: [{
-                                contentType: 'audio/mp4; codecs="mp4a.40.2"'
-                            }],
-                            videoCapabilities: [{
-                                contentType: 'video/mp4; codecs="avc1.42E01E"'
-                            }]
-                        }]);
-
-                        let e = await t.createMediaKeys();
-                        await e.setServerCertificate(g);
-                        let video = widevine ? null : document.createElement("video");
-                        if (video) {
-                            video.style.display = "none";
-                            document.body.appendChild(video);
-                            await video.setMediaKeys(e);
-                        }
-                        let n = e.createSession();
-                        let i = new Promise((resolve, reject) => {
-                          function onMessage(event) {
-                            n.removeEventListener("message", onMessage);
-                            if (video) {
-                                document.body.removeChild(video)
-                            }
-                            resolve(event.message);
-                          }
-
-                          function onError() {
-                            n.removeEventListener("error", onError);
-                            reject(new Error("Failed to generate license challenge"));
-                          }
-
-                          n.addEventListener("message", onMessage);
-                          n.addEventListener("error", onError);
-                        });
-
-                        if (widevine) {
-                            await n.generateRequest("cenc", base64ToArrayBuffer("${getPssh(f).toBase64()}"));
-                        } else {
-                            let oo = base64ToArrayBuffer("${f.toBase64()}")
-                            let c = Array.from(new Uint8Array(oo)).map(t => t.toString(16).padStart(2, "0")).join("");
-                            let d = JSON.stringify({
-                                uri: "skd://" + c,
-                                assetId: "$chapterId",
-                            });
-                            const textEncoder = new TextEncoder();
-                            await n.generateRequest("skd", textEncoder.encode(d));
-                        }
-                        let o = await i;
-                        let m = new Uint8Array(o);
-                        let v = btoa(String.fromCharCode(...m));
-                        window.$interfaceName.passPayload(v);
-                    }
-                    getData();
-                </script>
-            </body>
-            </html>
-        """.trimIndent()
-
-        val handler = Handler(Looper.getMainLooper())
-        val latch = CountDownLatch(1)
-        val jsInterface = JsInterface(latch)
-        var webView: WebView? = null
-
-        handler.post {
-            val innerWv = WebView(Injekt.get<Application>())
-
-            webView = innerWv
-            innerWv.settings.domStorageEnabled = true
-            innerWv.settings.javaScriptEnabled = true
-            innerWv.settings.blockNetworkImage = true
-            innerWv.settings.userAgentString = headers["User-Agent"]
-            innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-            innerWv.addJavascriptInterface(jsInterface, interfaceName)
-
-            innerWv.webChromeClient = object : WebChromeClient() {
-                override fun onPermissionRequest(request: PermissionRequest?) {
-                    if (request?.resources?.contains(PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID) == true) {
-                        request.grant(request.resources)
-                    } else {
-                        super.onPermissionRequest(request)
-                    }
-                }
-            }
-
-            innerWv.loadDataWithBaseURL(baseUrl, html, "text/html", "UTF-8", null)
+        val response = client.newCall(POST(challengeUrl.toString(), headers, challengeBody)).execute()
+        if (!response.isSuccessful) {
+            response.close()
+            throw Exception("Failed to get challenge. HTTP error ${response.code}")
         }
 
-        latch.await(10, TimeUnit.SECONDS)
-        handler.post { webView?.destroy() }
-
-        if (latch.count == 1L) {
-            throw Exception("Timed out getting drm challenge")
-        }
-
-        if (jsInterface.challenge.isEmpty()) {
-            throw Exception("Failed to get drm challenge")
-        }
-
-        return jsInterface.challenge
-    }
-
-    private fun concat(vararg arrays: ByteArray): ByteArray = arrays.reduce { acc, bytes -> acc + bytes }
-
-    private fun getPssh(t: ByteArray): ByteArray {
-        val e = Base64.decode("7e+LqXnWSs6jyCfc1R0h7Q==", Base64.DEFAULT)
-        val zeroes = ByteArray(4)
-
-        val i = byteArrayOf(18, t.size.toByte()) + t
-        val s = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(i.size).array()
-
-        val innerBox = concat(zeroes, e, s, i)
-        val outerSize =
-            ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(innerBox.size + 8).array()
-        val psshHeader = "pssh".toByteArray(StandardCharsets.UTF_8)
-
-        return concat(outerSize, psshHeader, innerBox)
-    }
-
-    internal class JsInterface(private val latch: CountDownLatch) {
-        var challenge: String = ""
-
-        @JavascriptInterface
-        @Suppress("UNUSED")
-        fun passPayload(rawData: String) {
-            try {
-                challenge = rawData
-                latch.countDown()
-            } catch (_: Exception) {
-                return
-            }
-        }
+        return response.parseAs<ChallengeDto>()
     }
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
@@ -658,9 +458,6 @@ class Kagane :
     private val SharedPreferences.dataSaver
         get() = this.getBoolean(DATA_SAVER, false)
 
-    private val SharedPreferences.wvd
-        get() = this.getString(WVD_KEY, WVD_DEFAULT)!!
-
     private val SharedPreferences.chapterTitleMode
         get() = this.getString(CHAPTER_TITLE_MODE, CHAPTER_TITLE_MODE_DEFAULT)!!
 
@@ -685,6 +482,7 @@ class Kagane :
             setDefaultValue(emptySet<String>())
 
             setOnPreferenceChangeListener { _, values ->
+                @Suppress("UNCHECKED_CAST")
                 val selected = values as Set<String>
                 this.summary = selected.joinToString { it.replaceFirstChar { c -> c.uppercase() } }
                 true
@@ -716,13 +514,6 @@ class Kagane :
             key = DATA_SAVER
             title = "Data saver"
             setDefaultValue(false)
-        }.let(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
-            key = WVD_KEY
-            title = "WVD file"
-            summary = "Enter contents as base64 string"
-            setDefaultValue(WVD_DEFAULT)
         }.let(screen::addPreference)
 
         ListPreference(screen.context).apply {
@@ -759,9 +550,6 @@ class Kagane :
         private const val SHOW_EDITION_DEFAULT = false
 
         private const val DATA_SAVER = "data_saver_default"
-
-        private const val WVD_KEY = "wvd_key"
-        private const val WVD_DEFAULT = ""
 
         private const val CHAPTER_TITLE_MODE = "chapter_title_mode"
         private const val CHAPTER_TITLE_MODE_DEFAULT = "optional"
