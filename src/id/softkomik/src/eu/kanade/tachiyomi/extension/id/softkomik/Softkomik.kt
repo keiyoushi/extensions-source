@@ -314,23 +314,12 @@ class Softkomik : HttpSource() {
         val route = resolveSessionRoute(request.url)
         val sessionResult = getSession(route)
         val newRequest = request.newBuilder()
-            .header("X-Token", sessionResult.token)
-            .header("X-Sign", sessionResult.sign)
+            // Clean garabage at trailing
+            .header("X-Token", sessionResult.token.substringBeforeLast('=') + '=')
+            .header("X-Sign", sessionResult.sign.take(64))
             .build()
 
-        var response = chain.proceed(newRequest)
-        if (response.code != 200) { // they now change the response status code
-            response.close()
-
-            // retry once with session from WebView, in case the session from api is invalid but WebView has valid session
-            val cookieSession = getSessionViaWebView(route)
-            val retryRequest = request.newBuilder()
-                .header("X-Token", cookieSession.token)
-                .header("X-Sign", cookieSession.sign)
-                .build()
-            response = chain.proceed(retryRequest)
-        }
-        return response
+        return chain.proceed(newRequest)
     }
 
     private fun getBearerTokenFromCookie(): BearerTokenDto? {
@@ -375,9 +364,9 @@ class Softkomik : HttpSource() {
         val sessionKey = if (isChapterImageRequest) sessionKeyChapterImage else sessionKeyChapterList
 
         val sessionApiUrl = if (isChapterImageRequest) {
-            "$baseUrl/api/sessions/chapter"
+            "$baseUrl/api/session/chapter"
         } else {
-            "$baseUrl/api/sessions/kajsijas"
+            "$baseUrl/api/session/amsnuy"
         }
         val webViewUrl = if (isChapterImageRequest) {
             val chapterSegment = resolveWebViewChapterSegment(url)
