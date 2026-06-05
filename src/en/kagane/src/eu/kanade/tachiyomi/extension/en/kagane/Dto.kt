@@ -289,7 +289,6 @@ class ChallengeDto(
     @SerialName("cache_url")
     val cacheUrl: String,
     val manifest: ManifestDto? = null,
-    val pages: List<PageDto>? = null,
 )
 
 @Serializable
@@ -299,19 +298,12 @@ class ManifestDto(
 
 @Serializable
 class PageDto(
-    @SerialName("page_number")
-    private val pageNumberOld: Int? = null,
     @SerialName("page_no")
-    private val pageNumberNew: Int? = null,
-    @SerialName("page_uuid")
-    private val pageUuidOld: String? = null,
+    val pageNumber: Int,
     @SerialName("page_id")
-    private val pageUuidNew: String? = null,
+    val pageUuid: String,
     val ext: String? = null,
-) {
-    val pageNumber: Int get() = pageNumberNew ?: pageNumberOld ?: 0
-    val pageUuid: String get() = pageUuidNew ?: pageUuidOld ?: ""
-}
+)
 
 @Serializable
 class IntegrityDto(
