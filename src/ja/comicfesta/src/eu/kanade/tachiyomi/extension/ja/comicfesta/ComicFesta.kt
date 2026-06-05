@@ -108,7 +108,7 @@ class ComicFesta :
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/titles/${manga.url}", headers) // no redirect for r18 content with rsc
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga) // no redirect for r18 content with rsc
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
