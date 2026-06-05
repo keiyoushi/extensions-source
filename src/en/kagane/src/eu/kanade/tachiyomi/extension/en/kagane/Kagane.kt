@@ -393,24 +393,19 @@ class Kagane :
         accessToken = challengeResp.accessToken
         cacheUrl = challengeResp.cacheUrl
 
-        val isNewApi = challengeResp.manifest != null
-        val pageList = challengeResp.manifest?.pages ?: challengeResp.pages ?: emptyList()
+        val pageList = challengeResp.manifest?.pages ?: emptyList()
 
         val pages = pageList.map { page ->
-            val pageUrl = "$cacheUrl/api/v2/books/${if (isNewApi) "page" else "file"}".toHttpUrl().newBuilder().apply {
+            val pageUrl = "$cacheUrl/api/v2/books/page".toHttpUrl().newBuilder().apply {
                 addPathSegment(chapterId)
-                if (isNewApi) {
-                    addPathSegment("${page.pageUuid}.${page.ext ?: "jxl"}")
-                } else {
-                    addPathSegment(page.pageUuid)
-                }
+                addPathSegment("${page.pageUuid}.${page.ext ?: "jxl"}")
                 addQueryParameter("token", accessToken)
                 addQueryParameter("is_datasaver", preferences.dataSaver.toString())
             }.build().toString()
 
             Page(page.pageNumber, url = pageUrl, imageUrl = pageUrl)
         }
-        Log.d("pages", "${pages.map { it.imageUrl }}")
+
         return Observable.just(pages)
     }
 
