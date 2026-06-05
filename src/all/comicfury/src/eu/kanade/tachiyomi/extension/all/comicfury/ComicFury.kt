@@ -208,7 +208,7 @@ class ComicFury(
                 val customUrl = "https://$slug.webcomic.ws/archive/comics"
                 try {
                     val customDoc = client.newCall(GET(customUrl, headers)).execute().asJsoup()
-                    customDoc.select("div.archivecomic").forEach { element ->
+                    customDoc.select("div.archivecomic, div.nl-archivecomic").forEach { element ->
                         val linkElement = element.selectFirst("a") ?: return@forEach
                         val chapterHeader = element.parent()?.previousElementSibling()?.selectFirst("h3")?.text()
                         chapters.add(
@@ -216,7 +216,7 @@ class ComicFury(
                                 url = linkElement.absUrl("href")
                                 val comicName = linkElement.text()
                                 name = if (chapterHeader.isNullOrEmpty()) comicName else "$chapterHeader - $comicName"
-                                date_upload = element.selectFirst(".comicposttime")?.text()?.toDate() ?: 0L
+                                date_upload = element.selectFirst(".comicposttime, .nl-archivecomicposttime")?.text()?.toDate() ?: 0L
                             },
                         )
                     }
