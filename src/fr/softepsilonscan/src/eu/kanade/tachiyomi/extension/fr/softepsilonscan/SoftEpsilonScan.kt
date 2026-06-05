@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
 class SoftEpsilonScan : Pam("Soft Epsilon Scan", "https://epsilonsoft.to", "fr") {
-    override val versionId = 1
 
     override val popularFilters = FilterList(SortFilter("Sort", sortValues, Filter.Sort.Selection(3, false)))
     override val latestFilters = FilterList(SortFilter("Sort", sortValues, Filter.Sort.Selection(2, false)))
