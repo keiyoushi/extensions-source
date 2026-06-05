@@ -85,7 +85,7 @@ class ComicFury(
             }
         }
 
-        return Request.Builder().url(req.build()).build()
+        return GET(req.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
