@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.loppytoon
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -16,9 +16,7 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.io.IOException
 import java.util.Calendar
-import java.util.concurrent.TimeUnit
 
 class LoppyToon : HttpSource() {
     override val name = "LoppyToon"
@@ -27,18 +25,7 @@ class LoppyToon : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 20, 1, TimeUnit.MINUTES)
-        .addNetworkInterceptor {
-            val request = it.request()
-            val response = it.proceed(request)
-
-            if (request.url.toString().startsWith(baseUrl)) {
-                if (response.code == 429) {
-                    throw IOException("Bạn đang request quá nhanh!")
-                }
-            }
-            response
-        }
+        .rateLimit(3)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -52,11 +39,15 @@ class LoppyToon : HttpSource() {
         val document = response.asJsoup()
 
         val mangaList = document.select("div.hot-comic-item a.hot-comic-item").mapNotNull { element ->
+            val mangaUrl = element.absUrl("href")
+            if (mangaUrl.isNovelUrl()) return@mapNotNull null
+
             SManga.create().apply {
-                setUrlWithoutDomain(element.absUrl("href"))
+                setUrlWithoutDomain(mangaUrl)
                 title = element.selectFirst("div.comic-title")?.text()
                     ?.takeIf(String::isNotBlank) ?: return@mapNotNull null
                 thumbnail_url = element.selectFirst("img")?.absUrl("src")
+                    ?.normalizeThumbnailUrl()
             }
         }
 
@@ -116,13 +107,17 @@ class LoppyToon : HttpSource() {
         if (url.contains("/api/search-story")) {
             val results = response.parseAs<List<SearchResult>>()
 
-            val mangaList = results.map { result ->
+            val mangaList = results.mapNotNull { result ->
+                val slug = result.slug ?: return@mapNotNull null
+                val mangaUrl = "/truyen/$slug"
+                if (mangaUrl.isNovelUrl()) return@mapNotNull null
+
                 SManga.create().apply {
-                    setUrlWithoutDomain("/truyen/${result.slug}")
+                    setUrlWithoutDomain(mangaUrl)
                     title = result.title ?: ""
                     thumbnail_url = result.cover?.let { cover ->
                         if (cover.startsWith("http")) cover else "$baseUrl/storage/$cover"
-                    }
+                    }?.normalizeThumbnailUrl()
                 }
             }
 
@@ -148,6 +143,7 @@ class LoppyToon : HttpSource() {
             genre = document.select(".manga-tags a.tag").joinToString { it.text() }
 
             thumbnail_url = document.selectFirst("img.cover-image")?.absUrl("src")
+                ?.normalizeThumbnailUrl()
 
             val altName = document.selectFirst("span.meta-label:contains(Tên khác)")
                 ?.nextElementSibling()?.text()?.trim()
@@ -178,12 +174,30 @@ class LoppyToon : HttpSource() {
         }
     }
 
-    private fun mangaFromElement(element: Element): SManga? = SManga.create().apply {
+    private fun mangaFromElement(element: Element): SManga? {
         val linkElement = element.selectFirst("a") ?: return null
-        setUrlWithoutDomain(linkElement.absUrl("href"))
-        title = element.selectFirst("h3.comic-title")?.text()
-            ?.takeIf(String::isNotBlank) ?: return null
-        thumbnail_url = element.selectFirst(".comic-cover img")?.absUrl("src")
+        val mangaUrl = linkElement.absUrl("href")
+        if (mangaUrl.isNovelUrl()) return null
+
+        return SManga.create().apply {
+            setUrlWithoutDomain(mangaUrl)
+            title = element.selectFirst("h3.comic-title")?.text()
+                ?.takeIf(String::isNotBlank) ?: return null
+            thumbnail_url = element.selectFirst(".comic-cover img")?.absUrl("src")
+                ?.normalizeThumbnailUrl()
+        }
+    }
+
+    private fun String.isNovelUrl(): Boolean {
+        val path = removePrefix(baseUrl)
+            .substringBefore("?")
+            .substringBefore("#")
+        return path.startsWith("/truyen/novel", ignoreCase = true)
+    }
+
+    private fun String.normalizeThumbnailUrl(): String {
+        val secondHttpsIndex = indexOf("https://", startIndex = "https://".length)
+        return if (secondHttpsIndex != -1) substring(secondHttpsIndex) else this
     }
 
     override fun relatedMangaListParse(response: Response) = latestUpdatesParse(response).mangas
@@ -277,8 +291,4 @@ class LoppyToon : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    // =============================== Related ================================
-    // disable suggested mangas on Komikku due to heavy rate limit
-    override val disableRelatedMangasBySearch = true
 }
