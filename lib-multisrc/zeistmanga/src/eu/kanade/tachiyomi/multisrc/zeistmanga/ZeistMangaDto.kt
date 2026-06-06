@@ -5,15 +5,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
-
-private val DATE_FORMATTER by lazy {
-    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-}
-
-private fun parseDate(dateStr: String): Long = runCatching { DATE_FORMATTER.parse(dateStr)?.time }
-    .getOrNull() ?: 0L
 
 @Serializable
 data class ZeistMangaDto(
@@ -31,6 +22,7 @@ data class ZeistMangaFeedDto(
 data class ZeistMangaEntryDto(
     val title: ZeistMangaEntryTitleDto? = null,
     val published: ZeistMangaEntryPublishedDto? = null,
+    val updated: ZeistMangaEntryUpdatedDto? = null,
     val category: List<ZeistMangaEntryCategory>? = emptyList(),
     @SerialName("link") val url: List<ZeistMangaEntryLink>? = emptyList(),
     val content: ZeistMangaEntryContentDto? = null,
@@ -46,12 +38,15 @@ data class ZeistMangaEntryDto(
         }
     }
 
-    fun toSChapter(baseurl: String): SChapter = SChapter.create().apply {
+    fun toSChapter(baseurl: String, dateUpload: Long = 0L): SChapter = SChapter.create().apply {
         name = this@ZeistMangaEntryDto.title!!.t
         url = getChapterLink(this@ZeistMangaEntryDto.url!!).substringAfter(baseurl)
-        val chapterDate = this@ZeistMangaEntryDto.published!!.t.trim()
-        date_upload = parseDate(chapterDate)
+        date_upload = dateUpload
     }
+
+    fun getPublishedDate(): String = published?.t?.trim().orEmpty()
+
+    fun getUpdatedDate(): String = updated?.t?.trim().orEmpty()
 
     private fun getChapterLink(list: List<ZeistMangaEntryLink>): String = list.first { it.rel == "alternate" }.href
 
@@ -71,6 +66,11 @@ data class ZeistMangaEntryTitleDto(
 
 @Serializable
 data class ZeistMangaEntryPublishedDto(
+    @SerialName("\$t") val t: String,
+)
+
+@Serializable
+data class ZeistMangaEntryUpdatedDto(
     @SerialName("\$t") val t: String,
 )
 
