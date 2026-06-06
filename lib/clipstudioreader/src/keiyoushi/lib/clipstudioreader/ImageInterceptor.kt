@@ -9,7 +9,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
-import kotlin.math.floor
 
 class ImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -54,24 +53,37 @@ class ImageInterceptor : Interceptor {
         val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
 
-        val pieceWidth = 8 * floor(floor(width.toFloat() / gridWidth) / 8).toInt()
-        val pieceHeight = 8 * floor(floor(height.toFloat() / gridHeight) / 8).toInt()
+        val pieceWidth = (width / gridWidth) / 8 * 8
+        val pieceHeight = (height / gridHeight) / 8 * 8
+
+        val tileAreaWidth = pieceWidth * gridWidth
+        val tileAreaHeight = pieceHeight * gridHeight
 
         val srcRect = Rect()
         val dstRect = Rect()
 
         for (scrambleIndex in scrambleMapping.indices) {
-            val destX = scrambleIndex % gridWidth * pieceWidth
-            val destY = floor(scrambleIndex.toFloat() / gridWidth).toInt() * pieceHeight
+            val destX = (scrambleIndex % gridWidth) * pieceWidth
+            val destY = (scrambleIndex / gridWidth) * pieceHeight
             dstRect.set(destX, destY, destX + pieceWidth, destY + pieceHeight)
 
             val sourcePieceIndex = scrambleMapping[scrambleIndex]
-            val sourceX = sourcePieceIndex % gridWidth * pieceWidth
-            val sourceY = floor(sourcePieceIndex.toFloat() / gridWidth).toInt() * pieceHeight
+            val sourceX = (sourcePieceIndex % gridWidth) * pieceWidth
+            val sourceY = (sourcePieceIndex / gridWidth) * pieceHeight
             srcRect.set(sourceX, sourceY, sourceX + pieceWidth, sourceY + pieceHeight)
 
             canvas.drawBitmap(image, srcRect, dstRect, null)
         }
+
+        if (tileAreaWidth < width) {
+            srcRect.set(tileAreaWidth, 0, width, height)
+            canvas.drawBitmap(image, srcRect, srcRect, null)
+        }
+        if (tileAreaHeight < height) {
+            srcRect.set(0, tileAreaHeight, tileAreaWidth, height)
+            canvas.drawBitmap(image, srcRect, srcRect, null)
+        }
+
         return result
     }
 
