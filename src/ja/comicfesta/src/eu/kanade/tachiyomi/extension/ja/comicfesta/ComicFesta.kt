@@ -13,7 +13,6 @@ import keiyoushi.lib.clipstudioreader.ClipStudioReader
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -112,7 +111,7 @@ class ComicFesta :
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        val result = response.extractNextJs<ChapterListResponse> { it is JsonObject && "packages" in it }
+        val result = response.extractNextJs<ChapterListResponse>()
         return result?.toSChapterList(hideLocked).orEmpty().reversed()
     }
 
