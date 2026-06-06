@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.tr.golgebahcesi
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -25,6 +24,7 @@ class GolgeBahcesi : HttpSource() {
     private val apiBaseUrl = "https://api.golgebahcesi.com/api"
     override val lang = "tr"
     override val supportsLatest = true
+    override val versionId = 2
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -85,9 +85,9 @@ class GolgeBahcesi : HttpSource() {
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val parts = chapter.url.split("/")
-        val seriesSlug = parts.getOrNull(1) ?: ""
-        val chapterSlug = parts.getOrNull(2) ?: ""
+        val httpUrl = "$baseUrl/${chapter.url}".toHttpUrl()
+        val seriesSlug = httpUrl.pathSegments[1]
+        val chapterSlug = httpUrl.pathSegments[2]
         return "$baseUrl/manga/$seriesSlug/bolum/$chapterSlug"
     }
 
@@ -107,162 +107,6 @@ class GolgeBahcesi : HttpSource() {
         GenreFilter(),
         MinChaptersFilter(),
     )
-
-    private class SortFilter :
-        Filter.Select<String>(
-            "Sıralama",
-            arrayOf("Varsayılan", "En Yeni", "Popüler", "Puan", "A-Z", "En Eski"),
-        ) {
-        fun toUriPart() = arrayOf("default", "updatedAt", "popular", "rating", "name", "createdAt")[state]
-    }
-
-    private class StatusFilter :
-        Filter.Select<String>(
-            "Durum",
-            arrayOf("Tümü", "Devam Ediyor", "Tamamlandı", "Ara Verildi", "Bırakıldı"),
-        ) {
-        fun toUriPart() = arrayOf("", "ONGOING", "COMPLETED", "HIATUS", "DROPPED")[state]
-    }
-
-    private class TypeFilter :
-        Filter.Select<String>(
-            "Format",
-            arrayOf("Tümü", "Manhwa", "Manhua", "Manga"),
-        ) {
-        fun toUriPart() = arrayOf("", "MANHWA", "MANHUA", "MANGA")[state]
-    }
-
-    private class GenreFilter :
-        Filter.Select<String>(
-            "Tür",
-            arrayOf(
-                "Tümü",
-                "Aksiyon",
-                "Fantastik",
-                "Harem",
-                "Komedi",
-                "Macera",
-                "Bilim Kurgu",
-                "Dövüş Sanatları",
-                "Shounen",
-                "Doğaüstü",
-                "Dram",
-                "Romantizm",
-                "Seinen",
-                "Sistem",
-                "Tarihsel",
-                "Aşırı Güçlü",
-                "İkinci Şans",
-                "İntikam",
-                "Murim",
-                "Yeniden Doğuş",
-                "Gizli Kimlik",
-                "Okul",
-                "Süper Güçler",
-                "Süper Kahramanlar",
-                "Okul Hayatı",
-                "Komplo",
-                "Gerilim",
-                "Karanlık Fantezi",
-                "Korku",
-                "Manhwa",
-                "Büyü",
-                "Genç",
-                "Modern",
-                "Gerileme",
-                "Yaşamdan Kesitler",
-                "Dahi Mc",
-                "Şiddet",
-                "Drama",
-                "Fantezi",
-                "Olgun",
-                "Psikolojik",
-                "Romantik",
-                "Fantazi",
-                "Canavar",
-                "Dedektif",
-                "Gizem",
-                "Kıyamet",
-                "Lise",
-                "Ecchi",
-                "Manga",
-                "İsekai",
-                "Reenkarnasyon",
-                "Supernatural",
-                "Dövüş",
-                "Trajedi",
-                "Oyun",
-                "Sanal Gerçeklik",
-                "makine",
-            ),
-        ) {
-        fun toUriPart() = arrayOf(
-            "",
-            "Aksiyon",
-            "Fantastik",
-            "Harem",
-            "Komedi",
-            "Macera",
-            "Bilim Kurgu",
-            "Dövüş Sanatları",
-            "Shounen",
-            "Doğaüstü",
-            "Dram",
-            "Romantizm",
-            "Seinen",
-            "Sistem",
-            "Tarihsel",
-            "Aşırı Güçlü",
-            "İkinci Şans",
-            "İntikam",
-            "Murim",
-            "Yeniden Doğuş",
-            "Gizli Kimlik",
-            "Okul",
-            "Süper Güçler",
-            "Süper Kahramanlar",
-            "Okul Hayatı",
-            "Komplo",
-            "Gerilim",
-            "Karanlık Fantezi",
-            "Korku",
-            "Manhwa",
-            "Büyü",
-            "Genç",
-            "Modern",
-            "Gerileme",
-            "Yaşamdan Kesitler",
-            "Dahi Mc",
-            "Şiddet",
-            "Drama",
-            "Fantezi",
-            "Olgun",
-            "Psikolojik",
-            "Romantik",
-            "Fantazi",
-            "Canavar",
-            "Dedektif",
-            "Gizem",
-            "Kıyamet",
-            "Lise",
-            "Ecchi",
-            "Manga",
-            "İsekai",
-            "Reenkarnasyon",
-            "Supernatural",
-            "Dövüş",
-            "Trajedi",
-            "Oyun",
-            "Sanal Gerçeklik",
-            "makine",
-        )[state]
-    }
-
-    private class MinChaptersFilter :
-        Filter.Text(
-            "Minimum Bölüm",
-            "",
-        )
 
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply {
