@@ -11,11 +11,12 @@ object Utils {
     private const val LFH_SIG = 0x04034b50L
 
     private const val EOCD_MIN_LEN = 22
+    private const val CDH_MIN_LEN = 46
     private const val LFH_MIN_LEN = 30
 
-    const val MAX_EOCD_SEARCH = EOCD_MIN_LEN + 0xFFFF + 1 // 65558
+    private const val METHOD_DEFLATE = 8
 
-    const val METHOD_DEFLATE = 8
+    const val MAX_EOCD_SEARCH = EOCD_MIN_LEN + 0xFFFF + 1 // 65558
 
     class Entry(
         val name: String,
@@ -27,28 +28,20 @@ object Utils {
     class Eocd(
         val cdOffset: Long,
         val cdSize: Long,
-        @Suppress("unused") val totalEntries: Int,
     )
 
-    private fun u16(b: ByteArray, off: Int): Int = (b[off].toInt() and 0xFF) or
-        ((b[off + 1].toInt() and 0xFF) shl 8)
+    private fun ByteArray.u16(off: Int): Int = (this[off].toInt() and 0xFF) or ((this[off + 1].toInt() and 0xFF) shl 8)
 
-    private fun u32(b: ByteArray, off: Int): Long = (b[off].toLong() and 0xFF) or
-        ((b[off + 1].toLong() and 0xFF) shl 8) or
-        ((b[off + 2].toLong() and 0xFF) shl 16) or
-        ((b[off + 3].toLong() and 0xFF) shl 24)
+    private fun ByteArray.u32(off: Int): Long = (this[off].toLong() and 0xFF) or
+        ((this[off + 1].toLong() and 0xFF) shl 8) or
+        ((this[off + 2].toLong() and 0xFF) shl 16) or
+        ((this[off + 3].toLong() and 0xFF) shl 24)
 
     fun findEocd(tail: ByteArray): Eocd {
-        var i = tail.size - EOCD_MIN_LEN
-        while (i >= 0) {
-            if (u32(tail, i) == EOCD_SIG) {
-                return Eocd(
-                    cdOffset = u32(tail, i + 16),
-                    cdSize = u32(tail, i + 12),
-                    totalEntries = u16(tail, i + 10),
-                )
+        for (i in tail.size - EOCD_MIN_LEN downTo 0) {
+            if (tail.u32(i) == EOCD_SIG) {
+                return Eocd(cdOffset = tail.u32(i + 16), cdSize = tail.u32(i + 12))
             }
-            i--
         }
         throw Exception("EOCD record not found")
     }
@@ -56,27 +49,42 @@ object Utils {
     fun parseCentralDirectory(cd: ByteArray): List<Entry> {
         val entries = ArrayList<Entry>()
         var p = 0
-        while (p + 46 <= cd.size && u32(cd, p) == CDH_SIG) {
-            val method = u16(cd, p + 10)
-            val compressedSize = u32(cd, p + 20)
-            val nameLen = u16(cd, p + 28)
-            val extraLen = u16(cd, p + 30)
-            val commentLen = u16(cd, p + 32)
-            val localOffset = u32(cd, p + 42)
-            val name = String(cd, p + 46, nameLen, Charsets.UTF_8)
-            entries.add(Entry(name, method, compressedSize, localOffset))
-            p += 46 + nameLen + extraLen + commentLen
+        while (p + CDH_MIN_LEN <= cd.size && cd.u32(p) == CDH_SIG) {
+            val nameLen = cd.u16(p + 28)
+            val extraLen = cd.u16(p + 30)
+            val commentLen = cd.u16(p + 32)
+            entries += Entry(
+                name = String(cd, p + CDH_MIN_LEN, nameLen, Charsets.UTF_8),
+                method = cd.u16(p + 10),
+                compressedSize = cd.u32(p + 20),
+                localHeaderOffset = cd.u32(p + 42),
+            )
+            p += CDH_MIN_LEN + nameLen + extraLen + commentLen
         }
         return entries
     }
 
-    fun skipLocalHeader(source: BufferedSource) {
-        val header = source.readByteArray(LFH_MIN_LEN.toLong())
-        require(u32(header, 0) == LFH_SIG) { "Not a local file header" }
-        source.skip((u16(header, 26) + u16(header, 28)).toLong())
+    fun readEntry(
+        source: BufferedSource,
+        compressedSize: Long,
+        method: Int,
+        decode: (Buffer) -> BufferedSource = { it },
+    ): Buffer {
+        skipLocalHeader(source)
+        val payload = Buffer().also { source.readFully(it, compressedSize) }
+        val decoded = decode(payload)
+        return if (method == METHOD_DEFLATE) inflate(decoded) else decoded.materialize()
     }
 
-    fun inflate(source: BufferedSource): Buffer = InflaterSource(source, Inflater()).use {
+    private fun skipLocalHeader(source: BufferedSource) {
+        val header = source.readByteArray(LFH_MIN_LEN.toLong())
+        require(header.u32(0) == LFH_SIG) { "Not a local file header" }
+        source.skip((header.u16(26) + header.u16(28)).toLong())
+    }
+
+    private fun inflate(source: BufferedSource): Buffer = InflaterSource(source, Inflater(true)).use {
         Buffer().apply { writeAll(it) }
     }
+
+    private fun BufferedSource.materialize(): Buffer = this as? Buffer ?: Buffer().also { it.writeAll(this) }
 }

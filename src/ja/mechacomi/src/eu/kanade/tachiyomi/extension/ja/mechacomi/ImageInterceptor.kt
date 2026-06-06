@@ -23,8 +23,8 @@ class ImageInterceptor : Interceptor {
 
         if (fragment.isNullOrEmpty()) return chain.proceed(request)
 
-        val parts = fragment.split(";", limit = 6)
-        if (parts.size < 6) return chain.proceed(request)
+        val parts = fragment.split(";")
+        if (parts.size < 5) return chain.proceed(request)
 
         val (token, startStr, endStr, compSizeStr, methodStr) = parts
         val start = startStr.toLong()
@@ -41,13 +41,8 @@ class ImageInterceptor : Interceptor {
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
         cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(IMAGE_IV_HEX))
 
-        val image = fileResponse.body.source().use {
-            val raw = Buffer().apply { writeAll(it) }
-            Utils.skipLocalHeader(raw)
-            val cipherText = Buffer()
-            raw.readFully(cipherText, compressedSize)
-            val decrypted = cipherText.cipherSource(cipher).buffer()
-            if (method == Utils.METHOD_DEFLATE) Utils.inflate(decrypted) else Buffer().apply { writeAll(decrypted) }
+        val image = fileResponse.body.source().use { src ->
+            Utils.readEntry(src, compressedSize, method) { it.cipherSource(cipher).buffer() }
         }
 
         return fileResponse.newBuilder()

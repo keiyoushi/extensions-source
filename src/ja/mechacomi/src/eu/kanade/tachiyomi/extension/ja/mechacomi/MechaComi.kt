@@ -47,7 +47,7 @@ class MechaComi :
         .addInterceptor {
             val request = it.request()
             val response = it.proceed(request)
-            if (response.code == 500 && request.url.pathSegments[3] == "access-provider") {
+            if (response.code == 500 && (request.url.pathSegments[3] == "access-provider" || request.url.pathSegments[2] == "mdviewer")) {
                 throw IOException("Log in via WebView and purchase this product to read.")
             }
             response
@@ -179,7 +179,6 @@ class MechaComi :
         }
 
         val pkgEntry = byName[PACKAGE_JSON]
-            ?: byName["package.json"]
             ?: entries.firstOrNull { it.name == "package.json" || it.name.endsWith("/package.json") }
             ?: throw Exception("manifest not found in .uze (looked for $PACKAGE_JSON). ${entries.size} entries, ${entries.take(5).joinToString { it.name }}")
 
@@ -189,11 +188,10 @@ class MechaComi :
             val entry = byName[item.href] ?: return@mapIndexedNotNull null
             val fragment = listOf(
                 token,
-                entry.localHeaderOffset.toString(),
-                spanEnd.getValue(entry.name).toString(),
-                entry.compressedSize.toString(),
-                entry.method.toString(),
-                entry.name,
+                entry.localHeaderOffset,
+                spanEnd.getValue(entry.name),
+                entry.compressedSize,
+                entry.method,
             ).joinToString(";")
 
             val pageUrl = uzeUrl.toHttpUrl().newBuilder()
@@ -211,12 +209,8 @@ class MechaComi :
         return client.newCall(request).execute()
     }
 
-    private fun readPlainEntry(url: String, entry: Utils.Entry, end: Long): Buffer {
-        val raw = Buffer()
-        rangeGet(url, "bytes=${entry.localHeaderOffset}-$end").body.source().use { raw.writeAll(it) }
-        Utils.skipLocalHeader(raw)
-        val stored = Buffer().also { raw.readFully(it, entry.compressedSize) }
-        return if (entry.method == Utils.METHOD_DEFLATE) Utils.inflate(stored) else stored
+    private fun readPlainEntry(url: String, entry: Utils.Entry, end: Long): Buffer = rangeGet(url, "bytes=${entry.localHeaderOffset}-$end").body.source().use {
+        Utils.readEntry(it, entry.compressedSize, entry.method)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
