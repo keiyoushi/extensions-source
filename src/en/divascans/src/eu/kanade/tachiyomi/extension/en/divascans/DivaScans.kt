@@ -286,8 +286,6 @@ class DivaScans :
         return manga
     }
 
-
-
     // --- HTML Chapter Layer ---
 
     override fun chapterListParse(response: Response): List<SChapter> {
