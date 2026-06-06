@@ -10,6 +10,8 @@ import eu.kanade.tachiyomi.source.model.FilterList
 class EpsilonScan : Pam("Epsilon Scan", "https://epsilonscan.to", "fr") {
     override val versionId = 2
 
+    override val prefPremiumTitle = "Masquer les chapitres Premium"
+
     override val popularFilters = FilterList(SortFilter("Sort", sortValues, Filter.Sort.Selection(3, false)))
     override val latestFilters = FilterList(SortFilter("Sort", sortValues, Filter.Sort.Selection(2, false)))
 
