@@ -194,6 +194,7 @@ class BookContent(
         val lock = if (isLocked) "🔒 " else ""
         val preview = if (isPreview) "🔒 (Preview) " else ""
         url = when {
+            isPurchased == true -> distributionId
             limitedReadPeriodBookContent != null -> limitedReadPeriodBookContent.distributionId
             isPreview -> sampleDistributionId!!
             else -> distributionId
@@ -223,4 +224,14 @@ class ViewerResponse(
 class ContentResponse(
     val url: String,
     val token: String,
+)
+
+@Serializable
+class MdPackage(
+    val spine: List<SpineItem>,
+)
+
+@Serializable
+class SpineItem(
+    val href: String,
 )

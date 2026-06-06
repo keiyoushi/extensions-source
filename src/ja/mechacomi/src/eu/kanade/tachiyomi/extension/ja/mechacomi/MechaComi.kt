@@ -20,6 +20,8 @@ import keiyoushi.utils.toJsonRequestBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import okio.Buffer
+import java.io.IOException
 
 class MechaComi :
     HttpSource(),
@@ -42,6 +44,14 @@ class MechaComi :
     override val client = network.client.newBuilder()
         .addInterceptor(GraphQLErrorInterceptor())
         .addInterceptor(ImageInterceptor())
+        .addInterceptor {
+            val request = it.request()
+            val response = it.proceed(request)
+            if (response.code == 500 && request.url.pathSegments[3] == "access-provider") {
+                throw IOException("Log in via WebView and purchase this product to read.")
+            }
+            response
+        }
         .build()
 
     override fun popularMangaRequest(page: Int) = graphQLPost(
@@ -120,7 +130,7 @@ class MechaComi :
             .map { it.toSChapter() }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/TODO(fwfwefwfwfwfwfw)${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/viewer/mdviewer/browser/${chapter.url}"
 
     override fun pageListRequest(chapter: SChapter): Request {
         val url = "$baseUrl/api/v1/mdviewer/content".toHttpUrl().newBuilder()
@@ -132,15 +142,81 @@ class MechaComi :
     override fun pageListParse(response: Response): List<Page> {
         val distributionId = response.request.url.queryParameter("distributionId")
         val result = response.parseAs<ViewerResponse>()
-        val accessUrl = "$viewerUrl/access-provider/${result.contentType}".toHttpUrl().newBuilder()
+        val accessUrl = "$viewerUrl/access-provider".toHttpUrl().newBuilder().apply {
+            if (result.contentType != "main") {
+                addPathSegment(result.contentType)
+            }
+        }
             .addQueryParameter("contentId", result.contentId)
             .addQueryParameter("distributionId", distributionId)
             .build()
-        val accessResponse = client.newCall(GET(accessUrl, headers)).execute().parseAs<ContentResponse>()
-        val contentUrl = accessResponse.url.toHttpUrl().newBuilder()
-            .fragment(accessResponse.token)
+
+        val access = client.newCall(GET(accessUrl, headers)).execute().parseAs<ContentResponse>()
+        val uzeUrl = access.url
+        val token = access.token
+
+        val tailResponse = rangeGet(uzeUrl, "bytes=-${Utils.MAX_EOCD_SEARCH}")
+        val totalSize = tailResponse.header("Content-Range")?.substringAfter('/', "")?.toLongOrNull()
+        val tail = tailResponse.body.bytes()
+        val tailStart = if (totalSize != null) totalSize - tail.size else 0L
+
+        val eocd = Utils.findEocd(tail)
+
+        val cdBytes = if (totalSize != null && eocd.cdOffset >= tailStart) {
+            val from = (eocd.cdOffset - tailStart).toInt()
+            tail.copyOfRange(from, from + eocd.cdSize.toInt())
+        } else {
+            rangeGet(uzeUrl, "bytes=${eocd.cdOffset}-${eocd.cdOffset + eocd.cdSize - 1}").body.bytes()
+        }
+        val entries = Utils.parseCentralDirectory(cdBytes)
+        val byName = entries.associateBy { it.name }
+
+        val ordered = entries.sortedBy { it.localHeaderOffset }
+        val spanEnd = HashMap<String, Long>(ordered.size)
+        for (i in ordered.indices) {
+            val end = if (i + 1 < ordered.size) ordered[i + 1].localHeaderOffset - 1 else eocd.cdOffset - 1
+            spanEnd[ordered[i].name] = end
+        }
+
+        val pkgEntry = byName[PACKAGE_JSON]
+            ?: byName["package.json"]
+            ?: entries.firstOrNull { it.name == "package.json" || it.name.endsWith("/package.json") }
+            ?: throw Exception("manifest not found in .uze (looked for $PACKAGE_JSON). ${entries.size} entries, ${entries.take(5).joinToString { it.name }}")
+
+        val pkg = readPlainEntry(uzeUrl, pkgEntry, spanEnd.getValue(pkgEntry.name)).inputStream().parseAs<MdPackage>()
+
+        return pkg.spine.mapIndexedNotNull { index, item ->
+            val entry = byName[item.href] ?: return@mapIndexedNotNull null
+            val fragment = listOf(
+                token,
+                entry.localHeaderOffset.toString(),
+                spanEnd.getValue(entry.name).toString(),
+                entry.compressedSize.toString(),
+                entry.method.toString(),
+                entry.name,
+            ).joinToString(";")
+
+            val pageUrl = uzeUrl.toHttpUrl().newBuilder()
+                .fragment(fragment)
+                .build()
+                .toString()
+            Page(index, imageUrl = pageUrl)
+        }
+    }
+
+    private fun rangeGet(url: String, range: String): Response {
+        val request = GET(url, headers).newBuilder()
+            .header("Range", range)
             .build()
-        TODO()
+        return client.newCall(request).execute()
+    }
+
+    private fun readPlainEntry(url: String, entry: Utils.Entry, end: Long): Buffer {
+        val raw = Buffer()
+        rangeGet(url, "bytes=${entry.localHeaderOffset}-$end").body.source().use { raw.writeAll(it) }
+        Utils.skipLocalHeader(raw)
+        val stored = Buffer().also { raw.readFully(it, entry.compressedSize) }
+        return if (entry.method == Utils.METHOD_DEFLATE) Utils.inflate(stored) else stored
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -155,5 +231,6 @@ class MechaComi :
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+        private const val PACKAGE_JSON = "META-INF/package.json"
     }
 }
