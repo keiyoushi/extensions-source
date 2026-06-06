@@ -25,11 +25,19 @@ class Komiic :
     ConfigurableSource {
     override val name = "Komiic"
     override val lang = "zh"
-    override val baseUrl by lazy {
-        mirrorUrls[pref.getString(BASE_URL_PREF, "0")!!.toInt().coerceAtMost(mirrorUrls.size - 1)]
-    }
+    override val baseUrl get() = "https://${mirrorUrls[urlIndex]}"
     override val supportsLatest = true
+
+    private val urlIndex get() = pref.getString(BASE_URL_PREF, "0")!!.toInt().coerceAtMost(mirrorUrls.size - 1)
     override val client = network.client.newBuilder()
+        .addInterceptor { chain ->
+            val origin = chain.request()
+            val request = origin.takeUnless { urlIndex > 0 && origin.url.host.endsWith("komiic.com") } ?: origin.run {
+                val newHost = url.host.removeSuffix("komiic.com") + mirrorUrls[urlIndex]
+                newBuilder().url(url.newBuilder().host(newHost).build()).build()
+            }
+            chain.proceed(request)
+        }
         .addInterceptor { chain ->
             refreshToken(chain)
             val origin = chain.request()
