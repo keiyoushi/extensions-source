@@ -39,7 +39,7 @@ class OlympusScanlation :
         else -> preferences.prefBaseUrl
     }
 
-    private val defaultBaseUrl: String = "https://olympusbiblioteca.com"
+    private val defaultBaseUrl: String = "https://olympusxyz.com"
 
     private val fetchedDomainUrl: String by lazy {
         if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
