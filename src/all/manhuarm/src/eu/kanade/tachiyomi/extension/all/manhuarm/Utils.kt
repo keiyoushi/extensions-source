@@ -11,6 +11,7 @@ data class Language(
     val disableFontSettings: Boolean = false,
     val disableWordBreak: Boolean = false,
     val disableTranslator: Boolean = false,
+    val translateSynopsis: Boolean = false,
     val supportNativeTranslation: Boolean = false,
     val fontName: String = "comic_neue_bold",
 )
