@@ -31,9 +31,6 @@ class GenreFilter :
             "Horror" to "Horror",
             "Isekai" to "Isekai",
             "Josei" to "Josei",
-            "Manhua" to "Manhua",
-            "Manhwa" to "Manhwa",
-            "Manga" to "Manga",
             "Martial arts" to "Martial arts",
             "Mature" to "Mature",
             "Mecha" to "Mecha",
@@ -52,7 +49,6 @@ class GenreFilter :
             "Supernatural" to "Supernatural",
             "Thriller" to "Thriller",
             "Tragedy" to "Tragedy",
-            "Webtoons" to "Webtoons",
             "ladies" to "ladies",
         ),
     )
@@ -76,5 +72,16 @@ class StatusFilter :
             "All" to "",
             "Ongoing" to "Ongoing",
             "Completed" to "Completed",
+        ),
+    )
+
+class TypeFilter :
+    SelectFilter(
+        "Type",
+        arrayOf(
+            "All Types" to "",
+            "Manga" to "Manga",
+            "Manhwa" to "Manhwa",
+            "Manhua" to "Manhua",
         ),
     )
