@@ -25,7 +25,9 @@ class Komiic :
     ConfigurableSource {
     override val name = "Komiic"
     override val lang = "zh"
-    override val baseUrl = "https://komiic.com"
+    override val baseUrl by lazy {
+        mirrorUrls[pref.getString(BASE_URL_PREF, "0")!!.toInt().coerceAtMost(mirrorUrls.size - 1)]
+    }
     override val supportsLatest = true
     override val client = network.client.newBuilder()
         .addInterceptor { chain ->
@@ -66,6 +68,7 @@ class Komiic :
         val extra = fragment?.let { "#$it" } ?: ""
         return POST("$baseUrl/api/query$extra", headers, this)
     }
+
     private fun Response.parse() = parseAs<ResponseDto>().getData()
 
     // Popular Manga ===============================================================================
