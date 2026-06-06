@@ -32,7 +32,7 @@ class Komiic :
     override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val origin = chain.request()
-            val request = origin.takeUnless { urlIndex > 0 && origin.url.host.endsWith("komiic.com") } ?: origin.run {
+            val request = origin.takeUnless { urlIndex > 0 && it.url.host.endsWith("komiic.com") } ?: origin.run {
                 val newHost = url.host.removeSuffix("komiic.com") + mirrorUrls[urlIndex]
                 newBuilder().url(url.newBuilder().host(newHost).build()).build()
             }
