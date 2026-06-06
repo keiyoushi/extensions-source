@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.imanevilgod
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -28,8 +27,7 @@ class IAmAnEvilGod : HttpSource() {
         status = SManga.UNKNOWN
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        Observable.just(MangasPage(listOf(createManga()), false))
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(createManga()), false))
 
     override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
     override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
@@ -37,32 +35,26 @@ class IAmAnEvilGod : HttpSource() {
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> =
-        Observable.just(MangasPage(listOf(createManga()), false))
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(listOf(createManga()), false))
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
     // --- Manga details ---
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(GET(baseUrl, headers))
-            .asObservableSuccess()
-            .map { response ->
-                val doc = response.asJsoup()
-                SManga.create().apply {
-                    title = "I'm An Evil God"
-                    url = "/"
-                    status = SManga.UNKNOWN
-                    description = "Across the realms, the manliest and most handsome evil god in history! " +
-                        "Xie Yan crosses over and falls into the vixen's lair..."
-                    thumbnail_url = doc.selectFirst("meta[property=og:image]")?.attr("content")
-                }
-            }
-    }
+    override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl, headers)
 
-    override fun mangaDetailsRequest(manga: SManga) = throw UnsupportedOperationException()
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val doc = response.asJsoup()
+        return SManga.create().apply {
+            title = "I'm An Evil God"
+            url = "/"
+            status = SManga.UNKNOWN
+            description = "Across the realms, the manliest and most handsome evil god in history! " +
+                "Xie Yan crosses over and falls into the vixen's lair..."
+            thumbnail_url = doc.selectFirst("meta[property=og:image]")?.attr("content")
+        }
+    }
 
     // --- Chapter list ---
 
@@ -75,7 +67,6 @@ class IAmAnEvilGod : HttpSource() {
             .mapIndexed { index, el ->
                 SChapter.create().apply {
                     name = el.text()
-                    url = el.attr("href")
                     setUrlWithoutDomain(el.absUrl("href"))
                     chapter_number = index.toFloat()
                 }
@@ -83,8 +74,6 @@ class IAmAnEvilGod : HttpSource() {
     }
 
     // --- Page list ---
-
-    override fun pageListRequest(chapter: SChapter) = GET(chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val doc = response.asJsoup()
