@@ -2,8 +2,8 @@ ext {
     extName = 'Aarlas'
     extClass = '.Aarlas'
     themePkg = 'zeistmanga'
-    baseUrl = 'https://aarlas.blogspot.com'
-    overrideVersionCode = 2
+    baseUrl = 'https://www.arlas.online'
+    overrideVersionCode = 3
     isNsfw = true
 }
 

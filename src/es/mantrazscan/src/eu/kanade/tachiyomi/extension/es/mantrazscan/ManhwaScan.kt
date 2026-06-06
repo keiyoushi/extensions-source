@@ -19,7 +19,7 @@ class ManhwaScan : HttpSource() {
 
     override val name = "Manhwa Scan"
 
-    override val baseUrl = "https://manhwascans.lat"
+    override val baseUrl = "https://manhwascanx.lat"
 
     override val lang = "es"
 
