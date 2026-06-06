@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.divascans
 
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -12,17 +11,24 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferences
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONArray
-import org.json.JSONObject
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import java.text.SimpleDateFormat
+import uy.kohesive.injekt.injectLazy
 import java.util.Locale
 
 class DivaScans :
@@ -34,12 +40,11 @@ class DivaScans :
     override val lang = "en"
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences: SharedPreferences by lazy { getPreferences() }
+    private val json: Json by injectLazy()
 
-    // Cloudflare Bypass Headers
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+        .add("Accept", "application/json, text/plain, */*")
         .add("Accept-Language", "en-US,en;q=0.5")
         .add("Referer", "$baseUrl/")
 
@@ -81,7 +86,6 @@ class DivaScans :
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        // If the user typed a name in the search bar, use the text search API
         if (query.isNotBlank()) {
             val url = "$baseUrl/api/search".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
@@ -90,7 +94,6 @@ class DivaScans :
             return GET(url, headers)
         }
 
-        // If the user is using the filter menu, use the series API
         val url = "$baseUrl/api/series".toHttpUrl().newBuilder()
         url.addQueryParameter("page", page.toString())
 
@@ -99,23 +102,8 @@ class DivaScans :
                 is SortFilter -> if (filter.selected.isNotEmpty()) url.addQueryParameter("sort", filter.selected)
                 is StatusFilter -> if (filter.selected.isNotEmpty()) url.addQueryParameter("status", filter.selected)
                 is OriginFilter -> if (filter.selected.isNotEmpty()) url.addQueryParameter("origin", filter.selected)
-
-                // Multi-Select Logic for Genres
-                is GenreFilter -> {
-                    val selectedGenres = filter.state.filter { it.state }.map { it.value }
-                    if (selectedGenres.isNotEmpty()) {
-                        // This adds a parameter for every checked box (e.g., &genre=action&genre=comedy)
-                        selectedGenres.forEach { url.addQueryParameter("genre", it) }
-                    }
-                }
-
-                // Multi-Select Logic for Tags
-                is TagFilter -> {
-                    val selectedTags = filter.state.filter { it.state }.map { it.value }
-                    if (selectedTags.isNotEmpty()) {
-                        selectedTags.forEach { url.addQueryParameter("tag", it) }
-                    }
-                }
+                is GenreFilter -> filter.state.filter { it.state }.forEach { url.addQueryParameter("genre", it.value) }
+                is TagFilter -> filter.state.filter { it.state }.forEach { url.addQueryParameter("tag", it.value) }
                 else -> {}
             }
         }
@@ -127,23 +115,49 @@ class DivaScans :
     override fun searchMangaParse(response: Response): MangasPage = parseJsonMangaList(response)
 
     private fun parseJsonMangaList(response: Response): MangasPage {
-        val jsonString = response.body!!.string()
+        val jsonString = response.body.string()
+        val jsonElement = runCatching { json.parseToJsonElement(jsonString) }.getOrNull() ?: return MangasPage(emptyList(), false)
+        val jsonArray = findJsonArray(jsonElement) ?: return MangasPage(emptyList(), false)
 
-        val jsonObj = runCatching { JSONObject(jsonString) }.getOrNull()
-        val jsonArray = jsonObj?.let { findJsonArray(it) }
-            ?: runCatching { JSONArray(jsonString) }.getOrDefault(JSONArray())
+        val savedGenres = preferences.getStringSet(GENRES_PREF_KEY, mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+        val savedTags = preferences.getStringSet(TAGS_PREF_KEY, mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+        var prefsChanged = false
 
-        val mangas = (0 until jsonArray.length()).mapNotNull { i ->
-            val item = jsonArray.optJSONObject(i) ?: return@mapNotNull null
+        val mangas = jsonArray.mapNotNull { item ->
+            val obj = item.jsonObject
 
-            val title = item.optString("title").ifEmpty { item.optString("name") }
-            val slug = item.optString("urlSlug").ifEmpty { item.optString("slug") }.ifEmpty { item.optString("id") }
-            var cover = item.optString("coverImage").ifEmpty { item.optString("cover") }.ifEmpty { item.optString("thumbnail") }
+            val genresArr = obj["genres"]?.jsonArray
+            if (genresArr != null) {
+                for (genreObj in genresArr) {
+                    val genreSlug = genreObj.jsonObject["genre"]?.jsonObject?.get("slug")?.jsonPrimitive?.contentOrNull
+                    if (!genreSlug.isNullOrEmpty() && savedGenres.add(formatSlug(genreSlug))) prefsChanged = true
+                }
+            }
+
+            val tagsArr = obj["tags"]?.jsonArray
+            if (tagsArr != null) {
+                for (tagObj in tagsArr) {
+                    val tagSlug = tagObj.jsonObject["tag"]?.jsonObject?.get("slug")?.jsonPrimitive?.contentOrNull
+                        ?: tagObj.jsonObject["slug"]?.jsonPrimitive?.contentOrNull
+                    if (!tagSlug.isNullOrEmpty() && savedTags.add(formatSlug(tagSlug))) prefsChanged = true
+                }
+            }
+
+            val title = obj["title"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: obj["name"]?.jsonPrimitive?.contentOrNull ?: ""
+            val slug = obj["urlSlug"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: obj["slug"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: obj["id"]?.jsonPrimitive?.contentOrNull ?: ""
+
+            var cover = obj["coverImage"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: obj["thumbnail"]?.jsonPrimitive?.contentOrNull ?: ""
+
+            if (cover.isBlank() && obj.containsKey("cover")) {
+                val coverElement = obj["cover"]
+                cover = if (coverElement is JsonObject) {
+                    coverElement["url"]?.jsonPrimitive?.contentOrNull ?: ""
+                } else {
+                    coverElement?.jsonPrimitive?.contentOrNull ?: ""
+                }
+            }
 
             if (title.isEmpty() || slug.isEmpty()) return@mapNotNull null
-            if (cover.isEmpty() && item.has("cover")) {
-                cover = item.optJSONObject("cover")?.optString("url") ?: ""
-            }
 
             SManga.create().apply {
                 this.title = title
@@ -151,127 +165,157 @@ class DivaScans :
                 this.thumbnail_url = cleanImageUrl(cover)
             }
         }
+
+        if (prefsChanged) {
+            preferences.edit()
+                .putStringSet(GENRES_PREF_KEY, savedGenres)
+                .putStringSet(TAGS_PREF_KEY, savedTags)
+                .apply()
+        }
+
         return MangasPage(mangas, mangas.size >= 10)
     }
 
-    private fun findJsonArray(obj: JSONObject): JSONArray? {
-        val keys = listOf("data", "series", "items", "results", "mangas")
-        for (key in keys) {
-            if (obj.has(key) && obj.optJSONArray(key) != null) return obj.getJSONArray(key)
-        }
-        obj.keys().forEach { key ->
-            val target = obj.optJSONArray(key)
-            if (target != null) return target
+    private fun formatSlug(slug: String): String = slug.replace("-", " ").replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+
+    private fun findJsonArray(element: JsonElement): JsonArray? {
+        if (element is JsonArray) return element
+        if (element is JsonObject) {
+            val keys = listOf("data", "series", "items", "results", "mangas")
+            for (key in keys) {
+                if (element.containsKey(key) && element[key] is JsonArray) {
+                    return element[key]?.jsonArray
+                }
+            }
         }
         return null
     }
-
-    // --- Next.js React Component DOM Reconstruction Layer ---
 
     private fun getHydratedDocument(html: String): Document {
         val doc = Jsoup.parse(html)
         if (doc.select("a[href*='/chapter/']").size > 1) return doc
 
         val sb = StringBuilder()
-        val rscRegex = Regex("""self\.__next_f\.push\(\[\d+,\s*("(?:[^"\\]|\\.)*")\]\)""")
+        val rscRegex = Regex("""self\.__next_f\.push\(\[\d+,\s*"((?:[^"\\]|\\.)*)"\]\)""")
+
         rscRegex.findAll(html).forEach { match ->
             try {
-                val jsonPayload = """{"data": ${match.groupValues[1]}}"""
-                val unescapedStr = JSONObject(jsonPayload).getString("data")
-                sb.append(unescapedStr)
-            } catch (e: Exception) {}
+                val jsonPayload = """{"d": "${match.groupValues[1]}"}"""
+                val unescapedStr = json.parseToJsonElement(jsonPayload).jsonObject["d"]?.jsonPrimitive?.contentOrNull
+                if (!unescapedStr.isNullOrEmpty()) {
+                    sb.append(unescapedStr)
+                }
+            } catch (_: Exception) {}
         }
 
-        if (sb.isNotEmpty()) {
-            doc.body().append(sb.toString())
-        }
+        if (sb.isNotEmpty()) doc.body().append(sb.toString())
         return doc
     }
 
     // --- HTML Details Layer ---
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val unescapedHtml = getHydratedDocument(response.body!!.string())
-        val document = Jsoup.parse(unescapedHtml.html(), response.request.url.toString())
-        document.select("noscript, script, style").remove()
+        val html = response.body.string()
+
+        // Find the main series object directly
+        val seriesRegex = Regex("""(?s)"series"\s*:\s*(\{"id":"[^"]+".*?\})""")
+        val match = seriesRegex.find(html) ?: return SManga.create()
+        val mangaObj = json.parseToJsonElement(match.groupValues[1]).jsonObject
 
         return SManga.create().apply {
-            title = document.select("main h1, div h1, h1").firstOrNull { !it.text().contains("JavaScript", true) }?.text()?.trim() ?: ""
-            artist = document.select("div:contains(Artist) + div, span:contains(Artist) + span, p:contains(Artist)").first()?.text()
-            author = document.select("div:contains(Author) + div, span:contains(Author) + span, p:contains(Author)").first()?.text() ?: artist
-            description = document.select("div.synopsis, div:contains(Synopsis), p.description, div.description").text().trim()
-
-            val statusStr = document.select("div:contains(Status), span:contains(Status)").text()
-            status = when {
-                statusStr.contains("Ongoing", true) -> SManga.ONGOING
-                statusStr.contains("Completed", true) -> SManga.COMPLETED
-                statusStr.contains("Hiatus", true) -> SManga.ON_HIATUS
-                else -> SManga.UNKNOWN
-            }
-
-            val imgElement = document.select("main img, div img[src*='cover']").first()
-            thumbnail_url = cleanImageUrl(imgElement?.attr("src") ?: "")
+            title = mangaObj["title"]?.jsonPrimitive?.contentOrNull ?: ""
+            thumbnail_url = cleanImageUrl(mangaObj["coverImage"]?.jsonPrimitive?.contentOrNull ?: "")
+            status = SManga.UNKNOWN
         }
     }
 
-    // --- Chapter Layer ---
+    // --- HTML Chapter Layer ---
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val html = response.body!!.string()
-        val document = getHydratedDocument(html)
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val html = response.body.string()
         val showPaid = preferences.getBoolean(SHOW_PAID_CHAPTERS_PREF, false)
+        val slug = response.request.url.pathSegments.last()
 
-        val domChapters = document.select("a[href*='/chapter/']").filter { element ->
-            element.select("span.font-medium").isNotEmpty() &&
-                !element.text().contains("Start Reading", true) &&
-                !element.text().contains("Read First", true)
+        // Hydrate to unescape RSC payloads which contain the chapter data
+        val doc = getHydratedDocument(html)
+        val fullContent = doc.body().html()
+
+        // 1. Improved JSON extraction from HYDRATED content
+        val chaptersArrays = mutableListOf<JsonArray>()
+        // Match both "chapters":[...] and \"chapters\":[...]
+        val chapterJsonRegex = Regex("""(?s)\\?"chapters\\?"\s*:\s*(\[.*?\])""")
+
+        chapterJsonRegex.findAll(fullContent).forEach { match ->
+            runCatching {
+                val element = json.parseToJsonElement(match.groupValues[1])
+                if (element is JsonArray) chaptersArrays.add(element)
+            }
         }
 
-        if (domChapters.isNotEmpty()) {
-            val chapters = mutableListOf<SChapter>()
-            for (element in domChapters) {
-                val isLocked = element.select("svg.lucide-lock").isNotEmpty()
+        val chaptersArray = chaptersArrays.maxByOrNull { it.size }
+        if (!chaptersArray.isNullOrEmpty()) {
+            val chapters = chaptersArray.mapNotNull { element ->
+                val chap = element.jsonObject
+                val isLocked = (chap["isLocked"]?.jsonPrimitive?.booleanOrNull ?: false) ||
+                    (chap["coinPrice"]?.jsonPrimitive?.intOrNull ?: 0) > 0
+                val coinPrice = chap["coinPrice"]?.jsonPrimitive?.intOrNull ?: 0
 
-                if (isLocked && !showPaid) continue
+                if (isLocked && !showPaid) return@mapNotNull null
 
-                val chapter = SChapter.create().apply {
-                    setUrlWithoutDomain(element.attr("href"))
+                val numStr = chap["number"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
 
-                    val titleSpan = element.select("span.font-medium").first()
-                    val rawName = titleSpan?.text()?.replace("NEW", "", true)?.trim() ?: element.text().trim()
-                    val price = element.select("svg.lucide-coins").first()?.parent()?.text()?.trim()
+                SChapter.create().apply {
+                    // Use number in URL as requested by site structure
+                    url = "/series/comic/$slug/chapter/$numStr"
 
-                    name = if (isLocked) {
-                        if (!price.isNullOrEmpty()) "\uD83D\uDD12 $rawName - $price Coins" else "\uD83D\uDD12 $rawName"
-                    } else {
-                        rawName
-                    }
+                    val prefix = if (isLocked) "\uD83D\uDD12 " else ""
+                    val suffix = if (isLocked && coinPrice > 0) " ($coinPrice coins)" else ""
+                    val baseName = chap["title"]?.jsonPrimitive?.contentOrNull?.takeIf { it != "null" && it.isNotBlank() } ?: "Chapter $numStr"
 
-                    val dateText = element.select("svg.lucide-clock ~ span, span.whitespace-nowrap").text().trim()
-                    date_upload = runCatching { dateFormat.parse(dateText)?.time ?: 0L }.getOrDefault(0L)
+                    name = "$prefix$baseName$suffix"
+                    chapter_number = numStr.toFloatOrNull() ?: 0f
                 }
-                chapters.add(chapter)
             }
-            return chapters.distinctBy { it.url }.reversed()
+            if (chapters.size > 1) return chapters.sortedByDescending { it.chapter_number }
         }
 
-        val chapterRegex = Regex("""(/series/comic/[^/]+/chapter/[^"\\}]+)""")
-        val urls = chapterRegex.findAll(document.html()).map { it.groupValues[1] }.toList()
+        // 2. Fallback: Parse via DOM from hydrated document
+        val chapterElements = doc.select("a[href*='/chapter/']")
+        if (chapterElements.isNotEmpty()) {
+            return chapterElements.mapNotNull { element ->
+                val nameText = element.text()
 
-        return urls.distinct().map { url ->
-            SChapter.create().apply {
-                this.url = url
-                val chapNum = url.substringAfterLast("/")
-                this.name = "Chapter $chapNum"
-            }
-        }.reversed()
+                // Filter out navigation/action buttons
+                if (nameText.contains("Start Reading", true) || nameText.contains("Continue Reading", true)) return@mapNotNull null
+
+                val href = element.attr("href")
+                val chapterUrl = when {
+                    href.startsWith("http") -> href.substringAfter(baseUrl)
+                    href.startsWith("/") -> href
+                    else -> return@mapNotNull null
+                }
+
+                if (!chapterUrl.contains("/chapter/")) return@mapNotNull null
+
+                SChapter.create().apply {
+                    url = chapterUrl
+                    name = nameText
+                    chapter_number = nameText.trim().substringAfter("Chapter").trim().takeWhile { it.isDigit() || it == '.' }.toFloatOrNull()
+                        ?: nameText.filter { it.isDigit() || it == '.' }.toFloatOrNull()
+                        ?: 0f
+                }
+            }.filter { it.name.contains("Chapter", true) || it.chapter_number > 0 }
+                .distinctBy { it.url }
+                .sortedByDescending { it.chapter_number }
+        }
+
+        return emptyList()
     }
 
     // --- Page Reader Layer ---
 
     override fun pageListParse(response: Response): List<Page> {
-        val html = response.body!!.string()
+        val html = response.body.string()
         val document = getHydratedDocument(html)
 
         val domImages = document.select("div.reader-images img, div.chapter-container img, main img[src*='chapter']")
@@ -297,32 +341,33 @@ class DivaScans :
 
     private fun cleanImageUrl(url: String): String {
         if (url.isEmpty()) return ""
-        var cleanUrl = url.replace("&amp;", "&")
 
-        try {
-            if (cleanUrl.contains("url=")) {
-                val encodedPart = cleanUrl.substringAfter("url=").substringBefore("&")
-                val decoded = java.net.URLDecoder.decode(encodedPart, "UTF-8")
-                if (decoded.startsWith("http")) {
-                    cleanUrl = decoded
-                }
-            }
-        } catch (_: Exception) {}
+        // 1. Decode proxy URLs
+        var cleanUrl = if (url.contains("url=")) {
+            val encodedPart = url.substringAfter("url=").substringBefore("&")
+            java.net.URLDecoder.decode(encodedPart, "UTF-8")
+        } else {
+            url
+        }
 
+        // 2. Ensure base URL
         if (cleanUrl.startsWith("/")) {
             cleanUrl = "$baseUrl$cleanUrl"
         }
 
-        cleanUrl = cleanUrl.replace("divascans.org", "media.divascans.org")
+        // 3. Force CDN and strip invalid next/image paths
+        return cleanUrl.replace("divascans.org", "media.divascans.org")
             .replace("media.media.divascans.org", "media.divascans.org")
+            .replace("/_next/image?url=", "")
             .replace("/uploads/", "/")
-
-        return cleanUrl
+            .substringBefore("&") // Strip all Next.js parameters
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private const val SHOW_PAID_CHAPTERS_PREF = "show_paid_chapters"
+        private const val GENRES_PREF_KEY = "saved_genres"
+        private const val TAGS_PREF_KEY = "saved_tags"
     }
 }
