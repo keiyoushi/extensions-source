@@ -30,6 +30,7 @@ class Nexusscanlation : HttpSource() {
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimitHost(apiBaseUrl.toHttpUrl(), 1, 3) // API: max 1 request per 3 seconds
+        .addInterceptor(ImageInterceptor())
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -166,7 +167,21 @@ class Nexusscanlation : HttpSource() {
             throw IOException("Premium chapter. Not available.")
         }
 
-        return chapterPagesDto.paginas.orEmpty().mapIndexed { index, page -> Page(index, imageUrl = page.url) }
+        return chapterPagesDto.paginas.orEmpty().mapIndexed { index, page ->
+            val imageUrl = buildString {
+                append(page.url)
+                page.scrambledData?.let {
+                    append("#scramble=")
+                    append(it.columns)
+                    append(',')
+                    append(it.rows)
+                    append(',')
+                    append(it.seed)
+                }
+            }
+
+            Page(index, imageUrl = imageUrl)
+        }
     }
 
     // ======================= Helpers =======================================
