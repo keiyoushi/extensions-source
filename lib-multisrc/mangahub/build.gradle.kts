@@ -4,7 +4,7 @@ plugins {
     alias(kei.plugins.multisrc)
 }
 
-baseVersionCode = 34
+baseVersionCode = 35
 
 dependencies {
     //noinspection UseTomlInstead
