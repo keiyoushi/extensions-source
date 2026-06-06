@@ -216,18 +216,77 @@ class DivaScans :
 
     override fun mangaDetailsParse(response: Response): SManga {
         val html = response.body.string()
+        val doc = getHydratedDocument(html)
+        val manga = SManga.create()
 
-        // Find the main series object directly
-        val seriesRegex = Regex("""(?s)"series"\s*:\s*(\{"id":"[^"]+".*?\})""")
-        val match = seriesRegex.find(html) ?: return SManga.create()
-        val mangaObj = json.parseToJsonElement(match.groupValues[1]).jsonObject
+        val fullContent = doc.body().html()
 
-        return SManga.create().apply {
-            title = mangaObj["title"]?.jsonPrimitive?.contentOrNull ?: ""
-            thumbnail_url = cleanImageUrl(mangaObj["coverImage"]?.jsonPrimitive?.contentOrNull ?: "")
-            status = SManga.UNKNOWN
+        // 1. JSON Attempt (Hydrated)
+        val seriesRegex = Regex("""(?s)\\?"series\\?"\s*:\s*(\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})""")
+        val match = seriesRegex.find(fullContent)
+        if (match != null) {
+            runCatching {
+                val jsonStr = match.groupValues[1].replace("\\\"", "\"")
+                val mangaObj = json.parseToJsonElement(jsonStr).jsonObject
+
+                manga.title = mangaObj["title"]?.jsonPrimitive?.contentOrNull ?: ""
+                manga.thumbnail_url = cleanImageUrl(mangaObj["coverImage"]?.jsonPrimitive?.contentOrNull ?: "")
+                manga.description = mangaObj["description"]?.jsonPrimitive?.contentOrNull
+                manga.author = mangaObj["author"]?.jsonPrimitive?.contentOrNull
+                manga.artist = mangaObj["artist"]?.jsonPrimitive?.contentOrNull ?: manga.author
+
+                val statusStr = mangaObj["status"]?.jsonPrimitive?.contentOrNull ?: ""
+                manga.status = when {
+                    statusStr.contains("Ongoing", true) -> SManga.ONGOING
+                    statusStr.contains("Completed", true) -> SManga.COMPLETED
+                    statusStr.contains("Hiatus", true) -> SManga.ON_HIATUS
+                    else -> SManga.UNKNOWN
+                }
+
+                val origin = mangaObj["origin"]?.jsonPrimitive?.contentOrNull?.let { formatSlug(it) }
+                val genresList = (mangaObj["genres"] ?: mangaObj["genre"])?.jsonArray?.mapNotNull {
+                    it.jsonObject["name"]?.jsonPrimitive?.contentOrNull ?: it.jsonObject["genre"]?.jsonObject?.get("name")?.jsonPrimitive?.contentOrNull
+                }
+                val tagsList = mangaObj["tags"]?.jsonArray?.mapNotNull {
+                    it.jsonObject["name"]?.jsonPrimitive?.contentOrNull ?: it.jsonObject["tag"]?.jsonObject?.get("name")?.jsonPrimitive?.contentOrNull
+                }
+
+                manga.genre = listOfNotNull(origin).plus(genresList ?: emptyList()).plus(tagsList ?: emptyList()).joinToString()
+
+                if (!manga.description.isNullOrBlank()) return manga
+            }
         }
+
+        // 2. DOM Fallback
+        manga.title = doc.select("h1").text().ifBlank { doc.title() }
+        manga.thumbnail_url = cleanImageUrl(doc.select("img[src*='cover'], img[src*='thumbnail']").attr("src"))
+        manga.description = doc.select("div:containsOwn(Synopsis), div:containsOwn(Description), div:containsOwn(synopsis)").firstOrNull()?.nextElementSibling()?.text()
+            ?: doc.select("main p").firstOrNull()?.text()
+
+        manga.author = doc.select("span:containsOwn(Author)").firstOrNull()?.nextElementSibling()?.text()
+            ?: doc.select("a[href*='/team/']").firstOrNull()?.text()
+
+        val statusText = doc.select("span:containsOwn(Status)").firstOrNull()?.nextElementSibling()?.text()
+            ?: doc.select("div:containsOwn(Status) + div").text()
+        manga.status = when {
+            statusText.contains("Ongoing", true) -> SManga.ONGOING
+            statusText.contains("Completed", true) -> SManga.COMPLETED
+            statusText.contains("Hiatus", true) -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
+        }
+
+        val originText = doc.select("span:containsOwn(Origin)").firstOrNull()?.nextElementSibling()?.text()
+            ?: doc.select("div:containsOwn(Origin) + a").text()
+
+        val genres = doc.select("a[href*='genre=']").map { it.text() }
+        val tags = doc.select("a[href*='tag=']").map { it.text() }
+
+        manga.genre = listOfNotNull(originText.takeIf { it.isNotBlank() }).plus(genres).plus(tags).joinToString()
+
+        return manga
     }
+
+
 
     // --- HTML Chapter Layer ---
 
