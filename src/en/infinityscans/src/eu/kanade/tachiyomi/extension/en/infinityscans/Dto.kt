@@ -24,6 +24,9 @@ class RankingResultDto(
 )
 
 @Serializable
+class SearchRequestBody(val search: String)
+
+@Serializable
 class SearchEntryDto(
     val id: String,
     val name: String,

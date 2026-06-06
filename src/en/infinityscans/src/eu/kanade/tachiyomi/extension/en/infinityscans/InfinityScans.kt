@@ -13,11 +13,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
@@ -26,6 +25,8 @@ class InfinityScans : HttpSource() {
     override val name = "InfinityScans"
 
     override val baseUrl = "https://infinityscans.org"
+
+    override val versionId = 2
 
     private val cdnHost = "cv.infinityscans.org"
     private val pageCdnHost = "ch.infinityscans.org"
@@ -38,12 +39,16 @@ class InfinityScans : HttpSource() {
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(WebviewInterceptor(baseUrl))
-        .rateLimit(10)
+        .rateLimit(5)
         .build()
 
     override fun headersBuilder() = super.headersBuilder().apply {
         add("Referer", "$baseUrl/")
     }
+
+    private val rscHeaders = headersBuilder()
+        .set("rsc", "1")
+        .build()
 
     private val apiHeaders = headersBuilder().apply {
         add("Accept", "application/json, text/javascript, */*; q=0.01")
@@ -110,7 +115,7 @@ class InfinityScans : HttpSource() {
             }
             GET(urlBuilder.build(), req.headers)
         } else {
-            fetchJson("api/search", 0, "", """{"search":"$query"}""")
+            fetchJson("api/search", 0, "", query)
         }
 
         return client.newCall(request).asObservableSuccess().map { res ->
@@ -130,10 +135,10 @@ class InfinityScans : HttpSource() {
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/comic/${manga.url}-$slugHash", headersBuilder().set("rsc", "1").build())
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/comic/${manga.url}-$slugHash", rscHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val dto = response.extractNextJs<MangaDetailsDto>() ?: return SManga.create()
+        val dto = response.extractNextJs<MangaDetailsDto>()!!
 
         return SManga.create().apply {
             description = buildString {
@@ -225,7 +230,7 @@ class InfinityScans : HttpSource() {
 
     // ============================= Utilities =============================
 
-    private fun fetchJson(api: String, page: Int, sort: String, payload: String? = null): Request {
+    private fun fetchJson(api: String, page: Int, sort: String, query: String? = null): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegments(api)
             .apply {
@@ -237,10 +242,10 @@ class InfinityScans : HttpSource() {
             set("Referer", url.newBuilder().removePathSegment(0).build().toString())
         }.build()
 
-        return if (payload == null) {
+        return if (query == null) {
             GET(url, refHeaders)
         } else {
-            val body = payload.toRequestBody("application/json".toMediaType())
+            val body = SearchRequestBody(search = query).toJsonRequestBody()
             POST(url.toString(), refHeaders, body)
         }
     }
