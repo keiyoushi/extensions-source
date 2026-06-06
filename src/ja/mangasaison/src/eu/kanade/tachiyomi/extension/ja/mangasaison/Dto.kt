@@ -21,9 +21,9 @@ class PopularVariables(
 @Suppress("unused")
 @Serializable
 class LatestVariables(
-    val layoutId: String,
-    val limit: Int,
-    val offset: Int,
+    private val layoutId: String,
+    private val limit: Int,
+    private val offset: Int,
 )
 
 @Suppress("unused")
@@ -135,7 +135,7 @@ class BookTitle(
         title = titleName
         author = authorNames?.joinToString()
         description = buildString {
-            longDescription?.let { text -> append(Jsoup.parseBodyFragment(text).text()) }
+            longDescription?.let { append(Jsoup.parseBodyFragment(it).text()) }
 
             titleNameKana?.takeIf { it.isNotEmpty() }?.let {
                 append("\n\nAlternative Title: $it")

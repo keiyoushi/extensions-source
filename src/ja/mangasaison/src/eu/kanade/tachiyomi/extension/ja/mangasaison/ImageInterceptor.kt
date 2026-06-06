@@ -75,12 +75,12 @@ class ImageInterceptor : Interceptor {
         md.update(CHUNK4)
         val master = md.digest()
 
-        // unwrap with master: AES-256-CBC (wasm func 89 0x3944f); block1 is IV-independent so IV=0
+        // unwrap with master: AES-256-CBC (wasm func 89 0x3944f)
         val unwrapCipher = Cipher.getInstance("AES/CBC/NoPadding")
         unwrapCipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(master, "AES"), IvParameterSpec(ByteArray(16)))
         val unwrapped = unwrapCipher.doFinal(material)
 
-        val imageKey = ByteArray(16) { (unwrapped[16 + it].toInt().inv() and 0xFF).toByte() } // not (block1)
+        val imageKey = ByteArray(16) { (unwrapped[16 + it].toInt().inv() and 0xFF).toByte() }
         return imageKey
     }
 

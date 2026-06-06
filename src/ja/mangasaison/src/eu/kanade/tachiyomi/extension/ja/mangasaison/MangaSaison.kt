@@ -88,7 +88,6 @@ class MangaSaison :
             listOf(
                 SearchRequest(
                     "cominavi",
-                    // removed "longDescription" in "restrictSearchableAttributes" -> stable but fewer results
                     "filters=isSearchable=1 AND isValid=1 AND payTitleId=-1&query=$query&hitsPerPage=36&page=${page - 1}&attributesToRetrieve=titleId,titleName,compressedTitleThumbnailPath&attributesToHighlight=&attributesToSnippet=&clickAnalytics=false&typoTolerance=false&restrictSearchableAttributes=titleName,titleNameHira,titleNameKana,authors.authorName,authors.authorNameHira,authors.authorNameKana,publisherName",
                 ),
             ),
