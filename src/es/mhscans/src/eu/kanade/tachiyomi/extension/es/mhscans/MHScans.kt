@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
@@ -54,44 +53,17 @@ class MHScans :
             if (it.isNotEmpty()) return it
         }
 
-        val html = document.html()
+        document.selectFirst("form#rk_madara_redirect[method=post]")?.let { form ->
+            val url = form.attr("action")
+            val headers = headersBuilder().set("Referer", document.location()).build()
+            val body = FormBody.Builder()
+            form.select("input").forEach {
+                body.add(it.attr("name"), it.attr("value"))
+            }
+            return pageListParse(client.newCall(POST(url, headers, body.build())).execute().asJsoup())
+        }
 
-        val nonce = NONCE_REGEX.find(html)?.groupValues?.get(1)
-            ?: throw Exception("Could not find the security nonce")
-
-        val chapterId = document.selectFirst("#wp-manga-current-chap")?.attr("data-id")
-            ?.takeIf { it.isNotEmpty() }
-            ?: throw Exception("Could not find chapter ID")
-        val mangaId = document.selectFirst("#manga-reading-nav-head")?.attr("data-id")
-            ?.takeIf { it.isNotEmpty() }
-            ?: throw Exception("Could not find manga ID")
-
-        // Request the token and reader URL
-        val ajaxHeaders = headers.newBuilder()
-            .add("X-Requested-With", "XMLHttpRequest")
-            .build()
-
-        val tokenBody = FormBody.Builder()
-            .add("action", "rk_get_token")
-            .add("nonce", nonce)
-            .add("chapter_id", chapterId)
-            .add("manga_id", mangaId)
-            .build()
-
-        val tokenData = client.newCall(POST("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, tokenBody))
-            .execute()
-            .parseAs<RkTokenResponse>().data
-
-        // Fetch the decoy reader page with the token
-        val readerBody = FormBody.Builder()
-            .add("rt", tokenData.token)
-            .add("chapter_id", tokenData.chapterId.toString())
-            .add("manga_id", tokenData.mangaId.toString())
-            .build()
-
-        val readerDocument = client.newCall(POST(tokenData.readerUrl, headers, readerBody)).execute().asJsoup()
-
-        return readerDocument.select("div.rk-page-wrap img, img.rk-img").mapIndexed { i, img ->
+        return document.select("div.rk-page-wrap img, img.rk-img").mapIndexed { i, img ->
             Page(i, imageUrl = img.attr("abs:src").ifEmpty { img.attr("abs:data-src") })
         }
     }
@@ -112,7 +84,5 @@ class MHScans :
     companion object {
         private const val REMOVE_PREMIUM_CHAPTERS = "removePremiumChapters"
         private const val REMOVE_PREMIUM_CHAPTERS_DEFAULT = true
-
-        private val NONCE_REGEX = """"nonce"\s*:\s*"([^"]+)"""".toRegex()
     }
 }

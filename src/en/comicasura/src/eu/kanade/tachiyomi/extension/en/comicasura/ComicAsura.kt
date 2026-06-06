@@ -71,6 +71,8 @@ class ComicAsura :
         setUrlWithoutDomain(element.absUrl("href"))
     }
 
+    override fun searchMangaNextPageSelector() = "a:has(img[alt=Next])"
+
     override val seriesDetailsSelector = """.bg-\[\#222222\]:has(h1)"""
     override val seriesTitleSelector = ".comic-title-content"
     override val seriesThumbnailSelector = "img[alt=poster]"

@@ -38,7 +38,7 @@ class CManga :
 
     override val lang = "vi"
 
-    private val defaultBaseUrl = "https://cmangax16.com"
+    private val defaultBaseUrl = "https://cmangax17.com"
 
     override val baseUrl get() = getPrefBaseUrl()
 

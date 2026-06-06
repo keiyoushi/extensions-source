@@ -159,5 +159,12 @@ class ManhwaWeb : HttpSource() {
             .mapIndexed { i, img -> Page(i, imageUrl = img) }
     }
 
+    override fun imageRequest(page: Page): Request {
+        val headers = headersBuilder()
+            .add("Referer", "$baseUrl/")
+            .build()
+        return GET(page.imageUrl!!, headers)
+    }
+
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }

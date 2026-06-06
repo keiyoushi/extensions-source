@@ -16,7 +16,7 @@ class SeriesQueryDto(
 class SeriesDto(
     private val name: String,
     private val slug: String,
-    @SerialName("cover_url") private val cover: String,
+    @SerialName("cover_url") private val cover: String?,
 ) {
     fun toSManga() = SManga.create().apply {
         title = name

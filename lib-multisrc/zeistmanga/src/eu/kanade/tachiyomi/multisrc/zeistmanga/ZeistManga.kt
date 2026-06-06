@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -17,6 +18,8 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import uy.kohesive.injekt.injectLazy
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 abstract class ZeistManga(
     override val name: String,
@@ -208,6 +211,14 @@ abstract class ZeistManga(
         return json.decodeFromString<ZeistMangaDto>(res.body.string())
     }
 
+    protected open val dateFormat: SimpleDateFormat by lazy {
+        SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+    }
+
+    protected open fun parseDate(dateStr: String): Long = dateFormat.tryParse(dateStr)
+
+    open val preferChapterUpdatedDate: Boolean = false
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val allEntries = mutableListOf<ZeistMangaEntryDto>()
@@ -231,7 +242,18 @@ abstract class ZeistManga(
         }
         return allEntries
             .filter { it.category.orEmpty().any { cat -> cat.term == chapterCategory } }
-            .map { it.toSChapter(baseUrl) }
+            .map { entry ->
+                val updated = entry.getUpdatedDate()
+                val published = entry.getPublishedDate()
+
+                val dateStr = if (preferChapterUpdatedDate) {
+                    updated ?: published
+                } else {
+                    published ?: updated
+                }
+
+                entry.toSChapter(baseUrl, parseDate(dateStr))
+            }
     }
 
     protected open val useNewChapterFeed = false

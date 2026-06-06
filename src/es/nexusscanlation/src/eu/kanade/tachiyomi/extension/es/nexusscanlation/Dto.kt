@@ -77,6 +77,14 @@ class ChapterPagesDto(
 
 @Serializable
 class PageEntryDto(
-    val orden: Int = 0,
-    val url: String = "",
+    val url: String,
+    @SerialName("sc") val scrambledData: ScrambledDataDto? = null,
+
+)
+
+@Serializable
+class ScrambledDataDto(
+    @SerialName("c") val columns: Int,
+    @SerialName("r") val rows: Int,
+    @SerialName("s") val seed: Long,
 )

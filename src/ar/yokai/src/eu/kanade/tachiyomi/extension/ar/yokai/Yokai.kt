@@ -1,38 +1,58 @@
 package eu.kanade.tachiyomi.extension.ar.yokai
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistMangaDto
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.json.decodeFromStream
 import okhttp3.Response
+import org.jsoup.Jsoup
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 class Yokai : ZeistManga("Yokai", "https://yokai-team.blogspot.com", "ar") {
 
-    // ============================== Chapters ==============================
+    override val preferChapterUpdatedDate = true
+
+    override val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.ROOT).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Dubai")
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.use { it.asJsoup() }
+        val document = Jsoup.parse(
+            response.peekBody(Long.MAX_VALUE).string(),
+            response.request.url.toString(),
+        )
 
-        val url = getChapterFeedUrl(document)
+        val originalList = super.chapterListParse(response)
+            .map { chapter ->
+                val chapterNumberStr: String? = if (
+                    chapter.name.startsWith("Chapter", ignoreCase = true)
+                ) {
+                    val numberPart = chapter.name.substringAfter("Chapter").trim().substringBefore(" ")
+                    chapter.name = "الفصل $numberPart"
+                    numberPart
+                } else {
+                    arabicChapterRegex.find(chapter.name)?.groupValues?.get(1)
+                }
 
-        val result = client.newCall(GET(url, headers)).execute()
-            .use { json.decodeFromStream<ZeistMangaDto>(it.body.byteStream()) }
-
-        val originalList = result.feed?.entry
-            ?.filter { it.category.orEmpty().any { category -> category.term == chapterCategory } }
-            ?.map { it.toSChapter(baseUrl) }
-            ?: throw Exception("Failed to parse from chapter API")
-
-        val additionalChapters = document.select("div#download > div.index-list > a").map {
-            SChapter.create().apply {
-                setUrlWithoutDomain(it.attr("href"))
-                val text = it.text().trim()
-                name = text
-                chapter_number = text.substringBefore(' ').toFloatOrNull() ?: 1F
+                chapterNumberStr?.toFloatOrNull()?.let { chapter.chapter_number = it }
+                chapter
             }
-        }
 
-        return originalList + additionalChapters
+        val additionalChapters = document.select("div#download > div.index-list > a")
+            .map { element ->
+                SChapter.create().apply {
+                    setUrlWithoutDomain(element.absUrl("href"))
+                    val text = element.text().trim()
+                    name = text
+                    chapter_number = text.substringBefore(' ').toFloatOrNull() ?: 1F
+                }
+            }
+
+        return (originalList + additionalChapters)
+            .distinctBy { it.url.substringBefore("?") }
+    }
+
+    companion object {
+        private val arabicChapterRegex = Regex("""الفصل\s*(\d+(?:\.\d+)?)""")
     }
 }

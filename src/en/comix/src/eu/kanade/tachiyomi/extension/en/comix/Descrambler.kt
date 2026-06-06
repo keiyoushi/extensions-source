@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.asResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 
@@ -27,11 +28,12 @@ object Descrambler {
         if (seed == 0) return@Interceptor response
 
         val body = response.body ?: return@Interceptor response
-        val imageBytes = body.bytes()
 
-        val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+        val bitmap = body.byteStream().use { BitmapFactory.decodeStream(it) }
             ?: return@Interceptor response.newBuilder()
-                .body(imageBytes.toResponseBody(body.contentType()))
+                .code(500)
+                .message("Failed to decode image")
+                .body("Failed to decode image".toResponseBody("text/plain".toMediaType()))
                 .build()
 
         val descrambled = descramble(bitmap, seed)
@@ -42,7 +44,7 @@ object Descrambler {
         descrambled.recycle()
 
         response.newBuilder()
-            .body(output.readByteString().toResponseBody(JPEG_MEDIA))
+            .body(output.asResponseBody(JPEG_MEDIA, output.size))
             .build()
     }
 

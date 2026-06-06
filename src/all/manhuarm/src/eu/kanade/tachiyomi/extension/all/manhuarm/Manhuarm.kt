@@ -91,6 +91,10 @@ class Manhuarm(
         get() = preferences.getBoolean(DISABLE_TRANSLATOR_PREF, language.disableTranslator)
         set(value) = preferences.edit().putBoolean(DISABLE_TRANSLATOR_PREF, value).apply()
 
+    private var translateSynopsis: Boolean
+        get() = preferences.getBoolean(TRANSLATE_SYNOPSIS_PREF, language.translateSynopsis)
+        set(value) = preferences.edit().putBoolean(TRANSLATE_SYNOPSIS_PREF, value).apply()
+
     private var customUserAgent: String
         get() = preferences.getString(CUSTOM_UA_PREF, "")!!
         set(value) = preferences.edit().putString(CUSTOM_UA_PREF, value).apply()
@@ -109,6 +113,7 @@ class Manhuarm(
         dialogBoxScale = this@Manhuarm.dialogBoxScale,
         disableWordBreak = this@Manhuarm.disableWordBreak,
         disableTranslator = this@Manhuarm.disableTranslator,
+        translateSynopsis = this@Manhuarm.translateSynopsis,
         disableFontSettings = this@Manhuarm.fontName == DEVICE_FONT,
     )
 
@@ -267,6 +272,10 @@ class Manhuarm(
 
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = super.mangaDetailsParse(document)
+
+        if (translateSynopsis && language.target != language.origin && !manga.description.isNullOrBlank()) {
+            manga.description = translator.translate(language.origin, language.target, manga.description!!)
+        }
 
         // Ensure cover is always set from detail page if it wasn't set from listing
         if (manga.thumbnail_url.isNullOrBlank()) {
@@ -529,7 +538,18 @@ class Manhuarm(
             }.also(screen::addPreference)
         }
 
-        if (!disableTranslator) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = TRANSLATE_SYNOPSIS_PREF
+            title = i18n["translate_synopsis_title"]
+            summary = i18n["translate_synopsis_summary"]
+            setDefaultValue(language.translateSynopsis)
+            setOnPreferenceChange { _, newValue ->
+                translateSynopsis = newValue as Boolean
+                true
+            }
+        }.also(screen::addPreference)
+
+        if (!disableTranslator || translateSynopsis) {
             ListPreference(screen.context).apply {
                 key = TRANSLATOR_PROVIDER_PREF
                 title = i18n["translate_dialog_box_title"]
@@ -581,6 +601,7 @@ class Manhuarm(
         private const val DIALOG_BOX_SCALE_PREF = "dialogBoxScalePref"
         private const val DISABLE_WORD_BREAK_PREF = "disableWordBreakPref"
         private const val DISABLE_TRANSLATOR_PREF = "disableTranslatorPref"
+        private const val TRANSLATE_SYNOPSIS_PREF = "translateSynopsisPref"
         private const val TRANSLATOR_PROVIDER_PREF = "translatorProviderPref"
         private const val CUSTOM_UA_PREF = "customUserAgentPref"
         private const val DEFAULT_FONT_SIZE = "28"
