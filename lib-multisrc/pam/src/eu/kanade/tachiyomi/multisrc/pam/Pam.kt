@@ -56,6 +56,8 @@ abstract class Pam(
 
     private val preferences by getPreferencesLazy()
 
+    protected open val prefPremiumTitle = "Hide Premium chapters"
+
     override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
@@ -167,21 +169,7 @@ abstract class Pam(
             if (page > 1) {
                 addQueryParameter("page", page.toString())
             }
-            filters.firstInstanceOrNull<TriStateGroupFilter>()?.also { genre ->
-                genre.included.also { included ->
-                    if (included.isNotEmpty()) {
-                        addQueryParameter("include_genres", included.joinToString(","))
-                    }
-                }
-                genre.excluded.also { excluded ->
-                    if (excluded.isNotEmpty()) {
-                        addQueryParameter("exclude_genres", excluded.joinToString(","))
-                    }
-                }
-            }
-            // Note: In the original sources, there was both GenreFilter and TypeFilter as TriStateGroupFilter.
-            // Since we consolidated them, we might need to handle multiple instances of TriStateGroupFilter
-            // or specific subclasses if they are present.
+
             filters.filterIsInstance<TriStateGroupFilter>().forEach { group ->
                 when (group.name) {
                     "Genres", "Genres/Thèmes" -> {
@@ -271,7 +259,7 @@ abstract class Pam(
                 data.type?.name?.also(::add)
                 data.genres.mapTo(this) { it.name }
             }.joinToString()
-            status = when (data.status) {
+            status = when (data.status?.lowercase()) {
                 "ongoing", "upcoming" -> SManga.ONGOING
                 "finished" -> SManga.COMPLETED
                 "dropped" -> SManga.CANCELLED
@@ -303,19 +291,21 @@ abstract class Pam(
                         }
                         append(it.title)
                     }
-                    date_upload = dateFormat.tryParse(it.createdAt)
+                    date_upload = it.createdAt.substringBefore(".").let { dateStr ->
+                        dateFormat.tryParse(dateStr)
+                    }
                 }
             }.asReversed()
     }
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.ROOT).apply {
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = HIDE_PREMIUM_PREF
-            title = "Masquer les chapitres Premium"
+            title = prefPremiumTitle
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
