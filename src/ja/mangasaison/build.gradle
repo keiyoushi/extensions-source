@@ -1,6 +1,6 @@
 ext {
     extName = 'Manga Saison'
-    extClass = '.MechaComi'
+    extClass = '.MangaSaison'
     extVersionCode = 1
     isNsfw = true
 }

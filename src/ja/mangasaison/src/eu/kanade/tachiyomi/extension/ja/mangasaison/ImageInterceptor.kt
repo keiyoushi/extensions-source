@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ja.mechacomi
+package eu.kanade.tachiyomi.extension.ja.mangasaison
 
 import android.util.Base64
 import keiyoushi.utils.decodeHex

@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ja.mechacomi
+package eu.kanade.tachiyomi.extension.ja.mangasaison
 
 val POPULAR_QUERY = $$"""
     query storeLatestWeeklySalesRankings($genreIds: [String], $limit: Int!) {

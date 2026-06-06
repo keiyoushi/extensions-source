@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ja.mechacomi
+package eu.kanade.tachiyomi.extension.ja.mangasaison
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -23,7 +23,7 @@ import okhttp3.Response
 import okio.Buffer
 import java.io.IOException
 
-class MechaComi :
+class MangaSaison :
     HttpSource(),
     ConfigurableSource {
     override val name = "Manga Saison"

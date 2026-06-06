@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ja.mechacomi
+package eu.kanade.tachiyomi.extension.ja.mangasaison
 
 import okio.Buffer
 import okio.BufferedSource

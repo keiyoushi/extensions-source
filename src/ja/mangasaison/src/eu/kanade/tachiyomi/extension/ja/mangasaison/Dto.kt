@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ja.mechacomi
+package eu.kanade.tachiyomi.extension.ja.mangasaison
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
