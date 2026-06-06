@@ -39,26 +39,28 @@ class Komiic :
             chain.proceed(request)
         }
         .addInterceptor { chain ->
-            refreshToken(chain)
             val origin = chain.request()
-            chain.proceed(origin).also {
-                if (it.code == 402 && origin.url.toString().contains("api/image")) {
-                    it.close()
-                    throw IOException("今日圖片讀取次數已達上限，請登录或明天再來！")
+            if (origin.url.toString().contains("api/image")) {
+                refreshToken(chain)
+                chain.proceed(origin).also {
+                    if (it.code == 402) {
+                        it.close()
+                        throw IOException("今日圖片讀取次數已達上限，請登录或明天再來！")
+                    }
                 }
+            } else {
+                chain.proceed(origin)
             }
         }.build()
 
     private fun refreshToken(chain: Interceptor.Chain) {
-        val url = chain.request().url
-        if (url.pathSegments[0] != "api") return
-        val cookie = client.cookieJar.loadForRequest(url).find { it.name == "komiic-access-token" } ?: return
-        val parts = cookie.value.split(".")
-        if (parts.size != 3) throw IOException("Token 格式無效")
-        val payload = Base64.decode(parts[1], Base64.DEFAULT).decodeToString()
-        if (System.currentTimeMillis() + 3600_000 < payload.parseAs<JwtPayload>().exp * 1000) return
-        val response = chain.proceed(POST("$baseUrl/auth/refresh", headers)).apply { close() }
-        if (!response.isSuccessful) throw IOException("刷新 Token 失敗：HTTP ${response.code}")
+        client.cookieJar.loadForRequest(chain.request().url).find { it.name == "komiic-access-token" }?.let {
+            val payload = Base64.decode(it.value.split(".")[1], Base64.DEFAULT).decodeToString()
+            if (System.currentTimeMillis() + 3600_000 >= payload.parseAs<JwtPayload>().exp * 1000) {
+                val response = chain.proceed(POST("$baseUrl/auth/refresh", headers)).apply { close() }
+                if (!response.isSuccessful) throw IOException("刷新 Token 失敗：HTTP ${response.code}")
+            }
+        }
     }
 
     private val pref by getPreferencesLazy()
