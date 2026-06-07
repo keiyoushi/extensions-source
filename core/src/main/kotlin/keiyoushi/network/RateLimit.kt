@@ -8,11 +8,11 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
-import java.util.ArrayDeque
 import java.util.concurrent.locks.Condition
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -53,12 +53,12 @@ private class RateLimitInterceptor : Interceptor {
         val interval: Duration,
         val shouldLimit: (HttpUrl) -> Boolean,
     ) {
-        val periodMillis = period.inWholeMilliseconds
-        val intervalMillis = interval.inWholeMilliseconds
-        val queue = ArrayDeque<Long>(permits)
+        val timestamps = ArrayList<Duration>(permits)
+        val ids = ArrayList<Long>(permits)
         val lock = ReentrantLock(true)
         val retryCondition: Condition = lock.newCondition()
-        var lastDispatchTime = 0L
+        var lastDispatchTime: Duration? = null
+        var sequence = 0L
     }
 
     private val rateLimits = mutableListOf<RateLimit>()
@@ -78,17 +78,16 @@ private class RateLimitInterceptor : Interceptor {
 
         if (call.isCanceled()) throw IOException("Canceled")
 
-        val rateLimit = rateLimits.firstOrNull { it.shouldLimit(request.url) }
+        val matched = rateLimits.firstOrNull { it.shouldLimit(request.url) }
             ?: return chain.proceed(request)
 
-        val timestamp = rateLimit.acquireSlot(call)
-
+        val id = matched.acquireSlot(call)
         try {
             val response = chain.proceed(request)
-            if (response.networkResponse == null) rateLimit.releaseSlot(timestamp)
+            if (response.networkResponse == null) matched.releaseSlot(id)
             return response
         } catch (e: Exception) {
-            rateLimit.releaseSlot(timestamp)
+            matched.releaseSlot(id)
             throw e
         }
     }
@@ -97,26 +96,42 @@ private class RateLimitInterceptor : Interceptor {
         while (true) {
             if (call.isCanceled()) throw IOException("Canceled")
 
-            val now = SystemClock.elapsedRealtime()
-            while (queue.isNotEmpty() && queue.first() <= now - periodMillis) queue.removeFirst()
+            val now = SystemClock.elapsedRealtime().milliseconds
+            while (timestamps.isNotEmpty() && now - timestamps.first() > period) {
+                timestamps.removeAt(0)
+                ids.removeAt(0)
+            }
 
-            val windowWait = if (queue.size < permits) 0L else queue.first() - (now - periodMillis)
-            val intervalWait = lastDispatchTime + intervalMillis - now
-            val waitTime = maxOf(windowWait, intervalWait, 0L)
+            val windowWait = if (timestamps.size < permits) {
+                Duration.ZERO
+            } else {
+                period - (now - timestamps.first())
+            }
+            val intervalWait = if (lastDispatchTime == null) {
+                Duration.ZERO
+            } else {
+                interval - (now - lastDispatchTime!!)
+            }
+            val waitTime = maxOf(windowWait, intervalWait, Duration.ZERO)
 
-            if (waitTime == 0L) break
-            retryCondition.awaitNanos(waitTime * 1_000_000L)
+            if (waitTime == Duration.ZERO) break
+
+            retryCondition.awaitNanos(waitTime.inWholeNanoseconds)
         }
 
-        val ts = SystemClock.elapsedRealtime()
-        queue.addLast(ts)
-        lastDispatchTime = ts
-        ts
+        val now = SystemClock.elapsedRealtime().milliseconds
+        val id = sequence++
+        timestamps.add(now)
+        ids.add(id)
+        lastDispatchTime = now
+        id
     }
 
-    private fun RateLimit.releaseSlot(timestamp: Long): Unit = lock.withLock {
-        if (queue.isEmpty() || timestamp < queue.first()) return
-        queue.removeFirstOccurrence(timestamp)
+    private fun RateLimit.releaseSlot(id: Long): Unit = lock.withLock {
+        val index = ids.indexOf(id)
+        if (index == -1) return
+        ids.removeAt(index)
+        timestamps.removeAt(index)
         retryCondition.signal()
     }
 }
