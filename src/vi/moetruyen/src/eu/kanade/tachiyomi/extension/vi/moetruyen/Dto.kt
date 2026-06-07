@@ -5,6 +5,16 @@ import kotlinx.serialization.Serializable
 @Serializable
 class PageAccessRequest(
     val pageIndexes: List<Int>,
+    val pageAccessProof: PageAccessProof? = null,
+)
+
+@Serializable
+class PageAccessProof(
+    val version: String,
+    val token: String,
+    val issuedAt: Long,
+    val nonce: String,
+    val proof: String,
 )
 
 @Serializable
@@ -26,6 +36,7 @@ class PageAccessEntry(
 class ImgxGrant(
     val version: Int? = null,
     val algorithm: String? = null,
+    val contentAlgorithm: String? = null,
     val imageId: String? = null,
     val issuedAt: Long? = null,
     val expiresAt: Long? = null,
@@ -33,5 +44,6 @@ class ImgxGrant(
     val keyNonce: String? = null,
     val signature: String? = null,
     val wrappedDecodeKey: String? = null,
+    val wrappedContentKey: String? = null,
     val decodeKey: String? = null,
 )
