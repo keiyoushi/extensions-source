@@ -6,14 +6,6 @@ import kotlinx.serialization.Serializable
 import kotlin.time.Instant
 
 @Serializable
-class ResponseDto(private val data: DataDto?, private val errors: List<ErrorDto>?) {
-    fun getData() = data ?: throw Exception(errors!!.joinToString("\n") { it.message })
-}
-
-@Serializable
-class ErrorDto(val message: String)
-
-@Serializable
 class DataDto(
     private val comics: List<MangaDto>?,
     val allCategory: List<ItemDto>?,

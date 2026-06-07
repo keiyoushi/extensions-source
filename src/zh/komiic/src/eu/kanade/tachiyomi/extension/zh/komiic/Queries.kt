@@ -1,16 +1,12 @@
 package eu.kanade.tachiyomi.extension.zh.komiic
 
 import eu.kanade.tachiyomi.source.model.MangasPage
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
+import keiyoushi.utils.graphQLBody
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
 
 private fun buildQuery(query: String): String {
     val allCategory = categories.takeIf { it.isEmpty() }?.let { "allCategory { id name }" } ?: ""
@@ -37,15 +33,6 @@ private val COMIC_BODY =
     }
     """.trimIndent()
 
-private fun buildRequestBody(query: String, variables: JsonObject): RequestBody {
-    val body = buildJsonObject {
-        put("query", query)
-        put("variables", variables)
-    }
-    val contentType = "application/json".toMediaType()
-    return Json.encodeToString(body).toByteArray().toRequestBody(contentType)
-}
-
 fun parseListing(data: DataDto): MangasPage {
     data.allCategory?.let { categories = it }
     val listing = data.getListing()
@@ -64,7 +51,7 @@ fun commonQuery(variables: ListingVariables): RequestBody {
         }
         """,
     )
-    return buildRequestBody(query, variables.encode())
+    return graphQLBody(query, "commonQuery", variables.encode())
 }
 
 fun listingQuery(variables: ListingVariables): RequestBody {
@@ -76,13 +63,13 @@ fun listingQuery(variables: ListingVariables): RequestBody {
         }
         """,
     )
-    return buildRequestBody(query, variables.encode())
+    return graphQLBody(query, "comicByCategories", variables.encode())
 }
 
 fun searchQuery(keyword: String): RequestBody {
     val query = buildQuery(
         $$"""
-        query searchComicAndAuthorQuery($keyword: String!) {
+        query searchComicsAndAuthor($keyword: String!) {
           searchComicsAndAuthors(keyword: $keyword) {
             comics $$COMIC_BODY
           }
@@ -93,7 +80,7 @@ fun searchQuery(keyword: String): RequestBody {
     val variables = buildJsonObject {
         put("keyword", keyword)
     }
-    return buildRequestBody(query, variables)
+    return graphQLBody(query, "searchComicsAndAuthor", variables)
 }
 
 fun idsQuery(id: String): RequestBody {
@@ -107,7 +94,7 @@ fun idsQuery(id: String): RequestBody {
     val variables = buildJsonObject {
         putJsonArray("comicIds") { add(id) }
     }
-    return buildRequestBody(query, variables)
+    return graphQLBody(query, "comicByIds", variables)
 }
 
 fun mangaDetailQuery(id: String): RequestBody {
@@ -121,7 +108,7 @@ fun mangaDetailQuery(id: String): RequestBody {
     val variables = buildJsonObject {
         put("comicId", id)
     }
-    return buildRequestBody(query, variables)
+    return graphQLBody(query, "comicById", variables)
 }
 
 fun chapterListQuery(id: String): RequestBody {
@@ -141,7 +128,7 @@ fun chapterListQuery(id: String): RequestBody {
     val variables = buildJsonObject {
         put("comicId", id)
     }
-    return buildRequestBody(query, variables)
+    return graphQLBody(query, "chapterByComicId", variables)
 }
 
 fun pageListQuery(chapterId: String): RequestBody {
@@ -157,5 +144,5 @@ fun pageListQuery(chapterId: String): RequestBody {
     val variables = buildJsonObject {
         put("chapterId", chapterId)
     }
-    return buildRequestBody(query, variables)
+    return graphQLBody(query, "imagesByChapterId", variables)
 }

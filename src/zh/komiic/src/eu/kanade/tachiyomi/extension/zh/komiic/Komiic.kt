@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.parseGraphQLAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
@@ -79,8 +80,6 @@ class Komiic :
         return POST("$baseUrl/api/query$extra", headers, this)
     }
 
-    private fun Response.parse() = parseAs<ResponseDto>().getData()
-
     // Popular Manga ===============================================================================
 
     override fun popularMangaRequest(page: Int): Request {
@@ -88,7 +87,7 @@ class Komiic :
         return commonQuery(ListingVariables(pagination)).request()
     }
 
-    override fun popularMangaParse(response: Response) = parseListing(response.parse())
+    override fun popularMangaParse(response: Response) = parseListing(response.parseGraphQLAs())
 
     // Latest Updates ==============================================================================
 
@@ -97,7 +96,7 @@ class Komiic :
         return commonQuery(ListingVariables(pagination)).request()
     }
 
-    override fun latestUpdatesParse(response: Response) = parseListing(response.parse())
+    override fun latestUpdatesParse(response: Response) = parseListing(response.parseGraphQLAs())
 
     // Search Manga ================================================================================
 
@@ -125,7 +124,7 @@ class Komiic :
         listingQuery(variables).request()
     }
 
-    override fun searchMangaParse(response: Response) = parseListing(response.parse())
+    override fun searchMangaParse(response: Response) = parseListing(response.parseGraphQLAs())
 
     // Manga Details ===============================================================================
 
@@ -133,7 +132,7 @@ class Komiic :
 
     override fun mangaDetailsRequest(manga: SManga) = mangaDetailQuery(manga.id).request()
 
-    override fun mangaDetailsParse(response: Response) = response.parse().comicById!!.toSManga()
+    override fun mangaDetailsParse(response: Response) = response.parseGraphQLAs<DataDto>().comicById!!.toSManga()
 
     // Chapter List ================================================================================
 
@@ -142,7 +141,7 @@ class Komiic :
     override fun chapterListRequest(manga: SManga) = chapterListQuery(manga.id).request(manga.id)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parse()
+        val data = response.parseGraphQLAs<DataDto>()
         val chapters = data.chaptersByComicId!!.toMutableList()
         when (pref.getString(CHAPTER_FILTER_PREF, "all")) {
             "chapter" -> chapters.retainAll { it.type == "chapter" }
@@ -161,7 +160,7 @@ class Komiic :
     override fun pageListRequest(chapter: SChapter) = pageListQuery(chapter.id).request(chapter.url)
 
     override fun pageListParse(response: Response): List<Page> {
-        val data = response.parse()
+        val data = response.parseGraphQLAs<DataDto>()
         val chapterUrl = response.request.url.fragment!!
         return data.imagesByChapterId!!.mapIndexed { index, image ->
             Page(index, "$chapterUrl/page/${index + 1}", "$baseUrl/api/image/${image.kid}")
