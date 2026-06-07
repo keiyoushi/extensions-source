@@ -10,6 +10,7 @@ class Manganato :
         arrayOf(
             "www.natomanga.com",
             "www.nelomanga.com",
+            "www.nelomanga.net",
             "www.manganato.gg",
         ),
         "en",

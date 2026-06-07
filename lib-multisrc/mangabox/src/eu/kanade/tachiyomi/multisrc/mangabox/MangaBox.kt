@@ -271,15 +271,25 @@ abstract class MangaBox(
             return GET(url, headers)
         } else {
             val url = "$baseUrl/genre".toHttpUrl().newBuilder()
-            url.addQueryParameter("page", page.toString())
+            var sort: String? = null
+            var status: String? = null
+
             filters.forEach { filter ->
                 when (filter) {
-                    is SortFilter -> url.addQueryParameter("type", filter.toUriPart())
-                    is StatusFilter -> url.addQueryParameter("state", filter.toUriPart())
-                    is GenreFilter -> url.addPathSegment(filter.toUriPart()!!)
+                    is SortFilter -> sort = filter.toUriPart()
+                    is StatusFilter -> status = filter.toUriPart()
+                    is GenreFilter -> filter.toUriPart()?.let { url.addPathSegment(it) }
                     else -> {}
                 }
             }
+
+            val id = if (sort != null && status != null) {
+                FILTER_ID_MAP[Pair(sort, status)]
+            } else {
+                null
+            }
+            id?.let { url.addQueryParameter("filter", it) }
+            url.addQueryParameter("page", page.toString())
 
             GET(url.build(), headers)
         }
@@ -607,51 +617,174 @@ abstract class MangaBox(
         Pair("all", "ALL"),
         Pair("completed", "Completed"),
         Pair("ongoing", "Ongoing"),
-        Pair("drop", "Dropped"),
     )
 
     open fun getGenreFilters(): Array<Pair<String?, String>> = arrayOf(
         Pair("all", "ALL"),
+        Pair("4-koma", "4-Koma"),
         Pair("action", "Action"),
+        Pair("adaptation", "Adaptation"),
         Pair("adult", "Adult"),
         Pair("adventure", "Adventure"),
+        Pair("age-gap", "Age gap"),
+        Pair("ai-art", "Ai art"),
+        Pair("aliens", "Aliens"),
+        Pair("animals", "Animals"),
+        Pair("anthology", "Anthology"),
+        Pair("artbook", "Artbook"),
+        Pair("avant-garde", "Avant garde"),
+        Pair("award-winning", "Award winning"),
+        Pair("beasts", "Beasts"),
+        Pair("boys-love", "Boys love"),
+        Pair("blackmail", "Blackmail"),
+        Pair("bloody", "Bloody"),
+        Pair("bodyswap", "Bodyswap"),
+        Pair("brocon-siscon", "Brocon/Siscon"),
+        Pair("cars", "Cars"),
+        Pair("cartoon", "Cartoon"),
+        Pair("cheating-infidelity", "Cheating infidelity"),
+        Pair("childhood-friends", "Childhood friends"),
+        Pair("college-life", "College life"),
         Pair("comedy", "Comedy"),
+        Pair("comic", "Comic"),
+        Pair("contest-winning", "Contest winning"),
         Pair("cooking", "Cooking"),
+        Pair("creators", "Creators"),
+        Pair("crime", "Crime"),
+        Pair("crossdressing", "Crossdressing"),
+        Pair("cultivation", "Cultivation"),
+        Pair("death-game", "Death game"),
+        Pair("degeneratemc", "Degeneratemc"),
+        Pair("delinquents", "Delinquents"),
+        Pair("dementia", "Dementia"),
+        Pair("demons", "Demons"),
         Pair("doujinshi", "Doujinshi"),
         Pair("drama", "Drama"),
         Pair("ecchi", "Ecchi"),
+        Pair("employee", "Employee"),
+        Pair("erotica", "Erotica"),
+        Pair("fan-colored", "Fan colored"),
         Pair("fantasy", "Fantasy"),
+        Pair("female-protagonists", "Female protagonists"),
+        Pair("fetish", "Fetish"),
+        Pair("full-color", "Full color"),
+        Pair("game", "Game"),
         Pair("gender-bender", "Gender bender"),
+        Pair("genderswap", "Genderswap"),
+        Pair("ghosts", "Ghosts"),
+        Pair("girls-love", "Girls love"),
+        Pair("gore", "Gore"),
+        Pair("gourmet", "Gourmet"),
+        Pair("graphic-novel", "Graphic novel"),
+        Pair("gyaru", "Gyaru"),
         Pair("harem", "Harem"),
+        Pair("heartwarming", "Heartwarming"),
+        Pair("hentai", "Hentai"),
         Pair("historical", "Historical"),
         Pair("horror", "Horror"),
+        Pair("imageset", "Imageset"),
+        Pair("incest", "Incest"),
+        Pair("informative", "Informative"),
         Pair("isekai", "Isekai"),
+        Pair("iyashikei", "Iyashikei"),
         Pair("josei", "Josei"),
+        Pair("kids", "Kids"),
+        Pair("korean", "Korean"),
+        Pair("liexing", "Liexing"),
+        Pair("loli", "Loli"),
+        Pair("long-strip", "Long strip"),
+        Pair("mafia", "Mafia"),
+        Pair("magic", "Magic"),
+        Pair("magical-girls", "Magical girls"),
+        Pair("mahou-shoujo", "Mahou shoujo"),
+        Pair("male-protagonists", "Male protagonists"),
+        Pair("manga", "Manga"),
+        Pair("mangatoon", "Mangatoon"),
         Pair("manhua", "Manhua"),
         Pair("manhwa", "Manhwa"),
         Pair("martial-arts", "Martial arts"),
+        Pair("master-servant", "Master servant"),
         Pair("mature", "Mature"),
         Pair("mecha", "Mecha"),
         Pair("medical", "Medical"),
+        Pair("military", "Military"),
+        Pair("monsters", "Monsters"),
+        Pair("monster-girls", "Monster girls"),
+        Pair("murim", "Murim"),
+        Pair("music", "Music"),
         Pair("mystery", "Mystery"),
+        Pair("netorare", "Netorare"),
+        Pair("netori", "Netori"),
+        Pair("ninja", "Ninja"),
+        Pair("non-human", "Non human"),
+        Pair("office", "Office"),
+        Pair("office-workers", "Office workers"),
+        Pair("official-colored", "Official colored"),
+        Pair("old-people", "Old people"),
+        Pair("omegaverse", "Omegaverse"),
         Pair("one-shot", "One shot"),
+        Pair("others", "Others"),
+        Pair("overpowered", "Overpowered"),
+        Pair("parody", "Parody"),
+        Pair("philosophical", "Philosophical"),
+        Pair("ping-ping-jun", "Ping ping jun"),
+        Pair("police", "Police"),
+        Pair("pornographic", "Pornographic"),
+        Pair("post-apocalyptic", "Post apocalyptic"),
         Pair("psychological", "Psychological"),
+        Pair("reincarnation", "Reincarnation"),
+        Pair("revenge", "Revenge"),
+        Pair("reverse", "Reverse"),
+        Pair("reverse-harem", "Reverse harem"),
         Pair("romance", "Romance"),
+        Pair("royal-family", "Royal family"),
+        Pair("royalty", "Royalty"),
+        Pair("samurai", "Samurai"),
+        Pair("school", "School"),
         Pair("school-life", "School life"),
         Pair("sci-fi", "Sci fi"),
+        Pair("science-fiction", "Science fiction"),
         Pair("seinen", "Seinen"),
+        Pair("self-published", "Self published"),
+        Pair("sexual-violence", "Sexual violence"),
+        Pair("shota", "Shota"),
         Pair("shoujo", "Shoujo"),
         Pair("shoujo-ai", "Shoujo ai"),
         Pair("shounen", "Shounen"),
         Pair("shounen-ai", "Shounen ai"),
+        Pair("showbiz", "Showbiz"),
         Pair("slice-of-life", "Slice of life"),
         Pair("smut", "Smut"),
+        Pair("sm-bdsm", "Sm bdsm"),
+        Pair("soft-yaoi", "Soft yaoi"),
+        Pair("space", "Space"),
         Pair("sports", "Sports"),
+        Pair("spy", "Spy"),
+        Pair("step-family", "Step family"),
+        Pair("super-power", "Super power"),
+        Pair("superhero", "Superhero"),
         Pair("supernatural", "Supernatural"),
+        Pair("survival", "Survival"),
+        Pair("suspense", "Suspense"),
+        Pair("system", "System"),
+        Pair("teacher-student", "Teacher student"),
+        Pair("thriller", "Thriller"),
+        Pair("time-travel", "Time travel"),
+        Pair("traditional-games", "Traditional games"),
         Pair("tragedy", "Tragedy"),
+        Pair("vampires", "Vampires"),
+        Pair("video-games", "Video games"),
+        Pair("villainess", "Villainess"),
+        Pair("violence", "Violence"),
+        Pair("virtual-reality", "Virtual reality"),
+        Pair("web-comic", "Web comic"),
         Pair("webtoons", "Webtoons"),
+        Pair("western", "Western"),
+        Pair("wuxia", "Wuxia"),
+        Pair("xianxia", "Xianxia"),
         Pair("yaoi", "Yaoi"),
         Pair("yuri", "Yuri"),
+        Pair("zombies", "Zombies"),
     )
 
     open class UriPartFilter(
@@ -698,6 +831,18 @@ abstract class MangaBox(
         private const val PREF_MERGE_IMAGES = "pref_merge_images"
         private const val CHAPTER_LIST_TAKE = 1000
         private const val URL_PREFIX = "https://"
+
+        private val FILTER_ID_MAP = mapOf(
+            Pair("newest", "all") to "1",
+            Pair("newest", "completed") to "2",
+            Pair("newest", "ongoing") to "3",
+            Pair("latest", "all") to "4",
+            Pair("latest", "completed") to "5",
+            Pair("latest", "ongoing") to "6",
+            Pair("topview", "all") to "7",
+            Pair("topview", "completed") to "8",
+            Pair("topview", "ongoing") to "9",
+        )
     }
 }
 
