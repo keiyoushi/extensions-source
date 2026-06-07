@@ -117,6 +117,6 @@ private class RateLimitInterceptor : Interceptor {
     private fun RateLimit.releaseSlot(timestamp: Long): Unit = lock.withLock {
         if (queue.isEmpty() || timestamp < queue.first()) return
         queue.removeFirstOccurrence(timestamp)
-        retryCondition.signalAll()
+        retryCondition.signal()
     }
 }
