@@ -38,7 +38,7 @@ class UriMultiSelectOption(name: String, val value: String) : Filter.CheckBox(na
 class UriMultiSelectFilter(
     name: String,
     private val param: String,
-    private val vals: Array<Pair<String, String>>,
+    vals: Array<Pair<String, String>>,
 ) : Filter.Group<UriMultiSelectOption>(name, vals.map { UriMultiSelectOption(it.first, it.second) }),
     UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
