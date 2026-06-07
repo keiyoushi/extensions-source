@@ -93,6 +93,8 @@ class TeamX :
         return GET(baseUrl + if (page > 1) "?page=$page" else "", headers)
     }
 
+    private val thumbnailSuffix = "thumbnail_"
+
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
@@ -105,7 +107,7 @@ class TeamX :
                         val linkElement = element.select("div.info a")
                         title = linkElement.select("h3").text()
                         setUrlWithoutDomain(linkElement.first()!!.attr("href"))
-                        thumbnail_url = element.select("div.imgu img").first()!!.absUrl("src")
+                        thumbnail_url = element.select("div.imgu img").first()!!.absUrl("src").replace(thumbnailSuffix, "")
                     }
                 }.distinctBy {
                     it.title
