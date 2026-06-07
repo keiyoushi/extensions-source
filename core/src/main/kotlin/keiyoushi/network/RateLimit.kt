@@ -78,16 +78,16 @@ private class RateLimitInterceptor : Interceptor {
 
         if (call.isCanceled()) throw IOException("Canceled")
 
-        val matched = rateLimits.firstOrNull { it.shouldLimit(request.url) }
+        val rateLimit = rateLimits.firstOrNull { it.shouldLimit(request.url) }
             ?: return chain.proceed(request)
 
-        val id = matched.acquireSlot(call)
+        val id = rateLimit.acquireSlot(call)
         try {
             val response = chain.proceed(request)
-            if (response.networkResponse == null) matched.releaseSlot(id)
+            if (response.networkResponse == null) rateLimit.releaseSlot(id)
             return response
         } catch (e: Exception) {
-            matched.releaseSlot(id)
+            rateLimit.releaseSlot(id)
             throw e
         }
     }
