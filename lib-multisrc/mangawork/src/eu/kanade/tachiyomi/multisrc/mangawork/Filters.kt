@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.multisrc.mangawork
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-// ==========Filters==========
+// ============================== Filters ==============================
 
 internal interface MangaWorkQueryFilter {
     fun appendQueryParameters(parameters: MutableList<Pair<String, String>>)
