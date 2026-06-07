@@ -108,7 +108,10 @@ class VyvyManga : HttpSource() {
     }
 
     // Pages
-    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
+    override fun pageListRequest(chapter: SChapter): Request {
+        if (!chapter.url.startsWith("http")) error("Refresh to reload chapters")
+        return GET(chapter.url, headers)
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
