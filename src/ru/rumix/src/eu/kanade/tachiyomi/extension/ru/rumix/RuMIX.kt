@@ -38,12 +38,15 @@ class RuMIX : GroupLe("RuMIX", "https://rumix.me", "ru") {
 
         val rawTags = infoElement.select("a[href*=\"/list/genre/\"], a[href*=\"/list/tag/\"]").map { it.text() }
 
-        manga.genre = listOf(category, rawAgeStop).plus(rawTags).map { it.trim().lowercase(Locale.ROOT) }.filter { it.isNotEmpty() }
-            .joinToString(", ")
+        manga.genre = listOf(category, rawAgeStop).plus(rawTags)
+            .map { it.lowercase(Locale.ROOT) }
+            .filter { it.isNotEmpty() }
+            .joinToString()
 
-        val altName =
-            infoElement.selectFirst(".another-names")?.text()?.takeIf { it.isNotBlank() }?.let { "Альтернативные названия:\n$it\n\n" }
-                .orEmpty()
+        val altName = infoElement.selectFirst(".another-names")?.text()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { "Альтернативные названия:\n$it\n\n" }
+            .orEmpty()
 
         val descriptionText = document.select("div#tab-description .manga-description").text()
         val ratingSummary = if (ratingValue > 0f) {
@@ -77,7 +80,7 @@ class RuMIX : GroupLe("RuMIX", "https://rumix.me", "ru") {
         }
 
         manga.thumbnail_url = infoElement.selectFirst("img")?.let { img ->
-            img.attr("data-full").ifEmpty { img.attr("data-original") }.ifEmpty { img.attr("src") }
+            img.absUrl("data-full").ifEmpty { img.absUrl("data-original") }.ifEmpty { img.absUrl("src") }
         }.orEmpty()
 
         return manga
