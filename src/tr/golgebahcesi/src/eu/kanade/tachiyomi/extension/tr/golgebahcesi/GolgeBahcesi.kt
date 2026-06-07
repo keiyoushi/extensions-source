@@ -77,28 +77,26 @@ class GolgeBahcesi : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<List<ChapterDto>>().map { chapter ->
         SChapter.create().apply {
-            url = "${chapter.id}/${chapter.seriesSlug}/${chapter.slug}"
+            url = "/${chapter.id}/${chapter.seriesSlug}/${chapter.slug}"
             name = chapter.title
             chapter_number = chapter.number
-            date_upload = parseDate(chapter.releaseDate ?: chapter.createdAt)
+            date_upload = dateFormat.tryParse(chapter.releaseDate ?: chapter.createdAt)
         }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val httpUrl = "$baseUrl/${chapter.url}".toHttpUrl()
-        val seriesSlug = httpUrl.pathSegments[1]
-        val chapterSlug = httpUrl.pathSegments[2]
-        return "$baseUrl/manga/$seriesSlug/bolum/$chapterSlug"
+        val segments = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
+        return "$baseUrl/manga/${segments[1]}/bolum/${segments[2]}"
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringBefore("/")
+        val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments[0]
         return GET("$apiBaseUrl/chapters/$chapterId", headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> = response.parseAs<ChapterDto>().pages.map { page ->
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<ChapterDto>().pages?.map { page ->
         Page(page.index, imageUrl = page.url)
-    }
+    } ?: emptyList()
 
     override fun getFilterList() = FilterList(
         SortFilter(),
@@ -113,8 +111,6 @@ class GolgeBahcesi : HttpSource() {
             timeZone = TimeZone.getTimeZone("UTC")
         }
     }
-
-    private fun parseDate(dateStr: String?): Long = dateFormat.tryParse(dateStr)
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 

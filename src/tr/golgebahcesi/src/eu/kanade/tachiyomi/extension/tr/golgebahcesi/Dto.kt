@@ -65,7 +65,7 @@ class ChapterDto(
     val number: Float,
     val title: String,
     val slug: String,
-    val pages: List<PageDto> = emptyList(),
+    val pages: List<PageDto>? = null,
     val releaseDate: String? = null,
     val createdAt: String? = null,
 )
