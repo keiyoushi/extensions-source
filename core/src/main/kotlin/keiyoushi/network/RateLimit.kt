@@ -8,6 +8,7 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
+import java.util.ArrayDeque
 import java.util.concurrent.locks.Condition
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
@@ -53,13 +54,17 @@ private class RateLimitInterceptor : Interceptor {
         val interval: Duration,
         val shouldLimit: (HttpUrl) -> Boolean,
     ) {
-        val timestamps = ArrayList<Duration>(permits)
-        val ids = ArrayList<Long>(permits)
+        val queue = ArrayDeque<TimeStamp>(permits)
         val lock = ReentrantLock(true)
         val retryCondition: Condition = lock.newCondition()
         var lastDispatchTime: Duration? = null
         var sequence = 0L
     }
+
+    private class TimeStamp(
+        val id: Long,
+        val timestamp: Duration,
+    )
 
     private val rateLimits = mutableListOf<RateLimit>()
 
@@ -97,15 +102,14 @@ private class RateLimitInterceptor : Interceptor {
             if (call.isCanceled()) throw IOException("Canceled")
 
             val now = SystemClock.elapsedRealtime().milliseconds
-            while (timestamps.isNotEmpty() && now - timestamps.first() > period) {
-                timestamps.removeAt(0)
-                ids.removeAt(0)
+            while (queue.isNotEmpty() && now - queue.first().timestamp > period) {
+                queue.removeFirst()
             }
 
-            val windowWait = if (timestamps.size < permits) {
+            val windowWait = if (queue.size < permits) {
                 Duration.ZERO
             } else {
-                period - (now - timestamps.first())
+                period - (now - queue.first().timestamp)
             }
             val intervalWait = if (lastDispatchTime == null) {
                 Duration.ZERO
@@ -121,17 +125,15 @@ private class RateLimitInterceptor : Interceptor {
 
         val now = SystemClock.elapsedRealtime().milliseconds
         val id = sequence++
-        timestamps.add(now)
-        ids.add(id)
+        queue.addLast(TimeStamp(id, now))
         lastDispatchTime = now
         id
     }
 
     private fun RateLimit.releaseSlot(id: Long): Unit = lock.withLock {
-        val index = ids.indexOf(id)
-        if (index == -1) return
-        ids.removeAt(index)
-        timestamps.removeAt(index)
-        retryCondition.signal()
+        val removed = queue.removeAll { it.id == id }
+        if (removed) {
+            retryCondition.signal()
+        }
     }
 }
