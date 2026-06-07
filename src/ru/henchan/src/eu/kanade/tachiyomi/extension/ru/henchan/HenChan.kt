@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ru.henchan
 
-import android.annotation.SuppressLint
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
@@ -8,13 +7,13 @@ import eu.kanade.tachiyomi.multisrc.multichan.MultiChan
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -24,7 +23,6 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.net.URL
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 
 class HenChan :
@@ -35,9 +33,8 @@ class HenChan :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    private val domain = preferences.getString(DOMAIN_TITLE, DOMAIN_DEFAULT)!!
-
-    override val baseUrl = domain
+    override val baseUrl: String
+        get() = preferences.getString(DOMAIN_TITLE, DOMAIN_DEFAULT)!!
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga/newest?offset=${20 * (page - 1)}", headers)
 
@@ -98,7 +95,7 @@ class HenChan :
 
     private fun String.getHQThumbnail(): String {
         val isExHenManga = this.contains("/manganew_thumbs_blur/")
-        val regex = "(?<=/)manganew_thumbs\\w*?(?=/)".toRegex(RegexOption.IGNORE_CASE)
+        val regex = manganewThumbsRegex
         return this.replace(regex, "showfull_retina/manga")
             .replace(
                 "_".plus(URL(baseUrl).host),
@@ -171,10 +168,8 @@ class HenChan :
             chap.name = document.select("a.title_top_a").text()
             chap.chapter_number = 1F
 
-            val date = document.select("div.row4_right b")?.text()?.let {
-                SimpleDateFormat("dd MMMM yyyy", Locale("ru")).parse(it)?.time ?: 0
-            } ?: 0
-            chap.date_upload = date
+            val dateText = document.select("div.row4_right b").text()
+            chap.date_upload = exhentaiDateFormat.tryParse(dateText)
             return listOf(chap)
         }
 
@@ -187,8 +182,7 @@ class HenChan :
                 .replace("\\\"", "\"")
                 .replace("\\'", "'")
             chap.chapter_number = 1F
-            chap.date_upload =
-                Date().time // setting to current date because of a sorting in the "Recent updates" section
+            chap.date_upload = System.currentTimeMillis() // setting to current date because of a sorting in the "Recent updates" section
             return listOf(chap)
         }
 
@@ -224,11 +218,8 @@ class HenChan :
         chapter.setUrlWithoutDomain(element.select("h2 a").attr("href"))
         val chapterName = element.select("h2 a").attr("title")
         chapter.name = chapterName
-        chapter.chapter_number =
-            "(глава\\s|часть\\s)([0-9]+\\.?[0-9]*)".toRegex(RegexOption.IGNORE_CASE)
-                .find(chapterName)?.groupValues?.get(2)?.toFloat() ?: -1F
-        chapter.date_upload =
-            Date().time // setting to current date because of a sorting in the "Recent updates" section
+        chapter.chapter_number = chapterNumberRegex.find(chapterName)?.groupValues?.get(2)?.toFloat() ?: -1F
+        chapter.date_upload = System.currentTimeMillis() // setting to current date because of a sorting in the "Recent updates" section
         return chapter
     }
 
@@ -251,36 +242,7 @@ class HenChan :
             .replace("\'", "")
 
         val pageUrls = trimmedHtml.split(", ")
-        return pageUrls.mapIndexed { i, url -> Page(i, "", url) }
-    }
-
-    private class Genre(
-        val id: String,
-        @SuppressLint("DefaultLocale") name: String = id.replace('_', ' ').capitalize(),
-    ) : Filter.TriState(name)
-
-    private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Тэги", genres)
-    private class OrderBy :
-        UriPartFilter(
-            "Сортировка",
-            arrayOf("Дата", "Популярность", "Алфавит"),
-            arrayOf("&n=dateasc" to "", "&n=favasc" to "&n=favdesc", "&n=abcdesc" to "&n=abcasc"),
-            arrayOf(
-                "manga/new&n=dateasc" to "manga/new",
-                "manga/new&n=favasc" to "mostfavorites&sort=manga",
-                "manga/new&n=abcdesc" to "manga/new&n=abcasc",
-            ),
-        )
-
-    private open class UriPartFilter(
-        displayName: String,
-        sortNames: Array<String>,
-        val withGenres: Array<Pair<String, String>>,
-        val withoutGenres: Array<Pair<String, String>>,
-    ) : Filter.Sort(displayName, sortNames, Selection(1, false)) {
-        fun toUriPartWithGenres() = if (state!!.ascending) withGenres[state!!.index].first else withGenres[state!!.index].second
-
-        fun toUriPartWithoutGenres() = if (state!!.ascending) withoutGenres[state!!.index].first else withoutGenres[state!!.index].second
+        return pageUrls.mapIndexed { i, url -> Page(i, imageUrl = url) }
     }
 
     override fun getFilterList() = FilterList(
@@ -288,198 +250,11 @@ class HenChan :
         GenreList(getGenreList()),
     )
 
-    private fun getGenreList() = listOf(
-        Genre("3D"),
-        Genre("action"),
-        Genre("ahegao"),
-        Genre("bdsm"),
-        Genre("corruption"),
-        Genre("foot_fetish"),
-        Genre("footfuck"),
-        Genre("gender_bender"),
-        Genre("live"),
-        Genre("lolcon"),
-        Genre("megane"),
-        Genre("mind_break"),
-        Genre("monstergirl"),
-        Genre("netorare"),
-        Genre("netori"),
-        Genre("nipple_penetration"),
-        Genre("oyakodon"),
-        Genre("paizuri_(titsfuck)"),
-        Genre("rpg"),
-        Genre("scat"),
-        Genre("shemale"),
-        Genre("shimaidon"),
-        Genre("shooter"),
-        Genre("simulation"),
-        Genre("skinsuit"),
-        Genre("tomboy"),
-        Genre("tomgirl"),
-        Genre("x-ray"),
-        Genre("алкоголь"),
-        Genre("анал"),
-        Genre("андроид"),
-        Genre("анилингус"),
-        Genre("анимация"),
-        Genre("аркада"),
-        Genre("арт"),
-        Genre("бабушка"),
-        Genre("без_текста"),
-        Genre("без_трусиков"),
-        Genre("без_цензуры"),
-        Genre("беременность"),
-        Genre("бикини"),
-        Genre("близнецы"),
-        Genre("боди-арт"),
-        Genre("больница"),
-        Genre("большая_грудь"),
-        Genre("большие_попки"),
-        Genre("бондаж"),
-        Genre("буккаке"),
-        Genre("в_ванной"),
-        Genre("в_общественном_месте"),
-        Genre("в_первый_раз"),
-        Genre("в_цвете"),
-        Genre("в_школе"),
-        Genre("вампиры"),
-        Genre("веб"),
-        Genre("вебкам"),
-        Genre("вибратор"),
-        Genre("визуальная_новелла"),
-        Genre("внучка"),
-        Genre("волосатые_женщины"),
-        Genre("гаремник"),
-        Genre("гг_девушка"),
-        Genre("гг_парень"),
-        Genre("гипноз"),
-        Genre("глубокий_минет"),
-        Genre("горячий_источник"),
-        Genre("грудастая_лоли"),
-        Genre("групповой_секс"),
-        Genre("гяру_и_гангуро"),
-        Genre("двойное_проникновение"),
-        Genre("девочки_волшебницы"),
-        Genre("девушка_туалет"),
-        Genre("демоны"),
-        Genre("дилдо"),
-        Genre("дочь"),
-        Genre("драма"),
-        Genre("дыра_в_стене"),
-        Genre("жестокость"),
-        Genre("за_деньги"),
-        Genre("зомби"),
-        Genre("зрелые_женщины"),
-        Genre("измена"),
-        Genre("изнасилование"),
-        Genre("инопланетяне"),
-        Genre("инцест"),
-        Genre("исполнение_желаний"),
-        Genre("камера"),
-        Genre("квест"),
-        Genre("кимоно"),
-        Genre("колготки"),
-        Genre("комиксы"),
-        Genre("косплей"),
-        Genre("кремпай"),
-        Genre("кудере"),
-        Genre("кузина"),
-        Genre("куннилингус"),
-        Genre("купальники"),
-        Genre("латекс_и_кожа"),
-        Genre("магия"),
-        Genre("маленькая_грудь"),
-        Genre("мастурбация"),
-        Genre("мать"),
-        Genre("мейдочки"),
-        Genre("мерзкий_дядька"),
-        Genre("минет"),
-        Genre("много_девушек"),
-        Genre("молоко"),
-        Genre("монашки"),
-        Genre("монстры"),
-        Genre("мочеиспускание"),
-        Genre("мужская_озвучка"),
-        Genre("мужчина_крепкого_телосложения"),
-        Genre("мускулистые_женщины"),
-        Genre("на_природе"),
-        Genre("наблюдение"),
-        Genre("непрямой_инцест"),
-        Genre("новелла"),
-        Genre("обмен_партнерами"),
-        Genre("обмен_телами"),
-        Genre("обычный_секс"),
-        Genre("огромная_грудь"),
-        Genre("огромный_член"),
-        Genre("оплодотворение"),
-        Genre("остановка_времени"),
-        Genre("парень_пассив"),
-        Genre("переодевание"),
-        Genre("песочница"),
-        Genre("племянница"),
-        Genre("пляж"),
-        Genre("подглядывание"),
-        Genre("подчинение"),
-        Genre("похищение"),
-        Genre("презерватив"),
-        Genre("принуждение"),
-        Genre("прозрачная_одежда"),
-        Genre("проникновение_в_матку"),
-        Genre("психические_отклонения"),
-        Genre("публично"),
-        Genre("рабыни"),
-        Genre("романтика"),
-        Genre("сверхъестественное"),
-        Genre("секс_игрушки"),
-        Genre("сестра"),
-        Genre("сетакон"),
-        Genre("скрытный_секс"),
-        Genre("спортивная_форма"),
-        Genre("спящие"),
-        Genre("страпон"),
-        Genre("суккубы"),
-        Genre("темнокожие"),
-        Genre("тентакли"),
-        Genre("толстушки"),
-        Genre("трап"),
-        Genre("тётя"),
-        Genre("умеренная_жестокость"),
-        Genre("учитель_и_ученик"),
-        Genre("ушастые"),
-        Genre("фантазии"),
-        Genre("фантастика"),
-        Genre("фемдом"),
-        Genre("фестиваль"),
-        Genre("фетиш"),
-        Genre("фистинг"),
-        Genre("фурри"),
-        Genre("футанари"),
-        Genre("футанари_имеет_парня"),
-        Genre("фэнтези"),
-        Genre("хоррор"),
-        Genre("цундере"),
-        Genre("чикан"),
-        Genre("чирлидеры"),
-        Genre("чулки"),
-        Genre("школьная_форма"),
-        Genre("школьники"),
-        Genre("школьницы"),
-        Genre("школьный_купальник"),
-        Genre("щекотка"),
-        Genre("эксгибиционизм"),
-        Genre("эльфы"),
-        Genre("эччи"),
-        Genre("юмор"),
-        Genre("юри"),
-        Genre("яндере"),
-        Genre("яой"),
-    )
-
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         EditTextPreference(screen.context).apply {
             key = DOMAIN_TITLE
             this.title = DOMAIN_TITLE
-            summary = domain
+            summary = baseUrl
             this.setDefaultValue(DOMAIN_DEFAULT)
             dialogTitle = DOMAIN_TITLE
             setOnPreferenceChangeListener { _, newValue ->
@@ -503,5 +278,10 @@ class HenChan :
     companion object {
         private const val DOMAIN_TITLE = "Домен"
         private const val DOMAIN_DEFAULT = "https://xxl.hentaichan.live"
+        private val manganewThumbsRegex = "(?<=/)manganew_thumbs\\w*?(?=/)".toRegex(RegexOption.IGNORE_CASE)
+        private val chapterNumberRegex = "(глава\\s|часть\\s)([0-9]+\\.?[0-9]*)".toRegex(RegexOption.IGNORE_CASE)
+        private val exhentaiDateFormat by lazy {
+            SimpleDateFormat("dd MMMM yyyy", Locale("ru"))
+        }
     }
 }
