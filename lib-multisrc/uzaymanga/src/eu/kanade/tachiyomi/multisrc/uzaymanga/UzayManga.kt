@@ -8,19 +8,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 abstract class UzayManga(
     override val name: String,
@@ -28,7 +23,7 @@ abstract class UzayManga(
     override val lang: String,
     override val versionId: Int,
     private val cdnUrl: String? = null,
-) : ParsedHttpSource() {
+) : HttpSource() {
 
     override val supportsLatest = true
 
@@ -39,161 +34,235 @@ abstract class UzayManga(
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/search?page=$page&search=&order=4", headers)
+    // ============================== Popular ==============================
 
-    override fun popularMangaNextPageSelector(): String? = null
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
-        return MangasPage(mangas, mangas.isNotEmpty())
+    override fun popularMangaRequest(page: Int): Request {
+        val url = "$baseUrl/manga/__data.json".toHttpUrl().newBuilder()
+            .addQueryParameter("sort", "popular")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("x-sveltekit-invalidated", "001")
+            .build()
+        return GET(url, headers)
     }
 
-    override fun popularMangaSelector() = "section[aria-label='series area'] .card"
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        title = element.selectFirst("h2")!!.text()
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+    // ============================== Latest ===============================
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$baseUrl/manga/__data.json".toHttpUrl().newBuilder()
+            .addQueryParameter("sort", "new")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("x-sveltekit-invalidated", "001")
+            .build()
+        return GET(url, headers)
     }
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?page=$page", headers)
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun latestUpdatesNextPageSelector(): String? = null
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val header = document.selectFirst("div.header:has(h2:contains(En Son Yüklenen))")
-        val grid = header?.nextElementSibling()
-            ?: document.selectFirst("div.grid.grid-cols-1")
-            ?: document.selectFirst("div.grid")
-        val mangas = grid?.select("> div")?.map(::latestUpdatesFromElement) ?: emptyList()
-        return MangasPage(mangas, mangas.isNotEmpty())
-    }
-
-    override fun latestUpdatesSelector() = "div.grid > div"
-
-    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
-        val mangaLink = element.selectFirst("h2")?.parent() ?: element.selectFirst("a[href*='/manga/']")!!
-        title = element.selectFirst("h2")!!.text()
-        thumbnail_url = element.selectFirst(".card-image img")?.absUrl("src") ?: element.selectFirst("img")?.absUrl("src")
-        setUrlWithoutDomain(mangaLink.absUrl("href"))
-    }
+    // ============================== Search ===============================
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(URL_SEARCH_PREFIX)) {
-            val url = "$baseUrl/manga/${query.substringAfter(URL_SEARCH_PREFIX)}"
+            val slug = query.substringAfter(URL_SEARCH_PREFIX)
+            val url = "$baseUrl/manga/$slug/__data.json".toHttpUrl().newBuilder()
+                .addQueryParameter("x-sveltekit-invalidated", "001")
+                .build()
+
             return client.newCall(GET(url, headers)).asObservableSuccess().map { response ->
-                val document = response.asJsoup()
-                when {
-                    isMangaPage(document) -> MangasPage(listOf(mangaDetailsParse(document)), false)
-                    else -> MangasPage(emptyList(), false)
-                }
+                val manga = mangaDetailsParse(response)
+                manga.url = "/manga/$slug"
+                MangasPage(listOf(manga), false)
             }
         }
         return super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/api/series/search/navbar".toHttpUrl().newBuilder()
-            .addQueryParameter("search", query)
-            .build()
+        val url = "$baseUrl/manga/__data.json".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("x-sveltekit-invalidated", "001")
 
-        return GET(url, headers)
+        if (query.isNotBlank()) {
+            url.addQueryParameter("search", query)
+        }
+
+        filters.forEach { filter ->
+            when (filter) {
+                is CategoryFilter -> if (filter.state != 0) url.addQueryParameter("category", filter.toUriPart())
+                is StatusFilter -> if (filter.state != 0) url.addQueryParameter("status", filter.toUriPart())
+                is CountryFilter -> if (filter.state != 0) url.addQueryParameter("country", filter.toUriPart())
+                is SortFilter -> url.addQueryParameter("sort", filter.toUriPart())
+                else -> {}
+            }
+        }
+
+        if (filters.none { it is SortFilter } && query.isBlank()) {
+            url.addQueryParameter("sort", "new")
+        }
+
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val body = response.body.string()
+        val dto = response.parseAs<SvelteResponse>()
+        val dataArray = dto.getData() ?: return MangasPage(emptyList(), false)
+        val svelte = SvelteData(dataArray)
 
-        if (body.contains("[]") || body.isBlank()) return MangasPage(emptyList(), false)
+        val root = svelte.getObject(0) ?: return MangasPage(emptyList(), false)
 
-        val dto = body.parseAs<List<SearchDto>>()
+        val seriesIdx = root["series"]?.jsonPrimitive?.intOrNull ?: return MangasPage(emptyList(), false)
+        val seriesArray = svelte.getArray(seriesIdx) ?: return MangasPage(emptyList(), false)
 
-        val mangas = dto.map { item ->
+        val mangas = seriesArray.mapNotNull {
+            val mangaIdx = it.jsonPrimitive.intOrNull ?: return@mapNotNull null
+            val mangaObj = svelte.getObject(mangaIdx) ?: return@mapNotNull null
+
             SManga.create().apply {
-                title = item.name
-
-                val baseImage = cdnUrl?.removeSuffix("/") ?: baseUrl.removeSuffix("/")
-                thumbnail_url = if (item.image.startsWith("http")) {
-                    item.image
-                } else {
-                    "$baseImage/${item.image.removePrefix("/")}"
-                }
-
-                val slug = item.name.lowercase(Locale("tr"))
-                    .replace("ı", "i")
-                    .replace("ğ", "g")
-                    .replace("ü", "u")
-                    .replace("ş", "s")
-                    .replace("ö", "o")
-                    .replace("ç", "c")
-                    .replace(Regex("[^a-z0-9\\s]"), "")
-                    .trim()
-                    .replace(Regex("\\s+"), "-")
-
-                url = "/manga/${item.id}/$slug"
+                title = svelte.resolveString(mangaObj, "name") ?: return@mapNotNull null
+                val imagePath = svelte.resolveString(mangaObj, "image") ?: ""
+                val baseImgUrl = cdnUrl?.removeSuffix("/") ?: baseUrl.removeSuffix("/")
+                thumbnail_url = if (imagePath.startsWith("http")) imagePath else "$baseImgUrl/${imagePath.removePrefix("/")}"
+                val slug = svelte.resolveString(mangaObj, "slug") ?: return@mapNotNull null
+                url = "/manga/$slug"
             }
         }
-        return MangasPage(mangas, false)
+
+        val currentPage = svelte.resolveInt(root, "currentPage") ?: 1
+        val totalPages = svelte.resolveInt(root, "totalPages") ?: 1
+
+        return MangasPage(mangas, currentPage < totalPages)
     }
 
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
+    // ============================== Details ==============================
 
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
-    override fun searchMangaSelector() = throw UnsupportedOperationException()
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val url = "$baseUrl${manga.url}/__data.json".toHttpUrl().newBuilder()
+            .addQueryParameter("x-sveltekit-invalidated", "001")
+            .build()
+        return GET(url, headers)
+    }
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        with(document.selectFirst("#content")!!) {
-            title = selectFirst("h1")!!.text()
-            thumbnail_url = selectFirst("img")?.absUrl("src")
-            genre = select("a[href^='search?categories']").joinToString { it.text() }
-            description = selectFirst("div.grid h2 + p")?.text()
-            val pageStatus = selectFirst("span:contains(Durum) + span")?.text() ?: ""
-            status = when {
-                pageStatus.contains("Devam Ediyor", "Birakildi") -> SManga.ONGOING
-                pageStatus.contains("Tamamlandi") -> SManga.COMPLETED
-                pageStatus.contains("Ara Veridi") -> SManga.ON_HIATUS
+    override fun mangaDetailsParse(response: Response): SManga {
+        val dto = response.parseAs<SvelteResponse>()
+        val dataArray = dto.getData() ?: return SManga.create()
+        val svelte = SvelteData(dataArray)
+        val root = svelte.getObject(0) ?: return SManga.create()
+
+        val seriesIdx = root["series"]?.jsonPrimitive?.intOrNull ?: return SManga.create()
+        val seriesObj = svelte.getObject(seriesIdx) ?: return SManga.create()
+
+        return SManga.create().apply {
+            title = svelte.resolveString(seriesObj, "name") ?: ""
+            val imagePath = svelte.resolveString(seriesObj, "image") ?: ""
+            val baseImgUrl = cdnUrl?.removeSuffix("/") ?: baseUrl.removeSuffix("/")
+            thumbnail_url = if (imagePath.startsWith("http")) imagePath else "$baseImgUrl/${imagePath.removePrefix("/")}"
+            description = svelte.resolveString(seriesObj, "description")
+
+            status = when (svelte.resolveInt(seriesObj, "status")) {
+                1 -> SManga.ONGOING
+                2 -> SManga.COMPLETED
+                3 -> SManga.ON_HIATUS
                 else -> SManga.UNKNOWN
             }
 
-            setUrlWithoutDomain(document.location())
+            val resolvedCatArray = svelte.resolveArray(seriesObj, "resolvedCategories")
+            if (resolvedCatArray != null) {
+                genre = resolvedCatArray.mapNotNull {
+                    val catObjIdx = it.jsonPrimitive.intOrNull ?: return@mapNotNull null
+                    val catObj = svelte.getObject(catObjIdx) ?: return@mapNotNull null
+                    svelte.resolveString(catObj, "title")
+                }.joinToString()
+            }
         }
     }
 
-    override fun chapterListSelector() = "div.list-episode a"
+    // ============================= Chapters ==============================
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        name = element.selectFirst("h3")!!.text()
-        date_upload = element.selectFirst("span")?.text()?.toDate() ?: 0L
-        setUrlWithoutDomain(element.absUrl("href"))
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
+
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val dto = response.parseAs<SvelteResponse>()
+        val dataArray = dto.getData() ?: return emptyList()
+        val svelte = SvelteData(dataArray)
+        val root = svelte.getObject(0) ?: return emptyList()
+
+        val seriesIdx = root["series"]?.jsonPrimitive?.intOrNull ?: return emptyList()
+        val seriesObj = svelte.getObject(seriesIdx) ?: return emptyList()
+
+        val seriesSlug = svelte.resolveString(seriesObj, "slug") ?: return emptyList()
+        val chaptersArray = svelte.resolveArray(seriesObj, "SeriesEpisode") ?: return emptyList()
+
+        return chaptersArray.mapNotNull {
+            val chapIdx = it.jsonPrimitive.intOrNull ?: return@mapNotNull null
+            val chapObj = svelte.getObject(chapIdx) ?: return@mapNotNull null
+
+            SChapter.create().apply {
+                val chapName = svelte.resolveString(chapObj, "name")
+                val chapOrder = svelte.resolveInt(chapObj, "order")
+                name = buildString {
+                    if (chapOrder != null) append("Bölüm $chapOrder")
+                    if (chapName != null && chapName != chapOrder?.toString()) {
+                        if (isNotEmpty()) append(" - ")
+                        append(chapName)
+                    }
+                    if (isEmpty()) append("Bölüm")
+                }
+
+                val slug = svelte.resolveString(chapObj, "slug") ?: return@mapNotNull null
+                url = "/manga/$seriesSlug/$slug"
+
+                date_upload = svelte.resolveDate(chapObj, "createdDate")
+            }
+        }
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        val script = document.select("script")
-            .map { it.html() }.firstOrNull { pageRegex.find(it) != null }
-            ?: return emptyList()
+    // =============================== Pages ===============================
 
-        return pageRegex.findAll(script).mapIndexed { index, result ->
-            val url = result.groups.get(1)!!.value
-            Page(index, document.location(), "$cdnUrl/$url")
-        }.toList()
+    override fun pageListRequest(chapter: SChapter): Request {
+        val url = "$baseUrl${chapter.url}/__data.json".toHttpUrl().newBuilder()
+            .addQueryParameter("x-sveltekit-invalidated", "001")
+            .build()
+        return GET(url, headers)
     }
 
-    override fun imageUrlParse(document: Document) = ""
+    override fun pageListParse(response: Response): List<Page> {
+        val dto = response.parseAs<SvelteResponse>()
+        val dataArray = dto.getData() ?: return emptyList()
+        val svelte = SvelteData(dataArray)
 
-    private fun isMangaPage(document: Document): Boolean = document.selectFirst("div.grid h2 + p") != null
+        val root = svelte.getObject(0) ?: return emptyList()
+        val episodeIdx = root["episode"]?.jsonPrimitive?.intOrNull ?: return emptyList()
+        val episodeObj = svelte.getObject(episodeIdx) ?: return emptyList()
 
-    private fun String.toDate(): Long = dateFormat.tryParse(this)
+        val imagesArray = svelte.resolveArray(episodeObj, "images") ?: return emptyList()
 
-    private fun String.contains(vararg fragment: String): Boolean = fragment.any { trim().contains(it, ignoreCase = true) }
+        return imagesArray.mapIndexedNotNull { index, element ->
+            val imageIdx = element.jsonPrimitive.intOrNull ?: return@mapIndexedNotNull null
+            val imagePath = svelte.getString(imageIdx) ?: return@mapIndexedNotNull null
+
+            val baseImgUrl = cdnUrl?.removeSuffix("/") ?: baseUrl.removeSuffix("/")
+            val imageUrl = if (imagePath.startsWith("http")) imagePath else "$baseImgUrl/${imagePath.removePrefix("/")}"
+            Page(index, imageUrl = imageUrl)
+        }
+    }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    // ============================== Filters ==============================
+
+    override fun getFilterList() = FilterList(
+        SortFilter(),
+        CategoryFilter(),
+        StatusFilter(),
+        CountryFilter(),
+    )
 
     companion object {
         const val URL_SEARCH_PREFIX = "slug:"
-        val dateFormat = SimpleDateFormat("MMM d ,yyyy", Locale("tr"))
-        val pageRegex = """\\"path\\":\\"([^"]+)\\""".trimIndent().toRegex()
     }
 }
-
-@Serializable
-class SearchDto(val id: Int, val name: String, val image: String)
