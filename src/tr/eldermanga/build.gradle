@@ -3,6 +3,7 @@ ext {
     extClass = '.ElderManga'
     themePkg = 'uzaymanga'
     overrideVersionCode = 3
+    isNsfw = false
 }
 
 apply plugin: "kei.plugins.extension.legacy"
