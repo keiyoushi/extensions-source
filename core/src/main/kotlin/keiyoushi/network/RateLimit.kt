@@ -1,6 +1,7 @@
 package keiyoushi.network
 
 import android.os.SystemClock
+import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.Call
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
@@ -15,41 +16,15 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Rate limit rule. Use with [rateLimits] to enforce per-URL request throttling.
- *
- * @param permits     Requests allowed per [period].
- * @param period      Sliding-window duration.
- * @param interval    Minimum gap between consecutive dispatches. Smooths bursts —
- *                    `permits=10, interval=100.ms` allows 10/s but spaced ≥100ms apart.
- * @param shouldLimit Whether this rule applies to a given URL.
- */
-data class RateLimit(
-    val permits: Int,
-    val period: Duration = 1.seconds,
-    val interval: Duration = Duration.ZERO,
-    val shouldLimit: (HttpUrl) -> Boolean,
-)
-
-/**
  * Adds an interceptor enforcing one or more rate limits.
  *
- * The first rule whose [RateLimit.shouldLimit] matches the request URL is applied;
+ * The first rule whose [shouldLimit] matches the request URL is applied;
  * remaining rules are skipped. Define more specific rules before broader ones:
  * ```
- * rateLimits(
- *     RateLimit(5)  { it.host == "api.manga.example" },
- *     RateLimit(20) { it.host == "img.manga.example" },
- * )
+ * clientBuilder
+ *     .rateLimit(5)  { it.host == "api.manga.example" }
+ *     .rateLimit(20) { it.host == "img.manga.example" }
  * ```
- */
-fun OkHttpClient.Builder.rateLimits(
-    vararg limits: RateLimit,
-): OkHttpClient.Builder = addInterceptor(RateLimitInterceptor(limits.toList()))
-
-/**
- * Adds an interceptor enforcing a single rate limit.
- *
- * For multiple rules, use [rateLimits].
  *
  * @param permits     Requests allowed per [period].
  * @param period      Sliding-window duration.
@@ -62,20 +37,40 @@ fun OkHttpClient.Builder.rateLimit(
     period: Duration = 1.seconds,
     interval: Duration = Duration.ZERO,
     shouldLimit: (HttpUrl) -> Boolean = { true },
-): OkHttpClient.Builder = rateLimits(RateLimit(permits, period, interval, shouldLimit))
+): OkHttpClient.Builder {
+    val interceptor = interceptors().firstInstanceOrNull<RateLimitInterceptor>()
+        ?: RateLimitInterceptor().also(::addInterceptor)
 
-private class RateLimitInterceptor(limits: List<RateLimit>) : Interceptor {
+    interceptor.addRateLimit(permits, period, interval, shouldLimit)
 
-    private class Limiter(val rule: RateLimit) {
-        val periodMillis = rule.period.inWholeMilliseconds
-        val intervalMillis = rule.interval.inWholeMilliseconds
-        val queue = ArrayDeque<Long>(rule.permits)
+    return this
+}
+
+private class RateLimitInterceptor : Interceptor {
+    private class RateLimit(
+        val permits: Int,
+        val period: Duration,
+        val interval: Duration,
+        val shouldLimit: (HttpUrl) -> Boolean,
+    ) {
+        val periodMillis = period.inWholeMilliseconds
+        val intervalMillis = interval.inWholeMilliseconds
+        val queue = ArrayDeque<Long>(permits)
         val lock = ReentrantLock(true)
         val retryCondition: Condition = lock.newCondition()
         var lastDispatchTime = 0L
     }
 
-    private val limiters = limits.map(::Limiter)
+    private val rateLimits = mutableListOf<RateLimit>()
+
+    fun addRateLimit(
+        permits: Int,
+        period: Duration,
+        interval: Duration,
+        shouldLimit: (HttpUrl) -> Boolean,
+    ) {
+        rateLimits.add(RateLimit(permits, period, interval, shouldLimit))
+    }
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val call = chain.call()
@@ -83,25 +78,29 @@ private class RateLimitInterceptor(limits: List<RateLimit>) : Interceptor {
 
         if (call.isCanceled()) throw IOException("Canceled")
 
-        val matched = limiters.firstOrNull { it.rule.shouldLimit(request.url) }
+        val rateLimit = rateLimits.firstOrNull { it.shouldLimit(request.url) }
             ?: return chain.proceed(request)
 
-        val timestamp = matched.acquireSlot(call)
-        val response = chain.proceed(request)
+        val timestamp = rateLimit.acquireSlot(call)
 
-        if (response.networkResponse == null) matched.releaseSlot(timestamp)
-
-        return response
+        try {
+            val response = chain.proceed(request)
+            if (response.networkResponse == null) rateLimit.releaseSlot(timestamp)
+            return response
+        } catch (e: Exception) {
+            rateLimit.releaseSlot(timestamp)
+            throw e
+        }
     }
 
-    private fun Limiter.acquireSlot(call: Call): Long = lock.withLock {
+    private fun RateLimit.acquireSlot(call: Call): Long = lock.withLock {
         while (true) {
             if (call.isCanceled()) throw IOException("Canceled")
 
             val now = SystemClock.elapsedRealtime()
             while (queue.isNotEmpty() && queue.first() <= now - periodMillis) queue.removeFirst()
 
-            val windowWait = if (queue.size < rule.permits) 0L else queue.first() - (now - periodMillis)
+            val windowWait = if (queue.size < permits) 0L else queue.first() - (now - periodMillis)
             val intervalWait = lastDispatchTime + intervalMillis - now
             val waitTime = maxOf(windowWait, intervalWait, 0L)
 
@@ -115,7 +114,7 @@ private class RateLimitInterceptor(limits: List<RateLimit>) : Interceptor {
         ts
     }
 
-    private fun Limiter.releaseSlot(timestamp: Long): Unit = lock.withLock {
+    private fun RateLimit.releaseSlot(timestamp: Long): Unit = lock.withLock {
         if (queue.isEmpty() || timestamp < queue.first()) return
         queue.removeFirstOccurrence(timestamp)
         retryCondition.signalAll()
