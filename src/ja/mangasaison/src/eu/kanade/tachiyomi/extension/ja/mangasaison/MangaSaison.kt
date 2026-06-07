@@ -22,6 +22,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okio.Buffer
 import java.io.IOException
+import java.net.URLEncoder
 
 class MangaSaison :
     HttpSource(),
@@ -88,7 +89,7 @@ class MangaSaison :
             listOf(
                 SearchRequest(
                     "cominavi",
-                    "filters=isSearchable=1 AND isValid=1 AND payTitleId=-1&query=$query&hitsPerPage=36&page=${page - 1}&attributesToRetrieve=titleId,titleName,compressedTitleThumbnailPath&attributesToHighlight=&attributesToSnippet=&clickAnalytics=false&typoTolerance=false&restrictSearchableAttributes=titleName,titleNameHira,titleNameKana,authors.authorName,authors.authorNameHira,authors.authorNameKana,publisherName",
+                    "filters=isSearchable=1 AND isValid=1 AND payTitleId=-1&query=${URLEncoder.encode(query, "UTF-8")}&hitsPerPage=36&page=${page - 1}&attributesToRetrieve=titleId,titleName,compressedTitleThumbnailPath&attributesToHighlight=&attributesToSnippet=&clickAnalytics=false&typoTolerance=false&restrictSearchableAttributes=titleName,titleNameHira,titleNameKana,authors.authorName,authors.authorNameHira,authors.authorNameKana,publisherName",
                 ),
             ),
         ).toJsonRequestBody()
