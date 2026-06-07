@@ -39,8 +39,12 @@ fun OkHttpClient.Builder.rateLimit(
     interval: Duration = Duration.ZERO,
     shouldLimit: (HttpUrl) -> Boolean = { true },
 ): OkHttpClient.Builder {
-    val interceptor = interceptors().firstInstanceOrNull<RateLimitInterceptor>()
-        ?: RateLimitInterceptor().also(::addInterceptor)
+    val interceptor = networkInterceptors().firstInstanceOrNull<RateLimitInterceptor>()
+        ?: RateLimitInterceptor().also(::addNetworkInterceptor)
+
+    if (interceptors().none { it === RateLimitInterceptor.TaggingInterceptor }) {
+        addInterceptor(RateLimitInterceptor.TaggingInterceptor)
+    }
 
     interceptor.addRateLimit(permits, period, interval, shouldLimit)
 
@@ -48,23 +52,32 @@ fun OkHttpClient.Builder.rateLimit(
 }
 
 private class RateLimitInterceptor : Interceptor {
+
+    private class RateLimitTag(
+        var rateLimitApplied: Boolean = false,
+    )
+
+    object TaggingInterceptor : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val request = chain.request().newBuilder()
+                .tag(RateLimitTag::class.java, RateLimitTag())
+                .build()
+
+            return chain.proceed(request)
+        }
+    }
+
     private class RateLimit(
         val permits: Int,
         val period: Duration,
         val interval: Duration,
         val shouldLimit: (HttpUrl) -> Boolean,
     ) {
-        val queue = ArrayDeque<TimeStamp>(permits)
+        val queue = ArrayDeque<Duration>(permits)
         val lock = ReentrantLock(true)
         val retryCondition: Condition = lock.newCondition()
         var lastDispatchTime: Duration? = null
-        var sequence = 0L
     }
-
-    private class TimeStamp(
-        val id: Long,
-        val timestamp: Duration,
-    )
 
     private val rateLimits = mutableListOf<RateLimit>()
 
@@ -86,30 +99,30 @@ private class RateLimitInterceptor : Interceptor {
         val rateLimit = rateLimits.firstOrNull { it.shouldLimit(request.url) }
             ?: return chain.proceed(request)
 
-        val id = rateLimit.acquireSlot(call)
-        try {
-            val response = chain.proceed(request)
-            if (response.networkResponse == null) rateLimit.releaseSlot(id)
-            return response
-        } catch (e: Exception) {
-            rateLimit.releaseSlot(id)
-            throw e
+        val state = request.tag(RateLimitTag::class.java)
+
+        if (state?.rateLimitApplied == true) {
+            return chain.proceed(request)
         }
+
+        rateLimit.acquireSlot(call)
+        state?.rateLimitApplied = true
+
+        return chain.proceed(request)
     }
 
-    private fun RateLimit.acquireSlot(call: Call): Long = lock.withLock {
+    private fun RateLimit.acquireSlot(call: Call) = lock.withLock {
         while (true) {
             if (call.isCanceled()) throw IOException("Canceled")
-
             val now = SystemClock.elapsedRealtime().milliseconds
-            while (queue.isNotEmpty() && now - queue.first().timestamp > period) {
+            while (queue.isNotEmpty() && now - queue.first() >= period) {
                 queue.removeFirst()
             }
 
             val windowWait = if (queue.size < permits) {
                 Duration.ZERO
             } else {
-                period - (now - queue.first().timestamp)
+                period - (now - queue.first())
             }
             val intervalWait = if (lastDispatchTime == null) {
                 Duration.ZERO
@@ -118,22 +131,13 @@ private class RateLimitInterceptor : Interceptor {
             }
             val waitTime = maxOf(windowWait, intervalWait, Duration.ZERO)
 
-            if (waitTime == Duration.ZERO) break
-
+            if (waitTime == Duration.ZERO) {
+                val ts = SystemClock.elapsedRealtime().milliseconds
+                queue.addLast(ts)
+                lastDispatchTime = ts
+                break
+            }
             retryCondition.awaitNanos(waitTime.inWholeNanoseconds)
-        }
-
-        val now = SystemClock.elapsedRealtime().milliseconds
-        val id = sequence++
-        queue.addLast(TimeStamp(id, now))
-        lastDispatchTime = now
-        id
-    }
-
-    private fun RateLimit.releaseSlot(id: Long): Unit = lock.withLock {
-        val removed = queue.removeAll { it.id == id }
-        if (removed) {
-            retryCondition.signal()
         }
     }
 }
