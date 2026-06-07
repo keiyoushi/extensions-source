@@ -16,6 +16,7 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
@@ -72,6 +73,11 @@ class LittleTyrant :
     override val mangaDetailsSelectorAuthor = ".mc-meta-grid .attr-item:has(.attr-label:contains(AUTOR)) .attr-value"
     override val mangaDetailsSelectorArtist = ".mc-meta-grid .attr-item:has(.attr-label:contains(ARTISTA)) .attr-value"
     override val mangaDetailsSelectorStatus = ".mc-meta-grid .attr-item:has(.attr-label:contains(STATUS)) .attr-value"
+
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        author = author?.replace(COMMA_REGEX, ", ")?.takeUnless { it.contains("---") }
+        artist = artist?.replace(COMMA_REGEX, ", ")?.takeUnless { it.contains("---") }
+    }
 
     // =============================== Chapters =================================
 
@@ -178,5 +184,6 @@ class LittleTyrant :
 
     companion object {
         private val CHAPTER_NUMBER_REGEX = """\d+(?:\.\d+)?""".toRegex()
+        private val COMMA_REGEX = """,\s*""".toRegex()
     }
 }

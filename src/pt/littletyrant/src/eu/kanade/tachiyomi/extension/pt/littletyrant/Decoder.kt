@@ -54,7 +54,7 @@ class Decoder {
     }
 
     fun extractPaths(document: Document): List<String> {
-        val urlScript = document.select("script:containsData(_proxyUrls)").first()?.data()
+        val urlScript = document.selectFirst("script:containsData(_proxyUrls)")?.data()
             ?: error("No image URLS")
 
         val match = PROXY_URLS_REGEX.find(urlScript) ?: error("Unable to parse _proxyUrls")
