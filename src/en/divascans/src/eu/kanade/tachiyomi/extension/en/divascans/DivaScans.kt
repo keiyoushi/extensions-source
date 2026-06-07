@@ -24,6 +24,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -39,7 +40,6 @@ class DivaScans :
     override val baseUrl = "https://divascans.org"
     override val lang = "en"
     override val supportsLatest = true
-
     private val preferences: SharedPreferences by lazy { getPreferences() }
     private val json: Json by injectLazy()
 
@@ -196,10 +196,10 @@ class DivaScans :
         if (doc.select("a[href*='/chapter/']").size > 1) return doc
 
         val sb = StringBuilder()
-        val rscRegex = Regex("""self\.__next_f\.push\(\[\d+,\s*"((?:[^"\\]|\\.)*)"\]\)""")
 
         rscRegex.findAll(html).forEach { match ->
             try {
+                // Use the proven raw-string unescaper method
                 val jsonPayload = """{"d": "${match.groupValues[1]}"}"""
                 val unescapedStr = json.parseToJsonElement(jsonPayload).jsonObject["d"]?.jsonPrimitive?.contentOrNull
                 if (!unescapedStr.isNullOrEmpty()) {
@@ -208,7 +208,9 @@ class DivaScans :
             } catch (_: Exception) {}
         }
 
-        if (sb.isNotEmpty()) doc.body().append(sb.toString())
+        if (sb.isNotEmpty()) {
+            doc.body().append("<div id='hydrated-data' style='display:none;'>$sb</div>")
+        }
         return doc
     }
 
@@ -216,13 +218,13 @@ class DivaScans :
 
     override fun mangaDetailsParse(response: Response): SManga {
         val html = response.body.string()
+
         val doc = getHydratedDocument(html)
         val manga = SManga.create()
 
         val fullContent = doc.body().html()
 
         // 1. JSON Attempt (Hydrated)
-        val seriesRegex = Regex("""(?s)\\?"series\\?"\s*:\s*(\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})""")
         val match = seriesRegex.find(fullContent)
         if (match != null) {
             runCatching {
@@ -231,7 +233,10 @@ class DivaScans :
 
                 manga.title = mangaObj["title"]?.jsonPrimitive?.contentOrNull ?: ""
                 manga.thumbnail_url = cleanImageUrl(mangaObj["coverImage"]?.jsonPrimitive?.contentOrNull ?: "")
-                manga.description = mangaObj["description"]?.jsonPrimitive?.contentOrNull
+                manga.description = mangaObj["description"]?.jsonPrimitive?.contentOrNull?.let {
+                    val descDoc = Jsoup.parseBodyFragment(it.replace("<br>", "[[n]]").replace("<p>", "[[n]]"))
+                    descDoc.text().replace("[[n]]", "\n").trim()
+                }
                 manga.author = mangaObj["author"]?.jsonPrimitive?.contentOrNull
                 manga.artist = mangaObj["artist"]?.jsonPrimitive?.contentOrNull ?: manga.author
 
@@ -258,30 +263,48 @@ class DivaScans :
         }
 
         // 2. DOM Fallback
-        manga.title = doc.select("h1").text().ifBlank { doc.title() }
-        manga.thumbnail_url = cleanImageUrl(doc.select("img[src*='cover'], img[src*='thumbnail']").attr("src"))
-        manga.description = doc.select("div:containsOwn(Synopsis), div:containsOwn(Description), div:containsOwn(synopsis)").firstOrNull()?.nextElementSibling()?.text()
-            ?: doc.select("main p").firstOrNull()?.text()
-
-        manga.author = doc.select("span:containsOwn(Author)").firstOrNull()?.nextElementSibling()?.text()
-            ?: doc.select("a[href*='/team/']").firstOrNull()?.text()
-
-        val statusText = doc.select("span:containsOwn(Status)").firstOrNull()?.nextElementSibling()?.text()
-            ?: doc.select("div:containsOwn(Status) + div").text()
-        manga.status = when {
-            statusText.contains("Ongoing", true) -> SManga.ONGOING
-            statusText.contains("Completed", true) -> SManga.COMPLETED
-            statusText.contains("Hiatus", true) -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
+        val domTitle = doc.selectFirst("h1")?.text()?.ifEmpty { doc.title() } ?: doc.title()
+        if (manga.title.isBlank() || manga.title.contains("JavaScript Required", true)) {
+            manga.title = if (domTitle.contains("JavaScript Required", true)) "" else domTitle
         }
 
-        val originText = doc.select("span:containsOwn(Origin)").firstOrNull()?.nextElementSibling()?.text()
-            ?: doc.select("div:containsOwn(Origin) + a").text()
+        if (manga.thumbnail_url.isNullOrBlank()) {
+            manga.thumbnail_url = cleanImageUrl(doc.selectFirst("img[src*='cover'], img[src*='thumbnail']")?.absUrl("src") ?: "")
+        }
 
-        val genres = doc.select("a[href*='genre=']").map { it.text() }
-        val tags = doc.select("a[href*='tag=']").map { it.text() }
+        if (manga.description.isNullOrBlank()) {
+            val synopsisEl = doc.selectFirst("div:containsOwn(Synopsis), div:containsOwn(Description), div:containsOwn(synopsis)")?.nextElementSibling()
+            manga.description = if (synopsisEl != null) {
+                val descDoc = Jsoup.parseBodyFragment(synopsisEl.html().replace("<br>", "[[n]]").replace("<p>", "[[n]]"))
+                descDoc.text().replace("[[n]]", "\n").trim()
+            } else {
+                doc.selectFirst("main p")?.text()
+            }
+        }
 
-        manga.genre = listOfNotNull(originText.takeIf { it.isNotBlank() }).plus(genres).plus(tags).joinToString()
+        if (manga.author.isNullOrBlank()) {
+            manga.author = doc.selectFirst("span:containsOwn(Author)")?.nextElementSibling()?.text()
+                ?: doc.selectFirst("a[href*='/team/']")?.text()
+        }
+
+        if (manga.status == SManga.UNKNOWN) {
+            val statusText = doc.selectFirst("span:containsOwn(Status)")?.nextElementSibling()?.text()
+                ?: doc.selectFirst("div:containsOwn(Status) + div")?.text() ?: ""
+            manga.status = when {
+                statusText.contains("Ongoing", true) -> SManga.ONGOING
+                statusText.contains("Completed", true) -> SManga.COMPLETED
+                statusText.contains("Hiatus", true) -> SManga.ON_HIATUS
+                else -> SManga.UNKNOWN
+            }
+        }
+
+        if (manga.genre.isNullOrBlank()) {
+            val originText = doc.selectFirst("span:containsOwn(Origin)")?.nextElementSibling()?.text()
+                ?: doc.selectFirst("div:containsOwn(Origin) + a")?.text() ?: ""
+            val genres = doc.select("a[href*='genre=']").map { it.text() }
+            val tags = doc.select("a[href*='tag=']").map { it.text() }
+            manga.genre = listOfNotNull(originText.takeIf { it.isNotBlank() }).plus(genres).plus(tags).joinToString()
+        }
 
         return manga
     }
@@ -290,6 +313,7 @@ class DivaScans :
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val html = response.body.string()
+
         val showPaid = preferences.getBoolean(SHOW_PAID_CHAPTERS_PREF, false)
         val slug = response.request.url.pathSegments.last()
 
@@ -300,7 +324,6 @@ class DivaScans :
         // 1. Improved JSON extraction from HYDRATED content
         val chaptersArrays = mutableListOf<JsonArray>()
         // Match both "chapters":[...] and \"chapters\":[...]
-        val chapterJsonRegex = Regex("""(?s)\\?"chapters\\?"\s*:\s*(\[.*?\])""")
 
         chapterJsonRegex.findAll(fullContent).forEach { match ->
             runCatching {
@@ -339,11 +362,8 @@ class DivaScans :
         // 2. Fallback: Parse via DOM from hydrated document
         val chapterElements = doc.select("a[href*='/chapter/']")
         if (chapterElements.isNotEmpty()) {
-            return chapterElements.mapNotNull { element ->
+            val chapters = chapterElements.mapNotNull { element ->
                 val nameText = element.text()
-
-                // Filter out navigation/action buttons
-                if (nameText.contains("Start Reading", true) || nameText.contains("Continue Reading", true)) return@mapNotNull null
 
                 val href = element.attr("href")
                 val chapterUrl = when {
@@ -356,14 +376,30 @@ class DivaScans :
 
                 SChapter.create().apply {
                     url = chapterUrl
-                    name = nameText
-                    chapter_number = nameText.trim().substringAfter("Chapter").trim().takeWhile { it.isDigit() || it == '.' }.toFloatOrNull()
+                    name = when {
+                        nameText.contains("Start Reading", true) -> "Chapter 1"
+                        nameText.contains("Continue Reading", true) -> "Continue Reading"
+                        nameText.isBlank() -> "Chapter 1"
+                        else -> nameText
+                    }
+                    chapter_number = nameText.substringAfter("Chapter").trim().takeWhile { it.isDigit() || it == '.' }.toFloatOrNull()
                         ?: nameText.filter { it.isDigit() || it == '.' }.toFloatOrNull()
-                        ?: 0f
+                        ?: if (name.contains("Chapter 1", true)) 1f else 0f
                 }
-            }.filter { it.name.contains("Chapter", true) || it.chapter_number > 0 }
-                .distinctBy { it.url }
-                .sortedByDescending { it.chapter_number }
+            }.distinctBy { it.url }
+
+            if (chapters.isNotEmpty()) {
+                // If we found regular chapters, filter out the navigation buttons
+                val filtered = if (chapters.size > 1) {
+                    chapters.filterNot { it.name.contains("Start Reading", true) || it.name.contains("Continue Reading", true) }
+                } else {
+                    chapters.map { chap ->
+                        if (chap.name.contains("Start Reading", true)) chap.name = "Chapter 1"
+                        chap
+                    }
+                }
+                return filtered.sortedByDescending { it.chapter_number }
+            }
         }
 
         return emptyList()
@@ -378,34 +414,31 @@ class DivaScans :
         val domImages = document.select("div.reader-images img, div.chapter-container img, main img[src*='chapter']")
         if (domImages.isNotEmpty()) {
             return domImages.mapIndexed { index, element ->
-                val imgUrl = element.attr("data-src").ifEmpty { element.attr("src") }
+                val imgUrl = element.absUrl("data-src").ifEmpty { element.absUrl("src") }
                 Page(index, "", cleanImageUrl(imgUrl))
             }
         }
 
-        val imgRegex = Regex("""(https?://[^"'\\]+\.(?:jpg|jpeg|png|webp))""")
         val urls = imgRegex.findAll(document.html()).map { it.groupValues[1] }.distinct().toList()
 
-        val pageUrls = urls.filter { it.contains("/chapters/", true) || it.contains("/pages/", true) }
-        if (pageUrls.isNotEmpty()) {
-            return pageUrls.mapIndexed { index, url -> Page(index, "", cleanImageUrl(url)) }
+        val pageUrls = urls.filter { url ->
+            val path = (if (url.startsWith("/")) "$baseUrl$url" else url).toHttpUrl().pathSegments
+            path.contains("chapters") || path.contains("pages")
         }
 
-        return urls.mapIndexed { index, url -> Page(index, "", cleanImageUrl(url)) }
+        return pageUrls.ifEmpty { urls }.mapIndexed { index, url -> Page(index, "", cleanImageUrl(url)) }
     }
 
     // --- Utilities ---
 
     private fun cleanImageUrl(url: String): String {
-        if (url.isEmpty()) return ""
+        if (url.isEmpty() || url.startsWith("data:")) return url
+
+        val absoluteUrl = if (url.startsWith("/")) "$baseUrl$url" else url
+        val httpUrl = absoluteUrl.toHttpUrlOrNull() ?: return url
 
         // 1. Decode proxy URLs
-        var cleanUrl = if (url.contains("url=")) {
-            val encodedPart = url.substringAfter("url=").substringBefore("&")
-            java.net.URLDecoder.decode(encodedPart, "UTF-8")
-        } else {
-            url
-        }
+        var cleanUrl = httpUrl.queryParameter("url") ?: absoluteUrl
 
         // 2. Ensure base URL
         if (cleanUrl.startsWith("/")) {
@@ -415,9 +448,9 @@ class DivaScans :
         // 3. Force CDN and strip invalid next/image paths
         return cleanUrl.replace("divascans.org", "media.divascans.org")
             .replace("media.media.divascans.org", "media.divascans.org")
-            .replace("/_next/image?url=", "")
+            .replace("/_next/image", "")
             .replace("/uploads/", "/")
-            .substringBefore("&") // Strip all Next.js parameters
+            .substringBefore("?") // Strip all Next.js parameters
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -426,5 +459,10 @@ class DivaScans :
         private const val SHOW_PAID_CHAPTERS_PREF = "show_paid_chapters"
         private const val GENRES_PREF_KEY = "saved_genres"
         private const val TAGS_PREF_KEY = "saved_tags"
+
+        private val rscRegex = Regex("""self\.__next_f\.push\(\[\d+,\s*"((?:[^"\\]|\\.)*)"\]\)""")
+        private val seriesRegex = Regex("""(?s)\\?"series\\?"\s*:\s*(\{(?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})*\})*\})""")
+        private val chapterJsonRegex = Regex("""(?s)\\?"chapters\\?"\s*:\s*(\[(?:[^{}\[\]]|\{(?:[^{}]|\{[^{}]*\})*\}|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])""")
+        private val imgRegex = Regex("""(https?://[^"'\\]+\.(?:jpg|jpeg|png|webp))""")
     }
 }

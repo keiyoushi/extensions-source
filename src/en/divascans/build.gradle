@@ -1,7 +1,7 @@
 ext {
     extName = 'Diva Scans'
     extClass = '.DivaScans'
-    extVersionCode = 31
+    extVersionCode = 22
     isNsfw = true
 }
 
