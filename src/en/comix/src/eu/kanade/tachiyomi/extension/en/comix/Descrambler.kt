@@ -14,29 +14,49 @@ object Descrambler {
 
     private const val GRID_COLS = 5
     private const val GRID_ROWS = 5
-    private const val NUM_TILES = GRID_COLS * GRID_ROWS
     private const val LCG_MULTIPLIER = 1664525
     private const val LCG_INCREMENT = 1013904223
+    private const val ENC_MULTIPLIER = 1000005
+    private const val ENC_INCREMENT = 1234567891
 
     val interceptor = Interceptor { chain ->
         val response = chain.proceed(chain.request())
         if (!response.isSuccessful) return@Interceptor response
+
+        val body = response.body
+        val bodyMediaType = body.contentType()
+
+        response.header("x-enc-seed")?.toLongOrNull()?.toInt()?.let { seed ->
+            if (seed == 0) return@Interceptor response
+
+            val length = response.header("x-enc-len")?.toIntOrNull()
+                ?: return@Interceptor response
+            val bytes = body.bytes()
+            decodeEncodedPrefix(bytes, seed, length)
+
+            return@Interceptor response.newBuilder()
+                .body(bytes.toResponseBody(bodyMediaType))
+                .build()
+        }
 
         val seed = response.header("x-scramble-seed")?.toLongOrNull()?.toInt()
             ?: return@Interceptor response
 
         if (seed == 0) return@Interceptor response
 
-        val body = response.body ?: return@Interceptor response
+        val grid = response.header("x-scramble-grid")?.let(::gridFromScrambleHeader)
+            ?: Grid(GRID_COLS, GRID_ROWS)
 
-        val bitmap = body.byteStream().use { BitmapFactory.decodeStream(it) }
+        val bitmap = runCatching {
+            body.byteStream().use { BitmapFactory.decodeStream(it) }
+        }.getOrNull()
             ?: return@Interceptor response.newBuilder()
                 .code(500)
                 .message("Failed to decode image")
                 .body("Failed to decode image".toResponseBody("text/plain".toMediaType()))
                 .build()
 
-        val descrambled = descramble(bitmap, seed)
+        val descrambled = descramble(bitmap, seed, grid)
         bitmap.recycle()
 
         val output = Buffer()
@@ -50,37 +70,43 @@ object Descrambler {
 
     private val JPEG_MEDIA = "image/jpeg".toMediaType()
 
-    private fun descramble(bitmap: Bitmap, seed: Int): Bitmap {
+    private data class Grid(val cols: Int, val rows: Int) {
+        val size = cols * rows
+    }
+
+    private fun descramble(bitmap: Bitmap, seed: Int, grid: Grid): Bitmap {
         val width = bitmap.width
         val height = bitmap.height
-        val tileW = width / GRID_COLS
-        val tileH = height / GRID_ROWS
+        if (width < grid.cols || height < grid.rows) return bitmap.copy(Bitmap.Config.ARGB_8888, false)
 
-        val perm = buildOrder(seed, NUM_TILES)
+        val tileW = width / grid.cols
+        val tileH = height / grid.rows
+
+        val perm = buildOrder(seed, grid.size)
 
         val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
 
         canvas.drawBitmap(bitmap, 0f, 0f, null)
 
-        for (srcIdx in 0 until NUM_TILES) {
+        for (srcIdx in 0 until grid.size) {
             val dstIdx = perm[srcIdx]
-            val srcCol = srcIdx % GRID_COLS
-            val srcRow = srcIdx / GRID_COLS
-            val dstCol = dstIdx % GRID_COLS
-            val dstRow = dstIdx / GRID_COLS
+            val srcCol = srcIdx % grid.cols
+            val srcRow = srcIdx / grid.cols
+            val dstCol = dstIdx % grid.cols
+            val dstRow = dstIdx / grid.cols
 
             val srcRect = Rect(
                 srcCol * tileW,
                 srcRow * tileH,
-                (srcCol + 1) * tileW,
-                (srcRow + 1) * tileH,
+                if (srcCol == grid.cols - 1) width else (srcCol + 1) * tileW,
+                if (srcRow == grid.rows - 1) height else (srcRow + 1) * tileH,
             )
             val dstRect = Rect(
                 dstCol * tileW,
                 dstRow * tileH,
-                (dstCol + 1) * tileW,
-                (dstRow + 1) * tileH,
+                if (dstCol == grid.cols - 1) width else (dstCol + 1) * tileW,
+                if (dstRow == grid.rows - 1) height else (dstRow + 1) * tileH,
             )
 
             canvas.drawBitmap(bitmap, srcRect, dstRect, null)
@@ -100,5 +126,26 @@ object Descrambler {
             arr[j.toInt()] = tmp
         }
         return arr
+    }
+
+    private fun decodeEncodedPrefix(bytes: ByteArray, seed: Int, length: Int) {
+        var state = seed
+        val limit = minOf(length, bytes.size)
+        for (i in 0 until limit) {
+            state = state * ENC_MULTIPLIER + ENC_INCREMENT
+            bytes[i] = (bytes[i].toInt() xor (state ushr 24)).toByte()
+        }
+    }
+
+    private fun gridFromScrambleHeader(header: String): Grid? {
+        val parts = header
+            .lowercase()
+            .split('x', ',', ':')
+            .mapNotNull { it.trim().toIntOrNull() }
+
+        return when (parts.size) {
+            1 -> Grid(parts[0], parts[0])
+            else -> Grid(parts[0], parts[1])
+        }.takeIf { it.cols > 1 && it.rows > 1 }
     }
 }

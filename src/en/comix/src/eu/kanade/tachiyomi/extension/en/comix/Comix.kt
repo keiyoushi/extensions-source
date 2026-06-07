@@ -516,8 +516,9 @@ class Comix :
         val base = pages.baseUrl.trimEnd('/')
 
         pages.items.mapIndexed { index, img ->
+            val isScrambled = img.s == 1 || (index + 1) % 4 == 0
             val full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
-            val url = if (img.s == 1) "$full#scrambled" else full
+            val url = if (isScrambled) "$full#scrambled" else full
             Page(index, imageUrl = url)
         }
     }
