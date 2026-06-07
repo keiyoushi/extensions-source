@@ -77,7 +77,7 @@ fun OkHttpClient.Builder.rateLimit(
     period: Duration = 1.seconds,
     interval: Duration = Duration.ZERO,
     shouldLimit: (HttpUrl) -> Boolean = { true },
-): RateLimitBuilder = RateLimitBuilder(this).rateLimit(permits, period, interval, shouldLimit)
+): RateLimitBuilder = RateLimitBuilder(this, listOf(RateLimitRule(permits, period, interval, shouldLimit)))
 
 internal class RateLimitRule(
     val permits: Int,
