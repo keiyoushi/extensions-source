@@ -91,11 +91,13 @@ class YuriGarden :
         .rateLimitHost(apiUrl.toHttpUrl(), 15, 1, TimeUnit.MINUTES)
         .build()
 
-    private fun apiHeaders() = headersBuilder()
+    private fun apiHeadersBuilder() = headersBuilder()
         .set("Referer", "$baseUrl/")
         .add("x-app-origin", "https://yurigarden.com")
         .add("x-custom-lang", "vi")
         .add("Accept", "application/json")
+
+    private fun apiHeaders() = apiHeadersBuilder()
         .apply {
             authToken?.let { set("Authorization", "Bearer $it") }
         }
@@ -519,12 +521,7 @@ class YuriGarden :
         val name = authData.displayName?.takeIf { it.isNotBlank() } ?: email.substringBefore("@")
         val avatar = authData.photoURL.orEmpty()
 
-        val headers = headersBuilder()
-            .set("Referer", "$baseUrl/")
-            .add("x-app-origin", "https://yurigarden.com")
-            .add("x-custom-lang", "vi")
-            .add("Accept", "application/json")
-            .build()
+        val headers = apiHeadersBuilder().build()
         val body = UserAuthRequest(
             email = email,
             name = name,
@@ -545,6 +542,8 @@ class YuriGarden :
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
         val bridge = WebViewAuthBridge(latch)
+        val interfaceName = randomJavascriptInterfaceName()
+        val script = buildWebViewAuthScript(interfaceName)
         var webView: WebView? = null
 
         handler.post {
@@ -556,10 +555,10 @@ class YuriGarden :
                     blockNetworkImage = true
                     webViewUserAgent?.let { userAgentString = it }
                 }
-                addJavascriptInterface(bridge, "YuriGardenAuth")
+                addJavascriptInterface(bridge, interfaceName)
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
-                        view?.evaluateJavascript(WEBVIEW_AUTH_SCRIPT, null)
+                        view?.evaluateJavascript(script, null)
                     }
                 }
                 loadDataWithBaseURL(baseUrl, " ", "text/html", "UTF-8", null)
@@ -569,7 +568,7 @@ class YuriGarden :
         latch.await(10, TimeUnit.SECONDS)
 
         handler.post {
-            webView?.removeJavascriptInterface("YuriGardenAuth")
+            webView?.removeJavascriptInterface(interfaceName)
             webView?.destroy()
         }
 
@@ -577,6 +576,13 @@ class YuriGarden :
             ?.takeUnless { it == "null" }
             ?.ifBlank { null }
             ?.let { runCatching { it.parseAs<WebViewAuthData>() }.getOrNull() }
+    }
+
+    private fun randomJavascriptInterfaceName(): String {
+        val pool = ('a'..'z') + ('A'..'Z')
+        return (1..(10..20).random())
+            .map { pool.random() }
+            .joinToString("")
     }
 
     private class WebViewAuthBridge(
@@ -606,10 +612,10 @@ class YuriGarden :
         )
         private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
 
-        private val WEBVIEW_AUTH_SCRIPT = """
+        private fun buildWebViewAuthScript(interfaceName: String) = """
             (() => {
               const done = (value) => {
-                window.YuriGardenAuth.onAuthData(value ? JSON.stringify(value) : "");
+                window.$interfaceName.onAuthData(value ? JSON.stringify(value) : "");
               };
               try {
                 const request = indexedDB.open("firebaseLocalStorageDb");
