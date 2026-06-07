@@ -2,20 +2,14 @@ package eu.kanade.tachiyomi.extension.en.manhuarush
 
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 
 @Serializable
-class MangaDetailsDto(
-    val text: String? = null,
+class ChaptersDto(
     val chapters: List<ChapterDto>,
     val mangadexId: String,
-) {
-    fun toSManga(): SManga = SManga.create().apply {
-        description = text
-    }
-}
+)
 
 @Serializable
 class ChapterDto(
