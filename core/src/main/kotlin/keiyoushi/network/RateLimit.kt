@@ -20,18 +20,8 @@ class RateLimitBuilder internal constructor(
     private val rules: List<RateLimitRule> = emptyList(),
 ) {
     /**
-     * Begins a rate-limited client configuration. Chain further [RateLimitBuilder.rateLimit] calls
-     * for additional rules, then call [RateLimitBuilder.build] to finalize — all other client
-     * configuration should be done on the [OkHttpClient.Builder] before calling this.
-     *
-     * The first rule whose [shouldLimit] matches the request URL is applied;
-     * remaining rules are skipped. Define more specific rules before broader ones:
-     * ```
-     * OkHttpClient.Builder()
-     *     .rateLimit(5)  { it.host == "api.manga.example" }
-     *     .rateLimit(20) { it.host == "img.manga.example" }
-     *     .build()
-     * ```
+     * Adds a rate limit rule. Rules are evaluated in order, first match wins —
+     * define more specific rules before broader ones. Call [build] to finalize.
      *
      * @param permits     Requests allowed per [period].
      * @param period      Sliding-window duration.
