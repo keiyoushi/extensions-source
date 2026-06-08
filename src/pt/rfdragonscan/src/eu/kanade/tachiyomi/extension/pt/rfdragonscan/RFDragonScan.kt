@@ -163,7 +163,7 @@ class RFDragonScan :
 
         seasonList.groups?.forEach { group ->
             group.chapters?.forEach { ch ->
-                if (ch.isUpcoming == true || ch.coinCost != null || ch.hasRestriction == true) {
+                if (ch.isUpcoming == true || ch.hasRestriction == true) {
                     return@forEach
                 }
                 chapters.add(ch.toSChapter(mangaId, mangaSlug, dateFormat))
