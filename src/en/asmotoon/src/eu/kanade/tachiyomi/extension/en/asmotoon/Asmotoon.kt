@@ -37,7 +37,7 @@ class Asmotoon :
                 } else {
                     it.toString()
                 }
-            }.let(::add)
+            }?.let(::add)
             document.select(genreSelector).forEach { add(it.text().removeSuffix(",")) }
         }.joinToString()
     }
