@@ -1,7 +1,7 @@
 ext {
     extName = 'SoraRaw'
     extClass = '.SoraRaw'
-    baseUrl = 'https://soraraw.net'
+    baseUrl = 'https://soraraw.com'
     extVersionCode = 1
     isNsfw = true
 }

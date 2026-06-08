@@ -11,8 +11,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.jsonInstance
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -24,7 +26,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -39,9 +40,7 @@ class SoraRaw : HttpSource() {
     override val lang = "ja"
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
-
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(::buildIdOutdatedInterceptor)
         .build()
 
@@ -50,7 +49,7 @@ class SoraRaw : HttpSource() {
 
     private var buildId: String = ""
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
@@ -69,7 +68,7 @@ class SoraRaw : HttpSource() {
             if (response.isSuccessful) {
                 val jsonStr = response.body.string()
                 val map = mutableMapOf<String, String>()
-                val element = json.parseToJsonElement(jsonStr)
+                val element = jsonInstance.parseToJsonElement(jsonStr)
                 if (element is kotlinx.serialization.json.JsonArray) {
                     for (item in element) {
                         if (item is JsonObject) {
@@ -126,9 +125,8 @@ class SoraRaw : HttpSource() {
                                 break
                             }
 
-                            val bodyStr = jsonResponse.body.string()
                             val dto = try {
-                                json.decodeFromString<MangaListDto>(bodyStr)
+                                jsonResponse.parseAs<MangaListDto>()
                             } catch (e: Exception) {
                                 break
                             }
@@ -161,44 +159,6 @@ class SoraRaw : HttpSource() {
                     }
                 }
             }
-    }
-
-    private fun MangaDto.toSManga(gMap: Map<String, String>): SManga {
-        val mangaDto = this
-        return SManga.create().apply {
-            url = "/manga/${mangaDto.slug ?: ""}"
-            title = mangaDto.name ?: ""
-            description = mangaDto.description ?: mangaDto.summary
-
-            val imgName = mangaDto.image ?: mangaDto.img
-            thumbnail_url = mangaDto.thumbnail ?: if (imgName != null) {
-                "https://i.mangaraw.lat/$imgName"
-            } else {
-                mangaDto.cover_url ?: mangaDto.cover ?: ""
-            }
-
-            author = mangaDto.author
-            artist = mangaDto.artist ?: mangaDto.author
-            genre = mangaDto.genres?.mapNotNull { element ->
-                if (element is JsonPrimitive) {
-                    if (element.isString) {
-                        element.content
-                    } else {
-                        gMap[element.content] ?: "Genre ${element.content}"
-                    }
-                } else if (element is JsonObject) {
-                    element["name"]?.let { if (it is JsonPrimitive) it.content else null }
-                } else {
-                    null
-                }
-            }?.joinToString(", ")
-
-            status = when (mangaDto.status?.lowercase() ?: mangaDto.type?.lowercase()) {
-                "ongoing", "incomplete" -> SManga.ONGOING
-                "completed" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
-        }
     }
 
     // ============================== Filters ========================================
@@ -237,7 +197,7 @@ class SoraRaw : HttpSource() {
             throw java.io.IOException("HTTP error ${response.code}")
         }
         val jsonString = response.body.string()
-        val element = json.parseToJsonElement(jsonString)
+        val element = jsonInstance.parseToJsonElement(jsonString)
 
         val mangas = mutableListOf<SManga>()
         val gMap = getGenreMap()
@@ -318,7 +278,7 @@ class SoraRaw : HttpSource() {
         if (page > 1) return Observable.just(MangasPage(emptyList(), false))
         return client.newCall(GET("$baseUrl/top/last7Days.json", headers)).asObservableSuccess()
             .map { response ->
-                val dto = json.decodeFromString<TopMangasDto>(response.body.string())
+                val dto = response.parseAs<TopMangasDto>()
                 val gMap = getGenreMap()
                 val mangas = dto.mangas.map { it.toSManga(gMap) }.distinctBy { it.url }
                 MangasPage(mangas, false)
@@ -368,7 +328,7 @@ class SoraRaw : HttpSource() {
             if (query.isNotBlank()) {
                 filtered = filtered.filter {
                     it.name?.contains(query, ignoreCase = true) == true ||
-                        it.alt_names?.contains(query, ignoreCase = true) == true
+                        it.altNames?.contains(query, ignoreCase = true) == true
                 }
             }
 
@@ -376,8 +336,8 @@ class SoraRaw : HttpSource() {
                 when (filter) {
                     is ContentFilter -> {
                         when (filter.state) {
-                            1 -> filtered = filtered.filter { it.is_adult == "no" }
-                            2 -> filtered = filtered.filter { it.is_adult == "yes" }
+                            1 -> filtered = filtered.filter { it.isAdult == "no" }
+                            2 -> filtered = filtered.filter { it.isAdult == "yes" }
                         }
                     }
                     is ModeFilter -> {
@@ -413,10 +373,10 @@ class SoraRaw : HttpSource() {
                 }
             }
 
-            val sortFilter = filters.filterIsInstance<SortFilter>().firstOrNull()
+            val sortFilter = filters.firstInstanceOrNull<SortFilter>()
             filtered = when (sortFilter?.state) {
-                1 -> filtered.sortedByDescending { it.c_published ?: it.updated_at ?: it.c_published_at ?: "" }
-                2 -> filtered.sortedByDescending { it.number_bookmark ?: 0 }
+                1 -> filtered.sortedByDescending { it.cPublished ?: it.updatedAt ?: it.cPublishedAt ?: "" }
+                2 -> filtered.sortedByDescending { it.numberBookmark ?: 0 }
                 else -> filtered.sortedByDescending { it.views ?: 0 }
             }
 
@@ -452,7 +412,7 @@ class SoraRaw : HttpSource() {
         if (!response.isSuccessful) {
             throw java.io.IOException("HTTP error ${response.code}")
         }
-        val dto = json.decodeFromString<NextDataWrapperDto<MangaDetailsDto>>(response.body.string())
+        val dto = response.parseAs<NextDataWrapperDto<MangaDetailsDto>>()
         val mangaDto = dto.pageProps.data.manga
         val gMap = getGenreMap()
 
@@ -463,7 +423,7 @@ class SoraRaw : HttpSource() {
             var desc = ""
             if (mangaDto.rate != null && mangaDto.rate.jsonPrimitive.content != "null") {
                 desc += "★ ${mangaDto.rate.jsonPrimitive.content}"
-                if (mangaDto.number_rate != null && mangaDto.number_rate > 0) desc += " (${mangaDto.number_rate})"
+                if (mangaDto.numberRate != null && mangaDto.numberRate > 0) desc += " (${mangaDto.numberRate})"
                 desc += ", "
             }
             if (mangaDto.views != null) desc += "${String.format(Locale.US, "%,d", mangaDto.views).replace(",", " ")}👁\n\n"
@@ -477,7 +437,7 @@ class SoraRaw : HttpSource() {
 
             if (mangaDto.content != null) {
                 try {
-                    val contentElement = json.parseToJsonElement(mangaDto.content)
+                    val contentElement = jsonInstance.parseToJsonElement(mangaDto.content)
                     if (contentElement is JsonObject && contentElement.containsKey("blocks")) {
                         val blocks = contentElement["blocks"]?.jsonArray
                         blocks?.forEach { block ->
@@ -497,7 +457,7 @@ class SoraRaw : HttpSource() {
             thumbnail_url = mangaDto.thumbnail ?: if (imgName != null) {
                 "https://i.mangaraw.lat/$imgName"
             } else {
-                mangaDto.cover_url ?: mangaDto.cover ?: ""
+                mangaDto.coverUrl ?: mangaDto.cover ?: ""
             }
 
             author = mangaDto.author
@@ -517,7 +477,7 @@ class SoraRaw : HttpSource() {
             }?.joinToString(", ")
             status = when (mangaDto.status?.lowercase() ?: mangaDto.type?.lowercase()) {
                 "ongoing", "incomplete" -> SManga.ONGOING
-                "completed" -> SManga.COMPLETED
+                "completed", "complete" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
             initialized = true
@@ -540,7 +500,7 @@ class SoraRaw : HttpSource() {
         if (!response.isSuccessful) {
             throw java.io.IOException("HTTP error ${response.code}")
         }
-        val dto = json.decodeFromString<NextDataWrapperDto<MangaDetailsDto>>(response.body.string())
+        val dto = response.parseAs<NextDataWrapperDto<MangaDetailsDto>>()
         val mangaDto = dto.pageProps.data.manga
         val mangaSlug = mangaDto.slug.orEmpty()
 
@@ -549,12 +509,8 @@ class SoraRaw : HttpSource() {
                 url = "/manga/$mangaSlug/${chapter.routeSlug(mangaSlug)}"
                 name = chapter.displayName()
 
-                val dateStr = chapter.published_at ?: chapter.updated_at
-                date_upload = try {
-                    if (dateStr != null) dateFormat.parse(dateStr)?.time ?: 0L else 0L
-                } catch (e: Exception) {
-                    0L
-                }
+                val dateStr = chapter.publishedAt ?: chapter.updatedAt
+                date_upload = dateFormat.tryParse(dateStr)
             }
         }
     }
@@ -577,17 +533,17 @@ class SoraRaw : HttpSource() {
         if (!response.isSuccessful) {
             throw java.io.IOException("HTTP error ${response.code}")
         }
-        val wrapper = json.decodeFromString<NextDataWrapperDto<ChapterDetailsDto>>(response.body.string())
+        val wrapper = response.parseAs<NextDataWrapperDto<ChapterDetailsDto>>()
         val chapter = wrapper.pageProps.data.chapter
 
         // Fetch pages data JSON from api.mangarawgo.site
-        val pagesJsonUrl = "$pageApiUrl/${chapter.manga_id}/${chapter.id}.json"
+        val pagesJsonUrl = "$pageApiUrl/${chapter.mangaId}/${chapter.id}.json"
         val cryptedResponse = client.newCall(GET(pagesJsonUrl, headers)).execute()
         if (!cryptedResponse.isSuccessful) {
             cryptedResponse.close()
             throw Exception("Failed to fetch crypted pages: ${cryptedResponse.code}")
         }
-        val cryptedDto = json.decodeFromString<CryptedPagesDto>(cryptedResponse.body.string())
+        val cryptedDto = cryptedResponse.parseAs<CryptedPagesDto>()
 
         // Decrypt pages data structure
         val keyXor = "/fuCkYou!!!".toByteArray(StandardCharsets.UTF_8)
@@ -595,7 +551,7 @@ class SoraRaw : HttpSource() {
         val decryptedDBytes = xor(decodedD, keyXor)
         val decryptedDString = String(decryptedDBytes, StandardCharsets.UTF_8)
 
-        val pagesData = json.decodeFromString<List<PageDataDto>>(decryptedDString)
+        val pagesData = decryptedDString.parseAs<List<PageDataDto>>()
 
         val aesKey = chapter.uuid.hexToByteArray()
         val xorKey = "202508055d0db38bae2e86cc41649f90".toByteArray(StandardCharsets.UTF_8)
@@ -650,7 +606,7 @@ class SoraRaw : HttpSource() {
     private fun fetchBuildId(document: Document): String {
         val nextData = document.selectFirst("script#__NEXT_DATA__")?.data()
         if (nextData != null) {
-            val dto = json.decodeFromString<NextDataDto>(nextData)
+            val dto = nextData.parseAs<NextDataDto>()
             return dto.buildId
         }
 
@@ -697,8 +653,8 @@ class SoraRaw : HttpSource() {
     private fun ChapterDto.routeSlug(mangaSlug: String): String {
         val fallbackName = nameText() ?: orderText() ?: id.toString()
         val fallbackSlug = "ch-${fallbackName.replace(".", "-")}"
-        val rawSlug = (path ?: c_slug ?: fallbackSlug)
-            .substringAfter("/manga/$mangaSlug/", path ?: c_slug ?: fallbackSlug)
+        val rawSlug = (path ?: cSlug ?: fallbackSlug)
+            .substringAfter("/manga/$mangaSlug/", path ?: cSlug ?: fallbackSlug)
             .removePrefix("/")
             .removeSuffix("/")
 
