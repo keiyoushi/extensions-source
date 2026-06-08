@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -39,55 +40,39 @@ class HenChan :
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga/newest?offset=${20 * (page - 1)}", headers)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = if (query.isNotEmpty()) {
-            baseUrl.toHttpUrl().newBuilder()
+        if (query.isNotEmpty()) {
+            val url = baseUrl.toHttpUrl().newBuilder()
                 .addQueryParameter("do", "search")
                 .addQueryParameter("subaction", "search")
                 .addQueryParameter("story", query)
                 .addQueryParameter("search_start", page.toString())
                 .build()
                 .toString()
-        } else {
-            var genres = ""
-            var order = ""
-            filters.forEach { filter ->
-                when (filter) {
-                    is GenreList -> {
-                        filter.state
-                            .filter { !it.isIgnored() }
-                            .forEach { f ->
-                                genres += (if (f.isExcluded()) "-" else "") + f.id + '+'
-                            }
+            return GET(url, headers)
+        }
+
+        var genres = ""
+        val filterList = filters.ifEmpty { getFilterList() }
+
+        filterList.forEach { filter ->
+            if (filter is GenreList) {
+                filter.state
+                    .filter { !it.isIgnored() }
+                    .forEach { f ->
+                        genres += (if (f.isExcluded()) "-" else "") + f.id + '+'
                     }
-
-                    else -> return@forEach
-                }
-            }
-
-            if (genres.isNotEmpty()) {
-                filters.forEach { filter ->
-                    when (filter) {
-                        is OrderBy -> {
-                            order = filter.toUriPartWithGenres()
-                        }
-
-                        else -> return@forEach
-                    }
-                }
-                "$baseUrl/tags/${genres.dropLast(1)}&sort=manga$order?offset=${20 * (page - 1)}"
-            } else {
-                filters.forEach { filter ->
-                    when (filter) {
-                        is OrderBy -> {
-                            order = filter.toUriPartWithoutGenres()
-                        }
-
-                        else -> return@forEach
-                    }
-                }
-                "$baseUrl/$order?offset=${20 * (page - 1)}"
             }
         }
+
+        val orderBy = filterList.firstInstanceOrNull<OrderBy>()
+        val url = if (genres.isNotEmpty()) {
+            val order = orderBy?.toUriPartWithGenres() ?: ""
+            "$baseUrl/tags/${genres.dropLast(1)}&sort=manga$order?offset=${20 * (page - 1)}"
+        } else {
+            val order = orderBy?.toUriPartWithoutGenres() ?: ""
+            "$baseUrl/$order?offset=${20 * (page - 1)}"
+        }
+
         return GET(url, headers)
     }
 
@@ -112,13 +97,13 @@ class HenChan :
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = super.popularMangaFromElement(element)
-        manga.thumbnail_url = element.select("img").first()!!.attr("src").getHQThumbnail()
+        manga.thumbnail_url = element.selectFirst("img")?.attr("abs:src")?.getHQThumbnail()
         return manga
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = super.mangaDetailsParse(document)
-        manga.thumbnail_url = document.select("img#cover").attr("abs:src").getHQThumbnail()
+        manga.thumbnail_url = document.selectFirst("img#cover")?.attr("abs:src")?.getHQThumbnail()
         return manga
     }
 
@@ -152,7 +137,7 @@ class HenChan :
         } else {
             manga.url.replace("/manga/", "/related/")
         }
-        return (GET(url, headers))
+        return GET(url, headers)
     }
 
     override fun chapterListSelector() = ".related"
@@ -174,15 +159,15 @@ class HenChan :
         }
 
         // one chapter, nothing related
-        if (document.select("#right > div:nth-child(4)").text().contains(" похожий на ")) {
+        val relatedText = document.select("#right > div:nth-child(4)").text()
+        if (relatedText.contains(" похожий на ")) {
             val chap = SChapter.create()
-            chap.setUrlWithoutDomain(document.select("#left > div > a").attr("href"))
-            chap.name = document.select("#right > div:nth-child(4)").text()
+            chap.setUrlWithoutDomain(document.selectFirst("#left > div > a")?.attr("abs:href") ?: "")
+            chap.name = relatedText
                 .split(" похожий на ")[1]
                 .replace("\\\"", "\"")
                 .replace("\\'", "'")
             chap.chapter_number = 1F
-            chap.date_upload = System.currentTimeMillis() // setting to current date because of a sorting in the "Recent updates" section
             return listOf(chap)
         }
 
@@ -194,12 +179,12 @@ class HenChan :
             },
         )
 
-        var url = document.select("div#pagination_related a:contains(Вперед)").attr("href")
-        while (url.isNotBlank()) {
-            val get = GET(
-                "${response.request.url}/$url",
-                headers = headers,
-            )
+        var nextElement = document.selectFirst("div#pagination_related a:contains(Вперед)")
+        while (nextElement != null) {
+            val url = nextElement.attr("abs:href")
+            if (url.isEmpty()) break
+
+            val get = GET(url, headers = headers)
             val nextPage = client.newCall(get).execute().asJsoup()
             result.addAll(
                 nextPage.select(chapterListSelector()).map {
@@ -207,7 +192,7 @@ class HenChan :
                 },
             )
 
-            url = nextPage.select("div#pagination_related a:contains(Вперед)").attr("href")
+            nextElement = nextPage.selectFirst("div#pagination_related a:contains(Вперед)")
         }
 
         return result.reversed()
@@ -215,11 +200,11 @@ class HenChan :
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain(element.select("h2 a").attr("href"))
-        val chapterName = element.select("h2 a").attr("title")
+        val aElement = element.selectFirst("h2 a")
+        chapter.setUrlWithoutDomain(aElement?.attr("abs:href") ?: "")
+        val chapterName = aElement?.attr("title") ?: ""
         chapter.name = chapterName
         chapter.chapter_number = chapterNumberRegex.find(chapterName)?.groupValues?.get(2)?.toFloat() ?: -1F
-        chapter.date_upload = System.currentTimeMillis() // setting to current date because of a sorting in the "Recent updates" section
         return chapter
     }
 
@@ -257,20 +242,13 @@ class HenChan :
             summary = baseUrl
             this.setDefaultValue(DOMAIN_DEFAULT)
             dialogTitle = DOMAIN_TITLE
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val res =
-                        preferences.edit().putString(DOMAIN_TITLE, newValue as String).commit()
-                    Toast.makeText(
-                        screen.context,
-                        "Для смены домена необходимо перезапустить приложение с полной остановкой.",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                    res
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(
+                    screen.context,
+                    "Для смены домена необходимо перезапустить приложение с полной остановкой.",
+                    Toast.LENGTH_LONG,
+                ).show()
+                true
             }
         }.let(screen::addPreference)
     }
