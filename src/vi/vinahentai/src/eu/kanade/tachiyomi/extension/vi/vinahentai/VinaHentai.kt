@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -14,6 +15,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -28,7 +33,7 @@ class VinaHentai :
     override val name = "VinaHentai"
     override val lang = "vi"
 
-    private val defaultBaseUrl = "https://vinahentai.life"
+    private val defaultBaseUrl = "https://vinahentai.bond"
 
     override val baseUrl get() = getPrefBaseUrl()
 
@@ -77,19 +82,31 @@ class VinaHentai :
 
         var genreSlug: String? = null
         var sort = "updatedAt"
+        var status = ""
 
         filters.forEach { filter ->
             when (filter) {
                 is GenreFilter -> genreSlug = filter.selected
                 is SortFilter -> sort = filter.toUriPart()
+                is StatusFilter -> status = filter.toUriPart()
                 else -> {}
             }
         }
 
         return if (genreSlug != null) {
-            GET("$baseUrl/genres/$genreSlug?page=$page&sort=$sort", headers)
+            val url = "$baseUrl/genres/$genreSlug".toHttpUrl().newBuilder()
+                .addQueryParameter("page", page.toString())
+                .addQueryParameter("sort", sort)
+                .apply { if (status.isNotEmpty()) addQueryParameter("status", status) }
+                .build()
+            GET(url, headers)
         } else {
-            GET("$baseUrl/danh-sach?page=$page&sort=$sort", headers)
+            val url = "$baseUrl/danh-sach".toHttpUrl().newBuilder()
+                .addQueryParameter("page", page.toString())
+                .addQueryParameter("sort", sort)
+                .apply { if (status.isNotEmpty()) addQueryParameter("status", status) }
+                .build()
+            GET(url, headers)
         }
     }
 
@@ -104,34 +121,63 @@ class VinaHentai :
         return parseMangaListPage(document)
     }
 
-    override fun getFilterList(): FilterList = getFilters()
+    // ============================== Filters ==============================
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private var genreList: List<Pair<String, String>> = emptyList()
+    private var fetchGenresAttempts: Int = 0
+
+    private fun fetchGenres() {
+        if (genreList.isEmpty() && fetchGenresAttempts < 3) {
+            scope.launch {
+                try {
+                    client.newCall(GET("$baseUrl/danh-sach", headers)).await()
+                        .use { response ->
+                            parseGenresFromHtml(response)
+                                .takeIf { it.isNotEmpty() }
+                                ?.let { genreList = it }
+                        }
+                } catch (_: Exception) {
+                } finally {
+                    fetchGenresAttempts++
+                }
+            }
+        }
+    }
+
+    override fun getFilterList(): FilterList {
+        fetchGenres()
+        return getFilters(genreList)
+    }
+
+    // ============================== Parsing ==============================
 
     private fun parseMangaListPage(document: Document): MangasPage {
-        val mangaList = document.select("a.group[href^=/truyen-hentai/], a.group[href^=/login?redirect=]")
-            .filter { it.selectFirst("h3") != null }
+        val mangaList = document.select("a[href^=/truyen-hentai/][data-variant]")
             .map { element -> mangaFromGridElement(element) }
 
-        val hasNextPage = document.selectFirst("button[title=Tới trang cuối]:not([disabled])") != null
+        val hasNextPage = mangaList.size >= MANGA_PER_PAGE
 
         return MangasPage(mangaList, hasNextPage)
     }
 
     private fun parseSearchPage(document: Document): MangasPage {
-        val mangaList = document.select("a[href^=/truyen-hentai/], a[href^=/login?redirect=]")
+        val mangaList = document.select("a[href^=/truyen-hentai/]")
             .filter { it.selectFirst("h2") != null }
             .map { element ->
                 SManga.create().apply {
-                    setUrlWithoutDomain(resolveMangaUrl(element.attr("href")))
+                    setUrlWithoutDomain(element.absUrl("href"))
                     title = element.selectFirst("h2")!!.text()
                     thumbnail_url = element.selectFirst("img")?.absUrl("src")
                 }
             }
 
-        val currentPage = """page=(\d+)""".toRegex()
+        val currentPage = PAGE_REGEX
             .find(document.location())?.groupValues?.get(1)?.toIntOrNull() ?: 1
         val hasNextPage = document.select("a[href*=page=]")
             .any { element ->
-                """page=(\d+)""".toRegex()
+                PAGE_REGEX
                     .find(element.attr("href"))?.groupValues?.get(1)?.toIntOrNull()
                     ?.let { it > currentPage } == true
             }
@@ -140,19 +186,10 @@ class VinaHentai :
     }
 
     private fun mangaFromGridElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(resolveMangaUrl(element.attr("href")))
-        title = element.selectFirst("h3")!!.text()
+        setUrlWithoutDomain(element.absUrl("href"))
+        val titleDiv = element.selectFirst("div.truncate.font-semibold[title]")
+        title = titleDiv?.attr("title") ?: titleDiv?.text() ?: ""
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
-    }
-
-    private fun resolveMangaUrl(href: String): String {
-        if (href.startsWith("/login")) {
-            val redirect = href.substringAfter("redirect=", "")
-            if (redirect.isNotEmpty()) {
-                return java.net.URLDecoder.decode(redirect, "UTF-8")
-            }
-        }
-        return href
     }
 
     // =============================== Details ==============================
@@ -164,13 +201,13 @@ class VinaHentai :
             title = document.selectFirst("h1")!!.text()
 
             author = document.select("a[href^=/authors/]")
-                .map { it.text().trim() }
+                .map { it.text() }
                 .filter { !it.startsWith("+") }
                 .joinToString()
                 .ifEmpty { null }
 
             genre = document.select("a[href^=/genres/]")
-                .map { it.text().trim() }
+                .map { it.text() }
                 .filter { !it.startsWith("+") }
                 .joinToString()
                 .ifEmpty { null }
@@ -179,7 +216,7 @@ class VinaHentai :
                 ?: document.selectFirst("img[src*=story-images]")?.absUrl("src")
 
             description = document.selectFirst("#manga-description-section .text-txt-secondary")
-                ?.text()?.trim()
+                ?.text()
 
             status = document.body().text().let { bodyText ->
                 when {
@@ -204,7 +241,7 @@ class VinaHentai :
             .map { element ->
                 SChapter.create().apply {
                     setUrlWithoutDomain(element.attr("href"))
-                    name = element.selectFirst("span")?.text()?.trim() ?: element.text().trim()
+                    name = element.selectFirst("span")?.text() ?: element.text()
                     date_upload = parseRelativeDate(element.selectFirst("time")?.text())
                 }
             }
@@ -268,7 +305,10 @@ class VinaHentai :
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
 
     companion object {
+        private const val MANGA_PER_PAGE = 24
+
         private val NUMBER_REGEX = Regex("""\d+""")
+        private val PAGE_REGEX = Regex("""page=(\d+)""")
 
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val BASE_URL_PREF = "overrideBaseUrl"
