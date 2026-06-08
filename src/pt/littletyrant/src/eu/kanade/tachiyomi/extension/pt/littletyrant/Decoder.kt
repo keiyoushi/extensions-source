@@ -1,49 +1,73 @@
 package eu.kanade.tachiyomi.extension.pt.littletyrant
 
-import eu.kanade.tachiyomi.network.GET
-import keiyoushi.utils.parseAs
-import okhttp3.OkHttpClient
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.buffer
+import okio.source
 import org.jsoup.nodes.Document
+import java.io.InputStream
 
-private val XOR_KEY_REGEX = Regex("""xorKey\s*=\s*'([^']+)'""")
-private val PROXY_URLS_REGEX = Regex("""proxyUrls\s*=\s*\[(.*?)\]""", RegexOption.DOT_MATCHES_ALL)
+class Decoder {
+    fun decrypt(response: Response, key: String): Response {
+        val body = response.body ?: return response
+        val stream = body.byteStream()
+        val keyBytes = key.toByteArray()
 
-class Decoder(private val client: OkHttpClient, private val baseUrl: String) {
-    private var xorKey = ""
+        val decryptedStream = object : InputStream() {
+            private var totalBytesRead = 0
 
-    fun getImageUrls(document: Document): List<String> {
-        val token = fetchToken()
-        val paths = extractKeyAndPaths(document)
-        return paths.map { "$baseUrl$it#token=$token" }
-    }
+            override fun read(): Int {
+                val b = stream.read()
+                if (b == -1) return -1
+                if (totalBytesRead < XOR_LIMIT) {
+                    val decrypted = b xor keyBytes[totalBytesRead % keyBytes.size].toInt()
+                    totalBytesRead++
+                    return decrypted and BYTE_MASK
+                }
+                return b
+            }
 
-    fun decrypt(response: Response): Response {
-        val bytes = response.body!!.bytes()
-        val key = xorKey.toByteArray()
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                val n = stream.read(b, off, len)
+                if (n == -1) return -1
+                val limit = minOf(n, XOR_LIMIT - totalBytesRead)
+                for (i in 0 until limit) {
+                    val idx = off + i
+                    b[idx] = (b[idx].toInt() xor keyBytes[totalBytesRead % keyBytes.size].toInt()).toByte()
+                    totalBytesRead++
+                }
+                return n
+            }
 
-        for (i in 0 until minOf(1024, bytes.size)) {
-            bytes[i] = (bytes[i].toInt() xor key[i % key.size].toInt()).toByte()
+            override fun close() {
+                stream.close()
+            }
         }
 
+        val contentType = body.contentType()
+        val contentLength = body.contentLength()
+        val decryptedBody = decryptedStream.source().buffer().asResponseBody(contentType, contentLength)
+
         return response.newBuilder()
-            .body(bytes.toResponseBody(response.body!!.contentType()))
+            .body(decryptedBody)
             .build()
     }
 
-    private fun fetchToken(): String {
-        val res = client.newCall(GET("$baseUrl/wp-content/themes/madara2/token-generator.php")).execute()
-        return res.parseAs<TokenDto>().token
+    fun extractPaths(document: Document): List<String> {
+        val urlScript = document.selectFirst("script:containsData(_proxyUrls)")?.data()
+            ?: error("No image URLS")
+
+        val match = PROXY_URLS_REGEX.find(urlScript) ?: error("Unable to parse _proxyUrls")
+
+        return match.groupValues[1]
+            .split(",")
+            .map { it.trim().trim('"').trim('\'').replace("\\/", "/") }
+            .filter { it.isNotEmpty() }
     }
 
-    private fun extractKeyAndPaths(document: Document): List<String> {
-        val xorKeyScript = document.select("script:containsData(xorKey)").first()?.data() ?: error("No XOR key")
-        xorKey = XOR_KEY_REGEX.find(xorKeyScript)!!.groupValues.get(1)
-
-        val urlScript = document.select("script:containsData(proxyUrls)").first()?.data() ?: error("No image URLS")
-        return PROXY_URLS_REGEX.find(urlScript)!!.groupValues.get(1)
-            .split(",")
-            .map { it.trim().trim('"') }
+    companion object {
+        private const val XOR_LIMIT = 1024
+        private const val BYTE_MASK = 0xFF
+        private val PROXY_URLS_REGEX = Regex("""_proxyUrls\s*=\s*\[(.*?)\]""", RegexOption.DOT_MATCHES_ALL)
     }
 }
