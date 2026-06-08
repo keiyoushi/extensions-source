@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -37,8 +38,7 @@ class RitharScans : Keyoapp("RitharScans", "https://ritharscans.com", "en") {
             if (query.isNotBlank()) {
                 addQueryParameter("title", query)
             }
-            filters.firstOrNull { it is GenreList }?.also {
-                val filter = it as GenreList
+            filters.firstInstanceOrNull<GenreList>()?.also { filter ->
                 filter.state
                     .filter { it.state }
                     .forEach { genre ->
@@ -74,8 +74,8 @@ class RitharScans : Keyoapp("RitharScans", "https://ritharscans.com", "en") {
         return (1..data.numberOfPages).mapIndexed { i, page ->
             Page(
                 i,
-                document.location(),
-                "$baseUrl/storage/series/webtoon/$seriesID/chapters/$chapterID/${page.toString().padStart(3, '0')}.jpg",
+                url = document.location(),
+                imageUrl = "$baseUrl/storage/series/webtoon/$seriesID/chapters/$chapterID/${page.toString().padStart(3, '0')}.jpg",
             )
         }
     }
