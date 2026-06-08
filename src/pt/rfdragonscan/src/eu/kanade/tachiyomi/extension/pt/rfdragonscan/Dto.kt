@@ -37,13 +37,13 @@ class PaginationDto(
 
 @Serializable
 class MangaDetailsDto(
-    val title: String? = null,
-    val synopsis: String? = null,
-    @SerialName("cover_image") val coverImage: String? = null,
-    val status: String? = null,
-    val authors: List<NameDto>? = null,
-    val artists: List<NameDto>? = null,
-    val genders: List<NameDto>? = null,
+    private val title: String? = null,
+    private val synopsis: String? = null,
+    @SerialName("cover_image") private val coverImage: String? = null,
+    private val status: String? = null,
+    private val authors: List<NameDto>? = null,
+    private val artists: List<NameDto>? = null,
+    private val genders: List<NameDto>? = null,
 ) {
     fun toSManga() = SManga.create().apply {
         title = this@MangaDetailsDto.title ?: ""
@@ -78,7 +78,6 @@ class ChapterDataDto(
     val title: JsonPrimitive? = null,
     @SerialName("created_at") private val createdAt: String? = null,
     val isUpcoming: Boolean? = null,
-    val coinCost: Int? = null,
     val hasRestriction: Boolean? = null,
 ) {
     fun toSChapter(mangaId: String, mangaSlug: String, dateFormat: SimpleDateFormat) = SChapter.create().apply {
