@@ -7,7 +7,7 @@ import okhttp3.Response
 
 fun getFilters(genres: List<Pair<String, String>>): FilterList = FilterList(
     buildList {
-        add(Filter.Header("Nhấn 'Làm mới' để hiển thị thể loại"))
+        add(Filter.Header("Nhấn 'Làm mới' để làm mới thể loại"))
         if (genres.isNotEmpty()) {
             add(GenreFilter(genres))
         }
