@@ -138,7 +138,11 @@ class MangaK :
                             }
                         }
                     }
-                    is SortFilter -> addQueryParameter("sort", filter.selected)
+                    is SortFilter -> {
+                        if (filter.selected.isNotBlank()) {
+                            addQueryParameter("sort", filter.selected)
+                        }
+                    }
                     is ContentRatingFilter -> {
                         if (filter.selected.isNotBlank()) {
                             addQueryParameter("content_rating", filter.selected)
