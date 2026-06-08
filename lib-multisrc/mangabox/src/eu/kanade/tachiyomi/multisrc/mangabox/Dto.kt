@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.multisrc.mangabox
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// Base classes
 @Serializable
 class ApiResponse(
     val data: ApiDataResponse,
@@ -16,13 +16,13 @@ class ApiDataResponse(
 
 @Serializable
 class ApiChapter(
-    val chapter_name: String,
-    val chapter_slug: String,
-    val chapter_num: Float,
-    val updated_at: String,
+    @SerialName("chapter_name") val chapterName: String,
+    @SerialName("chapter_slug") val chapterSlug: String,
+    @SerialName("chapter_num") val chapterNum: Float,
+    @SerialName("updated_at") val updatedAt: String,
 )
 
 @Serializable
 class ApiPagination(
-    val has_more: Boolean,
+    @SerialName("has_more") val hasMore: Boolean,
 )
