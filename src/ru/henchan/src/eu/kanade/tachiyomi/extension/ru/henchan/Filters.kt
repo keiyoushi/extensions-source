@@ -1,11 +1,12 @@
 package eu.kanade.tachiyomi.extension.ru.henchan
 
-import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.source.model.Filter
 
 class Genre(
     val id: String,
-    @SuppressLint("DefaultLocale") name: String = id.replace('_', ' ').capitalize(),
+    name: String = id.replace('_', ' ').replaceFirstChar {
+        if (it.isLowerCase()) it.titlecase() else it.toString()
+    },
 ) : Filter.TriState(name)
 
 class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Тэги", genres)
