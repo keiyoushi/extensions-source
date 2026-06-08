@@ -3,8 +3,8 @@ ext {
     extClass = '.BegaTranslation'
     themePkg = 'madara'
     baseUrl = 'https://begatranslation.com'
-    overrideVersionCode = 1
-    isNsfw = false
+    overrideVersionCode = 2
+    isNsfw = true
 }
 
 apply plugin: "kei.plugins.extension.legacy"
