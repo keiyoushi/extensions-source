@@ -46,7 +46,7 @@ class ManhuaRush : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
