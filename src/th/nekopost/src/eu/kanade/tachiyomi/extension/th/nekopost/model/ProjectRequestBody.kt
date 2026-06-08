@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-class RawProjectCategory(
-    @SerialName("CateName")
-    val categoryName: String,
+class ProjectRequestBody(
+    @SerialName("pid")
+    val pid: Int,
 )
