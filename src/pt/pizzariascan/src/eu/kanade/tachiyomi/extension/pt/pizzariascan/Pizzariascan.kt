@@ -15,15 +15,15 @@ class Pizzariascan :
 
     override val seriesPath = "todas-as-obras"
 
-    override fun getOrderFilterOptions() = PizzariascanFilters.orderFilterOptions
+    override fun getOrderFilterOptions() = orderFilterOptions
 
-    override fun getStatusFilterOptions() = PizzariascanFilters.statusFilterOptions
+    override fun getStatusFilterOptions() = statusFilterOptions
 
-    override fun getTypeFilterOptions() = PizzariascanFilters.typeFilterOptions
+    override fun getTypeFilterOptions() = typeFilterOptions
 
-    override fun getGenreFilterOptions() = PizzariascanFilters.genreFilterOptions
+    override fun getGenreFilterOptions() = genreFilterOptions
 
-    override fun getYearFilterOptions() = PizzariascanFilters.yearFilterOptions
+    override fun getYearFilterOptions() = yearFilterOptions
 
     override fun parseChapterDate(date: String?): Long {
         val normalizedDate = date
