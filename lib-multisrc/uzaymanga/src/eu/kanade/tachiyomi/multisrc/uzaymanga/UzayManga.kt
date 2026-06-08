@@ -203,10 +203,10 @@ abstract class UzayManga(
 
             SChapter.create().apply {
                 val chapName = svelte.resolveString(chapObj, "name")
-                val chapOrder = svelte.resolveInt(chapObj, "order")
+                val chapOrder = svelte.resolveString(chapObj, "order")?.removeSuffix(".0")
                 name = buildString {
                     if (chapOrder != null) append("Bölüm $chapOrder")
-                    if (chapName != null && chapName != chapOrder?.toString()) {
+                    if (chapName != null && chapName != chapOrder) {
                         if (isNotEmpty()) append(" - ")
                         append(chapName)
                     }
