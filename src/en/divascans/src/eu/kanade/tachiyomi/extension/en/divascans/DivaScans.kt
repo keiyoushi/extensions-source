@@ -37,6 +37,7 @@ class DivaScans :
     ConfigurableSource {
 
     override val name = "Diva Scans"
+    override val id: Long = 5481739102875145368L
     override val baseUrl = "https://divascans.org"
     override val lang = "en"
     override val supportsLatest = true
@@ -159,9 +160,15 @@ class DivaScans :
 
             if (title.isEmpty() || slug.isEmpty()) return@mapNotNull null
 
+            val type = obj["type"]?.jsonPrimitive?.contentOrNull?.lowercase()
+                ?: obj["category"]?.jsonPrimitive?.contentOrNull?.lowercase()
+                ?: "comic"
+
+            val urlType = if (type.contains("novel")) "novel" else "comic"
+
             SManga.create().apply {
                 this.title = title
-                this.url = "/series/comic/$slug"
+                this.url = "/series/$urlType/$slug"
                 this.thumbnail_url = cleanImageUrl(cover)
             }
         }
@@ -344,9 +351,14 @@ class DivaScans :
 
                 val numStr = chap["number"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
 
+                val type = response.request.url.pathSegments.let {
+                    val rawType = if (it.size >= 2) it[it.size - 2] else "comic"
+                    if (rawType.contains("novel")) "novel" else "comic"
+                }
+
                 SChapter.create().apply {
                     // Use number in URL as requested by site structure
-                    url = "/series/comic/$slug/chapter/$numStr"
+                    url = "/series/$type/$slug/chapter/$numStr"
 
                     val prefix = if (isLocked) "\uD83D\uDD12 " else ""
                     val suffix = if (isLocked && coinPrice > 0) " ($coinPrice coins)" else ""
