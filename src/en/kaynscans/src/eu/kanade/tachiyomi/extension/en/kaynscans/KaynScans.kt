@@ -6,7 +6,7 @@ class KaynScans :
     Iken(
         "Kayn Scans",
         "en",
-        "https://kaynscan.org/",
+        "https://kaynscan.org",
         "https://api.kaynscan.org",
     ) {
     override val versionId = 2
