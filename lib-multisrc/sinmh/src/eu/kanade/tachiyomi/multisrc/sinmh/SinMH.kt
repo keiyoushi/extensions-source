@@ -17,7 +17,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
-import org.jsoup.select.Evaluator
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -46,10 +45,10 @@ abstract class SinMH(
     protected open val comicItemSelector = "#contList > li, li.list-comic"
     protected open val comicItemTitleSelector = "p > a, h3 > a"
     protected open fun mangaFromElement(element: Element) = SManga.create().apply {
-        val titleElement = element.selectFirst(comicItemTitleSelector)
-        title = titleElement?.text().orEmpty()
-        titleElement?.absUrl("href")?.let { setUrlWithoutDomain(it) }
-        val image = element.selectFirst(Evaluator.Tag("img"))
+        val titleElement = element.selectFirst(comicItemTitleSelector)!!
+        title = titleElement.text()
+        setUrlWithoutDomain(titleElement.absUrl("href"))
+        val image = element.selectFirst("img")
         thumbnail_url = image?.absUrl("src")?.ifEmpty { image.absUrl("data-src") }
     }
 
@@ -119,7 +118,7 @@ abstract class SinMH(
 
     protected open fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst(".book-title > h1")?.text().orEmpty()
-        val detailsList = document.selectFirst(Evaluator.Class("detail-list"))
+        val detailsList = document.selectFirst(".detail-list")
         if (detailsList != null) {
             author = detailsList.select("strong:contains(作者) ~ *").text()
             genre = mangaDetailsParseDefaultGenre(document, detailsList)
@@ -129,9 +128,9 @@ abstract class SinMH(
                 else -> SManga.UNKNOWN
             }
         }
-        description = document.selectFirst(Evaluator.Id("intro-all"))?.text()
-            ?.removePrefix("漫画简介：")?.trim()
-            ?.removePrefix("漫画简介：")?.trim().orEmpty() // some sources have double prefix
+        description = document.selectFirst("#intro-all")?.text()
+            ?.removePrefix("漫画简介：")?.trimStart()
+            ?.removePrefix("漫画简介：")?.trimStart().orEmpty() // some sources have double prefix
         thumbnail_url = document.selectFirst("div.book-cover img")?.absUrl("src")
     }
 
@@ -146,9 +145,9 @@ abstract class SinMH(
 
     protected fun mangaDetailsParseDMZJStyle(document: Document, hasBreadcrumb: Boolean) = SManga.create().apply {
         val detailsDiv = document.selectFirst("div.comic_deCon") ?: return@apply
-        title = detailsDiv.selectFirst(Evaluator.Tag("h1"))?.text().orEmpty()
+        title = detailsDiv.selectFirst("h1")?.text().orEmpty()
         val details = detailsDiv.select("> ul > li")
-        val linkSelector = Evaluator.Tag("a")
+        val linkSelector = "a"
 
         if (details.isNotEmpty()) {
             author = details[0].text().removePrefix("作者：").trimStart()
@@ -250,9 +249,9 @@ abstract class SinMH(
 
     protected open fun parseCategories(document: Document) {
         if (categories.isNotEmpty()) return
-        val labelSelector = Evaluator.Tag("label")
-        val linkSelector = Evaluator.Tag("a")
-        categories = document.selectFirst(Evaluator.Class("filter-nav"))?.children()?.mapNotNull { element ->
+        val labelSelector = "label"
+        val linkSelector = "a"
+        categories = document.selectFirst(".filter-nav")?.children()?.mapNotNull { element ->
             val name = element.selectFirst(labelSelector)?.text() ?: return@mapNotNull null
             val tags = element.select(linkSelector)
             val values = tags.map { it.text() }.toTypedArray()
