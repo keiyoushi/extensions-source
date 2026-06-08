@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.ru.mangabuff
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -17,11 +19,14 @@ import keiyoushi.utils.tryParse
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import rx.Observable
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -34,6 +39,7 @@ class MangaBuff : HttpSource() {
 
     override val client = network.client.newBuilder()
         .addInterceptor(::tokenInterceptor)
+        .addInterceptor(::gifToJpegInterceptor)
         .build()
 
     // From Akuma - CSRF token
@@ -66,6 +72,30 @@ class MangaBuff : HttpSource() {
         }
 
         return chain.proceed(request)
+    }
+
+    private fun gifToJpegInterceptor(chain: Interceptor.Chain): Response {
+        val response = chain.proceed(chain.request())
+        val isGif = response.body.contentType()?.subtype?.lowercase() == "gif" ||
+            response.request.url.pathSegments.lastOrNull()?.endsWith(".gif", ignoreCase = true) == true
+
+        if (!isGif) {
+            return response
+        }
+
+        val originalBytes = response.body.use { it.bytes() }
+
+        val bitmap = BitmapFactory.decodeByteArray(originalBytes, 0, originalBytes.size)
+            ?: return response
+
+        val outputStream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream)
+        bitmap.recycle()
+
+        val newBody = outputStream.toByteArray().toResponseBody("image/jpeg".toMediaType())
+        return response.newBuilder()
+            .body(newBody)
+            .build()
     }
 
     private fun getToken(): String {
