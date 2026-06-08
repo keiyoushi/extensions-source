@@ -100,7 +100,7 @@ class VyvyManga : HttpSource() {
         val document = response.asJsoup()
         return document.select(".list-group > a").map { element ->
             SChapter.create().apply {
-                setUrlWithoutDomain(element.absUrl("href"))
+                url = element.absUrl("href")
                 name = element.selectFirst("span")!!.text()
                 date_upload = parseChapterDate(element.selectFirst("> p")?.text())
             }
@@ -108,7 +108,10 @@ class VyvyManga : HttpSource() {
     }
 
     // Pages
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
+    override fun pageListRequest(chapter: SChapter): Request {
+        if (!chapter.url.startsWith("http")) error("Refresh to reload chapters")
+        return GET(chapter.url, headers)
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
