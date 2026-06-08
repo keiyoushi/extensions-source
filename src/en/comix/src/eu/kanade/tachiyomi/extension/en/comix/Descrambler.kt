@@ -1,104 +1,62 @@
 package eu.kanade.tachiyomi.extension.en.comix
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Rect
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.asResponseBody
-import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
+import okio.ForwardingSource
+import okio.Source
+import okio.buffer
 
 object Descrambler {
 
-    private const val GRID_COLS = 5
-    private const val GRID_ROWS = 5
-    private const val NUM_TILES = GRID_COLS * GRID_ROWS
-    private const val LCG_MULTIPLIER = 1664525
-    private const val LCG_INCREMENT = 1013904223
+    private const val ENC_MULTIPLIER = 1000005
+    private const val ENC_INCREMENT = 1234567891
+    private const val ENC_READ_CHUNK_SIZE = 8192L
 
     val interceptor = Interceptor { chain ->
         val response = chain.proceed(chain.request())
         if (!response.isSuccessful) return@Interceptor response
 
-        val seed = response.header("x-scramble-seed")?.toLongOrNull()?.toInt()
+        val body = response.body
+        val bodyMediaType = body.contentType()
+
+        val seed = response.header("x-enc-seed")?.toLongOrNull()?.toInt()
             ?: return@Interceptor response
 
         if (seed == 0) return@Interceptor response
 
-        val body = response.body ?: return@Interceptor response
-
-        val bitmap = body.byteStream().use { BitmapFactory.decodeStream(it) }
-            ?: return@Interceptor response.newBuilder()
-                .code(500)
-                .message("Failed to decode image")
-                .body("Failed to decode image".toResponseBody("text/plain".toMediaType()))
-                .build()
-
-        val descrambled = descramble(bitmap, seed)
-        bitmap.recycle()
-
-        val output = Buffer()
-        descrambled.compress(Bitmap.CompressFormat.JPEG, 90, output.outputStream())
-        descrambled.recycle()
+        val length = response.header("x-enc-len")?.toIntOrNull()
+            ?: return@Interceptor response
 
         response.newBuilder()
-            .body(output.asResponseBody(JPEG_MEDIA, output.size))
+            .body(
+                body.source()
+                    .decodeEncodedPrefix(seed, length)
+                    .buffer()
+                    .asResponseBody(bodyMediaType, body.contentLength()),
+            )
             .build()
     }
 
-    private val JPEG_MEDIA = "image/jpeg".toMediaType()
+    private fun Source.decodeEncodedPrefix(seed: Int, length: Int) = object : ForwardingSource(this) {
+        private var state = seed
+        private var decoded = 0
 
-    private fun descramble(bitmap: Bitmap, seed: Int): Bitmap {
-        val width = bitmap.width
-        val height = bitmap.height
-        val tileW = width / GRID_COLS
-        val tileH = height / GRID_ROWS
+        override fun read(sink: Buffer, byteCount: Long): Long {
+            val chunk = Buffer()
+            val read = super.read(chunk, minOf(byteCount, ENC_READ_CHUNK_SIZE))
+            if (read == -1L) return -1L
 
-        val perm = buildOrder(seed, NUM_TILES)
+            val bytes = chunk.readByteArray()
+            val limit = minOf(bytes.size, (length - decoded).coerceAtLeast(0))
+            for (i in 0 until limit) {
+                state = state * ENC_MULTIPLIER + ENC_INCREMENT
+                bytes[i] = (bytes[i].toInt() xor (state ushr 24)).toByte()
+            }
+            decoded += limit
 
-        val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(output)
-
-        canvas.drawBitmap(bitmap, 0f, 0f, null)
-
-        for (srcIdx in 0 until NUM_TILES) {
-            val dstIdx = perm[srcIdx]
-            val srcCol = srcIdx % GRID_COLS
-            val srcRow = srcIdx / GRID_COLS
-            val dstCol = dstIdx % GRID_COLS
-            val dstRow = dstIdx / GRID_COLS
-
-            val srcRect = Rect(
-                srcCol * tileW,
-                srcRow * tileH,
-                (srcCol + 1) * tileW,
-                (srcRow + 1) * tileH,
-            )
-            val dstRect = Rect(
-                dstCol * tileW,
-                dstRow * tileH,
-                (dstCol + 1) * tileW,
-                (dstRow + 1) * tileH,
-            )
-
-            canvas.drawBitmap(bitmap, srcRect, dstRect, null)
+            sink.write(bytes)
+            return read
         }
-
-        return output
-    }
-
-    private fun buildOrder(seed: Int, n: Int): IntArray {
-        val arr = IntArray(n) { it }
-        var state = seed
-        for (i in n - 1 downTo 1) {
-            state = state * LCG_MULTIPLIER + LCG_INCREMENT
-            val j = (state.toLong() and 0xFFFFFFFFL) % (i + 1)
-            val tmp = arr[i]
-            arr[i] = arr[j.toInt()]
-            arr[j.toInt()] = tmp
-        }
-        return arr
     }
 }
