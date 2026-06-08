@@ -1,7 +1,8 @@
 ext {
     extName = 'Comicabc'
     extClass = '.Comicabc'
-    extVersionCode = 2
+    extVersionCode = 3
+    isNsfw = false
 }
 
 apply plugin: "kei.plugins.extension.legacy"
