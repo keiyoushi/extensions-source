@@ -295,7 +295,6 @@ class Japscan :
         return segments[typeIdx + 1].takeIf { it.isNotEmpty() }
     }
 
-
     private fun isHidden(el: Element): Boolean {
         if (el.hasClass("d-none")) return true
         if (el.hasAttr("hidden")) return true
