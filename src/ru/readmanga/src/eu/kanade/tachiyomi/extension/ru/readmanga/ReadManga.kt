@@ -40,7 +40,6 @@ class ReadManga : GroupLe("ReadManga", "https://a.zazaza.me", "ru") {
         val selectedTranslatorName = selectedTranslator
             .selectFirst(".translator-selection-name")
             ?.text()
-            ?.trim()
             .orEmpty()
 
         if (selectedTranslatorName.isBlank()) {

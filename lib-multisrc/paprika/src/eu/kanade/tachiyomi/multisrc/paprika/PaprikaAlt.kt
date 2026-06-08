@@ -18,22 +18,17 @@ abstract class PaprikaAlt(
 ) : Paprika(name, baseUrl, lang) {
     override fun popularMangaSelector() = "div.anipost"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        // Log.d("Paprika", "processing popular element")
+    override fun popularMangaFromElement(element: Element): SManga? {
+        val a = element.selectFirst("a:has(h3)") ?: return null
         return SManga.create().apply {
-            element.select("a:has(h3)").let {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.text()
-                // Log.d("Paprika", "manga url: $url")
-                // Log.d("Paprika", "manga title: $title")
-            }
-            thumbnail_url = element.select("img").attr("src")
-            // Log.d("Paprika", "manga thumb: $thumbnail_url")
+            setUrlWithoutDomain(a.absUrl("href"))
+            title = a.text()
+            thumbnail_url = element.selectFirst("img")?.attr("abs:src")
         }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isNotBlank()) {
-        GET("$baseUrl/search?s=$query&post_type=manga&page=$page")
+        GET("$baseUrl/search?s=$query&post_type=manga&page=$page", headers)
     } else {
         val url = "$baseUrl/genres/".toHttpUrl().newBuilder()
         filters.forEach { filter ->
@@ -48,37 +43,38 @@ abstract class PaprikaAlt(
     }
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.select(".animeinfo .rm h1")[0].text()
-        thumbnail_url = document.select(".animeinfo .lm  img").attr("abs:src")
-        document.select(".listinfo li").forEach {
-            it.text().apply {
+        title = document.selectFirst(".animeinfo .rm h1")!!.text()
+        thumbnail_url = document.selectFirst(".animeinfo .lm img")?.attr("abs:src")
+        document.select(".listinfo li").forEach { element ->
+            with(element.text()) {
                 when {
-                    this.startsWith("Author") -> author = this.substringAfter(":").trim()
-                    this.startsWith("Artist") -> artist = this.substringAfter(":").trim().replace(";", ",")
-                    this.startsWith("Genre") -> genre = this.substringAfter(":").trim().replace(";", ",")
-                    this.startsWith("Status") -> status = this.substringAfter(":").trim().toStatus()
+                    startsWith("Author") -> author = substringAfter(":").trim()
+                    startsWith("Artist") -> artist = substringAfter(":").trim().replace(";", ",")
+                    startsWith("Genre") -> genre = substringAfter(":").trim().replace(";", ",")
+                    startsWith("Status") -> status = substringAfter(":").trim().toStatus()
                 }
             }
         }
         description = document.select("#noidungm").joinToString("\n") { it.text() }
-
-        // Log.d("Paprika", "mangaDetials")
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val mangaTitle = document.select(".animeinfo .rm h1")[0].text()
-        return document.select(chapterListSelector()).map { chapterFromElement(it, mangaTitle) }.distinctBy { it.url }
+        val mangaTitle = document.selectFirst(".animeinfo .rm h1")?.text() ?: ""
+        return document.select(chapterListSelector())
+            .mapNotNull { chapterFromElement(it, mangaTitle) }
+            .distinctBy { it.url }
     }
 
     override fun chapterListSelector() = ".animeinfo .rm .cl li"
 
-    // changing the signature to pass the manga title in order to trim the title from chapter titles
-    override fun chapterFromElement(element: Element, mangaTitle: String): SChapter = SChapter.create().apply {
-        element.select(".leftoff").let {
-            name = it.text().substringAfter("$mangaTitle ")
-            setUrlWithoutDomain(it.select("a").attr("href"))
+    override fun chapterFromElement(element: Element, mangaTitle: String): SChapter? {
+        val leftoff = element.selectFirst(".leftoff") ?: return null
+        val a = leftoff.selectFirst("a") ?: return null
+        return SChapter.create().apply {
+            name = leftoff.text().substringAfter("$mangaTitle ")
+            setUrlWithoutDomain(a.absUrl("href"))
+            date_upload = element.selectFirst(".rightoff")?.text().toDate()
         }
-        date_upload = element.select(".rightoff").firstOrNull()?.text().toDate()
     }
 }

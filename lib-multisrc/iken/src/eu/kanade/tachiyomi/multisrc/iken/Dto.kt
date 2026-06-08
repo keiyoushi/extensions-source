@@ -45,7 +45,6 @@ class Manga(
         description = getDescription(postContent)
         genre = getGenres()
         status = getStatus()
-        initialized = true
     }
 
     fun getDescription(postContent: String?) = buildString {

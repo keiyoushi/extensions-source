@@ -1,9 +1,7 @@
 ext {
     extName = 'Gölge Bahçesi'
     extClass = '.GolgeBahcesi'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://golgebahcesi.com'
-    overrideVersionCode = 0
+    extVersionCode = 33
     isNsfw = false
 }
 

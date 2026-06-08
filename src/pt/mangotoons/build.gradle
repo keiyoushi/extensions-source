@@ -3,7 +3,7 @@ ext {
     extClass = '.MangoToons'
     themePkg = 'mangotheme'
     baseUrl = 'https://mangotoons.com'
-    overrideVersionCode = 5
+    overrideVersionCode = 6
     isNsfw = false
 }
 

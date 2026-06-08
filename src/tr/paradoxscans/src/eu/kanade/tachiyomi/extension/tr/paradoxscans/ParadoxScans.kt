@@ -24,10 +24,10 @@ class ParadoxScans :
             ?: element.select("h2").text()
             ?: element.select("h3").text()
 
-        setUrlWithoutDomain(linkElement!!.attr("href"))
+        setUrlWithoutDomain(linkElement!!.absUrl("href"))
 
         thumbnail_url = element.selectFirst("img")?.let { img ->
-            img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
+            img.absUrl("data-src").ifEmpty { img.absUrl("src") }
         }
     }
 }

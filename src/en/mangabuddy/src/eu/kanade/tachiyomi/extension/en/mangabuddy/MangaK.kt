@@ -122,7 +122,10 @@ class MangaK :
             addQueryParameter("limit", "24")
 
             if (query.isNotBlank()) {
-                addQueryParameter("q", query)
+                val filteredQuery = query
+                    .filter { it.isLetterOrDigit() || it == ' ' }
+                    .take(50)
+                addQueryParameter("q", filteredQuery)
             }
 
             val includedGenres = mutableListOf<String>()
@@ -138,7 +141,11 @@ class MangaK :
                             }
                         }
                     }
-                    is SortFilter -> addQueryParameter("sort", filter.selected)
+                    is SortFilter -> {
+                        if (filter.selected.isNotBlank()) {
+                            addQueryParameter("sort", filter.selected)
+                        }
+                    }
                     is ContentRatingFilter -> {
                         if (filter.selected.isNotBlank()) {
                             addQueryParameter("content_rating", filter.selected)

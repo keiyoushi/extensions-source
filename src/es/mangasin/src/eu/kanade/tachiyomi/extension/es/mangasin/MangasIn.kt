@@ -14,13 +14,14 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.lib.synchrony.Deobfuscator
 import keiyoushi.utils.decodeHex
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import java.net.URLDecoder
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -44,7 +45,7 @@ class MangasIn :
     override fun latestUpdatesParse(response: Response): MangasPage {
         runCatching { fetchFilterOptions() }
 
-        val data = json.decodeFromString<LatestUpdateResponse>(response.body.string())
+        val data = response.parseAs<LatestUpdateResponse>()
         val manga = data.data.map {
             SManga.create().apply {
                 url = "/$itemPath/${it.slug}"
@@ -76,7 +77,7 @@ class MangasIn :
             return super.searchMangaParse(response)
         }
 
-        searchDirectory = json.decodeFromString<List<SuggestionDto>>(response.body.string())
+        searchDirectory = response.parseAs<List<SuggestionDto>>()
 
         return parseSearchDirectory(1)
     }
@@ -113,7 +114,7 @@ class MangasIn :
         val mangaUrl = document.location().removeSuffix("/")
         val encodeChapterData = CHAPTER_DATA_REGEX.find(document.html())?.value ?: throw Exception("No se pudo encontrar la lista de capítulos")
         val unescapedChapterData = encodeChapterData.unescape()
-        val chapterData = json.decodeFromString<CDT>(unescapedChapterData)
+        val chapterData = unescapedChapterData.parseAs<CDT>()
         val salt = chapterData.s.decodeHex()
 
         val unsaltedCipherText = Base64.decode(chapterData.ct, Base64.DEFAULT)
@@ -126,7 +127,7 @@ class MangasIn :
 
         val unescaped = decrypted.unescapeJava().removeSurrounding("\"").unescape()
 
-        val chapters = json.decodeFromString<List<Chapter>>(unescaped)
+        val chapters = unescaped.parseAs<List<Chapter>>()
 
         return chapters.map {
             SChapter.create().apply {
@@ -136,11 +137,7 @@ class MangasIn :
                     "Capítulo ${it.number}: ${it.name}"
                 }
 
-                date_upload = try {
-                    dateFormat.parse(it.createdAt)!!.time
-                } catch (_: ParseException) {
-                    0L
-                }
+                date_upload = dateFormat.tryParse(it.createdAt)
 
                 setUrlWithoutDomain("$mangaUrl/${it.slug}")
             }

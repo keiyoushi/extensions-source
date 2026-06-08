@@ -4,7 +4,7 @@ plugins {
     alias(kei.plugins.multisrc)
 }
 
-baseVersionCode = 19
+baseVersionCode = 20
 
 dependencies {
     api(project(":lib:i18n"))
