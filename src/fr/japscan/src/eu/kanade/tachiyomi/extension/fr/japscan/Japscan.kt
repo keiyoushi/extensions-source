@@ -642,6 +642,10 @@ class Japscan :
         return Observable.just(images)
     }
 
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException("Not used")
+
+    override fun imageUrlParse(response: Response): String = ""
+
     // Filters
     private class TextField(name: String) : Filter.Text(name)
 
