@@ -28,8 +28,8 @@ class ReadAttackOnTitanShingekiNoKyojinManga : MangaCatalog("Read Attack on Tita
         val urlElement = element.selectFirst("a")!!
         name = listOfNotNull(
             urlElement.text(),
-            element.selectFirst("div.text-xs")!!.text().takeUnless { it.isBlank() },
-        ).joinToString(" - ") { it.trim() }
+            element.selectFirst("div.text-xs")?.text()?.takeIf { it.isNotEmpty() },
+        ).joinToString(" - ")
         url = urlElement.attr("abs:href")
     }
 }
