@@ -122,7 +122,10 @@ class MangaK :
             addQueryParameter("limit", "24")
 
             if (query.isNotBlank()) {
-                addQueryParameter("q", query)
+                val filteredQuery = query
+                    .filter { it.isLetterOrDigit() || it == ' ' }
+                    .take(50)
+                addQueryParameter("q", filteredQuery)
             }
 
             val includedGenres = mutableListOf<String>()
