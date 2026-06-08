@@ -1,7 +1,7 @@
 ext {
     extName = 'Komga'
     extClass = '.KomgaFactory'
-    extVersionCode = 65
+    extVersionCode = 66
 }
 
 apply plugin: "kei.plugins.extension.legacy"

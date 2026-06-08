@@ -1,12 +1,17 @@
 package eu.kanade.tachiyomi.extension.all.komga
 
+import android.app.Activity
+import android.content.Context
 import android.content.SharedPreferences
+import android.security.KeyChain
+import android.security.KeyChainAliasCallback
 import android.text.InputType
 import android.util.Log
 import android.widget.Toast
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.extension.all.komga.dto.AuthorDto
 import eu.kanade.tachiyomi.extension.all.komga.dto.BookDto
@@ -27,6 +32,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,8 +48,18 @@ import okhttp3.Request
 import okhttp3.Response
 import org.apache.commons.text.StringSubstitutor
 import uy.kohesive.injekt.injectLazy
+import java.net.Socket
+import java.security.KeyStore
 import java.security.MessageDigest
+import java.security.Principal
+import java.security.PrivateKey
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
 import java.util.Locale
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.X509KeyManager
+import javax.net.ssl.X509TrustManager
 
 open class Komga(private val suffix: String = "") :
     HttpSource(),
@@ -81,6 +97,9 @@ open class Komga(private val suffix: String = "") :
 
     private val apiKey by lazy { preferences.getString(PREF_API_KEY, "")!! }
 
+    private val mtlsAlias: String
+        get() = preferences.getString(PREF_MTLS_ALIAS, "")!!
+
     private val defaultLibraries
         get() = preferences.getStringSet(PREF_DEFAULT_LIBRARIES, emptySet())!!
 
@@ -94,8 +113,21 @@ open class Komga(private val suffix: String = "") :
             }
         }
 
-    override val client: OkHttpClient =
-        network.client.newBuilder()
+    private var cachedClient: OkHttpClient? = null
+    private var cachedAlias: String? = null
+
+    override val client: OkHttpClient
+        get() {
+            val currentAlias = mtlsAlias
+            if (currentAlias != cachedAlias || cachedClient == null) {
+                cachedAlias = currentAlias
+                cachedClient = buildMtlSClient(currentAlias)
+            }
+            return cachedClient!!
+        }
+
+    private fun buildMtlSClient(certAlias: String): OkHttpClient {
+        val builder = network.client.newBuilder()
             .authenticator { _, response ->
                 if (apiKey.isNotBlank() || response.request.header("Authorization") != null) {
                     null // Give up if API key is set or we've already failed to authenticate.
@@ -106,7 +138,61 @@ open class Komga(private val suffix: String = "") :
                 }
             }
             .dns(Dns.SYSTEM) // don't use DNS over HTTPS as it breaks IP addressing
-            .build()
+
+        if (certAlias.isNotBlank()) {
+            try {
+                val privateKey = KeyChain.getPrivateKey(applicationContext, certAlias)
+                val certChain = KeyChain.getCertificateChain(applicationContext, certAlias)
+
+                if (privateKey != null && certChain != null && certChain.isNotEmpty()) {
+                    val keyManager = object : X509KeyManager {
+                        override fun chooseClientAlias(
+                            keyType: Array<out String>?,
+                            issuers: Array<out Principal>?,
+                            socket: Socket?,
+                        ): String = certAlias
+
+                        override fun getPrivateKey(aliasParam: String?): PrivateKey? = if (aliasParam == certAlias) privateKey else null
+
+                        override fun getCertificateChain(aliasParam: String?): Array<X509Certificate>? = if (aliasParam == certAlias) certChain else null
+
+                        override fun getClientAliases(
+                            keyType: String?,
+                            issuers: Array<out Principal>?,
+                        ): Array<String> = arrayOf(certAlias)
+
+                        override fun chooseServerAlias(
+                            keyType: String?,
+                            issuers: Array<out Principal>?,
+                            socket: Socket?,
+                        ): String? = null
+
+                        override fun getServerAliases(
+                            keyType: String?,
+                            issuers: Array<out Principal>?,
+                        ): Array<String>? = null
+                    }
+
+                    val sslContext = SSLContext.getInstance("TLS").apply {
+                        init(arrayOf(keyManager), null, SecureRandom())
+                    }
+
+                    val tmf = TrustManagerFactory.getInstance(
+                        TrustManagerFactory.getDefaultAlgorithm(),
+                    ).also { it.init(null as KeyStore?) }
+
+                    builder.sslSocketFactory(
+                        sslContext.socketFactory,
+                        tmf.trustManagers[0] as X509TrustManager,
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(logTag, "Failed to load mTLS certificate from KeyChain", e)
+            }
+        }
+
+        return builder.build()
+    }
 
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
         page,
@@ -344,6 +430,12 @@ open class Komga(private val suffix: String = "") :
         return FilterList(filters)
     }
 
+    private tailrec fun Context.getActivity(): Activity = when (this) {
+        is Activity -> this
+        is android.content.ContextWrapper -> baseContext.getActivity()
+        else -> throw IllegalStateException("Cannot get Activity from context: $this")
+    }
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         fetchFilterOptions()
 
@@ -408,6 +500,52 @@ open class Komga(private val suffix: String = "") :
                 restartRequired = true,
             )
         }
+
+        // mTLS client certificate selection
+        val alias = preferences.getString(PREF_MTLS_ALIAS, "")!!
+        SwitchPreferenceCompat(screen.context).apply {
+            key = "mTLS_cert_select"
+            title = "Client certificate"
+            summary = if (alias.isBlank()) "No certificate selected" else alias
+            isChecked = alias.isNotBlank()
+            setOnPreferenceClickListener {
+                // Don't use isChecked — SwitchPreferenceCompat auto-toggles before this fires
+                val hasCert = preferences.getString(PREF_MTLS_ALIAS, "")!!.isNotBlank()
+                if (hasCert) {
+                    // Currently selected → clear it
+                    preferences.edit()
+                        .remove(PREF_MTLS_ALIAS)
+                        .apply()
+                    isChecked = false
+                    summary = "No certificate selected"
+                } else {
+                    // Not selected → open cert picker
+                    val activity = screen.context.getActivity()
+                    val thisPref = this@apply
+                    KeyChain.choosePrivateKeyAlias(
+                        activity,
+                        object : KeyChainAliasCallback {
+                            override fun alias(selectedAlias: String?) {
+                                if (selectedAlias != null) {
+                                    preferences.edit()
+                                        .putString(PREF_MTLS_ALIAS, selectedAlias)
+                                        .apply()
+                                    // Update UI immediately — callback runs on main thread
+                                    thisPref.isChecked = true
+                                    thisPref.summary = selectedAlias
+                                }
+                            }
+                        },
+                        null,
+                        null,
+                        null,
+                        -1,
+                        null,
+                    )
+                }
+                true
+            }
+        }.also(screen::addPreference)
 
         MultiSelectListPreference(screen.context).apply {
             key = PREF_DEFAULT_LIBRARIES
@@ -529,6 +667,8 @@ open class Komga(private val suffix: String = "") :
         internal const val TYPE_SERIES = "Series"
         internal const val TYPE_READLISTS = "Read lists"
         internal const val TYPE_BOOKS = "Books"
+
+        internal const val PREF_MTLS_ALIAS = "mTLS_alias"
     }
 }
 
