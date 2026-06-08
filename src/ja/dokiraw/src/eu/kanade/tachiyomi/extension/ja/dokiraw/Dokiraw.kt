@@ -17,7 +17,7 @@ import org.jsoup.nodes.Element
 import java.util.Calendar
 import kotlin.text.isNotBlank
 
-class Dokiraw : Liliana("Dokiraw", "https://dokiraw.team", "ja") {
+class Dokiraw : Liliana("Dokiraw", "https://dokiraw.cloud", "ja") {
 
     override val supportsLatest = false
 
