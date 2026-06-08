@@ -86,6 +86,7 @@ class Japscan :
             "height:0",
             "pointer-events:none",
             "clip-path:inset(100%",
+            "clip-path:circle(0)",
             "clip:rect(0,0,0,0",
             "font-size:0",
             "text-indent:-",
@@ -362,6 +363,7 @@ class Japscan :
                 if (mangaSlug != null && segments[1] != mangaSlug) return@filter false
                 val urlNum = url.trimEnd('/').substringAfterLast('/')
                 if (!urlNum.all { it.isDigit() }) return@filter false
+                if (urlNum.length > 1 && urlNum.startsWith('0')) return@filter false
                 val chapterNum = Regex("""(?i)chapitre\s+([\d.]+)""").find(name)
                     ?.groupValues?.get(1)?.replace(".", "")
                     ?: name.split(Regex("[^0-9.]+")).filter { it.isNotEmpty() }
