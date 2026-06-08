@@ -1,8 +1,8 @@
 ext {
-    extName = 'Elder Manga'
-    extClass = '.ElderManga'
+    extName = 'Eski Mangalar'
+    extClass = '.EskiMangalar'
     themePkg = 'uzaymanga'
-    overrideVersionCode = 3
+    overrideVersionCode = 0
     isNsfw = false
 }
 
