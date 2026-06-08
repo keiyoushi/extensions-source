@@ -67,10 +67,10 @@ abstract class MultiChan(
 
     open fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-        manga.thumbnail_url = element.select("img").first()!!.attr("src")
+        manga.thumbnail_url = element.selectFirst("img")?.attr("abs:src")
         manga.title = element.attr("title")
-        element.select("h2 > a").first()!!.let {
-            manga.setUrlWithoutDomain(it.attr("href"))
+        element.selectFirst("h2 > a")?.let {
+            manga.setUrlWithoutDomain(it.attr("abs:href"))
         }
         return manga
     }
@@ -97,7 +97,7 @@ abstract class MultiChan(
 
         val nextSearchPage = document.select(searchMangaNextPageSelector())
         if (nextSearchPage.isNotEmpty()) {
-            val query = document.select("input#searchinput").first()!!.attr("value")
+            val query = document.selectFirst("input#searchinput")?.attr("value") ?: ""
             val pageNum = nextSearchPage.let { selector ->
                 val onClick = selector.attr("onclick")
                 onClick.split("""\\d+""")
@@ -118,15 +118,15 @@ abstract class MultiChan(
 
     open fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.select("#info_wrap tr,#info_wrap > div")
-        val descElement = document.select("div#description").first()!!
+        val descElement = document.selectFirst("div#description")
         val rawCategory = infoElement.select(":contains(Тип) a").text().lowercase()
         val manga = SManga.create()
         manga.title = document.select("title").text().substringBefore(" »")
         manga.author = infoElement.select(":contains(Автор) .item2").text()
         manga.genre = rawCategory + ", " + document.select(".sidetags ul a:last-child").joinToString { it.text() }
         manga.status = parseStatus(infoElement.select(":contains(Загружено)").text())
-        manga.description = descElement.textNodes().first().text()
-        manga.thumbnail_url = document.select("img#cover").first()!!.attr("src")
+        manga.description = descElement?.textNodes()?.firstOrNull()?.text()
+        manga.thumbnail_url = document.selectFirst("img#cover")?.attr("abs:src")
         return manga
     }
 
@@ -143,13 +143,13 @@ abstract class MultiChan(
     }
 
     open fun chapterFromElement(element: Element): SChapter {
-        val urlElement = element.select("a").first()!!
+        val urlElement = element.selectFirst("a")!!
 
         val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain(urlElement.attr("href"))
+        chapter.setUrlWithoutDomain(urlElement.attr("abs:href"))
         chapter.name = urlElement.text()
         chapter.chapter_number = chapterNumberRegex.find(chapter.name)?.groupValues?.get(2)?.toFloat() ?: -1F
-        chapter.date_upload = simpleDateFormat.tryParse(element.select("div.date").first()!!.text())
+        chapter.date_upload = element.selectFirst("div.date")?.text()?.let { simpleDateFormat.tryParse(it) } ?: 0L
         return chapter
     }
 
