@@ -50,7 +50,7 @@ abstract class MangaBox(
     override val lang: String,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat(
         "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",
-        Locale.ENGLISH,
+        Locale.ROOT, // Changed to Locale.ROOT as per CONTRIBUTING.md rules
     ).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     },
@@ -286,15 +286,26 @@ abstract class MangaBox(
         GET(url, headers)
     } else {
         val url = "$baseUrl/genre".toHttpUrl().newBuilder()
-        url.addQueryParameter("page", page.toString())
+        var sort: String? = null
+        var status: String? = null
+
         filters.forEach { filter ->
             when (filter) {
-                is SortFilter -> url.addQueryParameter("type", filter.toUriPart())
-                is StatusFilter -> url.addQueryParameter("state", filter.toUriPart())
-                is GenreFilter -> url.addPathSegment(filter.toUriPart()!!)
+                is SortFilter -> sort = filter.toUriPart()
+                is StatusFilter -> status = filter.toUriPart()
+                is GenreFilter -> filter.toUriPart()?.let { url.addPathSegment(it) }
                 else -> {}
             }
         }
+
+        val id = if (sort != null && status != null) {
+            FILTER_ID_MAP[Pair(sort, status)]
+        } else {
+            null
+        }
+
+        id?.let { url.addQueryParameter("filter", it) }
+        url.addQueryParameter("page", page.toString())
 
         GET(url.build(), headers)
     }
@@ -636,6 +647,18 @@ abstract class MangaBox(
         private val cdnsRegex = Regex("""cdns\s*=\s*\[([^]]+)]""")
         private val backupImageRegex = Regex("""backupImage\s*=\s*\[([^]]+)]""")
         private val chapterImagesRegex = Regex("""chapterImages\s*=\s*\[([^]]+)]""")
+
+        private val FILTER_ID_MAP = mapOf(
+            Pair("newest", "all") to "1",
+            Pair("newest", "completed") to "2",
+            Pair("newest", "ongoing") to "3",
+            Pair("latest", "all") to "4",
+            Pair("latest", "completed") to "5",
+            Pair("latest", "ongoing") to "6",
+            Pair("topview", "all") to "7",
+            Pair("topview", "completed") to "8",
+            Pair("topview", "ongoing") to "9",
+        )
     }
 }
 
