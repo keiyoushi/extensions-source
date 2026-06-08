@@ -4,7 +4,7 @@
  * * Copyright (c) 2013-2024 Frank Denis <j at pureftpd dot org>
  */
 
-package eu.kanade.tachiyomi.extension.en.theblank.decryption;
+package keiyoushi.lib.secretstream;
 
 public class Poly1305 {
 

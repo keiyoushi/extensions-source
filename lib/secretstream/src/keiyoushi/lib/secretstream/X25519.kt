@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.theblank.decryption
+package keiyoushi.lib.secretstream
 
 import java.math.BigInteger
 
@@ -9,7 +9,7 @@ import java.math.BigInteger
  * static public key. Not constant-time — acceptable here because the
  * private scalar is freshly generated, used once, then wiped.
  */
-internal object X25519 {
+object X25519 {
     private val P = BigInteger.ONE.shiftLeft(255).subtract(BigInteger.valueOf(19))
     private val A24 = BigInteger.valueOf(121665)
     private val TWO = BigInteger.valueOf(2)

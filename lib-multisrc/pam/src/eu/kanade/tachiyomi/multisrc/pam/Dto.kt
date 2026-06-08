@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.theblank
+package eu.kanade.tachiyomi.multisrc.pam
 
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
@@ -31,11 +31,11 @@ class LibraryResponse(
 
 @Serializable
 class BrowseManga(
-    val slug: String,
+    private val slug: String,
     @JsonNames("name")
-    val title: String,
+    private val title: String,
     @JsonNames("cover_image")
-    val image: String? = null,
+    private val image: String? = null,
 ) {
     fun toSManga(createThumbnailUrl: (String?) -> String?) = SManga.create().apply {
         url = slug
@@ -87,11 +87,6 @@ class MangaResponse(
     }
 }
 
-/**
- * Inertia response for `GET /serie/{slug}/chapter/{slug}`. The handshake
- * material (chapter_token, server_pubkey, page_count) sits on `props`
- * directly; `props.data` only carries the chapter/serie identity.
- */
 @Serializable
 class PageListResponse(
     val props: Props,

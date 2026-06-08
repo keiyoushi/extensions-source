@@ -1,7 +1,9 @@
 ext {
     extName = 'The Blank'
     extClass = '.TheBlank'
-    extVersionCode = 54
+    themePkg = 'pam'
+    baseUrl = 'https://theblank.net'
+    overrideVersionCode = 54
     isNsfw = true
 }
 
