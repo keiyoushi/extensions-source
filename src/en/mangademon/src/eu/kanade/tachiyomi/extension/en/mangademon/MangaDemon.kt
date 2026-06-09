@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
@@ -31,7 +30,7 @@ class MangaDemon : HttpSource() {
     override val baseUrl = "https://demonicscans.org"
 
     override val client = network.client.newBuilder()
-        .rateLimit(6) { it.toString().contains("images/thumbnails")  }
+        .rateLimit(6) { it.toString().contains("images/thumbnails") }
         .rateLimit(2)
         .build()
 
