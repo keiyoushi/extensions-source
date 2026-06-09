@@ -620,7 +620,6 @@ either `SourceFactory` or `HttpSource`.
 |--------------------|----------------------------------------------------------------------------------------------------------------------------------|
 | `SourceFactory`    | Used to expose multiple `Source`s. Use this in case of a source that supports multiple languages or mirrors of the same website. |
 | `HttpSource`       | For online source, where requests are made using HTTP.                                                                           |
-| `ParsedHttpSource` | Deprecated, use `HttpSource` instead.                                                                                            |
 
 #### Main class key variables
 
@@ -673,8 +672,8 @@ either `SourceFactory` or `HttpSource`.
   ```
 - **GraphQL Queries:** If you are sending GraphQL requests, use Kotlin's raw multi-dollar string interpolation (`$$"""..."""`) for your queries. This prevents having to escape every JSON variable `$` symbol manually.
 - **Empty checks on `.text()`:** Because Jsoup's `.text()` automatically trims whitespace, you can use `.isNotEmpty()` instead of `.isNotBlank()` when checking for empty strings. The same applies to `.ownText()`. This also means you should not use `.trim()` with these functions.
-- **Use `network.client` for Cloudflare:** When overriding the client for sources protected by Cloudflare, simply use `override val client = network.client.newBuilder()...`. The default `client` now handles Cloudflare challenges automatically. Do **not** use `network.cloudflareClient`, as it is deprecated.
-- **Never use `Thread.sleep()`:** Do not use `Thread.sleep()` for rate limiting. Use OkHttp's `rateLimitHost` interceptor instead.
+- **Use `network.client` for Cloudflare:** When overriding the client for sources, simply use `override val client = network.client.newBuilder()...`.
+- **Never use `Thread.sleep()`:** Do not use `Thread.sleep()` for rate limiting. Use OkHttp's `rateLimit` interceptor instead.
 - **Avoid synchronous calls in `parse` methods:** Do not call `client.newCall(...).execute()` inside parsing methods like `pageListParse` or `chapterListParse`. Make the request part of the standard flow by overriding the corresponding request method (e.g., `pageListRequest`) or `fetchImageUrl`.
 - **Pass `HttpUrl` directly:** The `GET()` and `POST()` helpers accept an `HttpUrl` object. Do not call `.toString()` on a built `HttpUrl` before passing it.
 - **Use `HttpUrl` for URL manipulation:** When parsing or extracting parts of a URL, prefer using `HttpUrl` methods (like `pathSegments()` or `queryParameter()`) over manual string splitting (e.g., `.split("/")`) or regex. This ensures proper separation of concerns and protects against unexpected inputs-such as URL fragments or query parameters-without you needing to manually account for all edge cases.
