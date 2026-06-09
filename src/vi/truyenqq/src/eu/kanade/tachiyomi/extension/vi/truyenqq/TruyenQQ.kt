@@ -5,7 +5,7 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -27,6 +27,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class TruyenQQ :
     HttpSource(),
@@ -45,7 +46,7 @@ class TruyenQQ :
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
+        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", "$baseUrl/")

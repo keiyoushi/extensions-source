@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.hotcabaretscan
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -9,6 +9,7 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class HotCabaretScan :
     Madara(
@@ -19,7 +20,7 @@ class HotCabaretScan :
     ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(1, 2.seconds)
         .addInterceptor(::checkPasswordProtectedIntercept)
         .build()
 

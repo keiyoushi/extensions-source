@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.es.leercapitulo
 
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -19,6 +19,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.nio.charset.Charset
+import kotlin.time.Duration.Companion.seconds
 
 class LeerCapitulo : HttpSource() {
     override val name = "LeerCapitulo"
@@ -30,7 +31,7 @@ class LeerCapitulo : HttpSource() {
     override val baseUrl = "https://www.leercapitulo.co"
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 3)
+        .rateLimit(1, 3.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     private val notRateLimitClient = network.client

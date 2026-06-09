@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.voyceme
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -16,6 +16,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class VoyceMe : HttpSource() {
 
@@ -31,8 +32,8 @@ class VoyceMe : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimitHost(GRAPHQL_URL.toHttpUrl(), 1, 1, TimeUnit.SECONDS)
-        .rateLimitHost(STATIC_URL.toHttpUrl(), 2, 1, TimeUnit.SECONDS)
+        .rateLimit(1, 1.seconds) { it.host == GRAPHQL_URL.toHttpUrl().host }
+        .rateLimit(2, 1.seconds) { it.host == STATIC_URL.toHttpUrl().host }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

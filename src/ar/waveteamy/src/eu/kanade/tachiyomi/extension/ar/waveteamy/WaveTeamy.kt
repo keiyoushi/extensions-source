@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.ar.waveteamy
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -21,6 +21,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.io.encoding.Base64
+import kotlin.time.Duration.Companion.seconds
 
 class WaveTeamy : HttpSource() {
     override val name = "WaveTeamy"
@@ -38,7 +39,7 @@ class WaveTeamy : HttpSource() {
     override val client =
         network.client
             .newBuilder()
-            .rateLimit(10, 1, TimeUnit.SECONDS)
+            .rateLimit(10, 1.seconds)
             .build()
 
     override fun headersBuilder() = super.headersBuilder()

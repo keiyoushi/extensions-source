@@ -4,7 +4,7 @@ import android.util.Base64
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -27,6 +27,7 @@ import org.jsoup.select.Elements
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class Jinmantiantang :
     HttpSource(),
@@ -45,14 +46,13 @@ class Jinmantiantang :
     // 处理URL请求
     override val client: OkHttpClient = network.client
         .newBuilder()
-        // Add rate limit to fix manga thumbnail load failure
-        .rateLimitHost(
-            baseUrl.toHttpUrl(),
-            preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_PREF_DEFAULT)!!.toInt(),
-            preferences.getString(MAINSITE_RATELIMIT_PERIOD, MAINSITE_RATELIMIT_PERIOD_DEFAULT)!!.toLong(),
-        )
         .apply { interceptors().add(0, updateUrlInterceptor) }
         .addInterceptor(ScrambledImageInterceptor)
+        // Add rate limit to fix manga thumbnail load failure
+        .rateLimit(
+            preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_PREF_DEFAULT)!!.toInt(),
+            preferences.getString(MAINSITE_RATELIMIT_PERIOD, MAINSITE_RATELIMIT_PERIOD_DEFAULT)!!.toLong().seconds,
+        ) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     // 添加额外的header增加规避Cloudflare可能性

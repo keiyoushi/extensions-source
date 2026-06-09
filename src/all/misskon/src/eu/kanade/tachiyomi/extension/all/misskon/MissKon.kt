@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.misskon
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -20,6 +20,7 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class MissKon : HttpSource() {
 
@@ -29,7 +30,7 @@ class MissKon : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 10, 1, TimeUnit.SECONDS)
+        .rateLimit(10, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     private fun mangaFromElement(element: Element): SManga {

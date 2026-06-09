@@ -3,7 +3,7 @@ ext {
     extClass = '.ManhwaLandMom'
     themePkg = 'mangathemesia'
     baseUrl = 'https://02.manhwaland.land'
-    overrideVersionCode = 9
+    overrideVersionCode = 10
     isNsfw = true
 }
 

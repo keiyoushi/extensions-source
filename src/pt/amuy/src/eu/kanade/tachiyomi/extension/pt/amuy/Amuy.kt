@@ -1,13 +1,14 @@
 package eu.kanade.tachiyomi.extension.pt.amuy
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class Amuy :
     Madara(
@@ -18,7 +19,7 @@ class Amuy :
     ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(1, 2.seconds)
         .build()
 
     override val useNewChapterEndpoint = true

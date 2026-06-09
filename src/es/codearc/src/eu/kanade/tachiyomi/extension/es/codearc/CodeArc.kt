@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.codearc
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -15,6 +15,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class CodeArc : HttpSource() {
 
@@ -26,8 +27,8 @@ class CodeArc : HttpSource() {
     override val client = network.client.newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
-        .rateLimitHost("https://cdn.codearctraducciones.com".toHttpUrl(), 1, 1)
+        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(1, 1.seconds) { it.host ==  "cdn.codearctraducciones.com" }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

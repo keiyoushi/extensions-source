@@ -3,7 +3,7 @@ ext {
     extClass = '.SetsuScans'
     themePkg = 'madara'
     baseUrl = 'https://setsuscans.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = false
 }
 

@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.extension.pt.taiyo.dto.SearchResultDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -56,8 +56,8 @@ class Taiyo : HttpSource() {
     private var bearerToken: String = preferences.getString(BEARER_TOKEN_PREF, "").toString()
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
-        .rateLimitHost(IMG_CDN.toHttpUrl(), 2)
+        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(2) { it.host == IMG_CDN.toHttpUrl().host }
         .addInterceptor(::authorizationInterceptor)
         .build()
 

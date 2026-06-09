@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.en.mangafox
 
 import android.webkit.CookieManager
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -24,6 +24,7 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class MangaFox : HttpSource() {
 
@@ -38,7 +39,7 @@ class MangaFox : HttpSource() {
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 1)
+        .rateLimit(1, 1.seconds)
         // Force readway=2 cookie to get all page URLs at once
         .cookieJar(
             object : CookieJar {

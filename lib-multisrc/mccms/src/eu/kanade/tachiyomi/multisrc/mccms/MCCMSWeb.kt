@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.mccms
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -33,7 +33,7 @@ open class MCCMSWeb(
 
     override val client by lazy {
         network.client.newBuilder()
-            .rateLimitHost(baseUrl.toHttpUrl(), 2)
+            .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
             .addInterceptor { chain ->
                 val response = chain.proceed(chain.request())
                 if (response.request.url.encodedPath == "/err/comic") {

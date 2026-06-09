@@ -4,7 +4,7 @@ import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.FormBody
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -19,6 +19,7 @@ import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
+import kotlin.time.Duration.Companion.seconds
 
 class HanamiHeaven :
     Madara(
@@ -51,7 +52,7 @@ class HanamiHeaven :
 
     override val client: OkHttpClient = super.client.newBuilder()
         .ignoreAllSSLErrors() // Bypass the "Chain validation failed" issue
-        .rateLimit(3, 2, TimeUnit.SECONDS)
+        .rateLimit(3, 2.seconds)
         .addInterceptor(::jsChallengeInterceptor)
         .build()
 

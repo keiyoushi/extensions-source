@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.fr.astralmanga
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -22,6 +22,7 @@ import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class AstralManga : HttpSource() {
 
@@ -34,7 +35,7 @@ class AstralManga : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(8, 1)
+        .rateLimit(8, 1.seconds)
         .build()
 
     override val versionId = 2

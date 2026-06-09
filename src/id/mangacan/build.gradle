@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaCan'
     themePkg = 'mangathemesia'
     baseUrl = 'https://mangacanblog.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

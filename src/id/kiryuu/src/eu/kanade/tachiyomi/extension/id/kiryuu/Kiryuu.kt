@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.id.kiryuu
 
 import eu.kanade.tachiyomi.multisrc.natsuid.NatsuId
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.OkHttpClient
 import okhttp3.Request

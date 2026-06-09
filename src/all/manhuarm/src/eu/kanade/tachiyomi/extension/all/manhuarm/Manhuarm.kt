@@ -19,7 +19,7 @@ import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.TranslatorEng
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -43,6 +43,7 @@ import org.jsoup.nodes.Element
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 @RequiresApi(Build.VERSION_CODES.O)
 class Manhuarm(
@@ -145,7 +146,7 @@ class Manhuarm(
         }
 
     private val clientUtils = network.client.newBuilder()
-        .rateLimit(3, 2, TimeUnit.SECONDS)
+        .rateLimit(3, 2.seconds)
         .build()
 
     private lateinit var translator: TranslatorEngine
@@ -159,7 +160,7 @@ class Manhuarm(
         return network.client.newBuilder()
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(2, TimeUnit.MINUTES)
-            .rateLimit(2, 1)
+            .rateLimit(2, 1.seconds)
             // Fix disk cache / decompression issues
             .apply {
                 val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }

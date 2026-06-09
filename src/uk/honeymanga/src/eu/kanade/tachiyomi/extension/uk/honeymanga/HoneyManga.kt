@@ -4,7 +4,7 @@ import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -38,7 +38,7 @@ class HoneyManga :
         .add("Referer", "$baseUrl/")
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(API_URL.toHttpUrl(), 10)
+        .rateLimit(10) { it.host == API_URL.toHttpUrl().host }
         .build()
 
     // ============================== Popular ===============================

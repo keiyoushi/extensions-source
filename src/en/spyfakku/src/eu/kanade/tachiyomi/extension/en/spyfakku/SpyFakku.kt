@@ -4,7 +4,7 @@ import android.annotation.SuppressLint
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -38,6 +38,7 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.seconds
 
 class SpyFakku :
     HttpSource(),
@@ -115,7 +116,7 @@ class SpyFakku :
         }
         // airdns domain is protected by Anibus
         .addInterceptor(AnibusInterceptor)
-        .rateLimit(2, 1, TimeUnit.SECONDS)
+        .rateLimit(2, 1.seconds)
         .build()
 
     private val charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"

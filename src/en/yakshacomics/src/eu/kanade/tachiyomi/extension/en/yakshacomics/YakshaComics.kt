@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.en.yakshacomics
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.FormBody
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient

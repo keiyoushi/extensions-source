@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.ar.mangahub
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Response
 import org.jsoup.Jsoup

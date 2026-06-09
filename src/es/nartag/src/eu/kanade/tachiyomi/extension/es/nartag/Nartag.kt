@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.nartag
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
@@ -22,7 +22,7 @@ class Nartag :
     override val versionId = 2
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     override val useNewChapterEndpoint = true

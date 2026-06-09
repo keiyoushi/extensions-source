@@ -13,8 +13,8 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -76,8 +76,8 @@ abstract class LibGroup(
     override val client by lazy {
         network.client.newBuilder()
             .rateLimit(3)
-            .rateLimitHost(apiDomain.toHttpUrl(), 1)
-            .rateLimitHost(baseUrl.toHttpUrl(), 1)
+            .rateLimit(1) { it.host == apiDomain.toHttpUrl().host }
+            .rateLimit(1) { it.host == baseUrl.toHttpUrl().host }
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(30, TimeUnit.SECONDS)
             .addInterceptor(::checkForToken)

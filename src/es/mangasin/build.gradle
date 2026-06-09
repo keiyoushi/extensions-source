@@ -3,7 +3,7 @@ ext {
     extClass = '.MangasIn'
     themePkg = 'mmrcms'
     baseUrl = 'https://m440.in'
-    overrideVersionCode = 7
+    overrideVersionCode = 8
     isNsfw = true
 }
 

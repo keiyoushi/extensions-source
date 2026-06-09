@@ -3,7 +3,7 @@ ext {
     extClass = '.Ler999'
     themePkg = 'zeistmanga'
     baseUrl = 'https://ler999.blogspot.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 

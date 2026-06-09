@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.extension.all.projectsuki.activities.INTENT_SEARCH_QU
 import eu.kanade.tachiyomi.extension.all.projectsuki.activities.ProjectSukiSearchUrlActivity
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -37,6 +37,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.floor
 import kotlin.math.log10
 import kotlin.math.pow
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * [Project Suki](https://projectsuki.com)
@@ -210,7 +211,7 @@ class ProjectSuki :
      * most client options are already set as they should be, including the [Cache][okhttp3.Cache].
      */
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(2, 1, TimeUnit.SECONDS)
+        .rateLimit(2, 1.seconds)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

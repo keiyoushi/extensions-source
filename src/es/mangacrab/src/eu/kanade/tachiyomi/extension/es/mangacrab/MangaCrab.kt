@@ -4,7 +4,7 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -24,6 +24,7 @@ import org.jsoup.nodes.Element
 import java.io.InterruptedIOException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class MangaCrab :
     Madara(
@@ -35,7 +36,7 @@ class MangaCrab :
     ConfigurableSource {
 
     override val client = super.client.newBuilder()
-        .rateLimit(5, 1)
+        .rateLimit(5, 1.seconds)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

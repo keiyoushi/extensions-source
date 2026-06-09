@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.en.hentainexus
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -38,7 +38,7 @@ class HentaiNexus : HttpSource() {
 
     // Images on this site go through the free Jetpack Photon CDN.
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1)
+        .rateLimit(1) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

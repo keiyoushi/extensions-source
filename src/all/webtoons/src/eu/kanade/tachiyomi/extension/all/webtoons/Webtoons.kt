@@ -4,7 +4,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -68,7 +68,7 @@ open class Webtoons(
             }
         }
         .addInterceptor(TextInterceptor())
-        .rateLimitHost(mobileUrl.toHttpUrl(), 1)
+        .rateLimit(1) { it.host == mobileUrl.toHttpUrl().host }
         .build()
 
     private val preferences by getPreferencesLazy()

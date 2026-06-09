@@ -4,7 +4,7 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.zh.bakamh.Preferences.baseUrl
 import eu.kanade.tachiyomi.extension.zh.bakamh.Preferences.preferenceMigration
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga

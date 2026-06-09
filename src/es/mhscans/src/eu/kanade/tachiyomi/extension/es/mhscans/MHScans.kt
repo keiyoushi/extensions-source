@@ -6,7 +6,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
@@ -17,6 +17,7 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class MHScans :
     Madara(
@@ -29,7 +30,7 @@ class MHScans :
     override val mangaSubString = "series"
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 3, TimeUnit.SECONDS)
+        .rateLimit(1, 3.seconds)
         .build()
 
     override val useNewChapterEndpoint = true

@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.lmtoonline
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -15,6 +15,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import kotlin.time.Duration.Companion.seconds
 
 class Lmtos : HttpSource() {
 
@@ -27,7 +28,7 @@ class Lmtos : HttpSource() {
     override val supportsLatest = true
 
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
+        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

@@ -5,7 +5,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -26,6 +26,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
+import kotlin.time.Duration.Companion.seconds
 
 class FlameComics : HttpSource() {
     override val name = "Flame Comics"
@@ -38,7 +39,7 @@ class FlameComics : HttpSource() {
     private val json: Json by injectLazy()
 
     override val client = network.client.newBuilder()
-        .rateLimit(2, 2)
+        .rateLimit(2, 2.seconds)
         .addInterceptor(::buildIdOutdatedInterceptor)
         .addInterceptor(::composedImageIntercept)
         .build()

@@ -1,8 +1,9 @@
 package eu.kanade.tachiyomi.extension.pt.galaxscanlator
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class GalaxScanlator :
     ZeistManga(
@@ -11,7 +12,7 @@ class GalaxScanlator :
         "pt-BR",
     ) {
     override val client = super.client.newBuilder()
-        .rateLimit(5, 2, TimeUnit.SECONDS)
+        .rateLimit(5, 2.seconds)
         .build()
 
     override val popularMangaSelector = "#PopularPosts2 article"

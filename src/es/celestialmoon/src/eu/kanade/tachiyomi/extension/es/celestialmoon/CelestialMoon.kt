@@ -1,12 +1,13 @@
 package eu.kanade.tachiyomi.extension.es.celestialmoon
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class CelestialMoon :
     MangaThemesia(
@@ -21,7 +22,7 @@ class CelestialMoon :
     private val cookieInterceptor = CookieInterceptor(baseUrl.substringAfter("://"), "age_gate" to "18")
 
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 3, 1, TimeUnit.SECONDS)
+        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .addNetworkInterceptor(cookieInterceptor)
         .build()
 }

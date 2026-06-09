@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.leituramanga
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -17,6 +17,7 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class LeituraManga : HttpSource() {
 
@@ -33,7 +34,7 @@ class LeituraManga : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(1, 2.seconds)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
             when (response.code) {

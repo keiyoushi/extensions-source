@@ -5,7 +5,7 @@ import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -19,6 +19,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.seconds
 
 class NexusToons :
     HttpSource(),
@@ -38,7 +39,7 @@ class NexusToons :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
-        .rateLimit(3, 1)
+        .rateLimit(3, 1.seconds)
         .addInterceptor(NexusDecrypt.createInterceptor())
         .build()
 

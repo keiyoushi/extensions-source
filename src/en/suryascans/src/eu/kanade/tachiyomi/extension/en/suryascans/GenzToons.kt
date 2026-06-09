@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.suryascans
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import java.util.concurrent.TimeUnit
 

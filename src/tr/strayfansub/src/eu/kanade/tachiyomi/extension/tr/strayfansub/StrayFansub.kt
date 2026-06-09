@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.tr.strayfansub
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -31,6 +31,6 @@ class StrayFansub :
     }
 
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 3)
+        .rateLimit(3) { it.host == baseUrl.toHttpUrl().host }
         .build()
 }

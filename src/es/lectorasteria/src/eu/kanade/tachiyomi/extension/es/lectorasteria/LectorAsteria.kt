@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.lectorasteria
 
 import eu.kanade.tachiyomi.multisrc.moonlighttl.MoonlightTL
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -15,7 +15,7 @@ class LectorAsteria :
     ) {
 
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     override fun pageListParse(response: Response): List<Page> {

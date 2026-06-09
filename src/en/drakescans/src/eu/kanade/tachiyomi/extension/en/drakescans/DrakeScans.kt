@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.en.drakescans
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.utils.getPreferencesLazy
@@ -11,6 +11,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
 import kotlin.getValue
+import kotlin.time.Duration.Companion.seconds
 
 class DrakeScans :
     MangaThemesia(
@@ -25,7 +26,7 @@ class DrakeScans :
     private val preferences by getPreferencesLazy()
 
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 3, 1, TimeUnit.SECONDS)
+        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     override fun imageRequest(page: Page): Request {

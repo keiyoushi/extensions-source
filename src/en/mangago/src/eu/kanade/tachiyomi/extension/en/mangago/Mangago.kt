@@ -12,7 +12,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -58,7 +58,7 @@ class Mangago :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1)
+        .rateLimit(1) { it.host == baseUrl.toHttpUrl().host }
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)

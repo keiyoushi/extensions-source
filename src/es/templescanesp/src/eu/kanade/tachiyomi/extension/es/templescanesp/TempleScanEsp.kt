@@ -8,7 +8,7 @@ import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -24,6 +24,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class TempleScanEsp :
     Madara(
@@ -86,7 +87,7 @@ class TempleScanEsp :
 
     override val client by lazy {
         super.client.newBuilder()
-            .rateLimitHost(fetchedDomainUrl.toHttpUrl(), 3, 1)
+            .rateLimit(3, 1.seconds) { it.host == fetchedDomainUrl.toHttpUrl().host }
             .build()
     }
 

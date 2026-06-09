@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.traduccionesmoonlight
 
 import eu.kanade.tachiyomi.multisrc.moonlighttl.MoonlightTL
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 class TraduccionesMoonlight :
@@ -14,6 +14,6 @@ class TraduccionesMoonlight :
     override val versionId = 3
 
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
         .build()
 }

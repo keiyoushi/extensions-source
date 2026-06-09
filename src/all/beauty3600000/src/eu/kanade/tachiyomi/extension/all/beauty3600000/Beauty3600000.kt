@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.all.beauty3600000
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -28,6 +28,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class Beauty3600000 : HttpSource() {
 
@@ -46,7 +47,7 @@ class Beauty3600000 : HttpSource() {
         .build()
 
     private val searchingClient: OkHttpClient = client.newBuilder()
-        .rateLimit(1, 30)
+        .rateLimit(1, 30.seconds)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

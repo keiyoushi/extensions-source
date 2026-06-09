@@ -7,7 +7,7 @@ import eu.kanade.tachiyomi.extension.en.manhwalike.ManhwalikeHelper.toOriginal
 import eu.kanade.tachiyomi.extension.en.manhwalike.ManhwalikeHelper.toStatus
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -31,7 +31,7 @@ class Manhwalike : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

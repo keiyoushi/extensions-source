@@ -13,7 +13,7 @@ import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -41,6 +41,7 @@ import java.util.TimeZone
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
+import kotlin.time.Duration.Companion.seconds
 
 class IkigaiMangas :
     HttpSource(),
@@ -86,8 +87,8 @@ class IkigaiMangas :
 
     override val client by lazy {
         network.client.newBuilder()
-            .rateLimitHost(fetchedDomainUrl.toHttpUrl(), 1, 2)
-            .rateLimitHost(apiBaseUrl.toHttpUrl(), 2, 1)
+            .rateLimit(1, 2.seconds) { it.host == fetchedDomainUrl.toHttpUrl().host }
+            .rateLimit(2, 1.seconds) { it.host == apiBaseUrl.toHttpUrl().host }
             .addNetworkInterceptor(::nsfwCookieInterceptor)
             .build()
     }

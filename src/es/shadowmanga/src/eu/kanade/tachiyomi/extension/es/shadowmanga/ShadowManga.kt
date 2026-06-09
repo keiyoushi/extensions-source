@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.es.shadowmanga
 
 import eu.kanade.tachiyomi.extension.es.shadowmanga.interceptor.ImageFallbackInterceptor
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import kotlin.time.Duration.Companion.seconds
 
 class ShadowManga : HttpSource() {
 
@@ -36,7 +37,7 @@ class ShadowManga : HttpSource() {
     private val fallbackPrefix = "/api/media/"
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
+        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .addInterceptor(ImageFallbackInterceptor(cdnHosts, baseUrl.toHttpUrl().host, fallbackPrefix))
         .build()
 

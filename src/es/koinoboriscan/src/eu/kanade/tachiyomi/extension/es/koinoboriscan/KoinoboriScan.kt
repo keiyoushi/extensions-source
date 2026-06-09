@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.es.koinoboriscan
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -21,6 +21,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import kotlin.math.min
+import kotlin.time.Duration.Companion.seconds
 
 class KoinoboriScan : HttpSource() {
 
@@ -43,7 +44,7 @@ class KoinoboriScan : HttpSource() {
     }
 
     override val client = network.client.newBuilder()
-        .rateLimit(2, 1)
+        .rateLimit(2, 1.seconds)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

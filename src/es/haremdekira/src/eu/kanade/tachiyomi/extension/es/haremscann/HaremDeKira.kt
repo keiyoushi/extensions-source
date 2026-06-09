@@ -1,13 +1,14 @@
 package eu.kanade.tachiyomi.extension.es.haremdekira
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class HaremDeKira :
     Madara(
@@ -23,7 +24,7 @@ class HaremDeKira :
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
+        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     override fun popularMangaSelector() = "div.latest-poster"

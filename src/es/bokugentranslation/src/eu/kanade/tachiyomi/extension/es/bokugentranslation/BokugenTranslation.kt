@@ -1,11 +1,12 @@
 package eu.kanade.tachiyomi.extension.es.bokugentranslation
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class BokugenTranslation :
     MangaThemesia(
@@ -24,7 +25,7 @@ class BokugenTranslation :
                 chain.proceed(request)
             }
         }
-        .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
+        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     private val imageHeaders by lazy {

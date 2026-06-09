@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.colorcitoscan
 
 import eu.kanade.tachiyomi.multisrc.spicytheme.SpicyTheme
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 
 class ColorcitoScan :
     SpicyTheme(

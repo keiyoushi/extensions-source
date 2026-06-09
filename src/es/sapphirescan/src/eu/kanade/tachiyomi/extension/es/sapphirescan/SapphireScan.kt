@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.sapphirescan
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -15,7 +15,7 @@ class SapphireScan :
         "es",
     ) {
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 3)
+        .rateLimit(3) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     // Madara -> ZeistManga migration

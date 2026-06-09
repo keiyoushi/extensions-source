@@ -1,11 +1,12 @@
 package eu.kanade.tachiyomi.extension.es.mangaesp
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class MangaEsp :
     MangaThemesia(
@@ -17,7 +18,7 @@ class MangaEsp :
     override val versionId = 2
 
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 3, 1, TimeUnit.SECONDS)
+        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     override val hasProjectPage = true

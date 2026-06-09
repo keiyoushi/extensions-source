@@ -4,8 +4,8 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -52,7 +52,7 @@ class YugenMangas :
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(2)
-        .rateLimitHost(apiUrl.toHttpUrl(), 2)
+        .rateLimit(2) { it.host == apiUrl.toHttpUrl().host }
         .build()
 
     override val versionId = 2

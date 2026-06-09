@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.wolftoon
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -23,6 +23,7 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.time.Duration.Companion.seconds
 
 class Wolftoon : HttpSource() {
 
@@ -37,8 +38,8 @@ class Wolftoon : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2, 1)
-        .rateLimitHost(supabaseUrl.toHttpUrl(), 2, 1)
+        .rateLimit(2, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(2, 1.seconds) { it.host == supabaseUrl.toHttpUrl().host }
         .addInterceptor(CookieInterceptor(supabaseUrl.toHttpUrl().host, emptyList()))
         .build()
 

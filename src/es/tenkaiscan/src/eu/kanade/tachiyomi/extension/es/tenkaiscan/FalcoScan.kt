@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.tenkaiscan
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -37,7 +37,7 @@ class FalcoScan : HttpSource() {
     private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 3)
+        .rateLimit(3) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

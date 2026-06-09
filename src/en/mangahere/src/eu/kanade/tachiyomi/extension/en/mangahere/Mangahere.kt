@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.en.mangahere
 
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -21,6 +21,7 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class Mangahere : HttpSource() {
 
@@ -49,7 +50,7 @@ class Mangahere : HttpSource() {
         .build()
 
     override val client: OkHttpClient = notRateLimitClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
+        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     private val dateFormat = SimpleDateFormat("MMM dd,yyyy", Locale.ENGLISH)

@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.darthsdroids
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -17,6 +17,7 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 // Dear Darths & Droids creators:
 // I’m sorry if this extension causes too much traffic for your site.
@@ -28,7 +29,7 @@ class DarthsDroids : HttpSource() {
     override val lang = "en"
     override val supportsLatest = false
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 10, 1, TimeUnit.SECONDS)
+        .rateLimit(10, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     // Picks a thumbnail from the profile pictures of the »cast« pages:

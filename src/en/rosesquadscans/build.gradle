@@ -3,7 +3,7 @@ ext {
     extClass = '.RoseSquadScans'
     themePkg = 'madara'
     baseUrl = 'https://rosesquadscans.aishiteru.org'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

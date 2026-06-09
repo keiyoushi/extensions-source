@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.plumacomics
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -15,6 +15,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
+import kotlin.time.Duration.Companion.seconds
 
 class PlumaComics : HttpSource() {
 
@@ -27,7 +28,7 @@ class PlumaComics : HttpSource() {
     override val supportsLatest: Boolean = true
 
     override val client = super.client.newBuilder()
-        .rateLimit(3, 1)
+        .rateLimit(3, 1.seconds)
         .build()
 
     override val versionId = 5

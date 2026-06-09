@@ -6,7 +6,7 @@ import eu.kanade.tachiyomi.extension.en.warforrayuba.dto.PageDto
 import eu.kanade.tachiyomi.extension.en.warforrayuba.dto.RoundDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page

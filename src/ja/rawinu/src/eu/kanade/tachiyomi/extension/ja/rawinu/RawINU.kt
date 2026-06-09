@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.ja.rawinu
 
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -24,7 +24,7 @@ class RawINU :
         "ja",
     ) {
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
         .addInterceptor(::ddosChallengeInterceptor)
         .addNetworkInterceptor(CookieInterceptor(DOMAIN, "smartlink_shown" to "1"))
         .build()

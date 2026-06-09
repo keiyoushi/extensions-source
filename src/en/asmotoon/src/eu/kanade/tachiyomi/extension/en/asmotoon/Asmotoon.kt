@@ -1,11 +1,12 @@
 package eu.kanade.tachiyomi.extension.en.asmotoon
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class Asmotoon :
     Keyoapp(
@@ -16,7 +17,7 @@ class Asmotoon :
     override val client = super
         .client
         .newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 3, 5)
+        .rateLimit(3, 5.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     // filtering novel entries

@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.nexusscanlation
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -17,6 +17,7 @@ import okhttp3.Response
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class Nexusscanlation : HttpSource() {
 
@@ -29,7 +30,7 @@ class Nexusscanlation : HttpSource() {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimitHost(apiBaseUrl.toHttpUrl(), 1, 3) // API: max 1 request per 3 seconds
+        .rateLimit(1, 3.seconds) { it.host == apiBaseUrl.toHttpUrl().host } // API: max 1 request per 3 seconds
         .addInterceptor(ImageInterceptor())
         .build()
 

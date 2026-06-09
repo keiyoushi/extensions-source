@@ -5,7 +5,7 @@ import android.util.Base64
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -61,7 +61,7 @@ class MinoTruyen(
 
     override val client by lazy {
         network.client.newBuilder()
-            .rateLimitHost(apiUrl.toHttpUrl(), 3)
+            .rateLimit(3) { it.host == apiUrl.toHttpUrl().host }
             .addInterceptor(MinoImageInterceptor())
             .build()
     }

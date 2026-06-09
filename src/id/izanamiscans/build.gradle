@@ -3,7 +3,7 @@ ext {
     extClass = '.IzanamiScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://izanamiscans.my.id'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 

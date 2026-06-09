@@ -3,7 +3,7 @@ ext {
     extClass = '.Manhatok'
     themePkg = 'zeistmanga'
     baseUrl = 'https://manhatok.blogspot.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 

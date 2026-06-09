@@ -3,7 +3,7 @@ ext {
     extClass = '.NgamenKomik'
     themePkg = 'zeistmanga'
     baseUrl = 'https://ngamenkomik05.blogspot.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 

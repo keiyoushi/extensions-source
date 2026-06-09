@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.es.lectorjpg
 
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -21,6 +21,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.time.Duration.Companion.seconds
 
 class LectorJpg : HttpSource() {
 
@@ -37,7 +38,7 @@ class LectorJpg : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
+        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     class LimitedCache<K, V> : LinkedHashMap<K, V>() {

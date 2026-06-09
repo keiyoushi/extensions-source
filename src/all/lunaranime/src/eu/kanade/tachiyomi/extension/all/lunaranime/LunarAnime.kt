@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.lunaranime
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -27,8 +27,8 @@ class LunarAnime(override val lang: String, private val internalLang: String = l
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimitHost(API_URL.toHttpUrl(), 2)
-        .rateLimitHost(CDN_URL.toHttpUrl(), 2)
+        .rateLimit(2) { it.host == API_URL.toHttpUrl().host }
+        .rateLimit(2) { it.host == CDN_URL.toHttpUrl().host }
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()

@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.pt.animexnovel
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -26,6 +26,7 @@ import rx.Observable
 import java.util.concurrent.TimeUnit
 import kotlin.collections.map
 import kotlin.collections.plusAssign
+import kotlin.time.Duration.Companion.seconds
 
 class AnimeXNovel : HttpSource() {
 
@@ -42,7 +43,7 @@ class AnimeXNovel : HttpSource() {
     override val client: OkHttpClient = network.client.newBuilder()
         .readTimeout(1, TimeUnit.MINUTES)
         .callTimeout(1, TimeUnit.MINUTES)
-        .rateLimit(3, 1)
+        .rateLimit(3, 1.seconds)
         .build()
 
     // ========================== Popular ===================================

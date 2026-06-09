@@ -6,7 +6,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -32,6 +32,7 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class Honeytoon(
     private val language: Language,
@@ -52,7 +53,7 @@ class Honeytoon(
         get() = preferences.getBoolean(PREF_ADULT_KEY, false)
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3, 1)
+        .rateLimit(3, 1.seconds)
         .addInterceptor { chain ->
             val fragment = chain.request().url.fragment
             if (fragment != null && fragment.contains("locked")) {

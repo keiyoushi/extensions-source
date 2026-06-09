@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.en.mangakakalot
 
 import eu.kanade.tachiyomi.multisrc.mangabox.MangaBox
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.parseAs
@@ -17,6 +17,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class Mangakakalot :
     MangaBox(
@@ -70,7 +71,7 @@ class Mangakakalot :
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
-        .rateLimit(2, 1, TimeUnit.SECONDS)
+        .rateLimit(2, 1.seconds)
         .build()
 
     /* ================================

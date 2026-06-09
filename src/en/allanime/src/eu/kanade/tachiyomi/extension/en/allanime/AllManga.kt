@@ -13,7 +13,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -56,7 +56,7 @@ class AllManga :
     private val preferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(apiUrl.toHttpUrl(), 1)
+        .rateLimit(1) { it.host == apiUrl.toHttpUrl().host }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

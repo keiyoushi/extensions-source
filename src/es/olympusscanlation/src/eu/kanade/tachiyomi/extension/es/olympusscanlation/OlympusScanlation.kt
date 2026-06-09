@@ -6,7 +6,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -26,6 +26,7 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.time.Duration.Companion.seconds
 
 class OlympusScanlation :
     HttpSource(),
@@ -80,8 +81,8 @@ class OlympusScanlation :
 
     override val client by lazy {
         val client = network.client.newBuilder()
-            .rateLimitHost(fetchedDomainUrl.toHttpUrl(), 1, 2)
-            .rateLimitHost(apiBaseUrl.toHttpUrl(), 2, 1)
+            .rateLimit(1, 2.seconds) { it.host == fetchedDomainUrl.toHttpUrl().host }
+            .rateLimit(2, 1.seconds) { it.host == apiBaseUrl.toHttpUrl().host }
             .build()
 
         return@lazy client

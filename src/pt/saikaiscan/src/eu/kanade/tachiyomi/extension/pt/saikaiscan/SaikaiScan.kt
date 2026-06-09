@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.saikaiscan
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -17,6 +17,7 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import kotlin.time.Duration.Companion.seconds
 
 class SaikaiScan : HttpSource() {
 
@@ -33,8 +34,8 @@ class SaikaiScan : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimitHost(apiUrl.toHttpUrl(), 1, 2)
-        .rateLimitHost(storageUrl.toHttpUrl(), 1, 1)
+        .rateLimit(1, 2.seconds) { it.host == apiUrl.toHttpUrl().host }
+        .rateLimit(1, 1.seconds) { it.host == storageUrl.toHttpUrl().host }
         .build()
 
     private val json: Json by injectLazy()
