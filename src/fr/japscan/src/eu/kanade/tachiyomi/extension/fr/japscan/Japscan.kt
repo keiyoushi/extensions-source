@@ -70,7 +70,6 @@ abstract class Japscan :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 2.seconds)
         // Pages from fetchPageList are decoded blobs cached on disk; their imageUrl is
         // `https://japscan-cache.local/<absolute-cache-path>`. We can't override
         // fetchImage (final), so an interceptor catches that sentinel host and serves
@@ -92,6 +91,9 @@ abstract class Japscan :
                 .body(bytes.toResponseBody("image/jpeg".toMediaType()))
                 .build()
         }
+        // rateLimit returns a RateLimitBuilder; it must come last as all other
+        // OkHttpClient.Builder configuration has to happen before it.
+        .rateLimit(1, 2.seconds)
         .build()
 
     private val captchaRegex = """window\.__captcha\s*=\s*\{\s*needed\s*:\s*true\s*,?""".toRegex()
