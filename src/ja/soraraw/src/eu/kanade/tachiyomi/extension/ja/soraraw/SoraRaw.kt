@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.ja.soraraw
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,7 +10,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -97,68 +95,51 @@ class SoraRaw : HttpSource() {
         return emptyMap()
     }
 
-    private var fullDatabase: List<MangaDto>? = null
-    private val pageSize = 50
+    private var searchDatabase: List<MangaDto>? = null
+    private val searchPageSize = 24
 
     @Synchronized
-    private fun getFullDatabaseObservable(): Observable<List<MangaDto>> {
-        if (fullDatabase != null) return Observable.just(fullDatabase!!)
+    private fun getSearchDatabaseObservable(): Observable<List<MangaDto>> {
+        searchDatabase?.let { return Observable.just(it) }
 
-        return client.newCall(GET("$baseUrl/", headers)).asObservableSuccess()
-            .flatMap { response ->
-                response.close()
-                Observable.create<List<MangaDto>> { subscriber ->
-                    val allMangas = mutableListOf<MangaDto>()
-                    val seenIds = mutableSetOf<String>()
+        return Observable.create { subscriber ->
+            val mangas = mutableListOf<MangaDto>()
+            val seenSlugs = mutableSetOf<String>()
 
-                    try {
-                        for (page in 1..100) {
-                            val request = GET("$baseUrl/mangas_$page.json", headers)
-                            val jsonResponse = client.newCall(request).execute()
+            try {
+                var page = 1
+                while (!subscriber.isUnsubscribed) {
+                    val response = client.newCall(GET("$baseUrl/mangas_$page.json", headers)).execute()
 
-                            if (jsonResponse.code == 404) {
-                                jsonResponse.close()
-                                break
-                            }
-                            if (!jsonResponse.isSuccessful) {
-                                jsonResponse.close()
-                                break
-                            }
+                    if (response.code == 404) {
+                        response.close()
+                        break
+                    }
+                    if (!response.isSuccessful) {
+                        response.close()
+                        throw java.io.IOException("HTTP error ${response.code}")
+                    }
 
-                            val dto = try {
-                                jsonResponse.parseAs<MangaListDto>()
-                            } catch (e: Exception) {
-                                break
-                            }
+                    val dto = response.parseAs<MangaListDto>()
+                    if (dto.list.isEmpty()) break
 
-                            if (dto.list.isEmpty()) break
-
-                            var addedNew = false
-                            for (manga in dto.list) {
-                                val slug = manga.slug ?: continue
-                                if (seenIds.add(slug)) {
-                                    addedNew = true
-                                    allMangas.add(manga)
-                                }
-                            }
-
-                            if (!addedNew) break
-                        }
-
-                        fullDatabase = allMangas
-                        subscriber.onNext(allMangas)
-                        subscriber.onCompleted()
-                    } catch (e: Exception) {
-                        if (allMangas.isNotEmpty()) {
-                            fullDatabase = allMangas
-                            subscriber.onNext(allMangas)
-                            subscriber.onCompleted()
-                        } else {
-                            subscriber.onError(e)
+                    dto.list.forEach { manga ->
+                        val slug = manga.slug ?: return@forEach
+                        if (seenSlugs.add(slug)) {
+                            mangas.add(manga)
                         }
                     }
+
+                    page++
                 }
+
+                searchDatabase = mangas
+                subscriber.onNext(mangas)
+                subscriber.onCompleted()
+            } catch (e: Exception) {
+                subscriber.onError(e)
             }
+        }
     }
 
     // ============================== Filters ========================================
@@ -171,32 +152,17 @@ class SoraRaw : HttpSource() {
         GenreFilter(),
     )
 
-    private class ContentFilter : Filter.Select<String>("コンテンツ", arrayOf("すべて", "一般", "18+"))
-    private class ModeFilter : Filter.Select<String>("表示モード", arrayOf("すべて", "縦", "横"))
-    private class StatusFilter : Filter.Select<String>("ステータス", arrayOf("すべて", "連載中", "完結"))
-    private class SortFilter : Filter.Select<String>("並び順", arrayOf("閲覧数", "更新", "保存"))
-
-    private class GenreFilter :
-        Filter.Select<String>(
-            "Genre",
-            arrayOf(
-                "All", "日本漫画", "ファンタジー", "コメディ", "ロマンス", "アクション", "ドラマ",
-                "青年", "冒険", "少年", "日常", "フルカラー", "恋愛", "学園生活", "SMARTOON",
-                "超自然", "ハーレム", "独占配信", "少女", "異世界", "更新中", "オリジナル",
-                "ミステリー", "女性マンガ", "ホラー", "歴史", "転生", "SF", "心理", "青年マンガ",
-                "成熟", "女性", "ラブコメ", "コミカライズ", "スポーツ", "学園", "少女マンガ",
-                "少年マンガ", "現代", "ギャグ・コメディ", "完結", "王様・貴族", "悲劇", "復讐",
-                "胸キュン", "異能力", "ラブストーリー", "魔法", "百合",
-            ),
-        )
-
     // ============================== Popular / Latest ===============================
 
     private fun parseNextDataMangas(response: Response): MangasPage {
         if (!response.isSuccessful) {
             throw java.io.IOException("HTTP error ${response.code}")
         }
-        val jsonString = response.body.string()
+
+        return parseNextDataMangas(response.body.string())
+    }
+
+    private fun parseNextDataMangas(jsonString: String): MangasPage {
         val element = jsonInstance.parseToJsonElement(jsonString)
 
         val mangas = mutableListOf<SManga>()
@@ -321,76 +287,90 @@ class SoraRaw : HttpSource() {
                 }
         }
 
-        return getFullDatabaseObservable().map { list ->
-            var filtered = list
+        return getSearchDatabaseObservable().map { list ->
             val gMap = getGenreMap()
+            val filtered = list
+                .asSequence()
+                .filter { manga -> manga.matchesQuery(query) }
+                .filter { manga -> manga.matchesFilters(filters, gMap) }
+                .toList()
+                .sortFor(filters)
 
-            if (query.isNotBlank()) {
-                filtered = filtered.filter {
-                    it.name?.contains(query, ignoreCase = true) == true ||
-                        it.altNames?.contains(query, ignoreCase = true) == true
-                }
+            val fromIndex = (page - 1) * searchPageSize
+            val toIndex = minOf(fromIndex + searchPageSize, filtered.size)
+            val mangas = if (fromIndex < filtered.size) {
+                filtered.subList(fromIndex, toIndex).map { it.toSManga(gMap) }
+            } else {
+                emptyList()
             }
 
-            for (filter in filters) {
-                when (filter) {
-                    is ContentFilter -> {
-                        when (filter.state) {
-                            1 -> filtered = filtered.filter { it.isAdult == "no" }
-                            2 -> filtered = filtered.filter { it.isAdult == "yes" }
-                        }
-                    }
-                    is ModeFilter -> {
-                        when (filter.state) {
-                            1 -> filtered = filtered.filter { it.mode == "vertical" }
-                            2 -> filtered = filtered.filter { it.mode == "horizontal" }
-                        }
-                    }
-                    is StatusFilter -> {
-                        when (filter.state) {
-                            1 -> filtered = filtered.filter { it.type == "incomplete" || it.status == "ongoing" }
-                            2 -> filtered = filtered.filter { it.type == "complete" || it.type == "completed" || it.status == "completed" }
-                        }
-                    }
-                    is GenreFilter -> {
-                        if (filter.state != 0) {
-                            val genreName = filter.values[filter.state]
-                            val genreIdStr = gMap.entries.find { it.value == genreName }?.key
-                            if (genreIdStr != null) {
-                                filtered = filtered.filter { manga ->
-                                    manga.genres?.any { element ->
-                                        if (element is JsonPrimitive) {
-                                            element.content == genreIdStr || element.content == genreName
-                                        } else {
-                                            false
-                                        }
-                                    } == true
-                                }
-                            }
-                        }
-                    }
-                    else -> {}
-                }
-            }
-
-            val sortFilter = filters.firstInstanceOrNull<SortFilter>()
-            filtered = when (sortFilter?.state) {
-                1 -> filtered.sortedByDescending { it.cPublished ?: it.updatedAt ?: it.cPublishedAt ?: "" }
-                2 -> filtered.sortedByDescending { it.numberBookmark ?: 0 }
-                else -> filtered.sortedByDescending { it.views ?: 0 }
-            }
-
-            val start = (page - 1) * pageSize
-            val end = minOf(start + pageSize, filtered.size)
-            val pagedList = if (start < filtered.size) filtered.subList(start, end) else emptyList()
-
-            val mappedList = pagedList.map { it.toSManga(gMap) }
-            MangasPage(mappedList, end < filtered.size)
+            MangasPage(mangas, toIndex < filtered.size)
         }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    private fun MangaDto.matchesQuery(query: String): Boolean {
+        if (query.isBlank()) return true
+
+        return name?.contains(query, ignoreCase = true) == true ||
+            altNames?.contains(query, ignoreCase = true) == true ||
+            author?.contains(query, ignoreCase = true) == true ||
+            artist?.contains(query, ignoreCase = true) == true
+    }
+
+    private fun MangaDto.matchesFilters(filters: FilterList, gMap: Map<String, String>): Boolean {
+        filters.forEach { filter ->
+            when (filter) {
+                is ContentFilter -> when (filter.state) {
+                    1 -> if (isAdult == "yes") return false
+                    2 -> if (isAdult != "yes") return false
+                }
+                is ModeFilter -> when (filter.state) {
+                    1 -> if (mode != "vertical") return false
+                    2 -> if (mode != "horizontal") return false
+                }
+                is StatusFilter -> when (filter.state) {
+                    1 -> if (type != "incomplete" && status != "ongoing") return false
+                    2 -> if (type !in listOf("complete", "completed") && status != "completed") return false
+                }
+                is GenreFilter -> {
+                    if (filter.state != 0) {
+                        val genreName = filter.values[filter.state]
+                        val genreId = gMap.entries.firstOrNull { it.value == genreName }?.key
+                        if (genreId != null && genres?.any { it.matchesGenre(genreId, genreName, gMap) } != true) {
+                            return false
+                        }
+                    }
+                }
+                else -> {}
+            }
+        }
+
+        return true
+    }
+
+    private fun kotlinx.serialization.json.JsonElement.matchesGenre(
+        genreId: String,
+        genreName: String,
+        gMap: Map<String, String>,
+    ): Boolean = when (this) {
+        is JsonPrimitive -> content == genreId || content == genreName || gMap[content] == genreName
+        is JsonObject -> this["name"]?.jsonPrimitive?.contentOrNull == genreName ||
+            this["id"]?.jsonPrimitive?.contentOrNull == genreId
+        else -> false
+    }
+
+    private fun List<MangaDto>.sortFor(filters: FilterList): List<MangaDto> {
+        val sortFilter = filters.filterIsInstance<SortFilter>().firstOrNull()
+
+        return when (sortFilter?.state) {
+            1 -> sortedByDescending { it.updatedAt ?: it.cPublishedAt ?: it.cPublished ?: "" }
+            2 -> sortedByDescending { it.numberBookmark ?: 0 }
+            else -> sortedByDescending { it.views ?: 0 }
+        }
+    }
 
     // =========================== Manga Details ============================
 
