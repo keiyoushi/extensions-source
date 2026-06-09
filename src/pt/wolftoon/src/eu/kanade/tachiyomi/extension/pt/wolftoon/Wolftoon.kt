@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.wolftoon
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,8 +23,11 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.time.Duration.Companion.seconds
 
 class Wolftoon : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+    private val supabaseUrlHost by lazy { supabaseUrl.toHttpUrl().host }
 
     override val name = "Wolftoon"
 
@@ -37,9 +40,8 @@ class Wolftoon : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2, 1)
-        .rateLimitHost(supabaseUrl.toHttpUrl(), 2, 1)
-        .addInterceptor(CookieInterceptor(supabaseUrl.toHttpUrl().host, emptyList()))
+        .addNetworkInterceptor(CookieInterceptor(supabaseUrlHost, emptyList()))
+        .rateLimit(2, 1.seconds) { it.host == baseUrlHost || it.host == supabaseUrlHost }
         .build()
 
     private val scriptUrl: String by lazy {

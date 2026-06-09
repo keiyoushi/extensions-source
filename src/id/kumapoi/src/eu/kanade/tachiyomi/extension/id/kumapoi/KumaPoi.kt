@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.id.kumapoi
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 
 class KumaPoi : MangaThemesia("KumaPoi", "https://kumapoi.info", "id") {

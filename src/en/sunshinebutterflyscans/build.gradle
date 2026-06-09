@@ -1,7 +1,7 @@
 ext {
     extName = 'Sunshine Butterfly Scans'
     extClass = '.SunshineButterflyScans'
-    extVersionCode = 38
+    extVersionCode = 39
     isNsfw = true
 }
 

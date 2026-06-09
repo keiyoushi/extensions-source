@@ -3,7 +3,7 @@ ext {
     extClass = '.Amuy'
     themePkg = 'madara'
     baseUrl = 'https://apenasmaisumyaoi.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 

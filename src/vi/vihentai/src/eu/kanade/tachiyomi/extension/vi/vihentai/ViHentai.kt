@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.vi.vihentai
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
@@ -40,7 +40,6 @@ class ViHentai : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimit(5)
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -56,6 +55,7 @@ class ViHentai : HttpSource() {
             solvePassword(chain, body)
             chain.proceed(request)
         }
+        .rateLimit(5)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

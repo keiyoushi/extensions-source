@@ -3,7 +3,7 @@ ext {
     extClass = '.KunMangaOnline'
     themePkg = 'madara'
     baseUrl = 'https://www.kunmanga.online'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

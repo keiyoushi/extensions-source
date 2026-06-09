@@ -13,7 +13,6 @@ import eu.kanade.tachiyomi.extension.all.namicomi.dto.MangaListDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.PageListDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -21,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.encodeToString
 import okhttp3.CacheControl
@@ -50,7 +50,6 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
     }
 
     override val client = network.client.newBuilder()
-        .rateLimit(3)
         .addNetworkInterceptor { chain ->
             val response = chain.proceed(chain.request())
 
@@ -61,6 +60,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
 
             return@addNetworkInterceptor response
         }
+        .rateLimit(3)
         .build()
 
     private fun sortedMangaRequest(page: Int, orderBy: String): Request {

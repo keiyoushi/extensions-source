@@ -3,7 +3,7 @@ ext {
     extClass = '.OrigamiOrpheans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://origami-orpheans.com'
-    overrideVersionCode = 10
+    overrideVersionCode = 11
     isNsfw = true
 
 }

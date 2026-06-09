@@ -3,7 +3,7 @@ ext {
     extClass = '.LectorAsteria'
     baseUrl = 'https://lectorasteria.com'
     themePkg = 'moonlighttl'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 

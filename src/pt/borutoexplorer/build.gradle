@@ -3,7 +3,7 @@ ext {
     extClass = '.BorutoExplorer'
     themePkg = 'madara'
     baseUrl = 'https://leitor.borutoexplorer.com.br'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = false
 }
 

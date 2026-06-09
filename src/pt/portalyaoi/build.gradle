@@ -3,7 +3,7 @@ ext {
     extClass = '.PortalYaoi'
     themePkg = 'madara'
     baseUrl = 'https://lerboyslove.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 

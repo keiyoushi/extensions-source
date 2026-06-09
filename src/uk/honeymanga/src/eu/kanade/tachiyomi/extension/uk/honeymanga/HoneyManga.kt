@@ -4,7 +4,6 @@ import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -13,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -25,6 +25,7 @@ import kotlin.collections.ifEmpty
 class HoneyManga :
     HttpSource(),
     ConfigurableSource {
+    private val apiurlHost by lazy { API_URL.toHttpUrl().host }
 
     override val name = "HoneyManga"
     override val baseUrl = "https://honey-manga.com.ua"
@@ -38,7 +39,7 @@ class HoneyManga :
         .add("Referer", "$baseUrl/")
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(API_URL.toHttpUrl(), 10)
+        .rateLimit(10) { it.host == apiurlHost }
         .build()
 
     // ============================== Popular ===============================

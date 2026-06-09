@@ -3,7 +3,7 @@ ext {
     extClass = '.Ikiru'
     themePkg = 'natsuid'
     baseUrl = 'https://05.ikiru.wtf'
-    overrideVersionCode = 46
+    overrideVersionCode = 47
     isNsfw = false
 }
 

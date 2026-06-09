@@ -2,7 +2,7 @@ ext {
     extName = 'Astral-Manga'
     extClass = '.AstralManga'
     baseUrl = 'https://astral-manga.fr'
-    extVersionCode = 47
+    extVersionCode = 48
     isNsfw = false
 }
 

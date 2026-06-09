@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.manhuaonline
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response

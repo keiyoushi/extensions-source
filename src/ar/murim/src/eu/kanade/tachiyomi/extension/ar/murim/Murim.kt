@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.ar.murim
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.Response
 
 class Murim :
