@@ -50,7 +50,6 @@ class MangaFire(
 
     override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor)
-        .rateLimit(2)
         .apply {
             val naiveTrustManager =
                 @SuppressLint("CustomX509TrustManager")
@@ -68,6 +67,7 @@ class MangaFire(
             sslSocketFactory(insecureSocketFactory, naiveTrustManager)
             hostnameVerifier { _, _ -> true }
         }
+        .rateLimit(2)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

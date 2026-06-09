@@ -23,7 +23,6 @@ class ManhwaLatino :
     ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2.seconds)
         .addInterceptor { chain ->
             val request = chain.request()
 
@@ -52,6 +51,7 @@ class ManhwaLatino :
 
             return@addInterceptor response
         }
+        .rateLimit(1, 2.seconds)
         .build()
 
     override val useNewChapterEndpoint = true

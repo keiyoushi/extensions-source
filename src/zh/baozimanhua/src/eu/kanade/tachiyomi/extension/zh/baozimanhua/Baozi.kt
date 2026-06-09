@@ -54,10 +54,10 @@ class Baozi :
     )
 
     override val client = network.client.newBuilder()
-        .rateLimit(2)
         .addInterceptor(bannerInterceptor)
         .addNetworkInterceptor(MissingImageInterceptor)
         .addNetworkInterceptor(RedirectDomainInterceptor(domain))
+        .rateLimit(2)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

@@ -17,7 +17,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 class Bakamh :
     Madara(
@@ -33,7 +32,7 @@ class Bakamh :
 
     override val client = network.client.newBuilder()
         .addInterceptor(UserAgentClientHintsInterceptor())
-        .rateLimit(permits = 2, period = 1, unit = TimeUnit.SECONDS) // Rate limit added to prevent 429 errors during library updates
+        .rateLimit(2) // Rate limit added to prevent 429 errors during library updates
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

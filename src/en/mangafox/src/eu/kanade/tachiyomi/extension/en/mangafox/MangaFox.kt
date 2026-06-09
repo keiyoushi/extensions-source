@@ -39,7 +39,6 @@ class MangaFox : HttpSource() {
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 1.seconds)
         // Force readway=2 cookie to get all page URLs at once
         .cookieJar(
             object : CookieJar {
@@ -68,6 +67,7 @@ class MangaFox : HttpSource() {
                 }
             },
         )
+        .rateLimit(1, 1.seconds)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", "$baseUrl/")

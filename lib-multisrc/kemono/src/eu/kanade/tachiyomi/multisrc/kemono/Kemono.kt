@@ -40,7 +40,6 @@ open class Kemono(
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimit(1)
         .addInterceptor { chain ->
             val request = chain.request()
             if (request.url.pathSegments.first() == "api") {
@@ -59,6 +58,7 @@ open class Kemono(
                 maxSize = 50L * 1024 * 1024, // 50 MiB
             ),
         )
+        .rateLimit(1)
         .build()
 
     private val creatorsClient = client.newBuilder()

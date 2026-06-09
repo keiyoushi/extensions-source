@@ -53,7 +53,6 @@ class Honeytoon(
         get() = preferences.getBoolean(PREF_ADULT_KEY, false)
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3, 1.seconds)
         .addInterceptor { chain ->
             val fragment = chain.request().url.fragment
             if (fragment != null && fragment.contains("locked")) {
@@ -68,6 +67,7 @@ class Honeytoon(
                 else -> CookieInterceptor(baseUrl.substringAfter("//"), "eighteen" to "0")
             },
         )
+        .rateLimit(3, 1.seconds)
         .build()
 
     private val intl = Intl(

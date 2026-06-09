@@ -36,12 +36,12 @@ class ToonBr :
     override val client by lazy {
         val token = getToken()
         network.client.newBuilder()
-            .rateLimit(2)
             .apply {
                 if (token.isNotEmpty()) {
-                    addInterceptor(CookieInterceptor(API_HOST, "token" to token))
+                    addNetworkInterceptor(CookieInterceptor(API_HOST, "token" to token))
                 }
             }
+            .rateLimit(2)
             .build()
     }
 

@@ -50,7 +50,6 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
     }
 
     override val client = network.client.newBuilder()
-        .rateLimit(3)
         .addNetworkInterceptor { chain ->
             val response = chain.proceed(chain.request())
 
@@ -61,6 +60,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
 
             return@addNetworkInterceptor response
         }
+        .rateLimit(3)
         .build()
 
     private fun sortedMangaRequest(page: Int, orderBy: String): Request {

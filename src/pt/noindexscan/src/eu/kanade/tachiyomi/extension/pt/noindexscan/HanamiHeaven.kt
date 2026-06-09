@@ -51,8 +51,8 @@ class HanamiHeaven :
 
     override val client: OkHttpClient = super.client.newBuilder()
         .ignoreAllSSLErrors() // Bypass the "Chain validation failed" issue
-        .rateLimit(3, 2.seconds)
         .addInterceptor(::jsChallengeInterceptor)
+        .rateLimit(3, 2.seconds)
         .build()
 
     override val useNewChapterEndpoint = true

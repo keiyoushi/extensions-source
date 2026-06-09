@@ -43,9 +43,9 @@ class RFDragonScan :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
-        .rateLimit(2)
         .addInterceptor(::loginInterceptor)
         .addInterceptor(::migrationInterceptor)
+        .rateLimit(2)
         .build()
 
     private val apiHeaders by lazy {

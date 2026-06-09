@@ -51,8 +51,8 @@ abstract class GreenShit :
 
     override val client by lazy {
         network.client.newBuilder()
-            .rateLimit(rateLimitPerSecond)
             .addInterceptor(::authIntercept)
+            .rateLimit(rateLimitPerSecond)
             .build()
     }
 

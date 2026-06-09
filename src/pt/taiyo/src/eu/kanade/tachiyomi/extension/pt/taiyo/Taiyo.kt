@@ -56,9 +56,8 @@ class Taiyo : HttpSource() {
     private var bearerToken: String = preferences.getString(BEARER_TOKEN_PREF, "").toString()
 
     override val client = network.client.newBuilder()
-        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
-        .rateLimit(2) { it.host == IMG_CDN.toHttpUrl().host }
         .addInterceptor(::authorizationInterceptor)
+        .rateLimit(2) { it.host in setOf(baseUrl.toHttpUrl().host, IMG_CDN.toHttpUrl().host) }
         .build()
 
     // ============================== Popular ===============================

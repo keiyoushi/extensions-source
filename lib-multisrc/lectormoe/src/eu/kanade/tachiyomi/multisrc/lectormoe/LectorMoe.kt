@@ -27,8 +27,7 @@ abstract class LectorMoe(
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3) { it.host == baseUrl.toHttpUrl().host }
-        .rateLimit(3) { it.host == apiBaseUrl.toHttpUrl().host }
+        .rateLimit(3) { it.host in setOf(baseUrl.toHttpUrl().host, apiBaseUrl.toHttpUrl().host) }
         .build()
 
     final override fun headersBuilder(): Headers.Builder = super.headersBuilder()

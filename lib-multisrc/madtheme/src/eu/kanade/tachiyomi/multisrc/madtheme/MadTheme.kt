@@ -38,7 +38,6 @@ abstract class MadTheme(
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 1.seconds)
         // Intercepts chapter image requests that have a fallback URL encoded in the fragment.
         // If the primary CDN returns a failure, we retry with the fallback URL.
         // The fallback is encoded as a fragment so the parser doesn't need to pre-decide
@@ -73,14 +72,15 @@ abstract class MadTheme(
                 return@addInterceptor chain.proceed(request.newBuilder().url(newUrl).build())
             }
             response
-        }.build()
+        }
+        .rateLimit(1, 1.seconds)
+        .build()
 
     protected open val useLegacyApi = false
 
     protected open val useSlugSearch = false
 
     // TODO: better cookie sharing
-    // TODO: don't count cached responses against rate limit
     private val chapterClient: OkHttpClient = network.client.newBuilder()
         .rateLimit(1, 12.seconds)
         .build()

@@ -61,8 +61,8 @@ class MinoTruyen(
 
     override val client by lazy {
         network.client.newBuilder()
-            .rateLimit(3) { it.host == apiUrl.toHttpUrl().host }
             .addInterceptor(MinoImageInterceptor())
+            .rateLimit(3) { it.host == apiUrl.toHttpUrl().host }
             .build()
     }
 

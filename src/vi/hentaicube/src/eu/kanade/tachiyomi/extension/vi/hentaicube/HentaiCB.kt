@@ -43,7 +43,6 @@ class HentaiCB :
     override val id: Long = 823638192569572166
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3)
         .followRedirects(false)
         .addInterceptor { chain ->
             val maxRedirects = 5
@@ -73,6 +72,7 @@ class HentaiCB :
             }
             response
         }
+        .rateLimit(3)
         .build()
 
     private val preferences: SharedPreferences = getPreferences()

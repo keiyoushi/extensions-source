@@ -10,5 +10,5 @@ class Natsu :
         "id",
         "https://natsu.tv",
     ) {
-    override fun OkHttpClient.Builder.customizeClient() = rateLimit(4)
+    override fun OkHttpClient.Builder.customizeClient() = rateLimit(4).build().newBuilder()
 }

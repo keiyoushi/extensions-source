@@ -19,7 +19,6 @@ class Komikindo :
     private val cdnHeaders = imageRequest(Page(0, "$baseUrl/", baseUrl)).headers
 
     override val client = super.client.newBuilder()
-        .rateLimit(3)
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()
@@ -28,6 +27,7 @@ class Komikindo :
             }
             chain.proceed(request)
         }
+        .rateLimit(3)
         .build()
 
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {

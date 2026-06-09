@@ -38,9 +38,8 @@ class Wolftoon : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(2, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
-        .rateLimit(2, 1.seconds) { it.host == supabaseUrl.toHttpUrl().host }
-        .addInterceptor(CookieInterceptor(supabaseUrl.toHttpUrl().host, emptyList()))
+        .addNetworkInterceptor(CookieInterceptor(supabaseUrl.toHttpUrl().host, emptyList()))
+        .rateLimit(2, 1.seconds) { it.host in setOf(baseUrl.toHttpUrl().host, supabaseUrl.toHttpUrl().host) }
         .build()
 
     private val scriptUrl: String by lazy {

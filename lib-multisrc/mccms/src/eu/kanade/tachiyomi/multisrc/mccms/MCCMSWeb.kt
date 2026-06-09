@@ -33,7 +33,6 @@ open class MCCMSWeb(
 
     override val client by lazy {
         network.client.newBuilder()
-            .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
             .addInterceptor { chain ->
                 val response = chain.proceed(chain.request())
                 if (response.request.url.encodedPath == "/err/comic") {
@@ -41,6 +40,7 @@ open class MCCMSWeb(
                 }
                 response
             }
+            .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
             .build()
     }
 

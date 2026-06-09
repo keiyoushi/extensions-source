@@ -26,7 +26,6 @@ class HuntersScans :
         SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
     ) {
     override val client = super.client.newBuilder()
-        .rateLimit(2)
         .readTimeout(1, TimeUnit.MINUTES)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
@@ -37,6 +36,7 @@ class HuntersScans :
             response
         }
         .addInterceptor(::imageInterceptor)
+        .rateLimit(2)
         .build()
 
     override val mangaSubString = "comics"

@@ -30,8 +30,8 @@ class Nexusscanlation : HttpSource() {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 3.seconds) { it.host == apiBaseUrl.toHttpUrl().host } // API: max 1 request per 3 seconds
         .addInterceptor(ImageInterceptor())
+        .rateLimit(1, 3.seconds) { it.host == apiBaseUrl.toHttpUrl().host } // API: max 1 request per 3 seconds
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

@@ -18,7 +18,6 @@ class ArthurScan :
     ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2.seconds)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
             val mime = response.headers["Content-Type"]
@@ -31,6 +30,7 @@ class ArthurScan :
             }
             response
         }
+        .rateLimit(1, 2.seconds)
         .build()
 
     override val useNewChapterEndpoint = true

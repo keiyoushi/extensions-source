@@ -47,8 +47,8 @@ class BoyLove :
     }
 
     override val client = network.client.newBuilder()
-        .rateLimit(2)
         .addInterceptor(UnscramblerInterceptor())
+        .rateLimit(2)
         .build()
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/home/api/getpage/tp/1-topestmh-${page - 1}", headers)

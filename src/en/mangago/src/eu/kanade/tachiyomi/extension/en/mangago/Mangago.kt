@@ -58,7 +58,6 @@ class Mangago :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
-        .rateLimit(1) { it.host == baseUrl.toHttpUrl().host }
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -79,7 +78,9 @@ class Mangago :
         }
         .addNetworkInterceptor(
             CookieInterceptor(domain, "_m_superu" to "1"),
-        ).build()
+        )
+        .rateLimit(1) { it.host == baseUrl.toHttpUrl().host }
+        .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().apply {
         preferences.getString(PREF_KEY_CUSTOM_UA, null)?.takeIf { it.isNotBlank() }?.also {

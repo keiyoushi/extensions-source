@@ -41,7 +41,6 @@ class MiMiHentai : HttpSource() {
         .add("Referer", "$baseUrl/")
 
     override val client = network.client.newBuilder()
-        .rateLimit(14, 1.minutes) { it.host == baseUrl.toHttpUrl().host }
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -68,6 +67,7 @@ class MiMiHentai : HttpSource() {
             }
             response
         }
+        .rateLimit(14, 1.minutes) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     // ============================== Popular ===============================

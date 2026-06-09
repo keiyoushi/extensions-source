@@ -27,8 +27,6 @@ class LunarAnime(override val lang: String, private val internalLang: String = l
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(2) { it.host == API_URL.toHttpUrl().host }
-        .rateLimit(2) { it.host == CDN_URL.toHttpUrl().host }
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()
@@ -41,6 +39,7 @@ class LunarAnime(override val lang: String, private val internalLang: String = l
                 chain.proceed(request)
             }
         }
+        .rateLimit(2) { it.host in setOf(API_URL.toHttpUrl().host, CDN_URL.toHttpUrl().host) }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

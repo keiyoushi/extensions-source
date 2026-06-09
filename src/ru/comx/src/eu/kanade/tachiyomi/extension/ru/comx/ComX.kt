@@ -78,7 +78,6 @@ class ComX :
     override val client = network.client.newBuilder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
-        .rateLimit(3)
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()
@@ -115,6 +114,7 @@ class ComX :
             }
             response
         }
+        .rateLimit(3)
         .build()
 
     // Popular

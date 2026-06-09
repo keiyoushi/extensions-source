@@ -44,8 +44,8 @@ class Mangabz :
 
         val cookieInterceptor = CookieInterceptor(mirror.domain, mirror.langCookie to preferences.lang)
         client = network.client.newBuilder()
-            .rateLimit(5)
             .addNetworkInterceptor(cookieInterceptor)
+            .rateLimit(5)
             .build()
     }
 

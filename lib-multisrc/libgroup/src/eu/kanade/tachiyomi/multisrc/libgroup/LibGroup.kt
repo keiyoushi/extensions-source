@@ -74,9 +74,6 @@ abstract class LibGroup(
 
     override val client by lazy {
         network.client.newBuilder()
-            .rateLimit(3)
-            .rateLimit(1) { it.host == apiDomain.toHttpUrl().host }
-            .rateLimit(1) { it.host == baseUrl.toHttpUrl().host }
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(30, TimeUnit.SECONDS)
             .addInterceptor(::checkForToken)
@@ -90,6 +87,8 @@ abstract class LibGroup(
                 }
                 return@addInterceptor response
             }
+            .rateLimit(1) { it.host in setOf(apiDomain.toHttpUrl().host, baseUrl.toHttpUrl().host) }
+            .rateLimit(3)
             .build()
     }
 

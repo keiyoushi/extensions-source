@@ -40,7 +40,6 @@ class ViHentai : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimit(5)
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -56,6 +55,7 @@ class ViHentai : HttpSource() {
             solvePassword(chain, body)
             chain.proceed(request)
         }
+        .rateLimit(5)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

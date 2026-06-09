@@ -19,8 +19,8 @@ class HotCabaretScan :
     ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2.seconds)
         .addInterceptor(::checkPasswordProtectedIntercept)
+        .rateLimit(1, 2.seconds)
         .build()
 
     private fun checkPasswordProtectedIntercept(chain: Interceptor.Chain): Response {

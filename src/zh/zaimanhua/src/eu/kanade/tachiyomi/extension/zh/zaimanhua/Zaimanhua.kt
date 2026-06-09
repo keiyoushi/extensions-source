@@ -60,10 +60,10 @@ class Zaimanhua :
     private val preferences: SharedPreferences = getPreferences()
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(5)
         .addInterceptor(::authIntercept)
         .addInterceptor(::imageRetryInterceptor)
         .addInterceptor(CommentsInterceptor)
+        .rateLimit(5)
         .build()
 
     private fun authIntercept(chain: Interceptor.Chain): Response {

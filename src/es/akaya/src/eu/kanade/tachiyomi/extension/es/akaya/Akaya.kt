@@ -37,7 +37,6 @@ class Akaya : HttpSource() {
     private var csrfToken: String = ""
 
     override val client = network.client.newBuilder()
-        .rateLimit(1, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .addInterceptor { chain ->
             val request = chain.request()
             if (!request.url.toString().startsWith("$baseUrl/serie")) return@addInterceptor chain.proceed(request)
@@ -61,6 +60,7 @@ class Akaya : HttpSource() {
             }
             response
         }
+        .rateLimit(1, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     private fun getCsrftoken() {

@@ -13,10 +13,10 @@ class GenzToons :
     ) {
 
     override val client = super.client.newBuilder()
-        .rateLimit(3)
         .connectTimeout(90, TimeUnit.SECONDS)
         .writeTimeout(90, TimeUnit.SECONDS)
         .readTimeout(90, TimeUnit.SECONDS)
+        .rateLimit(3)
         .build()
 
     override fun fetchPopularManga(page: Int) = fetchSearchManga(page, "", FilterList())

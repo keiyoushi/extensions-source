@@ -37,8 +37,8 @@ class ShadowManga : HttpSource() {
     private val fallbackPrefix = "/api/media/"
 
     override val client = network.client.newBuilder()
-        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .addInterceptor(ImageFallbackInterceptor(cdnHosts, baseUrl.toHttpUrl().host, fallbackPrefix))
+        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

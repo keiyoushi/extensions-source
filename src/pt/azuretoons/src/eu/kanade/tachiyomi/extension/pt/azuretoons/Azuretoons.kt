@@ -40,8 +40,8 @@ class Azuretoons :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
-        .rateLimit(2)
         .addInterceptor(::authIntercept)
+        .rateLimit(2)
         .build()
 
     private fun authIntercept(chain: Interceptor.Chain): Response {

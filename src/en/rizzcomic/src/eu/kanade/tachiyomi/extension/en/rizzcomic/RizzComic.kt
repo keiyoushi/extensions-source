@@ -32,7 +32,6 @@ class RizzComic :
     ) {
 
     override val client = super.client.newBuilder()
-        .rateLimit(1, 3.seconds)
         .addInterceptor { chain ->
             val request = chain.request()
             val isApiRequest = request.header("X-API-Request") != null
@@ -42,6 +41,7 @@ class RizzComic :
             }.build()
             chain.proceed(request.newBuilder().headers(headers).build())
         }
+        .rateLimit(1, 3.seconds)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

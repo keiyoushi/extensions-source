@@ -47,8 +47,8 @@ class MeDamTruyen : HttpSource() {
     }
 
     override val client = network.client.newBuilder()
-        .rateLimit(3)
         .addInterceptor(thumbnailFallbackInterceptor)
+        .rateLimit(3)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

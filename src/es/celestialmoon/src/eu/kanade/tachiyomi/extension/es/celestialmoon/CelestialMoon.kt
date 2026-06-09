@@ -21,7 +21,7 @@ class CelestialMoon :
     private val cookieInterceptor = CookieInterceptor(baseUrl.substringAfter("://"), "age_gate" to "18")
 
     override val client = super.client.newBuilder()
-        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .addNetworkInterceptor(cookieInterceptor)
+        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 }

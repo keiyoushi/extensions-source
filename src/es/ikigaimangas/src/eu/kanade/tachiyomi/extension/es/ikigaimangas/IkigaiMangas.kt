@@ -87,9 +87,9 @@ class IkigaiMangas :
 
     override val client by lazy {
         network.client.newBuilder()
+            .addNetworkInterceptor(::nsfwCookieInterceptor)
             .rateLimit(1, 2.seconds) { it.host == fetchedDomainUrl.toHttpUrl().host }
             .rateLimit(2, 1.seconds) { it.host == apiBaseUrl.toHttpUrl().host }
-            .addNetworkInterceptor(::nsfwCookieInterceptor)
             .build()
     }
 

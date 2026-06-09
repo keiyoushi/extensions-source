@@ -21,8 +21,8 @@ class YakshaComics :
 
     // Adapted from src/en/yakshascans
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1)
         .addInterceptor(::jsChallengeInterceptor)
+        .rateLimit(1)
         .build()
 
     private fun jsChallengeInterceptor(chain: Interceptor.Chain): Response {

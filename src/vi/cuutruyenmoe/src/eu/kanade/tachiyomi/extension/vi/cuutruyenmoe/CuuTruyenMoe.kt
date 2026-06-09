@@ -51,7 +51,6 @@ class CuuTruyenMoe :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
-        .rateLimit(5)
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -67,6 +66,7 @@ class CuuTruyenMoe :
             submitConfiguredPassword(chain, body)
             chain.proceed(request)
         }
+        .rateLimit(5)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

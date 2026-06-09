@@ -44,13 +44,13 @@ class Manhastro :
     private val preferences by getPreferencesLazy()
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(2)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .apply {
             val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
             if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
         }
+        .rateLimit(2)
         .build()
 
     private val dataClient = client.newBuilder()

@@ -51,10 +51,10 @@ class MoeTruyen :
     private val imgxGrants = ConcurrentHashMap<String, PageAccessEntry>()
 
     override val client = network.client.newBuilder()
-        .rateLimit(3)
         .addNetworkInterceptor(CookieInterceptor("moetruyen.net", "moetruyen_full_web" to "Moetruyen123456"))
         .addNetworkInterceptor(CookieInterceptor("truyen.moe", "moetruyen_full_web" to "Moetruyen123456"))
         .addInterceptor(imgxInterceptor())
+        .rateLimit(3)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

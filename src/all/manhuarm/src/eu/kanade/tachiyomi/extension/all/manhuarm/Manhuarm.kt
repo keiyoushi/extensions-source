@@ -140,7 +140,7 @@ class Manhuarm(
         get() {
             if (field == null || isSettingsChanged) {
                 warmupInterceptor.reset()
-                field = clientBuilder().build()
+                field = clientBuilder()
             }
             return field
         }
@@ -151,7 +151,7 @@ class Manhuarm(
 
     private lateinit var translator: TranslatorEngine
 
-    private fun clientBuilder(): OkHttpClient.Builder {
+    private fun clientBuilder(): OkHttpClient {
         translator = when (provider) {
             "Google" -> GoogleTranslator(clientUtils, headers)
             else -> BingTranslator(clientUtils, headers)
@@ -160,7 +160,6 @@ class Manhuarm(
         return network.client.newBuilder()
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(2, TimeUnit.MINUTES)
-            .rateLimit(2, 1.seconds)
             // Fix disk cache / decompression issues
             .apply {
                 val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
@@ -172,6 +171,8 @@ class Manhuarm(
                 TranslationInterceptor(settings, translator),
             )
             .addInterceptor(ComposedImageInterceptor(settings))
+            .rateLimit(2, 1.seconds)
+            .build()
     }
 
     override fun headersBuilder(): Headers.Builder {

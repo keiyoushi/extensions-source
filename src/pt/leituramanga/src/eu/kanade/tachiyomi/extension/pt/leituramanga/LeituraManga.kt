@@ -33,7 +33,6 @@ class LeituraManga : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimit(1, 2.seconds)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
             when (response.code) {
@@ -49,6 +48,7 @@ class LeituraManga : HttpSource() {
             }
             response
         }
+        .rateLimit(1, 2.seconds)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

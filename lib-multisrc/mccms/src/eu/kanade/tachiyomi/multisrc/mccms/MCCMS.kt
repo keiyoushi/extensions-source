@@ -34,7 +34,6 @@ open class MCCMS(
 
     override val client by lazy {
         network.client.newBuilder()
-            .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
             .addInterceptor { chain ->
                 // for thumbnail requests
                 var request = chain.request()
@@ -44,6 +43,7 @@ open class MCCMS(
                 }
                 chain.proceed(request)
             }
+            .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
             .build()
     }
 

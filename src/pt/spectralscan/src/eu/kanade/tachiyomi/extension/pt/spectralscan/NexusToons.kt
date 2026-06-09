@@ -39,8 +39,8 @@ class NexusToons :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
-        .rateLimit(3, 1.seconds)
         .addInterceptor(NexusDecrypt.createInterceptor())
+        .rateLimit(3, 1.seconds)
         .build()
 
     private val apiHeaders by lazy {

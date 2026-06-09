@@ -58,7 +58,6 @@ class GeassComics :
 
     override val client: OkHttpClient by lazy {
         network.client.newBuilder()
-            .rateLimit(2)
             .addInterceptor { chain ->
                 val request = chain.request()
                 val token = getToken()
@@ -71,6 +70,7 @@ class GeassComics :
                 }
                 chain.proceed(newRequest)
             }
+            .rateLimit(2)
             .build()
     }
 

@@ -48,7 +48,6 @@ class KuroMangas :
         val token = getToken()
         val cdnHost = cdnUrl.toHttpUrl().host
         network.client.newBuilder()
-            .rateLimit(2)
             .apply {
                 if (token.isNotEmpty()) {
                     addInterceptor { chain ->
@@ -63,6 +62,7 @@ class KuroMangas :
                     }
                 }
             }
+            .rateLimit(2)
             .build()
     }
 

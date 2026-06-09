@@ -35,8 +35,8 @@ class EgoToons :
     override val versionId = 3
 
     override val client = network.client.newBuilder()
-        .rateLimit(2)
         .addInterceptor(ImageDecryptor())
+        .rateLimit(2)
         .build()
 
     private val preferences: SharedPreferences by getPreferencesLazy()

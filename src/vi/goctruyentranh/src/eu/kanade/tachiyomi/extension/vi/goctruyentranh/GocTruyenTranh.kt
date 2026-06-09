@@ -46,7 +46,6 @@ class GocTruyenTranh :
     private val dateFormat = SimpleDateFormat("dd-MM-yyyy HH:mm:ss", Locale.US)
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3)
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -65,6 +64,7 @@ class GocTruyenTranh :
             }
             response
         }
+        .rateLimit(3)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

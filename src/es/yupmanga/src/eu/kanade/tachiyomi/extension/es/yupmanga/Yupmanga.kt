@@ -58,8 +58,8 @@ class Yupmanga : HttpSource() {
     }
 
     override val client = network.client.newBuilder()
-        .rateLimit(1)
         .addInterceptor(tokenInterceptor)
+        .rateLimit(1)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

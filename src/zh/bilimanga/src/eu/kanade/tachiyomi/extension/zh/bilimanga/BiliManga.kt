@@ -21,6 +21,7 @@ import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class BiliManga :
     HttpSource(),
@@ -40,10 +41,13 @@ class BiliManga :
         preferencesInternal(screen.context, pref).forEach(screen::addPreference)
     }
 
-    override val client = super.client.newBuilder().also {
-        val split = pref.getString(PREF_RATE_LIMIT, "10/10")!!.split("/")
-        it.rateLimit(split[0].toInt(), split[1].toLong())
-    }.addNetworkInterceptor(MangaInterceptor()).build()
+    override val client = super.client.newBuilder()
+        .addNetworkInterceptor(MangaInterceptor())
+        .also {
+            val split = pref.getString(PREF_RATE_LIMIT, "10/10")!!.split("/")
+            it.rateLimit(split[0].toInt(), split[1].toInt().seconds)
+        }
+        .build()
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/").add("Accept-Language", "zh").add("Accept", "*/*")
 

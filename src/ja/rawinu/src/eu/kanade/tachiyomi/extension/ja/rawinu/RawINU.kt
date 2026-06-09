@@ -24,9 +24,9 @@ class RawINU :
         "ja",
     ) {
     override val client = super.client.newBuilder()
-        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
         .addInterceptor(::ddosChallengeInterceptor)
         .addNetworkInterceptor(CookieInterceptor(DOMAIN, "smartlink_shown" to "1"))
+        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     private val patternDdosKey = """'([a-f0-9]{32})'""".toRegex()
