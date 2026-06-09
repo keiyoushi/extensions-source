@@ -23,12 +23,14 @@ import kotlin.time.Duration.Companion.seconds
 // Unfortunately we can’t just download and use your Zip downloads.
 // Shall problems arise, we’ll reduce the rate limit.
 class DarthsDroids : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val name = "Darths & Droids"
     override val baseUrl = "https://www.darthsanddroids.net"
     override val lang = "en"
     override val supportsLatest = false
     override val client = network.client.newBuilder()
-        .rateLimit(10, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(10, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     // Picks a thumbnail from the profile pictures of the »cast« pages:

@@ -10,10 +10,11 @@ class TraduccionesMoonlight :
         "https://traduccionesmoonlight.com",
         "es",
     ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val versionId = 3
 
     override val client = super.client.newBuilder()
-        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 }

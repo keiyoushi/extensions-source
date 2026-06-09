@@ -22,6 +22,8 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 
 class Manhwalike : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val name = "Manhwalike"
 
     override val baseUrl = "https://manhwalike.com"
@@ -31,7 +33,7 @@ class Manhwalike : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

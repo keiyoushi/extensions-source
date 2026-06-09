@@ -21,6 +21,7 @@ import okhttp3.Response
 import kotlin.time.Duration.Companion.seconds
 
 class ShadowManga : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "Shadow Manga"
     override val baseUrl = "https://shademanga.com"
@@ -37,8 +38,8 @@ class ShadowManga : HttpSource() {
     private val fallbackPrefix = "/api/media/"
 
     override val client = network.client.newBuilder()
-        .addInterceptor(ImageFallbackInterceptor(cdnHosts, baseUrl.toHttpUrl().host, fallbackPrefix))
-        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .addInterceptor(ImageFallbackInterceptor(cdnHosts, baseUrlHost, fallbackPrefix))
+        .rateLimit(3, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

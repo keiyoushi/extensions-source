@@ -31,6 +31,8 @@ import kotlin.time.Duration.Companion.seconds
 class OlympusScanlation :
     HttpSource(),
     ConfigurableSource {
+    private val fetchedDomainUrlHost by lazy { fetchedDomainUrl.toHttpUrl().host }
+    private val apiBaseUrlHost by lazy { apiBaseUrl.toHttpUrl().host }
 
     override val versionId = 3
     private val isCi = System.getenv("CI") == "true"
@@ -81,8 +83,8 @@ class OlympusScanlation :
 
     override val client by lazy {
         val client = network.client.newBuilder()
-            .rateLimit(1, 2.seconds) { it.host == fetchedDomainUrl.toHttpUrl().host }
-            .rateLimit(2, 1.seconds) { it.host == apiBaseUrl.toHttpUrl().host }
+            .rateLimit(1, 2.seconds) { it.host == fetchedDomainUrlHost }
+            .rateLimit(2, 1.seconds) { it.host == apiBaseUrlHost }
             .build()
 
         return@lazy client

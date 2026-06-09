@@ -24,6 +24,7 @@ import kotlin.time.Duration.Companion.seconds
 class MangaLivre :
     HttpSource(),
     ConfigurableSource {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name: String = "Manga Livre"
 
@@ -36,7 +37,7 @@ class MangaLivre :
     override val versionId: Int = 2
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(2, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(2, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     private val apiUrl: String = "$baseUrl/api"

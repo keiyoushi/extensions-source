@@ -22,6 +22,7 @@ import org.jsoup.nodes.Document
 import java.util.Calendar
 
 class RavenManga : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "RavenManga"
 
@@ -32,7 +33,7 @@ class RavenManga : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

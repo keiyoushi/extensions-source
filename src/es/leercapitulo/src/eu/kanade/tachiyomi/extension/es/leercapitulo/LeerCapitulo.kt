@@ -22,6 +22,8 @@ import java.nio.charset.Charset
 import kotlin.time.Duration.Companion.seconds
 
 class LeerCapitulo : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val name = "LeerCapitulo"
 
     override val lang = "es"
@@ -31,7 +33,7 @@ class LeerCapitulo : HttpSource() {
     override val baseUrl = "https://www.leercapitulo.co"
 
     override val client = network.client.newBuilder()
-        .rateLimit(1, 3.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(1, 3.seconds) { it.host == baseUrlHost }
         .build()
 
     private val notRateLimitClient = network.client

@@ -18,6 +18,7 @@ import rx.Observable
 import kotlin.time.Duration.Companion.seconds
 
 class Lmtos : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "Lmtos"
 
@@ -28,7 +29,7 @@ class Lmtos : HttpSource() {
     override val supportsLatest = true
 
     override val client = super.client.newBuilder()
-        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(3, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

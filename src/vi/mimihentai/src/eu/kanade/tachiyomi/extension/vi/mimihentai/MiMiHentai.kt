@@ -28,6 +28,7 @@ import java.util.Calendar
 import kotlin.time.Duration.Companion.minutes
 
 class MiMiHentai : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "MiMiHentai"
 
@@ -67,7 +68,7 @@ class MiMiHentai : HttpSource() {
             }
             response
         }
-        .rateLimit(14, 1.minutes) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(14, 1.minutes) { it.host == baseUrlHost }
         .build()
 
     // ============================== Popular ===============================

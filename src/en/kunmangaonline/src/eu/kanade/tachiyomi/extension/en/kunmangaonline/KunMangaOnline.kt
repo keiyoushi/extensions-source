@@ -26,9 +26,10 @@ class KunMangaOnline :
         "https://www.kunmanga.online",
         "en",
     ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val client = network.client.newBuilder()
-        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
     // Popular
@@ -112,7 +113,7 @@ class KunMangaOnline :
 
     private fun parseMangaCards(response: Response): MangasPage {
         val document = response.asJsoup()
-        val baseHost = baseUrl.toHttpUrl().host
+        val baseHost = baseUrlHost
 
         val mangas = document.select(".c-tabs-item__content, .page-item-detail").mapNotNull { element ->
             val titleEl = element.selectFirst(".post-title a, h3.h4 a") ?: return@mapNotNull null

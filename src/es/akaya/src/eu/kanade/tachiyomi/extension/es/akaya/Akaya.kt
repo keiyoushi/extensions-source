@@ -24,6 +24,7 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 class Akaya : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "AKAYA"
 
@@ -60,7 +61,7 @@ class Akaya : HttpSource() {
             }
             response
         }
-        .rateLimit(1, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(1, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     private fun getCsrftoken() {

@@ -15,6 +15,7 @@ class BokugenTranslation :
         "es",
         dateFormat = SimpleDateFormat("dd MMMM, yyyy", Locale("en")),
     ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val client: OkHttpClient = super.client.newBuilder()
         .addInterceptor { chain ->
@@ -25,7 +26,7 @@ class BokugenTranslation :
                 chain.proceed(request)
             }
         }
-        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(3, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     private val imageHeaders by lazy {

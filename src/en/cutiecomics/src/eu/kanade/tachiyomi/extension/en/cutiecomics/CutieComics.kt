@@ -19,6 +19,7 @@ import okhttp3.Response
 import rx.Observable
 
 class CutieComics : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "Cutie Comics"
 
@@ -29,7 +30,7 @@ class CutieComics : HttpSource() {
     override val supportsLatest = false
 
     override val client = network.client.newBuilder()
-        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
     // ============================== Popular ===============================
@@ -62,7 +63,7 @@ class CutieComics : HttpSource() {
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
+            if (url.host != baseUrlHost) {
                 throw Exception("Unsupported url")
             }
             val id = url.pathSegments.getOrNull(0)?.takeIf { it.isNotEmpty() }

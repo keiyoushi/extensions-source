@@ -23,11 +23,13 @@ abstract class LectorMoe(
     private val organizationDomain: String = baseUrl.substringAfterLast("/"),
     private val apiBaseUrl: String = "https://capibaratraductor.com",
 ) : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+    private val apiBaseUrlHost by lazy { apiBaseUrl.toHttpUrl().host }
 
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3) { it.host in setOf(baseUrl.toHttpUrl().host, apiBaseUrl.toHttpUrl().host) }
+        .rateLimit(3) { it.host == baseUrlHost || it.host == apiBaseUrlHost }
         .build()
 
     final override fun headersBuilder(): Headers.Builder = super.headersBuilder()

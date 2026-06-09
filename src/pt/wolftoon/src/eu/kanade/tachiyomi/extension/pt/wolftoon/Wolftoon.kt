@@ -26,6 +26,8 @@ import java.util.TimeZone
 import kotlin.time.Duration.Companion.seconds
 
 class Wolftoon : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+    private val supabaseUrlHost by lazy { supabaseUrl.toHttpUrl().host }
 
     override val name = "Wolftoon"
 
@@ -38,8 +40,8 @@ class Wolftoon : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .addNetworkInterceptor(CookieInterceptor(supabaseUrl.toHttpUrl().host, emptyList()))
-        .rateLimit(2, 1.seconds) { it.host in setOf(baseUrl.toHttpUrl().host, supabaseUrl.toHttpUrl().host) }
+        .addNetworkInterceptor(CookieInterceptor(supabaseUrlHost, emptyList()))
+        .rateLimit(2, 1.seconds) { it.host == baseUrlHost || it.host == supabaseUrlHost }
         .build()
 
     private val scriptUrl: String by lazy {

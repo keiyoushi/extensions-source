@@ -34,8 +34,10 @@ class MangasIn :
         supportsAdvancedSearch = false,
         dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
     ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val client = super.client.newBuilder()
-        .rateLimit(1, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(1, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

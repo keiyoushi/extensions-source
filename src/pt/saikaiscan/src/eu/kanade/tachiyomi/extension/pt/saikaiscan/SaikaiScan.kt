@@ -20,6 +20,8 @@ import uy.kohesive.injekt.injectLazy
 import kotlin.time.Duration.Companion.seconds
 
 class SaikaiScan : HttpSource() {
+    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
+    private val storageUrlHost by lazy { storageUrl.toHttpUrl().host }
 
     override val name = SOURCE_NAME
 
@@ -34,8 +36,8 @@ class SaikaiScan : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 2.seconds) { it.host == apiUrl.toHttpUrl().host }
-        .rateLimit(1, 1.seconds) { it.host == storageUrl.toHttpUrl().host }
+        .rateLimit(1, 2.seconds) { it.host == apiUrlHost }
+        .rateLimit(1, 1.seconds) { it.host == storageUrlHost }
         .build()
 
     private val json: Json by injectLazy()

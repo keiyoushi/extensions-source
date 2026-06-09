@@ -11,11 +11,13 @@ class MagusManga :
         "https://magustoon.org",
         "https://api.magustoon.org",
     ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     // Moved from Keyoapp to Iken
     override val versionId = 3
 
     override val client = network.client.newBuilder()
-        .rateLimit(1) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(1) { it.host == baseUrlHost }
         .build()
 
     override val sortPagesByFilename = true

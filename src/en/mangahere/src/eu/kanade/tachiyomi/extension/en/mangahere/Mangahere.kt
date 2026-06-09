@@ -24,6 +24,7 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 class Mangahere : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val id: Long = 2
 
@@ -50,7 +51,7 @@ class Mangahere : HttpSource() {
         .build()
 
     override val client: OkHttpClient = notRateLimitClient.newBuilder()
-        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
         .build()
 
     private val dateFormat = SimpleDateFormat("MMM dd,yyyy", Locale.ENGLISH)

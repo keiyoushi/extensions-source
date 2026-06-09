@@ -26,6 +26,8 @@ open class MCCMS(
     final override val lang: String = "zh",
     private val config: MCCMSConfig = MCCMSConfig(),
 ) : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val supportsLatest get() = true
 
     init {
@@ -43,7 +45,7 @@ open class MCCMS(
                 }
                 chain.proceed(request)
             }
-            .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
+            .rateLimit(2) { it.host == baseUrlHost }
             .build()
     }
 

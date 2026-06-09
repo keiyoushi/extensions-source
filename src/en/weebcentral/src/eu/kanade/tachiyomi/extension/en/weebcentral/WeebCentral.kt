@@ -23,6 +23,7 @@ import java.util.TimeZone
 import kotlin.time.Duration.Companion.seconds
 
 class WeebCentral : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "Weeb Central"
 
@@ -33,7 +34,7 @@ class WeebCentral : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -68,7 +69,7 @@ class WeebCentral : HttpSource() {
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
+            if (url.host != baseUrlHost) {
                 throw Exception("Unsupported url")
             }
             val pathSegments = url.pathSegments

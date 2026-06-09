@@ -19,6 +19,8 @@ import okhttp3.Response
 const val LATEST_LIMIT = 20
 
 class Doujinio : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val name = "Doujin.io - J18"
 
     override val baseUrl = "https://doujin.io"
@@ -28,7 +30,7 @@ class Doujinio : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
     // Latest

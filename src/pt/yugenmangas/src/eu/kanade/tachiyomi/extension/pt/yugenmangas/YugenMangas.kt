@@ -27,6 +27,7 @@ import java.util.Calendar
 class YugenMangas :
     HttpSource(),
     ConfigurableSource {
+    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
 
     override val name = "Yugen Mangás"
 
@@ -51,7 +52,7 @@ class YugenMangas :
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(2)
-        .rateLimit(2) { it.host == apiUrl.toHttpUrl().host }
+        .rateLimit(2) { it.host == apiUrlHost }
         .build()
 
     override val versionId = 2

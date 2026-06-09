@@ -38,6 +38,7 @@ import java.util.concurrent.TimeUnit
 class AllManga :
     HttpSource(),
     ConfigurableSource {
+    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
 
     override val name = "AllManga"
 
@@ -56,7 +57,7 @@ class AllManga :
     private val preferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
-        .rateLimit(1) { it.host == apiUrl.toHttpUrl().host }
+        .rateLimit(1) { it.host == apiUrlHost }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

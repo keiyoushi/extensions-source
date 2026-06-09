@@ -20,6 +20,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class FalcoScan : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     // Site change theme from Madara to custom theme
     override val versionId = 3
@@ -37,7 +38,7 @@ class FalcoScan : HttpSource() {
     private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
 
     override val client = network.client.newBuilder()
-        .rateLimit(3) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(3) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

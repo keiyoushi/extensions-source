@@ -38,6 +38,8 @@ import kotlin.text.matches
 class Desu :
     HttpSource(),
     ConfigurableSource {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val name = "Desu"
 
     override val id: Long = 6684416167758830305
@@ -75,7 +77,7 @@ class Desu :
 
     override val client: OkHttpClient =
         network.client.newBuilder()
-            .rateLimit(3) { it.host == baseUrl.toHttpUrl().host }
+            .rateLimit(3) { it.host == baseUrlHost }
             .build()
 
     private fun MangaDetDto.toSManga(genresStr: String? = "", authorsStr: String? = null): SManga {
@@ -265,7 +267,7 @@ class Desu :
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
+            if (url.host != baseUrlHost) {
                 throw Exception("Unsupported url")
             }
             val titleid = url.pathSegments[1]

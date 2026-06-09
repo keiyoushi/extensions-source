@@ -18,6 +18,7 @@ import org.jsoup.nodes.Element
 import rx.Observable
 
 class Kiutaku : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "Kiutaku"
 
@@ -31,7 +32,7 @@ class Kiutaku : HttpSource() {
 
     override val client by lazy {
         network.client.newBuilder()
-            .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
+            .rateLimit(2) { it.host == baseUrlHost }
             .build()
     }
 
@@ -61,7 +62,7 @@ class Kiutaku : HttpSource() {
     // =============================== Search ===============================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith("https://")) {
         val url = query.toHttpUrl()
-        if (url.host != baseUrl.toHttpUrl().host) {
+        if (url.host != baseUrlHost) {
             throw Exception("Unsupported url")
         }
         val id = url.pathSegments.first()

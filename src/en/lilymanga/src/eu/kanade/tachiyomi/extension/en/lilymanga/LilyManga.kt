@@ -14,8 +14,10 @@ class LilyManga :
         "en",
         dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.US),
     ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val client = super.client.newBuilder()
-        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
         .build()
 
     override val mangaSubString = "ys"

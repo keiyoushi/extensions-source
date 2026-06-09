@@ -24,6 +24,7 @@ import java.util.TimeZone
 import kotlin.time.Duration.Companion.seconds
 
 class Xiutaku : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "Xiutaku"
 
@@ -34,7 +35,7 @@ class Xiutaku : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimit(10, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(10, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

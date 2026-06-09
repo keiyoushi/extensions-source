@@ -13,9 +13,10 @@ class LectorAsteria :
         "https://lectorasteria.com",
         "es",
     ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val client = super.client.newBuilder()
-        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
     override fun pageListParse(response: Response): List<Page> {

@@ -23,13 +23,15 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 class BuonDua : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val baseUrl = "https://buondua.com"
     override val lang = "all"
     override val name = "Buon Dua"
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimit(10, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(10, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

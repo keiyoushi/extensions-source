@@ -23,10 +23,12 @@ class RawINU :
         "https://$DOMAIN",
         "ja",
     ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val client = super.client.newBuilder()
         .addInterceptor(::ddosChallengeInterceptor)
         .addNetworkInterceptor(CookieInterceptor(DOMAIN, "smartlink_shown" to "1"))
-        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
     private val patternDdosKey = """'([a-f0-9]{32})'""".toRegex()

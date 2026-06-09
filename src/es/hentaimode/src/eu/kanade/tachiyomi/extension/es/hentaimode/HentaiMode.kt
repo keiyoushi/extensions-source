@@ -19,6 +19,7 @@ import org.jsoup.nodes.Element
 import rx.Observable
 
 class HentaiMode : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "HentaiMode"
 
@@ -29,7 +30,7 @@ class HentaiMode : HttpSource() {
     override val supportsLatest = false
 
     override val client = network.client.newBuilder()
-        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -59,7 +60,7 @@ class HentaiMode : HttpSource() {
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
+            if (url.host != baseUrlHost) {
                 throw Exception("Unsupported url")
             }
             val item = url.pathSegments[1]

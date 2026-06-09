@@ -25,6 +25,8 @@ open class MCCMSWeb(
     final override val lang: String = "zh",
     protected val config: MCCMSConfig = MCCMSConfig(),
 ) : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val supportsLatest get() = true
 
     init {
@@ -40,7 +42,7 @@ open class MCCMSWeb(
                 }
                 response
             }
-            .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
+            .rateLimit(2) { it.host == baseUrlHost }
             .build()
     }
 

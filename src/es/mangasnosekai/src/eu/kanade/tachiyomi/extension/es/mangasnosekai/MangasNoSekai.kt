@@ -27,11 +27,12 @@ class MangasNoSekai :
         "es",
         SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
     ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override val client = super.client.newBuilder()
-        .rateLimit(2, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(2, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     override val useNewChapterEndpoint = true

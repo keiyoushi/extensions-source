@@ -24,6 +24,7 @@ import java.util.TimeZone
 import kotlin.time.Duration.Companion.seconds
 
 class LectorJpg : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val versionId = 3
 
@@ -38,7 +39,7 @@ class LectorJpg : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(3, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     class LimitedCache<K, V> : LinkedHashMap<K, V>() {

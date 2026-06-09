@@ -49,6 +49,8 @@ abstract class LibGroup(
     final override val lang: String,
 ) : HttpSource(),
     ConfigurableSource {
+    private val apiDomainHost by lazy { apiDomain.toHttpUrl().host }
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     private val json: Json = Json {
         ignoreUnknownKeys = true
@@ -87,7 +89,7 @@ abstract class LibGroup(
                 }
                 return@addInterceptor response
             }
-            .rateLimit(1) { it.host in setOf(apiDomain.toHttpUrl().host, baseUrl.toHttpUrl().host) }
+            .rateLimit(1) { it.host == apiDomainHost || it.host == baseUrlHost }
             .rateLimit(3)
             .build()
     }

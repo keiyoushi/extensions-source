@@ -18,6 +18,8 @@ import okhttp3.Response
 import kotlin.time.Duration.Companion.seconds
 
 class VoyceMe : HttpSource() {
+    private val graphqlurlHost by lazy { GRAPHQL_URL.toHttpUrl().host }
+    private val staticurlHost by lazy { STATIC_URL.toHttpUrl().host }
 
     // Renamed from "Voyce.Me" to "VoyceMe" as the site uses.
     override val id = 4815322300278778429
@@ -31,8 +33,8 @@ class VoyceMe : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 1.seconds) { it.host == GRAPHQL_URL.toHttpUrl().host }
-        .rateLimit(2, 1.seconds) { it.host == STATIC_URL.toHttpUrl().host }
+        .rateLimit(1, 1.seconds) { it.host == graphqlurlHost }
+        .rateLimit(2, 1.seconds) { it.host == staticurlHost }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

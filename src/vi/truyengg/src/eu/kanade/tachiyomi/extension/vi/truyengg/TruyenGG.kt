@@ -30,6 +30,7 @@ import kotlin.time.Duration.Companion.seconds
 class TruyenGG :
     HttpSource(),
     ConfigurableSource {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "FoxTruyen"
 
@@ -55,7 +56,7 @@ class TruyenGG :
     override val id: Long = 1458993267006200127
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", "$baseUrl/")

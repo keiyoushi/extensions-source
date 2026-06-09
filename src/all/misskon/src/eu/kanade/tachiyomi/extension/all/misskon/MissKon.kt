@@ -22,6 +22,7 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 class MissKon : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val baseUrl = "https://misskon.com"
     override val lang = "all"
@@ -29,7 +30,7 @@ class MissKon : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimit(10, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(10, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     private fun mangaFromElement(element: Element): SManga {

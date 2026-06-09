@@ -15,6 +15,8 @@ class CelestialMoon :
         "es",
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
     ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     // ZeistManga -> MangaThemesia
     override val versionId = 2
 
@@ -22,6 +24,6 @@ class CelestialMoon :
 
     override val client = super.client.newBuilder()
         .addNetworkInterceptor(cookieInterceptor)
-        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(3, 1.seconds) { it.host == baseUrlHost }
         .build()
 }

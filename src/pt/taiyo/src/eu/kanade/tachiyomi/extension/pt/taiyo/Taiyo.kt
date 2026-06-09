@@ -42,6 +42,8 @@ import java.util.Locale
 import java.util.TimeZone
 
 class Taiyo : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+    private val imgcdnHost by lazy { IMG_CDN.toHttpUrl().host }
 
     override val name = "Taiyō"
 
@@ -57,7 +59,7 @@ class Taiyo : HttpSource() {
 
     override val client = network.client.newBuilder()
         .addInterceptor(::authorizationInterceptor)
-        .rateLimit(2) { it.host in setOf(baseUrl.toHttpUrl().host, IMG_CDN.toHttpUrl().host) }
+        .rateLimit(2) { it.host == baseUrlHost || it.host == imgcdnHost }
         .build()
 
     // ============================== Popular ===============================
@@ -77,7 +79,7 @@ class Taiyo : HttpSource() {
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
+            if (url.host != baseUrlHost) {
                 throw Exception("Unsupported url")
             }
             val item = url.pathSegments[1]

@@ -34,6 +34,7 @@ class TempleScanEsp :
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
     ),
     ConfigurableSource {
+    private val fetchedDomainUrlHost by lazy { fetchedDomainUrl.toHttpUrl().host }
 
     override val baseUrl get() = preferences.prefBaseUrl
 
@@ -87,7 +88,7 @@ class TempleScanEsp :
 
     override val client by lazy {
         super.client.newBuilder()
-            .rateLimit(3, 1.seconds) { it.host == fetchedDomainUrl.toHttpUrl().host }
+            .rateLimit(3, 1.seconds) { it.host == fetchedDomainUrlHost }
             .build()
     }
 

@@ -15,6 +15,8 @@ class StrayFansub :
         "tr",
         dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
     ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 
@@ -31,6 +33,6 @@ class StrayFansub :
     }
 
     override val client = super.client.newBuilder()
-        .rateLimit(3) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(3) { it.host == baseUrlHost }
         .build()
 }

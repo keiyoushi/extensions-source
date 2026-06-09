@@ -24,6 +24,8 @@ import java.util.Calendar
 class Zenko :
     HttpSource(),
     ConfigurableSource {
+    private val apiurlHost by lazy { API_URL.toHttpUrl().host }
+
     override val name = "Zenko"
     override val baseUrl = "https://zenko.online"
     override val lang = "uk"
@@ -35,7 +37,7 @@ class Zenko :
         .add("Referer", "$baseUrl/")
 
     override val client = network.client.newBuilder()
-        .rateLimit(10) { it.host == API_URL.toHttpUrl().host }
+        .rateLimit(10) { it.host == apiurlHost }
         .build()
 
     // ============================== Popular ===============================

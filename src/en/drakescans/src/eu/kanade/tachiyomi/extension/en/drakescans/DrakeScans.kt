@@ -19,13 +19,15 @@ class DrakeScans :
         "en",
     ),
     ConfigurableSource {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     // madara -> mangathemesia
     override val versionId = 2
 
     private val preferences by getPreferencesLazy()
 
     override val client = super.client.newBuilder()
-        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(3, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     override fun imageRequest(page: Page): Request {

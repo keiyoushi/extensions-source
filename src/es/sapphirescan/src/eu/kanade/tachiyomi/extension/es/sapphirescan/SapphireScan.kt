@@ -14,8 +14,10 @@ class SapphireScan :
         "https://www.sapphirescan.com",
         "es",
     ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val client = super.client.newBuilder()
-        .rateLimit(3) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(3) { it.host == baseUrlHost }
         .build()
 
     // Madara -> ZeistManga migration

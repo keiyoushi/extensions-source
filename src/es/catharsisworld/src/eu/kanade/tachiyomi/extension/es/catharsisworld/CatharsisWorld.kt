@@ -24,6 +24,7 @@ class CatharsisWorld :
         SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
     ),
     ConfigurableSource {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val baseUrl get() = preferences.prefBaseUrl
 
@@ -35,7 +36,7 @@ class CatharsisWorld :
 
     override val client by lazy {
         super.client.newBuilder()
-            .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+            .rateLimit(3, 1.seconds) { it.host == baseUrlHost }
             .build()
     }
 

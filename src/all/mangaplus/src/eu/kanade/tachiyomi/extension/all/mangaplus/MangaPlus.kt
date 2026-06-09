@@ -36,6 +36,8 @@ class MangaPlus(
     private val langCode: Language,
 ) : HttpSource(),
     ConfigurableSource {
+    private val apiurlHost by lazy { API_URL.toHttpUrl().host }
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "MANGA Plus by SHUEISHA"
 
@@ -52,8 +54,8 @@ class MangaPlus(
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::imageIntercept)
         .addInterceptor(::thumbnailIntercept)
-        .rateLimit(1) { it.host == API_URL.toHttpUrl().host }
-        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(1) { it.host == apiurlHost }
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
     private val json: Json by injectLazy()

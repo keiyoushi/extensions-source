@@ -45,6 +45,7 @@ import javax.crypto.spec.SecretKeySpec
 class Mangago :
     HttpSource(),
     ConfigurableSource {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "Mangago"
 
@@ -79,7 +80,7 @@ class Mangago :
         .addNetworkInterceptor(
             CookieInterceptor(domain, "_m_superu" to "1"),
         )
-        .rateLimit(1) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(1) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().apply {

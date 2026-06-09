@@ -36,6 +36,8 @@ open class Webtoons(
     localeForCookie: String = lang,
 ) : HttpSource(),
     ConfigurableSource {
+    private val mobileUrlHost by lazy { mobileUrl.toHttpUrl().host }
+
     override val name = "Webtoons.com"
     override val baseUrl = "https://www.webtoons.com"
     private val mobileUrl = "https://m.webtoons.com"
@@ -68,7 +70,7 @@ open class Webtoons(
             }
         }
         .addInterceptor(TextInterceptor())
-        .rateLimit(1) { it.host == mobileUrl.toHttpUrl().host }
+        .rateLimit(1) { it.host == mobileUrlHost }
         .build()
 
     private val preferences by getPreferencesLazy()

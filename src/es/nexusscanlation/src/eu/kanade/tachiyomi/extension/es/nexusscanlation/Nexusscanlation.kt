@@ -20,6 +20,7 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 class Nexusscanlation : HttpSource() {
+    private val apiBaseUrlHost by lazy { apiBaseUrl.toHttpUrl().host }
 
     override val name = "NexusScanlation"
     override val baseUrl = "https://nexusscanlation.com"
@@ -31,7 +32,7 @@ class Nexusscanlation : HttpSource() {
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
-        .rateLimit(1, 3.seconds) { it.host == apiBaseUrl.toHttpUrl().host } // API: max 1 request per 3 seconds
+        .rateLimit(1, 3.seconds) { it.host == apiBaseUrlHost } // API: max 1 request per 3 seconds
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

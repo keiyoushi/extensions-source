@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
 class CodeArc : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "Code Arc Mangas"
     override val baseUrl = "https://mangas.codearctraducciones.com"
@@ -27,7 +28,7 @@ class CodeArc : HttpSource() {
     override val client = network.client.newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
-        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
         .rateLimit(1, 1.seconds) { it.host == "cdn.codearctraducciones.com" }
         .build()
 

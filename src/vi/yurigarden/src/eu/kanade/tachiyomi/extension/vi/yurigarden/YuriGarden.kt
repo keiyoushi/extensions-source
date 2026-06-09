@@ -42,6 +42,7 @@ import kotlin.time.Duration.Companion.minutes
 class YuriGarden :
     HttpSource(),
     ConfigurableSource {
+    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
 
     override val name = "YuriGarden"
 
@@ -55,7 +56,7 @@ class YuriGarden :
 
     private val baseHost = baseUrl.toHttpUrl().host
 
-    private val apiHost = apiUrl.toHttpUrl().host
+    private val apiHost = apiUrlHost
 
     private val cdnUrl = baseUrl.replace("://", "://cdn.")
 
@@ -89,7 +90,7 @@ class YuriGarden :
     override val client = network.client.newBuilder()
         .addInterceptor(loginRequiredInterceptor())
         .addInterceptor(ImageDescrambler())
-        .rateLimit(15, 1.minutes) { it.host == apiUrl.toHttpUrl().host }
+        .rateLimit(15, 1.minutes) { it.host == apiUrlHost }
         .build()
 
     private fun apiHeadersBuilder() = headersBuilder()

@@ -32,6 +32,7 @@ class MinoTruyen(
     private val category: String,
 ) : HttpSource(),
     ConfigurableSource {
+    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
 
     override val lang = "vi"
 
@@ -62,7 +63,7 @@ class MinoTruyen(
     override val client by lazy {
         network.client.newBuilder()
             .addInterceptor(MinoImageInterceptor())
-            .rateLimit(3) { it.host == apiUrl.toHttpUrl().host }
+            .rateLimit(3) { it.host == apiUrlHost }
             .build()
     }
 

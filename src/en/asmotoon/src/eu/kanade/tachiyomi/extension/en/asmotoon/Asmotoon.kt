@@ -14,10 +14,12 @@ class Asmotoon :
         "https://asmotoon.com",
         "en",
     ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val client = super
         .client
         .newBuilder()
-        .rateLimit(3, 5.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(3, 5.seconds) { it.host == baseUrlHost }
         .build()
 
     // filtering novel entries

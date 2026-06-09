@@ -18,6 +18,7 @@ import okhttp3.Response
 import rx.Observable
 
 class HentaiClub : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "绅士会所"
     override val baseUrl = "https://www.hentaiclub.net"
@@ -25,7 +26,7 @@ class HentaiClub : HttpSource() {
     override val supportsLatest = false
 
     override val client = network.client.newBuilder()
-        .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

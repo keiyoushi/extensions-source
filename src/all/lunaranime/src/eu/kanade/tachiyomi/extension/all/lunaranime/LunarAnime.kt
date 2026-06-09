@@ -19,6 +19,8 @@ import rx.Observable
 import java.security.MessageDigest
 
 class LunarAnime(override val lang: String, private val internalLang: String = lang) : HttpSource() {
+    private val apiurlHost by lazy { API_URL.toHttpUrl().host }
+    private val cdnurlHost by lazy { CDN_URL.toHttpUrl().host }
 
     override val name = "Lunar Manga"
 
@@ -39,7 +41,7 @@ class LunarAnime(override val lang: String, private val internalLang: String = l
                 chain.proceed(request)
             }
         }
-        .rateLimit(2) { it.host in setOf(API_URL.toHttpUrl().host, CDN_URL.toHttpUrl().host) }
+        .rateLimit(2) { it.host == apiurlHost || it.host == cdnurlHost }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

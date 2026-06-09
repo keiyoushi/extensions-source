@@ -42,6 +42,7 @@ class Comick(
     private val siteLang: String = lang,
 ) : HttpSource(),
     ConfigurableSource {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "Comick (Unoriginal)"
 
@@ -71,7 +72,7 @@ class Comick(
             val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
             if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
         }
-        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
         .build()
 
     override fun popularMangaRequest(page: Int): Request {
