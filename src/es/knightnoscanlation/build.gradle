@@ -3,7 +3,7 @@ ext {
     extClass = '.KnightNoScanlation'
     themePkg = 'madara'
     baseUrl = 'https://lectorknight.com'
-    overrideVersionCode = 7
+    overrideVersionCode = 8
     isNsfw = true
 }
 

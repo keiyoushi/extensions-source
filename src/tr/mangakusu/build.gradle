@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaKusu'
     themePkg = 'mangathemesia'
     baseUrl = 'https://mangakusu.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 

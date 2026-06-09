@@ -3,7 +3,7 @@ ext {
     extClass = '.HadesScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://hadesscans.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 

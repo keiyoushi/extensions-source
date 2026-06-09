@@ -12,7 +12,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -21,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.lib.cryptoaes.CryptoAES
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -37,10 +37,12 @@ import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
 
 class YuriGarden :
     HttpSource(),
     ConfigurableSource {
+    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
 
     override val name = "YuriGarden"
 
@@ -54,7 +56,7 @@ class YuriGarden :
 
     private val baseHost = baseUrl.toHttpUrl().host
 
-    private val apiHost = apiUrl.toHttpUrl().host
+    private val apiHost = apiUrlHost
 
     private val cdnUrl = baseUrl.replace("://", "://cdn.")
 
@@ -88,7 +90,7 @@ class YuriGarden :
     override val client = network.client.newBuilder()
         .addInterceptor(loginRequiredInterceptor())
         .addInterceptor(ImageDescrambler())
-        .rateLimitHost(apiUrl.toHttpUrl(), 15, 1, TimeUnit.MINUTES)
+        .rateLimit(15, 1.minutes) { it.host == apiUrlHost }
         .build()
 
     private fun apiHeadersBuilder() = headersBuilder()

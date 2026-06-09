@@ -1,7 +1,7 @@
 ext {
     extName = 'Webcomics'
     extClass = '.Webcomics'
-    extVersionCode = 9
+    extVersionCode = 10
 }
 
 apply plugin: "kei.plugins.extension.legacy"

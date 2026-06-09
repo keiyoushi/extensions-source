@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.es.akaya
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -21,8 +21,10 @@ import okhttp3.Response
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class Akaya : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "AKAYA"
 
@@ -36,7 +38,6 @@ class Akaya : HttpSource() {
     private var csrfToken: String = ""
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
         .addInterceptor { chain ->
             val request = chain.request()
             if (!request.url.toString().startsWith("$baseUrl/serie")) return@addInterceptor chain.proceed(request)
@@ -60,6 +61,7 @@ class Akaya : HttpSource() {
             }
             response
         }
+        .rateLimit(1, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     private fun getCsrftoken() {

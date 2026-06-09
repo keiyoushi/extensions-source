@@ -5,7 +5,6 @@ import android.util.Base64
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.lib.cryptoaes.CryptoAES
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -32,6 +32,7 @@ class MinoTruyen(
     private val category: String,
 ) : HttpSource(),
     ConfigurableSource {
+    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
 
     override val lang = "vi"
 
@@ -61,8 +62,8 @@ class MinoTruyen(
 
     override val client by lazy {
         network.client.newBuilder()
-            .rateLimitHost(apiUrl.toHttpUrl(), 3)
             .addInterceptor(MinoImageInterceptor())
+            .rateLimit(3) { it.host == apiUrlHost }
             .build()
     }
 

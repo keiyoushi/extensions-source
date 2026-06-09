@@ -3,7 +3,7 @@ ext {
     extClass = '.CulturedWorks'
     themePkg = 'mangathemesia'
     baseUrl = 'https://culturedworks.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.mundohentai
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,13 +10,14 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class MundoHentai : HttpSource() {
 
@@ -32,7 +32,7 @@ class MundoHentai : HttpSource() {
     override val versionId: Int = 2
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(1, 2.seconds)
         .build()
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()

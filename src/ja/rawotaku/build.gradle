@@ -3,7 +3,7 @@ ext {
     extClass = '.RawOtaku'
     themePkg = 'mangareader'
     baseUrl = 'https://rawotaku.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

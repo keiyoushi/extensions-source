@@ -3,7 +3,7 @@ ext {
     extClass = '.OtaScans'
     themePkg = 'madara'
     baseUrl = 'https://yurilabs.my.id'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 

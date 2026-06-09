@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.en.kunmangaonline
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -26,9 +26,10 @@ class KunMangaOnline :
         "https://www.kunmanga.online",
         "en",
     ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
     // Popular
@@ -112,7 +113,7 @@ class KunMangaOnline :
 
     private fun parseMangaCards(response: Response): MangasPage {
         val document = response.asJsoup()
-        val baseHost = baseUrl.toHttpUrl().host
+        val baseHost = baseUrlHost
 
         val mangas = document.select(".c-tabs-item__content, .page-item-detail").mapNotNull { element ->
             val titleEl = element.selectFirst(".post-title a, h3.h4 a") ?: return@mapNotNull null

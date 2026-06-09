@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.zh.mangabz
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.unpacker.SubstringExtractor
 import keiyoushi.lib.unpacker.Unpacker
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -44,8 +44,8 @@ class Mangabz :
 
         val cookieInterceptor = CookieInterceptor(mirror.domain, mirror.langCookie to preferences.lang)
         client = network.client.newBuilder()
-            .rateLimit(5)
             .addNetworkInterceptor(cookieInterceptor)
+            .rateLimit(5)
             .build()
     }
 

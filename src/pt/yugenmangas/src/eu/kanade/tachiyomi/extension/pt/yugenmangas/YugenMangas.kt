@@ -4,8 +4,6 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.randomua.addRandomUAPreference
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -28,6 +27,7 @@ import java.util.Calendar
 class YugenMangas :
     HttpSource(),
     ConfigurableSource {
+    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
 
     override val name = "Yugen Mangás"
 
@@ -52,7 +52,7 @@ class YugenMangas :
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(2)
-        .rateLimitHost(apiUrl.toHttpUrl(), 2)
+        .rateLimit(2) { it.host == apiUrlHost }
         .build()
 
     override val versionId = 2

@@ -5,7 +5,6 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -15,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -45,22 +45,25 @@ abstract class GroupLe(
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.client.newBuilder().rateLimit(2).addNetworkInterceptor { chain ->
-        val originalRequest = chain.request()
-        val response = chain.proceed(originalRequest)
-        if (originalRequest.url.toString().contains(baseUrl) && (
-                originalRequest.url.toString().contains("internal/redirect") || response.code == 301
+    override val client: OkHttpClient = network.client.newBuilder()
+        .addNetworkInterceptor { chain ->
+            val originalRequest = chain.request()
+            val response = chain.proceed(originalRequest)
+            if (originalRequest.url.toString().contains(baseUrl) && (
+                    originalRequest.url.toString().contains("internal/redirect") || response.code == 301
+                    )
+            ) {
+                if (originalRequest.url.toString().contains("/list?")) {
+                    throw IOException("Смените домен: Поисковик > Расширения > $name > ⚙\uFE0F")
+                }
+                throw IOException(
+                    "URL серии изменился. Перенесите/мигрируйте с $name на $name (или смежный с GroupLe), чтобы список глав обновился",
                 )
-        ) {
-            if (originalRequest.url.toString().contains("/list?")) {
-                throw IOException("Смените домен: Поисковик > Расширения > $name > ⚙\uFE0F")
             }
-            throw IOException(
-                "URL серии изменился. Перенесите/мигрируйте с $name на $name (или смежный с GroupLe), чтобы список глав обновился",
-            )
+            response
         }
-        response
-    }.build()
+        .rateLimit(2)
+        .build()
 
     private val uagent = preferences.getString(UAGENT_TITLE, UAGENT_DEFAULT)!!
 

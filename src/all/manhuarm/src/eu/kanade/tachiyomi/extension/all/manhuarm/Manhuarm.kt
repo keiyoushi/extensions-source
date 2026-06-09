@@ -19,13 +19,13 @@ import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.TranslatorEng
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.lib.i18n.Intl.Companion.createDefaultMessageFileName
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
@@ -43,6 +43,7 @@ import org.jsoup.nodes.Element
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 @RequiresApi(Build.VERSION_CODES.O)
 class Manhuarm(
@@ -139,18 +140,18 @@ class Manhuarm(
         get() {
             if (field == null || isSettingsChanged) {
                 warmupInterceptor.reset()
-                field = clientBuilder().build()
+                field = clientBuilder()
             }
             return field
         }
 
     private val clientUtils = network.client.newBuilder()
-        .rateLimit(3, 2, TimeUnit.SECONDS)
+        .rateLimit(3, 2.seconds)
         .build()
 
     private lateinit var translator: TranslatorEngine
 
-    private fun clientBuilder(): OkHttpClient.Builder {
+    private fun clientBuilder(): OkHttpClient {
         translator = when (provider) {
             "Google" -> GoogleTranslator(clientUtils, headers)
             else -> BingTranslator(clientUtils, headers)
@@ -159,7 +160,6 @@ class Manhuarm(
         return network.client.newBuilder()
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(2, TimeUnit.MINUTES)
-            .rateLimit(2, 1)
             // Fix disk cache / decompression issues
             .apply {
                 val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
@@ -171,6 +171,8 @@ class Manhuarm(
                 TranslationInterceptor(settings, translator),
             )
             .addInterceptor(ComposedImageInterceptor(settings))
+            .rateLimit(2, 1.seconds)
+            .build()
     }
 
     override fun headersBuilder(): Headers.Builder {
