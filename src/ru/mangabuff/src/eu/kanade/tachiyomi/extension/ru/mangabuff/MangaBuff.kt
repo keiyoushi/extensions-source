@@ -22,11 +22,11 @@ import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import rx.Observable
-import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -39,7 +39,7 @@ class MangaBuff : HttpSource() {
 
     override val client = network.client.newBuilder()
         .addInterceptor(::tokenInterceptor)
-        .addInterceptor(::gifToJpegInterceptor)
+        .addInterceptor(::gifToWebpInterceptor)
         .build()
 
     // From Akuma - CSRF token
@@ -74,7 +74,7 @@ class MangaBuff : HttpSource() {
         return chain.proceed(request)
     }
 
-    private fun gifToJpegInterceptor(chain: Interceptor.Chain): Response {
+    private fun gifToWebpInterceptor(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
         val isGif = response.body.contentType()?.subtype?.lowercase() == "gif" ||
             response.request.url.pathSegments.lastOrNull()?.endsWith(".gif", ignoreCase = true) == true
@@ -88,11 +88,11 @@ class MangaBuff : HttpSource() {
         val bitmap = BitmapFactory.decodeByteArray(originalBytes, 0, originalBytes.size)
             ?: return response
 
-        val outputStream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream)
+        val buffer = Buffer()
+        bitmap.compress(Bitmap.CompressFormat.WEBP, 90, buffer.outputStream())
         bitmap.recycle()
 
-        val newBody = outputStream.toByteArray().toResponseBody("image/jpeg".toMediaType())
+        val newBody = buffer.asResponseBody(WEBP_MEDIA_TYPE, buffer.size)
         return response.newBuilder()
             .body(newBody)
             .build()
@@ -363,5 +363,6 @@ class MangaBuff : HttpSource() {
     companion object {
         const val SEARCH_PREFIX = "slug:"
         private val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.ROOT)
+        private val WEBP_MEDIA_TYPE = "image/webp".toMediaType()
     }
 }
