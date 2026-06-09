@@ -41,7 +41,7 @@ class FlameComics : HttpSource() {
     override val client = network.client.newBuilder()
         .addInterceptor(::buildIdOutdatedInterceptor)
         .addInterceptor(::composedImageIntercept)
-        .rateLimit(2, 2.seconds)
+        .rateLimit(2, 2.seconds) { it.fragment != THUMBNAIL_FRAGMENT }
         .build()
 
     private val removeSpecialCharsRegex = Regex("[^A-Za-z0-9 ]")
@@ -58,6 +58,7 @@ class FlameComics : HttpSource() {
         addPathSegment(seriesData.series_id.toString())
         addPathSegment(seriesData.cover)
         addQueryParameter(seriesData.last_edit.toString(), null)
+        fragment(THUMBNAIL_FRAGMENT)
     }.build().toString()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(
@@ -362,5 +363,6 @@ class FlameComics : HttpSource() {
     companion object {
         private const val COMPOSED_SUFFIX = "?comp"
         private val MEDIA_TYPE = "image/png".toMediaType()
+        private const val THUMBNAIL_FRAGMENT = "thumbnail"
     }
 }
