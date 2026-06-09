@@ -3,7 +3,7 @@ ext {
     extClass = '.KaynScans'
     themePkg = 'iken'
     baseUrl = 'https://kaynscan.org'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = false
 }
 
