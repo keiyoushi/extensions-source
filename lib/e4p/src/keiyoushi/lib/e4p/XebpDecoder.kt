@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.jnovel
+package keiyoushi.lib.e4p
 
 import android.graphics.Bitmap
 import android.graphics.Bitmap.createBitmap

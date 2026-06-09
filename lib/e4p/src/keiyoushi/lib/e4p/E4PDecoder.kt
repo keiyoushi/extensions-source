@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.jnovel
+package keiyoushi.lib.e4p
 
 import android.util.Base64
 import keiyoushi.utils.decodeProto
@@ -12,7 +12,7 @@ import java.util.zip.Inflater
 
 class DecodedManifest(val pub: ProtoPub, val pbexSeed: ByteArray?)
 
-class Decoder {
+class E4PDecoder {
     fun decodeManifestFull(ticket: E4PQSTicket): DecodedManifest {
         val wrapper = when (ticket.type) {
             TicketType.TDRM_V1 -> unwrapTdrmV1(ticket)
