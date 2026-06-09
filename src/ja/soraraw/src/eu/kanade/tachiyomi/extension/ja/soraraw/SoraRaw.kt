@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -53,6 +54,18 @@ class SoraRaw : HttpSource() {
 
     private val pageApiUrl = "https://api.mangarawgo.site"
 
+    private fun <T> withBuildId(observableFactory: () -> Observable<T>): Observable<T> {
+        if (buildId.isNotBlank()) return observableFactory()
+
+        return client.newCall(GET("$baseUrl/", headers)).asObservableSuccess()
+            .flatMap { response ->
+                response.use {
+                    buildId = fetchBuildId(it.asJsoup())
+                }
+                observableFactory()
+            }
+    }
+
     // ============================ Database Builder ============================
 
     private var genreMap: Map<String, String>? = null
@@ -62,32 +75,19 @@ class SoraRaw : HttpSource() {
 
         try {
             val request = GET("$baseUrl/genres.json", headers)
-            val response = client.newCall(request).execute()
-            if (response.isSuccessful) {
-                val jsonStr = response.body.string()
-                val map = mutableMapOf<String, String>()
-                val element = jsonInstance.parseToJsonElement(jsonStr)
-                if (element is kotlinx.serialization.json.JsonArray) {
-                    for (item in element) {
-                        if (item is JsonObject) {
-                            val id = item["id"]?.jsonPrimitive?.content ?: item["value"]?.jsonPrimitive?.content
-                            val name = item["name"]?.jsonPrimitive?.content ?: item["label"]?.jsonPrimitive?.content
-                            if (id != null && name != null) {
-                                map[id] = name
-                            }
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val map = response.parseAs<List<GenreItemDto>>()
+                        .mapNotNull { genre ->
+                            val id = genre.id ?: genre.value ?: return@mapNotNull null
+                            val name = genre.name ?: genre.label ?: return@mapNotNull null
+                            id.toString() to name
                         }
-                    }
-                } else if (element is JsonObject) {
-                    for ((key, value) in element) {
-                        if (value is JsonPrimitive) {
-                            map[key] = value.content
-                        } else if (value is JsonObject && value.containsKey("name")) {
-                            map[key] = value["name"]?.jsonPrimitive?.content ?: ""
-                        }
-                    }
+                        .toMap()
+
+                    genreMap = map
+                    return map
                 }
-                genreMap = map
-                return map
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -124,8 +124,7 @@ class SoraRaw : HttpSource() {
                     if (dto.list.isEmpty()) break
 
                     dto.list.forEach { manga ->
-                        val slug = manga.slug ?: return@forEach
-                        if (seenSlugs.add(slug)) {
+                        if (seenSlugs.add(manga.slug)) {
                             mangas.add(manga)
                         }
                     }
@@ -170,7 +169,7 @@ class SoraRaw : HttpSource() {
 
         var hasNextPage = false
 
-        fun extractMangas(node: kotlinx.serialization.json.JsonElement) {
+        fun extractMangas(node: JsonElement) {
             if (node is kotlinx.serialization.json.JsonArray) {
                 for (item in node) {
                     extractMangas(item)
@@ -190,7 +189,7 @@ class SoraRaw : HttpSource() {
 
                     mangas.add(
                         SManga.create().apply {
-                            url = "/manga/$slug"
+                            url = slug
                             title = name
 
                             val imgName = node["image"]?.jsonPrimitive?.content ?: node["img"]?.jsonPrimitive?.content
@@ -251,14 +250,10 @@ class SoraRaw : HttpSource() {
             }
     }
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = withBuildId {
         val path = if (page == 1) "newest.json" else "newest/page/$page.json?page=$page"
-        return client.newCall(GET("$baseUrl/", headers)).asObservableSuccess()
-            .flatMap { response ->
-                response.close()
-                val request = GET("$baseUrl/_next/data/$buildId/$path", headers)
-                client.newCall(request).asObservableSuccess().map { parseNextDataMangas(it) }
-            }
+        val request = GET("$baseUrl/_next/data/$buildId/$path", headers)
+        client.newCall(request).asObservableSuccess().map { parseNextDataMangas(it) }
     }
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
@@ -275,16 +270,14 @@ class SoraRaw : HttpSource() {
     ): Observable<MangasPage> {
         if (query.startsWith(SEARCH_PREFIX)) {
             val slug = query.substringAfter(SEARCH_PREFIX)
-            val request = mangaDetailsRequest(SManga.create().apply { url = "/manga/$slug" })
 
-            return client.newCall(GET("$baseUrl/", headers)).asObservableSuccess()
-                .flatMap { response ->
-                    response.close()
-                    client.newCall(request).asObservableSuccess().map { detailsResponse ->
-                        val details = mangaDetailsParse(detailsResponse)
-                        MangasPage(listOf(details), false)
-                    }
+            return withBuildId {
+                val request = mangaDetailsRequest(SManga.create().apply { url = slug })
+                client.newCall(request).asObservableSuccess().map { detailsResponse ->
+                    val details = mangaDetailsParse(detailsResponse)
+                    MangasPage(listOf(details), false)
                 }
+            }
         }
 
         return getSearchDatabaseObservable().map { list ->
@@ -314,7 +307,7 @@ class SoraRaw : HttpSource() {
     private fun MangaDto.matchesQuery(query: String): Boolean {
         if (query.isBlank()) return true
 
-        return name?.contains(query, ignoreCase = true) == true ||
+        return name.contains(query, ignoreCase = true) ||
             altNames?.contains(query, ignoreCase = true) == true ||
             author?.contains(query, ignoreCase = true) == true ||
             artist?.contains(query, ignoreCase = true) == true
@@ -351,7 +344,7 @@ class SoraRaw : HttpSource() {
         return true
     }
 
-    private fun kotlinx.serialization.json.JsonElement.matchesGenre(
+    private fun JsonElement.matchesGenre(
         genreId: String,
         genreName: String,
         gMap: Map<String, String>,
@@ -374,13 +367,11 @@ class SoraRaw : HttpSource() {
 
     // =========================== Manga Details ============================
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url.substringAfter("/manga/")}"
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(GET("$baseUrl/", headers)).asObservableSuccess()
-        .flatMap { response ->
-            response.close()
-            super.fetchMangaDetails(manga)
-        }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = withBuildId {
+        super.fetchMangaDetails(manga)
+    }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url.substringAfter("/manga/")
@@ -397,8 +388,8 @@ class SoraRaw : HttpSource() {
         val gMap = getGenreMap()
 
         return SManga.create().apply {
-            url = "/manga/${mangaDto.slug ?: ""}"
-            title = mangaDto.name ?: ""
+            url = mangaDto.slug
+            title = mangaDto.name
 
             var desc = ""
             if (mangaDto.rate != null && mangaDto.rate.jsonPrimitive.content != "null") {
@@ -468,11 +459,9 @@ class SoraRaw : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(GET("$baseUrl/", headers)).asObservableSuccess()
-        .flatMap { response ->
-            response.close()
-            super.fetchChapterList(manga)
-        }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = withBuildId {
+        super.fetchChapterList(manga)
+    }
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
@@ -482,7 +471,7 @@ class SoraRaw : HttpSource() {
         }
         val dto = response.parseAs<NextDataWrapperDto<MangaDetailsDto>>()
         val mangaDto = dto.pageProps.data.manga
-        val mangaSlug = mangaDto.slug.orEmpty()
+        val mangaSlug = mangaDto.slug
 
         return mangaDto.chapters.map { chapter ->
             SChapter.create().apply {
@@ -497,11 +486,9 @@ class SoraRaw : HttpSource() {
 
     // =============================== Pages ================================
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(GET("$baseUrl/", headers)).asObservableSuccess()
-        .flatMap { response ->
-            response.close()
-            super.fetchPageList(chapter)
-        }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = withBuildId {
+        super.fetchPageList(chapter)
+    }
 
     override fun pageListRequest(chapter: SChapter): Request {
         val path = chapter.url.removePrefix("/")
@@ -649,10 +636,10 @@ class SoraRaw : HttpSource() {
     private fun ChapterDto.orderText(): String? = (order as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 
     private fun PageDataDto.imageCandidates(chapter: ChapterDto): List<Pair<String?, String?>> = listOf(
-        chapter._b to b,
-        chapter._d to d,
-        chapter._p to p,
-        chapter._t to t,
+        chapter.bHost to b,
+        chapter.dHost to d,
+        chapter.pHost to p,
+        chapter.tHost to t,
     )
 
     private fun decryptImageUrl(
