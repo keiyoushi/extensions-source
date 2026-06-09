@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.divascans
 
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -11,15 +10,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
@@ -41,7 +38,8 @@ class DivaScans :
     override val baseUrl = "https://divascans.org"
     override val lang = "en"
     override val supportsLatest = true
-    private val preferences: SharedPreferences by lazy { getPreferences() }
+    private val preferences by getPreferencesLazy()
+
     private val json: Json by injectLazy()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -118,52 +116,49 @@ class DivaScans :
     private fun parseJsonMangaList(response: Response): MangasPage {
         val jsonString = response.body.string()
         val jsonElement = runCatching { json.parseToJsonElement(jsonString) }.getOrNull() ?: return MangasPage(emptyList(), false)
-        val jsonArray = findJsonArray(jsonElement) ?: return MangasPage(emptyList(), false)
+
+        val jsonArray = when (jsonElement) {
+            is JsonArray -> jsonElement
+            is JsonObject -> {
+                val keys = listOf("data", "series", "items", "results", "mangas")
+                keys.firstNotNullOfOrNull { key ->
+                    jsonElement[key] as? JsonArray
+                }
+            }
+            else -> null
+        } ?: return MangasPage(emptyList(), false)
 
         val savedGenres = preferences.getStringSet(GENRES_PREF_KEY, mutableSetOf())?.toMutableSet() ?: mutableSetOf()
         val savedTags = preferences.getStringSet(TAGS_PREF_KEY, mutableSetOf())?.toMutableSet() ?: mutableSetOf()
         var prefsChanged = false
 
-        val mangas = jsonArray.mapNotNull { item ->
-            val obj = item.jsonObject
+        val mangas = jsonArray.mapNotNull { itemElement ->
+            val item = runCatching { json.decodeFromJsonElement<MangaDto>(itemElement) }.getOrNull() ?: return@mapNotNull null
 
-            val genresArr = obj["genres"]?.jsonArray
+            val genresArr = item.genres
             if (genresArr != null) {
                 for (genreObj in genresArr) {
-                    val genreSlug = genreObj.jsonObject["genre"]?.jsonObject?.get("slug")?.jsonPrimitive?.contentOrNull
+                    val genreSlug = genreObj.genre?.slug
                     if (!genreSlug.isNullOrEmpty() && savedGenres.add(formatSlug(genreSlug))) prefsChanged = true
                 }
             }
 
-            val tagsArr = obj["tags"]?.jsonArray
+            val tagsArr = item.tags
             if (tagsArr != null) {
                 for (tagObj in tagsArr) {
-                    val tagSlug = tagObj.jsonObject["tag"]?.jsonObject?.get("slug")?.jsonPrimitive?.contentOrNull
-                        ?: tagObj.jsonObject["slug"]?.jsonPrimitive?.contentOrNull
+                    val tagSlug = tagObj.tag?.slug ?: tagObj.slug
                     if (!tagSlug.isNullOrEmpty() && savedTags.add(formatSlug(tagSlug))) prefsChanged = true
                 }
             }
 
-            val title = obj["title"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: obj["name"]?.jsonPrimitive?.contentOrNull ?: ""
-            val slug = obj["urlSlug"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: obj["slug"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: obj["id"]?.jsonPrimitive?.contentOrNull ?: ""
+            val title = item.title?.takeIf { it.isNotBlank() } ?: item.name ?: ""
+            val slug = item.urlSlug?.takeIf { it.isNotBlank() } ?: item.slug ?: ""
 
-            var cover = obj["coverImage"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: obj["thumbnail"]?.jsonPrimitive?.contentOrNull ?: ""
-
-            if (cover.isBlank() && obj.containsKey("cover")) {
-                val coverElement = obj["cover"]
-                cover = if (coverElement is JsonObject) {
-                    coverElement["url"]?.jsonPrimitive?.contentOrNull ?: ""
-                } else {
-                    coverElement?.jsonPrimitive?.contentOrNull ?: ""
-                }
-            }
+            val cover = item.coverImage?.takeIf { it.isNotBlank() } ?: item.thumbnail ?: ""
 
             if (title.isEmpty() || slug.isEmpty()) return@mapNotNull null
 
-            val type = obj["type"]?.jsonPrimitive?.contentOrNull?.lowercase()
-                ?: obj["category"]?.jsonPrimitive?.contentOrNull?.lowercase()
-                ?: "comic"
-
+            val type = item.type?.lowercase() ?: item.category?.lowercase() ?: "comic"
             val urlType = if (type.contains("novel")) "novel" else "comic"
 
             SManga.create().apply {
@@ -180,23 +175,28 @@ class DivaScans :
                 .apply()
         }
 
-        return MangasPage(mangas, mangas.size >= 10)
+        val hasNextPage = if (jsonElement is JsonObject) {
+            val meta = jsonElement["meta"]?.jsonObject
+            val pagination = meta?.get("pagination")?.jsonObject
+            val pageCount = pagination?.get("pageCount")?.jsonPrimitive?.intOrNull
+                ?: jsonElement["totalPages"]?.jsonPrimitive?.intOrNull
+
+            val currentPage = pagination?.get("page")?.jsonPrimitive?.intOrNull
+                ?: response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
+
+            if (pageCount != null) {
+                currentPage < pageCount
+            } else {
+                mangas.size >= 10
+            }
+        } else {
+            mangas.size >= 10
+        }
+
+        return MangasPage(mangas, hasNextPage)
     }
 
     private fun formatSlug(slug: String): String = slug.replace("-", " ").replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
-
-    private fun findJsonArray(element: JsonElement): JsonArray? {
-        if (element is JsonArray) return element
-        if (element is JsonObject) {
-            val keys = listOf("data", "series", "items", "results", "mangas")
-            for (key in keys) {
-                if (element.containsKey(key) && element[key] is JsonArray) {
-                    return element[key]?.jsonArray
-                }
-            }
-        }
-        return null
-    }
 
     private fun getHydratedDocument(html: String): Document {
         val doc = Jsoup.parse(html)
@@ -205,14 +205,15 @@ class DivaScans :
         val sb = StringBuilder()
 
         rscRegex.findAll(html).forEach { match ->
-            try {
+            runCatching {
                 // Use the proven raw-string unescaper method
                 val jsonPayload = """{"d": "${match.groupValues[1]}"}"""
-                val unescapedStr = json.parseToJsonElement(jsonPayload).jsonObject["d"]?.jsonPrimitive?.contentOrNull
+                val payload = json.decodeFromString<HydrationPayload>(jsonPayload)
+                val unescapedStr = payload.d
                 if (!unescapedStr.isNullOrEmpty()) {
                     sb.append(unescapedStr)
                 }
-            } catch (_: Exception) {}
+            }
         }
 
         if (sb.isNotEmpty()) {
@@ -236,18 +237,18 @@ class DivaScans :
         if (match != null) {
             runCatching {
                 val jsonStr = match.groupValues[1].replace("\\\"", "\"")
-                val mangaObj = json.parseToJsonElement(jsonStr).jsonObject
+                val item = json.decodeFromString<MangaDto>(jsonStr)
 
-                manga.title = mangaObj["title"]?.jsonPrimitive?.contentOrNull ?: ""
-                manga.thumbnail_url = cleanImageUrl(mangaObj["coverImage"]?.jsonPrimitive?.contentOrNull ?: "")
-                manga.description = mangaObj["description"]?.jsonPrimitive?.contentOrNull?.let {
+                manga.title = item.title ?: ""
+                manga.thumbnail_url = cleanImageUrl(item.coverImage ?: "")
+                manga.description = item.description?.let {
                     val descDoc = Jsoup.parseBodyFragment(it.replace("<br>", "[[n]]").replace("<p>", "[[n]]"))
                     descDoc.text().replace("[[n]]", "\n").trim()
                 }
-                manga.author = mangaObj["author"]?.jsonPrimitive?.contentOrNull
-                manga.artist = mangaObj["artist"]?.jsonPrimitive?.contentOrNull ?: manga.author
+                manga.author = item.author
+                manga.artist = item.artist ?: manga.author
 
-                val statusStr = mangaObj["status"]?.jsonPrimitive?.contentOrNull ?: ""
+                val statusStr = item.status ?: ""
                 manga.status = when {
                     statusStr.contains("Ongoing", true) -> SManga.ONGOING
                     statusStr.contains("Completed", true) -> SManga.COMPLETED
@@ -255,12 +256,12 @@ class DivaScans :
                     else -> SManga.UNKNOWN
                 }
 
-                val origin = mangaObj["origin"]?.jsonPrimitive?.contentOrNull?.let { formatSlug(it) }
-                val genresList = (mangaObj["genres"] ?: mangaObj["genre"])?.jsonArray?.mapNotNull {
-                    it.jsonObject["name"]?.jsonPrimitive?.contentOrNull ?: it.jsonObject["genre"]?.jsonObject?.get("name")?.jsonPrimitive?.contentOrNull
+                val origin = item.origin?.let { formatSlug(it) }
+                val genresList = item.genres?.mapNotNull {
+                    it.genre?.name
                 }
-                val tagsList = mangaObj["tags"]?.jsonArray?.mapNotNull {
-                    it.jsonObject["name"]?.jsonPrimitive?.contentOrNull ?: it.jsonObject["tag"]?.jsonObject?.get("name")?.jsonPrimitive?.contentOrNull
+                val tagsList = item.tags?.mapNotNull {
+                    it.tag?.name
                 }
 
                 manga.genre = listOfNotNull(origin).plus(genresList ?: emptyList()).plus(tagsList ?: emptyList()).joinToString()
@@ -329,27 +330,25 @@ class DivaScans :
         val fullContent = doc.body().html()
 
         // 1. Improved JSON extraction from HYDRATED content
-        val chaptersArrays = mutableListOf<JsonArray>()
+        val chaptersArrays = mutableListOf<List<ChapterDto>>()
         // Match both "chapters":[...] and \"chapters\":[...]
 
         chapterJsonRegex.findAll(fullContent).forEach { match ->
             runCatching {
-                val element = json.parseToJsonElement(match.groupValues[1])
-                if (element is JsonArray) chaptersArrays.add(element)
+                val element = json.decodeFromString<List<ChapterDto>>(match.groupValues[1])
+                chaptersArrays.add(element)
             }
         }
 
         val chaptersArray = chaptersArrays.maxByOrNull { it.size }
         if (!chaptersArray.isNullOrEmpty()) {
-            val chapters = chaptersArray.mapNotNull { element ->
-                val chap = element.jsonObject
-                val isLocked = (chap["isLocked"]?.jsonPrimitive?.booleanOrNull ?: false) ||
-                    (chap["coinPrice"]?.jsonPrimitive?.intOrNull ?: 0) > 0
-                val coinPrice = chap["coinPrice"]?.jsonPrimitive?.intOrNull ?: 0
+            val chapters = chaptersArray.mapNotNull { chap ->
+                val isLocked = (chap.isLocked ?: false) || (chap.coinPrice ?: 0) > 0
+                val coinPrice = chap.coinPrice ?: 0
 
                 if (isLocked && !showPaid) return@mapNotNull null
 
-                val numStr = chap["number"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                val numStr = chap.number?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
 
                 val type = response.request.url.pathSegments.let {
                     val rawType = if (it.size >= 2) it[it.size - 2] else "comic"
@@ -362,7 +361,7 @@ class DivaScans :
 
                     val prefix = if (isLocked) "\uD83D\uDD12 " else ""
                     val suffix = if (isLocked && coinPrice > 0) " ($coinPrice coins)" else ""
-                    val baseName = chap["title"]?.jsonPrimitive?.contentOrNull?.takeIf { it != "null" && it.isNotBlank() } ?: "Chapter $numStr"
+                    val baseName = chap.title?.takeIf { it != "null" && it.isNotBlank() } ?: "Chapter $numStr"
 
                     name = "$prefix$baseName$suffix"
                     chapter_number = numStr.toFloatOrNull() ?: 0f
