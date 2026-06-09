@@ -349,8 +349,9 @@ class Mangadotnet :
 
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.decodeRscAs<Data<MangaData>>().data
-
-        return data.mangaData.manga.toSManga(baseUrl)
+        val showLinks = preferences.getBoolean(SHOW_LINKS_PREF, true)
+        val showAltTitles = preferences.getBoolean(SHOW_ALT_TITLES_PREF, true)
+        return data.mangaData.manga.toSManga(baseUrl, showLinks, showAltTitles)
     }
 
     override val disableRelatedMangasBySearch = true
@@ -692,6 +693,22 @@ class Mangadotnet :
         }
         screen.addPreference(browseStatusPref)
 
+        val linksPref = SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_LINKS_PREF
+            title = "Show Tracker Links"
+            summary = "Display tracker and source links in description."
+            setDefaultValue(true)
+        }
+        screen.addPreference(linksPref)
+
+        val altTitlesPref = SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_ALT_TITLES_PREF
+            title = "Show Alternative Titles"
+            summary = "Display alternative titles in description."
+            setDefaultValue(true)
+        }
+        screen.addPreference(altTitlesPref)
+
         val chapterModePref = ListPreference(screen.context).apply {
             key = CHAPTER_MODE
             title = "Chapter List Mode"
@@ -824,3 +841,5 @@ private const val BROWSE_STATUS_PREF = "pref_browse_status"
 private const val DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
 private const val PREFERRED_SCANLATORS = "pref_preferred_scanlators"
 private const val EXCLUDE_DEMOGRAPHIC_PREF = "pref_exclude_demographic"
+private const val SHOW_LINKS_PREF = "pref_show_links"
+private const val SHOW_ALT_TITLES_PREF = "pref_show_alt_titles"
