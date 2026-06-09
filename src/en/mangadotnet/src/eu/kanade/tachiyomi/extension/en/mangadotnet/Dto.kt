@@ -133,8 +133,8 @@ class Manga(
     private val year: Int? = null,
     @SerialName("chapter_count")
     private val chapterCount: Int? = null,
-    @SerialName("view_count")
-    private val viewCount: Int? = null,
+    @SerialName("tracked_count")
+    private val trackedCount: Int? = null,
     @SerialName("rating_count")
     private val ratingCount: Int? = null,
     @SerialName("content_rating")
@@ -187,7 +187,7 @@ class Manga(
             val metaInfo = buildList {
                 year?.let { add("**Year:** $it") }
                 chapterCount?.let { add("**Chapters:** $it") }
-                viewCount?.let { add("**Views:** $it") }
+                trackedCount?.let { add("**Tracked:** $it") }
                 contentRating?.let {
                     add("**Content Rating:** ${it.replaceFirstChar { c -> c.uppercase() }}")
                 }
