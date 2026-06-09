@@ -31,22 +31,9 @@ class MangaDemon : HttpSource() {
     override val baseUrl = "https://demonicscans.org"
 
     override val client = network.client.newBuilder()
-        .addInterceptor(::thumbnailInterceptor)
+        .rateLimit(6) { it.toString().contains("images/thumbnails")  }
         .rateLimit(2)
         .build()
-
-    private val thumbnailClient = network.client.newBuilder()
-        .rateLimit(6)
-        .build()
-
-    private fun thumbnailInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        return if (request.url.toString().contains("images/thumbnails")) {
-            thumbnailClient.newCall(request).execute()
-        } else {
-            chain.proceed(request)
-        }
-    }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")

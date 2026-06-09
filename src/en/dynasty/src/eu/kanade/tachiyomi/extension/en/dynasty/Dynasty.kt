@@ -51,11 +51,8 @@ class Dynasty :
 
     override val client = network.client.newBuilder()
         .addInterceptor(::fetchCoverUrlInterceptor)
-        .addInterceptor(::coverInterceptor)
-        .rateLimit(1)
+        .rateLimit(1) { it.fragment != COVER_URL_FRAGMENT }
         .build()
-
-    private val coverClient = network.client
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -685,7 +682,7 @@ class Dynasty :
                     .head()
                     .build()
 
-                if (coverClient.newCall(request).execute().isSuccessful) {
+                if (client.newCall(request).execute().isSuccessful) {
                     return newUrl.toString()
                 }
             }
@@ -739,16 +736,6 @@ class Dynasty :
             .build()
 
         return chain.proceed(newRequest)
-    }
-
-    private fun coverInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-
-        return if (request.url.fragment == COVER_URL_FRAGMENT) {
-            coverClient.newCall(request).execute()
-        } else {
-            chain.proceed(request)
-        }
     }
 
     private fun String.permalinkToTitle(): String = split('_')

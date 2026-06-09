@@ -1,13 +1,16 @@
 import com.android.build.api.dsl.ApplicationDefaultConfig
 import com.android.build.api.dsl.CommonExtension
+import com.android.build.api.dsl.CompileOptions
 import com.android.build.api.dsl.DefaultConfig
 import com.android.build.api.dsl.LibraryDefaultConfig
 import keiyoushi.gradle.configurations.configureKotlin
 import keiyoushi.gradle.extensions.kei
+import keiyoushi.gradle.extensions.libs
 import keiyoushi.gradle.extensions.spotlessTaskName
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
+import org.gradle.kotlin.dsl.dependencies
 
 @Suppress("UNUSED")
 class PluginAndroidBase : Plugin<Project> {

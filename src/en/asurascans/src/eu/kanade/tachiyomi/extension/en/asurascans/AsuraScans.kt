@@ -90,7 +90,7 @@ class AsuraScans :
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addNetworkInterceptor(::scrambledImageInterceptor)
-        .rateLimit(2, 2.seconds)
+        .rateLimit(2, 2.seconds) { !it.encodedPath.contains("/covers/") }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

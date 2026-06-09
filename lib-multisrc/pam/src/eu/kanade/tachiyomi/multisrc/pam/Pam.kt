@@ -59,19 +59,9 @@ abstract class Pam(
     protected open val prefPremiumTitle = "Hide Premium chapters"
 
     override val client = network.client.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            if (request.url.fragment == THUMBNAIL_FRAGMENT) {
-                thumbnailClient.newCall(request).execute()
-            } else {
-                chain.proceed(request)
-            }
-        }
         .addInterceptor(::imageInterceptor)
-        .rateLimit(1, 2.seconds)
+        .rateLimit(1, 2.seconds) { it.fragment != THUMBNAIL_FRAGMENT }
         .build()
-
-    private val thumbnailClient = network.client
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Origin", "https://${baseHttpUrl.host}")
