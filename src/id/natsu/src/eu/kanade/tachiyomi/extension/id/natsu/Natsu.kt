@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.id.natsu
 
 import eu.kanade.tachiyomi.multisrc.natsuid.NatsuId
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 
 class Natsu :
@@ -10,5 +10,5 @@ class Natsu :
         "id",
         "https://natsu.tv",
     ) {
-    override fun OkHttpClient.Builder.customizeClient() = rateLimit(4)
+    override fun OkHttpClient.Builder.customizeClient() = rateLimit(4).build().newBuilder()
 }

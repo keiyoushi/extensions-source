@@ -4,7 +4,6 @@ import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.mmrcms.MMRCMS
 import eu.kanade.tachiyomi.multisrc.mmrcms.SuggestionDto
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.lib.synchrony.Deobfuscator
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -24,6 +24,7 @@ import org.jsoup.nodes.Document
 import java.net.URLDecoder
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class MangasIn :
     MMRCMS(
@@ -33,8 +34,10 @@ class MangasIn :
         supportsAdvancedSearch = false,
         dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
     ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
+        .rateLimit(1, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

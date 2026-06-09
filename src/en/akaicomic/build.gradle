@@ -1,7 +1,7 @@
 ext {
     extName = 'Akai Comic'
     extClass = '.AkaiComic'
-    extVersionCode = 2
+    extVersionCode = 3
     isNsfw = false
 }
 

@@ -3,7 +3,7 @@ ext {
     extClass = '.GistamisHouse'
     themePkg = 'zeistmanga'
     baseUrl = 'https://gistamishousefansub.blogspot.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 

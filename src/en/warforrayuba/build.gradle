@@ -1,7 +1,7 @@
 ext {
     extName = 'War For Rayuba'
     extClass = '.WarForRayuba'
-    extVersionCode = 2
+    extVersionCode = 3
 }
 
 apply plugin: "kei.plugins.extension.legacy"

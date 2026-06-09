@@ -2,13 +2,13 @@ package eu.kanade.tachiyomi.multisrc.mccms
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -26,6 +26,8 @@ open class MCCMS(
     final override val lang: String = "zh",
     private val config: MCCMSConfig = MCCMSConfig(),
 ) : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val supportsLatest get() = true
 
     init {
@@ -34,7 +36,6 @@ open class MCCMS(
 
     override val client by lazy {
         network.client.newBuilder()
-            .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .addInterceptor { chain ->
                 // for thumbnail requests
                 var request = chain.request()
@@ -44,6 +45,7 @@ open class MCCMS(
                 }
                 chain.proceed(request)
             }
+            .rateLimit(2) { it.host == baseUrlHost }
             .build()
     }
 

@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.lunaranime
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -19,6 +19,8 @@ import rx.Observable
 import java.security.MessageDigest
 
 class LunarAnime(override val lang: String, private val internalLang: String = lang) : HttpSource() {
+    private val apiurlHost by lazy { API_URL.toHttpUrl().host }
+    private val cdnurlHost by lazy { CDN_URL.toHttpUrl().host }
 
     override val name = "Lunar Manga"
 
@@ -27,8 +29,6 @@ class LunarAnime(override val lang: String, private val internalLang: String = l
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimitHost(API_URL.toHttpUrl(), 2)
-        .rateLimitHost(CDN_URL.toHttpUrl(), 2)
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()
@@ -41,6 +41,7 @@ class LunarAnime(override val lang: String, private val internalLang: String = l
                 chain.proceed(request)
             }
         }
+        .rateLimit(2) { it.host == apiurlHost || it.host == cdnurlHost }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

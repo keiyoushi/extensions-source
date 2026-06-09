@@ -2,7 +2,7 @@ ext {
     extName = 'Azuretoons'
     extClass = '.Azuretoons'
     baseUrl = 'https://azuretoons.com'
-    extVersionCode = 2
+    extVersionCode = 3
     isNsfw = true
 }
 

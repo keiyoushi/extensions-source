@@ -1,7 +1,7 @@
 ext {
     extName = 'Asura Scans'
     extClass = '.AsuraScans'
-    extVersionCode = 61
+    extVersionCode = 62
     isNsfw = false
 }
 

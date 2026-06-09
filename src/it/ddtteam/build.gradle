@@ -3,7 +3,7 @@ ext {
     extClass = '.DdtTeam'
     themePkg = 'pizzareader'
     baseUrl = 'https://ddt.hastateam.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 

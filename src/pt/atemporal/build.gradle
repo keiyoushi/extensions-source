@@ -3,7 +3,7 @@ ext {
     extClass = '.Atemporal'
     themePkg = 'mangathemesia'
     baseUrl = 'https://atemporal.cloud'
-    overrideVersionCode = 14
+    overrideVersionCode = 15
     isNsfw = false
 }
 

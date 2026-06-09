@@ -3,7 +3,7 @@ ext {
     extClass = '.HentaiSeason'
     themePkg = 'gattsu'
     baseUrl = 'https://hentaiseason.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

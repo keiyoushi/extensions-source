@@ -3,7 +3,7 @@ ext {
     extClass = '.KamiSamaExplorer'
     themePkg = 'madara'
     baseUrl = 'https://leitor.kamisama.com.br'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = false
 }
 

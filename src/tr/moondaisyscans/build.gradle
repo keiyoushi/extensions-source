@@ -3,7 +3,7 @@ ext {
     extClass = '.MoonDaisyScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://moondaisyscans.site'
-    overrideVersionCode = 4
+    overrideVersionCode = 5
     isNsfw = true
 }
 

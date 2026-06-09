@@ -1,7 +1,7 @@
 ext {
     extName = 'Nexus Toons'
     extClass = '.NexusToons'
-    extVersionCode = 61
+    extVersionCode = 62
     isNsfw = true
 }
 

@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.en.webcomics
 
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -14,6 +13,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -38,7 +38,6 @@ class Webcomics :
         .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
     override val client = network.client.newBuilder()
-        .rateLimit(3)
         .addInterceptor { chain ->
             val request = chain.request()
             if (request.isSearchRequest()) {
@@ -55,6 +54,7 @@ class Webcomics :
             }
             chain.proceed(request)
         }
+        .rateLimit(3)
         .build()
 
     private fun Request.isSearchRequest(): Boolean = url.pathSegments.contains("search") || url.pathSegments.count { segment -> segment == "All" } == 1

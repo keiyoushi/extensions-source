@@ -3,7 +3,7 @@ ext {
     extClass = '.StrayFansub'
     themePkg = 'madara'
     baseUrl = 'https://strayfansub.net'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = true
 }
 

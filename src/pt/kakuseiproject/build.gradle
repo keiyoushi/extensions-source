@@ -3,7 +3,7 @@ ext {
     extClass = '.KakuseiProject'
     themePkg = 'madara'
     baseUrl = 'https://kakuseiproject.org'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = false
 }
 

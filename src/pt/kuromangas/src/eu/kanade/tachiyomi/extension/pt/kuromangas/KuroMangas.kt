@@ -4,7 +4,6 @@ import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.buildJsonObject
@@ -48,7 +48,6 @@ class KuroMangas :
         val token = getToken()
         val cdnHost = cdnUrl.toHttpUrl().host
         network.client.newBuilder()
-            .rateLimit(2)
             .apply {
                 if (token.isNotEmpty()) {
                     addInterceptor { chain ->
@@ -63,6 +62,7 @@ class KuroMangas :
                     }
                 }
             }
+            .rateLimit(2)
             .build()
     }
 

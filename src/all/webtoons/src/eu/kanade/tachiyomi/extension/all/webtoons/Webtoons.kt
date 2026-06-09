@@ -4,7 +4,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,6 +15,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -36,6 +36,8 @@ open class Webtoons(
     localeForCookie: String = lang,
 ) : HttpSource(),
     ConfigurableSource {
+    private val mobileUrlHost by lazy { mobileUrl.toHttpUrl().host }
+
     override val name = "Webtoons.com"
     override val baseUrl = "https://www.webtoons.com"
     private val mobileUrl = "https://m.webtoons.com"
@@ -68,7 +70,7 @@ open class Webtoons(
             }
         }
         .addInterceptor(TextInterceptor())
-        .rateLimitHost(mobileUrl.toHttpUrl(), 1)
+        .rateLimit(1) { it.host == mobileUrlHost }
         .build()
 
     private val preferences by getPreferencesLazy()

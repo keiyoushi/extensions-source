@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.lectormoe
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -23,12 +23,13 @@ abstract class LectorMoe(
     private val organizationDomain: String = baseUrl.substringAfterLast("/"),
     private val apiBaseUrl: String = "https://capibaratraductor.com",
 ) : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+    private val apiBaseUrlHost by lazy { apiBaseUrl.toHttpUrl().host }
 
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 3)
-        .rateLimitHost(apiBaseUrl.toHttpUrl(), 3)
+        .rateLimit(3) { it.host == baseUrlHost || it.host == apiBaseUrlHost }
         .build()
 
     final override fun headersBuilder(): Headers.Builder = super.headersBuilder()
