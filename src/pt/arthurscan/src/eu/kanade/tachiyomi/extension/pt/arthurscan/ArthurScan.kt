@@ -7,7 +7,6 @@ import okhttp3.OkHttpClient
 import okhttp3.ResponseBody.Companion.asResponseBody
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
 class ArthurScan :

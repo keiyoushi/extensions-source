@@ -1,12 +1,11 @@
 package eu.kanade.tachiyomi.extension.es.celestialmoon
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import keiyoushi.network.rateLimit
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
 class CelestialMoon :

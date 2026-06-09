@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.extension.en.voyceme
 
 import eu.kanade.tachiyomi.network.GET
-import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.graphQLPost
 import keiyoushi.utils.parseGraphQLAs
 import okhttp3.Headers
@@ -15,7 +15,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
 class VoyceMe : HttpSource() {

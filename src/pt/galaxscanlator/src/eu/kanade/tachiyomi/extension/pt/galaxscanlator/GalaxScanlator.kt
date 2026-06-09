@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.pt.galaxscanlator
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import keiyoushi.network.rateLimit
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
 class GalaxScanlator :

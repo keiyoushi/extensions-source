@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.pt.hipercool
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
 class Hipercool : Madara("HipercooL", "https://hiper.cool", "pt-BR") {

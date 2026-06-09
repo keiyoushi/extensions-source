@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.asmotoon
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
-import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import java.util.Locale

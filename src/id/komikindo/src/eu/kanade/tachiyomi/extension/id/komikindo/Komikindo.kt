@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.extension.id.komikindo
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.nodes.Document
 

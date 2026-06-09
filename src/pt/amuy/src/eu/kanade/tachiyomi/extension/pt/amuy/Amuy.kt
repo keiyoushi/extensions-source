@@ -1,13 +1,12 @@
 package eu.kanade.tachiyomi.extension.pt.amuy
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
 class Amuy :

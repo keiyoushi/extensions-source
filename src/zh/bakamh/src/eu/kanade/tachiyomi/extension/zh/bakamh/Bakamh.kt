@@ -4,13 +4,13 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.zh.bakamh.Preferences.baseUrl
 import eu.kanade.tachiyomi.extension.zh.bakamh.Preferences.preferenceMigration
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.randomua.UserAgentType
 import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import okhttp3.Headers
 import okhttp3.Response

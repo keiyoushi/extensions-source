@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.extension.es.sapphirescan
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response

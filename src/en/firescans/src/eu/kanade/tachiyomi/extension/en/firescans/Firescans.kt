@@ -2,9 +2,9 @@ package eu.kanade.tachiyomi.extension.en.firescans
 
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.lib.cryptoaes.CryptoAES
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.decodeHex
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject

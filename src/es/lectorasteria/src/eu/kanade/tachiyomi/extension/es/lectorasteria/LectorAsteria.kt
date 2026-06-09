@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.extension.es.lectorasteria
 
 import eu.kanade.tachiyomi.multisrc.moonlighttl.MoonlightTL
-import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 

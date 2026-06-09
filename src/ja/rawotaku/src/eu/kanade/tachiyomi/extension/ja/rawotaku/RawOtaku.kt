@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.extension.ja.rawotaku
 
 import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader
-import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl
 
 class RawOtaku :

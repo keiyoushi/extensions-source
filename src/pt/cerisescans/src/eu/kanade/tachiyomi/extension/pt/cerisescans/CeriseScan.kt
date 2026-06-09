@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.pt.cerisescans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat

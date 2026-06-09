@@ -5,8 +5,8 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.fuzzydoodle.FuzzyDoodle
 import eu.kanade.tachiyomi.network.GET
-import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 
 class HentaiSlayer :

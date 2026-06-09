@@ -1,11 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.mangaforfree
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
 class MangaForFreeFactory : SourceFactory {

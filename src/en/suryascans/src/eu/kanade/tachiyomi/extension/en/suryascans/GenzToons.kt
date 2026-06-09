@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.suryascans
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
-import keiyoushi.network.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.network.rateLimit
 import java.util.concurrent.TimeUnit
 
 class GenzToons :

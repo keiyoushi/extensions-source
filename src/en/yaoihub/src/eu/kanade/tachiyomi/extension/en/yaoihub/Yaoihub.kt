@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.en.yaoihub
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
 class Yaoihub : Madara("Yaoihub", "https://yaoihub.net", "en") {
