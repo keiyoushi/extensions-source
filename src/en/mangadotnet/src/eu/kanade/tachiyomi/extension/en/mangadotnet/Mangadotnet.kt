@@ -349,6 +349,7 @@ class Mangadotnet :
 
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.decodeRscAs<Data<MangaData>>().data
+        
         return data.mangaData.manga.toSManga(baseUrl)
     }
 
