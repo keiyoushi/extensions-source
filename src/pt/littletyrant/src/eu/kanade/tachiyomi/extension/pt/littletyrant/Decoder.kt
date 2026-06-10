@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.littletyrant
 
+import android.util.Base64
 import org.jsoup.nodes.Document
-import java.util.Base64
 
 class Decoder {
     fun extractPaths(document: Document): List<String> {
@@ -15,7 +15,7 @@ class Decoder {
             .map { it.trim().trim('"').trim('\'') }
             .filter { it.isNotEmpty() }
             .map { base64 ->
-                Base64.getDecoder().decode(base64)
+                Base64.decode(base64, Base64.DEFAULT)
                     .toString(Charsets.UTF_8)
                     .trim()
             }
