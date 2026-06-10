@@ -18,7 +18,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class UniComics : HttpSource() {
 
@@ -31,8 +31,8 @@ class UniComics : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(10.seconds)
+        .readTimeout(30.seconds)
         .rateLimit(3)
         .build()
 

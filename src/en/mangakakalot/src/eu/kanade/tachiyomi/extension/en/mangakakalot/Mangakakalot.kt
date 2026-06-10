@@ -16,7 +16,6 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
 class Mangakakalot :
@@ -68,9 +67,9 @@ class Mangakakalot :
 
     override val client: OkHttpClient = super.client.newBuilder()
         .dispatcher(imageHeavyDispatcher)
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(30.seconds)
+        .readTimeout(60.seconds)
+        .writeTimeout(30.seconds)
         .rateLimit(2, 1.seconds)
         .build()
 

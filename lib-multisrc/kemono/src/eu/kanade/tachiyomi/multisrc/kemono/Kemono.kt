@@ -28,8 +28,8 @@ import uy.kohesive.injekt.api.get
 import java.io.File
 import java.lang.Thread.sleep
 import java.util.TimeZone
-import java.util.concurrent.TimeUnit
 import kotlin.math.min
+import kotlin.time.Duration.Companion.minutes
 
 open class Kemono(
     override val name: String,
@@ -62,7 +62,7 @@ open class Kemono(
         .build()
 
     private val creatorsClient = client.newBuilder()
-        .readTimeout(5, TimeUnit.MINUTES)
+        .readTimeout(5.minutes)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -149,7 +149,7 @@ open class Kemono(
             val request = GET(
                 "$baseUrl/$apiPath/creators",
                 headers,
-                CacheControl.Builder().maxStale(30, TimeUnit.MINUTES).build(),
+                CacheControl.Builder().maxStale(30.minutes).build(),
             )
             val response = creatorsClient.newCall(request).execute()
             if (!response.isSuccessful) {

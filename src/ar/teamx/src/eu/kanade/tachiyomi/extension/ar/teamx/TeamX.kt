@@ -21,7 +21,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
 class TeamX :
@@ -39,8 +38,8 @@ class TeamX :
 
     override val client = network.client
         .newBuilder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(15.seconds)
+        .readTimeout(30.seconds)
         .rateLimit(10, 1.seconds)
         .build()
 

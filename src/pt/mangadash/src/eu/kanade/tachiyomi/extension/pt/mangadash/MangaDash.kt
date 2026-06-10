@@ -40,7 +40,7 @@ import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
 
 @Suppress("unused")
 class MangaDash :
@@ -310,8 +310,8 @@ class MangaDash :
 
             // Create a specific client with a longer timeout to prevent OkHttp crashing on 30MB+ PDF downloads
             val pdfClient = client.newBuilder()
-                .readTimeout(3, TimeUnit.MINUTES)
-                .connectTimeout(1, TimeUnit.MINUTES)
+                .readTimeout(3.minutes)
+                .connectTimeout(1.minutes)
                 .build()
 
             val pdfHeaders = headersBuilder()

@@ -23,9 +23,9 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import java.util.concurrent.TimeUnit
 import kotlin.collections.map
 import kotlin.collections.plusAssign
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 class AnimeXNovel : HttpSource() {
@@ -41,8 +41,8 @@ class AnimeXNovel : HttpSource() {
     override val versionId: Int = 2
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .readTimeout(1, TimeUnit.MINUTES)
-        .callTimeout(1, TimeUnit.MINUTES)
+        .readTimeout(1.minutes)
+        .callTimeout(1.minutes)
         .rateLimit(3, 1.seconds)
         .build()
 

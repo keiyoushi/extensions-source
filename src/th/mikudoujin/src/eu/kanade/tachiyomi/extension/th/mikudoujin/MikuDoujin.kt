@@ -12,7 +12,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.net.URLEncoder
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
 
 class MikuDoujin : HttpSource() {
 
@@ -24,9 +24,9 @@ class MikuDoujin : HttpSource() {
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .connectTimeout(1, TimeUnit.MINUTES)
-        .readTimeout(1, TimeUnit.MINUTES)
-        .writeTimeout(1, TimeUnit.MINUTES)
+        .connectTimeout(1.minutes)
+        .readTimeout(1.minutes)
+        .writeTimeout(1.minutes)
         .build()
 
     // Popular

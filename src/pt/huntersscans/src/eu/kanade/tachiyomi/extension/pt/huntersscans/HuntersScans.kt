@@ -16,7 +16,7 @@ import rx.Observable
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
 
 class HuntersScans :
     Madara(
@@ -26,7 +26,7 @@ class HuntersScans :
         SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
     ) {
     override val client = super.client.newBuilder()
-        .readTimeout(1, TimeUnit.MINUTES)
+        .readTimeout(1.minutes)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
             if (response.request.url.pathSegments.any { segment -> listOf("logar", "registrar").any { it.equals(segment, true) } }) {
