@@ -551,7 +551,7 @@ import keiyoushi.utils.firstInstanceOrNull
 val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
 ```
 
-##### SharedPreferences - `getPreferences` / `getPreferencesLazy`
+**SharedPreferences - `getPreferences` / `getPreferencesLazy`**
 
 Use these instead of accessing `Injekt` manually.
 
