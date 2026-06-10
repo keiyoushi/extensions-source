@@ -87,7 +87,7 @@ jobs:
 
       - name: Upload APKs (${{ matrix.chunk.number }})
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: "github.repository == 'keiyoushi/extensions-source'"
+        if: "github.repository == 'theendlesswatch/extensions-source'"
         with:
           name: "individual-apks-${{ matrix.chunk.number }}"
           path: "**/*.apk"
@@ -99,7 +99,7 @@ jobs:
   publish:
     name: Publish extension repo
     needs: [prepare, build]
-    if: "github.repository == 'keiyoushi/extensions-source'"
+    if: "github.repository == 'theendlesswatch/extensions-source'"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -125,7 +125,7 @@ jobs:
         run: |
           cd main
           python ./.github/scripts/move-built-apks.py
-          INSPECTOR_LINK="$(curl -s "https://api.github.com/repos/keiyoushi/extensions-inspector/releases/latest" | jq -r '.assets[0].browser_download_url')"
+          INSPECTOR_LINK="$(curl -s "https://api.github.com/repos/theendlesswatch/extensions-inspector/releases/latest" | jq -r '.assets[0].browser_download_url')"
           curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
           java -jar ./Inspector.jar "repo/apk" "output.json" "tmp"
           python ./.github/scripts/create-repo.py
@@ -133,7 +133,7 @@ jobs:
       - name: Checkout repo branch
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          repository: keiyoushi/extensions
+          repository: theendlesswatch/extensions
           token: ${{ secrets.BOT_PAT }}
           ref: repo
           path: repo
