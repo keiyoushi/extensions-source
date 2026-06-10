@@ -48,11 +48,7 @@ class ReadVagabondManga : HttpSource() {
         return (1..chapter.pageCount).map { page ->
             Page(
                 index = page - 1,
-                imageUrl = "https://bucket.readbagabondo.com/volume-%02d/chapter-%03d/page-%03d.png".format(
-                    chapter.volume,
-                    chapter.number,
-                    page,
-                ),
+                imageUrl = "https://pub.moleve.net/chapter-${chapter.number}/page-$page.png",
             )
         }
     }
