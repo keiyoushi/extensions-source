@@ -36,7 +36,7 @@ import java.io.IOException
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class ComX :
     HttpSource(),
@@ -76,8 +76,8 @@ class ComX :
         .add("Referer", "$baseUrl/")
 
     override val client = network.client.newBuilder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(10.seconds)
+        .readTimeout(30.seconds)
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()

@@ -42,8 +42,8 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.Calendar
 import java.util.Date
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Duration.Companion.minutes
 
 @RequiresApi(Build.VERSION_CODES.O)
 class Manhuarm(
@@ -158,8 +158,8 @@ class Manhuarm(
         }
 
         return network.client.newBuilder()
-            .connectTimeout(1, TimeUnit.MINUTES)
-            .readTimeout(2, TimeUnit.MINUTES)
+            .connectTimeout(1.minutes)
+            .readTimeout(2.minutes)
             // Fix disk cache / decompression issues
             .apply {
                 val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }

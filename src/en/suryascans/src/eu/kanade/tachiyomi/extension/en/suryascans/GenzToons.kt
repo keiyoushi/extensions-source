@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.en.suryascans
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.network.rateLimit
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class GenzToons :
     Keyoapp(
@@ -13,9 +13,9 @@ class GenzToons :
     ) {
 
     override val client = super.client.newBuilder()
-        .connectTimeout(90, TimeUnit.SECONDS)
-        .writeTimeout(90, TimeUnit.SECONDS)
-        .readTimeout(90, TimeUnit.SECONDS)
+        .connectTimeout(90.seconds)
+        .writeTimeout(90.seconds)
+        .readTimeout(90.seconds)
         .rateLimit(3)
         .build()
 

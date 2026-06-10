@@ -14,7 +14,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
 
 class Honkaiimpact : HttpSource() {
 
@@ -24,8 +24,8 @@ class Honkaiimpact : HttpSource() {
     override val supportsLatest = false
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .connectTimeout(1, TimeUnit.MINUTES)
-        .readTimeout(1, TimeUnit.MINUTES)
+        .connectTimeout(1.minutes)
+        .readTimeout(1.minutes)
         .retryOnConnectionFailure(true)
         .followRedirects(true)
         .build()

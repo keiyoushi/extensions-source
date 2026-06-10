@@ -42,6 +42,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 abstract class LibGroup(
     override val name: String,
@@ -76,8 +78,8 @@ abstract class LibGroup(
 
     override val client by lazy {
         network.client.newBuilder()
-            .connectTimeout(1, TimeUnit.MINUTES)
-            .readTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(1.minutes)
+            .readTimeout(30.seconds)
             .addInterceptor(::checkForToken)
             .addInterceptor { chain ->
                 val response = chain.proceed(chain.request())

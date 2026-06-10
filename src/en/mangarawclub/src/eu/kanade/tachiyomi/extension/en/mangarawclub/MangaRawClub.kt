@@ -22,7 +22,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 private val DATE_FORMATTER = SimpleDateFormat("MMMM dd, yyyy, h:mm a", Locale.ENGLISH)
 private val DATE_FORMATTER_2 = SimpleDateFormat("MMMM dd, yyyy, h a", Locale.ENGLISH)
@@ -37,8 +37,8 @@ class MangaRawClub :
     override val lang = "en"
     override val supportsLatest = true
     override val client: OkHttpClient = network.client.newBuilder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(10.seconds)
+        .readTimeout(30.seconds)
         .build()
 
     private val preferences by getPreferencesLazy()

@@ -14,7 +14,6 @@ import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
 class CodeArc : HttpSource() {
@@ -26,8 +25,8 @@ class CodeArc : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(15.seconds)
+        .readTimeout(30.seconds)
         .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
         .rateLimit(1, 1.seconds) { it.host == "cdn.codearctraducciones.com" }
         .build()
