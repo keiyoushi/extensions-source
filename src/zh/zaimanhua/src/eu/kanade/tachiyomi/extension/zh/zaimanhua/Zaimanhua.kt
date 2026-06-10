@@ -37,7 +37,7 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.security.MessageDigest
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class Zaimanhua :
     HttpSource(),
@@ -347,7 +347,7 @@ class Zaimanhua :
     private fun chapterCommentsUrl(comicId: String, chapterId: String) = "$apiUrl/viewpoint/list?comicId=$comicId&chapterId=$chapterId"
 
     companion object {
-        val USE_CACHE = CacheControl.Builder().maxStale(170, TimeUnit.SECONDS).build()
+        val USE_CACHE = CacheControl.Builder().maxStale(170.seconds).build()
         const val USERNAME_PREF = "USERNAME"
         const val PASSWORD_PREF = "PASSWORD"
         const val TOKEN_PREF = "TOKEN"

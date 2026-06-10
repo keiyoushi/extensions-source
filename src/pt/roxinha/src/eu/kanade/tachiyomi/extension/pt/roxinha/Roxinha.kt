@@ -12,6 +12,7 @@ import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 
 class Roxinha : HttpSource() {
 
@@ -102,14 +103,24 @@ class Roxinha : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/manga/chapter/${chapter.url}"
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/manga/chapter/${chapter.url}", headers)
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        val chapterUrl = "$apiUrl/manga/chapter/${chapter.url}"
+        val accessUrl = chapterUrl + "/access"
 
-    override fun pageListParse(response: Response): List<Page> {
-        val dto = response.parseAs<ChapterDetailsDto>()
-        return dto.toPages(baseUrl)
+        val accessRes = client.newCall(GET(accessUrl, headers)).execute()
+        val accessDto = accessRes.parseAs<TicketDto>()
+        val accessHeaders = headersBuilder().set("x-chapter-access", accessDto.ticket).build()
+
+        val chapterRes = client.newCall(GET(chapterUrl, accessHeaders)).execute()
+        val chapterDto = chapterRes.parseAs<ChapterDetailsDto>()
+        return Observable.just(chapterDto.toPages(baseUrl))
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun pageListRequest(chapter: SChapter) = throw UnsupportedOperationException()
+
+    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
+
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList(
         SortFilter(),

@@ -23,7 +23,7 @@ class KaynScans :
     }
 
     override fun pageListParse(r: Response): List<Page> {
-        if (r.request.url.pathSegments.size > 1) {
+        if (r.request.url.pathSegments.firstOrNull() != "api") {
             throw Exception("Migrate entry from '$name' to '$name'")
         }
         return super.pageListParse(r)
