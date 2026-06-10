@@ -394,7 +394,7 @@ class MangaBuff :
         else -> absUrl("src")
     }
 
-    private fun imgConvert(): Boolean = preferences.getBoolean(CONVERT_IMG_PREF, false)
+    private fun imgConvert(): Boolean = preferences.getBoolean(CONVERT_IMG_PREF, true)
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = CONVERT_IMG_PREF
