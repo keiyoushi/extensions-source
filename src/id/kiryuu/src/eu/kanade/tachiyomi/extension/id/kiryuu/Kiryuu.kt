@@ -11,7 +11,7 @@ class Kiryuu :
     NatsuId(
         "Kiryuu",
         "id",
-        "https://v5.kiryuu.to",
+        "https://v6.kiryuu.to",
     ) {
 
     // Formerly "Kiryuu (WP Manga Stream)"
