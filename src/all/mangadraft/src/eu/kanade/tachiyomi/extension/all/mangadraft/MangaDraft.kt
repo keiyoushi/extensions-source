@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -208,8 +209,9 @@ class MangaDraft : HttpSource() {
     private fun chapterFromElement(element: Element, index: Int, isNotOneShot: Boolean): SChapter = SChapter.create().apply {
         chapter_number = index.toFloat() + 1
 
-        var titleText = element.selectFirst(".group-hover\\:text-secondary")?.ownText()?.trim() ?: ""
-        titleText = titleText.replace("""^\d+[.\s]+""".toRegex(), "").trim()
+        val titleText = element.selectFirst(".group-hover\\:text-secondary")!!.ownText()
+            .replace(TITLE_REGEX, "")
+            .trim()
 
         name = if (isNotOneShot) {
             if (titleText.isNotEmpty()) "Ch. $index: $titleText" else "Ch. $index"
@@ -259,6 +261,8 @@ class MangaDraft : HttpSource() {
         .first { pageList -> pageList.any { it.id == pageId } }
 
     companion object {
+        private val TITLE_REGEX = Regex("""^\d+[.\s]+""")
+
         private val dateFormats = listOf(
             // Pattern for English: "June 25, 2022"
             SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH),
@@ -266,15 +270,6 @@ class MangaDraft : HttpSource() {
             SimpleDateFormat("d MMMM yyyy", Locale.FRENCH),
         )
 
-        fun parseDate(dateText: String): Long {
-            for (format in dateFormats) {
-                try {
-                    return format.parse(dateText)?.time ?: 0L
-                } catch (e: Exception) {
-                    // Try the next format in the list
-                }
-            }
-            return 0L
-        }
+        fun parseDate(dateText: String): Long = dateFormats.firstNotNullOfOrNull { it.tryParse(dateText).takeIf { it != 0L } } ?: 0L
     }
 }
