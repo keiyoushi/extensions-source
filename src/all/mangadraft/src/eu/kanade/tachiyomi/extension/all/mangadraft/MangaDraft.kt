@@ -23,7 +23,6 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.collections.joinToString
-import kotlin.getValue
 
 class MangaDraft : HttpSource() {
     override val name = "MangaDraft"
