@@ -50,7 +50,10 @@ data class GreenShitChapterSimpleDto(
     @SerialName("cap_nome") val name: String,
     @SerialName("cap_numero") val number: Float? = null,
     @SerialName("cap_criado_em") val createdAt: String? = null,
-)
+    @SerialName("cap_liberado") val released: Boolean = true,
+) {
+    val locked get() = if (!released) "🔒 " else ""
+}
 
 @Serializable
 data class GreenShitMangaDto(
@@ -77,6 +80,11 @@ data class GreenShitChapterDetailDto(
     @SerialName("cap_numero") val number: Float? = null,
     @SerialName("cap_paginas") val pages: List<GreenShitPageSrcDto> = emptyList(),
     @SerialName("obra") val manga: GreenShitMangaDto? = null,
+)
+
+@Serializable
+class GreenShitErrorDto(
+    val message: String,
 )
 
 private fun isWpLikePath(src: String): Boolean = src.startsWith("uploads/") ||
@@ -134,7 +142,7 @@ fun GreenShitMangaDto.toSManga(cdnUrl: String, isDetails: Boolean = false): SMan
 }
 
 fun GreenShitChapterSimpleDto.toSChapter(): SChapter = SChapter.create().apply {
-    name = this@toSChapter.name
+    name = locked + this@toSChapter.name
     chapter_number = number ?: 0f
     url = "/capitulo/$id"
     date_upload = dateFormat.tryParse(createdAt)
@@ -143,7 +151,7 @@ fun GreenShitChapterSimpleDto.toSChapter(): SChapter = SChapter.create().apply {
 fun GreenShitChapterDetailDto.toPageList(cdnUrl: String): List<Page> {
     val obraId = manga?.id ?: 0
     val scanId = manga?.scanId ?: 0
-    val chapterNumber = number.toString()?.removeSuffix(".0") ?: "0"
+    val chapterNumber = number?.toString()?.removeSuffix(".0") ?: "0"
     return pages.mapIndexed { idx, p ->
         val imageUrl = buildImageUrl(path = "/scans/$scanId/obras/$obraId/capitulos/$chapterNumber/", src = p.src, mime = p.mime, width = null, base = cdnUrl)
         Page(idx, imageUrl = imageUrl)

@@ -5,6 +5,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -24,6 +25,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import rx.Observable
 import kotlin.jvm.Synchronized
 
 abstract class GreenShit :
@@ -368,7 +370,7 @@ abstract class GreenShit :
     }
 
     // ============================ Manga Details ============================
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url.replace("obra/", "obras/")}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val id = manga.url.substringAfter("/obra/").substringBefore("/")
@@ -398,6 +400,18 @@ abstract class GreenShit :
         val chapterId = chapter.url.substringAfter("/capitulo/")
         return GET("$apiUrl/capitulos/$chapterId", headers)
     }
+
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
+        .asObservable()
+        .flatMap { response: Response ->
+            if (response.code == 403) {
+                val message = runCatching { response.parseAs<GreenShitErrorDto>().message }
+                    .getOrElse { "Faça login" }
+                response.close()
+                throw Exception(message)
+            }
+            Observable.just(pageListParse(response))
+        }
 
     override fun pageListParse(response: Response): List<Page> {
         val dto = response.parseAs<GreenShitChapterDetailDto>()
