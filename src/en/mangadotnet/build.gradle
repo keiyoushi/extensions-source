@@ -1,7 +1,7 @@
 ext {
 	extName = 'Mangadotnet'
 	extClass = '.Mangadotnet'
-	extVersionCode = 8
+	extVersionCode = 9
 	isNsfw = true
 }
 
