@@ -25,8 +25,8 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import kotlin.collections.map
 import kotlin.collections.plusAssign
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 class AnimeXNovel : HttpSource() {
 
