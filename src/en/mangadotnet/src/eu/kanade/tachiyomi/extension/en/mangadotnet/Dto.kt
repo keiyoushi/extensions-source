@@ -142,7 +142,7 @@ class Manga(
     private val authors: String? = null,
     private val artists: String? = null,
 ) {
-    fun toSManga(baseUrl: String, showLinks: Boolean = true, showAltTitles: Boolean = true) = SManga.create().apply {
+    fun toSManga(baseUrl: String) = SManga.create().apply {
         url = id.toString()
         title = this@Manga.title
         thumbnail_url = photo?.let {
@@ -191,7 +191,7 @@ class Manga(
                 contentRating?.let {
                     add("**Content Rating:** ${it.replaceFirstChar { c -> c.uppercase() }}")
                 }
-                ratingCount?.let { add("$it ratings") }
+                ratingCount?.takeIf { it > 0 }?.let { add("$it ratings") }
             }
             if (metaInfo.isNotEmpty()) {
                 append(metaInfo.joinToString(" · "), "\n\n")
@@ -207,26 +207,24 @@ class Manga(
                 )
             }
 
-            if (showLinks) {
-                listOfNotNull(
-                    anilistID?.let { "[AniList](https://anilist.co/manga/$it)" },
-                    mangaupdatesID?.let { "[MangaUpdates](https://mangaupdates.com/series/$it)" },
-                    mangabakaID?.let { "[MangaBaka](https://mangabaka.org/$it)" },
-                    malID?.let { "[MyAnimeList](https://myanimelist.net/manga/$it)" },
-                    kitsuID?.let { "[Kitsu](https://kitsu.app/manga/$it)" },
-                    mangadexID?.let { "[MangaDex](https://mangadex.org/title/$it)" },
-                    sourceUrl?.let { "[Source]($it)" },
-                ).also { links ->
-                    if (links.isNotEmpty()) {
-                        append("\n**Links:**\n")
-                        links.forEach { link ->
-                            append("- ", link, "\n")
-                        }
+            listOfNotNull(
+                anilistID?.let { "[AniList](https://anilist.co/manga/$it)" },
+                mangaupdatesID?.let { "[MangaUpdates](https://mangaupdates.com/series/$it)" },
+                mangabakaID?.let { "[MangaBaka](https://mangabaka.org/$it)" },
+                malID?.let { "[MyAnimeList](https://myanimelist.net/manga/$it)" },
+                kitsuID?.let { "[Kitsu](https://kitsu.app/manga/$it)" },
+                mangadexID?.let { "[MangaDex](https://mangadex.org/title/$it)" },
+                sourceUrl?.let { "[Source]($it)" },
+            ).also { links ->
+                if (links.isNotEmpty()) {
+                    append("\n**Links:**\n")
+                    links.forEach { link ->
+                        append("- ", link, "\n")
                     }
                 }
             }
 
-            if (showAltTitles && altTitles.isNotEmpty()) {
+            if (altTitles.isNotEmpty()) {
                 append("\n**Alternative Names:**\n")
                 altTitles.forEach { altTitle ->
                     append("- ", altTitle.trim(), "\n")
