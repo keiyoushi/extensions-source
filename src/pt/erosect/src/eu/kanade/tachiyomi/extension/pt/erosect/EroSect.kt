@@ -38,13 +38,13 @@ class EroSect :
     private val tokenProvider by lazy {
         AuthTokenProvider(
             preferences = preferences,
-            client = network.cloudflareClient,
+            client = network.client,
             apiUrl = apiUrl,
             loginHeaders = loginHeaders().build(),
         )
     }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(AuthInterceptor(tokenProvider))
         .build()
 

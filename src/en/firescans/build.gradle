@@ -3,7 +3,7 @@ ext {
     extClass = '.Firescans'
     themePkg = 'madara'
     baseUrl = 'https://firescans.xyz'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = false
 }
 

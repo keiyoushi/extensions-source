@@ -6,7 +6,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.kemono.KemonoCreatorDto.Companion.serviceName
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -15,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import okhttp3.Cache
@@ -40,7 +40,6 @@ open class Kemono(
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimit(1)
         .addInterceptor { chain ->
             val request = chain.request()
             if (request.url.pathSegments.first() == "api") {
@@ -59,6 +58,7 @@ open class Kemono(
                 maxSize = 50L * 1024 * 1024, // 50 MiB
             ),
         )
+        .rateLimit(1)
         .build()
 
     private val creatorsClient = client.newBuilder()

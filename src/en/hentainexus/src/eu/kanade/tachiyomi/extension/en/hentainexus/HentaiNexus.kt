@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.en.hentainexus
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
@@ -27,6 +27,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class HentaiNexus : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "HentaiNexus"
 
@@ -38,7 +39,7 @@ class HentaiNexus : HttpSource() {
 
     // Images on this site go through the free Jetpack Photon CDN.
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1)
+        .rateLimit(1) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -78,7 +79,7 @@ class HentaiNexus : HttpSource() {
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
+            if (url.host != baseUrlHost) {
                 throw Exception("Unsupported url")
             }
             val id = url.pathSegments.getOrNull(1)

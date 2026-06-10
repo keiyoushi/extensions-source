@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.mccms
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -25,6 +25,8 @@ open class MCCMSWeb(
     final override val lang: String = "zh",
     protected val config: MCCMSConfig = MCCMSConfig(),
 ) : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val supportsLatest get() = true
 
     init {
@@ -33,7 +35,6 @@ open class MCCMSWeb(
 
     override val client by lazy {
         network.client.newBuilder()
-            .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .addInterceptor { chain ->
                 val response = chain.proceed(chain.request())
                 if (response.request.url.encodedPath == "/err/comic") {
@@ -41,6 +42,7 @@ open class MCCMSWeb(
                 }
                 response
             }
+            .rateLimit(2) { it.host == baseUrlHost }
             .build()
     }
 

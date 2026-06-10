@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.extension.es.nartag
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -19,10 +19,12 @@ class Nartag :
         "es",
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
     ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val versionId = 2
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
     override val useNewChapterEndpoint = true

@@ -3,7 +3,7 @@ ext {
     extClass = '.SekteDoujin'
     themePkg = 'mangathemesia'
     baseUrl = 'https://sektedoujin.cc'
-    overrideVersionCode = 5
+    overrideVersionCode = 6
     isNsfw = true
 }
 

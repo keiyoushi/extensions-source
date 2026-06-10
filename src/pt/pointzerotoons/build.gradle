@@ -3,7 +3,7 @@ ext {
     extClass = '.PointZeroToons'
     themePkg = 'mangathemesia'
     baseUrl = 'https://kitsuneyako.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = false
 }
 

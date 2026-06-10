@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.jnovel
+package keiyoushi.lib.e4p
 
 import keiyoushi.utils.decodeHex
 import okhttp3.Interceptor
@@ -12,7 +12,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 // drm_worker.js f128 + wasm xebp_render
-class ImageInterceptor : Interceptor {
+class E4PInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)

@@ -3,7 +3,7 @@ ext {
     extClass = '.LimboScan'
     themePkg = 'madara'
     baseUrl = 'https://limboscan.com.br'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

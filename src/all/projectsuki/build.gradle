@@ -1,7 +1,7 @@
 ext {
     extName = 'Project Suki'
     extClass = '.ProjectSuki'
-    extVersionCode = 7
+    extVersionCode = 8
 }
 
 apply plugin: "kei.plugins.extension.legacy"

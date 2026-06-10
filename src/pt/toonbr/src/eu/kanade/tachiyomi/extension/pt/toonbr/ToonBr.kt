@@ -4,7 +4,6 @@ import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.MediaType.Companion.toMediaType
@@ -36,12 +36,12 @@ class ToonBr :
     override val client by lazy {
         val token = getToken()
         network.client.newBuilder()
-            .rateLimit(2)
             .apply {
                 if (token.isNotEmpty()) {
-                    addInterceptor(CookieInterceptor(API_HOST, "token" to token))
+                    addNetworkInterceptor(CookieInterceptor(API_HOST, "token" to token))
                 }
             }
+            .rateLimit(2)
             .build()
     }
 

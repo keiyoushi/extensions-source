@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.zh.bilimanga
 
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -21,6 +21,7 @@ import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class BiliManga :
     HttpSource(),
@@ -40,10 +41,13 @@ class BiliManga :
         preferencesInternal(screen.context, pref).forEach(screen::addPreference)
     }
 
-    override val client = super.client.newBuilder().also {
-        val split = pref.getString(PREF_RATE_LIMIT, "10/10")!!.split("/")
-        it.rateLimit(split[0].toInt(), split[1].toLong())
-    }.addNetworkInterceptor(MangaInterceptor()).build()
+    override val client = super.client.newBuilder()
+        .addNetworkInterceptor(MangaInterceptor())
+        .also {
+            val split = pref.getString(PREF_RATE_LIMIT, "10/10")!!.split("/")
+            it.rateLimit(split[0].toInt(), split[1].toInt().seconds)
+        }
+        .build()
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/").add("Accept-Language", "zh").add("Accept", "*/*")
 

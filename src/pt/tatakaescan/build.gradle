@@ -3,7 +3,7 @@ ext {
     extClass = '.TatakaeScan'
     themePkg = 'madara'
     baseUrl = 'https://tatakaescan.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 

@@ -3,7 +3,7 @@ ext {
     extClass = '.Nartag'
     themePkg = 'madara'
     baseUrl = 'https://nartag.com'
-    overrideVersionCode = 5
+    overrideVersionCode = 6
     isNsfw = true
 }
 

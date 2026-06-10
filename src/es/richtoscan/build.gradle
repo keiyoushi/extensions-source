@@ -3,7 +3,7 @@ ext {
     extClass = '.RichtoScan'
     themePkg = 'madara'
     baseUrl = 'https://r1.richtoon.top'
-    overrideVersionCode = 4
+    overrideVersionCode = 5
     isNsfw = false
 }
 

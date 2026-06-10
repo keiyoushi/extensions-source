@@ -6,7 +6,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -36,6 +36,8 @@ class MangaPlus(
     private val langCode: Language,
 ) : HttpSource(),
     ConfigurableSource {
+    private val apiurlHost by lazy { API_URL.toHttpUrl().host }
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "MANGA Plus by SHUEISHA"
 
@@ -52,8 +54,8 @@ class MangaPlus(
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::imageIntercept)
         .addInterceptor(::thumbnailIntercept)
-        .rateLimitHost(API_URL.toHttpUrl(), 1)
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        .rateLimit(1) { it.host == apiurlHost }
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
     private val json: Json by injectLazy()

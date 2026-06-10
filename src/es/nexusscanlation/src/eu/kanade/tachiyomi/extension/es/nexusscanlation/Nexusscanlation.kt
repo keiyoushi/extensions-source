@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.extension.es.nexusscanlation
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -17,8 +17,10 @@ import okhttp3.Response
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class Nexusscanlation : HttpSource() {
+    private val apiBaseUrlHost by lazy { apiBaseUrl.toHttpUrl().host }
 
     override val name = "NexusScanlation"
     override val baseUrl = "https://nexusscanlation.com"
@@ -29,8 +31,8 @@ class Nexusscanlation : HttpSource() {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimitHost(apiBaseUrl.toHttpUrl(), 1, 3) // API: max 1 request per 3 seconds
         .addInterceptor(ImageInterceptor())
+        .rateLimit(1, 3.seconds) { it.host == apiBaseUrlHost } // API: max 1 request per 3 seconds
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

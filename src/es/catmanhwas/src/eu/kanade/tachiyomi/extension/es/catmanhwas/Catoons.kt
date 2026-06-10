@@ -8,7 +8,6 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -16,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonArray
@@ -35,6 +35,7 @@ import kotlin.collections.component1
 import kotlin.collections.component2
 import kotlin.collections.forEach
 import kotlin.collections.map
+import kotlin.time.Duration.Companion.seconds
 
 class Catoons : HttpSource() {
 
@@ -47,7 +48,7 @@ class Catoons : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3, 1)
+        .rateLimit(3, 1.seconds)
         .build()
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", FilterList(OrderFilter(listOf("" to "popular"))))

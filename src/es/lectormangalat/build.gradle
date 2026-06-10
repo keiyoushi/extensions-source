@@ -3,7 +3,7 @@ ext {
     extClass = '.LectorMangaLat'
     themePkg = 'madara'
     baseUrl = 'https://lectormangass.com'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = true
 }
 
