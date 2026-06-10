@@ -2,9 +2,15 @@ package eu.kanade.tachiyomi.extension.ru.mangabuff
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
@@ -30,8 +37,11 @@ import rx.Observable
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 
-class MangaBuff : HttpSource() {
+class MangaBuff :
+    HttpSource(),
+    ConfigurableSource {
     override val baseUrl = "https://mangabuff.ru"
     override val lang = "ru"
     override val name = "MangaBuff"
@@ -44,6 +54,8 @@ class MangaBuff : HttpSource() {
 
     // From Akuma - CSRF token
     private var storedToken: String? = null
+    private val convertedGif = AtomicBoolean(false)
+    private val preferences by getPreferencesLazy()
 
     private fun tokenInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -76,28 +88,49 @@ class MangaBuff : HttpSource() {
 
     private fun gifToWebpInterceptor(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
+
+        if (!imgConvert()) return response
+
         val isGif = response.body.contentType()?.subtype?.lowercase() == "gif" ||
             response.request.url.pathSegments.lastOrNull()?.endsWith(".gif", ignoreCase = true) == true
 
-        if (!isGif) {
-            return response
-        }
+        if (!isGif) return response
 
         val originalBytes = response.body.use { it.bytes() }
+        val original = BitmapFactory.decodeByteArray(originalBytes, 0, originalBytes.size) ?: return response
 
-        val bitmap = BitmapFactory.decodeByteArray(originalBytes, 0, originalBytes.size)
-            ?: return response
+        if (!convertedGif.get()) {
+            val buffer = Buffer()
+            original.compress(Bitmap.CompressFormat.WEBP, 90, buffer.outputStream())
+            original.recycle()
+            return response.newBuilder().body(buffer.asResponseBody(WEBP_MEDIA_TYPE, buffer.size)).build()
+        }
+
+        val headerHeight = 50
+        val w = original.width
+        val h = original.height
+        val bmp = Bitmap.createBitmap(w, h + headerHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val paint = Paint().apply {
+            textSize = 15f
+            textAlign = Paint.Align.CENTER
+        }
+
+        paint.color = Color.RED
+        canvas.drawRect(0f, 0f, w.toFloat(), headerHeight.toFloat(), paint)
+        paint.color = Color.WHITE
+        canvas.drawText(CONVERT_WARNING_1, w / 2f, (headerHeight / 2f) - 5f, paint)
+        canvas.drawText(CONVERT_WARNING_2, w / 2f, (headerHeight / 2f) + 15f, paint)
+        canvas.drawBitmap(original, 0f, headerHeight.toFloat(), null)
+        original.recycle()
 
         val buffer = Buffer()
-        bitmap.compress(Bitmap.CompressFormat.WEBP, 90, buffer.outputStream())
-        bitmap.recycle()
+        bmp.compress(Bitmap.CompressFormat.WEBP, 90, buffer.outputStream())
+        bmp.recycle()
+        convertedGif.set(false)
 
-        val newBody = buffer.asResponseBody(WEBP_MEDIA_TYPE, buffer.size)
-        return response.newBuilder()
-            .body(newBody)
-            .build()
+        return response.newBuilder().body(buffer.asResponseBody(WEBP_MEDIA_TYPE, buffer.size)).build()
     }
-
     private fun getToken(): String {
         storedToken?.let { return it }
 
@@ -325,6 +358,7 @@ class MangaBuff : HttpSource() {
     // Pages
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
+        convertedGif.set(true)
         return document.select(".reader__pages img").mapIndexed { i, img ->
             Page(i, imageUrl = img.imgAttr())
         }
@@ -360,9 +394,24 @@ class MangaBuff : HttpSource() {
         else -> absUrl("src")
     }
 
+    private fun imgConvert(): Boolean = preferences.getBoolean(CONVERT_IMG_PREF, false)
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = CONVERT_IMG_PREF
+            title = CONVERT_IMG_PREF_TITLE
+            summary = CONVERT_IMG_PREF_SUM
+            setDefaultValue(true)
+        }.let(screen::addPreference)
+    }
+
     companion object {
         const val SEARCH_PREFIX = "slug:"
         private val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.ROOT)
         private val WEBP_MEDIA_TYPE = "image/webp".toMediaType()
+        private const val CONVERT_WARNING_1 = "Статическая версия. Откройте в WebView для отображения анимации"
+        private const val CONVERT_WARNING_2 = "Или отключите преобразование в настройках расширения"
+        private const val CONVERT_IMG_PREF = "convert_img_pref"
+        private const val CONVERT_IMG_PREF_TITLE = "Исправлять изображения"
+        private const val CONVERT_IMG_PREF_SUM = "ⓘПриложение будет пытаться исправить изображения низкого качества, конвертируя их в другой формат. Анимированные изображения при этом конвертируются в статические, а в первом конвертированном изображении в каждой главе будет отображено предупреждение."
     }
 }
