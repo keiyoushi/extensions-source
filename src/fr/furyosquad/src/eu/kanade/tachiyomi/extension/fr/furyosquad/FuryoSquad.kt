@@ -19,7 +19,7 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class FuryoSquad : HttpSource() {
 
@@ -32,8 +32,8 @@ class FuryoSquad : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(10.seconds)
+        .readTimeout(30.seconds)
         .rateLimit(1)
         .build()
 

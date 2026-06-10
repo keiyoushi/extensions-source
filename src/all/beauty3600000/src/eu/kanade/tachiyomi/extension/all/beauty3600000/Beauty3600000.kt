@@ -27,7 +27,6 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
 class Beauty3600000 : HttpSource() {
@@ -41,8 +40,8 @@ class Beauty3600000 : HttpSource() {
     override val supportsLatest = false
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .connectTimeout(120, TimeUnit.SECONDS)
-        .readTimeout(120, TimeUnit.SECONDS)
+        .connectTimeout(120.seconds)
+        .readTimeout(120.seconds)
         .rateLimit(1)
         .build()
 
