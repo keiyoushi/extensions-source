@@ -238,7 +238,7 @@ abstract class Madara(
     }
 
     // load more
-    protected fun loadMoreRequest(page: Int, popular: Boolean): Request {
+    protected open fun loadMoreRequest(page: Int, popular: Boolean): Request {
         val formBody = FormBody.Builder().apply {
             add("action", "madara_load_more")
             add("page", (page - 1).toString())
