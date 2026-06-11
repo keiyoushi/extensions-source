@@ -1,10 +1,7 @@
 package eu.kanade.tachiyomi.extension.id.comicaso
 
-import androidx.preference.CheckBoxPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,7 +10,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -21,9 +17,7 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import rx.Observable
 
-class Comicaso :
-    HttpSource(),
-    ConfigurableSource {
+class Comicaso : HttpSource() {
 
     override val name = "Comicaso"
 
@@ -32,8 +26,6 @@ class Comicaso :
     override val lang = "id"
 
     override val supportsLatest = true
-
-    private val preferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
         .rateLimit(4)
@@ -66,15 +58,10 @@ class Comicaso :
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         return getMangaList().map { mangas ->
-            val filtered = if (preferences.getBoolean(PREF_HIDE_MEDUSA, true)) {
-                mangas.filter { it.first != "medusa" }
-            } else {
-                mangas
-            }
             val start = (page - 1) * PAGE_SIZE
-            if (start >= filtered.size) return@map MangasPage(emptyList(), false)
-            val end = minOf(start + PAGE_SIZE, filtered.size)
-            MangasPage(filtered.subList(start, end).map { it.second.toSManga(it.first) }, end < filtered.size)
+            if (start >= mangas.size) return@map MangasPage(emptyList(), false)
+            val end = minOf(start + PAGE_SIZE, mangas.size)
+            MangasPage(mangas.subList(start, end).map { it.second.toSManga(it.first) }, end < mangas.size)
         }
     }
 
@@ -85,12 +72,7 @@ class Comicaso :
 
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
         return getMangaList().map { mangas ->
-            val filtered = if (preferences.getBoolean(PREF_HIDE_MEDUSA, true)) {
-                mangas.filter { it.first != "medusa" }
-            } else {
-                mangas
-            }
-            val sortedMangas = filtered.sortedByDescending { it.second.updatedAt ?: it.second.mangaDate ?: 0L }
+            val sortedMangas = mangas.sortedByDescending { it.second.updatedAt ?: it.second.mangaDate ?: 0L }
             val start = (page - 1) * PAGE_SIZE
             if (start >= sortedMangas.size) return@map MangasPage(emptyList(), false)
             val end = minOf(start + PAGE_SIZE, sortedMangas.size)
@@ -116,9 +98,10 @@ class Comicaso :
                 val pageParam = httpUrl.queryParameter("page")
                 val sourceParam = httpUrl.queryParameter("source")
                 val mangaParam = httpUrl.queryParameter("manga")
+                val slugParam = httpUrl.queryParameter("slug")
 
-                if (pageParam == "manga" && sourceParam != null && mangaParam != null) {
-                    return fetchMangaDetails(SManga.create().apply { this.url = "$sourceParam/$mangaParam" })
+                if (pageParam == "manga" && sourceParam != null && (slugParam != null || mangaParam != null)) {
+                    return fetchMangaDetails(SManga.create().apply { this.url = "$sourceParam/${slugParam ?: mangaParam}" })
                         .map { MangasPage(listOf(it), false) }
                 }
 
@@ -134,10 +117,6 @@ class Comicaso :
 
         return getMangaList().map { mangas ->
             var filteredMangas = mangas
-
-            if (preferences.getBoolean(PREF_HIDE_MEDUSA, true)) {
-                filteredMangas = filteredMangas.filter { it.first != "medusa" }
-            }
 
             if (query.isNotEmpty()) {
                 filteredMangas = filteredMangas.filter { it.second.title.contains(query, ignoreCase = true) }
@@ -187,7 +166,7 @@ class Comicaso :
 
     override fun getMangaUrl(manga: SManga): String {
         val (source, slug) = manga.url.split("/")
-        return "$baseUrl/?page=manga&source=$source&manga=$slug"
+        return "$baseUrl/?page=manga&source=$source&slug=$slug"
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
@@ -285,21 +264,9 @@ class Comicaso :
     private class StatusFilter : Filter.Select<String>("Status", arrayOf("All", "On-going", "End"))
     private class TypeFilter : Filter.Select<String>("Type", arrayOf("All", "Manga", "Manhua", "Manhwa"))
 
-    // ============================== Settings ==============================
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        CheckBoxPreference(screen.context).apply {
-            key = PREF_HIDE_MEDUSA
-            title = "Sembunyikan konten Medusa (18+)"
-            summary = "Menyembunyikan semua manga dari sumber Medusa di daftar populer dan terbaru."
-            setDefaultValue(true)
-        }.also(screen::addPreference)
-    }
-
     companion object {
         const val URL_SEARCH_PREFIX = "url:"
         private const val STATIC_API_URL = "https://static.comicaso.pro/static"
         private const val PAGE_SIZE = 60
-        private const val PREF_HIDE_MEDUSA = "pref_hide_medusa"
     }
 }
