@@ -4,12 +4,15 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
 import okhttp3.FormBody
 import okhttp3.Request
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class Hizomanga :
     Madara(
         "Hizo Manga",
         "https://hizomanga.net",
         "ar",
+        SimpleDateFormat("yyyy-MM-dd", Locale.US),
     ) {
 
     override val mangaSubString = "serie"
@@ -25,12 +28,8 @@ class Hizomanga :
             add("vars[orderby]", "meta_value_num")
             add("vars[paged]", "1")
 
-            add("vars[tax_query][relation]", "OR")
-
-            add("vars[meta_query][0][0][key]", "_wp_manga_chapter_type")
-            add("vars[meta_query][0][0][value]", "manga")
-            add("vars[meta_query][0][relation]", "AND")
-            add("vars[meta_query][relation]", "AND")
+            add("vars[meta_query][0][key]", "_wp_manga_chapter_type")
+            add("vars[meta_query][0][value]", "manga")
 
             add("vars[post_type]", "wp-manga")
             add("vars[post_status]", "publish")
@@ -43,4 +42,7 @@ class Hizomanga :
 
         return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, formBody)
     }
+
+    override val mangaDetailsSelectorDescription = ".manga-excerpt"
+    override val mangaDetailsSelectorStatus = ".manga-status"
 }
