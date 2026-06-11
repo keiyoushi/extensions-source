@@ -651,6 +651,7 @@ either `SourceFactory` or `HttpSource`.
 |--------------------|----------------------------------------------------------------------------------------------------------------------------------|
 | `SourceFactory`    | Used to expose multiple `Source`s. Use this in case of a source that supports multiple languages or mirrors of the same website. |
 | `HttpSource`       | For online source, where requests are made using HTTP.                                                                           |
+| `ParsedHttpSource` | Deprecated, use `HttpSource` instead.                                                                                            |
 
 #### Main class key variables
 
