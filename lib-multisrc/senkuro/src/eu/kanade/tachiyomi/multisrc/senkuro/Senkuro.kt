@@ -37,9 +37,10 @@ abstract class Senkuro(
     override val supportsLatest = true
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Content-Type", "application/json")
-        .add("App-Id", if (name == "Senkuro") "4026531840100" else "5033164800100")
-        .add("App-Version", "060626")
+    .set("User-Agent", "Tachiyomi (+https://github.com/keiyoushi/extensions-source)")
+    .add("Content-Type", "application/json")
+    .add("App-Id", if (name == "Senkuro") "4026531840100" else "5033164800100")
+    .add("App-Version", "060626")
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
