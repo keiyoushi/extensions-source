@@ -1,10 +1,10 @@
 ext {
     extName = 'Orca Manga'
     extClass = '.Orcamanga'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
     themePkg = "zeistmanga"
-    baseUrl = "https://www.orcamanga.site"
+    baseUrl = "https://infinity896.blogspot.com"
 }
 
 apply plugin: "kei.plugins.extension.legacy"
