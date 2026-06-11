@@ -122,24 +122,38 @@ class Coolmic :
     }
 
     private fun fetchKey(encryptedKey: String, fileName: String): String {
-        val newHeaders = headersBuilder()
-            .set("Origin", baseUrl)
-            .set("X-CSRF-TOKEN", csrfToken)
-            .set("X-Requested-With", "XMLHttpRequest")
-            .build()
-
-        val request = POST(
-            "$apiUrl/decryption_keys",
-            newHeaders,
-            KeyRequestBody(encryptedKey, fileName).toJsonRequestBody(),
-        )
-        return client.newCall(request).execute().parseAs<KeyResponse>().decryptedKey
+        var response = requestKey(encryptedKey, fileName, csrfToken())
+        if (!response.isSuccessful) {
+            response.close()
+            response = requestKey(encryptedKey, fileName, csrfToken(refresh = true))
+        }
+        return response.parseAs<KeyResponse>().decryptedKey
     }
 
-    private val csrfToken: String by lazy {
-        client.newCall(GET(baseUrl, headers)).execute().asJsoup()
+    private fun requestKey(encryptedKey: String, fileName: String, token: String): Response {
+        val newHeaders = headersBuilder()
+            .set("Origin", baseUrl)
+            .set("X-CSRF-TOKEN", token)
+            .set("X-Requested-With", "XMLHttpRequest")
+            .build()
+        return client.newCall(
+            POST(
+                "$apiUrl/decryption_keys",
+                newHeaders,
+                KeyRequestBody(encryptedKey, fileName).toJsonRequestBody(),
+            ),
+        ).execute()
+    }
+
+    private var cachedCsrfToken: String? = null
+
+    @Synchronized
+    private fun csrfToken(refresh: Boolean = false): String {
+        if (refresh) cachedCsrfToken = null
+        return cachedCsrfToken ?: client.newCall(GET(baseUrl, headers)).execute().asJsoup()
             .selectFirst("meta[name=csrf-token]")!!
             .attr("content")
+            .also { cachedCsrfToken = it }
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
