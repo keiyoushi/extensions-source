@@ -310,7 +310,8 @@ class TeamX :
             document = client.newCall(GET(nextUrl, headers)).execute().asJsoup()
         }
 
-        return allElements.map { element ->
+        return allElements.mapNotNull { element ->
+            if (element.selectFirst("span.locked") != null) return@mapNotNull null
             SChapter.create().apply {
                 val chpNum = element.attr("data-number")
                 val chpTitle = element.selectFirst("div.chapter-info div.chapter-title")?.text()
