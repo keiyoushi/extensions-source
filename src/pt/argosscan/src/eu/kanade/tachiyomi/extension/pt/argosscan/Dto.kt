@@ -40,10 +40,11 @@ class ProjectDto(
             "em pausa" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
-        author = authors.filter { it.role.equals("autor", true) }
+        // Fixed: The API returns the roles in English ("Author", "Artist"), not just Portuguese
+        author = authors.filter { it.role.equals("Author", true) || it.role.equals("autor", true) }
             .joinToString { it.name }
             .takeIf { it.isNotBlank() }
-        artist = authors.filter { it.role.equals("artista", true) }
+        artist = authors.filter { it.role.equals("Artist", true) || it.role.equals("artista", true) }
             .joinToString { it.name }
             .takeIf { it.isNotBlank() }
         genre = tags.joinToString { it.name }.takeIf { it.isNotBlank() }
