@@ -97,19 +97,10 @@ class Comicaso : HttpSource() {
                 val httpUrl = url.toHttpUrl()
                 val pageParam = httpUrl.queryParameter("page")
                 val sourceParam = httpUrl.queryParameter("source")
-                val mangaParam = httpUrl.queryParameter("manga")
                 val slugParam = httpUrl.queryParameter("slug")
 
-                if (pageParam == "manga" && sourceParam != null && (slugParam != null || mangaParam != null)) {
-                    return fetchMangaDetails(SManga.create().apply { this.url = "$sourceParam/${slugParam ?: mangaParam}" })
-                        .map { MangasPage(listOf(it), false) }
-                }
-
-                // Old URL formats
-                if (httpUrl.host == "comicazen.com" || httpUrl.host == "medusascans.pro") {
-                    val slug = url.substringAfter("/komik/").substringBefore("/")
-                    val source = if (httpUrl.host == "medusascans.pro") "medusa" else "comicazen"
-                    return fetchMangaDetails(SManga.create().apply { this.url = "$source/$slug" })
+                if (pageParam == "manga" && sourceParam != null && slugParam != null) {
+                    return fetchMangaDetails(SManga.create().apply { this.url = "$sourceParam/$slugParam" })
                         .map { MangasPage(listOf(it), false) }
                 }
             }
