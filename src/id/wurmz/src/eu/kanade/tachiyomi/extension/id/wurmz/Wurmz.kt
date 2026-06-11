@@ -27,18 +27,16 @@ class Wurmz : HttpSource() {
         .add("Rsc", "1")
         .build()
 
-    // ======================== Popular ========================
-    override fun popularMangaRequest(page: Int): Request {
-        return searchMangaRequest(page, "", FilterList())
-    }
+    // ======================== Populer ========================
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList())
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
-    // ======================== Latest ========================
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    // ======================== Terbaru ========================
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Tidak didukung")
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException("Tidak didukung")
 
-    // ======================== Search ========================
+    // ======================== Pencarian ========================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
@@ -78,7 +76,7 @@ class Wurmz : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage {
         val bodyString = response.body.string()
         val entries = bodyString.extractNextJsRsc<List<MangaDto>>()
-            ?: throw Exception("Could not parse manga list")
+            ?: throw Exception("Gagal memproses daftar komik")
 
         val mangas = entries.filter { it.href?.contains("/detail/") == true && it.title != null }
             .distinctBy { it.href }
@@ -97,14 +95,12 @@ class Wurmz : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    // ======================== Details ========================
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(baseUrl + manga.url, rscHeaders)
-    }
+    // ======================== Detail ========================
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, rscHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val details = response.body.string().extractNextJsRsc<MangaDetailsDto>()
-            ?: throw Exception("Could not parse manga details")
+            ?: throw Exception("Gagal memproses detail komik")
 
         return details.toSManga(baseUrl).apply {
             initialized = true
@@ -113,13 +109,13 @@ class Wurmz : HttpSource() {
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
-    // ======================== Chapters ========================
+    // ======================== Daftar Chapter ========================
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val bodyString = response.body.string()
         val chapterList = bodyString.extractNextJsRsc<ChapterListDto>()
-            ?: throw Exception("Could not parse chapter list")
+            ?: throw Exception("Gagal memproses daftar chapter")
 
         val slug = response.request.url.pathSegments.let { segments ->
             val detailIdx = segments.indexOf("detail")
@@ -131,28 +127,24 @@ class Wurmz : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
-    // ======================== Pages ========================
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(baseUrl + chapter.url, rscHeaders)
-    }
+    // ======================== Daftar Gambar ========================
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
         val pageList = response.body.string().extractNextJsRsc<PageListDto>()
-            ?: throw Exception("Could not parse page list")
+            ?: throw Exception("Gagal memproses daftar gambar")
 
         return pageList.images.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Tidak didukung")
 
-    // ======================== Filters ========================
-    override fun getFilterList(): FilterList {
-        return FilterList(
-            TypeFilter(),
-            StatusFilter(),
-            GenreFilter(),
-        )
-    }
+    // ======================== Filter ========================
+    override fun getFilterList(): FilterList = FilterList(
+        TypeFilter(),
+        StatusFilter(),
+        GenreFilter(),
+    )
 }

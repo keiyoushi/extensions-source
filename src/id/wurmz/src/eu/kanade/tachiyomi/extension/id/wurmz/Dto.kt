@@ -27,7 +27,7 @@ class MangaDetailsDto(
             this@MangaDetailsDto.description?.let { append(it) }
             alternateName?.takeIf { it.isNotBlank() }?.let {
                 if (isNotEmpty()) append("\n\n")
-                append("Alternative Name: ")
+                append("Nama Alternatif: ")
                 append(it)
             }
         }

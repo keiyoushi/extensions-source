@@ -4,9 +4,9 @@ import eu.kanade.tachiyomi.source.model.Filter
 
 open class TypeFilter :
     UriPartFilter(
-        "Type",
+        "Tipe",
         arrayOf(
-            "Semua Type" to "",
+            "Semua Tipe" to "",
             "Manga" to "manga",
             "Manhwa" to "manhwa",
             "Manhua" to "manhua",
