@@ -13,6 +13,7 @@ class MangaDetailsDto(
     val image: String? = null,
     val author: AuthorDto? = null,
     val genre: List<String>? = null,
+    var status: Int = SManga.UNKNOWN,
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
         title = name
@@ -29,6 +30,7 @@ class MangaDetailsDto(
         }
         author = this@MangaDetailsDto.author?.name
         genre = this@MangaDetailsDto.genre?.joinToString()
+        status = this@MangaDetailsDto.status
     }
 }
 

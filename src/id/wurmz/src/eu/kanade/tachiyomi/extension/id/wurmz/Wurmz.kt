@@ -99,16 +99,28 @@ class Wurmz : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val bodyString = response.body.string()
         val details = bodyString.extractNextJsRsc<MangaDetailsDto> {
-            it is JsonObject && it["@type"]?.jsonPrimitive?.content == "ComicSeries"
+            it is JsonObject && it.containsKey("@type") && it["@type"]?.jsonPrimitive?.content == "ComicSeries"
         } ?: bodyString.extractNextJsRsc<LdJsonDto> {
             it is JsonObject && it.containsKey("dangerouslySetInnerHTML") &&
                 (it["dangerouslySetInnerHTML"] as? JsonObject)?.get("__html")?.jsonPrimitive?.content?.contains("ComicSeries") == true
         }?.dangerouslySetInnerHTML?.__html?.parseAs<MangaDetailsDto>()
             ?: throw Exception("Gagal memproses detail komik")
 
+        details.status = bodyString.extractNextJsRsc<JsonObject> {
+            it is JsonObject && it.containsKey("className") && it["className"]?.jsonPrimitive?.content == "status-badge"
+        }?.get("children")?.jsonPrimitive?.content?.let { parseStatus(it) } ?: SManga.UNKNOWN
+
         return details.toSManga(baseUrl).apply {
             initialized = true
         }
+    }
+
+    private fun parseStatus(status: String) = when (status.lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        "tamat", "completed" -> SManga.COMPLETED
+        "hiatus" -> SManga.ONGOING
+        "drop" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
     }
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
