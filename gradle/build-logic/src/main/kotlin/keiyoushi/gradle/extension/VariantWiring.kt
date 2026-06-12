@@ -4,8 +4,6 @@ import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import keiyoushi.gradle.extension.codegen.GenerateExtensionManifestTask
 import keiyoushi.gradle.extension.codegen.GenerateSourceTask
 import keiyoushi.gradle.extension.codegen.ResolvedExtension
-import keiyoushi.gradle.extension.dsl.DeeplinkSpec
-import keiyoushi.gradle.extension.dsl.ExtensionSpec
 import keiyoushi.gradle.tasks.GenerateKeepRulesTask
 import org.gradle.api.Project
 import org.gradle.api.provider.Property
@@ -28,7 +26,6 @@ fun Project.registerManifestTask(): TaskProvider<GenerateExtensionManifestTask> 
     }
 
 fun Project.registerGenerateSourceTask(
-    spec: ExtensionSpec,
     resolvedExtension: Property<ResolvedExtension>,
 ): TaskProvider<GenerateSourceTask> =
     tasks.register("generateSource", GenerateSourceTask::class.java) {
@@ -37,14 +34,14 @@ fun Project.registerGenerateSourceTask(
     }
 
 fun Project.wireVariantApi(
-    spec: ExtensionSpec,
+    className: Property<String>,
     bridges: VariantBridges,
     manifestTask: TaskProvider<GenerateExtensionManifestTask>,
     sourceTask: TaskProvider<GenerateSourceTask>,
 ) {
     extensions.configure(ApplicationAndroidComponentsExtension::class.java) {
         onVariants { variant ->
-            val extClass = spec.className.map { ".$it" + "Generated" }
+            val extClass = className.map { ".$it" + "Generated" }
 
             variant.outputs.forEach { output ->
                 output.versionCode.set(bridges.versionCode)
@@ -66,23 +63,7 @@ fun Project.wireVariantApi(
             }
 
             variant.sources.kotlin?.addGeneratedSourceDirectory(sourceTask) { it.outputDir }
-
-            // Read spec directly: onVariants runs inside AGP's afterEvaluate, before ours,
-            // so bridge values aren't populated yet.
-            val sourceDeeplinks = spec.sources.orNull?.any { it.specs.orNull?.isNotEmpty() == true } ?: false
-            val themeDeeplinks = spec.theme.orNull?.let { themeName ->
-                val themePath = ":lib-multisrc:$themeName"
-                evaluationDependsOn(themePath)
-                findProject(themePath)
-                    ?.extensions
-                    ?.findByType(DeeplinkSpec::class.java)
-                    ?.pathPatterns
-                    ?.orNull
-                    ?.isNotEmpty()
-            } == true
-            if (sourceDeeplinks || themeDeeplinks) {
-                variant.sources.manifests.addGeneratedManifestFile(manifestTask) { it.outputFile }
-            }
+            variant.sources.manifests.addGeneratedManifestFile(manifestTask) { it.outputFile }
         }
     }
 }

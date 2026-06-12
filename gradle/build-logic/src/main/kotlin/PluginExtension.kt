@@ -1,7 +1,6 @@
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.gradle.tasks.PackageAndroidArtifact
 import keiyoushi.gradle.extension.VariantBridges
-import keiyoushi.gradle.extension.codegen.DeeplinkFilter
 import keiyoushi.gradle.extension.codegen.ResolvedExtension
 import keiyoushi.gradle.extension.dsl.ExtensionSpec
 import keiyoushi.gradle.extension.registerGenerateSourceTask
@@ -50,8 +49,8 @@ class PluginExtension : Plugin<Project> {
 
         val resolvedExtension = objects.property(ResolvedExtension::class.java)
         val manifestTask = registerManifestTask()
-        val sourceTask = registerGenerateSourceTask(spec, resolvedExtension)
-        wireVariantApi(spec, bridges, manifestTask, sourceTask)
+        val sourceTask = registerGenerateSourceTask(resolvedExtension)
+        wireVariantApi(spec.className, bridges, manifestTask, sourceTask)
 
         afterEvaluate {
             val resolved = resolveExtensionSpec(spec, pkg)
@@ -63,9 +62,7 @@ class PluginExtension : Plugin<Project> {
             bridges.nsfw.set(if (resolved.extension.isNsfw) "1" else "0")
 
             manifestTask.configure {
-                filters.set(
-                    resolved.extension.sources.flatMap { it.deeplinks },
-                )
+                filters.set(resolved.deeplinkFilters)
             }
 
             dependencies {

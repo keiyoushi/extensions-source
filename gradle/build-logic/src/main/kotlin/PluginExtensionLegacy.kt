@@ -1,8 +1,10 @@
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.gradle.tasks.PackageAndroidArtifact
+import keiyoushi.gradle.extension.codegen.DeeplinkFilter
+import keiyoushi.gradle.extension.codegen.GenerateExtensionManifestTask
+import keiyoushi.gradle.extension.dsl.MultisrcSpec
 import keiyoushi.gradle.extensions.alias
-import keiyoushi.gradle.extensions.baseVersionCode
 import keiyoushi.gradle.extensions.compileOnly
 import keiyoushi.gradle.extensions.implementation
 import keiyoushi.gradle.extensions.kei
@@ -19,6 +21,7 @@ import org.gradle.kotlin.dsl.dependencies
 import org.gradle.kotlin.dsl.extra
 import org.gradle.kotlin.dsl.register
 import org.gradle.kotlin.dsl.withType
+import java.net.URI
 
 @Suppress("UNUSED")
 class PluginExtensionLegacy : Plugin<Project> {
@@ -58,7 +61,11 @@ class PluginExtensionLegacy : Plugin<Project> {
 
             defaultConfig {
                 applicationIdSuffix = project.parent?.name + "." + project.name
-                versionCode = if (theme == null) extVersionCode else theme.baseVersionCode + overrideVersionCode
+                versionCode = if (theme == null) extVersionCode else {
+                    val spec = theme.extensions.findByType(MultisrcSpec::class.java)
+                    val base = spec?.baseVersionCode?.getOrElse(0) ?: 0
+                    base + overrideVersionCode
+                }
                 versionName = "1.4.$versionCode"
                 base {
                     archivesName.set("tachiyomi-$applicationIdSuffix-v$versionName")
@@ -69,15 +76,6 @@ class PluginExtensionLegacy : Plugin<Project> {
                     "extClass" to extClass,
                     "nsfw" to if (isNsfw) 1 else 0,
                 )
-                if (theme != null && baseUrl.isNotEmpty()) {
-                    val split = baseUrl.split("://")
-                    assertWithoutFlag(split.size == 2) { "'baseUrl' must be in the format of 'https://example.com'" }
-                    val path = split[1].split("/")
-                    manifestPlaceholders += mapOf(
-                        "SOURCEHOST" to path[0],
-                        "SOURCESCHEME" to split[0],
-                    )
-                }
             }
 
             lint {
@@ -120,6 +118,26 @@ class PluginExtensionLegacy : Plugin<Project> {
             }
         }
 
+        val themeDeeplinks = theme?.let { t ->
+            val spec = t.extensions.findByType(MultisrcSpec::class.java)
+            val paths = spec?.deeplinks?.orNull?.flatMap { it.pathPatterns.orNull.orEmpty() }.orEmpty()
+            if (paths.isNotEmpty() && baseUrl.isNotEmpty()) {
+                val uri = runCatching { URI(baseUrl) }.getOrNull()
+                val scheme = uri?.scheme
+                val host = uri?.host
+                if (scheme != null && host != null) {
+                    listOf(DeeplinkFilter(scheme, host, paths))
+                } else emptyList()
+            } else emptyList()
+        } ?: emptyList()
+
+        val manifestTask = if (themeDeeplinks.isNotEmpty()) {
+            tasks.register("generateExtensionManifest", GenerateExtensionManifestTask::class.java) {
+                outputFile.set(layout.buildDirectory.file("generated/manifest/kei/AndroidManifest.xml"))
+                filters.set(themeDeeplinks)
+            }
+        } else null
+
         androidComponents {
             onVariants { variant ->
                 val variantName = variant.name.replaceFirstChar { it.uppercase() }
@@ -134,7 +152,9 @@ class PluginExtensionLegacy : Plugin<Project> {
                     keepRules.addGeneratedSourceDirectory(task) { it.outputDir }
                 }
 
-                variant.sources.manifests.addStaticManifestFile("AndroidManifest.xml")
+                if (manifestTask != null) {
+                    variant.sources.manifests.addGeneratedManifestFile(manifestTask) { it.outputFile }
+                }
             }
         }
 
