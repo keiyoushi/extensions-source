@@ -103,33 +103,81 @@ class Comix :
 
     // ============================== Popular ==============================
     override fun popularMangaRequest(page: Int): Request {
-        val url = apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("manga")
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("browse")
             addQueryParameter("order[score]", "desc")
-            addQueryParameter("limit", "28")
             addQueryParameter("page", page.toString())
-            applyContentPreferences()
+            applyBrowseContentPreferences()
         }.build()
 
         return GET(url, headers)
     }
 
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
+    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
+
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = fetchMangaListFromBrowse(
+        popularMangaRequest(page),
+    )
+
+    private fun fetchMangaListFromBrowse(request: Request): Observable<MangasPage> = Observable.fromCallable {
+        val document = runBlocking {
+            client.newCall(request).awaitSuccess().asJsoup()
+        }
+        val payload = runInWebView(
+            document = document,
+            buildScript = { interfaceName ->
+                """
+                    (function () {
+                        if (JSON.parse.__comixBrowseCaptureInstalled) return;
+                        const originalParse = JSON.parse;
+                        const proxiedParse = new Proxy(originalParse, {
+                            apply(target, thisArg, args) {
+                                const parsed = Reflect.apply(target, thisArg, args);
+                                try {
+                                    if (
+                                        parsed && parsed.result &&
+                                        Array.isArray(parsed.result.items) &&
+                                        parsed.result.items.length > 0 &&
+                                        parsed.result.items[0].hid !== undefined &&
+                                        parsed.result.items[0].title !== undefined
+                                    ) {
+                                        window.$interfaceName.passPayload(args[0]);
+                                    }
+                                } catch (e) {}
+                                return parsed;
+                            }
+                        });
+                        proxiedParse.__comixBrowseCaptureInstalled = true;
+                        JSON.parse = proxiedParse;
+                    })();
+                """.trimIndent()
+            },
+        )
+
+        val searchResponse = payload.parseAs<SearchResponse>()
+        val mangaList = searchResponse.result.items.map {
+            it.toBasicSManga(preferences.posterQuality())
+        }
+        MangasPage(mangaList, searchResponse.result.hasNextPage())
+    }
 
     // ============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("manga")
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("browse")
             addQueryParameter("order[chapter_updated_at]", "desc")
-            addQueryParameter("limit", "28")
             addQueryParameter("page", page.toString())
-            applyContentPreferences()
+            applyBrowseContentPreferences()
         }.build()
 
         return GET(url, headers)
     }
 
-    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = fetchMangaListFromBrowse(
+        latestUpdatesRequest(page),
+    )
 
     // ============================== Search ===============================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -144,8 +192,8 @@ class Comix :
             }
         }
 
-        val withFilters = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("manga")
+        val withFilters = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("browse")
             .apply {
                 filters.filterIsInstance<Filters.UriFilter>()
                     .forEach { it.addToUri(this) }
@@ -194,17 +242,17 @@ class Comix :
 
             if (query.isNotBlank()) {
                 addQueryParameter("keyword", query)
-                removeAllQueryParameters("order[score]")
-                removeAllQueryParameters("order[chapter_updated_at]")
-                addQueryParameter("order[relevance]", "desc")
             }
 
-            addQueryParameter("limit", "28")
             addQueryParameter("page", page.toString())
         }.build()
 
         return GET(url, headers)
     }
+
+    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchMangaListFromBrowse(searchMangaRequest(page, query, filters))
 
     /**
      * Apply every content-related source-level preference (rating, types,
@@ -213,7 +261,7 @@ class Comix :
      * `searchMangaRequest` calls each helper individually so the search
      * filter can short-circuit per-field.
      */
-    private fun HttpUrl.Builder.applyContentPreferences() {
+    private fun HttpUrl.Builder.applyBrowseContentPreferences() {
         applyContentRatingPreference()
         applyTypesPreference()
         applyDemographicsPreference()
@@ -292,41 +340,37 @@ class Comix :
         }.getOrDefault(emptyList())
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val posterQuality = preferences.posterQuality()
-
-        val pathSegments = response.request.url.pathSegments
-        val mangaIdx = pathSegments.indexOf("manga")
-
-        if (mangaIdx != -1 && pathSegments.size > mangaIdx + 1 && !pathSegments.contains("chapters")) {
-            val res: SingleMangaResponse = response.parseAs()
-            val manga = listOf(res.result.toBasicSManga(posterQuality))
-            return MangasPage(manga, false)
-        } else {
-            val res: SearchResponse = response.parseAs()
-            val manga = res.result.items.map { it.toBasicSManga(posterQuality) }
-            return MangasPage(manga, res.result.hasNextPage())
-        }
-    }
-
     // ============================== Filters ==============================
     override fun getFilterList() = Filters().getFilterList()
 
     // ============================== Details ==============================
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val hid = manga.url.removePrefix("/").substringBefore("-")
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("manga")
-            .addPathSegment(hid)
-            .build()
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
 
-        return GET(url, headers)
-    }
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val mangaResponse: SingleMangaResponse = response.parseAs()
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.fromCallable {
+        val document = runBlocking {
+            client.newCall(GET(getMangaUrl(manga), headers)).awaitSuccess().asJsoup()
+        }
 
-        return mangaResponse.result.toSManga(
+        val scriptEl = document.selectFirst("script#initial-data")
+            ?: throw Exception("Could not find manga data in page")
+
+        val scriptText = scriptEl.data()
+
+        val queriesData = kotlinx.serialization.json.Json.parseToJsonElement(scriptText) as kotlinx.serialization.json.JsonObject
+        val queries = queriesData["queries"] as? kotlinx.serialization.json.JsonObject
+            ?: throw Exception("Could not find queries in manga data")
+
+        val detailEntry = queries.entries.firstOrNull { (key, _) ->
+            key.contains("\"detail\"")
+        } ?: throw Exception("Could not find manga detail in queries")
+
+        val detailJson = detailEntry.value.toString()
+
+        val lenientJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        val manga = lenientJson.decodeFromString<Manga>(detailJson)
+        manga.toSManga(
             preferences.posterQuality(),
             preferences.alternativeNamesInDescription(),
             preferences.scorePosition(),
@@ -345,87 +389,31 @@ class Comix :
         val blacklist = preferences.scanlatorBlacklist()
         val mangaSlug = manga.url.removePrefix("/")
 
-        val document = runBlocking {
-            client.newCall(GET(getMangaUrl(manga), headers)).awaitSuccess().asJsoup()
+        val mangaUrl = getMangaUrl(manga)
+        val allChapters = mutableListOf<Chapter>()
+        var page = 1
+        var hasNextPage = true
+
+        // Use a WebView to install a JSON.parse proxy to capture the decrypted chapter data, and extract chapters from the parsed response.
+        while (hasNextPage) {
+            val pageUrl = mangaUrl.toHttpUrl().newBuilder()
+                .addQueryParameter("page", page.toString())
+                .build()
+                .toString()
+
+            val payload = fetchChapterPayload(pageUrl)
+            val chapterResponse = payload.parseAs<ChapterListResponse>()
+            val items = chapterResponse.result.items
+
+            if (items.isEmpty()) break
+
+            for (ch in items) {
+                allChapters.add(ch)
+            }
+
+            hasNextPage = chapterResponse.result.meta.hasNext
+            page++
         }
-        val payload = runInWebView(
-            document = document,
-            buildScript = { interfaceName ->
-                $$"""
-                (function () {
-                    const rewriteUrl = function (url) {
-                        if (typeof url === 'string' && url.indexOf('/chapters') !== -1 && /[?&]limit=\d+/.test(url)) {
-                            return url.replace(/([?&]limit=)\d+/, '$1100');
-                        }
-                        return url;
-                    };
-                    const originalOpen = XMLHttpRequest.prototype.open;
-                    XMLHttpRequest.prototype.open = function (method, url) {
-                        arguments[1] = rewriteUrl(url);
-                        return originalOpen.apply(this, arguments);
-                    };
-
-                    if (JSON.parse.__comixChapterCaptureInstalled) return;
-                    const originalParse = JSON.parse;
-                    const seen = new Set();
-                    const nextClicks = new Set();
-                    const items = [];
-                    let submitted = false;
-                    const submit = function () {
-                        if (submitted) return;
-                        submitted = true;
-                        window.$$interfaceName.passPayload(JSON.stringify(items));
-                    };
-
-                    const proxiedParse = new Proxy(originalParse, {
-                        apply(target, thisArg, args) {
-                            const parsed = Reflect.apply(target, thisArg, args);
-                            try {
-                                if (
-                                    !submitted &&
-                                    parsed && parsed.result &&
-                                    Array.isArray(parsed.result.items) &&
-                                    parsed.result.items.length > 0 &&
-                                    parsed.result.items[0] &&
-                                    parsed.result.items[0].id !== undefined &&
-                                    parsed.result.items[0].mangaId !== undefined
-                                ) {
-                                    const meta = parsed.result.meta || parsed.result.pagination;
-                                    const page = (meta && meta.page) || 1;
-                                    if (!seen.has(page)) {
-                                        seen.add(page);
-                                        for (const it of parsed.result.items) items.push(it);
-                                        if (meta && meta.hasNext && !nextClicks.has(page)) {
-                                            nextClicks.add(page);
-                                            window.$$interfaceName.resetTimer();
-                                            let tries = 0;
-                                            const iv = setInterval(function () {
-                                                const btn = document.querySelector('.mchap-foot button[aria-label*=Next]');
-                                                if (btn && !btn.disabled) {
-                                                    btn.click();
-                                                    clearInterval(iv);
-                                                } else if (++tries > 50) {
-                                                    clearInterval(iv);
-                                                    submit();
-                                                }
-                                            }, 100);
-                                        } else {
-                                            submit();
-                                        }
-                                    }
-                                }
-                            } catch (e) {}
-                            return parsed;
-                        }
-                    });
-                    proxiedParse.__comixChapterCaptureInstalled = true;
-                    JSON.parse = proxiedParse;
-                })();
-                """.trimIndent()
-            },
-        )
-
-        val allChapters = payload.parseAs<List<Chapter>>()
 
         // Filter out groups specified in the blacklist first
         val filteredChapters = if (blacklist.isNotEmpty()) {
@@ -458,6 +446,43 @@ class Comix :
     override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
+
+    private fun fetchChapterPayload(pageUrl: String): String {
+        val document = runBlocking {
+            client.newCall(GET(pageUrl, headers)).awaitSuccess().asJsoup()
+        }
+
+        return runInWebView(
+            document = document,
+            buildScript = { interfaceName ->
+                """
+                    (function () {
+                        if (JSON.parse.__comixChapterCaptureInstalled) return;
+                        const originalParse = JSON.parse;
+                        const proxiedParse = new Proxy(originalParse, {
+                            apply(target, thisArg, args) {
+                                const parsed = Reflect.apply(target, thisArg, args);
+                                try {
+                                    if (
+                                        parsed && parsed.result &&
+                                        Array.isArray(parsed.result.items) &&
+                                        parsed.result.items.length > 0 &&
+                                        parsed.result.items[0].number !== undefined &&
+                                        parsed.result.items[0].id !== undefined
+                                    ) {
+                                        window.$interfaceName.passPayload(JSON.stringify(parsed));
+                                    }
+                                } catch (e) {}
+                                return parsed;
+                            }
+                        });
+                        proxiedParse.__comixChapterCaptureInstalled = true;
+                        JSON.parse = proxiedParse;
+                    })();
+                """.trimIndent()
+            },
+        )
+    }
 
     private fun deduplicateChapters(
         chapterMap: LinkedHashMap<Number, Chapter>,
@@ -570,17 +595,11 @@ class Comix :
                     val httpUrl = request.url?.toString()?.toHttpUrlOrNull()
                         ?: return super.shouldInterceptRequest(view, request)
 
-                    return if (httpUrl.host.contains("comix.to") &&
-                        (
-                            httpUrl.encodedPath.contains(".js") ||
-                                httpUrl.encodedPath.startsWith("/api/") ||
-                                httpUrl.encodedPath.startsWith("/title/")
-                            )
-                    ) {
-                        super.shouldInterceptRequest(view, request)
-                    } else {
-                        emptyResponse
+                    if (!httpUrl.host.contains("comix.to")) {
+                        return emptyResponse
                     }
+
+                    return super.shouldInterceptRequest(view, request)
                 }
 
                 override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
@@ -805,5 +824,9 @@ class Comix :
         private const val DEFAULT_CONTENT_RATING = "suggestive"
 
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/s?i+/")
+        private val CHAPTER_NUM_REGEX = Regex("""Ch\.([\d.]+)""")
+        private val GROUP_ID_REGEX = Regex("""/groups/(\d+)""")
+        private val CHAPTER_ID_REGEX = Regex("""/(\d+)-""")
+        private val CHAPTER_PAGINATION_REGEX = Regex("""Showing\s+\d+\s+to\s+(\d+)\s+of\s+(\d+)""")
     }
 }
