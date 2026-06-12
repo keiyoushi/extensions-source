@@ -4,6 +4,9 @@ import android.annotation.SuppressLint
 import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
+import android.view.View
+import android.view.ViewGroup
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -30,6 +33,7 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -40,6 +44,7 @@ import org.jsoup.nodes.Document
 import rx.Observable
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 class Comix :
     HttpSource(),
@@ -52,6 +57,7 @@ class Comix :
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
+    private val lenientJson = Json { ignoreUnknownKeys = true }
 
     override val client = network.client.newBuilder()
         .addNetworkInterceptor(Descrambler.interceptor)
@@ -128,27 +134,44 @@ class Comix :
             buildScript = { interfaceName ->
                 """
                     (function () {
-                        if (JSON.parse.__comixBrowseCaptureInstalled) return;
+                        const payloadKey = '__comixBrowsePayload';
+                        const capture = parsed => {
+                            try {
+                                if (
+                                    parsed &&
+                                    parsed.result &&
+                                    Array.isArray(parsed.result.items) &&
+                                    parsed.result.items.length > 0
+                                ) {
+                                    window[payloadKey] = JSON.stringify(parsed);
+                                    window.$interfaceName.passPayload(window[payloadKey]);
+                                    return true;
+                                }
+                            } catch (e) {}
+                            return false;
+                        };
+
+                        if (window[payloadKey]) return window[payloadKey];
+
+                        try {
+                            const raw = document.querySelector('script#initial-data')?.textContent;
+                            const queries = raw && JSON.parse(raw).queries;
+                            if (queries) Object.values(queries).some(capture);
+                        } catch (e) {}
+
+                        if (window[payloadKey]) return window[payloadKey];
+                        if (JSON.parse.__comixBrowseCaptureInstalled) return null;
                         const originalParse = JSON.parse;
                         const proxiedParse = new Proxy(originalParse, {
                             apply(target, thisArg, args) {
                                 const parsed = Reflect.apply(target, thisArg, args);
-                                try {
-                                    if (
-                                        parsed && parsed.result &&
-                                        Array.isArray(parsed.result.items) &&
-                                        parsed.result.items.length > 0 &&
-                                        parsed.result.items[0].hid !== undefined &&
-                                        parsed.result.items[0].title !== undefined
-                                    ) {
-                                        window.$interfaceName.passPayload(args[0]);
-                                    }
-                                } catch (e) {}
+                                capture(parsed);
                                 return parsed;
                             }
                         });
                         proxiedParse.__comixBrowseCaptureInstalled = true;
                         JSON.parse = proxiedParse;
+                        return window[payloadKey] || null;
                     })();
                 """.trimIndent()
             },
@@ -353,24 +376,17 @@ class Comix :
             client.newCall(GET(getMangaUrl(manga), headers)).awaitSuccess().asJsoup()
         }
 
-        val scriptEl = document.selectFirst("script#initial-data")
+        val initialData = document.selectFirst("script#initial-data")?.data()
             ?: throw Exception("Could not find manga data in page")
-
-        val scriptText = scriptEl.data()
-
-        val queriesData = kotlinx.serialization.json.Json.parseToJsonElement(scriptText) as kotlinx.serialization.json.JsonObject
-        val queries = queriesData["queries"] as? kotlinx.serialization.json.JsonObject
+        val root = Json.parseToJsonElement(initialData) as? kotlinx.serialization.json.JsonObject
+            ?: throw Exception("Could not parse manga data")
+        val queries = root["queries"] as? kotlinx.serialization.json.JsonObject
             ?: throw Exception("Could not find queries in manga data")
+        val detail = queries.entries.firstOrNull { (key, _) -> key.contains("\"detail\"") }
+            ?.value
+            ?: throw Exception("Could not find manga detail in queries")
 
-        val detailEntry = queries.entries.firstOrNull { (key, _) ->
-            key.contains("\"detail\"")
-        } ?: throw Exception("Could not find manga detail in queries")
-
-        val detailJson = detailEntry.value.toString()
-
-        val lenientJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-        val manga = lenientJson.decodeFromString<Manga>(detailJson)
-        manga.toSManga(
+        lenientJson.decodeFromString<Manga>(detail.toString()).toSManga(
             preferences.posterQuality(),
             preferences.alternativeNamesInDescription(),
             preferences.scorePosition(),
@@ -391,27 +407,22 @@ class Comix :
 
         val mangaUrl = getMangaUrl(manga)
         val allChapters = mutableListOf<Chapter>()
+        val seenPages = mutableSetOf<Int>()
         var page = 1
         var hasNextPage = true
 
-        // Use a WebView to install a JSON.parse proxy to capture the decrypted chapter data, and extract chapters from the parsed response.
         while (hasNextPage) {
             val pageUrl = mangaUrl.toHttpUrl().newBuilder()
                 .addQueryParameter("page", page.toString())
                 .build()
                 .toString()
-
-            val payload = fetchChapterPayload(pageUrl)
-            val chapterResponse = payload.parseAs<ChapterListResponse>()
+            val chapterResponse = fetchChapterPayload(pageUrl).parseAs<ChapterListResponse>()
             val items = chapterResponse.result.items
+            val meta = chapterResponse.result.meta
 
-            if (items.isEmpty()) break
-
-            for (ch in items) {
-                allChapters.add(ch)
-            }
-
-            hasNextPage = chapterResponse.result.meta.hasNext
+            if (items.isEmpty() || !seenPages.add(meta.page)) break
+            allChapters.addAll(items)
+            hasNextPage = meta.hasNext && (meta.lastPage <= 1 || meta.page < meta.lastPage)
             page++
         }
 
@@ -464,11 +475,10 @@ class Comix :
                                 const parsed = Reflect.apply(target, thisArg, args);
                                 try {
                                     if (
-                                        parsed && parsed.result &&
+                                        parsed &&
+                                        parsed.result &&
                                         Array.isArray(parsed.result.items) &&
-                                        parsed.result.items.length > 0 &&
-                                        parsed.result.items[0].number !== undefined &&
-                                        parsed.result.items[0].id !== undefined
+                                        parsed.result.items.length > 0
                                     ) {
                                         window.$interfaceName.passPayload(JSON.stringify(parsed));
                                     }
@@ -525,21 +535,39 @@ class Comix :
             buildScript = { interfaceName ->
                 """
                 (function () {
-                    if (JSON.parse.__comixPageCaptureInstalled) return;
+                    const payloadKey = '__comixPagePayload';
+                    const capture = parsed => {
+                        try {
+                            if (parsed && parsed.result && parsed.result.pages) {
+                                window[payloadKey] = JSON.stringify(parsed);
+                                window.$interfaceName.passPayload(window[payloadKey]);
+                                return true;
+                            }
+                        } catch (e) {}
+                        return false;
+                    };
+
+                    if (window[payloadKey]) return window[payloadKey];
+
+                    try {
+                        const raw = document.querySelector('script#initial-data')?.textContent;
+                        const queries = raw && JSON.parse(raw).queries;
+                        if (queries) Object.values(queries).some(capture);
+                    } catch (e) {}
+
+                    if (window[payloadKey]) return window[payloadKey];
+                    if (JSON.parse.__comixPageCaptureInstalled) return null;
                     const originalParse = JSON.parse;
                     const proxiedParse = new Proxy(originalParse, {
                         apply(target, thisArg, args) {
                             const parsed = Reflect.apply(target, thisArg, args);
-                            try {
-                                if (parsed && parsed.result && parsed.result.pages) {
-                                    window.$interfaceName.passPayload(args[0]);
-                                }
-                            } catch (e) {}
+                            capture(parsed);
                             return parsed;
                         }
                     });
                     proxiedParse.__comixPageCaptureInstalled = true;
                     JSON.parse = proxiedParse;
+                    return window[payloadKey] || null;
                 })();
                 """.trimIndent()
             },
@@ -561,67 +589,126 @@ class Comix :
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     @SuppressLint("SetJavaScriptEnabled")
+    @Synchronized
     private fun runInWebView(
         document: Document,
         buildScript: (interfaceName: String) -> String,
     ): String {
         val handler = Handler(Looper.getMainLooper())
-        val jsInterface = WebViewPayloadInterface()
+        val payloadResult = WebViewPayloadResult()
         val pool = ('a'..'z') + ('A'..'Z')
         val interfaceName = (1..(10..20).random())
             .map { pool.random() }
             .joinToString("")
         val script = buildScript(interfaceName)
         val emptyResponse = WebResourceResponse("text/plain", "utf-8", Buffer().inputStream())
+        val active = AtomicBoolean(true)
 
         var webView: WebView? = null
+        var injectScript: Runnable? = null
+        var lastUrl = document.location()
         handler.post {
+            if (!active.get()) return@post
+
             val view = WebView(applicationContext)
             webView = view
+
+            // Suwayomi's KCEF WebView stubs Android view layout APIs.
+            runCatching {
+                view.layoutParams = ViewGroup.LayoutParams(WEBVIEW_WIDTH, WEBVIEW_HEIGHT)
+                view.measure(
+                    View.MeasureSpec.makeMeasureSpec(WEBVIEW_WIDTH, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(WEBVIEW_HEIGHT, View.MeasureSpec.EXACTLY),
+                )
+                view.layout(0, 0, WEBVIEW_WIDTH, WEBVIEW_HEIGHT)
+            }
 
             with(view.settings) {
                 javaScriptEnabled = true
                 domStorageEnabled = true
-                blockNetworkImage = true
+                databaseEnabled = true
+                loadWithOverviewMode = true
+                useWideViewPort = true
+                blockNetworkImage = false
                 userAgentString = headers["User-Agent"]
             }
-            view.addJavascriptInterface(jsInterface, interfaceName)
+
+            CookieManager.getInstance().apply {
+                setAcceptCookie(true)
+                setAcceptThirdPartyCookies(view, true)
+            }
+
+            view.addJavascriptInterface(payloadResult, interfaceName)
 
             view.webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(
                     view: WebView,
                     request: WebResourceRequest,
                 ): WebResourceResponse? {
-                    val httpUrl = request.url?.toString()?.toHttpUrlOrNull()
+                    val requestUrl = request.url?.toString()?.toHttpUrlOrNull()
                         ?: return super.shouldInterceptRequest(view, request)
 
-                    if (!httpUrl.host.contains("comix.to")) {
-                        return emptyResponse
-                    }
-
+                    if (!requestUrl.host.contains("comix.to")) return emptyResponse
                     return super.shouldInterceptRequest(view, request)
                 }
 
                 override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                     super.onPageStarted(view, url, favicon)
-                    view.evaluateJavascript(script) {}
+                    if (url != null) lastUrl = url
+                    if (active.get() && payloadResult.payload == null) {
+                        runCatching { view.evaluateJavascript(script, null) }
+                    }
+                }
+
+                override fun onPageFinished(view: WebView, url: String?) {
+                    super.onPageFinished(view, url)
+                    if (url != null) lastUrl = url
+                    if (active.get() && payloadResult.payload == null) {
+                        runCatching { view.evaluateJavascript(script, null) }
+                    }
                 }
             }
 
-            view.loadDataWithBaseURL(document.location(), document.outerHtml(), "text/html", "utf-8", null)
+            val retry = object : Runnable {
+                override fun run() {
+                    if (!active.get() || payloadResult.payload != null) return
+                    runCatching { view.evaluateJavascript(script, null) }
+                    if (active.get() && payloadResult.payload == null) {
+                        handler.postDelayed(this, SCRIPT_RETRY_INTERVAL_MS)
+                    }
+                }
+            }
+            injectScript = retry
+
+            view.loadDataWithBaseURL(
+                document.location(),
+                document.outerHtml(),
+                "text/html",
+                "utf-8",
+                null,
+            )
+            handler.post(retry)
         }
 
         val completed = try {
-            jsInterface.await(30, TimeUnit.SECONDS)
+            payloadResult.await(WEBVIEW_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         } finally {
-            handler.post { webView?.destroy() }
+            active.set(false)
+            handler.post {
+                injectScript?.let(handler::removeCallbacks)
+                val view = webView
+                webView = null
+                runCatching { view?.destroy() }
+            }
         }
 
-        if (!completed) throw Exception("Timed out waiting for WebView payload")
-        return jsInterface.payload ?: throw Exception("Failed to capture WebView payload")
+        if (!completed) {
+            throw Exception("Timed out waiting for WebView payload (url=$lastUrl)")
+        }
+        return payloadResult.payload ?: throw Exception("Failed to capture WebView payload")
     }
 
-    private class WebViewPayloadInterface {
+    private class WebViewPayloadResult {
         private val signal = Semaphore(0)
 
         @Volatile
@@ -635,12 +722,6 @@ class Comix :
                 payload = data
                 signal.release()
             }
-        }
-
-        @JavascriptInterface
-        @Suppress("UNUSED")
-        fun resetTimer() {
-            signal.release()
         }
 
         fun await(timeout: Long, unit: TimeUnit): Boolean {
@@ -822,6 +903,10 @@ class Comix :
         private const val PREF_SCORE_POSITION = "pref_score_position"
 
         private const val DEFAULT_CONTENT_RATING = "suggestive"
+        private const val WEBVIEW_TIMEOUT_SECONDS = 90L
+        private const val SCRIPT_RETRY_INTERVAL_MS = 100L
+        private const val WEBVIEW_WIDTH = 1080
+        private const val WEBVIEW_HEIGHT = 1920
 
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/s?i+/")
         private val CHAPTER_NUM_REGEX = Regex("""Ch\.([\d.]+)""")
