@@ -14,8 +14,8 @@ class CustomUrlPreferences(
 ) {
     private val prefDefaultKey = "${prefBaseKey}_default"
 
-    // Strict Regex: https?://domain.tld (no trailing slash, no path)
-    private val urlRegex = Regex("^https?://[^/?#]+\\.[^/?#]+$")
+    // Strict Regex: https?://domain.tld or https?://host:port (no trailing slash, no path)
+    private val urlRegex = Regex("^https?://[^/?#]+$")
 
     init {
         val storedDefault = preferences.getString(prefDefaultKey, null)

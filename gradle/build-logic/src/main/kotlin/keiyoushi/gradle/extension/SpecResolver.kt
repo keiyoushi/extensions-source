@@ -137,7 +137,7 @@ private fun resolveDeeplinkFilters(
         }
     }
 
-    return result
+    return result.distinct()
 }
 
 private fun parseUrls(baseUrl: BaseUrlSpec): List<Pair<String?, String?>> {
