@@ -29,6 +29,14 @@ abstract class GenerateExtensionManifestTask : DefaultTask() {
         val out = outputFile.get().asFile
         out.parentFile.mkdirs()
 
+        if (filterList.isEmpty()) {
+            out.writeText("""<?xml version="1.0" encoding="utf-8"?>
+                |<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
+                |
+            """.trimMargin())
+            return
+        }
+
         val intentFilters = filterList.joinToString("\n") { f ->
             buildString {
                 appendLine("            <intent-filter>")
@@ -51,7 +59,7 @@ abstract class GenerateExtensionManifestTask : DefaultTask() {
             |<manifest xmlns:android="http://schemas.android.com/apk/res/android">
             |    <application>
             |        <activity
-            |            android:name="keiyoushi.core.UrlDispatchActivity"
+            |            android:name="keiyoushi.source.UrlActivity"
             |            android:excludeFromRecents="true"
             |            android:exported="true"
             |            android:theme="@android:style/Theme.NoDisplay">

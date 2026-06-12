@@ -1,4 +1,4 @@
-package keiyoushi.core
+package keiyoushi.source
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -6,7 +6,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 
-class UrlDispatchActivity : Activity() {
+class UrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
