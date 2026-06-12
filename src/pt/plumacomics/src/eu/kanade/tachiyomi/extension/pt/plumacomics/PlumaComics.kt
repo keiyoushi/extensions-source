@@ -123,7 +123,7 @@ class PlumaComics : HttpSource() {
         val pages = response.parseAs<PagesList>()
 
         return pages.pages.map { page ->
-            Page(page.i, imageUrl = "$baseUrl/${page.u}")
+            Page(page.i, imageUrl = "$baseUrl/${page.u.trim('/')}")
         }
     }
 
