@@ -143,7 +143,7 @@ private fun resolveDeeplinkFilters(
 private fun parseUrls(baseUrl: BaseUrlSpec): List<Pair<String?, String?>> {
     val urls = when (baseUrl) {
         is BaseUrlSpec.Static -> listOf(baseUrl.url)
-        is BaseUrlSpec.Mirrors -> baseUrl.mirrors.map { it.url }
+        is BaseUrlSpec.Mirrors -> baseUrl.mirrors
         is BaseUrlSpec.Custom -> listOf(baseUrl.defaultUrl)
     }
     return urls.map { url ->

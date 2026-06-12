@@ -2,7 +2,7 @@ package keiyoushi.gradle.extension.codegen
 
 import keiyoushi.gradle.extension.dsl.BaseUrlSpec
 import keiyoushi.gradle.extension.dsl.OverrideValue
-import java.io.Serializable as JvmSerializable
+import java.io.Serializable
 
 data class ResolvedExtension(
     val name: String,
@@ -10,7 +10,7 @@ data class ResolvedExtension(
     val className: String,
     val sources: List<ResolvedSource>,
     val isNsfw: Boolean,
-) : JvmSerializable
+) : Serializable
 
 data class ResolvedSource(
     val name: String,
@@ -20,4 +20,4 @@ data class ResolvedSource(
     val id: Long,
     val baseUrl: BaseUrlSpec,
     val overrides: Map<String, OverrideValue>,
-) : JvmSerializable
+) : Serializable

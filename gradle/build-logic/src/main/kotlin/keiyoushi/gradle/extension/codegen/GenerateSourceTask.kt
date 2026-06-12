@@ -173,8 +173,8 @@ abstract class GenerateSourceTask : DefaultTask() {
                 builder.appendLine("private val mirrorPrefs = MirrorPreferences(")
                 builder.appendLine("    preferences = preferences,")
                 builder.appendLine("    mirrors = arrayOf(")
-                baseUrl.mirrors.forEach { mirror ->
-                    builder.appendLine("        \"${mirror.label}\" to \"${mirror.url}\",")
+                baseUrl.mirrors.forEach { url ->
+                    builder.appendLine("        \"$url\",")
                 }
                 builder.appendLine("    ),")
                 if (baseUrl.prefKey.isNotEmpty()) {
