@@ -245,6 +245,12 @@ abstract class Madara(
             add("template", "madara-core/content/content-archive")
             add("vars[orderby]", "meta_value_num")
             add("vars[paged]", "1")
+
+            if (filterNonMangaItems) {
+                add("vars[meta_query][0][key]", "_wp_manga_chapter_type")
+                add("vars[meta_query][0][value]", "manga")
+            }
+
             add("vars[post_type]", "wp-manga")
             add("vars[post_status]", "publish")
             add("vars[meta_key]", if (popular) "_wp_manga_views" else "_latest_update")
