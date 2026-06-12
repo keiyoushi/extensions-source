@@ -27,16 +27,13 @@ class Wurmz : HttpSource() {
         .add("Rsc", "1")
         .build()
 
-    // ======================== Populer ========================
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList())
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
-    // ======================== Terbaru ========================
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Tidak didukung")
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException("Tidak didukung")
 
-    // ======================== Pencarian ========================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
@@ -78,11 +75,11 @@ class Wurmz : HttpSource() {
         val entries = bodyString.extractNextJsRsc<List<MangaDto>>()
             ?: throw Exception("Gagal memproses daftar komik")
 
-        val mangas = entries.filter { it.href?.contains("/detail/") == true && it.title != null }
+        val mangas = entries.filter { it.href.contains("/detail/") && it.title != null }
             .distinctBy { it.href }
             .map { entry ->
                 SManga.create().apply {
-                    url = entry.href!!
+                    url = entry.href
                     title = entry.title!!
                     thumbnail_url = entry.src?.let {
                         if (it.startsWith("http")) it else baseUrl + it
@@ -95,7 +92,6 @@ class Wurmz : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    // ======================== Detail ========================
     override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, rscHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -109,7 +105,6 @@ class Wurmz : HttpSource() {
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
-    // ======================== Daftar Chapter ========================
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -127,7 +122,6 @@ class Wurmz : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
-    // ======================== Daftar Gambar ========================
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
@@ -141,7 +135,6 @@ class Wurmz : HttpSource() {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Tidak didukung")
 
-    // ======================== Filter ========================
     override fun getFilterList(): FilterList = FilterList(
         TypeFilter(),
         StatusFilter(),
