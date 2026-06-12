@@ -1,10 +1,14 @@
-import keiyoushi.gradle.extensions.baseVersionCode
-
 plugins {
     alias(kei.plugins.multisrc)
 }
 
-baseVersionCode = 50
+multisrc {
+    baseVersionCode = 50
+
+    deeplink {
+        path("/.*/..*")
+    }
+}
 
 dependencies {
     api(project(":lib:cryptoaes"))
