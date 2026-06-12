@@ -468,26 +468,46 @@ class Comix :
             buildScript = { interfaceName ->
                 """
                     (function () {
-                        if (JSON.parse.__comixChapterCaptureInstalled) return;
+                        const payloadKey = '__comixChapterPayload';
+                        const capture = parsed => {
+                            try {
+                                const items = parsed?.result?.items;
+                                const first = items?.[0];
+                                if (
+                                    Array.isArray(items) &&
+                                    items.length > 0 &&
+                                    first.id !== undefined &&
+                                    first.number !== undefined
+                                ) {
+                                    window[payloadKey] = JSON.stringify(parsed);
+                                    window.$interfaceName.passPayload(window[payloadKey]);
+                                    return true;
+                                }
+                            } catch (e) {}
+                            return false;
+                        };
+
+                        if (window[payloadKey]) return window[payloadKey];
+
+                        try {
+                            const raw = document.querySelector('script#initial-data')?.textContent;
+                            const queries = raw && JSON.parse(raw).queries;
+                            if (queries) Object.values(queries).some(capture);
+                        } catch (e) {}
+
+                        if (window[payloadKey]) return window[payloadKey];
+                        if (JSON.parse.__comixChapterCaptureInstalled) return null;
                         const originalParse = JSON.parse;
                         const proxiedParse = new Proxy(originalParse, {
                             apply(target, thisArg, args) {
                                 const parsed = Reflect.apply(target, thisArg, args);
-                                try {
-                                    if (
-                                        parsed &&
-                                        parsed.result &&
-                                        Array.isArray(parsed.result.items) &&
-                                        parsed.result.items.length > 0
-                                    ) {
-                                        window.$interfaceName.passPayload(JSON.stringify(parsed));
-                                    }
-                                } catch (e) {}
+                                capture(parsed);
                                 return parsed;
                             }
                         });
                         proxiedParse.__comixChapterCaptureInstalled = true;
                         JSON.parse = proxiedParse;
+                        return window[payloadKey] || null;
                     })();
                 """.trimIndent()
             },
