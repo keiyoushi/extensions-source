@@ -56,3 +56,13 @@ class ChapterDto(
 class PageListDto(
     val images: List<String>,
 )
+
+@Serializable
+class LdJsonDto(
+    val dangerouslySetInnerHTML: InnerHtmlDto,
+)
+
+@Serializable
+class InnerHtmlDto(
+    val __html: String,
+)
