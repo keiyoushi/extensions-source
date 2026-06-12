@@ -185,7 +185,7 @@ class CapibaraTraductor : HttpSource() {
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val (seriesSlug, chapterSlug, organizationSlug) = chapter.url.split("/", limit = 3)
+        val (chapterSlug, seriesSlug, organizationSlug) = chapter.url.split("/", limit = 3)
 
         return "$baseUrl/$organizationSlug/manga/$seriesSlug/chapters/$chapterSlug"
     }
