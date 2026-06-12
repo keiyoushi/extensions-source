@@ -546,9 +546,7 @@ class Comix :
 
     // =============================== Pages ===============================
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
-        val document = runBlocking {
-            client.newCall(GET(getChapterUrl(chapter), headers)).awaitSuccess().asJsoup()
-        }
+        val document = client.newCall(GET(getChapterUrl(chapter), headers)).execute().asJsoup()
         val payload = runInWebView(
             document = document,
             buildScript = { interfaceName ->
@@ -622,6 +620,8 @@ class Comix :
         val script = buildScript(interfaceName)
         val emptyResponse = WebResourceResponse("text/plain", "utf-8", Buffer().inputStream())
         val active = AtomicBoolean(true)
+        val isCloudflareChallenge = document.title() == "Just a moment..." ||
+            document.selectFirst("script[src*=challenge-platform], script:containsData(_cf_chl_opt)") != null
 
         var webView: WebView? = null
         var injectScript: Runnable? = null
@@ -667,7 +667,10 @@ class Comix :
                     val requestUrl = request.url?.toString()?.toHttpUrlOrNull()
                         ?: return super.shouldInterceptRequest(view, request)
 
-                    if (!requestUrl.host.contains("comix.to")) return emptyResponse
+                    val allowedHost = requestUrl.host == "comix.to" ||
+                        requestUrl.host.endsWith(".comix.to") ||
+                        requestUrl.host == "challenges.cloudflare.com"
+                    if (!allowedHost) return emptyResponse
                     return super.shouldInterceptRequest(view, request)
                 }
 
@@ -699,13 +702,17 @@ class Comix :
             }
             injectScript = retry
 
-            view.loadDataWithBaseURL(
-                document.location(),
-                document.outerHtml(),
-                "text/html",
-                "utf-8",
-                null,
-            )
+            if (isCloudflareChallenge) {
+                view.loadUrl(document.location())
+            } else {
+                view.loadDataWithBaseURL(
+                    document.location(),
+                    document.outerHtml(),
+                    "text/html",
+                    "utf-8",
+                    null,
+                )
+            }
             handler.post(retry)
         }
 
