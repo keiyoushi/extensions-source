@@ -1,12 +1,12 @@
 package eu.kanade.tachiyomi.extension.vi.moetruyen
 
 import android.content.SharedPreferences
+import android.util.Base64
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,21 +15,32 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.security.MessageDigest
+import java.security.SecureRandom
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.ConcurrentHashMap
 
 class MoeTruyen :
     HttpSource(),
     ConfigurableSource {
+
     override val name = "MoeTruyen"
     override val lang = "vi"
     override val baseUrl get() = getPrefBaseUrl()
@@ -37,7 +48,12 @@ class MoeTruyen :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
+    private val imgxGrants = ConcurrentHashMap<String, PageAccessEntry>()
+
     override val client = network.client.newBuilder()
+        .addNetworkInterceptor(CookieInterceptor("moetruyen.net", "moetruyen_full_web" to "Moetruyen123456"))
+        .addNetworkInterceptor(CookieInterceptor("truyen.moe", "moetruyen_full_web" to "Moetruyen123456"))
+        .addInterceptor(imgxInterceptor())
         .rateLimit(3)
         .build()
 
@@ -275,12 +291,26 @@ class MoeTruyen :
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-
-        val imageUrls = document.select("img.page-media")
-            .asSequence()
+        val images = document.select("img.page-media")
             .filterNot { element ->
                 element.parents().any { parent -> parent.tagName().equals("noscript", ignoreCase = true) }
             }
+        val readerPages = document.selectFirst("[data-reader-lazy-pages]")
+
+        val accessUrl = images.firstOrNull()?.attr("data-imgx-access-url")?.ifBlank { null }
+            ?: readerPages?.attr("data-reader-imgx-access-url")?.ifBlank { null }
+
+        if (accessUrl != null) {
+            val fullAccessUrl = if (accessUrl.startsWith("http")) accessUrl else "$baseUrl$accessUrl"
+            val proofToken = readerPages
+                ?.attr("data-reader-imgx-proof-token")
+                ?.ifBlank { null }
+
+            return fetchPagesWithGrants(fullAccessUrl, images.size, proofToken)
+        }
+
+        return images
+            .asSequence()
             .map { element ->
                 element.absUrl("data-src").ifEmpty { element.absUrl("src") }
             }
@@ -289,10 +319,111 @@ class MoeTruyen :
             }
             .distinct()
             .toList()
+            .mapIndexed { index, imageUrl ->
+                Page(index, imageUrl = imageUrl)
+            }
+    }
 
-        return imageUrls.mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = imageUrl)
+    private fun fetchPagesWithGrants(accessUrl: String, pageCount: Int, proofToken: String?): List<Page> {
+        val pages = mutableListOf<Page>()
+        val batchSize = 5
+
+        for (start in 0 until pageCount step batchSize) {
+            val end = minOf(start + batchSize, pageCount)
+            val indices = (start until end).toList()
+            val proof = proofToken?.let { createPageAccessProof(accessUrl, indices, it) }
+            val body = PageAccessRequest(pageIndexes = indices, pageAccessProof = proof).toJsonRequestBody()
+
+            val request = Request.Builder()
+                .url(accessUrl)
+                .post(body)
+                .headers(headers)
+                .header("Accept", "application/json")
+                .apply {
+                    if (proof != null) {
+                        header("X-IMGX-Reader-Proof", proof.proof)
+                        header("X-IMGX-Reader-Proof-Version", proof.version)
+                    }
+                }
+                .build()
+
+            val response = client.newCall(request).execute()
+            val pageAccess = response.use { it.parseAs<PageAccessResponse>() }
+
+            for (entry in pageAccess.pages) {
+                if (entry.downloadUrl.isNotBlank() && entry.grant != null) {
+                    imgxGrants[entry.downloadUrl] = entry
+                    pages.add(Page(entry.pageIndex, imageUrl = entry.downloadUrl))
+                }
+            }
         }
+
+        return pages.sortedBy { it.index }
+    }
+
+    private fun createPageAccessProof(accessUrl: String, pageIndexes: List<Int>, token: String): PageAccessProof {
+        val version = "imgx-page-access-proof-v1"
+        val issuedAt = System.currentTimeMillis()
+        val nonce = randomHex(16)
+        val accessPath = accessUrl.toHttpUrl().encodedPath
+        val pageIndexPart = pageIndexes.joinToString(",")
+        val proofInput = listOf(
+            version,
+            token,
+            accessPath,
+            "",
+            pageIndexPart,
+            issuedAt.toString(),
+            nonce.lowercase(Locale.ROOT),
+        ).joinToString("\n")
+
+        val proof = MessageDigest.getInstance("SHA-256")
+            .digest(proofInput.toByteArray(Charsets.UTF_8))
+            .base64UrlNoPadding()
+
+        return PageAccessProof(
+            version = version,
+            token = token,
+            issuedAt = issuedAt,
+            nonce = nonce,
+            proof = proof,
+        )
+    }
+
+    private fun randomHex(size: Int): String {
+        val bytes = ByteArray(size)
+        secureRandom.nextBytes(bytes)
+        return bytes.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+    }
+
+    private fun ByteArray.base64UrlNoPadding(): String = Base64.encodeToString(this, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+
+    private fun imgxInterceptor() = Interceptor { chain ->
+        val request = chain.request()
+        val url = request.url.toString()
+        val entry = imgxGrants.remove(url)
+
+        if (entry?.grant == null) {
+            return@Interceptor chain.proceed(request)
+        }
+
+        val response = chain.proceed(request)
+        val imgxData = response.body.bytes()
+
+        if (imgxData.size <= 13 ||
+            imgxData[0] != 0x49.toByte() || imgxData[1] != 0x4D.toByte() ||
+            imgxData[2] != 0x47.toByte() || imgxData[3] != 0x58.toByte()
+        ) {
+            return@Interceptor response.newBuilder()
+                .body(imgxData.toResponseBody(response.body.contentType()))
+                .build()
+        }
+
+        val webp = ImageDecryptor.decrypt(imgxData, entry.grant, entry.storageKey)
+
+        response.newBuilder()
+            .body(webp.toResponseBody("image/webp".toMediaType()))
+            .build()
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -315,7 +446,7 @@ class MoeTruyen :
                     Toast.makeText(screen.context, NOTIFICATION_SHOW, Toast.LENGTH_SHORT).show()
                     true
                 } catch (e: Exception) {
-                    Toast.makeText(screen.context, "Tên miền không hợp lệ: Error: ${e.message} ", Toast.LENGTH_LONG).show()
+                    Toast.makeText(screen.context, "Tên miền không hợp lệ: Error: ${e.message}", Toast.LENGTH_LONG).show()
                     false
                 }
             }
@@ -343,16 +474,19 @@ class MoeTruyen :
         UrlMode.GLOBAL -> DOMAIN_GLOBAL
         UrlMode.CUSTOM -> preferences.getString(PREF_CUSTOM_DOMAIN, DEFAULT_DOMAIN)!!
     }.removeSuffix("/")
+
     enum class UrlMode {
         DEFAULT,
         GLOBAL,
         CUSTOM,
     }
+
     private fun SharedPreferences.getPrefUrl(): UrlMode = when (getString(PREF_DOMAIN, "default")) {
         "default" -> UrlMode.DEFAULT
         "global" -> UrlMode.GLOBAL
         else -> UrlMode.CUSTOM
     }
+
     companion object {
         private const val PREF_DOMAIN = "pref_domain"
         private const val DEFAULT_DOMAIN = "https://moetruyen.net"
@@ -369,9 +503,13 @@ class MoeTruyen :
         )
         private const val PREF_CUSTOM_DOMAIN = "pref_custom_domain"
         private const val NOTIFICATION_SHOW = "Tên miền đã được thay đổi."
+
         private val NUMBER_REGEX = Regex("""\d+""")
+
         private val dateFormat = java.text.SimpleDateFormat("dd/MM/yyyy", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
         }
+
+        private val secureRandom = SecureRandom()
     }
 }

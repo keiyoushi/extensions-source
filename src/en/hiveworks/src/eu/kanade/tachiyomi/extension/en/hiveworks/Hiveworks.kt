@@ -21,7 +21,7 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Code that used to handle Saturday Morning Breakfast Comics has been split to its
@@ -39,8 +39,8 @@ class Hiveworks : HttpSource() {
     // Client
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .connectTimeout(1, TimeUnit.MINUTES)
-        .readTimeout(1, TimeUnit.MINUTES)
+        .connectTimeout(1.minutes)
+        .readTimeout(1.minutes)
         .retryOnConnectionFailure(true)
         .followRedirects(true)
         .build()

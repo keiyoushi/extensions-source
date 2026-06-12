@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.en.mangafox
 
 import android.webkit.CookieManager
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.Cookie
 import okhttp3.CookieJar
@@ -24,6 +24,7 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class MangaFox : HttpSource() {
 
@@ -38,7 +39,6 @@ class MangaFox : HttpSource() {
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 1)
         // Force readway=2 cookie to get all page URLs at once
         .cookieJar(
             object : CookieJar {
@@ -67,6 +67,7 @@ class MangaFox : HttpSource() {
                 }
             },
         )
+        .rateLimit(1, 1.seconds)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", "$baseUrl/")

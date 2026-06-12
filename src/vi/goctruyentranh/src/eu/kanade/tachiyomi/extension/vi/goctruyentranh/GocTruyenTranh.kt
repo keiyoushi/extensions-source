@@ -4,7 +4,6 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -46,7 +46,6 @@ class GocTruyenTranh :
     private val dateFormat = SimpleDateFormat("dd-MM-yyyy HH:mm:ss", Locale.US)
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3)
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -65,6 +64,7 @@ class GocTruyenTranh :
             }
             response
         }
+        .rateLimit(3)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

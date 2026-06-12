@@ -3,7 +3,7 @@ ext {
     extClass = '.AsiaLotus'
     themePkg = 'mangathemesia'
     baseUrl = 'https://asialotuss.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

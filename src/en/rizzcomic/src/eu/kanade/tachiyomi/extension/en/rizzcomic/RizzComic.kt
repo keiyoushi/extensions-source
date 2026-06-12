@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaAlt
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -20,6 +20,7 @@ import okhttp3.Response
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class RizzComic :
     MangaThemesiaAlt(
@@ -31,7 +32,6 @@ class RizzComic :
     ) {
 
     override val client = super.client.newBuilder()
-        .rateLimit(1, 3)
         .addInterceptor { chain ->
             val request = chain.request()
             val isApiRequest = request.header("X-API-Request") != null
@@ -41,6 +41,7 @@ class RizzComic :
             }.build()
             chain.proceed(request.newBuilder().headers(headers).build())
         }
+        .rateLimit(1, 3.seconds)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

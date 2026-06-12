@@ -40,10 +40,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
-import java.util.concurrent.TimeUnit.MINUTES
 import javax.crypto.Cipher
 import kotlin.random.Random
 import kotlin.random.nextUBytes
+import kotlin.time.Duration.Companion.minutes
 
 class Manhuaren :
     HttpSource(),
@@ -303,7 +303,7 @@ class Manhuaren :
         val authorization = fetchToken()
         return myRequest(url, "GET", null).newBuilder()
             .addHeader("Authorization", authorization)
-            .cacheControl(CacheControl.Builder().maxAge(10, MINUTES).build())
+            .cacheControl(CacheControl.Builder().maxAge(10.minutes).build())
             .build()
     }
 

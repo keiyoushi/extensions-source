@@ -39,23 +39,28 @@ class AuthorFilter(
     val checked get() = state.filter { it.state }.map { it.value }.takeUnless { it.isEmpty() }
 }
 
-class StatusFilter(
-    name: String,
-    status: List<Pair<String, String>>,
-) : Filter.Group<CheckBoxFilter>(
-    name,
-    status.map { CheckBoxFilter(it.first, it.second) },
-) {
-    val checked get() = state.filter { it.state }.map { it.value }.takeUnless { it.isEmpty() }
+class StatusFilter :
+    Filter.Group<CheckBoxFilter>(
+        "Status",
+        listOf(
+            CheckBoxFilter("Ongoing", "1"),
+            CheckBoxFilter("Completed", "4"),
+            CheckBoxFilter("Hiatus", "2"),
+            CheckBoxFilter("Cancelled", "3"),
+        ),
+    ) {
+    val checked get() = state.filter { it.state }.map { it.value }
+}
+
+enum class SortType(val value: String) {
+    Title(""),
+    Latest("1"),
+    Popularity("2"),
 }
 
 class SortFilter(defaultSort: String? = null) :
     SelectFilter(
         "Sort By",
-        listOf(
-            Pair("Title", "title"),
-            Pair("Popularity", "popularity"),
-            Pair("Latest", "latest"),
-        ),
+        SortType.values().map { it.name to it.value },
         defaultSort,
     )

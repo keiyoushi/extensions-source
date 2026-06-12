@@ -9,13 +9,13 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -24,6 +24,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -56,11 +57,12 @@ class Comix :
         .addNetworkInterceptor(Descrambler.interceptor)
         .addInterceptor { chain ->
             val request = chain.request()
+
             val response = chain.proceed(request)
             if (response.code != 404) return@addInterceptor response
 
             val url = request.url.toString()
-            val fallbacks = listOf("/i/", "/sii/", "/ii/")
+            val fallbacks = listOf("/si/", "/i/", "/sii/", "/ii/")
                 .map { url.replaceFirst(SCRAMBLE_PATH_FALLBACK_REGEX, it) }
                 .filter { it != url }
 
@@ -77,9 +79,27 @@ class Comix :
         .rateLimit(5)
         .build()
 
-    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("Origin", baseUrl)
+        .add("Accept", "*/*")
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    // wowpic hosts can return an invalid variant (seed=0 / empty body) when Origin=comix.to.
+    override fun imageRequest(page: Page): Request {
+        val imageUrl = page.imageUrl ?: return super.imageRequest(page)
+        val imageHost = imageUrl.substringBefore('#').toHttpUrlOrNull()?.host.orEmpty()
+        val isScrambled = imageUrl.contains("#scrambled")
+        val requestHeaders = if (imageHost.isNotEmpty() && !imageHost.contains("comix.to") && !isScrambled) {
+            headersBuilder()
+                .removeAll("Origin")
+                .build()
+        } else {
+            headers
+        }
+        return GET(imageUrl, requestHeaders)
+    }
 
     // ============================== Popular ==============================
     override fun popularMangaRequest(page: Int): Request {
@@ -322,6 +342,7 @@ class Comix :
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
         val deduplicate = preferences.deduplicateChapters()
+        val blacklist = preferences.scanlatorBlacklist()
         val mangaSlug = manga.url.removePrefix("/")
 
         val document = runBlocking {
@@ -344,8 +365,10 @@ class Comix :
                         return originalOpen.apply(this, arguments);
                     };
 
+                    if (JSON.parse.__comixChapterCaptureInstalled) return;
                     const originalParse = JSON.parse;
                     const seen = new Set();
+                    const nextClicks = new Set();
                     const items = [];
                     let submitted = false;
                     const submit = function () {
@@ -354,7 +377,7 @@ class Comix :
                         window.$$interfaceName.passPayload(JSON.stringify(items));
                     };
 
-                    JSON.parse = new Proxy(originalParse, {
+                    const proxiedParse = new Proxy(originalParse, {
                         apply(target, thisArg, args) {
                             const parsed = Reflect.apply(target, thisArg, args);
                             try {
@@ -372,7 +395,8 @@ class Comix :
                                     if (!seen.has(page)) {
                                         seen.add(page);
                                         for (const it of parsed.result.items) items.push(it);
-                                        if (meta && meta.hasNext) {
+                                        if (meta && meta.hasNext && !nextClicks.has(page)) {
+                                            nextClicks.add(page);
                                             window.$$interfaceName.resetTimer();
                                             let tries = 0;
                                             const iv = setInterval(function () {
@@ -394,6 +418,8 @@ class Comix :
                             return parsed;
                         }
                     });
+                    proxiedParse.__comixChapterCaptureInstalled = true;
+                    JSON.parse = proxiedParse;
                 })();
                 """.trimIndent()
             },
@@ -401,12 +427,29 @@ class Comix :
 
         val allChapters = payload.parseAs<List<Chapter>>()
 
-        val finalChapters: List<Chapter> = if (deduplicate) {
-            val chapterMap = LinkedHashMap<Number, Chapter>()
-            deduplicateChapters(chapterMap, allChapters)
-            chapterMap.values.toList()
+        // Filter out groups specified in the blacklist first
+        val filteredChapters = if (blacklist.isNotEmpty()) {
+            allChapters.filter { ch ->
+                val scanlatorName = when {
+                    ch.group != null -> ch.group.name
+                    ch.isOfficial -> "Official"
+                    else -> "Unknown"
+                }
+                val nameNormalized = scanlatorName.trim().lowercase()
+                val idStr = ch.group?.id?.toString()
+
+                nameNormalized !in blacklist && idStr !in blacklist
+            }
         } else {
             allChapters
+        }
+
+        val finalChapters: List<Chapter> = if (deduplicate) {
+            val chapterMap = LinkedHashMap<Number, Chapter>()
+            deduplicateChapters(chapterMap, filteredChapters)
+            chapterMap.values.toList()
+        } else {
+            filteredChapters
         }
 
         finalChapters.map { it.toSChapter(mangaSlug) }
@@ -457,8 +500,9 @@ class Comix :
             buildScript = { interfaceName ->
                 """
                 (function () {
+                    if (JSON.parse.__comixPageCaptureInstalled) return;
                     const originalParse = JSON.parse;
-                    JSON.parse = new Proxy(originalParse, {
+                    const proxiedParse = new Proxy(originalParse, {
                         apply(target, thisArg, args) {
                             const parsed = Reflect.apply(target, thisArg, args);
                             try {
@@ -469,6 +513,8 @@ class Comix :
                             return parsed;
                         }
                     });
+                    proxiedParse.__comixPageCaptureInstalled = true;
+                    JSON.parse = proxiedParse;
                 })();
                 """.trimIndent()
             },
@@ -478,13 +524,10 @@ class Comix :
         val base = pages.baseUrl.trimEnd('/')
 
         pages.items.mapIndexed { index, img ->
-            var full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
-            if (img.s == 1) {
-                full = full.replaceFirst(SCRAMBLE_PATH_REGEX, "/s$1/")
-            } else {
-                full = full.replaceFirst(UNSCRAMBLE_PATH_REGEX, "/$1/")
-            }
-            Page(index, imageUrl = full)
+            val isScrambled = img.s == 1 || (index + 1) % 4 == 0
+            val full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
+            val url = if (isScrambled) "$full#scrambled" else full
+            Page(index, imageUrl = url)
         }
     }
 
@@ -661,6 +704,14 @@ class Comix :
             setDefaultValue(false)
         }.let(screen::addPreference)
 
+        EditTextPreference(screen.context).apply {
+            key = PREF_SCANLATOR_BLACKLIST
+            title = "Scanlator Blacklist"
+            summary = "Filter out chapters from specific groups. Comma-separated list of group names or group IDs (e.g., 'Violet Scans, 307')."
+            dialogTitle = "Exclude groups"
+            setDefaultValue("")
+        }.let(screen::addPreference)
+
         SwitchPreferenceCompat(screen.context).apply {
             key = ALTERNATIVE_NAMES_IN_DESCRIPTION
             title = "Show Alternative Names in Description"
@@ -698,6 +749,12 @@ class Comix :
     private fun SharedPreferences.posterQuality() = getString(PREF_POSTER_QUALITY, "large")
 
     private fun SharedPreferences.deduplicateChapters() = getBoolean(DEDUPLICATE_CHAPTERS, false)
+
+    private fun SharedPreferences.scanlatorBlacklist(): Set<String> = getString(PREF_SCANLATOR_BLACKLIST, "")
+        ?.split(",")
+        ?.map { it.trim().lowercase() }
+        ?.filter { it.isNotEmpty() }
+        ?.toSet() ?: emptySet()
 
     private fun SharedPreferences.alternativeNamesInDescription() = getBoolean(ALTERNATIVE_NAMES_IN_DESCRIPTION, false)
 
@@ -739,6 +796,7 @@ class Comix :
         private const val PREF_BLOCKED_GENRES = "pref_blocked_genres"
         private const val LEGACY_HIDE_NSFW_PREF = "nsfw_pref"
         private const val DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
+        private const val PREF_SCANLATOR_BLACKLIST = "pref_scanlator_blacklist"
         private const val ALTERNATIVE_NAMES_IN_DESCRIPTION = "pref_alt_names_in_description"
         private const val PREF_SHOW_EXTRA_INFO = "pref_show_extra_info"
         private const val PREF_SHOW_TAGS_IN_GENRES = "pref_show_tags_in_genres"
@@ -746,8 +804,6 @@ class Comix :
 
         private const val DEFAULT_CONTENT_RATING = "suggestive"
 
-        private val SCRAMBLE_PATH_REGEX = Regex("/(i+)/")
-        private val UNSCRAMBLE_PATH_REGEX = Regex("/s(i+)/")
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/s?i+/")
     }
 }

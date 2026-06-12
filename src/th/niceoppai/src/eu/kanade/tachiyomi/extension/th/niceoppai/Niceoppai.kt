@@ -16,7 +16,7 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
 
 class Niceoppai : HttpSource() {
     override val baseUrl: String = "https://www.niceoppai.net"
@@ -25,9 +25,9 @@ class Niceoppai : HttpSource() {
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .connectTimeout(1, TimeUnit.MINUTES)
-        .readTimeout(1, TimeUnit.MINUTES)
-        .writeTimeout(1, TimeUnit.MINUTES)
+        .connectTimeout(1.minutes)
+        .readTimeout(1.minutes)
+        .writeTimeout(1.minutes)
         .build()
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga_list/all/any/most-popular-monthly/$page", headers)

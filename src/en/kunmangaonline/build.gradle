@@ -1,0 +1,10 @@
+ext {
+    extName = 'Kun Manga Online'
+    extClass = '.KunMangaOnline'
+    themePkg = 'madara'
+    baseUrl = 'https://www.kunmanga.online'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

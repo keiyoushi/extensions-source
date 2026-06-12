@@ -4,13 +4,17 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class RawProjectInfo(
-    @SerialName("code")
-    val code: Int,
-    @SerialName("listCate")
-    val projectCategoryUsed: List<RawProjectCategory>?,
-    @SerialName("listChapter")
-    val projectChapterList: List<RawProjectChapter>?,
+class RawProjectInfo(
     @SerialName("projectInfo")
-    val projectInfo: RawProjectInfoData,
+    val info: RawProjectInfoData,
+)
+
+@Serializable
+class RawProjectInfoData(
+    @SerialName("Project")
+    val project: RawProject,
+    @SerialName("ListCate")
+    val category: List<RawProjectCategory>?,
+    @SerialName("ListChapter")
+    val chapter: List<RawProjectChapter>?,
 )

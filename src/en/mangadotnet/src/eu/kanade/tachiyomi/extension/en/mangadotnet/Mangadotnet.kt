@@ -2,9 +2,11 @@ package eu.kanade.tachiyomi.extension.en.mangadotnet
 
 import android.app.Application
 import android.util.Log
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -59,7 +61,9 @@ class Mangadotnet :
     override val baseUrl = "https://mangadot.net"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.client
+
+    // ============================== Setup ===============================
     private val preferences = getPreferences {
         val oldChapterKey = "pref_fetch_volume"
         if (contains(oldChapterKey)) {
@@ -81,10 +85,45 @@ class Mangadotnet :
                 }
             }
         }
+
+        if (all[BROWSE_TYPE_PREF] is String) {
+            val value = all[BROWSE_TYPE_PREF] as String
+            if (value.isNotEmpty()) {
+                edit().putStringSet(BROWSE_TYPE_PREF, setOf("JP", "KR", "CN", "ONESHOT") - value).apply()
+            } else {
+                edit().remove(BROWSE_TYPE_PREF).apply()
+            }
+        }
+
+        val demographics = setOf("Josei", "Seinen", "Shoujo", "Shounen")
+        val normalExcluded = getStringSet(EXCLUDE_GENRE_PREF, emptySet()) ?: emptySet()
+        val adultExcluded = getStringSet(EXCLUDE_GENRE_ADULT_PREF, emptySet()) ?: emptySet()
+        val migratedDemos = (normalExcluded + adultExcluded).intersect(demographics)
+
+        if (migratedDemos.isNotEmpty()) {
+            val existingDemos = getStringSet(EXCLUDE_DEMOGRAPHIC_PREF, emptySet()) ?: emptySet()
+            edit()
+                .putStringSet(EXCLUDE_DEMOGRAPHIC_PREF, existingDemos + migratedDemos)
+                .putStringSet(EXCLUDE_GENRE_PREF, normalExcluded - demographics)
+                .putStringSet(EXCLUDE_GENRE_ADULT_PREF, adultExcluded - demographics)
+                .apply()
+        }
+
+        if (getString(POPULAR_MODE_PREF, null) == "trending") {
+            edit().putString(POPULAR_MODE_PREF, "most-tracked").apply()
+        }
     }
+
+    private val officialPriorityPatterns = listOf(
+        "manga plus", "mangaplus", "viz media", "viz manga", "webtoon",
+        "tapas", "mangadex", "k manga", "kmanga", "mangaup", "manga up",
+        "comikey", "shonen jump", "shounen jump", "shonenjump", "official",
+    ).map { Regex("\\b${Regex.escape(it)}\\b") }
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
+
+    private val demographicNames = setOf("Josei", "Seinen", "Shoujo", "Shounen")
 
     private fun HttpUrl.Builder.addAdultParam(): HttpUrl.Builder {
         when (adultModePref()) {
@@ -95,8 +134,9 @@ class Mangadotnet :
         return this
     }
 
+    // ============================== Popular ==============================
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/view-all/trending.data".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/view-all/${popularModePref()}.data".toHttpUrl().newBuilder().apply {
             addAdultParam()
             if (page > 1) {
                 addQueryParameter("page", page.toString())
@@ -104,7 +144,14 @@ class Mangadotnet :
             excludedGenresPref().forEach { genre ->
                 addQueryParameter("genre", "-$genre")
             }
+            excludedDemographicsPref().forEach { demo ->
+                addQueryParameter("genre", "-$demo")
+            }
             addQueryParameter("_routes", "pages/ViewAllPage")
+            includedTypes().forEach { origin ->
+                addQueryParameter("origin", origin)
+            }
+            browseStatusPref()?.also { addQueryParameter("status", it) }
         }.build()
 
         return GET(url, headers)
@@ -120,8 +167,9 @@ class Mangadotnet :
         )
     }
 
+    // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/view-all/latest-updates.data".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/view-all/${latestModePref()}.data".toHttpUrl().newBuilder().apply {
             addAdultParam()
             if (page > 1) {
                 addQueryParameter("page", page.toString())
@@ -129,7 +177,14 @@ class Mangadotnet :
             excludedGenresPref().forEach { genre ->
                 addQueryParameter("genre", "-$genre")
             }
+            excludedDemographicsPref().forEach { demo ->
+                addQueryParameter("genre", "-$demo")
+            }
             addQueryParameter("_routes", "pages/ViewAllPage")
+            includedTypes().forEach { origin ->
+                addQueryParameter("origin", origin)
+            }
+            browseStatusPref()?.also { addQueryParameter("status", it) }
         }.build()
 
         return GET(url, headers)
@@ -137,6 +192,7 @@ class Mangadotnet :
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
+    // =============================== Search ===============================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("\u200B\u200B")) {
             val name = query.removePrefix("\u200B\u200B")
@@ -212,8 +268,19 @@ class Mangadotnet :
                         }
                     }
                     is TypeFilter -> {
-                        filter.checked.forEach { origin ->
-                            addQueryParameter("origin", origin)
+                        val checked = filter.checked
+                        if (checked.isNotEmpty() && checked.toSet() != allOrigins) {
+                            checked.forEach { origin ->
+                                addQueryParameter("origin", origin)
+                            }
+                        }
+                    }
+                    is DemographicFilter -> {
+                        filter.included.forEach { demo ->
+                            addQueryParameter("genre", demo)
+                        }
+                        filter.excluded.forEach { demo ->
+                            addQueryParameter("genre", "-$demo")
                         }
                     }
                     is GenreFilter -> {
@@ -248,6 +315,7 @@ class Mangadotnet :
             SortFilter(),
             StatusFilter(),
             TypeFilter(),
+            DemographicFilter(excludedDemographicsPref()),
             AuthorFilter(),
             ArtistFilter(),
         )
@@ -255,10 +323,13 @@ class Mangadotnet :
         val genres = getGenreLists()
         val genreList = if (adultModePref().let { it == "1" || it == "both" }) genres.adult else genres.normal
         if (genreList != null) {
-            filters.add(GenreFilter(genreList, excludedGenresPref()))
+            val filteredGenres = genreList
+                .filter { it !in demographicNames }
+                .sortedBy { it.lowercase(Locale.ROOT) }
+            filters.add(4, GenreFilter(filteredGenres, excludedGenresPref()))
         } else {
-            filters.add(Filter.Separator())
-            filters.add(Filter.Header("Press 'reset' to load genres"))
+            filters.add(4, Filter.Separator())
+            filters.add(5, Filter.Header("Press 'reset' to load genres"))
         }
 
         return FilterList(filters)
@@ -271,13 +342,13 @@ class Mangadotnet :
         return MangasPage(data.mangaList.map { it.toSManga(baseUrl) }, data.hasNextPage())
     }
 
+    // ============================== Details ==============================
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/manga/${manga.url}.data?_routes=pages/MangaDetailPage", headers)
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.decodeRscAs<Data<MangaData>>().data
-
         return data.mangaData.manga.toSManga(baseUrl)
     }
 
@@ -294,28 +365,15 @@ class Mangadotnet :
         }.map { it.toSManga(baseUrl) }
     }
 
+    // ============================= Chapters ==============================
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = runBlocking {
         coroutineScope {
             val mode = chapterModePref()
+            val deduplicate = preferences.getBoolean(DEDUPLICATE_CHAPTERS, false)
+
             val chapters = async {
                 if (mode != "volumes") {
-                    val response = client.newCall(chapterListRequest(manga)).await()
-                    response.parseAs<List<Chapter>>()
-                        .map { chapter ->
-                            SChapter.create().apply {
-                                url = ChapterUrl(chapter.id.toString(), chapter.source, false).toJsonString()
-                                name = buildString {
-                                    val number = chapter.number?.toString()?.substringBefore(".0") ?: "0"
-                                    val name = chapter.name ?: ""
-                                    if (!name.contains(number)) append("Chapter ", number, ": ")
-                                    append(name.trim())
-                                }
-                                chapter_number = chapter.number ?: 0f
-                                scanlator = (chapter.group ?: chapter.scanlator)?.takeIf { it.isNotBlank() }
-                                date_upload = dateFormat.tryParse(chapter.date?.substringBefore("+"))
-                            }
-                        }
-                        .asReversed()
+                    fetchChaptersList(manga)
                 } else {
                     emptyList()
                 }
@@ -328,7 +386,7 @@ class Mangadotnet :
                             SChapter.create().apply {
                                 url = ChapterUrl(volume.id.toString(), volume.source, true).toJsonString()
                                 name = "Volume ${(volume.volume ?: 0f).toString().substringBefore(".0")}"
-                                chapter_number = -2f
+                                chapter_number = 0f
                                 scanlator = (volume.group ?: volume.scanlator)?.takeIf { it.isNotBlank() }
                                 date_upload = dateFormat.tryParse(volume.date?.substringBefore("+"))
                             }
@@ -338,18 +396,87 @@ class Mangadotnet :
                 }
             }
 
-            val allChapters = buildList {
-                addAll(chapters.await())
-                addAll(volumes.await())
+            val chaptersResult = chapters.await()
+            val volumesResult = volumes.await()
+
+            val allChapters = if (mode == "volumes" && volumesResult.isEmpty()) {
+                fetchChaptersList(manga)
+            } else {
+                chaptersResult + volumesResult
             }
 
-            val hasScanlator = allChapters.any { it.scanlator != null }
+            val finalChapters = if (deduplicate && allChapters.isNotEmpty()) {
+                val prefPatterns = preferences.getString(PREFERRED_SCANLATORS, "")
+                    ?.split(",")
+                    ?.map { it.trim().lowercase() }
+                    ?.filter { it.isNotBlank() }
+                    ?.map { Regex("\\b${Regex.escape(it)}\\b") }
+                    ?: emptyList()
+
+                val prefPatternsLower = prefPatterns.map { it.pattern.lowercase() }.toSet()
+                val fullPriorityPatterns = prefPatterns + officialPriorityPatterns.filter { pattern ->
+                    pattern.pattern.lowercase() !in prefPatternsLower
+                }
+
+                val dedupedChapters = mutableListOf<SChapter>()
+                val grouped = allChapters.groupBy { it.chapter_number }
+
+                for ((chapterNum, chapterGroup) in grouped) {
+                    if (chapterNum <= 0f || chapterGroup.size == 1) {
+                        dedupedChapters.addAll(chapterGroup)
+                        continue
+                    }
+
+                    var selectedChapter: SChapter? = null
+
+                    for (pattern in fullPriorityPatterns) {
+                        val match = chapterGroup.find { ch ->
+                            ch.scanlator?.lowercase()?.let { s -> pattern.containsMatchIn(s) } == true
+                        }
+                        if (match != null) {
+                            selectedChapter = match
+                            break
+                        }
+                    }
+
+                    if (selectedChapter == null) {
+                        selectedChapter = chapterGroup.first()
+                    }
+
+                    dedupedChapters.add(selectedChapter)
+                }
+                dedupedChapters
+            } else {
+                allChapters
+            }
+
+            val hasScanlator = finalChapters.any { it.scanlator != null }
             if (hasScanlator) {
-                allChapters.forEach { it.scanlator = it.scanlator ?: "\u200B" }
+                finalChapters.forEach { it.scanlator = it.scanlator ?: "\u200B" }
             }
 
-            Observable.just(allChapters)
+            Observable.just(finalChapters)
         }
+    }
+
+    private suspend fun fetchChaptersList(manga: SManga): List<SChapter> {
+        val response = client.newCall(chapterListRequest(manga)).await()
+        return response.parseAs<List<Chapter>>()
+            .map { chapter ->
+                SChapter.create().apply {
+                    url = ChapterUrl(chapter.id.toString(), chapter.source, false).toJsonString()
+                    name = buildString {
+                        val number = chapter.number?.toString()?.substringBefore(".0") ?: "0"
+                        val name = chapter.name ?: ""
+                        if (!name.contains(number)) append("Chapter ", number, ": ")
+                        append(name.trim())
+                    }
+                    chapter_number = chapter.number ?: 0f
+                    scanlator = (chapter.group ?: chapter.scanlator)?.takeIf { it.isNotBlank() }
+                    date_upload = dateFormat.tryParse(chapter.date?.substringBefore("+"))
+                }
+            }
+            .asReversed()
     }
 
     override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/api/manga/${manga.url}/chapters/list?lang=en", headers)
@@ -358,6 +485,7 @@ class Mangadotnet :
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
+    // =============================== Pages ===============================
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterUrl = chapter.url.parseAs<ChapterUrl>()
 
@@ -427,9 +555,16 @@ class Mangadotnet :
             )
     }
 
+    // =========================== Preferences =============================
     private fun adultModePref(): String = preferences.getString(NSFW_MODE, "none")!!
 
     private fun chapterModePref() = preferences.getString(CHAPTER_MODE, "chapters")!!
+
+    private fun popularModePref() = preferences.getString(POPULAR_MODE_PREF, "most-tracked")!!
+
+    private fun latestModePref() = preferences.getString(LATEST_MODE_PREF, "latest-updates")!!
+
+    private fun excludedDemographicsPref(): Set<String> = preferences.getStringSet(EXCLUDE_DEMOGRAPHIC_PREF, emptySet())!!
 
     private fun excludedGenresPref(): Set<String> {
         val mode = adultModePref()
@@ -440,6 +575,19 @@ class Mangadotnet :
         }
     }
 
+    private val allOrigins = setOf("JP", "KR", "CN", "ONESHOT")
+
+    private fun excludedTypesPref(): Set<String> = preferences.getStringSet(BROWSE_TYPE_PREF, emptySet())!!
+
+    private fun includedTypes(): Set<String> {
+        val included = allOrigins - excludedTypesPref()
+        return if (included.isEmpty() || included == allOrigins) emptySet() else included
+    }
+
+    private fun browseStatusPref(): String? = preferences.getString(BROWSE_STATUS_PREF, "")
+        ?.takeIf { it != "" }
+
+    // =========================== Genre Cache =============================
     private val genreCacheNormalFile: File by lazy {
         Injekt.get<Application>().cacheDir.resolve("source_$id/genres_normal.json")
     }
@@ -485,9 +633,13 @@ class Mangadotnet :
         }
     }
 
+    // ============================= Settings ==============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val mode = adultModePref()
         val genres = getGenreLists()
+
+        val excludedNormal = preferences.getStringSet(EXCLUDE_GENRE_PREF, emptySet())!!
+        val excludedAdult = preferences.getStringSet(EXCLUDE_GENRE_ADULT_PREF, emptySet())!!
 
         val nsfwPref = ListPreference(screen.context).apply {
             key = NSFW_MODE
@@ -496,19 +648,95 @@ class Mangadotnet :
             entryValues = arrayOf("none", "1", "both")
             setDefaultValue("none")
             summary = "%s"
-        }.also(screen::addPreference)
+        }
+        screen.addPreference(nsfwPref)
 
-        ListPreference(screen.context).apply {
+        val popularModePref = ListPreference(screen.context).apply {
+            key = POPULAR_MODE_PREF
+            title = "Popular Mode"
+            entries = arrayOf("Most Tracked", "Top Rated")
+            entryValues = arrayOf("most-tracked", "top-rated")
+            setDefaultValue("most-tracked")
+            summary = "%s"
+        }
+        screen.addPreference(popularModePref)
+
+        val latestModePref = ListPreference(screen.context).apply {
+            key = LATEST_MODE_PREF
+            title = "Latest Mode"
+            entries = arrayOf("Latest Updates", "Recently Added")
+            entryValues = arrayOf("latest-updates", "recently-added")
+            setDefaultValue("latest-updates")
+            summary = "%s"
+        }
+        screen.addPreference(latestModePref)
+
+        val browseTypePref = MultiSelectListPreference(screen.context).apply {
+            key = BROWSE_TYPE_PREF
+            title = "Type Blacklist"
+            entries = arrayOf("Manga", "Manhwa", "Manhua", "One Shot")
+            entryValues = arrayOf("JP", "KR", "CN", "ONESHOT")
+            setDefaultValue(emptySet<String>())
+            summary = "Exclude types from Popular & Latest."
+        }
+        screen.addPreference(browseTypePref)
+
+        val browseStatusPref = ListPreference(screen.context).apply {
+            key = BROWSE_STATUS_PREF
+            title = "Status Filter"
+            entries = arrayOf("Any Status", "Ongoing", "Completed", "Hiatus")
+            entryValues = arrayOf("", "Ongoing", "Completed", "Hiatus")
+            setDefaultValue("")
+            summary = "Applies to Popular & Latest"
+        }
+        screen.addPreference(browseStatusPref)
+
+        val chapterModePref = ListPreference(screen.context).apply {
             key = CHAPTER_MODE
             title = "Chapter List Mode"
             entries = arrayOf("Chapters only", "Volumes only", "Chapters + Volumes")
             entryValues = arrayOf("chapters", "volumes", "both")
             setDefaultValue("chapters")
-            summary = "%s\nNote: Most titles don't have volumes"
-        }.also(screen::addPreference)
+            summary = "%s\nNote: Most titles don't have volumes. 'Volumes only' falls back to chapters if none are found."
+        }
+        screen.addPreference(chapterModePref)
 
-        val excludedNormal = preferences.getStringSet(EXCLUDE_GENRE_PREF, emptySet())!!
-        val normalEntries = genres.normal ?: excludedNormal.toList()
+        val dedupeSwitch = SwitchPreferenceCompat(screen.context).apply {
+            key = DEDUPLICATE_CHAPTERS
+            title = "Deduplicate Chapters"
+            summary = "Keep only one version of each chapter, preferring selected scanlators."
+            setDefaultValue(false)
+        }
+        screen.addPreference(dedupeSwitch)
+
+        val priorityPref = EditTextPreference(screen.context).apply {
+            key = PREFERRED_SCANLATORS
+            title = "Scanlator Priority"
+            summary = "Comma-separated, in order of preference. First match wins. Supports unofficial only if scanlator name matches website.\nDefaults to official scrapers: Manga Plus, VIZ Media, Webtoon, Tapas, MangaDex, K Manga, MangaUP, Comikey, Shonen Jump"
+            setDefaultValue("VIZ Media, MANGA Plus, MangaPlus, Official, Webtoon, Tapas, MangaDex, K Manga, MangaUP, Comikey, Shonen Jump")
+            setEnabled(preferences.getBoolean(DEDUPLICATE_CHAPTERS, false))
+        }
+        screen.addPreference(priorityPref)
+
+        dedupeSwitch.setOnPreferenceChangeListener { _, newValue ->
+            priorityPref.setEnabled(newValue as Boolean)
+            true
+        }
+
+        val demographicPref = MultiSelectListPreference(screen.context).apply {
+            key = EXCLUDE_DEMOGRAPHIC_PREF
+            title = "Demographic Blacklist"
+            summary = "Exclude demographics when browsing."
+            entries = arrayOf("Josei", "Seinen", "Shoujo", "Shounen")
+            entryValues = arrayOf("Josei", "Seinen", "Shoujo", "Shounen")
+            setDefaultValue(emptySet<String>())
+        }
+        screen.addPreference(demographicPref)
+
+        val normalEntries = genres.normal
+            ?.filter { it !in demographicNames }
+            ?.sortedBy { it.lowercase(Locale.ROOT) }
+            ?: excludedNormal.filter { it !in demographicNames }.toList().sortedBy { it.lowercase(Locale.ROOT) }
         val normalGenrePref = MultiSelectListPreference(screen.context).apply {
             key = EXCLUDE_GENRE_PREF
             title = "Genre Blacklist"
@@ -517,10 +745,13 @@ class Mangadotnet :
             entryValues = normalEntries.toTypedArray()
             setDefaultValue(emptySet<String>())
             setEnabled((genres.normal != null || excludedNormal.isNotEmpty()) && mode == "none")
-        }.also(screen::addPreference)
+        }
+        screen.addPreference(normalGenrePref)
 
-        val excludedAdult = preferences.getStringSet(EXCLUDE_GENRE_ADULT_PREF, emptySet())!!
-        val adultEntries = genres.adult ?: excludedAdult.toList()
+        val adultEntries = genres.adult
+            ?.filter { it !in demographicNames }
+            ?.sortedBy { it.lowercase(Locale.ROOT) }
+            ?: excludedAdult.filter { it !in demographicNames }.toList().sortedBy { it.lowercase(Locale.ROOT) }
         val adultGenrePref = MultiSelectListPreference(screen.context).apply {
             key = EXCLUDE_GENRE_ADULT_PREF
             title = "Genre Blacklist (Adult Mode)"
@@ -529,7 +760,8 @@ class Mangadotnet :
             entryValues = adultEntries.toTypedArray()
             setDefaultValue(emptySet<String>())
             setEnabled((genres.adult != null || excludedAdult.isNotEmpty()) && (mode == "1" || mode == "both"))
-        }.also(screen::addPreference)
+        }
+        screen.addPreference(adultGenrePref)
 
         nsfwPref.setOnPreferenceChangeListener { _, newValue ->
             val newMode = newValue as String
@@ -539,6 +771,7 @@ class Mangadotnet :
         }
     }
 
+    // ========================= RSC Decoder ===============================
     private inline fun <reified T> Response.decodeRscAs(): T {
         val flat = parseAs<JsonArray>()
         val decoded = decodeRsc(flat)
@@ -574,11 +807,19 @@ class Mangadotnet :
         return resolve(0)
     }
 
+    // ========================== Unsupported ==============================
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
 
 private const val NSFW_MODE = "pref_nsfw_mode"
 private const val CHAPTER_MODE = "pref_chapter_mode"
+private const val POPULAR_MODE_PREF = "pref_popular_mode"
+private const val LATEST_MODE_PREF = "pref_latest_mode"
 private const val EXCLUDE_GENRE_PREF = "pref_exclude_genre"
 private const val EXCLUDE_GENRE_ADULT_PREF = "pref_exclude_genre_adult"
+private const val BROWSE_TYPE_PREF = "pref_browse_type"
+private const val BROWSE_STATUS_PREF = "pref_browse_status"
+private const val DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
+private const val PREFERRED_SCANLATORS = "pref_preferred_scanlators"
+private const val EXCLUDE_DEMOGRAPHIC_PREF = "pref_exclude_demographic"

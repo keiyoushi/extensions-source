@@ -27,6 +27,7 @@ internal open class TextFilter(name: String) : Filter.Text(name)
 internal open class SortFilter(name: String, selection: Selection, private val vals: List<Pair<String, String>>) : Filter.Sort(name, vals.map { it.first }.toTypedArray(), selection) {
     val selected get() = vals[state!!.index].second
 }
+
 private val getStatusList = listOf(
     "All Status",
     "Ongoing",
@@ -72,7 +73,8 @@ private val getTypeList = listOf(
 )
 
 private val getSortsList: List<Pair<String, String>> = listOf(
-    Pair("Recently Updated", "updated_at"),
+    Pair("Most Viewed", "views"),
+    Pair("Recently Updated", "new"),
+    Pair("Top Rated", "rating"),
     Pair("Alphabetical", "title"),
-    Pair("Most Chapters", "chapter_count"),
 )

@@ -7,6 +7,8 @@ import org.jsoup.nodes.Document
 
 class JiuerManhua : SinMH("92漫画", "http://www.92mh.com") {
 
+    override val mobileUrl = "http://h5.92mh.com"
+
     override fun mangaDetailsParse(document: Document) = mangaDetailsParseDMZJStyle(document, hasBreadcrumb = false)
 
     override fun pageListRequest(chapter: SChapter) = GET(baseUrl + chapter.url, headers)

@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.fr.furyosquad
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -19,7 +19,7 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class FuryoSquad : HttpSource() {
 
@@ -32,8 +32,8 @@ class FuryoSquad : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(10.seconds)
+        .readTimeout(30.seconds)
         .rateLimit(1)
         .build()
 

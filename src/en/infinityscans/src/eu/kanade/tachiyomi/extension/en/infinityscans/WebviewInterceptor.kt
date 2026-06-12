@@ -14,6 +14,8 @@ import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
+const val SESSION_COOKIE = "__Secure-infinityscans.data"
+
 class WebviewInterceptor(private val baseUrl: String) : Interceptor {
 
     private val context: Application by injectLazy()
@@ -21,23 +23,25 @@ class WebviewInterceptor(private val baseUrl: String) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val origRes = chain.proceed(request)
-
-        if (origRes.code != 400) return origRes
-        origRes.close()
-
-        resolveInWebview()
-
-        // If webview failed
         val response = chain.proceed(request)
-        if (response.code == 400) {
+
+        if (response.hasSessionCookie()) {
             response.close()
-            throw IOException("Solve Captcha in WebView")
+
+            resolveInWebview(request.header("User-Agent"))
+
+            val res = chain.proceed(request)
+            // If webview failed
+            if (res.hasSessionCookie()) {
+                response.close()
+                throw IOException("Solve webview Captcha and refresh.")
+            }
+            return res
         }
         return response
     }
 
-    private fun resolveInWebview() {
+    private fun resolveInWebview(userAgent: String?) {
         val latch = CountDownLatch(1)
         var webView: WebView? = null
         var hasSetCookies = false
@@ -51,13 +55,15 @@ class WebviewInterceptor(private val baseUrl: String) : Interceptor {
                 databaseEnabled = true
                 useWideViewPort = false
                 loadWithOverviewMode = false
+                userAgentString = userAgent
             }
 
             webview.webViewClient = object : WebViewClient() {
-                override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-                    if (request?.url.toString().contains("$baseUrl/api/verification")) {
+
+                override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest): WebResourceResponse? {
+                    if (request.method == "POST" && request.url.toString().contains("/api/validate")) {
                         hasSetCookies = true
-                    } else if (request?.url.toString().contains(baseUrl) && hasSetCookies) {
+                    } else if (request.url.toString().contains(baseUrl) && hasSetCookies) {
                         latch.countDown()
                     }
                     return super.shouldInterceptRequest(view, request)
@@ -76,3 +82,5 @@ class WebviewInterceptor(private val baseUrl: String) : Interceptor {
         }
     }
 }
+
+fun Response.hasSessionCookie(): Boolean = headers("Set-Cookie").any { it.startsWith(SESSION_COOKIE) }

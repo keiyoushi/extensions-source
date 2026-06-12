@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.ru.unicomics
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -18,7 +18,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class UniComics : HttpSource() {
 
@@ -31,8 +31,8 @@ class UniComics : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(10.seconds)
+        .readTimeout(30.seconds)
         .rateLimit(3)
         .build()
 

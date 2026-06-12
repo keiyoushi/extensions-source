@@ -2,15 +2,15 @@ package eu.kanade.tachiyomi.extension.es.lectormangalat
 
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class LectorMangaLat :
     Madara(
@@ -22,7 +22,7 @@ class LectorMangaLat :
     ConfigurableSource {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(2, 1, TimeUnit.SECONDS)
+        .rateLimit(2, 1.seconds)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

@@ -3,7 +3,7 @@ ext {
     extClass = '.NekoScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://nekoproject.org'
-    overrideVersionCode = 7
+    overrideVersionCode = 8
     isNsfw = true
 }
 

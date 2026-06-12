@@ -6,7 +6,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.kemono.KemonoCreatorDto.Companion.serviceName
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -15,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import okhttp3.Cache
@@ -28,8 +28,8 @@ import uy.kohesive.injekt.api.get
 import java.io.File
 import java.lang.Thread.sleep
 import java.util.TimeZone
-import java.util.concurrent.TimeUnit
 import kotlin.math.min
+import kotlin.time.Duration.Companion.minutes
 
 open class Kemono(
     override val name: String,
@@ -40,7 +40,6 @@ open class Kemono(
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .rateLimit(1)
         .addInterceptor { chain ->
             val request = chain.request()
             if (request.url.pathSegments.first() == "api") {
@@ -59,10 +58,11 @@ open class Kemono(
                 maxSize = 50L * 1024 * 1024, // 50 MiB
             ),
         )
+        .rateLimit(1)
         .build()
 
     private val creatorsClient = client.newBuilder()
-        .readTimeout(5, TimeUnit.MINUTES)
+        .readTimeout(5.minutes)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -149,7 +149,7 @@ open class Kemono(
             val request = GET(
                 "$baseUrl/$apiPath/creators",
                 headers,
-                CacheControl.Builder().maxStale(30, TimeUnit.MINUTES).build(),
+                CacheControl.Builder().maxStale(30.minutes).build(),
             )
             val response = creatorsClient.newCall(request).execute()
             if (!response.isSuccessful) {

@@ -1,10 +1,11 @@
 package eu.kanade.tachiyomi.extension.es.uchuujinprojects
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class UchuujinProjects :
     MangaThemesia(
@@ -13,8 +14,10 @@ class UchuujinProjects :
         "es",
         dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")),
     ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
+        .rateLimit(3, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     override val hasProjectPage = true

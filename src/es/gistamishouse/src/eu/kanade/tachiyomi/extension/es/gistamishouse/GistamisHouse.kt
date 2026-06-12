@@ -6,10 +6,10 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.Type
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistMangaDto
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import okhttp3.Response
 
@@ -90,7 +90,7 @@ class GistamisHouse :
 
         val result = json.decodeFromString<ZeistMangaDto>(res.body.string())
         return result.feed?.entry?.filter { it.category.orEmpty().any { category -> chapterCategories.contains(category.term) } }
-            ?.map { it.toSChapter(baseUrl) }
+            ?.map { it.toSChapter(baseUrl, parseDate(it.getPublishedDate())) }
             ?: throw Exception("Failed to parse from chapter API")
     }
 

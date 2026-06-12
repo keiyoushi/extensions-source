@@ -9,15 +9,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.Calendar
-import kotlin.text.isNotBlank
 
-class Dokiraw : Liliana("Dokiraw", "https://dokiraw.team", "ja") {
+class Dokiraw : Liliana("Dokiraw", "https://dokiraw.cloud", "ja") {
 
     override val supportsLatest = false
 
@@ -34,6 +34,7 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.team", "ja") {
 
         return GET(url, headers)
     }
+
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangaElements = document.select(popularMangaSelector())
@@ -46,7 +47,9 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.team", "ja") {
 
         return MangasPage(mangas, hasNextPage)
     }
+
     override fun popularMangaSelector(): String = "div[class*=manga-item_item]"
+
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         val anchor = element.selectFirst("a[href*=/manga/]")!!
         setUrlWithoutDomain(anchor.attr("abs:href"))
@@ -72,7 +75,7 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.team", "ja") {
                 if (query.isNotBlank()) {
                     addQueryParameter("keyword", query)
                 }
-                filters.filterIsInstance<GenreFilter>().firstOrNull()?.let { filter ->
+                filters.firstInstanceOrNull<GenreFilter>()?.let { filter ->
                     filter.values[filter.state]
                         .takeIf { it != "All" }
                         ?.let { addQueryParameter("genre", it) }
@@ -85,19 +88,16 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.team", "ja") {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangaElements = document.select(searchMangaSelector())
+        val mangaElements = document.select(popularMangaSelector())
 
         val mangas = mangaElements.map { element ->
-            searchMangaFromElement(element)
+            popularMangaFromElement(element)
         }
 
-        val hasNextPage = mangaElements.isNotEmpty() && mangaElements.size == RESULTS_PER_PAGE
+        val hasNextPage = mangaElements.size == RESULTS_PER_PAGE
 
         return MangasPage(mangas, hasNextPage)
     }
-    override fun searchMangaSelector() = popularMangaSelector()
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-    override fun searchMangaNextPageSelector() = "div[class*=pagination] a:last-of-type"
 
     // =========================== Filters ============================
 
@@ -153,12 +153,12 @@ class Dokiraw : Liliana("Dokiraw", "https://dokiraw.team", "ja") {
             val src = element.attr("abs:src")
 
             val finalUrl = when {
-                dataCdn.isNotBlank() -> dataCdn
-                dataOriginal.isNotBlank() -> dataOriginal
+                dataCdn.isNotEmpty() -> dataCdn
+                dataOriginal.isNotEmpty() -> dataOriginal
                 else -> src
             }
 
-            Page(index, "", finalUrl)
+            Page(index, imageUrl = finalUrl)
         }
     }
 

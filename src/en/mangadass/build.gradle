@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaDass'
     themePkg = 'madara'
     baseUrl = "https://mangadass.com"
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

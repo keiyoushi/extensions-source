@@ -1,0 +1,8 @@
+ext {
+    extName = 'CuuTruyen (unoriginal)'
+    extClass = '.CuuTruyenMoe'
+    extVersionCode = 2
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

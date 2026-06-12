@@ -3,7 +3,7 @@ ext {
     extClass = '.OmegaScans'
     themePkg = 'heancms'
     baseUrl = 'https://omegascans.org'
-    overrideVersionCode = 18
+    overrideVersionCode = 19
     isNsfw = true
 }
 

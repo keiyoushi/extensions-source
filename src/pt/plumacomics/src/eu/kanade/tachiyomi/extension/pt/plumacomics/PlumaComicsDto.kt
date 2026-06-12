@@ -16,7 +16,18 @@ class MangaDto(
 
 @Serializable
 class ChapterDto(
-    val chapterId: Long,
-    val chapterToken: String,
-    val baseSeed: List<Long>,
+    val seriesId: Int,
+    val chapterId: Int,
+    val chapterNumber: Int,
+)
+
+@Serializable
+class PagesList(
+    val pages: List<PageItem>,
+)
+
+@Serializable
+class PageItem(
+    val i: Int,
+    val u: String,
 )

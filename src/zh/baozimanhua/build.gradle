@@ -1,7 +1,7 @@
 ext {
     extName = 'Baozi Manhua'
     extClass = '.Baozi'
-    extVersionCode = 27
+    extVersionCode = 28
     isNsfw = false
 }
 

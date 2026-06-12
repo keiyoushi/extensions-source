@@ -78,36 +78,11 @@ class OcrUrlInterceptor(private val headers: Headers) {
         return ocrRequest
     }
 
+    private val utilities: String by lazy {
+        javaClass.getResource("/assets/scripts/utilities.js")!!.readText()
+    }
+
     private fun injectScript(view: WebView?) {
-        val utilities = """
-            const origin = Math.random;
-            const proxy = () => 0.01 + origin() * 0.09;
-
-            Object.setPrototypeOf(proxy, Object.getPrototypeOf(origin));
-            Object.defineProperties(proxy, {
-                'name': { value: 'random', writable: false },
-                'length': { value: 0, writable: false }
-            });
-
-            proxy.toString = () => "function random() {\n    [native code]\n}"
-
-            Object.defineProperty(Math, 'random', {
-                value: proxy,
-                writable: false,
-                configurable: false
-            });
-
-            const serializeHeaders = (h) => {
-                if (!h) return "{}";
-                if (h instanceof Headers) {
-                    const obj = {};
-                    h.forEach((v, k) => { obj[k] = v; });
-                    return JSON.stringify(obj);
-                }
-                return JSON.stringify(h);
-            };
-        """.trimIndent()
-
         view?.evaluateJavascript(
             """
             (function() {

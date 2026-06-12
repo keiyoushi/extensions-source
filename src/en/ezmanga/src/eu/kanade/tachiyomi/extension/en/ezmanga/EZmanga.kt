@@ -5,9 +5,9 @@ import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwaSortFilter
 import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwaStatusFilter
 import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwaTypeFilter
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 

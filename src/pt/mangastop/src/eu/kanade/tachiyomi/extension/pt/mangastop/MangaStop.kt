@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.pt.mangastop
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers

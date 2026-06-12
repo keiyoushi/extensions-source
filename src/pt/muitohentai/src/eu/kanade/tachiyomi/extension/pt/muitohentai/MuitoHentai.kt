@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.muitohentai
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonPrimitive
@@ -19,7 +19,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class MuitoHentai : HttpSource() {
 
@@ -32,7 +32,7 @@ class MuitoHentai : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(1, 2.seconds)
         .build()
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()

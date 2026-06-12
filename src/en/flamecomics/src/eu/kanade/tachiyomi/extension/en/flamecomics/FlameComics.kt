@@ -5,7 +5,6 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -26,6 +26,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
+import kotlin.time.Duration.Companion.seconds
 
 class FlameComics : HttpSource() {
     override val name = "Flame Comics"
@@ -38,9 +39,9 @@ class FlameComics : HttpSource() {
     private val json: Json by injectLazy()
 
     override val client = network.client.newBuilder()
-        .rateLimit(2, 2)
         .addInterceptor(::buildIdOutdatedInterceptor)
         .addInterceptor(::composedImageIntercept)
+        .rateLimit(2, 2.seconds) { it.fragment != THUMBNAIL_FRAGMENT }
         .build()
 
     private val removeSpecialCharsRegex = Regex("[^A-Za-z0-9 ]")
@@ -57,6 +58,7 @@ class FlameComics : HttpSource() {
         addPathSegment(seriesData.series_id.toString())
         addPathSegment(seriesData.cover)
         addQueryParameter(seriesData.last_edit.toString(), null)
+        fragment(THUMBNAIL_FRAGMENT)
     }.build().toString()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(
@@ -361,5 +363,6 @@ class FlameComics : HttpSource() {
     companion object {
         private const val COMPOSED_SUFFIX = "?comp"
         private val MEDIA_TYPE = "image/png".toMediaType()
+        private const val THUMBNAIL_FRAGMENT = "thumbnail"
     }
 }

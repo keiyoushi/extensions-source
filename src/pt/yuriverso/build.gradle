@@ -3,7 +3,7 @@ ext {
     extClass = '.YuriOnAir'
     themePkg = 'madara'
     baseUrl = 'https://yurionair.top'
-    overrideVersionCode = 4
+    overrideVersionCode = 5
     isNsfw = true
 }
 

@@ -4,7 +4,6 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -14,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -21,7 +21,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class TeamX :
     HttpSource(),
@@ -38,9 +38,9 @@ class TeamX :
 
     override val client = network.client
         .newBuilder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .rateLimit(10, 1, TimeUnit.SECONDS)
+        .connectTimeout(15.seconds)
+        .readTimeout(30.seconds)
+        .rateLimit(10, 1.seconds)
         .build()
 
     private val preferences: SharedPreferences by getPreferencesLazy()
@@ -93,6 +93,8 @@ class TeamX :
         return GET(baseUrl + if (page > 1) "?page=$page" else "", headers)
     }
 
+    private val thumbnailSuffix = "thumbnail_"
+
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
@@ -105,7 +107,7 @@ class TeamX :
                         val linkElement = element.select("div.info a")
                         title = linkElement.select("h3").text()
                         setUrlWithoutDomain(linkElement.first()!!.attr("href"))
-                        thumbnail_url = element.select("div.imgu img").first()!!.absUrl("src")
+                        thumbnail_url = element.select("div.imgu img").first()!!.absUrl("src").replace(thumbnailSuffix, "")
                     }
                 }.distinctBy {
                     it.title

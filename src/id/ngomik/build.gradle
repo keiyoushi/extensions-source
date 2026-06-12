@@ -2,8 +2,8 @@ ext {
     extName = 'Ngomik (unoriginal)'
     extClass = '.Ngomik'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://id.ngomik.cloud'
-    overrideVersionCode = 5
+    baseUrl = 'https://02.ngomik.cc'
+    overrideVersionCode = 6
 }
 
 apply plugin: "kei.plugins.extension.legacy"

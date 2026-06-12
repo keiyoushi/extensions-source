@@ -13,7 +13,6 @@ import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -23,6 +22,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -41,10 +41,13 @@ import java.util.TimeZone
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
+import kotlin.time.Duration.Companion.seconds
 
 class IkigaiMangas :
     HttpSource(),
     ConfigurableSource {
+    private val fetchedDomainUrlHost by lazy { fetchedDomainUrl.toHttpUrl().host }
+    private val apiBaseUrlHost by lazy { apiBaseUrl.toHttpUrl().host }
 
     private val isCi = System.getenv("CI") == "true"
 
@@ -86,9 +89,9 @@ class IkigaiMangas :
 
     override val client by lazy {
         network.client.newBuilder()
-            .rateLimitHost(fetchedDomainUrl.toHttpUrl(), 1, 2)
-            .rateLimitHost(apiBaseUrl.toHttpUrl(), 2, 1)
             .addNetworkInterceptor(::nsfwCookieInterceptor)
+            .rateLimit(1, 2.seconds) { it.host == fetchedDomainUrlHost }
+            .rateLimit(2, 1.seconds) { it.host == apiBaseUrlHost }
             .build()
     }
 

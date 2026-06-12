@@ -84,7 +84,7 @@ class Yabai : HttpSource() {
 
     @Synchronized
     private fun updateTokens() {
-        // We do a normal GET to baseUrl (without X-Requested-With) so that cloudflareClient
+        // We do a normal GET to baseUrl (without X-Requested-With) so that client
         // can successfully handle the DDOS-Guard challenge via WebView if needed.
         val request = GET(baseUrl, headers)
         val response = client.newCall(request).execute()

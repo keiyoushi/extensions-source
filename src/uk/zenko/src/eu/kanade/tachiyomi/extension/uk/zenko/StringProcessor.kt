@@ -92,4 +92,9 @@ object StringProcessor {
             name,
         ).filter { it.isNotEmpty() }.joinToString(" ")
     }
+
+    fun number(input: String?): Float {
+        val (part, chapter, name) = parse(input)
+        return if (chapter.isNotEmpty()) chapter.toFloat() else -1f
+    }
 }

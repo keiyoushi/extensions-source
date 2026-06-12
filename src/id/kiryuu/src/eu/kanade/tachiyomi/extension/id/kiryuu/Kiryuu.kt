@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.extension.id.kiryuu
 
 import eu.kanade.tachiyomi.multisrc.natsuid.NatsuId
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
@@ -11,13 +11,13 @@ class Kiryuu :
     NatsuId(
         "Kiryuu",
         "id",
-        "https://v5.kiryuu.to",
+        "https://v6.kiryuu.to",
     ) {
 
     // Formerly "Kiryuu (WP Manga Stream)"
     override val id = 3639673976007021338
 
-    override fun OkHttpClient.Builder.customizeClient() = rateLimit(4)
+    override fun OkHttpClient.Builder.customizeClient() = rateLimit(4).build().newBuilder()
 
     override fun chapterListRequest(manga: SManga): Request {
         val url = super.chapterListRequest(manga).url.newBuilder()

@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.multisrc.iken
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import org.jsoup.Jsoup
@@ -21,7 +22,8 @@ class Manga(
     val slug: String,
     private val postTitle: String,
     private val postContent: String? = null,
-    val isNovel: Boolean = false,
+    @SerialName("isNovel")
+    private val rawIsNovel: Boolean = false,
     private val featuredImage: String? = null,
     private val alternativeTitles: String? = null,
     private val author: String? = null,
@@ -30,6 +32,10 @@ class Manga(
     private val seriesStatus: String? = null,
     private val genres: List<Genre> = emptyList(),
 ) {
+
+    val isNovel: Boolean
+        get() = rawIsNovel || seriesType.equals("novel", ignoreCase = true)
+
     fun toSManga() = SManga.create().apply {
         url = "$slug#$id"
         title = postTitle
@@ -39,7 +45,6 @@ class Manga(
         description = getDescription(postContent)
         genre = getGenres()
         status = getStatus()
-        initialized = true
     }
 
     fun getDescription(postContent: String?) = buildString {

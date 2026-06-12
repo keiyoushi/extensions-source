@@ -9,7 +9,6 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -17,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
@@ -43,7 +43,6 @@ class HentaiCB :
     override val id: Long = 823638192569572166
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3)
         .followRedirects(false)
         .addInterceptor { chain ->
             val maxRedirects = 5
@@ -73,6 +72,7 @@ class HentaiCB :
             }
             response
         }
+        .rateLimit(3)
         .build()
 
     private val preferences: SharedPreferences = getPreferences()

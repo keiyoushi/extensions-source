@@ -7,7 +7,6 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservable
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -36,7 +36,7 @@ import java.io.IOException
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class ComX :
     HttpSource(),
@@ -76,9 +76,8 @@ class ComX :
         .add("Referer", "$baseUrl/")
 
     override val client = network.client.newBuilder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .rateLimit(3)
+        .connectTimeout(10.seconds)
+        .readTimeout(30.seconds)
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()
@@ -115,6 +114,7 @@ class ComX :
             }
             response
         }
+        .rateLimit(3)
         .build()
 
     // Popular
@@ -291,9 +291,15 @@ class ComX :
         var nonce = 0L
         val md = MessageDigest.getInstance("SHA-256")
         val start = System.currentTimeMillis()
-        while (md.digest("$token:$nonce".toByteArray())[0] != 0.toByte()) {
-            nonce++
-            if (nonce > 1_000_000L) throw IOException("Antibot challenge failed: PoW exhausted")
+        val powHash = run {
+            while (true) {
+                val hash = md.digest("$token:$nonce".toByteArray()).joinToString("") { "%02x".format(it) }
+                if (hash.startsWith("00")) {
+                    return@run hash
+                }
+                nonce++
+                if (nonce > 1_000_000L) throw IOException("Antibot challenge failed: PoW exhausted")
+            }
         }
         val workTime = (System.currentTimeMillis() - start).coerceAtLeast(120)
 
@@ -304,6 +310,8 @@ class ComX :
             .add("screen_w", "390").add("screen_h", "844").add("screen_cd", "24")
             .add("wgv", "Apple Inc.").add("wgr", "Apple GPU")
             .add("tz", "-180").add("dpr", "3").add("cdp", "0").add("cdpf", "")
+            .add("pow_nonce", nonce.toString())
+            .add("pow_hash", powHash.toString())
             .build()
 
         val verifyReq = Request.Builder()

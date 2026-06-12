@@ -2,7 +2,7 @@ ext {
     extName = 'TruyenTranh3Q'
     extClass = '.TruyenTranh3Q'
     baseUrl = 'https://manhua3q.com'
-    extVersionCode = 8
+    extVersionCode = 9
     isNsfw = true
 }
 

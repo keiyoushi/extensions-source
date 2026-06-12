@@ -1,0 +1,8 @@
+ext {
+	extName = 'Manga-Bay'
+	extClass = '.Mangabay'
+	extVersionCode = 1
+	isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

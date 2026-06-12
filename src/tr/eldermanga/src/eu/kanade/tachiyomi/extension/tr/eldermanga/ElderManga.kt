@@ -7,6 +7,6 @@ class ElderManga :
         "Elder Manga",
         "https://eldermanga.com",
         lang = "tr",
-        versionId = 1,
-        cdnUrl = "https://eldermangacdn2.efsaneler.can.re",
+        versionId = 2,
+        cdnUrl = "https://cdn-el.efsaneler2.can.re",
     )

@@ -3,7 +3,7 @@ ext {
     extClass = '.TopManhua'
     themePkg = 'madara'
     baseUrl = 'https://mangatop.org'
-    overrideVersionCode = 6
+    overrideVersionCode = 7
     isNsfw = true
 }
 
