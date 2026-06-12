@@ -7,7 +7,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.extractNextJsRsc
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -27,13 +30,16 @@ class Wurmz : HttpSource() {
         .add("Rsc", "1")
         .build()
 
+    // ======================== Popular ========================
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList())
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
+    // ======================== Latest ========================
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Tidak didukung")
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException("Tidak didukung")
 
+    // ======================== Search ========================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
@@ -54,7 +60,7 @@ class Wurmz : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/semua-komik".toHttpUrl().newBuilder().apply {
-            addQueryParameter("q", query)
+            if (query.isNotEmpty()) addQueryParameter("q", query)
             if (page > 1) {
                 addQueryParameter("page", page.toString())
             }
@@ -67,36 +73,32 @@ class Wurmz : HttpSource() {
                 }
             }
         }.build()
-        return GET(url, rscHeaders)
+        return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val bodyString = response.body.string()
-        val entries = bodyString.extractNextJsRsc<List<MangaDto>>()
-            ?: throw Exception("Gagal memproses daftar komik")
-
-        val mangas = entries.filter { it.href.contains("/detail/") && it.title != null }
-            .distinctBy { it.href }
-            .map { entry ->
-                SManga.create().apply {
-                    url = entry.href
-                    title = entry.title!!
-                    thumbnail_url = entry.src?.let {
-                        if (it.startsWith("http")) it else baseUrl + it
-                    }
-                }
+        val document = response.asJsoup()
+        val mangas = document.select("article.comic-card").map { element ->
+            SManga.create().apply {
+                val link = element.selectFirst("a")!!
+                setUrlWithoutDomain(link.absUrl("href"))
+                title = link.attr("aria-label").ifEmpty { element.selectFirst("h2")?.text() ?: "" }
+                thumbnail_url = element.selectFirst("img")?.absUrl("src")
             }
+        }
 
-        val hasNextPage = bodyString.contains("Berikutnya")
+        val hasNextPage = document.selectFirst("a:contains(Berikutnya)") != null
 
         return MangasPage(mangas, hasNextPage)
     }
 
+    // ======================== Details ========================
     override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, rscHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val details = response.body.string().extractNextJsRsc<MangaDetailsDto>()
-            ?: throw Exception("Gagal memproses detail komik")
+        val details = response.body.string().extractNextJsRsc<MangaDetailsDto> {
+            it is JsonObject && it["@type"]?.jsonPrimitive?.content == "ComicSeries"
+        } ?: throw Exception("Gagal memproses detail komik")
 
         return details.toSManga(baseUrl).apply {
             initialized = true
@@ -105,12 +107,14 @@ class Wurmz : HttpSource() {
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
+    // ======================== Chapters ========================
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val bodyString = response.body.string()
-        val chapterList = bodyString.extractNextJsRsc<ChapterListDto>()
-            ?: throw Exception("Gagal memproses daftar chapter")
+        val chapterList = bodyString.extractNextJsRsc<ChapterListDto> {
+            it is JsonObject && it.containsKey("chapters")
+        } ?: throw Exception("Gagal memproses daftar chapter")
 
         val slug = response.request.url.pathSegments.let { segments ->
             val detailIdx = segments.indexOf("detail")
@@ -122,11 +126,13 @@ class Wurmz : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
+    // ======================== Pages ========================
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
-        val pageList = response.body.string().extractNextJsRsc<PageListDto>()
-            ?: throw Exception("Gagal memproses daftar gambar")
+        val pageList = response.body.string().extractNextJsRsc<PageListDto> {
+            it is JsonObject && it.containsKey("images")
+        } ?: throw Exception("Gagal memproses daftar gambar")
 
         return pageList.images.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
@@ -135,6 +141,7 @@ class Wurmz : HttpSource() {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("Tidak didukung")
 
+    // ======================== Filters ========================
     override fun getFilterList(): FilterList = FilterList(
         TypeFilter(),
         StatusFilter(),

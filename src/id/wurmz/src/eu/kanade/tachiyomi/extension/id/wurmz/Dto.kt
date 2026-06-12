@@ -6,13 +6,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-class MangaDto(
-    val href: String,
-    @SerialName("aria-label") val title: String? = null,
-    val src: String? = null,
-)
-
-@Serializable
 class MangaDetailsDto(
     val name: String,
     val alternateName: String? = null,
