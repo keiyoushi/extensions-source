@@ -13,6 +13,7 @@ class CustomUrlPreferences(
     private val prefBaseKey: String = "overrideBaseUrl",
 ) {
     private val prefDefaultKey = "${prefBaseKey}_default"
+
     // Strict Regex: https?://domain.tld (no trailing slash, no path)
     private val urlRegex = Regex("^https?://[^/?#]+\\.[^/?#]+$")
 
