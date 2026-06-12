@@ -67,15 +67,21 @@ private fun validateMetadata(spec: ExtensionSpec): String {
 private fun validateSources(spec: ExtensionSpec): List<keiyoushi.gradle.extension.dsl.SourceSpec> {
     val sources = spec.sources.orNull.orEmpty()
     assertWithoutFlag(sources.isNotEmpty()) { "At least one source { } block is required" }
-    val seenNameLang = mutableSetOf<Pair<String, String>>()
+    val seenIdKey = mutableSetOf<Any>()
     sources.forEach { src ->
         assertWithoutFlag(src.name.isPresent) { "source { name = ... } is required" }
         assertWithoutFlag(src.lang.isPresent) { "source { lang = ... } is required" }
         assertWithoutFlag(src.resolvedBaseUrl.isPresent) { "source { baseUrl(...) } is required (for '${src.name.orNull}')" }
-        val key = src.name.get() to src.lang.get()
-        assertWithoutFlag(seenNameLang.add(key)) {
-            "Duplicate (name, lang) = ('${key.first}', '${key.second}') across sources — IDs would collide. " +
-                "Make names distinct or set an explicit id = ..."
+        val key: Any = if (src.id.isPresent) {
+            src.id.get()
+        } else {
+            Triple(src.name.get(), src.lang.get(), src.versionId.orElse(1).get())
+        }
+        assertWithoutFlag(seenIdKey.add(key)) {
+            val name = src.name.get()
+            val lang = src.lang.get()
+            "Sources with (name, lang) = ('$name', '$lang') would produce duplicate IDs. " +
+                "Set an explicit id = ... or change versionId so IDs differ"
         }
     }
     return sources
