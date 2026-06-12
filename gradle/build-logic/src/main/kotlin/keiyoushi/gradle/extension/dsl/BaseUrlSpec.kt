@@ -1,7 +1,9 @@
 package keiyoushi.gradle.extension.dsl
 
+import keiyoushi.gradle.utils.assertWithoutFlag
 import org.gradle.api.provider.Property
 import java.io.Serializable as JvmSerializable
+import java.net.URI
 
 sealed interface BaseUrlSpec : JvmSerializable {
     data class Static(val url: String) : BaseUrlSpec
@@ -25,21 +27,27 @@ abstract class BaseUrlDsl {
     private val mirrorsInternal = mutableListOf<Mirror>()
 
     fun mirror(url: String) {
-        mirrorsInternal.add(Mirror(url, url))
-    }
-
-    fun mirror(label: String, url: String) {
-        mirrorsInternal.add(Mirror(label, url))
+        mirrorsInternal.add(Mirror(labelOf(url), url))
     }
 
     internal fun build(): BaseUrlSpec {
         val baseUrl = value.get()
         val custom = withCustomUrl.getOrElse(false)
 
+        assertWithoutFlag(!(custom && mirrorsInternal.isNotEmpty())) {
+            "Cannot use both mirror() and withCustomUrl = true"
+        }
+
         return when {
             custom -> BaseUrlSpec.Custom(baseUrl)
-            mirrorsInternal.isNotEmpty() -> BaseUrlSpec.Mirrors(mirrorsInternal.toList())
+            mirrorsInternal.isNotEmpty() -> {
+                val default = Mirror(labelOf(baseUrl), baseUrl)
+                BaseUrlSpec.Mirrors(listOf(default) + mirrorsInternal)
+            }
             else -> BaseUrlSpec.Static(baseUrl)
         }
     }
+
+    private fun labelOf(url: String): String =
+        runCatching { URI(url).host }.getOrDefault(url)
 }
