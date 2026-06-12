@@ -50,16 +50,16 @@ fun Project.resolveExtensionSpec(spec: ExtensionSpec, pkg: String): ResolvedSpec
 }
 
 private fun validateMetadata(spec: ExtensionSpec): String {
-    assertWithoutFlag(spec.name.isPresent) { "extension { name = ... } is required" }
-    assertWithoutFlag(spec.className.isPresent) { "extension { className = ... } is required" }
-    assertWithoutFlag(spec.versionCode.isPresent) { "extension { versionCode = ... } is required" }
+    assertWithoutFlag(spec.name.isPresent) { "keiyoushi { name = ... } is required" }
+    assertWithoutFlag(spec.className.isPresent) { "keiyoushi { className = ... } is required" }
+    assertWithoutFlag(spec.versionCode.isPresent) { "keiyoushi { versionCode = ... } is required" }
     val extName = spec.name.get()
-    assertWithoutFlag(extName.isNotEmpty()) { "extension.name must not be empty" }
+    assertWithoutFlag(extName.isNotEmpty()) { "keiyoushi.name must not be empty" }
     assertWithoutFlag(extName.all { it.code < 0x180 }) { "Extension name should be romanized" }
 
     val className = spec.className.get()
-    assertWithoutFlag(className.isNotEmpty()) { "extension.className must not be empty" }
-    assertWithoutFlag(className.first().isUpperCase()) { "extension.className must be PascalCase (got '$className')" }
+    assertWithoutFlag(className.isNotEmpty()) { "keiyoushi.className must not be empty" }
+    assertWithoutFlag(className.first().isUpperCase()) { "keiyoushi.className must be PascalCase (got '$className')" }
 
     return extName
 }
