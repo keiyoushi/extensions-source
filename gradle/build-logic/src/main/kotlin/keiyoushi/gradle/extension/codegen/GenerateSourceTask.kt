@@ -177,6 +177,9 @@ abstract class GenerateSourceTask : DefaultTask() {
                     builder.appendLine("        \"${mirror.label}\" to \"${mirror.url}\",")
                 }
                 builder.appendLine("    ),")
+                if (baseUrl.prefKey.isNotEmpty()) {
+                    builder.appendLine("    prefKey = \"${baseUrl.prefKey}\",")
+                }
                 builder.appendLine(")")
                 builder.appendLine()
                 builder.appendLine("override val baseUrl: String")
@@ -193,6 +196,9 @@ abstract class GenerateSourceTask : DefaultTask() {
                 builder.appendLine("private val customUrlPrefs = CustomUrlPreferences(")
                 builder.appendLine("    preferences = preferences,")
                 builder.appendLine("    defaultUrl = \"${baseUrl.defaultUrl}\",")
+                if (baseUrl.prefKey.isNotEmpty()) {
+                    builder.appendLine("    prefBaseKey = \"${baseUrl.prefKey}\",")
+                }
                 builder.appendLine(")")
                 builder.appendLine()
                 builder.appendLine("override val baseUrl: String")

@@ -7,8 +7,8 @@ import java.net.URI
 
 sealed interface BaseUrlSpec : JvmSerializable {
     data class Static(val url: String) : BaseUrlSpec
-    data class Mirrors(val mirrors: List<Mirror>) : BaseUrlSpec
-    data class Custom(override val defaultUrl: String) : BaseUrlSpec
+    data class Mirrors(val mirrors: List<Mirror>, val prefKey: String) : BaseUrlSpec
+    data class Custom(override val defaultUrl: String, val prefKey: String) : BaseUrlSpec
 
     val defaultUrl: String
         get() = when (this) {
@@ -23,6 +23,7 @@ data class Mirror(val label: String, val url: String) : JvmSerializable
 abstract class BaseUrlDsl {
     abstract val value: Property<String>
     abstract val withCustomUrl: Property<Boolean>
+    abstract val prefKey: Property<String>
 
     private val mirrorsInternal = mutableListOf<Mirror>()
 
@@ -38,11 +39,13 @@ abstract class BaseUrlDsl {
             "Cannot use both mirror() and withCustomUrl = true"
         }
 
+        val key = prefKey.getOrElse("")
+
         return when {
-            custom -> BaseUrlSpec.Custom(baseUrl)
+            custom -> BaseUrlSpec.Custom(baseUrl, key)
             mirrorsInternal.isNotEmpty() -> {
                 val default = Mirror(labelOf(baseUrl), baseUrl)
-                BaseUrlSpec.Mirrors(listOf(default) + mirrorsInternal)
+                BaseUrlSpec.Mirrors(listOf(default) + mirrorsInternal, key)
             }
             else -> BaseUrlSpec.Static(baseUrl)
         }
