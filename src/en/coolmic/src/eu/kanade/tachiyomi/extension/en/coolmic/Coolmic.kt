@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.coolmic
 
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -14,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -33,7 +33,7 @@ class Coolmic :
     private val apiUrl = "$baseUrl/api/v1"
     private val cdnUrl = "https://en-img.$domain"
     private val searchUrl = "https://en-search.$domain"
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
@@ -43,42 +43,38 @@ class Coolmic :
         .addInterceptor(ImageInterceptor())
         .build()
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$searchUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("q", "(matchall)")
-            .addQueryParameter("size", SEARCH_SIZE.toString())
-            .addQueryParameter("start", ((page - 1) * SEARCH_SIZE).toString())
-            .addQueryParameter("q.options", "")
-            .addQueryParameter("q.parser", "structured")
-            .addQueryParameter("return", "_all_fields")
-            .addEncodedQueryParameter("sort", "like_vote_count+desc")
-            .addQueryParameter("fq", "")
-            .build()
-        return GET(url, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter().apply { state = 3 }))
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter().apply { state = 1 }))
+
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val keywords = query.trim().split(Regex("\\s+"))
+            .filter(String::isNotBlank)
+            .joinToString(" ") { "($it|$it*)" }
+        val status = filters.firstInstanceOrNull<StatusFilter>()?.value
+        val sort = filters.firstInstanceOrNull<SortFilter>()?.value
+
         val url = "$searchUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("q", "(matchall)")
+            .addQueryParameter("q", keywords.ifBlank { "(matchall)" })
             .addQueryParameter("size", SEARCH_SIZE.toString())
             .addQueryParameter("start", ((page - 1) * SEARCH_SIZE).toString())
             .addQueryParameter("q.options", "")
-            .addQueryParameter("q.parser", "structured")
+            .addQueryParameter("q.parser", if (keywords.isBlank()) "structured" else "simple")
             .addQueryParameter("return", "_all_fields")
-            .addEncodedQueryParameter("sort", "start_at+desc")
-            .addQueryParameter("fq", "")
+            .addEncodedQueryParameter("sort", sort)
+            .addQueryParameter("fq", if (status.orEmpty().isEmpty()) "" else "(and (term field=$status))")
             .build()
         return GET(url, headers)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
-
-    // "q.parser", "simple"
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        TODO()
-    }
+    override fun getFilterList() = FilterList(
+        SortFilter(),
+        StatusFilter(),
+    )
 
     override fun searchMangaParse(response: Response): MangasPage {
         val result = response.parseAs<SeriesResponse>()
