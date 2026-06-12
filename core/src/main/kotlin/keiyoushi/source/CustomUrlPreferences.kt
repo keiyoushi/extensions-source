@@ -6,6 +6,7 @@ import android.text.TextWatcher
 import android.widget.Button
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 class CustomUrlPreferences(
     private val preferences: SharedPreferences,
@@ -13,9 +14,6 @@ class CustomUrlPreferences(
     private val prefBaseKey: String = "overrideBaseUrl",
 ) {
     private val prefDefaultKey = "${prefBaseKey}_default"
-
-    // Strict Regex: https?://domain.tld or https?://host:port (no trailing slash, no path)
-    private val urlRegex = Regex("^https?://[^/?#]+$")
 
     init {
         val storedDefault = preferences.getString(prefDefaultKey, null)
@@ -34,17 +32,26 @@ class CustomUrlPreferences(
         EditTextPreference(screen.context).apply {
             key = prefBaseKey
             title = "Custom base URL"
-            summary = "Default: $defaultUrl"
+            dialogTitle = "Custom base URL"
+            dialogMessage = "Leave blank to use default"
+
+            val currentValue = preferences.getString(prefBaseKey, null)
+            summary = if (currentValue.isNullOrBlank() || currentValue == defaultUrl) {
+                "Using default: $defaultUrl"
+            } else {
+                currentValue
+            }
             setDefaultValue(defaultUrl)
 
             setOnBindEditTextListener { editText ->
+                editText.hint = defaultUrl
                 editText.addTextChangedListener(
                     object : TextWatcher {
                         override fun afterTextChanged(editable: Editable?) {
                             val text = editable?.toString() ?: ""
-                            val isValid = text.isBlank() || urlRegex.matches(text)
+                            val isValid = text.isBlank() || text.toHttpUrlOrNull() != null
 
-                            editText.error = if (isValid) null else "Invalid URL (use https://domain.tld)"
+                            editText.error = if (isValid) null else "Invalid URL"
 
                             // Disable the "OK" button if invalid
                             editText.rootView.findViewById<Button>(android.R.id.button1)?.isEnabled = isValid
@@ -56,13 +63,30 @@ class CustomUrlPreferences(
                 )
             }
 
-            setOnPreferenceChangeListener { _, newValue ->
+            setOnPreferenceChangeListener { preference, newValue ->
                 val text = newValue as String
-                val isValid = text.isBlank() || urlRegex.matches(text)
+                val httpUrl = text.toHttpUrlOrNull()
+                val isValid = text.isBlank() || httpUrl != null
                 if (isValid) {
-                    summary = if (text.isBlank()) "Using default: $defaultUrl" else text
+                    val sanitizedValue = if (text.isBlank()) {
+                        ""
+                    } else {
+                        val scheme = httpUrl!!.scheme
+                        val host = httpUrl.host
+                        val port = httpUrl.port
+                        val defaultPort = if (scheme == "https") 443 else 80
+                        val portStr = if (port == defaultPort) "" else ":$port"
+                        "$scheme://$host$portStr"
+                    }
+
+                    preferences.edit()
+                        .putString(prefBaseKey, sanitizedValue.ifBlank { defaultUrl })
+                        .apply()
+
+                    (preference as EditTextPreference).text = sanitizedValue
+                    summary = sanitizedValue.ifBlank { "Using default: $defaultUrl" }
                 }
-                isValid
+                false
             }
         }.also(screen::addPreference)
     }
