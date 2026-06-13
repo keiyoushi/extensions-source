@@ -95,11 +95,12 @@ class Comix :
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    // External image hosts can reject requests carrying Comix's Origin header.
+    // Encoded images require Comix's Origin header to receive X-Enc-* metadata.
     override fun imageRequest(page: Page): Request {
         val imageUrl = page.imageUrl ?: return super.imageRequest(page)
         val imageHost = imageUrl.substringBefore('#').toHttpUrlOrNull()?.host.orEmpty()
-        val requestHeaders = if (imageHost.isNotEmpty() && !imageHost.contains("comix.to")) {
+        val isScrambled = imageUrl.contains("#scrambled")
+        val requestHeaders = if (imageHost.isNotEmpty() && !imageHost.contains("comix.to") && !isScrambled) {
             headersBuilder()
                 .removeAll("Origin")
                 .build()
