@@ -2,49 +2,35 @@ package eu.kanade.tachiyomi.multisrc.senkuro
 
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import java.util.Locale
 
 @Serializable
-class MangasResponseDto(val mangas: ConnectionDto<MangaNodeDto>)
+class TachiyomiSearchResponseDto(val mangaTachiyomiSearch: TachiyomiSearchesDto)
 
 @Serializable
-class ConnectionDto<T>(
-    val edges: List<EdgeDto<T>>,
-    val pageInfo: PageInfoDto,
-)
+class TachiyomiSearchesDto(val mangas: List<TachiyomiSearchMangaDto>)
 
 @Serializable
-class EdgeDto<T>(val node: T)
-
-@Serializable
-class PageInfoDto(
-    val hasNextPage: Boolean,
-    val endCursor: String? = null,
-)
-
-@Serializable
-class MangaNodeDto(
-    private val slug: String,
-    private val titles: List<TitleDto>? = null,
-    private val cover: CoverDto? = null,
+class TachiyomiSearchMangaDto(
+    val id: String,
+    val slug: String,
+    val titles: List<TitleDto>? = null,
+    val originalName: TitleDto? = null,
+    val alternativeNames: List<TitleDto>? = null,
+    val cover: CoverDto? = null,
 ) {
     fun toSManga() = SManga.create().apply {
         title = titles?.find { it.lang == "RU" }?.content
             ?: titles?.find { it.lang == "EN" }?.content
             ?: titles?.firstOrNull()?.content ?: ""
-        url = slug
-        thumbnail_url = cover?.original?.url ?: cover?.preview?.url
+        url = "$id,,$slug"
+        thumbnail_url = cover?.original?.url
     }
 }
 
 @Serializable
 class CoverDto(
     val original: ImageSizeDto? = null,
-    val preview: ImageSizeDto? = null,
 )
 
 @Serializable
@@ -57,42 +43,44 @@ class TitleDto(
 )
 
 @Serializable
-class MangaDetailsResponseDto(val manga: MangaDetailsDto)
+class TachiyomiMangaInfoResponseDto(val mangaTachiyomiInfo: TachiyomiMangaDto? = null)
 
 @Serializable
-class MangaDetailsDto(
-    private val slug: String,
-    private val titles: List<TitleDto>? = null,
-    private val alternativeNames: List<TitleDto>? = null,
-    private val localizations: List<LocalizationDto>? = null,
-    private val type: String? = null,
-    private val status: String? = null,
-    private val rating: String? = null,
-    private val formats: List<String>? = null,
-    private val labels: List<LabelDto>? = null,
-    private val cover: CoverDto? = null,
-    val branches: List<BranchDto>? = null,
-    private val mainStaff: List<MainStaffDto>? = null,
+class TachiyomiMangaDto(
+    val id: String,
+    val slug: String,
+    val titles: List<TitleDto>? = null,
+    val originalName: TitleDto? = null,
+    val alternativeNames: List<TitleDto>? = null,
+    val localizations: List<LocalizationDto>? = null,
+    val type: String? = null,
+    val status: String? = null,
+    val rating: String? = null,
+    val formats: List<String>? = null,
+    val labels: List<LabelDto>? = null,
+    val mainStaff: List<MainStaffDto>? = null,
+    val translationStatus: String? = null,
+    val cover: CoverDto? = null,
 ) {
     fun toSManga() = SManga.create().apply {
         title = titles?.find { it.lang == "RU" }?.content
             ?: titles?.find { it.lang == "EN" }?.content
             ?: titles?.firstOrNull()?.content ?: ""
-        url = slug
-        thumbnail_url = cover?.original?.url ?: cover?.preview?.url
+        url = "$id,,$slug"
+        thumbnail_url = cover?.original?.url
 
-        author = mainStaff?.filter { "STORY" in it.roles }?.joinToString { it.person.name }
-        artist = mainStaff?.filter { "ART" in it.roles }?.joinToString { it.person.name }
+        author = mainStaff?.filter { "STORY" in it.roles || "STORY_AND_ART" in it.roles || "ORIGINAL_CREATOR" in it.roles }?.joinToString { it.person.name }
+        artist = mainStaff?.filter { "ART" in it.roles || "STORY_AND_ART" in it.roles }?.joinToString { it.person.name }
 
         description = buildString {
             val altName = alternativeNames?.joinToString(" / ") { it.content }
             if (!altName.isNullOrEmpty()) {
                 append("Альтернативные названия:\n", altName, "\n\n")
             }
-            append(localizations?.find { it.lang == "RU" }?.extractDescription().orEmpty())
+            append(localizations?.find { it.lang == "RU" }?.description.orEmpty())
         }
 
-        status = parseStatus(this@MangaDetailsDto.status)
+        status = parseStatus(this@TachiyomiMangaDto.status)
         genre = listOfNotNull(
             getTypeName(type),
             getAgeName(rating),
@@ -109,37 +97,11 @@ class MangaDetailsDto(
 @Serializable
 class LocalizationDto(
     val lang: String,
-    private val description: JsonElement? = null,
-) {
-    fun extractDescription(): String {
-        if (description == null) return ""
-        return extractText(description).trim()
-    }
-
-    private fun extractText(element: JsonElement): String {
-        if (element is JsonArray) {
-            return element.joinToString("") { extractText(it) }
-        }
-        if (element is JsonObject) {
-            val type = element["type"]?.jsonPrimitive?.content
-            if (type == "text") {
-                return element["text"]?.jsonPrimitive?.content ?: ""
-            }
-            val content = element["content"]?.let { extractText(it) } ?: ""
-            if (type == "paragraph") {
-                return "$content\n"
-            }
-            return content
-        }
-        return ""
-    }
-}
+    val description: String? = null,
+)
 
 @Serializable
-class LabelDto(val titles: List<TitleDto>)
-
-@Serializable
-class BranchDto(val id: String, val primaryBranch: Boolean)
+class LabelDto(val id: String, val rootId: String? = null, val slug: String, val titles: List<TitleDto>)
 
 @Serializable
 class MainStaffDto(val roles: List<String>, val person: PersonDto)
@@ -148,46 +110,49 @@ class MainStaffDto(val roles: List<String>, val person: PersonDto)
 class PersonDto(val name: String)
 
 @Serializable
-class ChaptersResponseDto(val mangaChapters: ConnectionDto<ChapterNodeDto>)
+class TachiyomiChaptersResponseDto(val mangaTachiyomiChapters: TachiyomiChaptersDto)
 
 @Serializable
-class ChapterNodeDto(
+class TachiyomiChaptersDto(
+    val message: String? = null,
+    val chapters: List<TachiyomiChapterDto> = emptyList(),
+    val teams: List<TachiyomiTeamDto> = emptyList(),
+)
+
+@Serializable
+class TachiyomiChapterDto(
+    val id: String,
+    val branchId: String,
+    val teamIds: List<String>,
     val slug: String,
     val name: String? = null,
-    val number: String? = null,
-    val volume: String? = null,
+    val number: String,
+    val volume: String,
     val createdAt: String? = null,
-    val creator: CreatorDto? = null,
+    val updatedAt: String? = null,
 )
 
 @Serializable
-class CreatorDto(val name: String? = null)
-
-@Serializable
-class ChapterPagesResponseDto(val mangaChapter: MangaChapterDto)
-
-@Serializable
-class MangaChapterDto(val pages: List<PageNodeDto>? = null)
-
-@Serializable
-class PageNodeDto(val image: PageImageDto? = null)
-
-@Serializable
-class PageImageDto(
-    val original: ImageSizeDto? = null,
-    val compress: ImageSizeDto? = null,
-)
-
-@Serializable
-class FiltersResponseDto(val allLabels: List<FilterLabelDto>)
-
-@Serializable
-class FilterLabelDto(
+class TachiyomiTeamDto(
     val id: String,
     val slug: String,
-    val rootId: String,
-    val titles: List<TitleDto>,
+    val name: String,
 )
+
+@Serializable
+class TachiyomiChapterPagesResponseDto(val mangaTachiyomiChapterPages: TachiyomiChapterPagesDto)
+
+@Serializable
+class TachiyomiChapterPagesDto(val pages: List<TachiyomiChapterPageDto>)
+
+@Serializable
+class TachiyomiChapterPageDto(val url: String)
+
+@Serializable
+class TachiyomiSearchFiltersResponseDto(val mangaTachiyomiSearchFilters: TachiyomiSearchFiltersDto)
+
+@Serializable
+class TachiyomiSearchFiltersDto(val labels: List<LabelDto>)
 
 private fun parseStatus(status: String?): Int = when (status) {
     "FINISHED" -> SManga.COMPLETED
