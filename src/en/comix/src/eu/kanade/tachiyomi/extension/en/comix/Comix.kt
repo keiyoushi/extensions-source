@@ -59,6 +59,8 @@ class Comix :
     private val apiUrl = "https://comix.to/api/v1"
     override val lang = "en"
     override val supportsLatest = true
+    override val supportsRelatedMangas = false
+    override val disableRelatedMangasBySearch = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
     private val lenientJson = Json { ignoreUnknownKeys = true }
