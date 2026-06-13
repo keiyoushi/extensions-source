@@ -1,0 +1,8 @@
+ext {
+    extName = 'YuriNeko'
+    extClass = '.YuriNeko'
+    extVersionCode = 6
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

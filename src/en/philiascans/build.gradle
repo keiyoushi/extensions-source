@@ -1,7 +1,7 @@
 ext {
     extName = 'Philia Scans'
     extClass = '.PhiliaScans'
-    extVersionCode = 55
+    extVersionCode = 56
     isNsfw = false
 }
 
