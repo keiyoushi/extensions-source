@@ -142,7 +142,7 @@ class MangaTek :
     // Page
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val pages = getSpeechBubbles(document)
+        val pages = getPages(document)
 
         return pages.mapIndexed { index, page ->
             val imageUrl = when {
@@ -153,11 +153,11 @@ class MangaTek :
         }
     }
 
-    private fun getSpeechBubbles(document: Document): List<PageDTO> = document.select(".manga-page").map { element ->
+    private fun getPages(document: Document): List<PageDTO> = document.select(".manga-page").map { element ->
         val imageUrl = element.selectFirst("img")!!.imgAttr()
         val overlays = element.select(".text-overlay").takeIf(List<Element>::isNotEmpty) ?: return@map PageDTO(imageUrl)
 
-        val boxes = overlays.map { overlay ->
+        val bubbles = overlays.map { overlay ->
             val style = overlay.attr("style")
             Bubble(
                 text = overlay.text(),
@@ -168,7 +168,7 @@ class MangaTek :
             )
         }
 
-        PageDTO(imageUrl, boxes)
+        PageDTO(imageUrl, bubbles)
     }
 
     fun String.toFragment(): String = "#${this.replace("#", "*")}"
