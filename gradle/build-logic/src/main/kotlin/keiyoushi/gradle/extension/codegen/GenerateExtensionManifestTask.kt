@@ -10,7 +10,6 @@ import org.gradle.api.tasks.TaskAction
 import java.io.Serializable
 
 data class DeeplinkFilter(
-    val scheme: String,
     val host: String,
     val pathPatterns: List<String>,
 ) : Serializable
@@ -43,7 +42,18 @@ abstract class GenerateExtensionManifestTask : DefaultTask() {
                 appendLine("                <action android:name=\"android.intent.action.VIEW\" />")
                 appendLine("                <category android:name=\"android.intent.category.DEFAULT\" />")
                 appendLine("                <category android:name=\"android.intent.category.BROWSABLE\" />")
-                appendLine("                <data android:scheme=\"${f.scheme}\" />")
+                appendLine("                <data android:scheme=\"https\" />")
+                appendLine("                <data android:host=\"${f.host}\" />")
+                f.pathPatterns.forEach {
+                    appendLine("                <data android:pathPattern=\"$it\" />")
+                }
+                append("            </intent-filter>")
+                appendLine()
+                appendLine("            <intent-filter>")
+                appendLine("                <action android:name=\"android.intent.action.VIEW\" />")
+                appendLine("                <category android:name=\"android.intent.category.DEFAULT\" />")
+                appendLine("                <category android:name=\"android.intent.category.BROWSABLE\" />")
+                appendLine("                <data android:scheme=\"http\" />")
                 appendLine("                <data android:host=\"${f.host}\" />")
                 f.pathPatterns.forEach {
                     appendLine("                <data android:pathPattern=\"$it\" />")

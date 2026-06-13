@@ -26,11 +26,10 @@ fun Project.resolveExtensionSpec(spec: ExtensionSpec, pkg: String): ResolvedSpec
 
     val themeProject = spec.theme.orNull?.let { findThemeProject(it) }
     val multisrcSpec = themeProject?.extensions?.findByType(MultisrcSpec::class.java)
-    val themePaths = multisrcSpec
-        ?.deeplinks?.orNull?.flatMap { it.pathPatterns.orNull.orEmpty() }.orEmpty()
 
     val resolvedSources = sources.map { it.resolve() }
-    val deeplinkFilters = resolveDeeplinkFilters(sources, themePaths)
+    val themeSpecs = multisrcSpec?.deeplinks?.orNull.orEmpty()
+    val deeplinkFilters = resolveDeeplinkFilters(sources, themeSpecs)
 
     val isNsfw = spec.nsfw.getOrElse(false)
 
@@ -105,40 +104,19 @@ private fun keiyoushi.gradle.extension.dsl.SourceSpec.resolve(): ResolvedSource 
 
 private fun resolveDeeplinkFilters(
     sources: List<keiyoushi.gradle.extension.dsl.SourceSpec>,
-    themePaths: List<String>,
+    themeSpecs: List<DeeplinkSpec>,
 ): List<DeeplinkFilter> {
-    val combinedPaths = themePaths.distinct()
     val result = mutableListOf<DeeplinkFilter>()
 
     sources.forEach { source ->
         val baseUrl = source.resolvedBaseUrl.get()
-        val specs = source.specs.orNull.orEmpty()
+        val specs = source.specs.orNull.orEmpty() + themeSpecs
 
-        if (specs.isEmpty()) {
-            if (combinedPaths.isNotEmpty()) {
-                parseUrls(baseUrl).forEach { (scheme, host) ->
-                    if (scheme != null && host != null) {
-                        result.add(DeeplinkFilter(scheme, host, combinedPaths))
-                    }
-                }
-            }
-        } else {
-            specs.forEach { spec ->
-                val explicitScheme = spec.scheme.orNull
-                val explicitHost = spec.host.orNull
-                val paths = (spec.pathPatterns.orNull.orEmpty() + combinedPaths).distinct()
-
-                if (explicitScheme != null && explicitHost != null) {
-                    result.add(DeeplinkFilter(explicitScheme, explicitHost, paths))
-                } else {
-                    parseUrls(baseUrl).forEach { (scheme, host) ->
-                        val s = explicitScheme ?: scheme
-                        val h = explicitHost ?: host
-                        if (s != null && h != null) {
-                            result.add(DeeplinkFilter(s, h, paths))
-                        }
-                    }
-                }
+        specs.forEach { spec ->
+            val hosts = spec.hosts.orNull.orEmpty().ifEmpty { hostsFrom(baseUrl) }
+            val paths = spec.pathPatterns.orNull.orEmpty()
+            if (paths.isNotEmpty()) {
+                hosts.forEach { host -> result.add(DeeplinkFilter(host, paths)) }
             }
         }
     }
@@ -146,15 +124,14 @@ private fun resolveDeeplinkFilters(
     return result.distinct()
 }
 
-private fun parseUrls(baseUrl: BaseUrlSpec): List<Pair<String?, String?>> {
+private fun hostsFrom(baseUrl: BaseUrlSpec): List<String> {
     val urls = when (baseUrl) {
         is BaseUrlSpec.Static -> listOf(baseUrl.url)
         is BaseUrlSpec.Mirrors -> baseUrl.mirrors
         is BaseUrlSpec.Custom -> listOf(baseUrl.defaultUrl)
     }
-    return urls.map { url ->
-        val uri = runCatching { URI(url) }.getOrNull()
-        uri?.scheme to uri?.host
+    return urls.mapNotNull { url ->
+        runCatching { URI(url).host }.getOrNull()
     }
 }
 

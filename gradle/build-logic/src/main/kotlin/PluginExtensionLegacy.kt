@@ -122,11 +122,9 @@ class PluginExtensionLegacy : Plugin<Project> {
             val spec = t.extensions.findByType(MultisrcSpec::class.java)
             val paths = spec?.deeplinks?.orNull?.flatMap { it.pathPatterns.orNull.orEmpty() }.orEmpty()
             if (paths.isNotEmpty() && baseUrl.isNotEmpty()) {
-                val uri = runCatching { URI(baseUrl) }.getOrNull()
-                val scheme = uri?.scheme
-                val host = uri?.host
-                if (scheme != null && host != null) {
-                    listOf(DeeplinkFilter(scheme, host, paths))
+                val host = runCatching { URI(baseUrl).host }.getOrNull()
+                if (host != null) {
+                    listOf(DeeplinkFilter(host, paths))
                 } else emptyList()
             } else emptyList()
         } ?: emptyList()
