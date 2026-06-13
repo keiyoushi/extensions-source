@@ -58,6 +58,7 @@ class Comix :
     override val lang = "en"
     override val supportsLatest = true
     override val supportsRelatedMangas = false
+    override val disableRelatedMangasBySearch = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
     private val lenientJson = Json { ignoreUnknownKeys = true }
