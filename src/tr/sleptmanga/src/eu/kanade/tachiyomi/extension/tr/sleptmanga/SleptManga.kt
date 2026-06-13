@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 
@@ -34,7 +35,7 @@ class SleptManga : HttpSource() {
         val elements = document.select("a.group:has(article)")
 
         val mangas = elements
-            .filterNot { it.attr("href").startsWith("/novel/") }
+            .filterNot { it.absUrl("href").toHttpUrlOrNull()?.pathSegments?.firstOrNull() == "novel" }
             .mapNotNull { element ->
                 SManga.create().apply {
                     setUrlWithoutDomain(element.absUrl("href"))
@@ -100,7 +101,7 @@ class SleptManga : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val series = response.extractNextJs<SeriesDto>()
-            ?: throw Exception("Bölümler bulunamadı")
+            ?: return emptyList()
 
         val encodedPath = response.request.url.encodedPath.removeSuffix("/")
 
@@ -111,7 +112,7 @@ class SleptManga : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val data = response.extractNextJs<ChapterDataDto>()
-            ?: throw Exception("Sayfalar bulunamadı")
+            ?: return emptyList()
 
         return data.toPageList(baseUrl)
     }
