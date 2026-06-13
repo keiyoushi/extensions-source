@@ -197,13 +197,24 @@ class CodeArc : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
-        val readerData = response.extractNextJs<ReaderDto>()
-        if (readerData != null && readerData.pages.isNotEmpty()) {
-            return readerData.pages.mapIndexed { index, page ->
-                Page(index, imageUrl = page.imagenUrl)
+        val readerData = response.extractNextJs<ReaderDto>() ?: return emptyList()
+        val pages = readerData.initialPages.toMutableList()
+        val pagesFetchUrl = baseUrl.toHttpUrl().resolve(readerData.pagesFetchUrl) ?: return emptyList()
+
+        while (pages.size < readerData.totalPages) {
+            val url = pagesFetchUrl.newBuilder()
+                .setQueryParameter("offset", pages.size.toString())
+                .build()
+            val newPages = client.newCall(GET(url, headers)).execute().use { apiResponse ->
+                apiResponse.parseAs<ReaderPagesDto>().items
             }
+            if (newPages.isEmpty()) break
+            pages += newPages
         }
-        return emptyList()
+
+        return pages.mapIndexed { index, page ->
+            Page(index, imageUrl = page.imagenUrl)
+        }
     }
 
     override fun getFilterList(): FilterList = getFilters()
