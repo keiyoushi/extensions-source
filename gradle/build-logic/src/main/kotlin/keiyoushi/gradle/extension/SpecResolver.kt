@@ -27,9 +27,9 @@ fun Project.resolveExtensionSpec(spec: ExtensionSpec, pkg: String): ResolvedSpec
     val themeProject = spec.theme.orNull?.let { findThemeProject(it) }
     val multisrcSpec = themeProject?.extensions?.findByType(MultisrcSpec::class.java)
 
-    val resolvedSources = sources.map { it.resolve() }
     val themeSpecs = multisrcSpec?.deeplinks?.orNull.orEmpty()
-    val deeplinkFilters = resolveDeeplinkFilters(sources, themeSpecs)
+    val resolvedSources = sources.map { it.resolve(themeSpecs) }
+    val deeplinkFilters = resolvedSources.flatMap { it.deeplinks }.distinct()
 
     val isNsfw = spec.nsfw.getOrElse(false)
 
@@ -86,10 +86,21 @@ private fun validateSources(spec: ExtensionSpec): List<keiyoushi.gradle.extensio
     return sources
 }
 
-private fun keiyoushi.gradle.extension.dsl.SourceSpec.resolve(): ResolvedSource {
+private fun keiyoushi.gradle.extension.dsl.SourceSpec.resolve(themeSpecs: List<DeeplinkSpec>): ResolvedSource {
     val baseUrl = resolvedBaseUrl.get()
     val versionId = versionId.orElse(1).get()
     val effectiveId = if (id.isPresent) id.get() else generateSourceId(name.get(), lang.get(), versionId)
+
+    val specs = specs.orNull.orEmpty() + themeSpecs
+    val sourceDeeplinks = specs.flatMap { spec ->
+        val hosts = spec.hosts.orNull.orEmpty().ifEmpty { hostsFrom(baseUrl) }
+        val paths = spec.pathPatterns.orNull.orEmpty()
+        if (paths.isNotEmpty()) {
+            hosts.map { host -> DeeplinkFilter(host, paths) }
+        } else {
+            emptyList()
+        }
+    }.distinct()
 
     return ResolvedSource(
         name = name.get(),
@@ -99,29 +110,8 @@ private fun keiyoushi.gradle.extension.dsl.SourceSpec.resolve(): ResolvedSource 
         id = effectiveId,
         baseUrl = baseUrl,
         overrides = overrides.orNull.orEmpty(),
+        deeplinks = sourceDeeplinks,
     )
-}
-
-private fun resolveDeeplinkFilters(
-    sources: List<keiyoushi.gradle.extension.dsl.SourceSpec>,
-    themeSpecs: List<DeeplinkSpec>,
-): List<DeeplinkFilter> {
-    val result = mutableListOf<DeeplinkFilter>()
-
-    sources.forEach { source ->
-        val baseUrl = source.resolvedBaseUrl.get()
-        val specs = source.specs.orNull.orEmpty() + themeSpecs
-
-        specs.forEach { spec ->
-            val hosts = spec.hosts.orNull.orEmpty().ifEmpty { hostsFrom(baseUrl) }
-            val paths = spec.pathPatterns.orNull.orEmpty()
-            if (paths.isNotEmpty()) {
-                hosts.forEach { host -> result.add(DeeplinkFilter(host, paths)) }
-            }
-        }
-    }
-
-    return result.distinct()
 }
 
 private fun hostsFrom(baseUrl: BaseUrlSpec): List<String> {

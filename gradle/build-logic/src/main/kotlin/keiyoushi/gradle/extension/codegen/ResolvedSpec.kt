@@ -2,6 +2,7 @@ package keiyoushi.gradle.extension.codegen
 
 import keiyoushi.gradle.extension.dsl.BaseUrlSpec
 import keiyoushi.gradle.extension.dsl.OverrideValue
+import keiyoushi.gradle.extension.tasks.DeeplinkFilter
 import java.io.Serializable
 
 data class ResolvedExtension(
@@ -20,4 +21,5 @@ data class ResolvedSource(
     val id: Long,
     val baseUrl: BaseUrlSpec,
     val overrides: Map<String, OverrideValue>,
+    val deeplinks: List<DeeplinkFilter> = emptyList(),
 ) : Serializable

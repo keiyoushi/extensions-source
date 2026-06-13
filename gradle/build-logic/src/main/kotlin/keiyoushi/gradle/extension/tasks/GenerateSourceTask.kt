@@ -131,6 +131,7 @@ abstract class GenerateSourceTask : DefaultTask() {
     ) {
         val anyMirrors = sources.any { it.baseUrl is BaseUrlSpec.Mirrors }
         val anyCustom = sources.any { it.baseUrl is BaseUrlSpec.Custom }
+        val anyDeeplinks = sources.any { it.deeplinks.isNotEmpty() }
 
         if (needsPrefsImport) {
             builder.appendLine("import android.content.SharedPreferences")
@@ -149,6 +150,12 @@ abstract class GenerateSourceTask : DefaultTask() {
         }
         if (anyMirrors || anyCustom) {
             builder.appendLine("import keiyoushi.utils.getPreferences")
+        }
+        if (anyDeeplinks) {
+            builder.appendLine("import eu.kanade.tachiyomi.source.model.FilterList")
+            builder.appendLine("import eu.kanade.tachiyomi.source.model.MangasPage")
+            builder.appendLine("import rx.Observable")
+            builder.appendLine("import okhttp3.HttpUrl.Companion.toHttpUrlOrNull")
         }
     }
 
@@ -214,6 +221,38 @@ abstract class GenerateSourceTask : DefaultTask() {
                 builder.appendLine("}")
             }
         }
+
+        if (source.deeplinks.isNotEmpty()) {
+            builder.appendLine()
+            builder.appendLine("    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {")
+            builder.appendLine("        val httpUrl = query.toHttpUrlOrNull()")
+            builder.appendLine("        if (httpUrl == null) {")
+            builder.appendLine("            return super.fetchSearchManga(page, query, filters)")
+            builder.appendLine("        }")
+            builder.appendLine()
+
+            val groupedDeeplinks = source.deeplinks.groupBy { it.host }
+            builder.appendLine("        val matches = when (httpUrl.host) {")
+            groupedDeeplinks.forEach { (host, filtersForHost) ->
+                builder.appendLine("            \"$host\" -> {")
+                builder.appendLine("                val path = httpUrl.encodedPath")
+                val conditions = filtersForHost.flatMap { it.pathPatterns }.map { pattern ->
+                    val regexStr = androidPatternToRegexStr(pattern)
+                    "path.matches(Regex(\"\"\"$regexStr\"\"\"))"
+                }
+                builder.appendLine("                ${conditions.joinToString(" || ")}")
+                builder.appendLine("            }")
+            }
+            builder.appendLine("            else -> false")
+            builder.appendLine("        }")
+            builder.appendLine()
+            builder.appendLine("        return if (matches) {")
+            builder.appendLine("            super.fetchSearchManga(page, query, filters)")
+            builder.appendLine("        } else {")
+            builder.appendLine("            Observable.just(MangasPage(emptyList(), false))")
+            builder.appendLine("        }")
+            builder.appendLine("    }")
+        }
     }
 
     private fun sourceSuffixes(sources: List<ResolvedSource>): List<String> {
@@ -225,4 +264,48 @@ abstract class GenerateSourceTask : DefaultTask() {
             if (count == 1) base else "${base}_$count"
         }
     }
+
+    private fun androidPatternToRegexStr(pattern: String): String {
+        val regexStr = buildString {
+            append("^")
+            var i = 0
+            while (i < pattern.length) {
+                val c = pattern[i]
+                when (c) {
+                    '.' -> {
+                        append('.')
+                        i++
+                    }
+                    '*' -> {
+                        append('*')
+                        i++
+                    }
+                    '\\' -> {
+                        if (i + 1 < pattern.length) {
+                            val next = pattern[i + 1]
+                            append(escapeRegexChar(next))
+                            i += 2
+                        } else {
+                            append(escapeRegexChar('\\'))
+                            i++
+                        }
+                    }
+                    else -> {
+                        append(escapeRegexChar(c))
+                        i++
+                    }
+                }
+            }
+            append("$")
+        }
+        return regexStr
+    }
+
+    private fun escapeRegexChar(c: Char): String {
+        return when (c) {
+            '\\', '^', '$', '.', '|', '?', '*', '+', '(', ')', '[', ']', '{', '}' -> "\\$c"
+            else -> c.toString()
+        }
+    }
 }
+
