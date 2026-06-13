@@ -35,8 +35,6 @@ import keiyoushi.utils.parseAs
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import okhttp3.Cookie
-import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -60,35 +58,11 @@ class Comix :
     override val lang = "en"
     override val supportsLatest = true
     override val supportsRelatedMangas = false
-    override val disableRelatedMangasBySearch = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
     private val lenientJson = Json { ignoreUnknownKeys = true }
-    private val baseCookieJar = network.client.cookieJar
-    private val webViewCookieManager by lazy { CookieManager.getInstance() }
-    private val sharedCookieJar = object : CookieJar {
-        override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-            baseCookieJar.saveFromResponse(url, cookies)
-            cookies.forEach { cookie ->
-                runCatching { webViewCookieManager.setCookie(url.toString(), cookie.toString()) }
-            }
-        }
-
-        override fun loadForRequest(url: HttpUrl): List<Cookie> {
-            val webViewCookies = runCatching {
-                webViewCookieManager.getCookie(url.toString())
-                    ?.split(';')
-                    ?.mapNotNull { Cookie.parse(url, it.trim()) }
-                    .orEmpty()
-            }.getOrDefault(emptyList())
-
-            return (webViewCookies + baseCookieJar.loadForRequest(url))
-                .distinctBy { Triple(it.name, it.domain, it.path) }
-        }
-    }
 
     override val client = network.client.newBuilder()
-        .cookieJar(sharedCookieJar)
         .addNetworkInterceptor(Descrambler.interceptor)
         .addInterceptor { chain ->
             val request = chain.request()
@@ -444,26 +418,93 @@ class Comix :
         val blacklist = preferences.scanlatorBlacklist()
         val mangaSlug = manga.url.removePrefix("/")
 
-        val mangaUrl = getMangaUrl(manga)
-        val allChapters = mutableListOf<Chapter>()
-        val seenPages = mutableSetOf<Int>()
-        var page = 1
-        var hasNextPage = true
-
-        while (hasNextPage) {
-            val pageUrl = mangaUrl.toHttpUrl().newBuilder()
-                .addQueryParameter("page", page.toString())
-                .build()
-                .toString()
-            val chapterResponse = fetchChapterPayload(pageUrl).parseAs<ChapterListResponse>()
-            val items = chapterResponse.result.items
-            val meta = chapterResponse.result.meta
-
-            if (items.isEmpty() || !seenPages.add(meta.page)) break
-            allChapters.addAll(items)
-            hasNextPage = meta.hasNext && (meta.lastPage <= 1 || meta.page < meta.lastPage)
-            page++
+        val document = runBlocking {
+            client.newCall(GET(getMangaUrl(manga), headers)).awaitSuccess().asJsoup()
         }
+        val payload = runInWebView(
+            document = document,
+            buildScript = { interfaceName ->
+                $$"""
+                    (function () {
+                        const payloadKey = '__comixChapterPayload';
+                        if (window[payloadKey]?.installed) return null;
+
+                        const state = window[payloadKey] = {
+                            installed: true,
+                            submitted: false,
+                            seen: new Set(),
+                            nextClicks: new Set(),
+                            items: []
+                        };
+                        const submit = () => {
+                            if (state.submitted) return;
+                            state.submitted = true;
+                            window.$$interfaceName.passPayload(JSON.stringify(state.items));
+                        };
+                        const capture = parsed => {
+                            try {
+                                const items = parsed?.result?.items;
+                                const first = items?.[0];
+                                if (
+                                    state.submitted ||
+                                    !Array.isArray(items) ||
+                                    items.length === 0 ||
+                                    first?.id === undefined ||
+                                    first?.number === undefined
+                                ) return false;
+
+                                const meta = parsed.result.meta || parsed.result.pagination || {};
+                                const page = meta.page || 1;
+                                if (state.seen.has(page)) return true;
+
+                                state.seen.add(page);
+                                state.items.push(...items);
+                                if (meta.hasNext && !state.nextClicks.has(page)) {
+                                    state.nextClicks.add(page);
+                                    window.$$interfaceName.resetTimer();
+                                    let tries = 0;
+                                    const interval = setInterval(() => {
+                                        const button = document.querySelector('.mchap-foot button[aria-label*=Next]');
+                                        if (button && !button.disabled) {
+                                            button.click();
+                                            clearInterval(interval);
+                                        } else if (++tries > 50) {
+                                            clearInterval(interval);
+                                            submit();
+                                        }
+                                    }, 100);
+                                } else {
+                                    submit();
+                                }
+                                return true;
+                            } catch (e) {
+                                return false;
+                            }
+                        };
+
+                        const originalParse = JSON.parse;
+                        const proxiedParse = new Proxy(originalParse, {
+                            apply(target, thisArg, args) {
+                                const parsed = Reflect.apply(target, thisArg, args);
+                                capture(parsed);
+                                return parsed;
+                            }
+                        });
+                        proxiedParse.__comixChapterCaptureInstalled = true;
+                        JSON.parse = proxiedParse;
+
+                        try {
+                            const raw = document.querySelector('script#initial-data')?.textContent;
+                            const queries = raw && originalParse(raw).queries;
+                            if (queries) Object.values(queries).some(capture);
+                        } catch (e) {}
+                        return null;
+                    })();
+                """.trimIndent()
+            },
+        )
+
+        val allChapters = payload.parseAs<List<Chapter>>()
 
         // Filter out groups specified in the blacklist first
         val filteredChapters = if (blacklist.isNotEmpty()) {
@@ -496,62 +537,6 @@ class Comix :
     override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    private fun fetchChapterPayload(pageUrl: String): String {
-        val document = runBlocking {
-            client.newCall(GET(pageUrl, headers)).awaitSuccess().asJsoup()
-        }
-
-        return runInWebView(
-            document = document,
-            buildScript = { interfaceName ->
-                """
-                    (function () {
-                        const payloadKey = '__comixChapterPayload';
-                        const capture = parsed => {
-                            try {
-                                const items = parsed?.result?.items;
-                                const first = items?.[0];
-                                if (
-                                    Array.isArray(items) &&
-                                    items.length > 0 &&
-                                    first.id !== undefined &&
-                                    first.number !== undefined
-                                ) {
-                                    window[payloadKey] = JSON.stringify(parsed);
-                                    window.$interfaceName.passPayload(window[payloadKey]);
-                                    return true;
-                                }
-                            } catch (e) {}
-                            return false;
-                        };
-
-                        if (window[payloadKey]) return window[payloadKey];
-
-                        try {
-                            const raw = document.querySelector('script#initial-data')?.textContent;
-                            const queries = raw && JSON.parse(raw).queries;
-                            if (queries) Object.values(queries).some(capture);
-                        } catch (e) {}
-
-                        if (window[payloadKey]) return window[payloadKey];
-                        if (JSON.parse.__comixChapterCaptureInstalled) return null;
-                        const originalParse = JSON.parse;
-                        const proxiedParse = new Proxy(originalParse, {
-                            apply(target, thisArg, args) {
-                                const parsed = Reflect.apply(target, thisArg, args);
-                                capture(parsed);
-                                return parsed;
-                            }
-                        });
-                        proxiedParse.__comixChapterCaptureInstalled = true;
-                        JSON.parse = proxiedParse;
-                        return window[payloadKey] || null;
-                    })();
-                """.trimIndent()
-            },
-        )
-    }
 
     private fun deduplicateChapters(
         chapterMap: LinkedHashMap<Number, Chapter>,
@@ -662,8 +647,6 @@ class Comix :
         val active = AtomicBoolean(true)
         val started = Semaphore(0)
         val startupError = AtomicReference<Throwable?>()
-        val isCloudflareChallenge = document.title() == "Just a moment..." ||
-            document.selectFirst("script[src*=challenge-platform], script:containsData(_cf_chl_opt)") != null
 
         var webView: WebView? = null
         var injectScript: Runnable? = null
@@ -745,17 +728,13 @@ class Comix :
                 }
                 injectScript = retry
 
-                if (isCloudflareChallenge) {
-                    view.loadUrl(document.location())
-                } else {
-                    view.loadDataWithBaseURL(
-                        document.location(),
-                        document.outerHtml(),
-                        "text/html",
-                        "utf-8",
-                        null,
-                    )
-                }
+                view.loadDataWithBaseURL(
+                    document.location(),
+                    document.outerHtml(),
+                    "text/html",
+                    "utf-8",
+                    null,
+                )
                 handler.post(retry)
             } catch (error: Throwable) {
                 startupError.set(error)
@@ -802,6 +781,12 @@ class Comix :
                 payload = data
                 signal.release()
             }
+        }
+
+        @JavascriptInterface
+        @Suppress("UNUSED")
+        fun resetTimer() {
+            signal.release()
         }
 
         fun await(timeout: Long, unit: TimeUnit): Boolean {

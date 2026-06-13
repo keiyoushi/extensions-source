@@ -329,26 +329,3 @@ class ChapterResponse(
         val s: Int = 0,
     )
 }
-
-@Serializable
-class ChapterListResponse(
-    val result: ChapterListResult,
-) {
-    @Serializable
-    class ChapterListResult(
-        val items: List<Chapter> = emptyList(),
-        val meta: ChapterListMeta,
-    )
-
-    @Serializable
-    class ChapterListMeta(
-        val total: Int = 0,
-        val perPage: Int = 20,
-        val page: Int = 1,
-        val lastPage: Int = 1,
-        val from: Int = 0,
-        val to: Int = 0,
-        val hasNext: Boolean = false,
-        val hasPrev: Boolean = false,
-    )
-}
