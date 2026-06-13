@@ -571,7 +571,9 @@ class Comix :
 
     // =============================== Pages ===============================
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
-        val document = client.newCall(GET(getChapterUrl(chapter), headers)).execute().asJsoup()
+        val document = runBlocking {
+            client.newCall(request).awaitSuccess().asJsoup()
+        }
         val payload = runInWebView(
             document = document,
             buildScript = { interfaceName ->
