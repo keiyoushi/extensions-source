@@ -3,7 +3,7 @@ ext {
     extClass = ".HerosWeb"
     themePkg = 'comiciviewer'
     baseUrl = "https://heros-web.com"
-    overrideVersionCode = 1
+    overrideVersionCode = 0
     isNsfw = false
 }
 
