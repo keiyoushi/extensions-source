@@ -27,7 +27,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
-import kotlin.time.Duration.Companion.seconds
 
 @RequiresApi(Build.VERSION_CODES.O)
 class MangaTek :
@@ -143,9 +142,9 @@ class MangaTek :
     // Page
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val dialogBoxes = getDialogBoxes(document)
+        val pages = getSpeechBubbles(document)
 
-        return dialogBoxes.mapIndexed { index, page ->
+        return pages.mapIndexed { index, page ->
             val imageUrl = when {
                 page.hasSpeechBubbles() -> "${page.imageUrl}${page.bubbles.toJsonString().toFragment()}"
                 else -> page.imageUrl
@@ -154,7 +153,7 @@ class MangaTek :
         }
     }
 
-    private fun getDialogBoxes(document: Document): List<PageDTO> = document.select(".manga-page").map { element ->
+    private fun getSpeechBubbles(document: Document): List<PageDTO> = document.select(".manga-page").map { element ->
         val imageUrl = element.selectFirst("img")!!.imgAttr()
         val overlays = element.select(".text-overlay").takeIf(List<Element>::isNotEmpty) ?: return@map PageDTO(imageUrl)
 
