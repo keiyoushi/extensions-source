@@ -83,14 +83,14 @@ class MangaBuff :
 
     private fun gifToWebpInterceptor(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
-    
+
         if (!imgConvert()) return response
-    
+
         val isGif = response.body.contentType()?.subtype?.lowercase() == "gif" ||
             response.request.url.pathSegments.lastOrNull()?.endsWith(".gif", ignoreCase = true) == true
-    
+
         if (!isGif) return response
-    
+
         val original = response.body.use { body ->
             BitmapFactory.decodeStream(body.inputStream())
                 ?: throw IOException("Failed to decode GIF")
