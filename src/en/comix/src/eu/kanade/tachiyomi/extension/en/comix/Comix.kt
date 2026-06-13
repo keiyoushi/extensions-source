@@ -33,7 +33,6 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -58,9 +57,9 @@ class Comix :
     override val lang = "en"
     override val supportsLatest = true
     override val supportsRelatedMangas = false
+    override val disableRelatedMangasBySearch = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
-    private val lenientJson = Json { ignoreUnknownKeys = true }
 
     override val client = network.client.newBuilder()
         .addNetworkInterceptor(Descrambler.interceptor)
@@ -95,11 +94,12 @@ class Comix :
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    // External image hosts can reject requests carrying Comix's Origin header.
+    // Encoded images require Comix's Origin header to receive X-Enc-* metadata.
     override fun imageRequest(page: Page): Request {
         val imageUrl = page.imageUrl ?: return super.imageRequest(page)
         val imageHost = imageUrl.substringBefore('#').toHttpUrlOrNull()?.host.orEmpty()
-        val requestHeaders = if (imageHost.isNotEmpty() && !imageHost.contains("comix.to")) {
+        val isScrambled = imageUrl.contains("#scrambled")
+        val requestHeaders = if (imageHost.isNotEmpty() && !imageHost.contains("comix.to") && !isScrambled) {
             headersBuilder()
                 .removeAll("Origin")
                 .build()
@@ -177,7 +177,7 @@ class Comix :
                     })();
                 """.trimIndent()
             },
-        ).parseAs<SearchResponse>(lenientJson)
+        ).parseAs<SearchResponse>()
 
         val mangaList = searchResponse.result.items.map {
             it.toBasicSManga(preferences.posterQuality())
@@ -188,11 +188,11 @@ class Comix :
     private fun Document.extractBrowseResponse(): SearchResponse? {
         val initialData = selectFirst("script#initial-data")?.data() ?: return null
         val queries = runCatching {
-            initialData.parseAs<JsonObject>(lenientJson)["queries"] as? JsonObject
+            initialData.parseAs<JsonObject>()["queries"] as? JsonObject
         }.getOrNull() ?: return null
 
         return queries.values.firstNotNullOfOrNull { value ->
-            runCatching { value.parseAs<SearchResponse>(lenientJson) }
+            runCatching { value.parseAs<SearchResponse>() }
                 .getOrNull()
                 ?.takeIf { it.result.items.isNotEmpty() }
         }
@@ -392,14 +392,14 @@ class Comix :
 
         val initialData = document.selectFirst("script#initial-data")?.data()
             ?: throw Exception("Could not find manga data in page")
-        val root = initialData.parseAs<JsonObject>(lenientJson)
+        val root = initialData.parseAs<JsonObject>()
         val queries = root["queries"] as? JsonObject
             ?: throw Exception("Could not find queries in manga data")
         val detail = queries.entries.firstOrNull { (key, _) -> key.contains("\"detail\"") }
             ?.value
             ?: throw Exception("Could not find manga detail in queries")
 
-        detail.parseAs<Manga>(lenientJson).toSManga(
+        detail.parseAs<Manga>().toSManga(
             preferences.posterQuality(),
             preferences.alternativeNamesInDescription(),
             preferences.scorePosition(),
