@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.extension.all.mangadraft.dto.MangaDraftPageDTO
 import eu.kanade.tachiyomi.extension.all.mangadraft.dto.MangaDraftProjectDto
 import eu.kanade.tachiyomi.extension.all.mangadraft.dto.PagesByCategory
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -22,11 +23,10 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.collections.joinToString
-import kotlin.getValue
 
 class MangaDraft : HttpSource() {
     override val name = "MangaDraft"
-    override val baseUrl = "https://mangadraft.com"
+    override val baseUrl = "https://www.mangadraft.com"
     override val lang = "all"
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
@@ -46,42 +46,60 @@ class MangaDraft : HttpSource() {
         }.build(),
         headers,
     )
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<MangaDraftCatalogResponseDto>()
 
+    private fun parseMangaList(response: Response, isSearch: Boolean): MangasPage {
+        val result = response.parseAs<MangaDraftCatalogResponseDto>()
         val mangas = result.data
+
+        val mangaList = mangas.map {
+            SManga.create().apply {
+                setUrlWithoutDomain(it.url)
+                title = it.name
+                thumbnail_url = it.avatar
+                description = it.description
+                genre = it.genres
+            }
+        }
+
         return MangasPage(
-            mangas.map {
-                SManga.create().apply {
-                    setUrlWithoutDomain(it.url)
-                    title = it.name
-                    thumbnail_url = it.avatar
-                    description = it.description
-                    genre = it.genres
-                }
-            },
-            // if there is less than 20 received there won't be a next page
-            mangas.count() >= 20,
+            mangaList,
+            // No next page if text-search or less/equal to 16 results
+            hasNextPage = if (isSearch) false else mangas.size >= 16,
         )
     }
 
-    // latest
+    override fun popularMangaParse(response: Response): MangasPage = parseMangaList(response, isSearch = false)
+
+    // Latest
     override fun latestUpdatesRequest(page: Int): Request = GET(
         baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("api")
             addPathSegment("catalog")
             addPathSegment("projects")
+            addQueryParameter("number", "16")
+            addQueryParameter("page", page.toString())
             addQueryParameter("order", "news")
             addQueryParameter("type", "all")
-            addQueryParameter("page", page.toString())
-            addQueryParameter("number", "20")
         }.build(),
         headers,
     )
+
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isNotBlank()) {
+        // Text-only Search
+        GET(
+            baseUrl.toHttpUrl().newBuilder().apply {
+                addPathSegment("api")
+                addPathSegment("search")
+                addPathSegment("autocomplete")
+                addQueryParameter("value", query)
+            }.fragment("search").build().toString(),
+            headers,
+        )
+    } else {
+        // Filter-only Search
         val filterList = if (filters.isEmpty()) getFilterList() else filters
 
         val typeFilter = filterList.firstInstance<TypeFilter>()
@@ -93,30 +111,36 @@ class MangaDraft : HttpSource() {
         val statusFilter = filterList.firstInstance<StatusFilter>()
         val sortFilter = filterList.firstInstance<SortFilter>()
 
-        return GET(
+        GET(
             baseUrl.toHttpUrl().newBuilder().apply {
                 addPathSegment("api")
                 addPathSegment("catalog")
                 addPathSegment("projects")
-                addQueryParameter("type", typeFilter.toUriPart())
+                addQueryParameter("number", "16")
+                addQueryParameter("page", page.toString())
                 addQueryParameter("order", orderFilter.toUriPart())
+                addQueryParameter("order_all", sortFilter.toUriPart())
                 addQueryParameter("section", sectionFilter.toUriPart())
+                addQueryParameter("status", statusFilter.toUriPart())
                 addQueryParameter("genre", genreFilter.toUriPart())
                 addQueryParameter("format", formatFilter.toUriPart())
+                addQueryParameter("type", typeFilter.toUriPart())
                 addQueryParameter("language", languageFilter.toUriPart())
-                addQueryParameter("status", statusFilter.toUriPart())
-                addQueryParameter("order_all", sortFilter.toUriPart())
-                addQueryParameter("page", page.toString())
-                addQueryParameter("number", "20")
             }.build(),
             headers,
         )
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    override fun searchMangaParse(response: Response): MangasPage {
+        val isTextSearch = response.request.url.queryParameter("value") != null
 
-    // filters
+        return parseMangaList(response, isSearch = isTextSearch)
+    }
+
+    // Filters
     override fun getFilterList() = FilterList(
+        Filter.Header("Ignored when using text search"),
+        Filter.Separator(),
         SortFilter(),
         TypeFilter(),
         OrderFilter(),
@@ -168,32 +192,38 @@ class MangaDraft : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-
         val chapterElements = document.select(chapterListSelector())
 
         val isNotOneShot = chapterElements[0].attr("href").contains("c.")
-        var chapterList: List<SChapter>
-        if (isNotOneShot) {
-            chapterList = chapterElements.mapIndexed { i, it ->
-                chapterFromElement(it, i)
+
+        return if (isNotOneShot) {
+            chapterElements.mapIndexed { i, it ->
+                chapterFromElement(it, i, true)
             }.reversed()
         } else {
-            chapterList = listOf<SChapter>(chapterFromElement(chapterElements[0], 0))
+            listOf(chapterFromElement(chapterElements[0], 0, false))
         }
-
-        return chapterList
     }
 
-    private fun chapterFromElement(element: Element, index: Int): SChapter = SChapter.create().apply {
-        chapter_number = index.toFloat()
-        name = "$chapter_number. ${element.selectFirst(".group-hover\\:text-secondary")?.text() ?: ""}"
+    private fun chapterFromElement(element: Element, index: Int, isNotOneShot: Boolean): SChapter = SChapter.create().apply {
+        chapter_number = index.toFloat() + 1
 
-        url = "${element.absUrl("href")}"
+        val titleText = element.selectFirst(".group-hover\\:text-secondary")!!.ownText()
+            .replace(TITLE_REGEX, "")
+            .trim()
 
-        val dateText = element.selectFirst("div>span")?.text()
+        name = if (isNotOneShot) {
+            if (titleText.isNotEmpty()) "Ch. $index: $titleText" else "Ch. $index"
+        } else {
+            titleText.ifEmpty { "Oneshot" }
+        }
+
+        url = element.absUrl("href")
+
+        val dateText = element.selectFirst("div.flex.items-center span.md\\:inline")?.text()
+
         if (!dateText.isNullOrBlank()) {
-            name = name.substringBefore(dateText)
-            date_upload = dateFormat.tryParse(dateText)
+            date_upload = parseDate(dateText)
         }
     }
 
@@ -225,12 +255,20 @@ class MangaDraft : HttpSource() {
             Page(it.number, "${it.url}?size=full", "${it.url}?size=full")
         }
     }
+
     fun findCategoryByPageId(pagesByCategory: PagesByCategory, pageId: Long): List<MangaDraftPageDTO> = pagesByCategory.values
         .first { pageList -> pageList.any { it.id == pageId } }
 
     companion object {
-        private fun getApiDateFormat() = SimpleDateFormat("dd MMMM yyyy", Locale.FRENCH)
+        private val TITLE_REGEX = Regex("""^\d+[.\s]+""")
 
-        val dateFormat by lazy { getApiDateFormat() }
+        private val dateFormats = listOf(
+            // Pattern for English: "June 25, 2022"
+            SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH),
+            // Pattern for French: "25 juin 2022"
+            SimpleDateFormat("d MMMM yyyy", Locale.FRENCH),
+        )
+
+        fun parseDate(dateText: String): Long = dateFormats.firstNotNullOfOrNull { it.tryParse(dateText).takeIf { it != 0L } } ?: 0L
     }
 }
