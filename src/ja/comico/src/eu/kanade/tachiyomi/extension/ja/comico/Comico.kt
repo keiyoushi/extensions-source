@@ -62,9 +62,8 @@ class Comico : HttpSource() {
             },
         ).build()
 
-    override fun headersBuilder() = Headers.Builder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Accept-Language", lang)
-        .set("User-Agent", userAgent)
         .set("Referer", "$baseUrl/")
 
     override fun latestUpdatesRequest(page: Int) = paginate("all_comic/daily/$day", page)
@@ -140,7 +139,6 @@ class Comico : HttpSource() {
         private val keyBytes = AES_KEY.toByteArray(Charsets.UTF_8)
         private val ivBytes = ByteArray(16) // Zero filled array as IV
         private const val ACCEPT_IMAGE = "image/avif,image/jxl,image/webp,image/*,*/*"
-        private val userAgent = System.getProperty("http.agent") ?: "Mozilla/5.0"
 
         private val SHA256 = MessageDigest.getInstance("SHA-256")
 
