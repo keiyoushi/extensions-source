@@ -566,6 +566,24 @@ private val preferences = getPreferences()
 private val preferences by getPreferencesLazy()
 ```
 
+**User-configurable domain - `addDomainPreference` / `getDomain`**
+
+For sources whose domain changes often (e.g. mirrors), let users override the base URL with a one-line preference instead of writing the full `EditTextPreference` boilerplate.
+
+```kotlin
+import keiyoushi.utils.addDomainPreference
+import keiyoushi.utils.getDomain
+
+override val baseUrl: String
+    get() = preferences.getDomain(DEFAULT_BASE_URL)
+
+override fun setupPreferenceScreen(screen: PreferenceScreen) {
+    screen.addDomainPreference(preferences, DEFAULT_BASE_URL)
+}
+```
+
+Both helpers accept an optional `key` parameter when an extension needs more than one custom-domain pref or has to migrate from a legacy key. `addDomainPreference` also accepts `title` and `restartMessage` overrides for localization. The user is shown a toast reminding them to restart the app for the new domain to take effect.
+
 ##### Next.js data extraction - `extractNextJs` / `extractNextJsRsc`
 
 If the site is built with Next.js, use `keiyoushi.utils.extractNextJs` on a `Document` or `Response`,
