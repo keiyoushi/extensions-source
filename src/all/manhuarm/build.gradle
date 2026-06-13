@@ -3,7 +3,7 @@ ext {
     extClass = '.Factory'
     themePkg = 'madara'
     baseUrl = 'https://manhuarmtl.com'
-    overrideVersionCode = 23
+    overrideVersionCode = 24
     isNsfw = true
 }
 

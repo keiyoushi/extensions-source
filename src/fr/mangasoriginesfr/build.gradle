@@ -3,7 +3,7 @@ ext {
     extClass = '.MangasOriginesFr'
     themePkg = 'madara'
     baseUrl = 'https://mangas-origines.fr'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = false
 }
 
