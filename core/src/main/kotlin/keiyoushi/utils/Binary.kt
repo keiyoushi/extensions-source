@@ -72,6 +72,17 @@ fun ByteArray.writeIntBigEndian(offset: Int, value: Int) {
 fun ByteArray.readUShortLittleEndian(offset: Int): Int = (this[offset].toInt() and 0xFF) or ((this[offset + 1].toInt() and 0xFF) shl 8)
 
 /**
+ * Reads two bytes starting at [offset] as a big-endian unsigned 16-bit value, returned as an [Int].
+ *
+ * The byte at [offset] is the most significant; the byte at `offset + 1` is the least significant.
+ *
+ * @param offset the index of the first (most significant) byte to read
+ * @return the decoded value, in `0..65535`
+ * @throws IndexOutOfBoundsException if fewer than two bytes are available at [offset]
+ */
+fun ByteArray.readUShortBigEndian(offset: Int): Int = ((this[offset].toInt() and 0xFF) shl 8) or (this[offset + 1].toInt() and 0xFF)
+
+/**
  * Reads four bytes starting at [offset] as a little-endian unsigned 32-bit value, returned as a [Long].
  *
  * The byte at [offset] is the least significant; the byte at `offset + 3` is the most significant.
