@@ -48,13 +48,9 @@ jobs:
           python ./.github/scripts/generate-build-matrices.py "$NX_BASE" Release
 
   build:
-    name: Build extensions (${{ matrix.chunk.number }})
-    needs: prepare
+    name: Build ProComic Extension
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    if: ${{ toJson(fromJson(needs.prepare.outputs.matrix).chunk) != '[]' }}
-    strategy:
-      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    timeout-minutes: 5
     steps:
       - name: Checkout main branch
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -69,32 +65,21 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
-        with:
-          cache-read-only: ${{ matrix.chunk.number > 1 }}
 
-      - name: Prepare signing key
+      - name: Run Spotless Apply
         run: |
-          echo ${{ secrets.SIGNING_KEY }} | base64 -d > signingkey.jks
+          ./gradlew spotlessApply
 
-      - name: Build extensions (${{ matrix.chunk.number }})
-        env:
-          MODULES: ${{ join(matrix.chunk.modules, ' ') }}
-          ALIAS: ${{ secrets.ALIAS }}
-          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      - name: Build ProComic
         run: |
-          ./gradlew $MODULES
+          ./gradlew :src:ar:procomic:assembleDebug
 
-      - name: Upload APKs (${{ matrix.chunk.number }})
+      - name: Upload APK
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: "github.repository == 'keiyoushi/extensions-source'"
         with:
-          name: "individual-apks-${{ matrix.chunk.number }}"
+          name: "ProComic-APK"
           path: "**/*.apk"
           retention-days: 1
-
-      - name: Clean up CI files
-        run: rm signingkey.jks
 
   publish:
     name: Publish extension repo
