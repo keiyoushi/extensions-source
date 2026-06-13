@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.senkuro
 
 import android.content.SharedPreferences
+import android.widget.Toast
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -16,7 +17,6 @@ import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLPost
 import keiyoushi.utils.parseGraphQLAs
-import keiyoushi.utils.persistedQueryExtension
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -34,7 +34,7 @@ abstract class Senkuro(
 ) : HttpSource(),
     ConfigurableSource {
 
-    override val supportsLatest = true
+    override val supportsLatest = false
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("User-Agent", "Tachiyomi (+https://github.com/keiyoushi/extensions-source)")
@@ -55,86 +55,36 @@ abstract class Senkuro(
         .build()
 
     // ============================== Popular ==============================
-    private val popularCursors = mutableMapOf<Int, String>()
-
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        if (page == 1) popularCursors.clear()
-        return super.fetchPopularManga(page)
-    }
-
     override fun popularMangaRequest(page: Int): Request {
         fetchTachiyomiSearchFilters(page)
 
-        val cursor = if (page == 1) null else popularCursors[page - 1]
+        val offset = (page - 1) * 20
         val request = graphQLPost(
             url = apiUrl,
             headers = headers,
-            operationName = "fetchMangas",
-            variables = FetchMangasVariables(
-                after = cursor,
-                orderField = "POPULARITY_SCORE",
-                orderDirection = "DESC",
+            operationName = "searchTachiyomiManga",
+            query = SEARCH_QUERY,
+            variables = SearchTachiyomiMangaVariables(
+                orderBy = OrderByDto("DESC", "POPULARITY_SCORE"),
+                offset = offset,
             ),
-            extensions = persistedQueryExtension(HASH_SEARCH),
         )
 
         return request.newBuilder().tag(PageTag::class.java, PageTag(page)).build()
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val page = response.request.tag(PageTag::class.java)?.page ?: 1
-        val data = response.parseGraphQLAs<MangasResponseDto>()
-
-        data.mangas.pageInfo.endCursor?.let {
-            popularCursors[page] = it
-        }
-
-        val mangasList = data.mangas.edges.map { it.node.toSManga() }
-        return MangasPage(mangasList, data.mangas.pageInfo.hasNextPage)
+        val data = response.parseGraphQLAs<TachiyomiSearchResponseDto>()
+        val mangasList = data.mangaTachiyomiSearch.mangas.map { it.toSManga() }
+        return MangasPage(mangasList, mangasList.size >= 20)
     }
 
     // ============================== Latest ===============================
-    private val latestCursors = mutableMapOf<Int, String>()
-
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        if (page == 1) latestCursors.clear()
-        return super.fetchLatestUpdates(page)
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        val cursor = if (page == 1) null else latestCursors[page - 1]
-        val request = graphQLPost(
-            url = apiUrl,
-            headers = headers,
-            operationName = "fetchMangas",
-            variables = FetchMangasVariables(
-                after = cursor,
-                orderField = "LAST_CHAPTER_AT",
-                orderDirection = "DESC",
-            ),
-            extensions = persistedQueryExtension(HASH_SEARCH),
-        )
-
-        return request.newBuilder().tag(PageTag::class.java, PageTag(page)).build()
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val page = response.request.tag(PageTag::class.java)?.page ?: 1
-        val data = response.parseGraphQLAs<MangasResponseDto>()
-
-        data.mangas.pageInfo.endCursor?.let {
-            latestCursors[page] = it
-        }
-
-        val mangasList = data.mangas.edges.map { it.node.toSManga() }
-        return MangasPage(mangasList, data.mangas.pageInfo.hasNextPage)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // ============================== Search ===============================
-    private val searchCursors = mutableMapOf<Int, String>()
-
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (page == 1) searchCursors.clear()
         fetchTachiyomiSearchFilters(page)
         return super.fetchSearchManga(page, query, filters)
     }
@@ -215,89 +165,77 @@ abstract class Senkuro(
             }
         }
 
-        val cursor = if (page == 1) null else searchCursors[page - 1]
+        val offset = (page - 1) * 20
+
         val request = graphQLPost(
             url = apiUrl,
             headers = headers,
-            operationName = "fetchMangas",
-            variables = FetchMangasVariables(
-                after = cursor,
-                search = query.takeIf { it.isNotEmpty() },
-                orderField = orderField,
-                orderDirection = orderDirection,
-                label = ExcludeInclude(excludeGenres, includeGenres),
-                type = ExcludeInclude(excludeTypes, includeTypes),
-                format = ExcludeInclude(excludeFormats, includeFormats),
-                status = ExcludeInclude(excludeStatus, includeStatus),
-                translitionStatus = ExcludeInclude(excludeTStatus, includeTStatus),
-                rating = ExcludeInclude(excludeAges, includeAges),
+            operationName = "searchTachiyomiManga",
+            query = SEARCH_QUERY,
+            variables = SearchTachiyomiMangaVariables(
+                query = query.takeIf { it.isNotEmpty() },
+                type = ExcludeInclude(includeTypes, excludeTypes).takeIf { it.isNotEmpty() },
+                status = ExcludeInclude(includeStatus, excludeStatus).takeIf { it.isNotEmpty() },
+                rating = ExcludeInclude(includeAges, excludeAges).takeIf { it.isNotEmpty() },
+                format = ExcludeInclude(includeFormats, excludeFormats).takeIf { it.isNotEmpty() },
+                translationStatus = ExcludeInclude(includeTStatus, excludeTStatus).takeIf { it.isNotEmpty() },
+                label = ExcludeInclude(includeGenres, excludeGenres).takeIf { it.isNotEmpty() },
+                orderBy = OrderByDto(orderDirection, orderField),
+                offset = offset,
             ),
-            extensions = persistedQueryExtension(HASH_SEARCH),
         )
 
         return request.newBuilder().tag(PageTag::class.java, PageTag(page)).build()
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val page = response.request.tag(PageTag::class.java)?.page ?: 1
-        val data = response.parseGraphQLAs<MangasResponseDto>()
-
-        data.mangas.pageInfo.endCursor?.let {
-            searchCursors[page] = it
-        }
-
-        val mangasList = data.mangas.edges.map { it.node.toSManga() }
-        return MangasPage(mangasList, data.mangas.pageInfo.hasNextPage)
-    }
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ============================== Details ==============================
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.split(",,").last()
+        val id = manga.url.split(",,").first()
         return graphQLPost(
             url = apiUrl,
             headers = headers,
-            operationName = "fetchManga",
-            variables = FetchMangaVariables(slug = slug),
-            extensions = persistedQueryExtension(HASH_DETAILS),
+            operationName = "fetchTachiyomiManga",
+            query = DETAILS_QUERY,
+            variables = FetchTachiyomiMangaVariables(mangaId = id),
         )
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseGraphQLAs<MangaDetailsResponseDto>().manga.toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = response.parseGraphQLAs<TachiyomiMangaInfoResponseDto>().mangaTachiyomiInfo?.toSManga()
+        ?: throw Exception("Manga not found")
 
     override fun getMangaUrl(manga: SManga): String {
-        val slug = manga.url.split(",,").last()
+        val slug = manga.url.split(",,").getOrNull(1) ?: return ""
         return "$baseUrl/manga/$slug"
     }
 
     // ============================= Chapters ==============================
-    private val simpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.ROOT).apply {
+    private val simpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.S", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(mangaDetailsRequest(manga)).asObservableSuccess().flatMap { response ->
-        val detailsDto = response.parseGraphQLAs<MangaDetailsResponseDto>().manga
-        val branchId = detailsDto.branches?.firstOrNull { it.primaryBranch }?.id
-            ?: detailsDto.branches?.firstOrNull()?.id
-            ?: throw Exception("Не удалось найти ветку (Branch ID) для этого тайтла")
-
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val mangaId = manga.url.split(",,").first()
         val request = graphQLPost(
             url = apiUrl,
             headers = headers,
-            operationName = "fetchMangaChapters",
-            variables = FetchMangaChaptersVariables(branchId = branchId),
-            extensions = persistedQueryExtension(HASH_CHAPTERS),
+            operationName = "fetchTachiyomiChapters",
+            query = CHAPTERS_QUERY,
+            variables = FetchTachiyomiChaptersVariables(mangaId = mangaId),
         )
 
-        client.newCall(request).asObservableSuccess().map { chaptersResponse ->
-            val chaptersDto = chaptersResponse.parseGraphQLAs<ChaptersResponseDto>()
-            chaptersDto.mangaChapters.edges.map { edge ->
-                val chapter = edge.node
+        return client.newCall(request).asObservableSuccess().map { chaptersResponse ->
+            val data = chaptersResponse.parseGraphQLAs<TachiyomiChaptersResponseDto>().mangaTachiyomiChapters
+            val teamsMap = data.teams.associateBy { it.id }
+
+            data.chapters.map { chapter ->
                 SChapter.create().apply {
-                    chapter_number = chapter.number?.toFloatOrNull() ?: -2f
-                    name = "${chapter.volume ?: "1"}. Глава ${chapter.number ?: ""} " + (chapter.name ?: "")
-                    url = chapter.slug
-                    date_upload = simpleDateFormat.tryParse(chapter.createdAt)
-                    scanlator = chapter.creator?.name
+                    chapter_number = chapter.number.toFloatOrNull() ?: -2f
+                    name = "${chapter.volume}. Глава ${chapter.number} " + (chapter.name ?: "")
+                    url = "${manga.url},,${chapter.id},,${chapter.slug}"
+                    date_upload = simpleDateFormat.tryParse(chapter.updatedAt ?: chapter.createdAt)
+                    scanlator = chapter.teamIds.mapNotNull { teamsMap[it]?.name }.joinToString().takeIf { it.isNotEmpty() }
                 }
             }
         }
@@ -308,26 +246,29 @@ abstract class Senkuro(
 
     // =============================== Pages ===============================
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterSlug = chapter.url.split(",,").last()
+        val parts = chapter.url.split(",,")
+        val mangaId = parts.getOrNull(0) ?: ""
+        val chapterId = parts.getOrNull(2) ?: ""
         return graphQLPost(
             url = apiUrl,
             headers = headers,
-            operationName = "fetchMangaChapter",
-            variables = FetchMangaChapterVariables(slug = chapterSlug),
-            extensions = persistedQueryExtension(HASH_PAGES),
+            operationName = "fetchTachiyomiChapterPages",
+            query = PAGES_QUERY,
+            variables = FetchTachiyomiChapterPagesVariables(mangaId = mangaId, chapterId = chapterId),
         )
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        // Fallback for missing manga slug, usually users open WebView from manga details anyway.
-        val chapterSlug = chapter.url.split(",,").last()
-        return "$baseUrl/manga/unavailable/chapters/$chapterSlug"
+        val parts = chapter.url.split(",,")
+        val mangaSlug = parts.getOrNull(1) ?: return ""
+        val chapterSlug = parts.getOrNull(3) ?: return ""
+        return "$baseUrl/manga/$mangaSlug/chapters/$chapterSlug"
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val pagesDto = response.parseGraphQLAs<ChapterPagesResponseDto>().mangaChapter.pages ?: emptyList()
+        val pagesDto = response.parseGraphQLAs<TachiyomiChapterPagesResponseDto>().mangaTachiyomiChapterPages.pages
         return pagesDto.mapIndexed { index, page ->
-            Page(index, imageUrl = page.image?.original?.url ?: page.image?.compress?.url ?: "")
+            Page(index, imageUrl = page.url)
         }
     }
 
@@ -337,23 +278,23 @@ abstract class Senkuro(
 
     // ============================== Filters ==============================
     private fun fetchTachiyomiSearchFilters(pageRequest: Int) {
-        if (pageRequest == 1) {
+        if (pageRequest == 1 && labelsList.isEmpty()) {
             val response = client.newCall(
                 graphQLPost(
                     url = apiUrl,
                     headers = headers,
-                    operationName = "fetchMangaFilters",
+                    operationName = "fetchTachiyomiSearchFilters",
+                    query = FILTERS_QUERY,
                     variables = EmptyObject,
-                    extensions = persistedQueryExtension(HASH_FILTERS),
                 ),
             ).execute()
 
-            val filterDto = response.parseGraphQLAs<FiltersResponseDto>()
-            labelsList = filterDto.allLabels.map { label ->
+            val filterDto = response.parseGraphQLAs<TachiyomiSearchFiltersResponseDto>()
+            labelsList = filterDto.mangaTachiyomiSearchFilters.labels.map { label ->
                 FilterersTriRoot(
                     label.titles.find { it.lang == "RU" }?.content?.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() } ?: label.slug,
                     label.slug,
-                    label.rootId,
+                    label.rootId ?: "",
                 )
             }.sortedBy { it.name }
         }
@@ -461,6 +402,10 @@ abstract class Senkuro(
             entryValues = arrayOf(API_DOMAIN_DEFAULT, "https://api.senkuro.me")
             summary = "%s"
             setDefaultValue(API_DOMAIN_DEFAULT)
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, "Для смены домена необходимо перезапустить приложение с полной остановкой.", Toast.LENGTH_LONG).show()
+                true
+            }
         }.let(screen::addPreference)
     }
 
@@ -468,12 +413,5 @@ abstract class Senkuro(
         private const val API_DOMAIN_PREF = "MangaApiDomain"
         private const val API_DOMAIN_TITLE = "Домен"
         private const val API_DOMAIN_DEFAULT = "https://api.senkuro.com"
-
-        // APQ SHA-256 Hashes
-        private const val HASH_SEARCH = "2e239cbedda2c8af91bb0f86149b26889f2f800dc08ba36417cdecb91614799e"
-        private const val HASH_DETAILS = "062d157eb1158bd14aa95de219d125aa98bc00750f499970893287f1781f0770"
-        private const val HASH_CHAPTERS = "8c854e121f05aa93b0c37889e732410df9ea207b4186c965c845a8d970bdcc12"
-        private const val HASH_PAGES = "8e166106650d3659d21e7aadc15e7e59e5def36f1793a9b15287c73a1e27aa50"
-        private const val HASH_FILTERS = "1e4fb028e6a80b23b4f6840159e2b9cbfb8b19da4341ebc064d4e74bf8daa9a3"
     }
 }
