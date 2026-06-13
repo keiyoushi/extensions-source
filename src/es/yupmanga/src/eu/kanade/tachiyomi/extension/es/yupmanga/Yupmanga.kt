@@ -32,27 +32,23 @@ class Yupmanga : HttpSource() {
 
     override val supportsLatest = true
 
-    // Cached CSRF token and data-k value, populated by the token interceptor during normal browsing flow.
+    // Cached CSRF token populated by the token interceptor during normal browsing flow.
     private var csrfToken: String = ""
-    private var kScript: String = ""
-    private var dataV: String = ""
-    private var anchorScript: String = ""
 
-    // Peeks at every HTML response to extract the token and data-k values without consuming the body.
+    // Peeks at every HTML response to extract the token values without consuming the body.
     private val tokenInterceptor = Interceptor { chain ->
         val response = chain.proceed(chain.request())
         if (response.header("Content-Type").orEmpty().contains("text/html")) {
             // Peak a max of 3MB of data to prevent OutOfMemoryError
             val html = response.peekBody(3 * 1024 * 1024L).string()
 
-            TOKEN_REGEX.find(html)?.groupValues?.get(1)?.let { csrfToken = it }
-            TOKEN_META_REGEX.find(html)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }?.let { csrfToken = it }
-            csrfToken = TOKEN_JS_REGEX.decodeChars(html)
+            val token = TOKEN_REGEX.find(html)?.groupValues?.get(1)
+                ?: TOKEN_META_REGEX.find(html)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
+                ?: TOKEN_JS_REGEX.decodeChars(html).takeIf { it.isNotBlank() }
 
-            Jsoup.parse(html).selectFirst("script:containsData(dataset.k)")?.let { kScript = it.html() }
-
-            dataV = DATAV_REGEX.decodeChars(html)
-            ANCHOR_SCRIPT_REGEX.find(html)?.groupValues?.get(1)?.let { anchorScript = it }
+            if (!token.isNullOrEmpty()) {
+                csrfToken = token
+            }
         }
         response
     }
@@ -223,6 +219,16 @@ class Yupmanga : HttpSource() {
             client.newCall(GET("$baseUrl/series.php?id=$mangaId", headers)).execute().close()
         }
 
+        val requestHeaders = apiHeaders.newBuilder().apply {
+            if (csrfToken.isNotEmpty()) {
+                add("X-CSRF-Token", csrfToken)
+            }
+        }.build()
+
+        val anchorUrl = "$baseUrl/ajax/get_anchor.php?s=$mangaId"
+        val anchorResponse = client.newCall(GET(anchorUrl, requestHeaders)).execute()
+        val anchorValue = anchorResponse.parseAs<AnchorDto>().v ?: throw Exception("Failed to get anchor")
+
         val challengeUrl = "$baseUrl/ajax/get_challenge.php".toHttpUrl().newBuilder()
             .addQueryParameter("chapter", chapterId)
             .apply {
@@ -235,81 +241,31 @@ class Yupmanga : HttpSource() {
             throw Exception("Error fetching challenge")
         }
 
-        val dataK = QuickJs.create().use {
-            it.evaluate(
-                """
-            var mockElem = { dataset: {} };
-            var document = {
-                getElementById: function(id) {
-                    return mockElem;
-                }
-            };
-            $kScript
-            mockElem.dataset.k || "";
-                """.trimIndent(),
-            )
-        }
+        val sanitizedJs = challenge.challengeJs
+            .replace("return (async function(){", "(function(){")
+            .replace(INNER_CHALLENGE_REGEX, "\"$anchorValue\"")
 
-        // Broad mocking to avoid "cannot read property" crashes in QuickJs evaluation.
         val answer = QuickJs.create().use {
             it.evaluate(
                 """
-                var cssVars = {};
-                var window = {
-                    getComputedStyle: function(el) {
-                        return {
-                            getPropertyValue: function(prop) {
-                                return cssVars[prop] || "$csrfToken";
-                            }
-                        };
-                    }
-                };
-                var mockElem = {
-                    value: "$csrfToken",
-                    content: "$csrfToken",
-                    getAttribute: function(attr) {
-                        if (attr === 'data-k') return "$dataK";
-                        if (attr === 'data-v') return "${dataV.ifEmpty { csrfToken }}";
-                        if (attr === 'content') return "$csrfToken";
-                        return "$csrfToken";
-                    },
-                    dataset: { token: "$csrfToken", k: "$dataK", v: "$dataV" },
-                    textContent: "$csrfToken",
-                    innerText: "$csrfToken",
-                    innerHTML: "$csrfToken",
-                    id: "csrf_token",
-                    name: "_token",
-                    className: "_cr",
-                    style: {
-                        setProperty: function(prop, val) {
-                            cssVars[prop] = val;
-                        }
-                    },
-                    shadowRoot: {
-                        querySelector: function(_) {
-                            return {
-                                dataset: {
-                                    k: "$dataK"
-                                }
-                            };
+                var document = {};
+                var window = {};
+                var atob = function(input) {
+                    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+                    var str = String(input).replace(/=+$/, '');
+                    var output = '';
+                    for (var bc = 0, bs, fn, idx = 0; idx < str.length; ) {
+                        var char = str.charAt(idx++);
+                        var index = chars.indexOf(char);
+                        if (index === -1) continue;
+                        bs = bc % 4 ? bs * 64 + index : index;
+                        if (bc++ % 4) {
+                            output += String.fromCharCode(255 & bs >> (-2 * bc & 6));
                         }
                     }
+                    return output;
                 };
-                var document = {
-                    documentElement: mockElem,
-                    querySelector: function(sel) { return mockElem; },
-                    getElementById: function(id) { return mockElem; },
-                    getElementsByName: function(name) { return [mockElem]; },
-                    getElementsByTagName: function(tag) { return [mockElem]; },
-                    getElementsByClassName: function(cls) { return [mockElem]; },
-                    cookie: ""
-                };
-
-                try {
-                    $anchorScript
-                } catch(e) {}
-
-                (function(){ ${challenge.challengeJs} })();
+                $sanitizedJs
                 """.trimIndent(),
             )?.toString()
         } ?: throw Exception("Failed to solve challenge")
@@ -380,7 +336,6 @@ class Yupmanga : HttpSource() {
         private val TOKEN_REGEX = """id=["']csrf_token["']\s+value=["']([^"']+)["']""".toRegex()
         private val TOKEN_META_REGEX = """name=["']csrf-token["'][^>]*?content=["']([^"']+)["']""".toRegex()
         private val TOKEN_JS_REGEX = """(?:_token|csrf-token).*?String\.fromCharCode\(([^)]+)\)""".toRegex()
-        private val DATAV_REGEX = """['"]data-v['"].*?String\.fromCharCode\(([^)]+)\)""".toRegex()
-        private val ANCHOR_SCRIPT_REGEX = """<script>\s*(\(\s*function\(\)\s*\{\s*document\.querySelector\(':root'\)[\s\S]*?\}\s*\)\(\);?)\s*</script>""".toRegex()
+        private val INNER_CHALLENGE_REGEX = """await\s+\(async\s+function\(\)\{[\s\S]+?\}\)\(\)""".toRegex()
     }
 }

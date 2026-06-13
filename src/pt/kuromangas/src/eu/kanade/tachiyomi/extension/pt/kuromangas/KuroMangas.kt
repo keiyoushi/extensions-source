@@ -32,7 +32,7 @@ class KuroMangas :
 
     override val name = "KuroMangas"
 
-    override val baseUrl = "https://beta.kuromangas.com"
+    override val baseUrl = "https://kuromangas.com"
 
     override val lang = "pt-BR"
 
@@ -44,11 +44,16 @@ class KuroMangas :
 
     private val cdnUrl = "https://cdn.kuromangas.com"
 
+    private val decryptor = KuroMangasDecryptor()
+
     override val client by lazy {
         val token = getToken()
         val cdnHost = cdnUrl.toHttpUrl().host
         network.client.newBuilder()
             .apply {
+
+                addInterceptor(decryptor.vSecureInterceptor())
+
                 if (token.isNotEmpty()) {
                     addInterceptor { chain ->
                         val request = chain.request()

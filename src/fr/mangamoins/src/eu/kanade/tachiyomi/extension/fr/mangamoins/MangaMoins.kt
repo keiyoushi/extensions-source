@@ -170,25 +170,14 @@ class MangaMoins : HttpSource() {
             client.newCall(GET(scriptUrl, headers)).execute().use { response ->
                 val script = response.body.string()
 
-                val alphabet = ALPHABET_REGEX.find(script)?.groupValues?.get(1)
-                    ?: FALLBACK_ALPHABET
-
-                val formulaMatch = FORMULA_REGEX.find(script)
-                val multiplier = formulaMatch?.groupValues?.get(1)?.toInt(16) ?: 3
-                val offset = formulaMatch?.groupValues?.get(2)?.toInt(16) ?: 7
-
                 val pathSegment = pagesBaseUrl.removeSuffix("/").substringAfterLast("/")
                 val salts = mutableListOf<String>()
 
-                HEX_ARRAY_REGEX.findAll(script).forEach { match ->
-                    val hexValues = match.groupValues[1].split(",")
-                    val decoded = hexValues.map {
-                        val v = it.trim().removePrefix("0x").toInt(16)
-                        alphabet[(v * multiplier + offset) % alphabet.length]
-                    }.joinToString("")
-
-                    if (decoded.length >= 3 && pathSegment.contains(decoded)) {
-                        salts.add(decoded)
+                val polochonMatch = POLOCHON_REGEX.find(script)
+                if (polochonMatch != null) {
+                    val polochonVal = polochonMatch.groupValues[1]
+                    if (polochonVal.isNotEmpty() && pathSegment.contains(polochonVal)) {
+                        salts.add(polochonVal)
                     }
                 }
 
@@ -231,12 +220,9 @@ class MangaMoins : HttpSource() {
     companion object {
         private const val MANGA_PAGE_LIMIT = 20
         private val FALLBACK_SALTS = listOf("a1f", "Z0_9")
-        private const val FALLBACK_ALPHABET = "abcdefghijk-lmnopqrstuvwxyz_0123456789+"
         private const val SALT_EXPIRY = 3 * 60 * 60 * 1000L // 3 hours
+        private val POLOCHON_REGEX = Regex("""polochon['"]?\s*\]?\s*=\s*['"]([^'"]+)['"]""")
 
-        private val ALPHABET_REGEX = Regex("""['"]([a-zA-Z0-9\-+_]{30,})['"]""")
-        private val FORMULA_REGEX = Regex("""\*0x([a-f\d]+)\+0x([a-f\d]+)""")
-        private val HEX_ARRAY_REGEX = Regex("""\[(0x[a-f\d]+(?:,0x[a-f\d]+)+)\]""")
         private val STRINGS_REGEX = Regex("""['"]([^'"]*)['"]""")
         private val ESCAPE_REGEX = Regex("""\\x([a-f\d]{2})""", RegexOption.IGNORE_CASE)
     }

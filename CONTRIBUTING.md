@@ -324,14 +324,19 @@ use case. Each lib is self-documented via KDoc comments and/or a README in its o
 
 #### Available libs
 
-| Module                                                                                                    | Description                                                          |
-|-----------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------|
-| [`lib-cookieinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cookieinterceptor) | Injects cookies into OkHttp requests for a given domain              |
-| [`lib-cryptoaes`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cryptoaes)                 | AES-CBC decryption compatible with CryptoJS; JSFuck deobfuscation    |
-| [`lib-randomua`](https://github.com/keiyoushi/extensions-source/tree/main/lib/randomua)                   | Fetches and rotates real-world User-Agent strings                    |
-| [`lib-synchrony`](https://github.com/keiyoushi/extensions-source/tree/main/lib/synchrony)                 | JavaScript deobfuscation via the Synchrony engine (QuickJS sandbox)  |
-| [`lib-textinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/textinterceptor)     | Renders plain text or HTML as a PNG image page                       |
-| [`lib-unpacker`](https://github.com/keiyoushi/extensions-source/tree/main/lib/unpacker)                   | Unpacks Dean Edwards-packed JavaScript; substring extraction helpers |
+| Module | Description |
+|---|---|
+| [`lib-cookieinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cookieinterceptor) | Injects cookies into OkHttp requests for a given domain |
+| [`lib-cryptoaes`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cryptoaes) | AES-CBC decryption compatible with CryptoJS; JSFuck deobfuscation |
+| [`lib-dataimage`](https://github.com/keiyoushi/extensions-source/tree/main/lib/dataimage) | Decodes base64 `data:image` strings into mock URLs that OkHttp can handle |
+| [`lib-randomua`](https://github.com/keiyoushi/extensions-source/tree/main/lib/randomua) | Fetches and rotates real-world User-Agent strings (requires overriding `getMangaUrl()`) |
+| [`lib-synchrony`](https://github.com/keiyoushi/extensions-source/tree/main/lib/synchrony) | JavaScript deobfuscation via the Synchrony engine (QuickJS sandbox) |
+| [`lib-textinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/textinterceptor) | Renders plain text or HTML as a PNG image page |
+| [`lib-unpacker`](https://github.com/keiyoushi/extensions-source/tree/main/lib/unpacker) | Unpacks Dean Edwards-packed JavaScript; substring extraction helpers |
+| [`lib-zipinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/zipinterceptor) | Decodes, stitches, and processes multi-page ZIP/AVIF/SVG image archives |
+
+> [!IMPORTANT]
+> If your module uses `:lib:randomua`, the Spotless check requires your extension to override the `getMangaUrl()` method in your main class, or the build will fail.
 
 > [!NOTE]
 > The table above highlights the most commonly used libraries. Check the `lib/` directory for the full list of available modules and their specific READMEs.
@@ -578,9 +583,9 @@ val data = document.extractNextJs<MyDto> { element ->
 ```
 
 For client-side navigation responses (`text/x-component` content type), pass the `rsc: 1`
-request header and use `extractNextJsRsc` on the response body string.
-See [#14266](https://github.com/keiyoushi/extensions-source/pull/14266) and
-[#14446](https://github.com/keiyoushi/extensions-source/pull/14446) for real-world usage.
+request header. You can call `response.extractNextJs<T>()` directly on the `Response` object;
+the utility automatically inspects the `Content-Type` header and safely routes to `extractNextJsRsc`
+for you without needing to manually extract the response body string.
 
 ##### Extracting URLs - `setUrlWithoutDomain` + `absUrl`
 
@@ -591,6 +596,32 @@ When extracting URLs from HTML, prefer `element.absUrl("href")` or `element.attr
 setUrlWithoutDomain(element.attr("href"))
 // Safe:
 setUrlWithoutDomain(element.absUrl("href"))
+```
+
+##### GraphQL Requests - `graphQLPost` / `parseGraphQLAs`
+
+If a source uses a GraphQL API, use the dedicated `keiyoushi.utils` helpers to build requests and
+parse responses. These utilities automatically serialize variables, encode payload structures, and
+throw a `GraphQLException` if the response contains GraphQL errors.
+
+```kotlin
+import keiyoushi.utils.graphQLPost
+import keiyoushi.utils.parseGraphQLAs
+
+// Define your variables as a @Serializable class
+val variables = MyVariablesDto(page = 1)
+
+// Building the request:
+val request = graphQLPost(
+    url = "$baseUrl/graphql",
+    headers = headers,
+    operationName = "SearchManga",
+    query = $$"""query SearchManga($page: Int!) { ... }""",
+    variables = variables
+)
+
+// Parsing the response (automatically extracts the "data" object):
+val data = response.parseGraphQLAs<MyResponseDto>()
 ```
 
 #### Additional dependencies
@@ -620,6 +651,7 @@ either `SourceFactory` or `HttpSource`.
 |--------------------|----------------------------------------------------------------------------------------------------------------------------------|
 | `SourceFactory`    | Used to expose multiple `Source`s. Use this in case of a source that supports multiple languages or mirrors of the same website. |
 | `HttpSource`       | For online source, where requests are made using HTTP.                                                                           |
+| `ParsedHttpSource` | Deprecated, use `HttpSource` instead.                                                                                            |
 
 #### Main class key variables
 
@@ -670,10 +702,10 @@ either `SourceFactory` or `HttpSource`.
   // Prefer:
   return GET("$baseUrl/manga", headers)
   ```
-- **GraphQL Queries:** If you are sending GraphQL requests, use Kotlin's raw multi-dollar string interpolation (`$$"""..."""`) for your queries. This prevents having to escape every JSON variable `$` symbol manually.
+- **GraphQL Queries:** If you are sending GraphQL requests, use Kotlin's raw multi-dollar string interpolation (`$$"""..."""`) for your queries. This prevents having to escape every JSON variable `$` symbol manually. For building the request and parsing the response, prefer the `graphQLPost` and `parseGraphQLAs` helpers in `keiyoushi.utils`.
 - **Empty checks on `.text()`:** Because Jsoup's `.text()` automatically trims whitespace, you can use `.isNotEmpty()` instead of `.isNotBlank()` when checking for empty strings. The same applies to `.ownText()`. This also means you should not use `.trim()` with these functions.
 - **Use `network.client` for Cloudflare:** When overriding the client for sources, simply use `override val client = network.client.newBuilder()...`.
-- **Never use `Thread.sleep()`:** Do not use `Thread.sleep()` for rate limiting. Use OkHttp's `rateLimit` interceptor instead.
+- **Never use `Thread.sleep()`:** Do not use `Thread.sleep()` for rate limiting. Use the `keiyoushi.network.rateLimit` builder extension function on your `OkHttpClient.Builder` instead.
 - **Avoid synchronous calls in `parse` methods:** Do not call `client.newCall(...).execute()` inside parsing methods like `pageListParse` or `chapterListParse`. Make the request part of the standard flow by overriding the corresponding request method (e.g., `pageListRequest`) or `fetchImageUrl`.
 - **Pass `HttpUrl` directly:** The `GET()` and `POST()` helpers accept an `HttpUrl` object. Do not call `.toString()` on a built `HttpUrl` before passing it.
 - **Use `HttpUrl` for URL manipulation:** When parsing or extracting parts of a URL, prefer using `HttpUrl` methods (like `pathSegments()` or `queryParameter()`) over manual string splitting (e.g., `.split("/")`) or regex. This ensures proper separation of concerns and protects against unexpected inputs-such as URL fragments or query parameters-without you needing to manually account for all edge cases.
