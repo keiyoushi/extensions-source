@@ -92,7 +92,7 @@ class MangaBuff :
         if (!isGif) return response
 
         val original = response.body.use { body ->
-            BitmapFactory.decodeStream(body.inputStream())
+            BitmapFactory.decodeStream(body.byteStream())
                 ?: throw IOException("Failed to decode GIF")
         }
 
