@@ -195,7 +195,18 @@ class YellowNote :
             }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String {
+        val url = response.request.url.toString()
+        val quality = preferences.getString(
+            "XChina::IMAGE_QUALITY", "original"
+        ) ?: "original"
+
+        return if (quality == "original" && url.contains("_600x0.webp")) {
+            url.replace("_600x0.webp", ".jpg")
+        } else {
+            url
+        }
+    }
 
     override fun getFilterList() = FilterList(
         Filters.createSortSelector(intl),
