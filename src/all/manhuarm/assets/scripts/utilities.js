@@ -90,3 +90,53 @@ Object.defineProperty(window, "setTimeout", {
   writable: false,
   configurable: false,
 });
+
+const _Worker = window.Worker;
+
+function WorkerMock(scriptURL, options) {
+  const fakeWorkerInstance = {
+    onmessage: null,
+    onerror: null,
+    postMessage: function (messageData) {
+      const originalSelfPostMessage =
+        typeof self !== "undefined" ? self.postMessage : undefined;
+
+      self.postMessage = (replyData) => {
+        if (fakeWorkerInstance.onmessage) {
+          fakeWorkerInstance.onmessage({ data: replyData });
+        }
+      };
+      const fakeEvent = { data: messageData };
+
+      try {
+        if (typeof self.onmessage === "function") {
+          self.onmessage(fakeEvent);
+        }
+      } catch (err) {
+        if (fakeWorkerInstance.onerror) fakeWorkerInstance.onerror(err);
+      } finally {
+        if (originalSelfPostMessage) self.postMessage = originalSelfPostMessage;
+      }
+    },
+
+    terminate: function () {/* do nothing */ },
+  };
+
+  if (typeof scriptURL === "string" && scriptURL.startsWith("blob:")) {
+    const xhr = new XHR();
+    xhr.open("GET", scriptURL, false);
+    xhr.send();
+
+    const workerScriptText = xhr.responseText;
+
+    try {
+      new Function(workerScriptText)();
+    } catch (_) { /* do nothing */ }
+  }
+
+  return fakeWorkerInstance;
+}
+
+WorkerMock.prototype = _Worker.prototype;
+window.Worker = WorkerMock;
+

@@ -3,7 +3,7 @@ plugins {
 }
 
 multisrc {
-    baseVersionCode = 50
+    baseVersionCode = 51
 
     deeplink {
         path("/.*/..*")

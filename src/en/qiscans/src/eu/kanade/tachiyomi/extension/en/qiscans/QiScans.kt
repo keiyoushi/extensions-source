@@ -9,7 +9,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
-class QiScans : EZManhwa("QiScans", "https://qimanhwa.com", "https://api.qimanhwa.com/api/v1") {
+class QiScans : EZManhwa("QiScans", "https://qimanga.com", "https://api.qimanga.com/api/v1") {
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Origin", baseUrl)

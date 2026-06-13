@@ -41,7 +41,8 @@ class ArgosScan : HttpSource() {
 
         if (request.url.host.startsWith("api.")) {
             val cookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
-            val hasAuth = cookies.any { it.name == "argos_auth_token" && it.value.isNotEmpty() }
+            // Fixed the cookie name check from "argos_auth_token" to "session"
+            val hasAuth = cookies.any { it.name == "session" && it.value.isNotEmpty() }
 
             if (!hasAuth) {
                 throw IOException("Login necessário. Abra o WebView e faça login com o Discord para usar a extensão.")

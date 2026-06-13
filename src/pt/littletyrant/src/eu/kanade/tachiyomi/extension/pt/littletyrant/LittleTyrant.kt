@@ -11,8 +11,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -32,23 +30,6 @@ class LittleTyrant :
     ) {
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .addNetworkInterceptor(
-            Interceptor { chain ->
-                val request = chain.request()
-                val xorKey = request.header("X-Internal-XOR-Key")
-
-                if (xorKey != null) {
-                    val newRequest = request.newBuilder()
-                        .removeHeader("X-Internal-XOR-Key")
-                        .build()
-
-                    val response = chain.proceed(newRequest)
-                    return@Interceptor decoder.decrypt(response, xorKey)
-                }
-
-                chain.proceed(request)
-            },
-        )
         .rateLimit(3, 1.seconds)
         .build()
 
@@ -117,38 +98,12 @@ class LittleTyrant :
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
         .asObservableSuccess()
-        .flatMap { response ->
+        .map { response ->
             val doc = response.asJsoup()
-            val chapterUrl = doc.baseUri()
             launchIO { countViews(doc) }
 
-            val timestamp = System.currentTimeMillis()
-            val fetchHeaders = headers.newBuilder()
-                .set("Accept", "*/*")
-                .set("Referer", chapterUrl)
-                .set("Sec-Fetch-Dest", "empty")
-                .set("Sec-Fetch-Mode", "cors")
-                .set("Sec-Fetch-Site", "same-origin")
-                .set("X-Reader-Sec", "tiraninha-web")
-                .build()
-
-            val request = GET("$baseUrl/wp-content/themes/madara2/gatekeeper.php?t=$timestamp", fetchHeaders)
-
-            client.newCall(request).asObservableSuccess().map { tokenResponse ->
-                if (!tokenResponse.isSuccessful) {
-                    tokenResponse.close()
-                    error("Could not load pages (error ${tokenResponse.code}).")
-                }
-
-                val token = tokenResponse.parseAs<TokenDto>().token
-                val parts = token.split(".")
-                if (parts.size < 2) error("Invalid JWT token format")
-                val xorKey = parts[1].substring(4, 20)
-
-                val paths = decoder.extractPaths(doc)
-                paths.mapIndexed { idx: Int, path: String ->
-                    Page(idx, url = chapterUrl, imageUrl = "$baseUrl$path#key=$xorKey&token=$token")
-                }
+            decoder.extractPaths(doc).mapIndexed { idx, url ->
+                Page(idx, imageUrl = url)
             }
         }
 
@@ -157,30 +112,11 @@ class LittleTyrant :
     // =============================== Images =================================
 
     override fun imageRequest(page: Page): Request {
-        val url = page.imageUrl!!
-        val chapterUrl = page.url
-
-        val fragment = url.substringAfter("#", "")
-        val key = fragment.substringAfter("key=").substringBefore("&")
-        val token = fragment.substringAfter("token=").substringBefore("&")
-
-        val cleanUrl = url.substringBefore("#")
-        val httpUrl = cleanUrl.toHttpUrl()
-
-        val cookie = okhttp3.Cookie.parse(httpUrl, "lt_sec_val=$token; path=/")
-        client.cookieJar.saveFromResponse(httpUrl, listOfNotNull(cookie))
-
         val imageHeaders = headers.newBuilder()
-            .set("Accept", "*/*")
-            .set("Referer", chapterUrl)
-            .set("Sec-Fetch-Dest", "empty")
-            .set("Sec-Fetch-Mode", "cors")
-            .set("Sec-Fetch-Site", "same-origin")
-            .set("X-Reader-Sec", "tiraninha-web")
-            .set("X-Internal-XOR-Key", key)
+            .set("Accept", "image/webp,image/*,*/*")
+            .set("Referer", "$baseUrl/")
             .build()
-
-        return GET(cleanUrl, imageHeaders)
+        return GET(page.imageUrl!!, imageHeaders)
     }
 
     companion object {

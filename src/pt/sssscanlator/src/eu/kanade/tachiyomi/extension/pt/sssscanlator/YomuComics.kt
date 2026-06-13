@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.sssscanlator
 
+import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,6 +16,8 @@ import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -172,7 +175,21 @@ class YomuComics : HttpSource() {
             .parseAs<JsonElement>()
             .jsonObject.values
             .firstNotNullOfOrNull { v ->
-                (v as? JsonArray)?.runCatching {
+                val jsonArray = when (v) {
+                    is JsonArray -> v
+
+                    // value can be base64 encoded
+                    is JsonPrimitive -> v.contentOrNull?.let { base64Str ->
+                        runCatching {
+                            Base64.decode(base64Str, Base64.DEFAULT)
+                                .toString(Charsets.UTF_8)
+                                .parseAs<JsonArray>()
+                        }.getOrNull()
+                    }
+                    else -> null
+                }
+
+                jsonArray?.runCatching {
                     map { it.parseAs<LibraryMangaDto>() }
                 }?.getOrNull()
             } ?: emptyList()
