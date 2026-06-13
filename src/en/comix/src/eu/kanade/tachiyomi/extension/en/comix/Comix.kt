@@ -34,6 +34,9 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import okhttp3.Cookie
+import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -45,6 +48,7 @@ import rx.Observable
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 class Comix :
     HttpSource(),
@@ -58,8 +62,31 @@ class Comix :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
     private val lenientJson = Json { ignoreUnknownKeys = true }
+    private val baseCookieJar = network.client.cookieJar
+    private val webViewCookieManager by lazy { CookieManager.getInstance() }
+    private val sharedCookieJar = object : CookieJar {
+        override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+            baseCookieJar.saveFromResponse(url, cookies)
+            cookies.forEach { cookie ->
+                runCatching { webViewCookieManager.setCookie(url.toString(), cookie.toString()) }
+            }
+        }
+
+        override fun loadForRequest(url: HttpUrl): List<Cookie> {
+            val webViewCookies = runCatching {
+                webViewCookieManager.getCookie(url.toString())
+                    ?.split(';')
+                    ?.mapNotNull { Cookie.parse(url, it.trim()) }
+                    .orEmpty()
+            }.getOrDefault(emptyList())
+
+            return (webViewCookies + baseCookieJar.loadForRequest(url))
+                .distinctBy { Triple(it.name, it.domain, it.path) }
+        }
+    }
 
     override val client = network.client.newBuilder()
+        .cookieJar(sharedCookieJar)
         .addNetworkInterceptor(Descrambler.interceptor)
         .addInterceptor { chain ->
             val request = chain.request()
@@ -128,7 +155,7 @@ class Comix :
         val document = runBlocking {
             client.newCall(request).awaitSuccess().asJsoup()
         }
-        val payload = runInWebView(
+        val searchResponse = document.extractBrowseResponse() ?: runInWebView(
             document = document,
             buildScript = { interfaceName ->
                 """
@@ -174,13 +201,25 @@ class Comix :
                     })();
                 """.trimIndent()
             },
-        )
+        ).parseAs<SearchResponse>(lenientJson)
 
-        val searchResponse = payload.parseAs<SearchResponse>()
         val mangaList = searchResponse.result.items.map {
             it.toBasicSManga(preferences.posterQuality())
         }
         MangasPage(mangaList, searchResponse.result.hasNextPage())
+    }
+
+    private fun Document.extractBrowseResponse(): SearchResponse? {
+        val initialData = selectFirst("script#initial-data")?.data() ?: return null
+        val queries = runCatching {
+            initialData.parseAs<JsonObject>(lenientJson)["queries"] as? JsonObject
+        }.getOrNull() ?: return null
+
+        return queries.values.firstNotNullOfOrNull { value ->
+            runCatching { value.parseAs<SearchResponse>(lenientJson) }
+                .getOrNull()
+                ?.takeIf { it.result.items.isNotEmpty() }
+        }
     }
 
     // ============================== Latest ===============================
@@ -377,15 +416,14 @@ class Comix :
 
         val initialData = document.selectFirst("script#initial-data")?.data()
             ?: throw Exception("Could not find manga data in page")
-        val root = Json.parseToJsonElement(initialData) as? kotlinx.serialization.json.JsonObject
-            ?: throw Exception("Could not parse manga data")
-        val queries = root["queries"] as? kotlinx.serialization.json.JsonObject
+        val root = initialData.parseAs<JsonObject>(lenientJson)
+        val queries = root["queries"] as? JsonObject
             ?: throw Exception("Could not find queries in manga data")
         val detail = queries.entries.firstOrNull { (key, _) -> key.contains("\"detail\"") }
             ?.value
             ?: throw Exception("Could not find manga detail in queries")
 
-        lenientJson.decodeFromString<Manga>(detail.toString()).toSManga(
+        detail.parseAs<Manga>(lenientJson).toSManga(
             preferences.posterQuality(),
             preferences.alternativeNamesInDescription(),
             preferences.scorePosition(),
@@ -620,6 +658,8 @@ class Comix :
         val script = buildScript(interfaceName)
         val emptyResponse = WebResourceResponse("text/plain", "utf-8", Buffer().inputStream())
         val active = AtomicBoolean(true)
+        val started = Semaphore(0)
+        val startupError = AtomicReference<Throwable?>()
         val isCloudflareChallenge = document.title() == "Just a moment..." ||
             document.selectFirst("script[src*=challenge-platform], script:containsData(_cf_chl_opt)") != null
 
@@ -627,96 +667,108 @@ class Comix :
         var injectScript: Runnable? = null
         var lastUrl = document.location()
         handler.post {
-            if (!active.get()) return@post
+            try {
+                if (!active.get()) return@post
 
-            val view = WebView(applicationContext)
-            webView = view
+                val view = WebView(applicationContext)
+                webView = view
 
-            // Suwayomi's KCEF WebView stubs Android view layout APIs.
-            runCatching {
-                view.layoutParams = ViewGroup.LayoutParams(WEBVIEW_WIDTH, WEBVIEW_HEIGHT)
-                view.measure(
-                    View.MeasureSpec.makeMeasureSpec(WEBVIEW_WIDTH, View.MeasureSpec.EXACTLY),
-                    View.MeasureSpec.makeMeasureSpec(WEBVIEW_HEIGHT, View.MeasureSpec.EXACTLY),
-                )
-                view.layout(0, 0, WEBVIEW_WIDTH, WEBVIEW_HEIGHT)
-            }
-
-            with(view.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                loadWithOverviewMode = true
-                useWideViewPort = true
-                blockNetworkImage = false
-                userAgentString = headers["User-Agent"]
-            }
-
-            CookieManager.getInstance().apply {
-                setAcceptCookie(true)
-                setAcceptThirdPartyCookies(view, true)
-            }
-
-            view.addJavascriptInterface(payloadResult, interfaceName)
-
-            view.webViewClient = object : WebViewClient() {
-                override fun shouldInterceptRequest(
-                    view: WebView,
-                    request: WebResourceRequest,
-                ): WebResourceResponse? {
-                    val requestUrl = request.url?.toString()?.toHttpUrlOrNull()
-                        ?: return super.shouldInterceptRequest(view, request)
-
-                    val allowedHost = requestUrl.host == "comix.to" ||
-                        requestUrl.host.endsWith(".comix.to") ||
-                        requestUrl.host == "challenges.cloudflare.com"
-                    if (!allowedHost) return emptyResponse
-                    return super.shouldInterceptRequest(view, request)
+                // Suwayomi's KCEF WebView stubs Android view layout APIs.
+                runCatching {
+                    view.layoutParams = ViewGroup.LayoutParams(WEBVIEW_WIDTH, WEBVIEW_HEIGHT)
+                    view.measure(
+                        View.MeasureSpec.makeMeasureSpec(WEBVIEW_WIDTH, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(WEBVIEW_HEIGHT, View.MeasureSpec.EXACTLY),
+                    )
+                    view.layout(0, 0, WEBVIEW_WIDTH, WEBVIEW_HEIGHT)
                 }
 
-                override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
-                    super.onPageStarted(view, url, favicon)
-                    if (url != null) lastUrl = url
-                    if (active.get() && payloadResult.payload == null) {
+                with(view.settings) {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    databaseEnabled = true
+                    loadWithOverviewMode = true
+                    useWideViewPort = true
+                    blockNetworkImage = false
+                    userAgentString = headers["User-Agent"]
+                }
+
+                CookieManager.getInstance().apply {
+                    setAcceptCookie(true)
+                    setAcceptThirdPartyCookies(view, true)
+                }
+
+                view.addJavascriptInterface(payloadResult, interfaceName)
+
+                view.webViewClient = object : WebViewClient() {
+                    override fun shouldInterceptRequest(
+                        view: WebView,
+                        request: WebResourceRequest,
+                    ): WebResourceResponse? {
+                        val requestUrl = request.url?.toString()?.toHttpUrlOrNull()
+                            ?: return super.shouldInterceptRequest(view, request)
+
+                        val allowedHost = requestUrl.host == "comix.to" ||
+                            requestUrl.host.endsWith(".comix.to") ||
+                            requestUrl.host == "challenges.cloudflare.com"
+                        if (!allowedHost) return emptyResponse
+                        return super.shouldInterceptRequest(view, request)
+                    }
+
+                    override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                        super.onPageStarted(view, url, favicon)
+                        if (url != null) lastUrl = url
+                        if (active.get() && payloadResult.payload == null) {
+                            runCatching { view.evaluateJavascript(script, null) }
+                        }
+                    }
+
+                    override fun onPageFinished(view: WebView, url: String?) {
+                        super.onPageFinished(view, url)
+                        if (url != null) lastUrl = url
+                        if (active.get() && payloadResult.payload == null) {
+                            runCatching { view.evaluateJavascript(script, null) }
+                        }
+                    }
+                }
+
+                val retry = object : Runnable {
+                    override fun run() {
+                        if (!active.get() || payloadResult.payload != null) return
                         runCatching { view.evaluateJavascript(script, null) }
+                        if (active.get() && payloadResult.payload == null) {
+                            handler.postDelayed(this, SCRIPT_RETRY_INTERVAL_MS)
+                        }
                     }
                 }
+                injectScript = retry
 
-                override fun onPageFinished(view: WebView, url: String?) {
-                    super.onPageFinished(view, url)
-                    if (url != null) lastUrl = url
-                    if (active.get() && payloadResult.payload == null) {
-                        runCatching { view.evaluateJavascript(script, null) }
-                    }
+                if (isCloudflareChallenge) {
+                    view.loadUrl(document.location())
+                } else {
+                    view.loadDataWithBaseURL(
+                        document.location(),
+                        document.outerHtml(),
+                        "text/html",
+                        "utf-8",
+                        null,
+                    )
                 }
+                handler.post(retry)
+            } catch (error: Throwable) {
+                startupError.set(error)
+            } finally {
+                started.release()
             }
-
-            val retry = object : Runnable {
-                override fun run() {
-                    if (!active.get() || payloadResult.payload != null) return
-                    runCatching { view.evaluateJavascript(script, null) }
-                    if (active.get() && payloadResult.payload == null) {
-                        handler.postDelayed(this, SCRIPT_RETRY_INTERVAL_MS)
-                    }
-                }
-            }
-            injectScript = retry
-
-            if (isCloudflareChallenge) {
-                view.loadUrl(document.location())
-            } else {
-                view.loadDataWithBaseURL(
-                    document.location(),
-                    document.outerHtml(),
-                    "text/html",
-                    "utf-8",
-                    null,
-                )
-            }
-            handler.post(retry)
         }
 
         val completed = try {
+            if (!started.tryAcquire(WEBVIEW_START_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                throw Exception("Timed out starting WebView (url=$lastUrl)")
+            }
+            startupError.get()?.let {
+                throw Exception("Failed to start WebView (url=$lastUrl)", it)
+            }
             payloadResult.await(WEBVIEW_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         } finally {
             active.set(false)
@@ -929,6 +981,7 @@ class Comix :
         private const val PREF_SCORE_POSITION = "pref_score_position"
 
         private const val DEFAULT_CONTENT_RATING = "suggestive"
+        private const val WEBVIEW_START_TIMEOUT_SECONDS = 120L
         private const val WEBVIEW_TIMEOUT_SECONDS = 90L
         private const val SCRIPT_RETRY_INTERVAL_MS = 100L
         private const val WEBVIEW_WIDTH = 1080
