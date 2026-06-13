@@ -42,7 +42,7 @@ class CapibaraTraductor : HttpSource() {
         .add("x-organization", organizationSlug)
         .build()
 
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=popular", headers)
 
