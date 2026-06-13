@@ -1,6 +1,5 @@
 package keiyoushi.gradle.extension
 
-import keiyoushi.gradle.extension.tasks.DeeplinkFilter
 import keiyoushi.gradle.extension.codegen.ResolvedExtension
 import keiyoushi.gradle.extension.codegen.ResolvedSource
 import keiyoushi.gradle.extension.codegen.generateSourceId
@@ -8,6 +7,7 @@ import keiyoushi.gradle.extension.dsl.BaseUrlSpec
 import keiyoushi.gradle.extension.dsl.DeeplinkSpec
 import keiyoushi.gradle.extension.dsl.ExtensionSpec
 import keiyoushi.gradle.extension.dsl.MultisrcSpec
+import keiyoushi.gradle.extension.tasks.DeeplinkFilter
 import keiyoushi.gradle.utils.assertWithoutFlag
 import org.gradle.api.Project
 import java.net.URI

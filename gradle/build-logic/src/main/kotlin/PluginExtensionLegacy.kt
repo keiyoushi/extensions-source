@@ -1,15 +1,15 @@
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.gradle.tasks.PackageAndroidArtifact
-import keiyoushi.gradle.extension.tasks.DeeplinkFilter
-import keiyoushi.gradle.extension.tasks.GenerateExtensionManifestTask
-import keiyoushi.gradle.extension.dsl.MultisrcSpec
 import keiyoushi.gradle.api.alias
 import keiyoushi.gradle.api.compileOnly
 import keiyoushi.gradle.api.implementation
 import keiyoushi.gradle.api.kei
 import keiyoushi.gradle.api.libs
 import keiyoushi.gradle.api.plugins
+import keiyoushi.gradle.extension.dsl.MultisrcSpec
+import keiyoushi.gradle.extension.tasks.DeeplinkFilter
+import keiyoushi.gradle.extension.tasks.GenerateExtensionManifestTask
 import keiyoushi.gradle.extension.tasks.GenerateKeepRulesTask
 import keiyoushi.gradle.utils.assertWithoutFlag
 import org.gradle.api.Plugin
@@ -61,7 +61,9 @@ class PluginExtensionLegacy : Plugin<Project> {
 
             defaultConfig {
                 applicationIdSuffix = project.parent?.name + "." + project.name
-                versionCode = if (theme == null) extVersionCode else {
+                versionCode = if (theme == null) {
+                    extVersionCode
+                } else {
                     val spec = theme.extensions.findByType(MultisrcSpec::class.java)
                     val base = spec?.baseVersionCode?.getOrElse(0) ?: 0
                     base + overrideVersionCode
@@ -125,8 +127,12 @@ class PluginExtensionLegacy : Plugin<Project> {
                 val host = runCatching { URI(baseUrl).host }.getOrNull()
                 if (host != null) {
                     listOf(DeeplinkFilter(host, paths))
-                } else emptyList()
-            } else emptyList()
+                } else {
+                    emptyList()
+                }
+            } else {
+                emptyList()
+            }
         } ?: emptyList()
 
         val manifestTask = if (themeDeeplinks.isNotEmpty()) {
@@ -134,7 +140,9 @@ class PluginExtensionLegacy : Plugin<Project> {
                 outputFile.set(layout.buildDirectory.file("generated/manifest/kei/AndroidManifest.xml"))
                 filters.set(themeDeeplinks)
             }
-        } else null
+        } else {
+            null
+        }
 
         androidComponents {
             onVariants { variant ->

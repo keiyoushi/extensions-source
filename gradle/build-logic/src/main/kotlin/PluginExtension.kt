@@ -1,5 +1,11 @@
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.gradle.tasks.PackageAndroidArtifact
+import keiyoushi.gradle.api.alias
+import keiyoushi.gradle.api.compileOnly
+import keiyoushi.gradle.api.implementation
+import keiyoushi.gradle.api.kei
+import keiyoushi.gradle.api.libs
+import keiyoushi.gradle.api.plugins
 import keiyoushi.gradle.extension.VariantBridges
 import keiyoushi.gradle.extension.codegen.ResolvedExtension
 import keiyoushi.gradle.extension.dsl.ExtensionSpec
@@ -7,12 +13,6 @@ import keiyoushi.gradle.extension.registerGenerateSourceTask
 import keiyoushi.gradle.extension.registerManifestTask
 import keiyoushi.gradle.extension.resolveExtensionSpec
 import keiyoushi.gradle.extension.wireVariantApi
-import keiyoushi.gradle.api.alias
-import keiyoushi.gradle.api.compileOnly
-import keiyoushi.gradle.api.implementation
-import keiyoushi.gradle.api.kei
-import keiyoushi.gradle.api.libs
-import keiyoushi.gradle.api.plugins
 import keiyoushi.gradle.utils.assertWithoutFlag
 import org.gradle.api.Plugin
 import org.gradle.api.Project

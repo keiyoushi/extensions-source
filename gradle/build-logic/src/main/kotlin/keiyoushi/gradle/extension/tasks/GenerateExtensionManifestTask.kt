@@ -29,10 +29,12 @@ abstract class GenerateExtensionManifestTask : DefaultTask() {
         out.parentFile.mkdirs()
 
         if (filterList.isEmpty()) {
-            out.writeText("""<?xml version="1.0" encoding="utf-8"?>
+            out.writeText(
+                """<?xml version="1.0" encoding="utf-8"?>
                 |<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
                 |
-            """.trimMargin())
+                """.trimMargin(),
+            )
             return
         }
 

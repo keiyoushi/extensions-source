@@ -1,10 +1,10 @@
 package keiyoushi.gradle.extension
 
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
-import keiyoushi.gradle.extension.tasks.GenerateExtensionManifestTask
-import keiyoushi.gradle.extension.tasks.GenerateSourceTask
 import keiyoushi.gradle.extension.codegen.ResolvedExtension
+import keiyoushi.gradle.extension.tasks.GenerateExtensionManifestTask
 import keiyoushi.gradle.extension.tasks.GenerateKeepRulesTask
+import keiyoushi.gradle.extension.tasks.GenerateSourceTask
 import org.gradle.api.Project
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.TaskProvider
@@ -20,18 +20,16 @@ data class VariantBridges(
     val nsfw: Property<String>,
 )
 
-fun Project.registerManifestTask(): TaskProvider<GenerateExtensionManifestTask> =
-    tasks.register("generateExtensionManifest", GenerateExtensionManifestTask::class.java) {
-        outputFile.set(layout.buildDirectory.file("generated/manifest/kei/AndroidManifest.xml"))
-    }
+fun Project.registerManifestTask(): TaskProvider<GenerateExtensionManifestTask> = tasks.register("generateExtensionManifest", GenerateExtensionManifestTask::class.java) {
+    outputFile.set(layout.buildDirectory.file("generated/manifest/kei/AndroidManifest.xml"))
+}
 
 fun Project.registerGenerateSourceTask(
     resolvedExtension: Property<ResolvedExtension>,
-): TaskProvider<GenerateSourceTask> =
-    tasks.register("generateSource", GenerateSourceTask::class.java) {
-        this.resolvedExtension.set(resolvedExtension)
-        this.outputDir.set(layout.buildDirectory.dir("generated/source/kei"))
-    }
+): TaskProvider<GenerateSourceTask> = tasks.register("generateSource", GenerateSourceTask::class.java) {
+    this.resolvedExtension.set(resolvedExtension)
+    this.outputDir.set(layout.buildDirectory.dir("generated/source/kei"))
+}
 
 fun Project.wireVariantApi(
     className: Property<String>,
@@ -52,6 +50,7 @@ fun Project.wireVariantApi(
             variant.manifestPlaceholders.put("nsfw", bridges.nsfw)
 
             val variantName = variant.name.replaceFirstChar { it.uppercase() }
+
             @Suppress("UnstableApiUsage")
             val keepRules = variant.sources.keepRules
             if (keepRules != null) {
