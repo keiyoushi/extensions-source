@@ -218,7 +218,7 @@ class MangaTek :
 
                 Toast.makeText(
                     screen.context,
-                    "Font size changed to '$entry'pt. Restart app to apply new setting.",
+                    "Font size changed to '$entry'. Restart app to apply new setting.",
                     Toast.LENGTH_LONG,
                 ).show()
 
