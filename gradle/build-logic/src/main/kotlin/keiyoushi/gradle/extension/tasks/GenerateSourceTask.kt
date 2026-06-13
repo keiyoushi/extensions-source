@@ -1,5 +1,7 @@
-package keiyoushi.gradle.extension.codegen
+package keiyoushi.gradle.extension.tasks
 
+import keiyoushi.gradle.extension.codegen.ResolvedExtension
+import keiyoushi.gradle.extension.codegen.ResolvedSource
 import keiyoushi.gradle.extension.dsl.BaseUrlSpec
 import keiyoushi.gradle.extension.dsl.OverrideValue
 import org.gradle.api.DefaultTask

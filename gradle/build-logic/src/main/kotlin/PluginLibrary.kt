@@ -1,10 +1,10 @@
 import com.android.build.api.dsl.LibraryExtension
-import keiyoushi.gradle.extensions.alias
-import keiyoushi.gradle.extensions.compileOnly
-import keiyoushi.gradle.extensions.implementation
-import keiyoushi.gradle.extensions.kei
-import keiyoushi.gradle.extensions.libs
-import keiyoushi.gradle.extensions.plugins
+import keiyoushi.gradle.api.alias
+import keiyoushi.gradle.api.compileOnly
+import keiyoushi.gradle.api.implementation
+import keiyoushi.gradle.api.kei
+import keiyoushi.gradle.api.libs
+import keiyoushi.gradle.api.plugins
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure

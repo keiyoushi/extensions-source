@@ -1,10 +1,10 @@
 package keiyoushi.gradle.extension
 
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
-import keiyoushi.gradle.extension.codegen.GenerateExtensionManifestTask
-import keiyoushi.gradle.extension.codegen.GenerateSourceTask
+import keiyoushi.gradle.extension.tasks.GenerateExtensionManifestTask
+import keiyoushi.gradle.extension.tasks.GenerateSourceTask
 import keiyoushi.gradle.extension.codegen.ResolvedExtension
-import keiyoushi.gradle.tasks.GenerateKeepRulesTask
+import keiyoushi.gradle.extension.tasks.GenerateKeepRulesTask
 import org.gradle.api.Project
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.TaskProvider

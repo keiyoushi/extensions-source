@@ -1,6 +1,6 @@
 package keiyoushi.gradle.extension
 
-import keiyoushi.gradle.extension.codegen.DeeplinkFilter
+import keiyoushi.gradle.extension.tasks.DeeplinkFilter
 import keiyoushi.gradle.extension.codegen.ResolvedExtension
 import keiyoushi.gradle.extension.codegen.ResolvedSource
 import keiyoushi.gradle.extension.codegen.generateSourceId

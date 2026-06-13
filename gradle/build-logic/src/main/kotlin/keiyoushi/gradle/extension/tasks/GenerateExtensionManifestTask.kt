@@ -1,4 +1,4 @@
-package keiyoushi.gradle.extension.codegen
+package keiyoushi.gradle.extension.tasks
 
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty

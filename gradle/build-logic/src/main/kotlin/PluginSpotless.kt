@@ -1,9 +1,9 @@
 import com.diffplug.gradle.spotless.SpotlessExtension
 import com.diffplug.spotless.FormatterFunc
 import com.diffplug.spotless.FormatterStep
-import keiyoushi.gradle.extensions.alias
-import keiyoushi.gradle.extensions.libs
-import keiyoushi.gradle.extensions.plugins
+import keiyoushi.gradle.api.alias
+import keiyoushi.gradle.api.libs
+import keiyoushi.gradle.api.plugins
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure

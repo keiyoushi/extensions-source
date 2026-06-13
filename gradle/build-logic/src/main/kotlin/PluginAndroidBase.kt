@@ -4,9 +4,9 @@ import com.android.build.api.dsl.CompileOptions
 import com.android.build.api.dsl.DefaultConfig
 import com.android.build.api.dsl.LibraryDefaultConfig
 import keiyoushi.gradle.configurations.configureKotlin
-import keiyoushi.gradle.extensions.kei
-import keiyoushi.gradle.extensions.libs
-import keiyoushi.gradle.extensions.spotlessTaskName
+import keiyoushi.gradle.api.kei
+import keiyoushi.gradle.api.libs
+import keiyoushi.gradle.api.spotlessTaskName
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
