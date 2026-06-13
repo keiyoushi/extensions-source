@@ -25,12 +25,14 @@ class CapibaraTraductor : HttpSource() {
 
     override val baseUrl = "https://capibaratraductor.com"
 
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val lang = "es"
 
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(3) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
