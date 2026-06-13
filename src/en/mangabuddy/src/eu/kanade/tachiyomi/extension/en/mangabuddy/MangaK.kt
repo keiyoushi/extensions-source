@@ -122,9 +122,7 @@ class MangaK :
             addQueryParameter("limit", "24")
 
             if (query.isNotBlank()) {
-                val filteredQuery = query
-                    .filter { it.isLetterOrDigit() || it == ' ' }
-                    .take(50)
+                val filteredQuery = query.filter { it.isLetterOrDigit() || it == ' ' }.trim().take(50)
                 addQueryParameter("q", filteredQuery)
             }
 
