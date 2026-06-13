@@ -21,6 +21,7 @@ class DassouScan : HttpSource() {
     override val baseUrl = "https://dassouscan.com"
     override val lang = "fr"
     override val supportsLatest = true
+    override val versionId = 2
 
     private val dateFormat = SimpleDateFormat("d MMMM yyyy 'à' HH:mm", Locale.FRENCH)
 
@@ -33,7 +34,7 @@ class DassouScan : HttpSource() {
             addQueryParameter("tri", "popular")
         }.build()
 
-        return GET(url.toString(), headers)
+        return GET(url, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -41,8 +42,7 @@ class DassouScan : HttpSource() {
 
         val mangas = document.select("article.featured-card").map { element ->
             SManga.create().apply {
-                title = element.attr("data-title")
-                // URL is mandatory, failing loudly with !! is correct per guidelines
+                title = element.attr("data-title").takeIf { it.isNotEmpty() } ?: throw Exception("Title is empty")
                 setUrlWithoutDomain(element.selectFirst("a.dsc-card-link")!!.absUrl("href"))
 
                 val bgStyle = element.selectFirst(".cover")?.attr("style") ?: ""
@@ -63,7 +63,7 @@ class DassouScan : HttpSource() {
             addQueryParameter("post_type", "dsc_manga")
         }.build()
 
-        return GET(url.toString(), headers)
+        return GET(url, headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
@@ -77,7 +77,7 @@ class DassouScan : HttpSource() {
             addQueryParameter("s", query)
         }.build()
 
-        return GET(url.toString(), headers)
+        return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
@@ -88,7 +88,7 @@ class DassouScan : HttpSource() {
         val document = response.asJsoup()
 
         return SManga.create().apply {
-            title = document.selectFirst("h1")?.text() ?: ""
+            title = document.selectFirst("h1")?.text()?.takeIf { it.isNotEmpty() } ?: throw Exception("Manga title is missing")
             description = document.selectFirst(".hero-synopsis p")?.text()
             genre = document.select(".hero-tags a.tag:not(.tag--dsc-tag)").joinToString { it.text() }
 
@@ -101,8 +101,6 @@ class DassouScan : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-
-        // Filters out locked premium/future chapters that require inscription/login
         return document.select("div.dsc-manga-chapter-block:not(:has(a[href*=/inscription/]))").map { element ->
             SChapter.create().apply {
                 val link = element.selectFirst("a.dsc-manga-chapter-block__title-link")!!
