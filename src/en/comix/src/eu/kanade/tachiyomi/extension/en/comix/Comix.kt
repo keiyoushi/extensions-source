@@ -636,7 +636,6 @@ class Comix :
                     if (!full.toHttpUrl().queryParameterNames.contains("v3")) {
                         addQueryParameter("v3", null)
                     }
-                    setQueryParameter("comix_ext_fix", V3_CACHE_REVISION)
                 }.build().toString()
                 isLegacyScramble -> "$full#scrambled"
                 else -> full
@@ -992,8 +991,6 @@ class Comix :
         private const val SCRIPT_RETRY_INTERVAL_MS = 100L
         private const val WEBVIEW_WIDTH = 1080
         private const val WEBVIEW_HEIGHT = 1920
-        private const val V3_CACHE_REVISION = "1"
-
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/s?i+/")
         private val CHAPTER_NUM_REGEX = Regex("""Ch\.([\d.]+)""")
         private val GROUP_ID_REGEX = Regex("""/groups/(\d+)""")
