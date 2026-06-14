@@ -48,17 +48,18 @@ class ImageInterceptor : Interceptor {
         val source = response.body.source()
         if (!source.request(2L)) return response
         val isAesScheme = source.buffer[0L] == AES_MAGIC[0] && source.buffer[1L] == AES_MAGIC[1]
-        if (!source.request(if (isAesScheme) 6L else 4L)) return response
-        if (isAesScheme) source.skip(2)
+        val isAes4Scheme = source.buffer[0L] == AES4_MAGIC[0] && source.buffer[1L] == AES4_MAGIC[1]
+        if (!source.request(if (isAesScheme || isAes4Scheme) 6L else 4L)) return response
+        if (isAesScheme || isAes4Scheme) source.skip(2)
 
         val header = ByteBuffer.wrap(source.readByteArray(4)).order(ByteOrder.BIG_ENDIAN)
         val originalWidth = header.short.toInt() and 0xFFFF
         val originalHeight = header.short.toInt() and 0xFFFF
 
-        val plainSource: Source = if (isAesScheme) {
-            source.cipherSource(aesCtrCipher(chapterKey, pageIndex))
-        } else {
-            Buffer().write(xorKeystream(chapterKey, pageIndex, source.readByteArray()))
+        val plainSource: Source = when {
+            isAes4Scheme -> source.cipherSource(aesCtrCipher(chapterKey, pageIndex, "aesctr4:"))
+            isAesScheme -> source.cipherSource(aesCtrCipher(chapterKey, pageIndex, "aesctr:"))
+            else -> Buffer().write(xorKeystream(chapterKey, pageIndex, source.readByteArray()))
         }
 
         if (isScrambled != "1") {
@@ -160,8 +161,8 @@ class ImageInterceptor : Interceptor {
         return data
     }
 
-    private fun aesCtrCipher(chapterKey: ByteArray, pageIndex: Int): Cipher {
-        val derivedKey = initMac(chapterKey).doFinal("aesctr:$pageIndex".toByteArray(Charsets.UTF_8))
+    private fun aesCtrCipher(chapterKey: ByteArray, pageIndex: Int, prefix: String): Cipher {
+        val derivedKey = initMac(chapterKey).doFinal("$prefix$pageIndex".toByteArray(Charsets.UTF_8))
         return Cipher.getInstance("AES/CTR/NoPadding").apply {
             init(Cipher.DECRYPT_MODE, SecretKeySpec(derivedKey, "AES"), IvParameterSpec(ByteArray(16)))
         }
@@ -171,6 +172,7 @@ class ImageInterceptor : Interceptor {
 
     companion object {
         private val AES_MAGIC = "ff02".decodeHex()
+        private val AES4_MAGIC = "ff04".decodeHex()
         private val SCRAMBLED = Regex(""".*_s\.[^.]+$""")
     }
 }
