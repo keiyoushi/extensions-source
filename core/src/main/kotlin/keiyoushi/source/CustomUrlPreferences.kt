@@ -45,6 +45,8 @@ class CustomUrlPreferences(
 
             setOnBindEditTextListener { editText ->
                 editText.hint = defaultUrl
+                editText.setHorizontallyScrolling(true)
+                editText.post { editText.selectAll() }
                 editText.addTextChangedListener(
                     object : TextWatcher {
                         override fun afterTextChanged(editable: Editable?) {
