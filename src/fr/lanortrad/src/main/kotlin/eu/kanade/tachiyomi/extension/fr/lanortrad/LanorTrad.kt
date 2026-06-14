@@ -19,7 +19,7 @@ import rx.Observable
 class LanorTrad : HttpSource() {
 
     override val name = "LanorTrad"
-    override val baseUrl = "https://lanortrad.netlify.app"
+    override val baseUrl = "https://lanortrad.com"
     override val lang = "fr"
     override val supportsLatest = false
 
