@@ -62,7 +62,7 @@ class ImageInterceptor : Interceptor {
             else -> Buffer().write(xorKeystream(chapterKey, pageIndex, source.readByteArray()))
         }
 
-        if (isScrambled != "1") {
+        if (isScrambled != "1" || isAes4Scheme) {
             return response.newBuilder()
                 .body(plainSource.buffer().asResponseBody(mimeType.toMediaType()))
                 .build()
