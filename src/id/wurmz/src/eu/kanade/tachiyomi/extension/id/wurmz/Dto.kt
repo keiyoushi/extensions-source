@@ -13,9 +13,8 @@ class MangaDetailsDto(
     val image: String? = null,
     val author: AuthorDto? = null,
     val genre: List<String>? = null,
-    var status: Int = SManga.UNKNOWN,
 ) {
-    fun toSManga(baseUrl: String) = SManga.create().apply {
+    fun toSManga() = SManga.create().apply {
         title = name
         description = buildString {
             this@MangaDetailsDto.description?.let { append(it) }
@@ -25,12 +24,9 @@ class MangaDetailsDto(
                 append(it)
             }
         }
-        thumbnail_url = image?.let {
-            if (it.startsWith("http")) it else baseUrl + it
-        }
+        thumbnail_url = image
         author = this@MangaDetailsDto.author?.name
         genre = this@MangaDetailsDto.genre?.joinToString()
-        status = this@MangaDetailsDto.status
     }
 }
 
