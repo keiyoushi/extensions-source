@@ -1,4 +1,4 @@
-package keiyoushi.gradle.tasks
+package keiyoushi.gradle.extension.tasks
 
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.DirectoryProperty

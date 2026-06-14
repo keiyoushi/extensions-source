@@ -1,4 +1,4 @@
-package keiyoushi.gradle.extensions
+package keiyoushi.gradle.api
 
 import org.gradle.accessors.dm.LibrariesForKei
 import org.gradle.accessors.dm.LibrariesForLibs

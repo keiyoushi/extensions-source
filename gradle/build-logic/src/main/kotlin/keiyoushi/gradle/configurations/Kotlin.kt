@@ -1,6 +1,6 @@
 package keiyoushi.gradle.configurations
 
-import keiyoushi.gradle.extensions.kei
+import keiyoushi.gradle.api.kei
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
 import org.jetbrains.kotlin.gradle.dsl.HasConfigurableKotlinCompilerOptions

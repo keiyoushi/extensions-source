@@ -1,7 +1,12 @@
-import keiyoushi.gradle.extensions.baseVersionCode
 
 plugins {
     alias(kei.plugins.multisrc)
 }
 
-baseVersionCode = 9
+multisrc {
+    baseVersionCode = 9
+
+    deeplink {
+        path("/g.*/..*/")
+    }
+}

@@ -46,7 +46,14 @@ gradlePlugin {
             implementationClass = "PluginAndroidBase"
         }
         register("extension") {
-            id = kei.plugins.extension.legacy.get().pluginId
+            id = kei.plugins.extension.get().pluginId
+            implementationClass = "PluginExtension"
+        }
+        register("extension-legacy") {
+            // Legacy plugin id is not exposed via the catalog (would collide with the
+            // `extension` leaf accessor). Existing `apply plugin: "kei.plugins.extension.legacy"`
+            // calls in legacy build.gradle files continue to resolve via this registration.
+            id = "kei.plugins.extension.legacy"
             implementationClass = "PluginExtensionLegacy"
         }
         register("library") {

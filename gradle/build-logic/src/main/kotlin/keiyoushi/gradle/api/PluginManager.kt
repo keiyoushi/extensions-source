@@ -1,4 +1,4 @@
-package keiyoushi.gradle.extensions
+package keiyoushi.gradle.api
 
 import org.gradle.api.plugins.PluginManager
 import org.gradle.api.provider.Provider
