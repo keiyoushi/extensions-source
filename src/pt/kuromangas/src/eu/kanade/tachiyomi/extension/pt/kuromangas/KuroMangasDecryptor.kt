@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.extension.pt.kuromangas
 
 import android.util.Base64
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.readIntBigEndian
+import keiyoushi.utils.readIntLittleEndian
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
 import okhttp3.Interceptor
@@ -84,10 +86,7 @@ class Rabbit {
     fun setup(key: ByteArray, iv: ByteArray) {
         val kw = IntArray(4)
         for (i in 0 until 4) {
-            kw[i] = (key[i * 4 + 3].toInt() and 0xFF shl 24) or
-                (key[i * 4 + 2].toInt() and 0xFF shl 16) or
-                (key[i * 4 + 1].toInt() and 0xFF shl 8) or
-                (key[i * 4].toInt() and 0xFF)
+            kw[i] = key.readIntLittleEndian(i * 4)
         }
 
         x[0] = kw[0]
@@ -117,14 +116,8 @@ class Rabbit {
         }
 
         if (iv.isNotEmpty()) {
-            val iv0 = (iv[0].toInt() and 0xFF shl 24) or
-                (iv[1].toInt() and 0xFF shl 16) or
-                (iv[2].toInt() and 0xFF shl 8) or
-                (iv[3].toInt() and 0xFF)
-            val iv1 = (iv[4].toInt() and 0xFF shl 24) or
-                (iv[5].toInt() and 0xFF shl 16) or
-                (iv[6].toInt() and 0xFF shl 8) or
-                (iv[7].toInt() and 0xFF)
+            val iv0 = iv.readIntBigEndian(0)
+            val iv1 = iv.readIntBigEndian(4)
 
             fun swap(w: Int) = ((w and 0xFF) shl 24) or
                 ((w and 0xFF00) shl 8) or

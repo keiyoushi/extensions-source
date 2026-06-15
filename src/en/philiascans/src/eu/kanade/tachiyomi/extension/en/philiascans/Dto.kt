@@ -126,15 +126,16 @@ class Page(
 class PageKeys(
     val chapterKeyB64: String,
     val gridSize: Int,
+    val sessionDefault: Boolean = false,
 )
 
 @Serializable
 class OpenResponse(
     val sessionId: String,
-    val payloadA: String,
+    val payloadA: String? = null,
 )
 
 @Serializable
 class DrmResponse(
-    val payloadB: String,
+    val payloadB: String? = null,
 )

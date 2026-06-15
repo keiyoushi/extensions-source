@@ -1,7 +1,7 @@
 ext {
     extName = 'Raijin Scans'
     extClass = '.RaijinScans'
-    extVersionCode = 66
+    extVersionCode = 67
     isNsfw = false
 }
 

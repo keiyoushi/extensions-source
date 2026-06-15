@@ -11,21 +11,18 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
-import java.net.URLDecoder
-import java.text.DecimalFormat
-import java.text.DecimalFormatSymbols
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -76,34 +73,27 @@ class ValirScans :
 
     override fun searchMangaParse(response: Response): MangasPage = response.parseBrowsePage()
 
-    override fun getFilterList() = FilterList()
-
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
-
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
-
     override fun mangaDetailsParse(response: Response): SManga {
-        val html = response.use { it.body.string() }
-        val document = Jsoup.parse(html, response.request.url.toString())
+        val document = response.asJsoup()
         val pageData = document.extractSeriesPageData()
         val schema = document.select("script[type=application/ld+json]")
             .asSequence()
-            .map { runCatching { it.data().parseAs<BookSchema>() }.getOrNull() }
-            .firstOrNull { it?.type == "Book" }
+            .mapNotNull { runCatching { it.data().parseAs<BookSchema>() }.getOrNull() }
+            .firstOrNull { it.isBook() }
 
         val detailData = pageData?.series
 
         return SManga.create().apply {
-            title = schema?.name ?: document.selectFirst("h1")!!.text()
+            title = schema?.name ?: document.selectFirst("h1")?.text() ?: error("Title not found")
             description = detailData?.description ?: schema?.description
-            author = schema?.author?.name ?: detailData?.author
+            author = schema?.authorName ?: detailData?.author
             artist = detailData?.artist
             status = parseStatus(detailData?.status)
             thumbnail_url = detailData?.coverImage?.toAbsoluteUrl(response.request.url.toString())
                 ?: schema?.image?.toAbsoluteUrl(response.request.url.toString())
             genre = buildList {
                 detailData?.type
-                    ?.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ENGLISH) else it.toString() }
+                    ?.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
                     ?.also(::add)
                 addAll(detailData?.genres.orEmpty().map { it.name })
                 if (isEmpty()) {
@@ -114,53 +104,47 @@ class ValirScans :
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        return Observable.fromCallable {
+            val request = mangaDetailsRequest(manga)
+            val response = client.newCall(request).execute()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val html = response.use { it.body.string() }
-        val document = Jsoup.parse(html, response.request.url.toString())
-        val seriesPath = response.request.url.encodedPath
-        val firstPageData = document.extractSeriesPageData() ?: return emptyList()
-        val chapters = buildList {
-            addAll(firstPageData.chapters)
+            val document = response.asJsoup()
+            val seriesPath = response.request.url.encodedPath
+            val firstPageData = document.extractSeriesPageData() ?: return@fromCallable emptyList()
 
-            for (page in (firstPageData.currentPage + 1)..firstPageData.totalPages) {
-                val pageUrl = response.request.url.newBuilder()
-                    .setQueryParameter("page", page.toString())
-                    .build()
-                val pageData = client.newCall(GET(pageUrl, headers)).execute().use { pageResponse ->
-                    pageResponse.asSeriesPageData()
-                } ?: continue
-                addAll(pageData.chapters)
-            }
-        }
+            val chapters = buildList {
+                addAll(firstPageData.chapters)
 
-        return chapters
-            .asSequence()
-            .filter { preferences.showPaidChapters || !it.isLocked }
-            .map { chapter ->
-                SChapter.create().apply {
-                    url = "$seriesPath/chapter/${formatChapterNumber(chapter.number)}"
-                    name = buildString {
-                        if (chapter.isLocked) append("🔒 ")
-                        append(chapter.title.ifBlank { "Chapter ${formatChapterNumber(chapter.number)}" })
-                    }
-                    chapter_number = chapter.number
-                    date_upload = dateFormat.tryParse(chapter.publishedAt)
+                for (page in (firstPageData.currentPage + 1)..firstPageData.totalPages) {
+                    val pageUrl = response.request.url.newBuilder()
+                        .setQueryParameter("page", page.toString())
+                        .build()
+                    val pageData = client.newCall(GET(pageUrl, headers)).execute().use { pageResponse ->
+                        pageResponse.asSeriesPageData()
+                    } ?: continue
+                    addAll(pageData.chapters)
                 }
             }
-            .toList()
-            .reversed()
+
+            chapters
+                .asSequence()
+                .filter { preferences.showPaidChapters || !it.isLocked }
+                .map { it.toSChapter(seriesPath, dateFormat) }
+                .toList()
+                .reversed()
+        }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException("Not used.")
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException("Not used.")
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), rscHeaders)
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
         val chapter = response.extractNextJs<ChapterPageDto> { element ->
             element is JsonObject && "chapter" in element
-        }?.chapter ?: error("Could not find chapter data")
+        }?.chapter ?: return emptyList()
 
         return chapter.pages
             .sortedBy { it.pageNumber }
@@ -179,9 +163,23 @@ class ValirScans :
         return GET(page.imageUrl!!, imageHeaders)
     }
 
+    override fun getFilterList() = FilterList()
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_PAID_CHAPTERS_PREF
+            title = "Show paid chapters"
+            summaryOn = "Paid chapters will be shown in the chapter list."
+            summaryOff = "Paid chapters will be hidden from the chapter list."
+            setDefaultValue(SHOW_PAID_CHAPTERS_DEFAULT)
+        }.also(screen::addPreference)
+    }
+
+    private val SharedPreferences.showPaidChapters: Boolean
+        get() = getBoolean(SHOW_PAID_CHAPTERS_PREF, SHOW_PAID_CHAPTERS_DEFAULT)
+
     private fun Response.asSeriesPageData(): SeriesPageDto? {
-        val html = body.string()
-        val document = Jsoup.parse(html, request.url.toString())
+        val document = asJsoup()
         return document.extractSeriesPageData()
     }
 
@@ -191,26 +189,22 @@ class ValirScans :
 
     private fun Response.parseBrowsePage(): MangasPage {
         val page = request.url.queryParameter("page")?.toIntOrNull() ?: 1
-        val html = use { it.body.string() }
-        val document = Jsoup.parse(html, request.url.toString())
+        val document = asJsoup()
         val mangas = document.select("div[role=gridcell]").mapNotNull { it.toSManga() }
 
-        val totalResults = TOTAL_RESULTS_REGEX.find(html)?.groupValues?.get(2)?.toIntOrNull()
+        val totalResults = TOTAL_RESULTS_REGEX.find(document.text())?.groupValues?.get(1)?.toIntOrNull()
         val hasNextPage = totalResults?.let { page * BROWSE_PAGE_SIZE < it } ?: false
 
         return MangasPage(mangas, hasNextPage)
     }
 
     private fun Element.toSManga(): SManga? {
-        val detailLink = selectFirst("a[href*='?ref=browse']")
-            ?: select("a[href*='/series/comic/']")
-                .firstOrNull { !it.attr("href").contains("/chapter/") }
+        val detailLink = selectFirst("a[href*='?ref=browse']:not([href*='/novel/'])")
+            ?: selectFirst("a[href*='/series/']:not([href*='/chapter/']):not([href*='/novel/'])")
             ?: return null
 
-        val title = selectFirst("h3")?.text()
-            ?.ifBlank { null }
-            ?: selectFirst("img[alt]")?.attr("alt")
-                ?.ifBlank { null }
+        val title = selectFirst("h3")?.text()?.ifEmpty { null }
+            ?: selectFirst("img[alt]")?.attr("alt")?.ifEmpty { null }
             ?: return null
 
         return SManga.create().apply {
@@ -222,14 +216,13 @@ class ValirScans :
 
     private fun Element.extractThumbnailUrl(): String {
         val candidate = attr("abs:src")
-            .ifBlank { attr("abs:srcset").substringBefore(" ") }
+            .ifEmpty { attr("abs:srcset").substringBefore(" ") }
 
         if (!candidate.contains("/_next/image?url=")) {
             return candidate
         }
 
-        val encodedUrl = candidate.toHttpUrlOrNull()?.queryParameter("url") ?: return candidate
-        val decodedUrl = URLDecoder.decode(encodedUrl, "UTF-8")
+        val decodedUrl = candidate.toHttpUrlOrNull()?.queryParameter("url") ?: return candidate
         return decodedUrl.toAbsoluteUrl(ownerDocument()?.location() ?: baseUrl)
     }
 
@@ -245,28 +238,13 @@ class ValirScans :
         return base.resolve(path)
     }
 
-    private fun parseStatus(status: String?): Int = when (status?.uppercase(Locale.ENGLISH)) {
-        "ONGOING" -> SManga.ONGOING
-        "COMPLETED" -> SManga.COMPLETED
-        "HIATUS" -> SManga.ON_HIATUS
-        "CANCELLED", "CANCELED", "DROPPED" -> SManga.CANCELLED
+    private fun parseStatus(status: String?): Int = when (status?.lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        "completed" -> SManga.COMPLETED
+        "hiatus" -> SManga.ON_HIATUS
+        "cancelled", "canceled", "dropped" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
-
-    private fun formatChapterNumber(number: Float): String = chapterNumberFormatter.format(number)
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_PAID_CHAPTERS_PREF
-            title = "Show paid chapters"
-            summaryOn = "Paid chapters will be shown in the chapter list."
-            summaryOff = "Paid chapters will be hidden from the chapter list."
-            setDefaultValue(SHOW_PAID_CHAPTERS_DEFAULT)
-        }.also(screen::addPreference)
-    }
-
-    private val SharedPreferences.showPaidChapters: Boolean
-        get() = getBoolean(SHOW_PAID_CHAPTERS_PREF, SHOW_PAID_CHAPTERS_DEFAULT)
 
     companion object {
         private const val BROWSE_PAGE_SIZE = 24
@@ -274,12 +252,9 @@ class ValirScans :
         private const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
         private const val SHOW_PAID_CHAPTERS_DEFAULT = false
 
-        private val TOTAL_RESULTS_REGEX =
-            """Showing <!-- -->(\d+)<!-- --> of <!-- -->(\d+)<!-- --> results""".toRegex()
+        private val TOTAL_RESULTS_REGEX = """Showing\s+\d+\s+of\s+(\d+)\s+results""".toRegex(RegexOption.IGNORE_CASE)
 
-        private val chapterNumberFormatter = DecimalFormat("#.##", DecimalFormatSymbols(Locale.US))
-
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("UTC")
         }
     }

@@ -54,3 +54,21 @@ class ChapterItem(
     val title: Wrapped<String?>,
     @SerialName("created_at") val createdAt: Wrapped<String?>,
 )
+
+@Serializable
+class PageDTO(
+    val imageUrl: String,
+    val bubbles: List<Bubble> = emptyList(),
+) {
+    fun hasSpeechBubbles() = bubbles.isNotEmpty()
+}
+
+@Serializable
+class Bubble(
+    val text: String = "",
+    val left: Float = 0.0f,
+    val top: Float = 0.0f,
+    val width: Float = 0.0f,
+    val height: Float = 0.0f,
+    val angle: Float = 0.0f,
+)

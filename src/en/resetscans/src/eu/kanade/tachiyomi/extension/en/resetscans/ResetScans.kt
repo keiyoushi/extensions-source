@@ -21,6 +21,12 @@ class ResetScans :
 
     override fun chapterListSelector() = "li.wp-manga-chapter:not(:has(a[href*='#']))"
 
+    override fun searchMangaSelector() = ".rs-manga-library__card"
+    override val searchMangaUrlSelector = ".rs-manga-library__card-title a"
+
+    override fun popularMangaSelector() = searchMangaSelector()
+    override val popularMangaUrlSelector = searchMangaUrlSelector
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = super.chapterListParse(response)
 

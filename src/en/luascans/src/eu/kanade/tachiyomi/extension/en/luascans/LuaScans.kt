@@ -16,5 +16,7 @@ class LuaScans :
 
     override val useNewChapterEndpoint = true
 
+    override val latestSortBy = "asc"
+
     override val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
 }
