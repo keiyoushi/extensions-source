@@ -62,7 +62,7 @@ class Comix :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
-        .addNetworkInterceptor(Descrambler.interceptor)
+        .addInterceptor(Descrambler.interceptor)
         .addInterceptor { chain ->
             val request = chain.request()
 
@@ -94,19 +94,23 @@ class Comix :
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    // Encoded images require Comix's Origin header to receive X-Enc-* metadata.
+    // V3 grid-scramble pages must NOT send Origin — the server withholds X-Scramble-Seed when
+    // Origin is present. Legacy byte-XOR pages need Origin to receive X-Enc-Seed.
     override fun imageRequest(page: Page): Request {
         val imageUrl = page.imageUrl ?: return super.imageRequest(page)
-        val imageHost = imageUrl.substringBefore('#').toHttpUrlOrNull()?.host.orEmpty()
+        val urlWithoutFragment = imageUrl.substringBefore('#')
+        val imageHost = urlWithoutFragment.toHttpUrlOrNull()?.host.orEmpty()
         val isScrambled = imageUrl.contains("#scrambled")
-        val requestHeaders = if (imageHost.isNotEmpty() && !imageHost.contains("comix.to") && !isScrambled) {
+        val isV3 = urlWithoutFragment.toHttpUrlOrNull()?.queryParameterNames?.contains("v3") == true
+        val isLegacyScramble = isScrambled && !isV3
+        val requestHeaders = if (imageHost.isNotEmpty() && !imageHost.contains("comix.to") && !isLegacyScramble) {
             headersBuilder()
                 .removeAll("Origin")
                 .build()
         } else {
             headers
         }
-        return GET(imageUrl, requestHeaders)
+        return GET(urlWithoutFragment, requestHeaders)
     }
 
     // ============================== Popular ==============================
@@ -131,8 +135,26 @@ class Comix :
         val document = runBlocking {
             client.newCall(request).awaitSuccess().asJsoup()
         }
+        val contentRating = request.url.queryParameter("content_rating")
+            ?: preferences.contentRating()
+        val effectiveContentRating = contentRating.ifEmpty { "pornographic" }
         val searchResponse = document.extractBrowseResponse() ?: runInWebView(
             document = document,
+            initializationScript = """
+                (function () {
+                    const key = 'settings_v2';
+                    let settings = {};
+                    try {
+                        settings = JSON.parse(localStorage.getItem(key) || '{}');
+                    } catch (e) {}
+                    settings.state = {
+                        ...(settings.state || {}),
+                        contentFilter: '$effectiveContentRating'
+                    };
+                    if (settings.version === undefined) settings.version = 0;
+                    localStorage.setItem(key, JSON.stringify(settings));
+                })();
+            """.trimIndent(),
             buildScript = { interfaceName ->
                 """
                     (function () {
@@ -279,6 +301,10 @@ class Comix :
 
             if (query.isNotBlank()) {
                 addQueryParameter("keyword", query)
+                build().queryParameterNames
+                    .filter { it.startsWith("order[") }
+                    .forEach(::removeAllQueryParameters)
+                addQueryParameter("order[relevance]", "desc")
             }
 
             addQueryParameter("page", page.toString())
@@ -571,7 +597,10 @@ class Comix :
 
     // =============================== Pages ===============================
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
-        val document = client.newCall(GET(getChapterUrl(chapter), headers)).execute().asJsoup()
+        val request = GET(getChapterUrl(chapter), headers)
+        val document = runBlocking {
+            client.newCall(request).awaitSuccess().asJsoup()
+        }
         val payload = runInWebView(
             document = document,
             buildScript = { interfaceName ->
@@ -619,9 +648,20 @@ class Comix :
         val base = pages.baseUrl.trimEnd('/')
 
         pages.items.mapIndexed { index, img ->
-            val isScrambled = img.s == 1 || (index + 1) % 4 == 0
             val full = if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}"
-            val url = if (isScrambled) "$full#scrambled" else full
+            // V3 pages need the query flag so the server returns grid-scramble headers.
+            // Legacy byte-XOR pages: add #scrambled so imageRequest keeps Origin for x-enc-seed
+            val isV3 = img.s == 1 || full.contains("?v3")
+            val isLegacyScramble = !isV3 && (index + 1) % 4 == 0
+            val url = when {
+                isV3 -> full.toHttpUrl().newBuilder().apply {
+                    if (!full.toHttpUrl().queryParameterNames.contains("v3")) {
+                        addQueryParameter("v3", null)
+                    }
+                }.build().toString()
+                isLegacyScramble -> "$full#scrambled"
+                else -> full
+            }
             Page(index, imageUrl = url)
         }
     }
@@ -634,6 +674,7 @@ class Comix :
     @Synchronized
     private fun runInWebView(
         document: Document,
+        initializationScript: String? = null,
         buildScript: (interfaceName: String) -> String,
     ): String {
         val handler = Handler(Looper.getMainLooper())
@@ -728,9 +769,15 @@ class Comix :
                 }
                 injectScript = retry
 
+                val html = document.clone().apply {
+                    initializationScript?.let {
+                        head().prependElement("script").append(it)
+                    }
+                }.outerHtml()
+
                 view.loadDataWithBaseURL(
                     document.location(),
-                    document.outerHtml(),
+                    html,
                     "text/html",
                     "utf-8",
                     null,
@@ -973,7 +1020,6 @@ class Comix :
         private const val SCRIPT_RETRY_INTERVAL_MS = 100L
         private const val WEBVIEW_WIDTH = 1080
         private const val WEBVIEW_HEIGHT = 1920
-
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/s?i+/")
         private val CHAPTER_NUM_REGEX = Regex("""Ch\.([\d.]+)""")
         private val GROUP_ID_REGEX = Regex("""/groups/(\d+)""")
