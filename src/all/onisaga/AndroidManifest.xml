@@ -12,10 +12,15 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:host="onisaga.com" />
                 <data
-                    android:pathPattern="/manga/..*"
-                    android:scheme="https" />
+                    android:scheme="https"
+                    android:host="onisaga.com"
+                    android:pathPrefix="/manga/" />
+                <data
+                    android:scheme="https"
+                    android:host="onisaga.com"
+                    android:pathPrefix="/read/" />
+
             </intent-filter>
         </activity>
     </application>
