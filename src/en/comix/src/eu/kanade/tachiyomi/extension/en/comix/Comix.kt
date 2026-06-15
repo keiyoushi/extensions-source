@@ -283,6 +283,10 @@ class Comix :
 
             if (query.isNotBlank()) {
                 addQueryParameter("keyword", query)
+                build().queryParameterNames
+                    .filter { it.startsWith("order[") }
+                    .forEach(::removeAllQueryParameters)
+                addQueryParameter("order[relevance]", "desc")
             }
 
             addQueryParameter("page", page.toString())
