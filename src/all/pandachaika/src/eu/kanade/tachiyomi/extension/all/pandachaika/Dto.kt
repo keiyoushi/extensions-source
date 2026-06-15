@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.pandachaika
 
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -36,11 +37,11 @@ class LongArchive(
     private val title: String,
     val id: Int,
     private val posted: Long?,
-    private val public_date: Long?,
+    @SerialName("public_date") private val publicDate: Long?,
     private val filecount: Int,
     private val filesize: Double,
     private val tags: List<String>,
-    private val title_jpn: String?,
+    @SerialName("title_jpn") private val titleJpn: String?,
     private val uploader: String,
 ) {
     fun toSManga() = SManga.create().apply {
@@ -87,12 +88,12 @@ class LongArchive(
                 append("Other tags: ", it, "\n\n")
             }
 
-            title_jpn?.takeIf { it.isNotEmpty() }?.let { append("Japanese Title: ", it, "\n") }
+            titleJpn?.takeIf { it.isNotEmpty() }?.let { append("Japanese Title: ", it, "\n") }
             append("Pages: ", filecount, "\n")
             append("File Size: ", getReadableSize(filesize), "\n")
 
             try {
-                append("Public Date: ", dateReformat.format(Date(public_date!! * 1000)), "\n")
+                append("Public Date: ", dateReformat.format(Date(publicDate!! * 1000)), "\n")
             } catch (_: Exception) {}
             try {
                 append("Posted: ", dateReformat.format(Date(posted!! * 1000)), "\n")
@@ -107,5 +108,14 @@ class LongArchive(
 @Serializable
 class ArchiveResponse(
     val archives: List<LongArchive>,
-    val has_next: Boolean,
+    @SerialName("has_next") val hasNext: Boolean,
+)
+
+@Serializable
+class ImageRequest(
+    val url: String,
+    val name: String,
+    val offset: Long,
+    val compressedSize: Long,
+    val method: Int,
 )
