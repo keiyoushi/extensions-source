@@ -4,7 +4,6 @@ import android.content.SharedPreferences
 import android.webkit.CookieManager
 import android.widget.Toast
 import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -26,8 +25,6 @@ import org.jsoup.nodes.Element
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
-import kotlin.math.absoluteValue
-import kotlin.random.Random
 
 class Nudemoon :
     HttpSource(),
@@ -41,13 +38,8 @@ class Nudemoon :
     private val dateParseRu = SimpleDateFormat("d MMMM yyyy", Locale("ru"))
     private val cookieManager by lazy { CookieManager.getInstance() }
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder().apply {
-        if (preferences.getString(UA_SOURCE, "hardcoded") == "hardcoded") {
-            val userAgentRandomizer = "${Random.nextInt().absoluteValue}"
-            add("User-Agent", "Mozilla/5.0 (Linux; Android 10; SM-G980F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.$userAgentRandomizer Mobile Safari/537.36")
-        }
-        add("Referer", "$baseUrl/")
-    }
+    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+        .add("Referer", "$baseUrl/")
 
     init {
         cookieManager.setCookie(baseUrl, "nm_mobile=1; Domain=" + baseUrl.split("//")[1])
@@ -215,22 +207,6 @@ class Nudemoon :
                 true
             }
         }.let(screen::addPreference)
-
-        ListPreference(screen.context).apply {
-            key = UA_SOURCE
-            title = UA_SOURCE_TITLE
-            entries = arrayOf(
-                "Установленный в расширении",
-                "Из настроек приложения",
-            )
-            entryValues = arrayOf("hardcoded", "app")
-            summary = "%s"
-            setDefaultValue("hardcoded")
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Для применения настроек необходимо перезапустить приложение с полной остановкой.", Toast.LENGTH_LONG).show()
-                true
-            }
-        }.let(screen::addPreference)
     }
 
     private fun getPrefBaseUrl(): String = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
@@ -251,7 +227,5 @@ class Nudemoon :
         private const val DEFAULT_DOMAIN_PREF = "pref_default_domain"
         private const val DOMAIN_TITLE = "Домен"
         private const val DOMAIN_DEFAULT = "https://nude-moon.org"
-        private const val UA_SOURCE = "ua_source"
-        private const val UA_SOURCE_TITLE = "Используемый User Agent"
     }
 }
