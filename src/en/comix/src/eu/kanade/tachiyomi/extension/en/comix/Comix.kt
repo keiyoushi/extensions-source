@@ -135,8 +135,26 @@ class Comix :
         val document = runBlocking {
             client.newCall(request).awaitSuccess().asJsoup()
         }
+        val contentRating = request.url.queryParameter("content_rating")
+            ?: preferences.contentRating()
+        val effectiveContentRating = contentRating.ifEmpty { "pornographic" }
         val searchResponse = document.extractBrowseResponse() ?: runInWebView(
             document = document,
+            initializationScript = """
+                (function () {
+                    const key = 'settings_v2';
+                    let settings = {};
+                    try {
+                        settings = JSON.parse(localStorage.getItem(key) || '{}');
+                    } catch (e) {}
+                    settings.state = {
+                        ...(settings.state || {}),
+                        contentFilter: '$effectiveContentRating'
+                    };
+                    if (settings.version === undefined) settings.version = 0;
+                    localStorage.setItem(key, JSON.stringify(settings));
+                })();
+            """.trimIndent(),
             buildScript = { interfaceName ->
                 """
                     (function () {
@@ -656,6 +674,7 @@ class Comix :
     @Synchronized
     private fun runInWebView(
         document: Document,
+        initializationScript: String? = null,
         buildScript: (interfaceName: String) -> String,
     ): String {
         val handler = Handler(Looper.getMainLooper())
@@ -750,9 +769,15 @@ class Comix :
                 }
                 injectScript = retry
 
+                val html = document.clone().apply {
+                    initializationScript?.let {
+                        head().prependElement("script").append(it)
+                    }
+                }.outerHtml()
+
                 view.loadDataWithBaseURL(
                     document.location(),
-                    document.outerHtml(),
+                    html,
                     "text/html",
                     "utf-8",
                     null,
