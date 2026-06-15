@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.id.westmanga
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -61,13 +62,21 @@ class WestManga : HttpSource() {
 
     override fun getFilterList(): FilterList {
         fetchGenres()
-        return FilterList(
+
+        val filters = mutableListOf<Filter<*>>(
             SortFilter(),
             StatusFilter(),
             CountryFilter(),
             ColorFilter(),
-            GenreFilter(genres),
         )
+
+        if (genres.isEmpty()) {
+            filters.add(Filter.Header("Klik pada 'Atur ulang' untuk memuat ulang genre"))
+        } else {
+            filters.add(GenreFilter(genres))
+        }
+
+        return FilterList(filters)
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {

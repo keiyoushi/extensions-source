@@ -107,6 +107,6 @@ class ColorFilter :
 class GenreFilter(options: List<Pair<String, String>>) :
     CheckBoxGroup(
         name = "Genre",
-        options = options.ifEmpty { listOf("Klik pada 'Atur ulang' untuk memuat ulang genre" to "") },
+        options = options,
         queryParameterName = "genre[]",
     )
