@@ -255,12 +255,10 @@ class Mangadotnet :
             filters.forEach { filter ->
                 when (filter) {
                     is SortFilter -> {
-                        if (filter.sort == "relevance" && query.isBlank()) {
-                            addQueryParameter("sortBy", "latest")
-                        } else {
-                            addQueryParameter("sortBy", filter.sort)
+                        if (filter.sort.isNotBlank()) {
+                            addQueryParameter("sort", filter.sort)
+                            addQueryParameter("sortOrder", if (filter.ascending) "asc" else "desc")
                         }
-                        addQueryParameter("sortOrder", if (filter.ascending) "asc" else "desc")
                     }
                     is StatusFilter -> {
                         filter.selected?.also { selected ->
