@@ -114,14 +114,16 @@ open class MantaComics(
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    override fun chapterListParse(response: Response) = response.parseAs<MantaResponse<Series<Title>>>().data.episodes!!.map {
-        SChapter.create().apply {
-            name = it.asString(lang)
-            url = it.id.toString()
-            date_upload = it.timestamp
-            chapter_number = it.ord.toFloat()
-        }
-    }.reversed()
+    override fun chapterListParse(response: Response) = response.parseAs<MantaResponse<Series<Title>>>().data.episodes!!
+        .filterNot { it.lockData?.isLocked == true }
+        .map {
+            SChapter.create().apply {
+                name = it.asString(lang)
+                url = it.id.toString()
+                date_upload = it.timestamp
+                chapter_number = it.ord.toFloat()
+            }
+        }.reversed()
 
     override fun fetchChapterList(manga: SManga) = chapterListRequest(manga).fetch(::chapterListParse)
 
