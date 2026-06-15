@@ -26,7 +26,8 @@ class SabrinaOnline : HttpSource() {
         artist = "Eric W. Schwartz"
         author = "Eric W. Schwartz"
         status = SManga.UNKNOWN
-        url = "archive.html"
+        setUrlWithoutDomain("$baseUrl/archive.html")
+        initialized = true
     }
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(manga()), false))
@@ -55,15 +56,13 @@ class SabrinaOnline : HttpSource() {
 
             tr.select("td").forEachIndexed { index, td ->
                 td.select("a").forEach { a ->
-                    val chapter = a.text().trim()
+                    val chapter = a.text()
                     if (chapter.isEmpty()) return@forEach
-
-                    val href = a.absUrl("href").ifEmpty { a.attr("href") }
 
                     val hasYear = sections.getOrNull(index)?.let { it.isNotEmpty() && it.first().isDigit() } ?: false
                     chapters.add(
                         SChapter.create().apply {
-                            url = href
+                            setUrlWithoutDomain(a.absUrl("href"))
                             name = if (hasYear) "${sections[index]} $chapter" else chapter
                         },
                     )
@@ -91,10 +90,7 @@ class SabrinaOnline : HttpSource() {
         return chapters.reversed()
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val url = if (chapter.url.startsWith("http")) chapter.url else "$baseUrl/${chapter.url}"
-        return GET(url, headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
@@ -110,7 +106,7 @@ class SabrinaOnline : HttpSource() {
             if (img.parent()?.tagName() == "a") {
                 val parent = img.parent()!!
                 val href = parent.absUrl("href").ifEmpty { parent.attr("href") }
-                Page(index, href)
+                Page(index, imageUrl = href)
             } else {
                 val src = img.absUrl("src").ifEmpty { img.attr("src") }
                 Page(index, src)
@@ -118,7 +114,7 @@ class SabrinaOnline : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String = response.request.url.toString()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
