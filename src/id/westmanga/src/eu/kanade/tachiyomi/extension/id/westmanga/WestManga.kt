@@ -17,7 +17,7 @@ import javax.crypto.spec.SecretKeySpec
 
 class WestManga : HttpSource() {
     override val name = "West Manga"
-    override val baseUrl = "https://westmanga.cc"
+    override val baseUrl = "https://v1.westmanga.cc"
     private val apiUrl = "https://data.mantweh.online"
     override val lang = "id"
     override val id = 8883916630998758688
