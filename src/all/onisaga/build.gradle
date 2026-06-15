@@ -1,6 +1,6 @@
 ext {
     extName = 'OniSaga'
-    extClass = '.OniSaga'
+    extClass = '.OniSagaFactory'
     extVersionCode = 1
     isNsfw = true
 }

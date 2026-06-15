@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.onisaga
 
 import android.content.SharedPreferences
-import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -20,43 +19,42 @@ import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.serializer
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import rx.Observable
 
-class OniSaga :
-    HttpSource(),
+class OniSaga(
+    override val lang: String,
+    private val langKey: String?,
+) : HttpSource(),
     ConfigurableSource {
 
     override val name = "OniSaga"
     override val baseUrl = "https://onisaga.com"
-    override val lang = "all"
     override val supportsLatest = true
-
-    override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3)
-        .build()
 
     private val livewireJson = Json {
         encodeDefaults = true
     }
 
-    private inline fun <reified T> T.toLivewireRequestBody() = livewireJson.encodeToString(serializer<T>(), this)
-        .toRequestBody("application/json".toMediaType())
+    override val client: OkHttpClient = network.client.newBuilder()
+        .rateLimit(2)
+        .build()
+
+    private val apiClient: OkHttpClient = client.newBuilder()
+        .rateLimit(1)
+        .build()
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    private val langs = arrayOf("All", "English", "French", "Japanese", "Portuguese (BR)", "Portuguese (PT)", "Spanish (LATAM)", "Spanish (ES)")
-    private val langKeys = arrayOf(null, "EN", "FR", "JA", "PT-BR", "PT", "ES-LA", "ES")
+    private val langKeys = arrayOf("EN", "FR", "JA", "PT-BR", "PT", "ES-LA", "ES")
 
     private fun buildLivewireHeaders(referer: String): Headers = headersBuilder()
         .set("X-Livewire", "")
@@ -125,7 +123,7 @@ class OniSaga :
         )
 
         val dto = client.newCall(
-            POST("$baseUrl/livewire/update", buildLivewireHeaders(url.substringBefore("?")), request.toLivewireRequestBody()),
+            POST("$baseUrl/livewire/update", buildLivewireHeaders(url.substringBefore("?")), request.toJsonRequestBody(livewireJson)),
         ).execute().use { response ->
             if (!response.isSuccessful) {
                 throw Exception("Livewire error (HTTP ${response.code}): ${response.body.string()}")
@@ -268,14 +266,20 @@ class OniSaga :
         nsfwSpan?.closest("div.absolute.inset-0.z-20")?.remove()
 
         val badgeRow = doc.selectFirst("div.flex.items-center.gap-2.justify-center.mb-2")
-        val bannerUrl = doc.selectFirst("img.absolute.inset-0.object-cover.object-center")?.let { resolveImageUrl(it) }
+
+        var bannerUrl = doc.selectFirst("img.absolute")?.let { resolveImageUrl(it) }
 
         return SManga.create().apply {
             title = doc.selectFirst("h1")?.text()
                 ?: doc.selectFirst("[data-flux-heading]")?.text()
                 ?: ""
 
-            thumbnail_url = doc.selectFirst("img.w-full.h-full.object-cover:not(.absolute)")?.let { resolveImageUrl(it) }
+            thumbnail_url = doc.selectFirst(".w-32 > picture:nth-child(1) > img:nth-child(3)")?.let { resolveImageUrl(it) }
+
+            // If banner and cover are the same, do not display banner
+            if (bannerUrl == thumbnail_url) {
+                bannerUrl = null
+            }
 
             val infoSection = doc.selectFirst("div.flex.flex-col.md\\:flex-row")
 
@@ -438,10 +442,7 @@ class OniSaga :
             val state = doc.extractLivewireState("manga.chapter-list")
                 ?: return@fromCallable emptyList()
 
-            val optlang = preferences.getString(PREF_LANG_KEY, "0")!!.toInt()
-            val langId = langKeys.getOrNull(optlang)
-
-            val chapters = parseChaptersFromDoc(doc, optlang, langId).toMutableList()
+            val chapters = parseChaptersFromDoc(doc, langKey).toMutableList()
             var currentSnapshot = state.snapshot
 
             while (true) {
@@ -460,7 +461,7 @@ class OniSaga :
                     ),
                 )
 
-                val chapterRequest = POST("$baseUrl/livewire/update", buildLivewireHeaders(baseUrl + manga.url), request.toLivewireRequestBody())
+                val chapterRequest = POST("$baseUrl/livewire/update", buildLivewireHeaders(baseUrl + manga.url), request.toJsonRequestBody(livewireJson))
 
                 val dto = client.newCall(chapterRequest).execute().use { response ->
                     if (!response.isSuccessful) {
@@ -473,7 +474,7 @@ class OniSaga :
                 val html = dto.components.firstOrNull()?.effects?.html ?: break
 
                 val chapterDoc = Jsoup.parseBodyFragment(html, baseUrl)
-                val newChapters = parseChaptersFromDoc(chapterDoc, optlang, langId)
+                val newChapters = parseChaptersFromDoc(chapterDoc, langKey)
 
                 if (newChapters.size <= chapters.size) break
 
@@ -491,7 +492,7 @@ class OniSaga :
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
-    private fun parseChaptersFromDoc(doc: Document, optlang: Int, langId: String?): List<SChapter> {
+    private fun parseChaptersFromDoc(doc: Document, langId: String?): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
 
         doc.select("a[wire:key^=ch-]").forEach { el ->
@@ -504,10 +505,12 @@ class OniSaga :
             val language = details.firstOrNull { it.trim() in langKeys }?.trim() ?: details.lastOrNull()?.trim() ?: ""
 
             if (langId == null || language == langId) {
-                val langSuffix = if (optlang == 0 && language.isNotEmpty()) " [$language]" else ""
+                val chapterLang = if (langKey == null && language.isNotEmpty()) language else null
+
                 chapters.add(
                     SChapter.create().apply {
-                        name = "Chapter $number$langSuffix"
+                        name = "Chapter $number"
+                        scanlator = chapterLang
                         setUrlWithoutDomain(url)
                     },
                 )
@@ -525,10 +528,12 @@ class OniSaga :
                 val language = linkEl.selectFirst("div[data-flux-badge]")?.text() ?: ""
 
                 if (langId == null || language == langId) {
-                    val langSuffix = if (optlang == 0 && language.isNotEmpty()) " [$language]" else ""
+                    val chapterLang = if (langKey == null && language.isNotEmpty()) language else null
+
                     chapters.add(
                         SChapter.create().apply {
-                            name = "Chapter $number$langSuffix"
+                            name = "Chapter $number"
+                            scanlator = chapterLang
                             setUrlWithoutDomain(url)
                         },
                     )
@@ -541,53 +546,76 @@ class OniSaga :
 
     // ============================== Pages & Images ===============================
 
+    @Volatile
+    private var currentReaderToken: String = ""
+    private val pageLoadLock = Any()
+
     override fun pageListParse(response: Response): List<Page> {
         val body = response.body.string()
 
         val token = READER_TOKEN_REGEX.find(body)?.groupValues?.get(1) ?: ""
         if (token.isBlank()) throw Exception("Could not find readerToken in chapter page")
 
+        // Store the initial token in the shared variable for fetchImageUrl to use
+        currentReaderToken = token
+
         val chapterUrl = response.request.url.toString()
         val orders = PAGE_ORDER_REGEX.findAll(body).map { it.groupValues[1] }.toList()
 
         return orders.mapIndexed { index, order ->
-            Page(index, url = "$chapterUrl#$order,$token")
+            Page(index, url = "$chapterUrl#$order")
         }
     }
 
     override fun fetchImageUrl(page: Page): Observable<String> {
         val chapterUrl = page.url.substringBeforeLast("#")
-        val fragment = page.url.substringAfterLast("#")
-        val order = fragment.substringBefore(",")
-        var token = fragment.substringAfter(",")
+        val order = page.url.substringAfterLast("#")
 
         val cid = chapterUrl.toHttpUrl().pathSegments.last()
         val apiUrl = "$baseUrl/api/chapter/$cid/page/$order"
 
         return Observable.fromCallable {
-            client.newCall(GET(apiUrl, apiHeaders(token, chapterUrl))).execute().use { response ->
-                val dto = response.parseAs<PageApiResponse>()
+            synchronized(pageLoadLock) {
+                var token = currentReaderToken
 
-                if (dto.url != null) return@fromCallable dto.url
-
-                if (dto.message?.contains("expired", true) == true || !response.isSuccessful) {
-                    val refreshBody = client.newCall(GET(chapterUrl, headers)).execute().use { it.body.string() }
-                    token = READER_TOKEN_REGEX.find(refreshBody)?.groupValues?.get(1) ?: ""
-
-                    if (token.isBlank()) {
-                        throw Exception("Could not find readerToken in refreshed chapter page")
+                apiClient.newCall(GET(apiUrl, apiHeaders(token, chapterUrl))).execute().use { response ->
+                    // Check for token rotation
+                    response.header("x-reader-token-next")?.takeIf { it.isNotBlank() }?.let {
+                        currentReaderToken = it
                     }
 
-                    client.newCall(GET(apiUrl, apiHeaders(token, chapterUrl))).execute().use { retryResponse ->
-                        val retryDto = retryResponse.parseAs<PageApiResponse>()
-                        if (retryDto.url != null) return@fromCallable retryDto.url
-                        val msg = retryDto.message ?: "No URL in API response"
-                        throw Exception("API Error: $msg (HTTP ${retryResponse.code})")
+                    val dto = response.parseAs<PageApiResponse>()
+
+                    if (dto.url != null) return@fromCallable dto.url
+
+                    if (dto.message?.contains("expired", true) == true || !response.isSuccessful) {
+                        // Token expired — re-fetch the chapter HTML to get a fresh token
+                        val refreshBody = client.newCall(GET(chapterUrl, headers)).execute().use { it.body.string() }
+                        token = READER_TOKEN_REGEX.find(refreshBody)?.groupValues?.get(1) ?: ""
+
+                        if (token.isBlank()) {
+                            throw Exception("Could not find readerToken in refreshed chapter page")
+                        }
+
+                        currentReaderToken = token
+
+                        // Retry the API call with the fresh token
+                        apiClient.newCall(GET(apiUrl, apiHeaders(token, chapterUrl))).execute().use { retryResponse ->
+                            // Check for token rotation on retry response too
+                            retryResponse.header("x-reader-token-next")?.takeIf { it.isNotBlank() }?.let {
+                                currentReaderToken = it
+                            }
+
+                            val retryDto = retryResponse.parseAs<PageApiResponse>()
+                            if (retryDto.url != null) return@fromCallable retryDto.url
+                            val msg = retryDto.message ?: "No URL in API response"
+                            throw Exception("API Error: $msg (HTTP ${retryResponse.code})")
+                        }
                     }
+
+                    val msg = dto.message ?: "No URL in API response"
+                    throw Exception("API Error: $msg (HTTP ${response.code})")
                 }
-
-                val msg = dto.message ?: "No URL in API response"
-                throw Exception("API Error: $msg (HTTP ${response.code})")
             }
         }
     }
@@ -605,7 +633,7 @@ class OniSaga :
         .set("X-Reader-Token", token)
         .set("Sec-Fetch-Mode", "cors")
         .set("Sec-Fetch-Site", "same-origin")
-        .set("Accept", "application/json")
+        .set("Accept", "*/*")
         .set("Referer", referer)
         .build()
 
@@ -644,15 +672,6 @@ class OniSaga :
 
         val genreNames = genreList.map { it.first }.toTypedArray()
         val genreIds = genreList.map { it.second }.toTypedArray()
-
-        ListPreference(screen.context).apply {
-            key = PREF_LANG_KEY
-            title = "Language"
-            entries = langs
-            entryValues = langs.indices.map { it.toString() }.toTypedArray()
-            summary = "%s"
-            setDefaultValue("0")
-        }.let(screen::addPreference)
 
         val nsfwPref = SwitchPreferenceCompat(screen.context).apply {
             key = PREF_NSFW_KEY
@@ -693,7 +712,6 @@ class OniSaga :
     }
 
     companion object {
-        private const val PREF_LANG_KEY = "lang"
         private const val PREF_NSFW_KEY = "pref_nsfw"
         private const val PREF_EXCLUDE_GENRE = "pref_exclude_genre"
         private const val PREF_EXCLUDE_GENRE_ADULT = "pref_exclude_genre_adult"
