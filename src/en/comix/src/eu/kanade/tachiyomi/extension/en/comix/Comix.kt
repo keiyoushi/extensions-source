@@ -699,7 +699,7 @@ class Comix :
                 val view = WebView(applicationContext)
                 webView = view
 
-                // Suwayomi's KCEF WebView stubs Android view layout APIs.
+                // Some WebView implementations do not support manual layout.
                 runCatching {
                     view.layoutParams = ViewGroup.LayoutParams(WEBVIEW_WIDTH, WEBVIEW_HEIGHT)
                     view.measure(
@@ -804,6 +804,7 @@ class Comix :
                 injectScript?.let(handler::removeCallbacks)
                 val view = webView
                 webView = null
+                runCatching { view?.stopLoading() }
                 runCatching { view?.destroy() }
             }
         }
