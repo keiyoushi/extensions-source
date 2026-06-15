@@ -47,7 +47,12 @@ class RaijinScans :
     private val preferences: SharedPreferences by getPreferencesLazy()
     private val nonceRegex = """"nonce"\s*:\s*"([^"]+)"""".toRegex()
     private val numberRegex = """(\d+)""".toRegex()
-    private val descriptionScriptRegex = """content\.innerHTML = `([\s\S]+?)`;""".toRegex()
+
+    // Capture only within a single template literal (no backtick inside). The page also has a
+    // "view all" toggle whose `content.innerHTML = ``` assignments are empty; a [\s\S]+? capture
+    // would span across them and yield garbage, so a description-less page must fail to match here
+    // and fall back to div.description-content.
+    private val descriptionScriptRegex = """content\.innerHTML = `([^`]+)`;""".toRegex()
 
     private val scriptManager by lazy { ReaderScriptManager(client, preferences) }
     private val pageListInterpreter by lazy { PageListInterpreter(client) }
