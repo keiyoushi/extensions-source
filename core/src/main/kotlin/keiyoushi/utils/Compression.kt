@@ -1,17 +1,8 @@
 package keiyoushi.utils
 
-import eu.kanade.tachiyomi.network.GET
-import okhttp3.Headers
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import okio.Buffer
-import okio.BufferedSource
-import okio.ForwardingSource
 import okio.InflaterSource
 import okio.Source
-import okio.buffer
-import java.io.EOFException
-import java.io.IOException
 import java.util.zip.Inflater
 
 /**
