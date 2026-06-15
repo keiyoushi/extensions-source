@@ -42,7 +42,7 @@ class Nudemoon :
     private val cookieManager by lazy { CookieManager.getInstance() }
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().apply {
-        if (preferences.getString(UA_SOURCE, "hardcode") == "hardcode") {
+        if (preferences.getString(UA_SOURCE, "hardcoded") == "hardcoded") {
             val userAgentRandomizer = "${Random.nextInt().absoluteValue}"
             add("User-Agent", "Mozilla/5.0 (Linux; Android 10; SM-G980F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.$userAgentRandomizer Mobile Safari/537.36")
         }
@@ -220,12 +220,12 @@ class Nudemoon :
             key = UA_SOURCE
             title = UA_SOURCE_TITLE
             entries = arrayOf(
-                "Созданный расширением (не изменяется)",
+                "Установленный в расширении",
                 "Из настроек приложения",
             )
-            entryValues = arrayOf("hardcode", "app")
+            entryValues = arrayOf("hardcoded", "app")
             summary = "%s"
-            setDefaultValue("hardcode")
+            setDefaultValue("hardcoded")
             setOnPreferenceChangeListener { _, _ ->
                 Toast.makeText(screen.context, "Для применения настроек необходимо перезапустить приложение с полной остановкой.", Toast.LENGTH_LONG).show()
                 true
