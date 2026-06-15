@@ -177,9 +177,20 @@ class OniSaga :
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
         if (query.startsWith("http")) {
-            val manga = client.newCall(GET(query, headers)).execute().use { response ->
+            val url = query.toHttpUrl()
+            var mangaUrl = query
+
+            if (url.pathSegments.firstOrNull() == "read") {
+                val doc = client.newCall(GET(query, headers)).execute().use { it.asJsoup() }
+                mangaUrl = doc.selectFirst("a[href*=\"/manga/\"]")?.absUrl("href")
+                    ?: throw Exception("Could not find manga link on chapter page")
+            } else if (url.pathSegments.size >= 3 && url.pathSegments[0] == "manga") {
+                mangaUrl = "${url.scheme}://${url.host}/manga/${url.pathSegments[1]}"
+            }
+
+            val manga = client.newCall(GET(mangaUrl, headers)).execute().use { response ->
                 mangaDetailsParse(response).apply {
-                    setUrlWithoutDomain(query)
+                    setUrlWithoutDomain(mangaUrl)
                 }
             }
             return@fromCallable MangasPage(listOf(manga), false)

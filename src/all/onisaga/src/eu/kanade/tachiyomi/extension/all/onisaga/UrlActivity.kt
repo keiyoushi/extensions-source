@@ -10,17 +10,18 @@ import kotlin.system.exitProcess
 class UrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val data = intent?.data
+        if (data != null) {
+            val mainIntent = Intent("eu.kanade.tachiyomi.SEARCH").apply {
+                putExtra("query", data.toString())
+                putExtra("filter", packageName)
+            }
 
-        val mainIntent = Intent().apply {
-            action = "eu.kanade.tachiyomi.SEARCH"
-            putExtra("query", intent.data.toString())
-            putExtra("filter", packageName)
-        }
-
-        try {
-            startActivity(mainIntent)
-        } catch (e: ActivityNotFoundException) {
-            Log.e("OniSaga", "Unable to launch activity", e)
+            try {
+                startActivity(mainIntent)
+            } catch (e: ActivityNotFoundException) {
+                Log.e("OniSaga", "Unable to launch activity", e)
+            }
         }
 
         finish()
