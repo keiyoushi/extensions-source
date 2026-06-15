@@ -10,25 +10,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.lib.cryptoaes.CryptoAES
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.boolean
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.parseAs
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
-import java.lang.Exception
+import rx.Observable
 import java.security.MessageDigest
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Locale
 
 class Comico : HttpSource() {
     override val name = "コミコ"
@@ -38,9 +29,7 @@ class Comico : HttpSource() {
 
     override val id = 4991718230921189832
 
-    final override val supportsLatest = true
-
-    private val json by injectLazy<Json>()
+    override val supportsLatest = true
 
     private val cookieManager by lazy { CookieManager.getInstance() }
 
@@ -73,9 +62,8 @@ class Comico : HttpSource() {
             },
         ).build()
 
-    override fun headersBuilder() = Headers.Builder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Accept-Language", lang)
-        .set("User-Agent", userAgent)
         .set("Referer", "$baseUrl/")
 
     override fun latestUpdatesRequest(page: Int) = paginate("all_comic/daily/$day", page)
@@ -97,51 +85,25 @@ class Comico : HttpSource() {
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.data
-        val hasNext = data["page"]["hasNext"]
-        val mangas = data.map<ContentInfo, SManga>("contents") {
-            SManga.create().apply {
-                title = it.name
-                url = "/comic/${it.id}"
-                thumbnail_url = it.cover
-                description = it.description
-                status = when (it.status) {
-                    "completed" -> SManga.COMPLETED
-                    else -> SManga.ONGOING
-                }
-                author = it.authors?.filter { it.isAuthor }?.joinToString()
-                artist = it.authors?.filter { it.isArtist }?.joinToString()
-                genre = buildString {
-                    it.genres?.joinTo(this)
-                    if (it.mature) append(", Mature")
-                    if (it.original) append(", Original")
-                    if (it.exclusive) append(", Exclusive")
-                }
-            }
-        }
-        return MangasPage(mangas, hasNext.jsonPrimitive.boolean)
+        val dto = response.parseData()
+        val hasNext = dto.page?.hasNext == true
+        val mangas = dto.contents?.map { it.toSManga() } ?: emptyList()
+        return MangasPage(mangas, hasNext)
     }
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val content = response.data["episode"]["content"]
-        val id = content["id"].jsonPrimitive.int
-        return content.map<Chapter, SChapter>("chapters") {
-            SChapter.create().apply {
-                chapter_number = it.id.toFloat()
-                url = "/comic/$id/chapter/${it.id}/product"
-                name = it.name + if (it.isAvailable) "" else LOCK
-                date_upload = dateFormat.parse(it.publishedAt)?.time ?: 0L
-            }
-        }.reversed()
+        val content = response.parseData().episode?.content ?: return emptyList()
+        val id = content.id
+        return content.chapters?.map { it.toSChapter(id) }?.reversed() ?: emptyList()
     }
 
-    override fun pageListParse(response: Response) = response.data["chapter"].map<ChapterImage, Page>("images") {
-        Page(it.sort, "", it.url.decrypt() + "?" + it.parameter)
-    }
+    override fun pageListParse(response: Response): List<Page> = response.parseData().chapter?.images?.mapIndexed { index, img ->
+        Page(index, imageUrl = img.url.decrypt() + (img.parameter?.let { "?$it" } ?: ""))
+    } ?: emptyList()
 
-    override fun fetchMangaDetails(manga: SManga) = rx.Observable.just(manga.apply { initialized = true })!!
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga.apply { initialized = true })
 
     override fun fetchPageList(chapter: SChapter) = if (!chapter.name.endsWith(LOCK)) {
         super.fetchPageList(chapter)
@@ -157,18 +119,13 @@ class Comico : HttpSource() {
 
     private fun String.decrypt() = CryptoAES.decrypt(this, keyBytes, ivBytes)
 
-    private val Response.data: JsonElement?
-        get() = json.parseToJsonElement(body.string()).jsonObject.also {
-            val code = it["result"]["code"].jsonPrimitive.int
-            if (code != 200) throw Exception(status(code))
-        }["data"]
-
-    private operator fun JsonElement?.get(key: String) = this!!.jsonObject[key]!!
-
-    private inline fun <reified T, R> JsonElement?.map(
-        key: String,
-        transform: (T) -> R,
-    ) = json.decodeFromJsonElement<List<T>>(this[key]).map(transform)
+    private fun Response.parseData(): ComicoDataDto {
+        val dto = parseAs<ComicoResponseDto>()
+        if (dto.result?.code != 200) {
+            throw Exception(status(dto.result?.code ?: 0))
+        }
+        return dto.data ?: throw Exception("No data found")
+    }
 
     override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
@@ -176,25 +133,12 @@ class Comico : HttpSource() {
 
     companion object {
         private const val ANON_IP = "0.0.0.0"
-
-        private const val LOCK = " \uD83D\uDD12"
-
-        private const val ISO_DATE = "yyyy-MM-dd'T'HH:mm:ss'Z'"
-
+        const val LOCK = " \uD83D\uDD12" // Accessed by Chapter
         private const val WEB_KEY = "9241d2f090d01716feac20ae08ba791a"
-
         private const val AES_KEY = "a7fc9dc89f2c873d79397f8a0028a4cd"
-
         private val keyBytes = AES_KEY.toByteArray(Charsets.UTF_8)
-
         private val ivBytes = ByteArray(16) // Zero filled array as IV
-
-        private const val ACCEPT_IMAGE =
-            "image/avif,image/jxl,image/webp,image/*,*/*"
-
-        private val userAgent = System.getProperty("http.agent")!!
-
-        private val dateFormat = SimpleDateFormat(ISO_DATE, Locale.ROOT)
+        private const val ACCEPT_IMAGE = "image/avif,image/jxl,image/webp,image/*,*/*"
 
         private val SHA256 = MessageDigest.getInstance("SHA-256")
 
@@ -211,7 +155,7 @@ class Comico : HttpSource() {
             }
         }
 
-        fun sha256(timestamp: Long) = buildString(64) {
+        fun sha256(timestamp: Long): String = buildString(64) {
             SHA256.digest((WEB_KEY + ANON_IP + timestamp).toByteArray())
                 .joinTo(this, "") { "%02x".format(it) }
             SHA256.reset()
