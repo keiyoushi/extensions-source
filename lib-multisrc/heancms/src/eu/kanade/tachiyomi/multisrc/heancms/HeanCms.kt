@@ -131,11 +131,13 @@ abstract class HeanCms(
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
+    protected open val latestSortBy = "desc"
+
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/query".toHttpUrl().newBuilder()
             .addQueryParameter("query_string", "")
             .addQueryParameter(if (useNewQueryEndpoint) "status" else "series_status", "All")
-            .addQueryParameter("order", "desc")
+            .addQueryParameter("order", latestSortBy)
             .addQueryParameter("orderBy", "latest")
             .addQueryParameter("series_type", "Comic")
             .addQueryParameter("page", page.toString())
