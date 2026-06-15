@@ -1,6 +1,13 @@
 package eu.kanade.tachiyomi.extension.ar.mangatek
 
+import android.content.SharedPreferences
+import android.os.Build
+import android.widget.Toast
+import androidx.annotation.RequiresApi
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,24 +15,45 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaTek : HttpSource() {
+@RequiresApi(Build.VERSION_CODES.O)
+class MangaTek :
+    HttpSource(),
+    ConfigurableSource {
+
     override val name = "MangaTek"
+
     override val baseUrl = "https://mangatek.com"
+
     override val lang = "ar"
+
+    private var fontSize: Int
+        get() = preferences.getString(FONT_SIZE_PREF, DEFAULT_FONT_SIZE)!!.toInt()
+        set(value) = preferences.edit().putString(FONT_SIZE_PREF, value.toString()).apply()
+
+    override val client by lazy {
+        network.client.newBuilder()
+            .addInterceptor(SpeechBubblePainterInterceptor(fontSize))
+            .rateLimit(3)
+            .build()
+    }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale("ar"))
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val supportsLatest = true
 
@@ -114,10 +142,36 @@ class MangaTek : HttpSource() {
     // Page
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select(".manga-page img").mapIndexed { i, element ->
-            Page(i, imageUrl = element.imgAttr())
+        val pages = getPages(document)
+
+        return pages.mapIndexed { index, page ->
+            val imageUrl = when {
+                page.hasSpeechBubbles() -> "${page.imageUrl}${page.bubbles.toJsonString().toFragment()}"
+                else -> page.imageUrl
+            }
+            Page(index, imageUrl = imageUrl)
         }
     }
+
+    private fun getPages(document: Document): List<PageDTO> = document.select(".manga-page").map { element ->
+        val imageUrl = element.selectFirst("img")!!.imgAttr()
+        val overlays = element.select(".text-overlay").takeIf(List<Element>::isNotEmpty) ?: return@map PageDTO(imageUrl)
+
+        val bubbles = overlays.map { overlay ->
+            val style = overlay.attr("style")
+            Bubble(
+                text = overlay.text(),
+                left = style.substringAfterLast("left:").substringBefore("%").trim().toFloat(),
+                top = style.substringAfterLast("top:").substringBefore("%").trim().toFloat(),
+                width = style.substringAfterLast("width:").substringBefore("%").trim().toFloat(),
+                height = style.substringAfterLast("height:").substringBefore("%").trim().toFloat(),
+            )
+        }
+
+        PageDTO(imageUrl, bubbles)
+    }
+
+    fun String.toFragment(): String = "#${this.replace("#", "*")}"
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
@@ -128,5 +182,55 @@ class MangaTek : HttpSource() {
         hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
         hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
         else -> attr("abs:src")
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val sizes = arrayOf(
+            "12", "13", "14",
+            "15", "16", "18",
+            "20", "21", "22",
+            "24", "26", "28",
+            "32", "36", "40",
+            "42", "44", "48",
+            "54", "60", "72",
+            "80", "88", "96",
+        )
+
+        ListPreference(screen.context).apply {
+            key = FONT_SIZE_PREF
+            title = "Font size"
+            entries = sizes.map {
+                "${it}pt" + if (it == DEFAULT_FONT_SIZE) " - Default" else ""
+            }.toTypedArray()
+            entryValues = sizes
+
+            summary = buildString {
+                appendLine("Font changes will not be applied to downloaded or cached chapters. ")
+                append("\t* %s")
+            }
+
+            setDefaultValue(fontSize.toString())
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val selected = newValue as String
+                val index = this.findIndexOfValue(selected)
+                val entry = entries[index] as String
+
+                Toast.makeText(
+                    screen.context,
+                    "Font size changed to '$entry'. Restart app to apply new setting.",
+                    Toast.LENGTH_LONG,
+                ).show()
+
+                true
+            }
+        }.also(screen::addPreference)
+    }
+
+    companion object {
+        val PAGE_REGEX = Regex(""".*?\.(webp|png|jpg|jpeg)(?:\?v=\d+)?#\[.*?]""", RegexOption.IGNORE_CASE)
+        private const val FONT_SIZE_PREF = "fontSizePref"
+        private const val DEFAULT_FONT_SIZE = "28"
+        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale("ar"))
     }
 }

@@ -20,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -46,7 +47,6 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
-import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -252,58 +252,54 @@ class Mangadotnet :
                 addQueryParameter("search", query)
             }
             addQueryParameter("page", page.toString())
-            filters.forEach { filter ->
-                when (filter) {
-                    is SortFilter -> {
-                        if (filter.sort == "relevance" && query.isBlank()) {
-                            addQueryParameter("sortBy", "latest")
-                        } else {
-                            addQueryParameter("sortBy", filter.sort)
-                        }
-                        addQueryParameter("sortOrder", if (filter.ascending) "asc" else "desc")
+
+            filters.firstInstanceOrNull<SortFilter>()?.also { filter ->
+                if (filter.sort == "relevance" && query.isBlank()) {
+                    addQueryParameter("sortBy", "latest")
+                } else {
+                    addQueryParameter("sortBy", filter.sort)
+                }
+                addQueryParameter("sortOrder", if (filter.ascending) "asc" else "desc")
+            }
+
+            filters.firstInstanceOrNull<StatusFilter>()?.selected?.also {
+                addQueryParameter("status", it)
+            }
+
+            filters.firstInstanceOrNull<TypeFilter>()?.checked?.also { checked ->
+                if (checked.isNotEmpty() && checked.toSet() != allOrigins) {
+                    checked.forEach { origin ->
+                        addQueryParameter("origin", origin)
                     }
-                    is StatusFilter -> {
-                        filter.selected?.also { selected ->
-                            addQueryParameter("status", selected)
-                        }
-                    }
-                    is TypeFilter -> {
-                        val checked = filter.checked
-                        if (checked.isNotEmpty() && checked.toSet() != allOrigins) {
-                            checked.forEach { origin ->
-                                addQueryParameter("origin", origin)
-                            }
-                        }
-                    }
-                    is DemographicFilter -> {
-                        filter.included.forEach { demo ->
-                            addQueryParameter("genre", demo)
-                        }
-                        filter.excluded.forEach { demo ->
-                            addQueryParameter("genre", "-$demo")
-                        }
-                    }
-                    is GenreFilter -> {
-                        filter.included.forEach { genre ->
-                            addQueryParameter("genre", genre)
-                        }
-                        filter.excluded.forEach { genre ->
-                            addQueryParameter("genre", "-$genre")
-                        }
-                    }
-                    is AuthorFilter -> {
-                        if (filter.state.isNotBlank()) {
-                            addQueryParameter("author", filter.state.trim())
-                        }
-                    }
-                    is ArtistFilter -> {
-                        if (filter.state.isNotBlank()) {
-                            addQueryParameter("artist", filter.state.trim())
-                        }
-                    }
-                    else -> throw IllegalStateException("Unknown filter: ${filter::class.simpleName}")
                 }
             }
+
+            filters.firstInstanceOrNull<DemographicFilter>()?.also { filter ->
+                filter.included.forEach { demo ->
+                    addQueryParameter("genre", demo)
+                }
+                filter.excluded.forEach { demo ->
+                    addQueryParameter("genre", "-$demo")
+                }
+            }
+
+            filters.firstInstanceOrNull<GenreFilter>()?.also { filter ->
+                filter.included.forEach { genre ->
+                    addQueryParameter("genre", genre)
+                }
+                filter.excluded.forEach { genre ->
+                    addQueryParameter("genre", "-$genre")
+                }
+            }
+
+            filters.firstInstanceOrNull<AuthorFilter>()?.state?.takeIf { it.isNotBlank() }?.also {
+                addQueryParameter("author", it.trim())
+            }
+
+            filters.firstInstanceOrNull<ArtistFilter>()?.state?.takeIf { it.isNotBlank() }?.also {
+                addQueryParameter("artist", it.trim())
+            }
+
             addQueryParameter("_routes", "pages/SearchPage")
         }.build()
 

@@ -229,26 +229,38 @@ class Yupmanga : HttpSource() {
         val anchorResponse = client.newCall(GET(anchorUrl, requestHeaders)).execute()
         val anchorValue = anchorResponse.parseAs<AnchorDto>().v ?: throw Exception("Failed to get anchor")
 
-        val challengeUrl = "$baseUrl/ajax/get_challenge.php".toHttpUrl().newBuilder()
-            .addQueryParameter("chapter", chapterId)
+        val challengeBody = FormBody.Builder()
+            .add("chapter", chapterId)
             .apply {
-                if (mangaId.isNotEmpty()) addQueryParameter("s", mangaId)
+                if (mangaId.isNotEmpty()) add("s", mangaId)
             }
             .build()
+        val challengeUrl = "$baseUrl/ajax/get_challenge.php"
 
-        val challenge = client.newCall(GET(challengeUrl, apiHeaders)).execute().parseAs<ChallengeDto>()
+        val challenge = client.newCall(POST(challengeUrl, apiHeaders, challengeBody)).execute().parseAs<ChallengeDto>()
         if (!challenge.success || challenge.challengeJs == null || challenge.challengeId == null) {
             throw Exception("Error fetching challenge")
         }
 
         val sanitizedJs = challenge.challengeJs
-            .replace("return (async function(){", "(function(){")
+            .replace("return (async function(){", "return (function(){")
             .replace(INNER_CHALLENGE_REGEX, "\"$anchorValue\"")
 
         val answer = QuickJs.create().use {
             it.evaluate(
                 """
-                var document = {};
+                var document = {
+                    getElementById: function(id) {
+                        if (id === 'ym-fw') {
+                            return {
+                                elements: {
+                                    'w8': { value: "$anchorValue" }
+                                }
+                            };
+                        }
+                        return null;
+                    }
+                };
                 var window = {};
                 var atob = function(input) {
                     var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -265,7 +277,9 @@ class Yupmanga : HttpSource() {
                     }
                     return output;
                 };
-                $sanitizedJs
+                (function() {
+                    $sanitizedJs
+                })();
                 """.trimIndent(),
             )?.toString()
         } ?: throw Exception("Failed to solve challenge")

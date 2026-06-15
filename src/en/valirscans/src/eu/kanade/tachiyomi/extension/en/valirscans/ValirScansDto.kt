@@ -1,17 +1,23 @@
 package eu.kanade.tachiyomi.extension.en.valirscans
 
+import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.text.SimpleDateFormat
 
 @Serializable
 class BookSchema(
-    @SerialName("@type") val type: String? = null,
-    val name: String = "",
-    val author: AuthorSchema? = null,
+    @SerialName("@type") private val type: String? = null,
+    val name: String,
+    private val author: AuthorSchema? = null,
     val image: String? = null,
     val description: String? = null,
     val genre: List<String> = emptyList(),
-)
+) {
+    val authorName: String? get() = author?.name
+    fun isBook() = type == "Book"
+}
 
 @Serializable
 class AuthorSchema(
@@ -46,11 +52,24 @@ class GenreDto(
 
 @Serializable
 class ChapterDto(
-    val number: Float,
-    val title: String = "",
+    private val number: Float,
+    private val title: String? = null,
     val isLocked: Boolean = false,
-    val publishedAt: String? = null,
-)
+    private val publishedAt: String? = null,
+) {
+    fun toSChapter(seriesPath: String, dateFormat: SimpleDateFormat): SChapter {
+        val chapterNumberStr = number.toString().removeSuffix(".0")
+        return SChapter.create().apply {
+            url = "$seriesPath/chapter/$chapterNumberStr"
+            name = buildString {
+                if (isLocked) append("🔒 ")
+                append(title?.ifEmpty { "Chapter $chapterNumberStr" } ?: "Chapter $chapterNumberStr")
+            }
+            chapter_number = number
+            date_upload = dateFormat.tryParse(publishedAt)
+        }
+    }
+}
 
 @Serializable
 class ReaderChapterDto(
@@ -59,7 +78,7 @@ class ReaderChapterDto(
 
 @Serializable
 class ChapterPageDto(
-    val chapter: ReaderChapterDto,
+    val chapter: ReaderChapterDto? = null,
 )
 
 @Serializable

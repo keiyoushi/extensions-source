@@ -61,7 +61,7 @@ class RaijinScans :
     private val nonceRegex = """"nonce"\s*:\s*"([^"]+)"""".toRegex()
     private val numberRegex = """(\d+)""".toRegex()
     private val descriptionScriptRegex = """content\.innerHTML = `([\s\S]+?)`;""".toRegex()
-    private val manifestPushRegex = """push\((\{.*\})\);""".toRegex()
+    private val manifestObjectRegex = """(\{"m":"[\s\S]*\})""".toRegex()
     private val imageExtRegex = """\.(webp|jpe?g|png|gif|avif)""".toRegex(RegexOption.IGNORE_CASE)
     private val json: Json by lazy {
         Json {
@@ -267,17 +267,20 @@ class RaijinScans :
             .add("Origin", baseUrl)
             .build()
 
-        // window["rjfr_xxx"].push({
-        //   "m": "hex1|...",  // order of fragments
-        //   "c": {               // key-value pairs of b64 fragments
-        //     "hex1": "base64fragment1", ... }
-        // })
+        // The chapter HTML injects a manifest object into a window["rjfr_xxx"] array. The
+        // injection syntax has varied over time (e.g. `.push({...})` and `[…length] = {...}`),
+        // so we extract the object literal directly rather than depend on the surrounding code:
+        //   {
+        //     "m": "hex1|...",  // order of fragments
+        //     "c": {               // key-value pairs of b64 fragments
+        //       "hex1": "base64fragment1", ... }
+        //   }
         // config = m.split("|").map { key -> c[key] }.joinToString("") -> Base64 decode
 
         val manifestScript = document.select("script").find { it.data().contains("rjfr_") }
             ?: throw Exception("No reader manifest found. Open the chapter in WebView.")
         val scriptData = manifestScript.data()
-        val match = manifestPushRegex.find(scriptData) ?: throw Exception("Invalid manifest format")
+        val match = manifestObjectRegex.find(scriptData) ?: throw Exception("Invalid manifest format")
 
         val manifestJson = match.groupValues[1].parseAs<JsonObject>()
         val mOrder = manifestJson["m"]!!.jsonPrimitive.content.split("|")

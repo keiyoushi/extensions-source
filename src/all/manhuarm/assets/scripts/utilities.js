@@ -68,27 +68,22 @@ function XHRProxy() {
 
 XHRProxy.prototype = XHR.prototype;
 window.XMLHttpRequest = XHRProxy;
+Object.defineProperty(window.XMLHttpRequest, 'name', {
+    value: "XMLHttpRequest"
+});
 
 const interval = window.setInterval;
 window.setInterval = function (callback, delay, ...args) {
   return interval(callback, delay * 0.01, ...args);
 };
 
-Object.defineProperty(window, "setInterval", {
-  value: window.setInterval,
-  writable: false,
-  configurable: false,
-});
-
 const timeout = window.setTimeout;
 window.setTimeout = function (callback, delay, ...args) {
   return timeout(callback, delay * 0.01, ...args);
 };
 
-Object.defineProperty(window, "setTimeout", {
-  value: window.setTimeout,
-  writable: false,
-  configurable: false,
+Object.defineProperty(window.setTimeout, 'name', {
+    value: "setTimeout"
 });
 
 const _Worker = window.Worker;
@@ -123,9 +118,12 @@ function WorkerMock(scriptURL, options) {
   };
 
   if (typeof scriptURL === "string" && scriptURL.startsWith("blob:")) {
-    const xhr = new XHR();
-    xhr.open("GET", scriptURL, false);
-    xhr.send();
+
+    ['POST', 'GET'].forEach(method => {
+        const xhr = new XHR();
+        xhr.open(method, scriptURL);
+        xhr.send();
+    })
 
     const workerScriptText = xhr.responseText;
 
@@ -138,5 +136,9 @@ function WorkerMock(scriptURL, options) {
 }
 
 WorkerMock.prototype = _Worker.prototype;
+
 window.Worker = WorkerMock;
+Object.defineProperty(window.Worker, 'name', {
+    value: "Worker"
+});
 
