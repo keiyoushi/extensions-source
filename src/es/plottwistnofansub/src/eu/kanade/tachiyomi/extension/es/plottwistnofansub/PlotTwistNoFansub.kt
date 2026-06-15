@@ -173,7 +173,7 @@ class PlotTwistNoFansub : HttpSource() {
                     ?: ""
                 chapters.add(
                     SChapter.create().apply {
-                        setUrlWithoutDomain(url.substringAfter(baseUrl))
+                        setUrlWithoutDomain(url)
                         name = buildString {
                             append("Capítulo $num")
                             if (extend.isNotEmpty()) append(" - $extend")
@@ -205,7 +205,7 @@ class PlotTwistNoFansub : HttpSource() {
             if (apiData.data.html.isEmpty() || !apiData.data.hasMore) {
                 hasNextPage = false
             } else {
-                val fragment = org.jsoup.Jsoup.parseBodyFragment(apiData.data.html)
+                val fragment = org.jsoup.Jsoup.parseBodyFragment(apiData.data.html, baseUrl)
                 fragment.body().select("a.mn-detail-chapter-item").forEach { a ->
                     val url = a.attr("abs:href").ifEmpty { a.attr("href") }
                     if (url.isNotEmpty()) {
@@ -216,7 +216,7 @@ class PlotTwistNoFansub : HttpSource() {
                             ?: ""
                         chapters.add(
                             SChapter.create().apply {
-                                setUrlWithoutDomain(url.substringAfter(baseUrl))
+                                setUrlWithoutDomain(url)
                                 name = buildString {
                                     append("Capítulo $num")
                                     if (extend.isNotEmpty()) append(" - $extend")
