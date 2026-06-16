@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.extension.ja.mangasaison
 
 import android.util.Base64
-import keiyoushi.utils.dataRange
 import keiyoushi.utils.decodeHex
-import keiyoushi.utils.range
-import keiyoushi.utils.readEntry
+import keiyoushi.zip.dataRange
+import keiyoushi.zip.range
+import keiyoushi.zip.readEntry
 import okhttp3.Interceptor
 import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType

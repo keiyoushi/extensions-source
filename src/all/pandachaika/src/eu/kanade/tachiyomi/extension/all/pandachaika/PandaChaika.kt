@@ -9,12 +9,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.dataRange
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.range
-import keiyoushi.utils.readEntry
 import keiyoushi.utils.toJsonString
-import keiyoushi.utils.zipDirectory
+import keiyoushi.zip.dataRange
+import keiyoushi.zip.range
+import keiyoushi.zip.readEntry
+import keiyoushi.zip.zipDirectory
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType

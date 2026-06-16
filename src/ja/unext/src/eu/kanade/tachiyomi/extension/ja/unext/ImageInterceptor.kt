@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.extension.ja.unext
 
-import keiyoushi.utils.dataRange
-import keiyoushi.utils.fixedLength
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.range
-import keiyoushi.utils.readEntry
+import keiyoushi.zip.dataRange
+import keiyoushi.zip.fixedLength
+import keiyoushi.zip.range
+import keiyoushi.zip.readEntry
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol

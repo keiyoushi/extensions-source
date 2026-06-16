@@ -25,9 +25,9 @@ import keiyoushi.utils.graphQLGet
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseGraphQLAs
 import keiyoushi.utils.persistedQueryExtension
-import keiyoushi.utils.readZipEntry
 import keiyoushi.utils.toJsonString
-import keiyoushi.utils.zipDirectory
+import keiyoushi.zip.readZipEntry
+import keiyoushi.zip.zipDirectory
 import okhttp3.CacheControl.Companion.FORCE_NETWORK
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request

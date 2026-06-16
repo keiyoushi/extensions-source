@@ -16,9 +16,9 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLPost
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseGraphQLAs
-import keiyoushi.utils.readZipEntry
 import keiyoushi.utils.toJsonRequestBody
-import keiyoushi.utils.zipDirectory
+import keiyoushi.zip.readZipEntry
+import keiyoushi.zip.zipDirectory
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
