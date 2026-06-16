@@ -117,10 +117,13 @@ class ReaderScriptManager(
               }
               if (!manifestScript) throw new Error("No reader manifest found. Open the chapter in WebView.");
 
-              // The manifest object is injected either as `.push({"m":...,"c":{...}})` or as
-              // `window["rjfr_..."][...length]={"m":...,"c":{...}}`. Locate the `{"m":...}` object and
-              // brace-match it (respecting strings) so both forms — and the nested `c` object — parse.
-              var start = manifestScript.search(/\{\s*"m"\s*:/);
+              // The manifest object is injected either as `.push({...,"m":...,"c":{...}})` or as
+              // `window["rjfr_..."][...length]={...,"m":...,"c":{...}}`. The first key is randomized
+              // (e.g. {"rj<hex>":1,"m":...}), so anchor on the "m" key and walk back to the enclosing
+              // "{" rather than requiring "m" to be first, then brace-match forward (respecting strings).
+              var mKey = manifestScript.search(/"m"\s*:/);
+              if (mKey < 0) throw new Error("Invalid manifest format");
+              var start = manifestScript.lastIndexOf("{", mKey);
               if (start < 0) throw new Error("Invalid manifest format");
               var manifest = JSON.parse(extractObject(manifestScript, start));
 
