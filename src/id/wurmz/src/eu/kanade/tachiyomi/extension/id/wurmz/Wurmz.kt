@@ -86,7 +86,7 @@ class Wurmz : HttpSource() {
             SManga.create().apply {
                 val link = element.selectFirst("a")!!
                 setUrlWithoutDomain(link.absUrl("href"))
-                title = link.attr("aria-label").ifEmpty { element.selectFirst("h2")?.text() ?: "" }
+                title = link.attr("aria-label").ifEmpty { element.selectFirst("h2")!!.text() }
                 thumbnail_url = element.selectFirst("img")?.absUrl("src")
             }
         }
