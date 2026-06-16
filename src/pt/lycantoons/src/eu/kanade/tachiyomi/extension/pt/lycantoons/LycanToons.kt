@@ -31,6 +31,7 @@ class LycanToons : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
+        .addInterceptor(WebViewInterceptor(headers["User-Agent"]))
         .rateLimit(2)
         .build()
 
