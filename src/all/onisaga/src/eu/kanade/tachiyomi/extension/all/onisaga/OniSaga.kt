@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.onisaga
 
 import android.content.SharedPreferences
+import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -23,6 +24,7 @@ import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -46,7 +48,43 @@ class OniSaga(
     }
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3)
+        .rateLimit(4)
+        .build()
+
+    private val apiLock = Any()
+
+    @Volatile private var lastRequestTime = 0L
+
+    private val strictApiInterceptor = Interceptor { chain ->
+        synchronized(apiLock) {
+            val now = System.currentTimeMillis()
+            val waitTime = (2000L - (now - lastRequestTime)).coerceAtLeast(0L)
+
+            // Using rateLimit from keiyoushi.network.rateLimit was too aggressive, leading to 429 errors when it was fine after the rest of the images loaded
+            // Note: Error 429 lasts for approximately 15-30 minutes. Had to jump between many VPN servers to reach this conclusion
+            if (waitTime > 0) {
+                Thread.sleep(waitTime)
+            }
+
+            var response = chain.proceed(chain.request())
+
+            var attempt = 0
+            while (response.code == 429 && attempt < 3) {
+                val retryAfter = response.header("retry-after")?.toLongOrNull()?.times(1000L) ?: 2000L
+                response.close()
+
+                Thread.sleep(retryAfter)
+                response = chain.proceed(chain.request())
+                attempt++
+            }
+
+            lastRequestTime = System.currentTimeMillis()
+            response
+        }
+    }
+
+    private val pageClient: OkHttpClient = client.newBuilder()
+        .addInterceptor(strictApiInterceptor)
         .build()
 
     private val preferences: SharedPreferences by getPreferencesLazy()
@@ -64,7 +102,12 @@ class OniSaga(
     // =============================== Popular Manga ===============================
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
-        fetchMangaLivewirePage("$baseUrl/browse", page, PostFilterUpdatesDto(sort = "view"))
+        val updates = PostFilterUpdatesDto(
+            platform = typePref(),
+            status = statusPref(),
+            sort = "view",
+        )
+        fetchMangaLivewirePage("$baseUrl/browse", page, updates)
     }
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
@@ -73,7 +116,11 @@ class OniSaga(
     // ================================ Latest Manga ================================
 
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = Observable.fromCallable {
-        fetchMangaLivewirePage("$baseUrl/browse", page)
+        val updates = PostFilterUpdatesDto(
+            platform = typePref(),
+            status = statusPref(),
+        )
+        fetchMangaLivewirePage("$baseUrl/browse", page, updates)
     }
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
@@ -497,17 +544,16 @@ class OniSaga(
             if (url.isEmpty()) return@forEach
 
             val textEl = el.selectFirst("p[data-flux-text]")
-            val details = textEl?.text()?.replace(" - ", " · ")?.split("\\s*·\\s*".toRegex())?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+            val details = textEl?.text()?.replace(" - ", " · ")?.split("\\s*·\\s*".toRegex())?.filter { it.isNotEmpty() } ?: emptyList()
 
-            val language = details.firstOrNull { it.trim() in langKeys }?.trim()
-                ?: details.lastOrNull { it.contains("language", ignoreCase = true) }?.trim()
-                ?: details.lastOrNull()?.trim()
+            val language = details.firstOrNull { it in langKeys }
+                ?: details.lastOrNull { it.lowercase().contains("language") }
+                ?: details.lastOrNull()
                 ?: ""
 
             val dateStr = details.firstOrNull {
-                it.contains("ago", ignoreCase = true) ||
-                    it.equals("today", ignoreCase = true) ||
-                    it.equals("yesterday", ignoreCase = true)
+                val lower = it.lowercase()
+                lower.contains("ago") || lower == "today" || lower == "yesterday"
             } ?: ""
 
             if (langId == null || language == langId) {
@@ -588,8 +634,11 @@ class OniSaga(
         val value = match.groupValues[1].toInt()
         val unit = match.groupValues[2]
 
+        val now = System.currentTimeMillis()
+
         return when (unit) {
-            "minute", "hour" -> calendar.timeInMillis
+            "minute" -> now - (value * 60_000L)
+            "hour" -> now - (value * 3_600_000L)
             "day" -> {
                 calendar.add(Calendar.DAY_OF_YEAR, -value)
                 calendar.timeInMillis
@@ -614,7 +663,6 @@ class OniSaga(
 
     @Volatile
     private var currentReaderToken: String = ""
-    private val pageLoadLock = Any()
 
     override fun pageListParse(response: Response): List<Page> {
         val body = response.body.string()
@@ -638,52 +686,42 @@ class OniSaga(
         val order = page.index
         val apiUrl = "$baseUrl/api/chapter/$cid/page/$order"
 
-        // Using rateLimit from keiyoushi.network.rateLimit was too aggressive, leading to 429 errors when it was fine after the rest of the images loaded
-        // Note: Error 429 lasts for approximately 15-30 minutes. Had to jump between many VPN servers to reach this conclusion
         return Observable.fromCallable {
-            synchronized(pageLoadLock) {
-                Thread.sleep(1500)
+            var token = currentReaderToken
+            var attempt = 0
 
-                val token = currentReaderToken
+            while (attempt < 3) {
+                attempt++
 
-                client.newCall(GET(apiUrl, apiHeaders(token, chapterUrl))).execute().use { response ->
-                    if (response.code == 429) {
-                        throw Exception("Rate limited by server (HTTP 429). Slow down requests.")
-                    }
+                val response = pageClient.newCall(GET(apiUrl, apiHeaders(token, chapterUrl))).execute()
 
-                    if (!response.isSuccessful) {
-                        Thread.sleep(1250)
-                        val refreshBody = client.newCall(GET(chapterUrl, headers)).execute().use { it.body.string() }
-                        val newToken = READER_TOKEN_REGEX.find(refreshBody)?.groupValues?.get(1) ?: ""
-                        if (newToken.isNotBlank()) {
-                            currentReaderToken = newToken
-                        }
-
-                        Thread.sleep(1250)
-
-                        val retriedToken = currentReaderToken
-                        client.newCall(GET(apiUrl, apiHeaders(retriedToken, chapterUrl))).execute().use { retryResponse ->
-                            if (retryResponse.code == 429) throw Exception("HTTP 429 during token retry.")
-
-                            retryResponse.header("x-reader-token-next")?.takeIf { it.isNotBlank() }?.let {
-                                currentReaderToken = it
-                            }
-
-                            val retryDto = retryResponse.parseAs<PageApiResponse>()
-                            if (retryDto.url != null) return@fromCallable retryDto.url
-                            throw Exception("API Error after token refresh: ${retryDto.message}")
-                        }
-                    }
-
-                    response.header("x-reader-token-next")?.takeIf { it.isNotBlank() }?.let {
-                        currentReaderToken = it
-                    }
-
-                    val dto = response.parseAs<PageApiResponse>()
-                    if (dto.url != null) return@fromCallable dto.url
-                    throw Exception("API Error: ${dto.message}")
+                response.header("x-reader-token-next")?.takeIf { it.isNotBlank() }?.let {
+                    currentReaderToken = it
                 }
+
+                val dto = response.parseAs<PageApiResponse>()
+
+                if (dto.url != null) {
+                    return@fromCallable dto.url
+                }
+
+                if (!response.isSuccessful || dto.message?.contains("expired", ignoreCase = true) == true) {
+                    val refreshBody = client.newCall(GET(chapterUrl, headers)).execute().use { it.body.string() }
+                    val newToken = READER_TOKEN_REGEX.find(refreshBody)?.groupValues?.get(1)
+
+                    if (newToken.isNullOrBlank()) {
+                        throw Exception("Failed to refresh reader token (HTTP ${response.code})")
+                    }
+
+                    token = newToken
+                    currentReaderToken = newToken
+                    continue
+                }
+
+                throw Exception("API Error: ${dto.message}")
             }
+
+            throw Exception("Failed to fetch image after 3 retries.")
         }
     }
 
@@ -700,7 +738,6 @@ class OniSaga(
         .set("X-Reader-Token", token)
         .set("Sec-Fetch-Mode", "cors")
         .set("Sec-Fetch-Site", "same-origin")
-        .set("Accept", "*/*")
         .set("Referer", referer)
         .build()
 
@@ -732,6 +769,9 @@ class OniSaga(
         }
     }
 
+    private fun typePref(): String = preferences.getString(PREF_TYPE_KEY, "")!!
+    private fun statusPref(): String = preferences.getString(PREF_STATUS_KEY, "")!!
+
     // =============================== Preferences =================================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -747,6 +787,26 @@ class OniSaga(
             setDefaultValue(false)
         }
         screen.addPreference(nsfwPref)
+
+        val typePref = ListPreference(screen.context).apply {
+            key = PREF_TYPE_KEY
+            title = "Type Filter"
+            entries = arrayOf("All", "Manga", "Manhwa", "Manhua", "Novel", "One-Shot", "Doujinshi")
+            entryValues = arrayOf("", "MANGA", "MANHWA", "MANHUA", "NOVEL", "ONE-SHOT", "DOUJINSHI")
+            setDefaultValue("")
+            summary = "Applies to Popular & Latest"
+        }
+        screen.addPreference(typePref)
+
+        val statusPref = ListPreference(screen.context).apply {
+            key = PREF_STATUS_KEY
+            title = "Status Filter"
+            entries = arrayOf("All", "Ongoing", "Completed", "Hiatus", "Releasing")
+            entryValues = arrayOf("", "ongoing", "completed", "hiatus", "releasing")
+            setDefaultValue("")
+            summary = "Applies to Popular & Latest"
+        }
+        screen.addPreference(statusPref)
 
         val normalGenrePref = MultiSelectListPreference(screen.context).apply {
             key = PREF_EXCLUDE_GENRE
@@ -780,6 +840,8 @@ class OniSaga(
 
     companion object {
         private const val PREF_NSFW_KEY = "pref_nsfw"
+        private const val PREF_TYPE_KEY = "pref_type"
+        private const val PREF_STATUS_KEY = "pref_status"
         private const val PREF_EXCLUDE_GENRE = "pref_exclude_genre"
         private const val PREF_EXCLUDE_GENRE_ADULT = "pref_exclude_genre_adult"
 
