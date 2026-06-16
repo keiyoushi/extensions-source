@@ -45,11 +45,7 @@ class OniSaga(
     }
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(2)
-        .build()
-
-    private val apiClient: OkHttpClient = client.newBuilder()
-        .rateLimit(1)
+        .rateLimit(3)
         .build()
 
     private val preferences: SharedPreferences by getPreferencesLazy()
@@ -556,65 +552,66 @@ class OniSaga(
         val token = READER_TOKEN_REGEX.find(body)?.groupValues?.get(1) ?: ""
         if (token.isBlank()) throw Exception("Could not find readerToken in chapter page")
 
-        // Store the initial token in the shared variable for fetchImageUrl to use
         currentReaderToken = token
 
         val chapterUrl = response.request.url.toString()
-        val orders = PAGE_ORDER_REGEX.findAll(body).map { it.groupValues[1] }.toList()
+        val pageCount = PAGE_ORDER_REGEX.findAll(body).count()
 
-        return orders.mapIndexed { index, order ->
-            Page(index, url = "$chapterUrl#$order")
+        return (0 until pageCount).map { index ->
+            Page(index, url = "$chapterUrl#$index")
         }
     }
 
     override fun fetchImageUrl(page: Page): Observable<String> {
         val chapterUrl = page.url.substringBeforeLast("#")
-        val order = page.url.substringAfterLast("#")
-
         val cid = chapterUrl.toHttpUrl().pathSegments.last()
+        val order = page.index
         val apiUrl = "$baseUrl/api/chapter/$cid/page/$order"
 
+        // Using rateLimit from keiyoushi.network.rateLimit was too aggressive, leading to 429 errors when it was fine after the rest of the images loaded
+        // Note: Error 429 lasts for approximately 15-30 minutes. Had to jump between many VPN servers to reach this conclusion
         return Observable.fromCallable {
             synchronized(pageLoadLock) {
-                var token = currentReaderToken
+                Thread.sleep(1500)
 
-                apiClient.newCall(GET(apiUrl, apiHeaders(token, chapterUrl))).execute().use { response ->
-                    // Check for token rotation
-                    response.header("x-reader-token-next")?.takeIf { it.isNotBlank() }?.let {
-                        currentReaderToken = it
+                val token = currentReaderToken
+
+                client.newCall(GET(apiUrl, apiHeaders(token, chapterUrl))).execute().use { response ->
+                    if (response.code == 429) {
+                        throw Exception("Rate limited by server (HTTP 429). Slow down requests.")
                     }
 
-                    val dto = response.parseAs<PageApiResponse>()
-
-                    if (dto.url != null) return@fromCallable dto.url
-
-                    if (dto.message?.contains("expired", true) == true || !response.isSuccessful) {
-                        // Token expired — re-fetch the chapter HTML to get a fresh token
+                    if (!response.isSuccessful) {
+                        Thread.sleep(1250)
                         val refreshBody = client.newCall(GET(chapterUrl, headers)).execute().use { it.body.string() }
-                        token = READER_TOKEN_REGEX.find(refreshBody)?.groupValues?.get(1) ?: ""
-
-                        if (token.isBlank()) {
-                            throw Exception("Could not find readerToken in refreshed chapter page")
+                        val newToken = READER_TOKEN_REGEX.find(refreshBody)?.groupValues?.get(1) ?: ""
+                        if (newToken.isNotBlank()) {
+                            currentReaderToken = newToken
                         }
 
-                        currentReaderToken = token
+                        Thread.sleep(1250)
 
-                        // Retry the API call with the fresh token
-                        apiClient.newCall(GET(apiUrl, apiHeaders(token, chapterUrl))).execute().use { retryResponse ->
-                            // Check for token rotation on retry response too
+                        val retriedToken = currentReaderToken
+                        client.newCall(GET(apiUrl, apiHeaders(retriedToken, chapterUrl))).execute().use { retryResponse ->
+                            if (retryResponse.code == 429) throw Exception("HTTP 429 during token retry.")
+
                             retryResponse.header("x-reader-token-next")?.takeIf { it.isNotBlank() }?.let {
                                 currentReaderToken = it
                             }
 
                             val retryDto = retryResponse.parseAs<PageApiResponse>()
                             if (retryDto.url != null) return@fromCallable retryDto.url
-                            val msg = retryDto.message ?: "No URL in API response"
-                            throw Exception("API Error: $msg (HTTP ${retryResponse.code})")
+                            throw Exception("API Error after token refresh: ${retryDto.message}")
                         }
                     }
 
-                    val msg = dto.message ?: "No URL in API response"
-                    throw Exception("API Error: $msg (HTTP ${response.code})")
+                    response.header("x-reader-token-next")?.takeIf { it.isNotBlank() }?.let {
+                        currentReaderToken = it
+                    }
+
+                    val dto = response.parseAs<PageApiResponse>()
+                    if (dto.url != null) return@fromCallable dto.url
+                    throw Exception("API Error: ${dto.message}")
                 }
             }
         }

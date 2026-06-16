@@ -72,5 +72,6 @@ class PostFilterUpdatesDto(
 @Serializable
 class PageApiResponse(
     val url: String? = null,
+    val order: Int? = null,
     val message: String? = null,
 )
