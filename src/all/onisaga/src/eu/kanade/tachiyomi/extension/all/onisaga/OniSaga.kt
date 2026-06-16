@@ -29,6 +29,7 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import rx.Observable
+import java.util.Calendar
 
 class OniSaga(
     override val lang: String,
@@ -372,11 +373,7 @@ class OniSaga(
             .takeIf { it.isNotEmpty() && !it.startsWith("data:") }
             ?: return null
 
-        return when {
-            src.startsWith("http") -> src
-            src.startsWith("//") -> "https:$src"
-            else -> baseUrl.toHttpUrl().newBuilder().addEncodedPathSegments(src.removePrefix("/")).build().toString()
-        }
+        return baseUrl.toHttpUrl().resolve(src)?.toString()
     }
 
     // =============================== Related Manga ===============================
@@ -491,14 +488,27 @@ class OniSaga(
     private fun parseChaptersFromDoc(doc: Document, langId: String?): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
 
+        // Structure 1: Direct chapter links
         doc.select("a[wire:key^=ch-]").forEach { el ->
-            val number = el.selectFirst("div.w-10")?.text() ?: return@forEach
+            val headingText = el.selectFirst("div[data-flux-heading]")?.text()?.replace("Chapter ", "")?.trim()
+            val number = headingText?.ifBlank { null } ?: el.selectFirst("div.w-10")?.text() ?: return@forEach
+
             val url = el.absUrl("href").ifEmpty { el.attr("href") }
             if (url.isEmpty()) return@forEach
 
             val textEl = el.selectFirst("p[data-flux-text]")
-            val details = textEl?.text()?.split("\\s*·\\s*".toRegex())?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
-            val language = details.firstOrNull { it.trim() in langKeys }?.trim() ?: details.lastOrNull()?.trim() ?: ""
+            val details = textEl?.text()?.replace(" - ", " · ")?.split("\\s*·\\s*".toRegex())?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+
+            val language = details.firstOrNull { it.trim() in langKeys }?.trim()
+                ?: details.lastOrNull { it.contains("language", ignoreCase = true) }?.trim()
+                ?: details.lastOrNull()?.trim()
+                ?: ""
+
+            val dateStr = details.firstOrNull {
+                it.contains("ago", ignoreCase = true) ||
+                    it.equals("today", ignoreCase = true) ||
+                    it.equals("yesterday", ignoreCase = true)
+            } ?: ""
 
             if (langId == null || language == langId) {
                 val chapterLang = if (langKey == null && language.isNotEmpty()) language else null
@@ -507,21 +517,37 @@ class OniSaga(
                     SChapter.create().apply {
                         name = "Chapter $number"
                         scanlator = chapterLang
+                        date_upload = parseChapterDate(dateStr)
                         setUrlWithoutDomain(url)
                     },
                 )
             }
         }
 
+        // Structure 2: Dropdown menus (multi-language chapters)
         doc.select("ui-dropdown[wire:key^=ch-]").forEach { dropdown ->
             val button = dropdown.selectFirst("button") ?: return@forEach
-            val number = button.selectFirst("div.w-10")?.text() ?: return@forEach
 
+            val headingText = dropdown.selectFirst("div[data-flux-heading]")?.text()?.replace("Chapter ", "")?.trim()
+            val number = headingText?.ifBlank { null } ?: button.selectFirst("div.w-10")?.text() ?: return@forEach
+
+            val textEl = dropdown.selectFirst("p[data-flux-text]")
+            val details = textEl?.text()?.replace(" - ", " · ")?.split("\\s*·\\s*".toRegex())?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+
+            val dateStr = details.firstOrNull {
+                it.contains("ago", ignoreCase = true) ||
+                    it.equals("today", ignoreCase = true) ||
+                    it.equals("yesterday", ignoreCase = true)
+            } ?: ""
+
+            // Loop through the individual language links inside the dropdown
             dropdown.select("ui-menu a[data-flux-menu-item]").forEach { linkEl ->
                 val url = linkEl.absUrl("href").ifEmpty { linkEl.attr("href") }
                 if (url.isEmpty()) return@forEach
 
-                val language = linkEl.selectFirst("div[data-flux-badge]")?.text() ?: ""
+                // The language is isolated inside the link's badge, fallback to link text
+                val language = linkEl.selectFirst("div[data-flux-badge]")?.text()?.trim()
+                    ?: linkEl.text().trim()
 
                 if (langId == null || language == langId) {
                     val chapterLang = if (langKey == null && language.isNotEmpty()) language else null
@@ -530,6 +556,7 @@ class OniSaga(
                         SChapter.create().apply {
                             name = "Chapter $number"
                             scanlator = chapterLang
+                            date_upload = parseChapterDate(dateStr)
                             setUrlWithoutDomain(url)
                         },
                     )
@@ -538,6 +565,51 @@ class OniSaga(
         }
 
         return chapters
+    }
+
+    private fun parseChapterDate(dateStr: String): Long {
+        val date = dateStr.lowercase().trim()
+        if (date.isEmpty()) return 0L
+
+        val calendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+
+        if (date.contains("today")) return calendar.timeInMillis
+        if (date.contains("yesterday")) {
+            calendar.add(Calendar.DAY_OF_YEAR, -1)
+            return calendar.timeInMillis
+        }
+
+        val regex = Regex("(\\d+)\\s+(minute|hour|day|week|month|year)s?\\s+ago")
+        val match = regex.find(date) ?: return 0L
+
+        val value = match.groupValues[1].toInt()
+        val unit = match.groupValues[2]
+
+        return when (unit) {
+            "minute", "hour" -> calendar.timeInMillis
+            "day" -> {
+                calendar.add(Calendar.DAY_OF_YEAR, -value)
+                calendar.timeInMillis
+            }
+            "week" -> {
+                calendar.add(Calendar.WEEK_OF_YEAR, -value)
+                calendar.timeInMillis
+            }
+            "month" -> {
+                calendar.add(Calendar.MONTH, -value)
+                calendar.timeInMillis
+            }
+            "year" -> {
+                calendar.add(Calendar.YEAR, -value)
+                calendar.timeInMillis
+            }
+            else -> 0L
+        }
     }
 
     // ============================== Pages & Images ===============================
