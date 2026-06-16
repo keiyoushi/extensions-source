@@ -3,6 +3,7 @@ import keiyoushi.gradle.extensions.alias
 import keiyoushi.gradle.extensions.compileOnly
 import keiyoushi.gradle.extensions.implementation
 import keiyoushi.gradle.extensions.kei
+import keiyoushi.gradle.extensions.libVersion
 import keiyoushi.gradle.extensions.libs
 import keiyoushi.gradle.extensions.plugins
 import org.gradle.api.Plugin
@@ -39,6 +40,11 @@ class PluginMultiSrc : Plugin<Project> {
 
         dependencies {
             compileOnly(libs.bundles.common)
+            if (libVersion == "1.6") {
+                compileOnly(libs.tachiyomi.lib.v16)
+            } else {
+                compileOnly(libs.tachiyomi.lib.v14)
+            }
             implementation(project(":core"))
         }
     }

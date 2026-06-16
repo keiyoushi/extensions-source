@@ -40,6 +40,7 @@ class PluginLibrary : Plugin<Project> {
 
         dependencies {
             compileOnly(libs.bundles.common)
+            compileOnly(libs.tachiyomi.lib.v16)
             implementation(project(":core"))
         }
     }
