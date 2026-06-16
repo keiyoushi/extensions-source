@@ -48,7 +48,7 @@ abstract class Manhwa18Cc(
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/webtoons/$page?orderby=trending", headers)
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/webtoons/$page?orderby=latest", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/webtoons/$page", headers)
 
     override fun searchMangaSelector() = popularMangaSelector()
 
