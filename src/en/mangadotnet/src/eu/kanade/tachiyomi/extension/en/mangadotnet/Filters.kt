@@ -6,9 +6,9 @@ class SortFilter :
     Filter.Sort(
         name = "Sort",
         values = sortOrders.map { it.first }.toTypedArray(),
-        state = Selection(1, false),
+        state = Selection(0, false),
     ) {
-    val sort get() = sortOrders[state?.index ?: 1].second
+    val sort get() = sortOrders[state?.index ?: 0].second
     val ascending get() = state?.ascending ?: false
 }
 
