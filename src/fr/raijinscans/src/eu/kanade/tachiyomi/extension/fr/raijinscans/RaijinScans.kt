@@ -261,14 +261,28 @@ class RaijinScans :
             .build()
 
         return runBlocking {
-            pageListInterpreter.getPages(
-                script = scriptManager.getScript(),
-                baseUrl = baseUrl,
-                chapterUrl = chapterUrl,
-                html = html,
-                ajaxHeaders = ajaxHeaders,
-                maxPageRequests = MAX_PAGE_REQUESTS,
-            )
+            val attempt: suspend (String) -> List<Page> = { script ->
+                pageListInterpreter.getPages(
+                    script = script,
+                    baseUrl = baseUrl,
+                    chapterUrl = chapterUrl,
+                    html = html,
+                    ajaxHeaders = ajaxHeaders,
+                    maxPageRequests = MAX_PAGE_REQUESTS,
+                )
+            }
+
+            val script = scriptManager.getScript()
+            try {
+                attempt(script)
+            } catch (e: Exception) {
+                // The script that just ran may be a stale/broken cached copy while a fixed one is
+                // already published. Force a fresh fetch and retry once; if it's identical there's
+                // no point retrying, so surface the original error.
+                val fresh = scriptManager.refreshScript()
+                if (fresh == script) throw e
+                attempt(fresh)
+            }
         }
     }
 

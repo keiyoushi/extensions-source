@@ -54,6 +54,13 @@ class ReaderScriptManager(
         return fetchWithRetry()
     }
 
+    /**
+     * Force a fresh fetch, bypassing both caches. Used to recover when a script returned by
+     * [getScript] fails at *runtime*: the cached copy may be stale/broken while the remote one has
+     * already been fixed. Updates the cache with whatever it resolves (remote or [DEFAULT_SCRIPT]).
+     */
+    fun refreshScript(): String = fetchWithRetry()
+
     private fun fetchWithRetry(): String {
         return (1..3).firstNotNullOfOrNull {
             runCatching {
