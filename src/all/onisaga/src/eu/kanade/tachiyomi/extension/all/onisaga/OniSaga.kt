@@ -540,12 +540,10 @@ class OniSaga(
                     it.equals("yesterday", ignoreCase = true)
             } ?: ""
 
-            // Loop through the individual language links inside the dropdown
             dropdown.select("ui-menu a[data-flux-menu-item]").forEach { linkEl ->
                 val url = linkEl.absUrl("href").ifEmpty { linkEl.attr("href") }
                 if (url.isEmpty()) return@forEach
 
-                // The language is isolated inside the link's badge, fallback to link text
                 val language = linkEl.selectFirst("div[data-flux-badge]")?.text()?.trim()
                     ?: linkEl.text().trim()
 
