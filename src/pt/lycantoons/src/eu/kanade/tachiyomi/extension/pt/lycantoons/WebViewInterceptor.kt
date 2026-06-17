@@ -8,6 +8,8 @@ import android.util.Base64
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import keiyoushi.utils.toJsonString
+import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Protocol
@@ -16,6 +18,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import uy.kohesive.injekt.injectLazy
+import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -38,15 +41,14 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
             null
         }
 
-        val contentType = req.body?.contentType()?.toString()
+        val resultData = fetchViaJs(url, req.method, req.headers, requestBody, isImage)
+        if (!resultData.success) throw IOException("[JS]: " + resultData.result)
 
-        val resultData = fetchViaJs(url, req.method, requestBody, contentType, isImage)
-            ?: error("Failed webview fetch for: $url")
-
+        val resultConentType = resultData.contentType ?: "text/html"
         return if (isImage) {
-            Base64.decode(resultData, Base64.DEFAULT).toResponse(req, "image/jpeg")
+            Base64.decode(resultData.result, Base64.DEFAULT).toResponse(req, resultConentType)
         } else {
-            resultData.toResponse(req, "text/html")
+            resultData.result.toResponse(req, resultConentType)
         }
     }
 
@@ -54,12 +56,12 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
     private fun fetchViaJs(
         url: String,
         method: String,
+        headers: Headers,
         requestBody: String?,
-        contentType: String?,
         isImage: Boolean,
-    ): String? {
+    ): FetchResult {
         val latch = CountDownLatch(1)
-        var result: String? = null
+        lateinit var result: FetchResult
         var localWebView: WebView? = null
 
         mainHandler.post {
@@ -69,19 +71,20 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
                     javaScriptEnabled = true
                     domStorageEnabled = true
                     databaseEnabled = true
-                    if (!userAgent.isNullOrBlank()) userAgentString = userAgent
+                    userAgentString = userAgent
                 }
 
                 webView.addJavascriptInterface(
                     object {
                         @JavascriptInterface
-                        fun passResult(data: String) {
-                            result = data
+                        fun passResult(data: String, contentType: String?) {
+                            result = FetchResult(true, data, contentType)
                             latch.countDown()
                         }
 
                         @JavascriptInterface
                         fun passError(error: String) {
+                            result = FetchResult(false, error)
                             latch.countDown()
                         }
                     },
@@ -94,6 +97,7 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
                             """
                             .then(res => {
                                 if (!res.ok) throw new Error('HTTP ' + res.status);
+                                contentType = res.headers.get('content-type')
                                 return res.blob();
                             })
                             .then(blob => {
@@ -101,7 +105,7 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
                                 reader.onloadend = function() {
                                     if (!reader.result) { window.Bridge.passError('Empty payload'); return; }
                                     var parts = reader.result.split(',');
-                                    window.Bridge.passResult(parts.length > 1 ? parts[1] : parts[0]);
+                                    window.Bridge.passResult(parts.length > 1 ? parts[1] : parts[0], contentType);
                                 };
                                 reader.onerror = function() { window.Bridge.passError('Reader failed'); };
                                 reader.readAsDataURL(blob);
@@ -111,17 +115,25 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
                             """
                             .then(res => {
                                 if (!res.ok) throw new Error('HTTP ' + res.status);
+                                contentType = res.headers.get('content-type')
                                 return res.text();
                             })
-                            .then(text => window.Bridge.passResult(text))
+                            .then(text => window.Bridge.passResult(text, contentType))
                             """
                         }
 
-                        val jsHeaders = if (contentType != null) "{ 'Content-Type': '$contentType' }" else "{}"
+                        val jsHeaders = buildMap {
+                            headers.names().forEach { name ->
+                                put(name, headers[name])
+                            }
+                        }.toJsonString()
+
                         val requestBody = if (requestBody != null) "body: `$requestBody`," else ""
 
                         val jsFetchScript = """
                             (function() {
+                                let contentType;
+
                                 fetch('$url', {
                                     method: '$method',
                                     credentials: 'include',
@@ -154,7 +166,7 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
             } catch (_: Throwable) {}
         }
 
-        return if (completed) result else null
+        return if (completed) result else FetchResult(false, "Timed out")
     }
 
     private fun String.toResponse(request: Request, contentType: String): Response = this.toByteArray(Charsets.UTF_8).toResponse(request, contentType)
@@ -164,6 +176,7 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
         .protocol(Protocol.HTTP_1_1)
         .code(200)
         .message("OK")
+        .header("Content-Type", contentType)
         .body(this.toResponseBody(contentType.toMediaTypeOrNull()))
         .build()
 }
