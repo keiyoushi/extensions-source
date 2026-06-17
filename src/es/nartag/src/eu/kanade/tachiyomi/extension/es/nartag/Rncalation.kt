@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.nartag
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,6 +13,7 @@ import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -138,7 +138,7 @@ class Rncalation : HttpSource() {
 
         document.select("template#chapters-extra").firstOrNull()?.let { template ->
             val extraHtml = template.html()
-            val extraDoc = org.jsoup.Jsoup.parseBodyFragment(extraHtml, response.request.url.toString())
+            val extraDoc = Jsoup.parseBodyFragment(extraHtml, response.request.url.toString())
             extraDoc.select("a").forEach { element ->
                 chapters.add(chapterFromElement(element))
             }
@@ -183,48 +183,7 @@ class Rncalation : HttpSource() {
         GenreFilter(genresList.map { Genre(it) }),
     )
 
-    private class TypeFilter : Filter.Select<String>("Tipo", arrayOf("Todos", "Manga", "Manhwa", "Manhua", "Novel", "Other"))
-
-    private class StatusFilter : Filter.Select<String>("Estado", arrayOf("Todos", "Ongoing", "Completed", "Hiatus", "Cancelled"))
-
-    private class SortFilter : Filter.Select<SortOption>("Ordenar por", sortOptions)
-
-    private class SortOption(val name: String, val value: String) {
-        override fun toString(): String = name
-    }
-
-    private class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("Géneros", genres)
-    private class Genre(name: String) : Filter.CheckBox(name)
-
     companion object {
-        private val sortOptions = arrayOf(
-            SortOption("Más reciente", "latest"),
-            SortOption("Actualizado", "updated"),
-            SortOption("Más visto", "views"),
-            SortOption("Mejor valorado", "rating"),
-            SortOption("A-Z", "title"),
-        )
-
-        private val genresList = listOf(
-            "Acción",
-            "Adventure",
-            "Aventura",
-            "ciencia ficción",
-            "Comedia",
-            "Cultivación",
-            "Drama",
-            "Fantasia",
-            "Fantasía",
-            "Harem",
-            "Love",
-            "Manhua",
-            "Reencarnacion",
-            "Romance",
-            "Sistema",
-            "Supernatural",
-            "+15",
-        )
-
         private val NON_DIGIT_REGEX = Regex("[^0-9]")
     }
 }

@@ -1,7 +1,7 @@
 ext {
     extName = 'Rncalation'
     extClass = '.Rncalation'
-    extVersionCode = 7
+    extVersionCode = 58
     isNsfw = true
 }
 
