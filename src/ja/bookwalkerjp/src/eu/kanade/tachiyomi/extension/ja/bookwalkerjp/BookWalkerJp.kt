@@ -17,6 +17,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.publus.Decoder
@@ -27,7 +28,6 @@ import keiyoushi.lib.publus.generatePages
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -37,7 +37,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
@@ -70,74 +69,81 @@ class BookWalkerJp :
         .addInterceptor(::coverFallbackIntercept)
         .build()
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/category/2/".toHttpUrl().newBuilder()
             .addQueryParameter("order", "rank")
             .addQueryParameter("np", "0")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, desktopHeaders)
+        return client.newCall(GET(url, desktopHeaders)).awaitSuccess().asJsoup().toMangasPage()
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/category/2/".toHttpUrl().newBuilder()
             .addQueryParameter("order", "release")
             .addQueryParameter("np", "0")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, desktopHeaders)
+        return client.newCall(GET(url, desktopHeaders)).awaitSuccess().asJsoup().toMangasPage()
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/search/".toHttpUrl().newBuilder()
             .addQueryParameter("word", query)
             .addQueryParameter("order", "score")
             .addQueryParameter("np", "1")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, desktopHeaders)
+        return client.newCall(GET(url, desktopHeaders)).awaitSuccess().asJsoup().toMangasPage()
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(".m-tile").map {
+    private fun Document.toMangasPage(): MangasPage {
+        val mangas = select(".m-tile").map {
             SManga.create().apply {
                 title = it.selectFirst("a.m-book-item__title")!!.text()
                 val cover = it.selectFirst(".m-thumb__image img")?.absUrl("data-original")
                 thumbnail_url = cover.getHiResCoverFromLegacyUrl() ?: cover
                 val href = it.selectFirst("a.m-book-item__title")!!.absUrl("href").toHttpUrl().pathSegments
-                val path = if (href.first() == "series") href[1] else href[0]
-                setUrlWithoutDomain(path)
+                setUrlWithoutDomain(if (href.first() == "series") href[1] else href[0])
             }
         }
-        return MangasPage(mangas, document.hasNextPage())
+        return MangasPage(mangas, hasNextPage())
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
+    override suspend fun getMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val details = if (fetchDetails || (fetchChapters && manga.url.startsWith("de"))) {
+            fetchBookDetails(manga)
+        } else {
+            null
+        }
+        val seriesId = details?.seriesId?.toString() ?: manga.url
+
+        return SMangaUpdate(
+            manga = if (fetchDetails) details!!.toSManga() else manga,
+            chapters = if (fetchChapters) chapterList(seriesId) else chapters,
+        )
+    }
+
+    override fun getMangaUrl(manga: SManga): String {
+        val seriesId = manga.url.takeUnless { it.startsWith("de") } ?: runBlocking { resolveSeriesId(manga) }
+        return "$baseUrl/series/$seriesId/list/"
+    }
+
+    private suspend fun fetchBookDetails(manga: SManga): DetailsResponse {
         val bookId = if (manga.url.startsWith("de")) {
             manga.url
         } else {
-            client.newCall(seriesListRequest(manga.url, 1)).execute().asJsoup().firstBookId()
+            client.newCall(seriesListRequest(manga.url, 1)).awaitSuccess().asJsoup().firstBookId()
         }
-        return booksUpdatesRequest(bookId)
+        return client.newCall(booksUpdatesRequest(bookId)).awaitSuccess().parseAs<List<DetailsResponse>>().first()
     }
 
-    override fun getMangaUrl(manga: SManga): String = runBlocking(Dispatchers.IO) {
-        client.newCall(mangaDetailsRequest(manga)).execute()
-            .parseAs<List<DetailsResponse>>().first().seriesId
-            .let { "$baseUrl/series/$it/list/" }
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<List<DetailsResponse>>().first().toSManga()
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable { runBlocking { getChapterList(manga) } }
-
-    private suspend fun getChapterList(manga: SManga): List<SChapter> {
-        val seriesId = resolveSeriesId(manga)
+    private suspend fun chapterList(seriesId: String): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
         var page = 1
         while (true) {
@@ -148,11 +154,8 @@ class BookWalkerJp :
             if (!document.hasNextPage()) break
             page++
         }
-
         return chapters.reversed()
     }
-
-    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().toSChapters()
 
     private suspend fun resolveSeriesId(manga: SManga): String {
         if (!manga.url.startsWith("de")) return manga.url
@@ -193,9 +196,7 @@ class BookWalkerJp :
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}"
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable { runBlocking { getPageList(chapter) } }
-
-    private suspend fun getPageList(chapter: SChapter): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.newCall(GET("$baseUrl/${chapter.url}", headers))
             .awaitSuccess()
             // .let { validateLogin(it) }
@@ -329,8 +330,6 @@ class BookWalkerJp :
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
-
     @SuppressLint("SetJavaScriptEnabled")
     private fun fetchCr(scriptContent: String, viewerUrl: String): String? {
         val match = Regex("""^(\w+)=function\(\)\{[\s\S]*?\};""", RegexOption.MULTILINE).find(scriptContent) ?: return null
@@ -432,8 +431,6 @@ class BookWalkerJp :
         }
         throw Exception("Invalid image URL")
     }
-
-    override fun imageUrlParse(response: Response): String = response.request.url.toString()
 
     private suspend fun validateLogin(response: Response): Response {
         /*
