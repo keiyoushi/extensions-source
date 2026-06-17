@@ -14,24 +14,17 @@ class RemoteScriptBasic(
 @Serializable
 class RemoteScript(
     val validVersion: List<Int>,
-    // Bare filename (no path) of the JS bundle in the same release. The actual `rjGetPages(ctx, host)`
-    // source is downloaded separately from RELEASE_BASE + script. See PageListInterpreter for the contract.
+    // Bare filename of the JS bundle, fetched from RELEASE_BASE + script.
     val script: String,
 )
 
 /**
- * Loads the page-list reader script. The reader for raijin-scans descrambles a per-page randomized
- * manifest and walks an obfuscated admin-ajax response; the site rotates that obfuscation, so the
- * descrambler lives in an external JS bundle that can be updated without shipping a new APK
- * (same idea as scanmanga's external markers, but executable). The bundle runs inside a sandboxed
- * WebView and talks to okhttp through the [PageListInterpreter] host bridge.
+ * Loads the page-list reader script. The descrambler lives in an external JS bundle so it can be
+ * updated without a new APK; it runs in a sandboxed WebView via the [PageListInterpreter] bridge.
  *
- * The remote manifest ([RemoteScript]) only names a JS *filename*; the source is fetched separately
- * from the same release. The filename is validated to be a bare name (no path) so it cannot point
- * outside the release directory.
- *
- * Resolution order: in-memory cache -> prefs cache (within TTL) -> remote fetch -> [DEFAULT_SCRIPT].
- * The remote manifest is version-gated against [PARSER_VERSION] so an incompatible bundle is ignored.
+ * The manifest ([RemoteScript]) only names a bare JS filename (validated, no path), fetched from the
+ * same release. Resolution: in-memory cache -> prefs cache (within TTL) -> remote fetch ->
+ * [DEFAULT_SCRIPT]; the manifest is version-gated against [PARSER_VERSION].
  */
 class ReaderScriptManager(
     private val client: OkHttpClient,
@@ -55,9 +48,9 @@ class ReaderScriptManager(
     }
 
     /**
-     * Force a fresh fetch, bypassing both caches. Used to recover when a script returned by
-     * [getScript] fails at *runtime*: the cached copy may be stale/broken while the remote one has
-     * already been fixed. Updates the cache with whatever it resolves (remote or [DEFAULT_SCRIPT]).
+     * Force a fresh fetch, bypassing both caches. Recovers when a [getScript] result fails at
+     * runtime: the cached copy may be stale while the remote one is already fixed. A successful
+     * remote fetch updates the cache; the [DEFAULT_SCRIPT] fallback does not.
      */
     fun refreshScript(): String = fetchWithRetry()
 
@@ -108,10 +101,7 @@ class ReaderScriptManager(
 
         private const val PARSER_VERSION = 1
 
-        // Bundled fallback. Mirrors the previous Kotlin descrambler 1:1 (see git history of
-        // RaijinScans.pageListParse). Entry point: `rjGetPages(ctx, host)` returning an array of
-        // image-url strings. `ctx` carries baseUrl/chapterUrl/html/ajaxHeaders/maxPageRequests;
-        // `host.fetch(spec)` performs an okhttp request and resolves to { ok, status, body }.
+        // Bundled fallback
         val DEFAULT_SCRIPT = """
             async function rjGetPages(ctx, host) {
               var doc = new DOMParser().parseFromString(ctx.html, "text/html");

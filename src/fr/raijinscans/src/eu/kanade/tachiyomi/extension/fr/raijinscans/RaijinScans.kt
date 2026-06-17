@@ -237,11 +237,9 @@ class RaijinScans :
 
     // ========================== Page List =============================
 
-    // The reader descrambles a per-page randomized manifest and walks an obfuscated admin-ajax
-    // response. The site rotates that obfuscation, so the logic lives in an external JS bundle
-    // ([ReaderScriptManager]) run inside a sandboxed WebView ([PageListInterpreter]); it asks for
-    // network through the okhttp host bridge and returns the image-url list. This lets the
-    // descrambler be updated server-side without shipping a new APK.
+    // Descrambler logic lives in an external JS bundle ([ReaderScriptManager]) run in a sandboxed
+    // WebView ([PageListInterpreter]), so it can be updated server-side without a new APK.
+    // Network runs here, off the main thread, not in pageListParse (parse methods must not block).
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
         client.newCall(pageListRequest(chapter)).execute().use(::pageList)
     }
@@ -252,8 +250,8 @@ class RaijinScans :
         val html = response.body.string()
         val document = Jsoup.parse(html, baseUrl)
 
-        // left connexion check just in case cause url returned by the website is /connexion but then it wont show in chapters list
-        // so i made it so it goes to /{mangaurl}/{chapter number} which should show in almost all case the buy premium page and if it doesnt whatever it throw a 404
+        // /connexion isn't in the chapter list, so we route to /{manga}/{chapter} which lands on the
+        // premium page (or a 404). Treat either signal as premium.
         val isPremium = document.select(".subscription-required-message").isNotEmpty() || response.request.url.toString().contains("connexion")
         if (isPremium) {
             throw Exception("This chapter is premium. Please connect via the webview to view.")
@@ -283,9 +281,8 @@ class RaijinScans :
             try {
                 attempt(script)
             } catch (e: Exception) {
-                // The script that just ran may be a stale/broken cached copy while a fixed one is
-                // already published. Force a fresh fetch and retry once; if it's identical there's
-                // no point retrying, so surface the original error.
+                // Cached script may be stale while a fixed one is published. Refetch and retry once;
+                // if identical, retrying is pointless, so surface the original error.
                 val fresh = scriptManager.refreshScript()
                 if (fresh == script) throw e
                 attempt(fresh)
