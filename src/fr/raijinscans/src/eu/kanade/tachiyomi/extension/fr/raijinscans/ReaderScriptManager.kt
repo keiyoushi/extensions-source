@@ -102,7 +102,7 @@ class ReaderScriptManager(
         private const val PARSER_VERSION = 1
 
         // Bundled fallback
-        val DEFAULT_SCRIPT = """
+        val DEFAULT_SCRIPT = $$"""
             async function rjGetPages(ctx, host) {
               var doc = new DOMParser().parseFromString(ctx.html, "text/html");
 
@@ -188,7 +188,7 @@ class ReaderScriptManager(
               return pages;
 
               function decodeBase64(s) {
-                s = s.replace(/=+${'$'}/, "");
+                s = s.replace(/=+$/, "");
                 while (s.length % 4) s += "=";
                 return decodeURIComponent(escape(atob(s)));
               }
