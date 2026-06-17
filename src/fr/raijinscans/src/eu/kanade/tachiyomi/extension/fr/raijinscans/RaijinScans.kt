@@ -23,6 +23,7 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import java.net.URI
 import java.util.Calendar
 import java.util.Locale
@@ -241,7 +242,13 @@ class RaijinScans :
     // ([ReaderScriptManager]) run inside a sandboxed WebView ([PageListInterpreter]); it asks for
     // network through the okhttp host bridge and returns the image-url list. This lets the
     // descrambler be updated server-side without shipping a new APK.
-    override fun pageListParse(response: Response): List<Page> {
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        client.newCall(pageListRequest(chapter)).execute().use(::pageList)
+    }
+
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException("Handled in fetchPageList.")
+
+    private fun pageList(response: Response): List<Page> {
         val html = response.body.string()
         val document = Jsoup.parse(html, baseUrl)
 
