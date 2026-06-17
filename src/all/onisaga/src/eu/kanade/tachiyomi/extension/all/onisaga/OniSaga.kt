@@ -57,8 +57,10 @@ class OniSaga(
 
     private val strictApiInterceptor = Interceptor { chain ->
         synchronized(apiLock) {
+            val rateLimitDelay = preferences.getString(PREF_RATE_LIMIT_KEY, "2000")?.toLongOrNull() ?: 2000L
+
             val now = System.currentTimeMillis()
-            val waitTime = (2000L - (now - lastRequestTime)).coerceAtLeast(0L)
+            val waitTime = (rateLimitDelay - (now - lastRequestTime)).coerceAtLeast(0L)
 
             // Using rateLimit from keiyoushi.network.rateLimit was too aggressive, leading to 429 errors when it was fine after the rest of the images loaded
             // Note: Error 429 lasts for approximately 15-30 minutes. Had to jump between many VPN servers to reach this conclusion
@@ -68,9 +70,10 @@ class OniSaga(
 
             var response = chain.proceed(chain.request())
 
+            // Handle 429 just in case (still holding the lock)
             var attempt = 0
             while (response.code == 429 && attempt < 3) {
-                val retryAfter = response.header("retry-after")?.toLongOrNull()?.times(1000L) ?: 2000L
+                val retryAfter = response.header("retry-after")?.toLongOrNull()?.times(1000L) ?: rateLimitDelay
                 response.close()
 
                 Thread.sleep(retryAfter)
@@ -79,6 +82,7 @@ class OniSaga(
             }
 
             lastRequestTime = System.currentTimeMillis()
+
             response
         }
     }
@@ -578,20 +582,19 @@ class OniSaga(
             val number = headingText?.ifBlank { null } ?: button.selectFirst("div.w-10")?.text() ?: return@forEach
 
             val textEl = dropdown.selectFirst("p[data-flux-text]")
-            val details = textEl?.text()?.replace(" - ", " · ")?.split("\\s*·\\s*".toRegex())?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+            val details = textEl?.text()?.replace(" - ", " · ")?.split("\\s*·\\s*".toRegex())?.filter { it.isNotEmpty() } ?: emptyList()
 
             val dateStr = details.firstOrNull {
-                it.contains("ago", ignoreCase = true) ||
-                    it.equals("today", ignoreCase = true) ||
-                    it.equals("yesterday", ignoreCase = true)
+                val lower = it.lowercase()
+                lower.contains("ago") || lower == "today" || lower == "yesterday"
             } ?: ""
 
             dropdown.select("ui-menu a[data-flux-menu-item]").forEach { linkEl ->
                 val url = linkEl.absUrl("href").ifEmpty { linkEl.attr("href") }
                 if (url.isEmpty()) return@forEach
 
-                val language = linkEl.selectFirst("div[data-flux-badge]")?.text()?.trim()
-                    ?: linkEl.text().trim()
+                val language = linkEl.selectFirst("div[data-flux-badge]")?.text()
+                    ?: linkEl.text()
 
                 if (langId == null || language == langId) {
                     val chapterLang = if (langKey == null && language.isNotEmpty()) language else null
@@ -836,6 +839,16 @@ class OniSaga(
             adultGenrePref.setEnabled(enabled)
             true
         }
+
+        val rateLimitPref = ListPreference(screen.context).apply {
+            key = PREF_RATE_LIMIT_KEY
+            title = "Image Requests Limit"
+            entries = arrayOf("1 image per 1.50 seconds", "1 image per 1.75 seconds", "1 image per 2.00 seconds", "1 image per 2.25 seconds", "1 image per 2.50 seconds")
+            entryValues = arrayOf("1500", "1750", "2000", "2250", "2500")
+            setDefaultValue("2000")
+            summary = "%s\nWarning: Lowering this might cause 429 errors."
+        }
+        screen.addPreference(rateLimitPref)
     }
 
     companion object {
@@ -844,6 +857,7 @@ class OniSaga(
         private const val PREF_STATUS_KEY = "pref_status"
         private const val PREF_EXCLUDE_GENRE = "pref_exclude_genre"
         private const val PREF_EXCLUDE_GENRE_ADULT = "pref_exclude_genre_adult"
+        private const val PREF_RATE_LIMIT_KEY = "pref_rate_limit"
 
         private val READER_TOKEN_REGEX = Regex("""readerToken["']?\s*:\s*["']([^"']+)["']""")
         private val PAGE_ORDER_REGEX = Regex("""["']?order["']?\s*:\s*(\d+)""")
