@@ -29,8 +29,6 @@ class Rncalation : HttpSource() {
 
     override val supportsLatest = true
 
-    override val id: Long = 1424373335432920755L
-
     override val client = network.client.newBuilder()
         .rateLimit(2, 1.seconds)
         .build()
@@ -51,16 +49,7 @@ class Rncalation : HttpSource() {
                 thumbnail_url = element.select("img").attr("abs:src")
             }
         }
-        val hasNextPage = document.select(".lib-results-page").text().let { text ->
-            val parts = text.split("/")
-            if (parts.size == 2) {
-                val current = parts[0].replace(NON_DIGIT_REGEX, "").toIntOrNull() ?: 1
-                val total = parts[1].replace(NON_DIGIT_REGEX, "").toIntOrNull() ?: 1
-                current < total
-            } else {
-                false
-            }
-        }
+        val hasNextPage = document.select("a.lib-page-btn--nav:last-child").isNotEmpty()
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -90,10 +79,8 @@ class Rncalation : HttpSource() {
                         }
                     }
                     is GenreFilter -> {
-                        filter.state.forEach { genre ->
-                            if (genre.state) {
-                                addQueryParameter("genre", genre.name)
-                            }
+                        if (filter.state > 0) {
+                            addQueryParameter("genre", filter.values[filter.state])
                         }
                     }
                     else -> {}
@@ -138,7 +125,7 @@ class Rncalation : HttpSource() {
 
         document.select("template#chapters-extra").firstOrNull()?.let { template ->
             val extraHtml = template.html()
-            val extraDoc = Jsoup.parseBodyFragment(extraHtml, response.request.url.toString())
+            val extraDoc = Jsoup.parseBodyFragment(extraHtml, document.baseUri())
             extraDoc.select("a").forEach { element ->
                 chapters.add(chapterFromElement(element))
             }
@@ -180,10 +167,6 @@ class Rncalation : HttpSource() {
         SortFilter(),
         TypeFilter(),
         StatusFilter(),
-        GenreFilter(genresList.map { Genre(it) }),
+        GenreFilter(genresList),
     )
-
-    companion object {
-        private val NON_DIGIT_REGEX = Regex("[^0-9]")
-    }
 }

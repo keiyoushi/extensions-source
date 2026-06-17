@@ -12,8 +12,7 @@ class SortOption(val name: String, val value: String) {
     override fun toString(): String = name
 }
 
-class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("Géneros", genres)
-class Genre(name: String) : Filter.CheckBox(name)
+class GenreFilter(genres: Array<String>) : Filter.Select<String>("Géneros", genres)
 
 val sortOptions = arrayOf(
     SortOption("Más reciente", "latest"),
@@ -23,7 +22,8 @@ val sortOptions = arrayOf(
     SortOption("A-Z", "title"),
 )
 
-val genresList = listOf(
+val genresList = arrayOf(
+    "Todos",
     "Acción",
     "Adventure",
     "Aventura",
