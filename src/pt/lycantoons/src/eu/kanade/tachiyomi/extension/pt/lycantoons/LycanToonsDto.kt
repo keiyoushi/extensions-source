@@ -52,12 +52,12 @@ class PaginationDto(
 
 @Serializable
 class SearchRequestBody(
-    val limit: Int,
-    val page: Int,
-    val search: String,
-    val seriesType: String,
-    val status: String,
-    val tags: List<String>,
+    private val limit: Int,
+    private val page: Int,
+    private val search: String,
+    private val seriesType: String,
+    private val status: String,
+    private val tags: List<String>,
 )
 
 @Serializable
@@ -87,7 +87,6 @@ class ChapterDto(
     }
 }
 
-@Serializable
 class FetchResult(
     val success: Boolean,
     val result: String,

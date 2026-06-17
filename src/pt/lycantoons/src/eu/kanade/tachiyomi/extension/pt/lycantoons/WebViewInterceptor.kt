@@ -34,9 +34,11 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
         val isImage = url.contains("/cdn")
 
         val requestBody = if (req.method == "POST") {
-            val buffer = Buffer()
-            req.body!!.writeTo(buffer)
-            buffer.readUtf8()
+            req.body?.let {
+                val buffer = Buffer()
+                it.writeTo(buffer)
+                buffer.readUtf8()
+            }
         } else {
             null
         }
@@ -44,11 +46,11 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
         val resultData = fetchViaJs(url, req.method, req.headers, requestBody, isImage)
         if (!resultData.success) throw IOException("[JS]: " + resultData.result)
 
-        val resultConentType = resultData.contentType ?: "text/html"
+        val resultContentType = resultData.contentType ?: "text/html"
         return if (isImage) {
-            Base64.decode(resultData.result, Base64.DEFAULT).toResponse(req, resultConentType)
+            Base64.decode(resultData.result, Base64.DEFAULT).toResponse(req, resultContentType)
         } else {
-            resultData.result.toResponse(req, resultConentType)
+            resultData.result.toResponse(req, resultContentType)
         }
     }
 
@@ -128,17 +130,17 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
                             }
                         }.toJsonString()
 
-                        val requestBody = if (requestBody != null) "body: `$requestBody`," else ""
+                        val jsRequestBody = if (requestBody != null) "body: ${requestBody.toJsonString()}," else ""
 
                         val jsFetchScript = """
                             (function() {
                                 let contentType;
 
-                                fetch('$url', {
-                                    method: '$method',
+                                fetch(${url.toJsonString()}, {
+                                    method: ${method.toJsonString()},
                                     credentials: 'include',
                                     headers: $jsHeaders,
-                                    $requestBody
+                                    $jsRequestBody
                                 })
                                 $handlingScript
                                 .catch(err => window.Bridge.passError(err.message));

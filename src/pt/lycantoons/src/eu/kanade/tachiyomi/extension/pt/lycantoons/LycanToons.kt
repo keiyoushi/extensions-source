@@ -62,6 +62,7 @@ class LycanToons : HttpSource() {
         val tags = filters.selectedTags().toMutableList()
 
         val genreEntry = tagMapping.entries.find { it.value.equals(query, ignoreCase = true) }
+
         if (genreEntry != null) {
             tags.add(genreEntry.key)
             search = ""
