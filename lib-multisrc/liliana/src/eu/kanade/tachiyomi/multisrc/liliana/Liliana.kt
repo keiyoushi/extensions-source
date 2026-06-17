@@ -10,14 +10,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -25,18 +23,14 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
-import java.lang.Exception
 
 abstract class Liliana(
     override val name: String,
     override val baseUrl: String,
     final override val lang: String,
     private val usesPostSearch: Boolean = false,
-) : ParsedHttpSource() {
+) : HttpSource() {
     override val supportsLatest = true
-
-    private val json: Json by injectLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -45,9 +39,19 @@ abstract class Liliana(
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ranking/week/$page", headers)
 
-    override fun popularMangaSelector(): String = "div#main div.grid > div"
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val elements = document.select(popularMangaSelector())
+        val mangas = elements.map { popularMangaFromElement(it) }
+        val hasNextPage = popularMangaNextPageSelector()?.let { selector ->
+            document.selectFirst(selector) != null
+        } ?: false
+        return MangasPage(mangas, hasNextPage)
+    }
 
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+    protected open fun popularMangaSelector(): String = "div#main div.grid > div"
+
+    protected open fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         thumbnail_url = element.selectFirst("img")?.imgAttr()
         with(element.selectFirst(".text-center a")!!) {
             title = text()
@@ -55,19 +59,13 @@ abstract class Liliana(
         }
     }
 
-    override fun popularMangaNextPageSelector(): String = ".blog-pager > span.pagecurrent + span"
+    protected open fun popularMangaNextPageSelector(): String? = ".blog-pager > span.pagecurrent + span"
 
     // =============================== Latest ===============================
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/all-manga/$page/?sort=last_update&status=0", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun latestUpdatesNextPageSelector(): String = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
 
@@ -119,24 +117,6 @@ abstract class Liliana(
 
         return MangasPage(mangaList, false)
     }
-
-    @Serializable
-    class SearchResponseDto(
-        val list: List<MangaDto>,
-    ) {
-        @Serializable
-        class MangaDto(
-            val cover: String,
-            val name: String,
-            val url: String,
-        )
-    }
-
-    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
-
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
 
     // =============================== Filters ==============================
 
@@ -233,7 +213,9 @@ abstract class Liliana(
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
+
+    protected open fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         description = document.selectFirst("div#syn-target")?.text()
         thumbnail_url = document.selectFirst(".a1 > figure img")?.imgAttr()
         title = document.selectFirst(".a2 header h1")!!.text()
@@ -254,11 +236,16 @@ abstract class Liliana(
 
     // ============================== Chapters ==============================
 
-    override fun chapterListSelector() = "ul > li.chapter"
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select(chapterListSelector()).map { chapterFromElement(it) }
+    }
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+    protected open fun chapterListSelector() = "ul > li.chapter"
+
+    protected open fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         element.selectFirst("time[datetime]")?.also {
-            date_upload = it.attr("datetime").toLongOrNull()?.let { it * 1000L } ?: 0L
+            date_upload = it.attr("datetime").toLongOrNull()?.let { time -> time * 1000L } ?: 0L
         }
         with(element.selectFirst("a")!!) {
             name = text()
@@ -268,13 +255,6 @@ abstract class Liliana(
 
     // =============================== Pages ================================
 
-    @Serializable
-    class PageListResponseDto(
-        val status: Boolean = false,
-        val msg: String? = null,
-        val html: String,
-    )
-
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val script = document.selectFirst("script:containsData(const CHAPTER_ID)")?.data()
@@ -283,7 +263,7 @@ abstract class Liliana(
         val chapterId = script.substringAfter("const CHAPTER_ID = ").substringBefore(";")
 
         val pageHeaders = headersBuilder().apply {
-            add("Accept", "application/json, text/javascript, *//*; q=0.01")
+            add("Accept", "application/json, text/javascript, */*; q=0.01")
             add("Host", baseUrl.toHttpUrl().host)
             set("Referer", response.request.url.toString())
             add("X-Requested-With", "XMLHttpRequest")
@@ -296,7 +276,7 @@ abstract class Liliana(
         val data = ajaxResponse.parseAs<PageListResponseDto>()
 
         if (!data.status) {
-            throw Exception(data.msg)
+            throw Exception(data.msg ?: "Unknown error")
         }
 
         return pageListParse(
@@ -307,20 +287,20 @@ abstract class Liliana(
         )
     }
 
-    override fun pageListParse(document: Document): List<Page> = if (document.selectFirst("div.separator[data-index]") == null) {
+    protected open fun pageListParse(document: Document): List<Page> = if (document.selectFirst("div.separator[data-index]") == null) {
         document.select("div.separator").mapIndexed { i, page ->
             val url = page.selectFirst("a")!!.attr("abs:href")
-            Page(i, document.location(), url)
+            Page(i, imageUrl = url)
         }
     } else {
         document.select("div.separator[data-index]").map { page ->
             val index = page.attr("data-index").toInt()
             val url = page.selectFirst("a")!!.attr("abs:href")
-            Page(index, document.location(), url)
+            Page(index, imageUrl = url)
         }.sortedBy { it.index }
     }
 
-    override fun imageUrlParse(document: Document) = ""
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val imgHeaders = headersBuilder().apply {
@@ -339,6 +319,4 @@ abstract class Liliana(
         hasAttr("data-src") -> attr("abs:data-src")
         else -> attr("abs:src")
     }
-
-    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 }

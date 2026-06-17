@@ -35,148 +35,20 @@ class ComicFury(
     override val name: String = "Comic Fury$extraName" // Used for No Text
     override val supportsLatest: Boolean = true
 
-    override val client = network.client.newBuilder().addInterceptor(TextInterceptor()).build()
+    override val client = network.client.newBuilder()
+        .addInterceptor(ContentWarningInterceptor())
+        .addInterceptor(TextInterceptor())
+        .build()
 
-    /**
-     * Archive is on a separate page from manga info
-     */
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/read/${manga.url.substringAfter("?url=")}/archive")
+    // ========================= Popular =========================
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList(1))
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
-    /**
-     * Open Archive Url instead of the details page
-     * Helps with getting past the nfsw pages
-     */
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/read/" + manga.url.substringAfter("?url=") + "/archive"
+    // ========================= Latest =========================
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList(2))
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
-    /**
-     * There are two different ways chapters are setup
-     * First Way if (true)
-     *  Manga -> Chapter -> Comic -> Pages
-     * The Second Way if (false)
-     *  Manga -> Comic -> Pages
-     *
-     *  Importantly the Chapter And Comic Pages can be easy distinguished
-     *  by the name of the list elements in this case archive-chapter/archive-comic
-     *
-     *  For Manga that doesn't have "chapters" skip the loop. Including All Sub-Comics of Chapters
-     *
-     *  Put the chapter name into scanlator so read can know what chapter it is.
-     *
-     *  Chapter Number is handled as Chapter dot Comic. Ex. Chapter 6, Comic 4: chapter_number = 6.4
-     *
-     */
-    private val archiveSelector = "a:has(div.archive-chapter)"
-    private val chapterSelector = "a:has(div.archive-comic)"
-    private val nextPageSelector = "span.vfpagecurrent + a.vfpage"
-
-    private fun Element.toSManga(): SChapter = SChapter.create().apply {
-        setUrlWithoutDomain(this@toSManga.attr("abs:href"))
-        name = this@toSManga.select(".archive-comic-title").text()
-        date_upload = this@toSManga.select(".archive-comic-date").text().toDate()
-    }
-
-    private fun collect(startPage: Document): List<SChapter> {
-        val chapters = mutableListOf<SChapter>()
-        var currentPage = startPage
-
-        while (true) {
-            // Get all chapters on the current page.
-            chapters.addAll(
-                currentPage.select(chapterSelector).map { element ->
-                    element.toSManga()
-                },
-            )
-
-            // Fetch the next page and repeat. If there are no more pages, exit.
-            val nextPageButton = currentPage.selectFirst(nextPageSelector) ?: break
-            val url = nextPageButton.attr("abs:href")
-            currentPage = client.newCall(GET(url, headers)).execute().asJsoup()
-        }
-
-        return chapters
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val jsp = response.asJsoup()
-        val chapters = mutableListOf<SChapter>()
-
-        if (jsp.selectFirst(archiveSelector) != null) {
-            jsp.select(archiveSelector).eachAttr("abs:href").forEach { url ->
-                val currentPage = client.newCall(GET(url, headers)).execute().asJsoup()
-                chapters.addAll(collect(currentPage))
-            }
-        } else {
-            chapters.addAll(collect(jsp))
-        }
-
-        return chapters
-            .mapIndexed { index, sChapter -> sChapter.apply { chapter_number = index.toFloat() } }
-            .reversed()
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val jsp = response.asJsoup()
-        val pages: MutableList<Page> = arrayListOf()
-        val comic = jsp.selectFirst("div.is--comic-page")
-        for (child in comic!!.select("div.is--image-segment div img")) {
-            pages.add(
-                Page(
-                    pages.size,
-                    response.request.url.toString(),
-                    child.attr("src"),
-                ),
-            )
-        }
-        if (showAuthorsNotesPref()) {
-            for (child in comic.select("div.is--author-notes div.is--comment-box").withIndex()) {
-                pages.add(
-                    Page(
-                        pages.size,
-                        response.request.url.toString(),
-                        TextInterceptorHelper.createUrl(
-                            jsp.selectFirst("a.is--comment-author")?.ownText()
-                                ?.let { "Author's Notes from $it" }
-                                .orEmpty(),
-                            jsp.selectFirst("div.is--comment-content")?.html().orEmpty(),
-                        ),
-                    ),
-                )
-            }
-        }
-        return pages
-    }
-
-    /**
-     * Author name joining maybe redundant.
-     *
-     * Manga Status is available but not currently implemented.
-     */
-    override fun mangaDetailsParse(response: Response): SManga {
-        val jsp = response.asJsoup()
-        val desDiv = jsp.selectFirst("div.description-tags")
-        return SManga.create().apply {
-            setUrlWithoutDomain(response.request.url.toString())
-            description = desDiv?.parent()?.ownText()
-            genre = desDiv?.children()?.eachText()?.joinToString(", ")
-            author = jsp.select("a.authorname").eachText().joinToString(", ")
-            initialized = true
-        }
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val jsp = response.asJsoup()
-        val list: MutableList<SManga> = arrayListOf()
-        for (result in jsp.select("div.webcomic-result")) {
-            list.add(
-                SManga.create().apply {
-                    url = result.selectFirst("div.webcomic-result-avatar a")!!.attr("href")
-                    title = result.selectFirst("div.webcomic-result-title")!!.attr("title")
-                    thumbnail_url = result.selectFirst("div.webcomic-result-avatar a img")!!.absUrl("src")
-                },
-            )
-        }
-        return MangasPage(list, (jsp.selectFirst("div.search-next-page") != null))
-    }
+    // ========================= Search =========================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val req: HttpUrl.Builder = "$baseUrl/search.php".toHttpUrl().newBuilder()
         req.addQueryParameter("query", query)
@@ -213,35 +85,27 @@ class ComicFury(
             }
         }
 
-        return Request.Builder().url(req.build()).build()
+        return GET(req.build(), headers)
     }
 
-    private fun Boolean.toInt(): Int = if (this) {
-        0
-    } else {
-        1
-    }
-
-    // START OF AUTHOR NOTES //
-    private val preferences: SharedPreferences by getPreferencesLazy()
-    companion object {
-        private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
-    }
-    private fun showAuthorsNotesPref() = preferences.getBoolean(SHOW_AUTHORS_NOTES_KEY, false)
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val authorsNotesPref = SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_AUTHORS_NOTES_KEY
-            title = "Show author's notes"
-            summary = "Enable to see the author's notes at the end of chapters (if they're there)."
-            setDefaultValue(false)
+    override fun searchMangaParse(response: Response): MangasPage {
+        val jsp = response.asJsoup()
+        val list: MutableList<SManga> = arrayListOf()
+        for (result in jsp.select("div.webcomic-result")) {
+            list.add(
+                SManga.create().apply {
+                    url = result.selectFirst("div.webcomic-result-avatar a")!!.attr("href")
+                    title = result.selectFirst("div.webcomic-result-title")!!.attr("title")
+                    thumbnail_url = result.selectFirst("div.webcomic-result-avatar a img")!!.absUrl("src")
+                },
+            )
         }
-        screen.addPreference(authorsNotesPref)
+        return MangasPage(list, (jsp.selectFirst("div.search-next-page") != null))
     }
-    // END OF AUTHOR NOTES //
 
-    // START OF FILTERS //
+    // ========================= Filters =========================
     override fun getFilterList(): FilterList = getFilterList(0)
+
     private fun getFilterList(sortIndex: Int): FilterList = FilterList(
         TagsFilter(),
         Filter.Separator(),
@@ -257,71 +121,216 @@ class ComicFury(
         SexualFilter(),
     )
 
-    internal class SortFilter(index: Int) :
-        Filter.Select<String>(
-            "Sort By",
-            arrayOf("Relevance", "Popularity", "Last Update"),
-            index,
-        )
-    internal class CompletedComicFilter : Filter.CheckBox("Comic Completed", false)
-    internal class LastUpdatedFilter :
-        Filter.Select<String>(
-            "Last Updated",
-            arrayOf("All Time", "This Week", "This Month", "This Year", "Completed Only"),
-            0,
-        )
-    internal class ViolenceFilter :
-        Filter.Select<String>(
-            "Violence",
-            arrayOf("None / Minimal", "Violent Content", "Gore / Graphic"),
-            2,
-        )
-    internal class NudityFilter :
-        Filter.Select<String>(
-            "Frontal Nudity",
-            arrayOf("None", "Occasional", "Frequent"),
-            2,
-        )
-    internal class StrongLangFilter :
-        Filter.Select<String>(
-            "Strong Language",
-            arrayOf("None", "Occasional", "Frequent"),
-            2,
-        )
-    internal class SexualFilter :
-        Filter.Select<String>(
-            "Sexual Content",
-            arrayOf("No Sexual Content", "Sexual Situations", "Strong Sexual Themes"),
-            2,
-        )
-    internal class TagsFilter : Filter.Text("Tags")
+    private fun Boolean.toInt(): Int = if (this) {
+        0
+    } else {
+        1
+    }
 
-    // END OF FILTERS //
+    // ========================= Details =========================
+    override fun mangaDetailsParse(response: Response): SManga {
+        val jsp = response.asJsoup()
+        val desDiv = jsp.selectFirst("div.description-tags")
+        return SManga.create().apply {
+            setUrlWithoutDomain(response.request.url.toString())
+            // If the description-tags div is null (common on profile pages or custom layout pages),
+            // fallback to the custom layouts selector (username-and-title em).
+            description = desDiv?.parent()?.ownText()
+                ?: jsp.selectFirst("div.username-and-title em")?.text()
+            // Fallback to parsing from the profile page's authorinfo block when description-tags is null.
+            genre = desDiv?.children()?.eachText()?.joinToString(", ")
+                ?: jsp.select("div.authorinfo:contains(Genre) a").eachText().joinToString(", ")
+            author = jsp.select("a.authorname").eachText().joinToString(", ")
+            initialized = true
+        }
+    }
 
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList(1))
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/read/" + manga.url.substringAfter("?url=") + "/archive"
 
-    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList(2))
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
+    // ========================= Chapters =========================
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/read/${manga.url.substringAfter("?url=")}/archive")
+
+    private val archiveSelector = "a:has(div.archive-chapter)"
+    private val chapterSelector = "a:has(div.archive-comic)"
+    private val nextPageSelector = "span.vfpagecurrent + a.vfpage"
+
+    private fun Element.toSManga(chapterHeader: String? = null): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(this@toSManga.absUrl("href"))
+        val comicName = this@toSManga.select(".archive-comic-title").text()
+        name = if (chapterHeader.isNullOrEmpty()) comicName else "$chapterHeader - $comicName"
+        date_upload = this@toSManga.select(".archive-comic-date").text().toDate()
+    }
+
+    private fun collect(startPage: Document, chapterHeader: String? = null): List<SChapter> {
+        val chapters = mutableListOf<SChapter>()
+        var currentPage = startPage
+
+        while (true) {
+            // Get all chapters on the current page.
+            chapters.addAll(
+                currentPage.select(chapterSelector).map { element ->
+                    element.toSManga(chapterHeader)
+                },
+            )
+
+            // Fetch the next page and repeat. If there are no more pages, exit.
+            val nextPageButton = currentPage.selectFirst(nextPageSelector) ?: break
+            val url = nextPageButton.absUrl("href")
+            currentPage = client.newCall(GET(url, headers)).execute().asJsoup()
+        }
+
+        return chapters
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val jsp = response.asJsoup()
+        val chapters = mutableListOf<SChapter>()
+
+        val archiveElements = jsp.select(archiveSelector)
+        if (archiveElements.isNotEmpty()) {
+            archiveElements.forEach { element ->
+                val url = element.absUrl("href")
+                val chapterHeader = element.select(".archive-chapter-title").text().ifEmpty { element.text() }
+                val currentPage = client.newCall(GET(url, headers)).execute().asJsoup()
+                chapters.addAll(collect(currentPage, chapterHeader))
+            }
+        } else {
+            chapters.addAll(collect(jsp))
+        }
+
+        // Fallback when "Infinite Scroll View" is disabled by the author.
+        // We fetch and parse the custom layout site under <slug>.webcomic.ws.
+        if (chapters.isEmpty()) {
+            val pathSegments = response.request.url.pathSegments
+            val readIndex = pathSegments.indexOf("read")
+            val slug = if (readIndex != -1 && readIndex + 1 < pathSegments.size) pathSegments[readIndex + 1] else ""
+            if (slug.isNotEmpty()) {
+                val customUrl = "https://$slug.webcomic.ws/archive/comics"
+                try {
+                    val customDoc = client.newCall(GET(customUrl, headers)).execute().asJsoup()
+                    customDoc.select("div.archivecomic, div.nl-archivecomic").forEach { element ->
+                        val linkElement = element.selectFirst("a") ?: return@forEach
+                        val chapterHeader = element.parent()?.previousElementSibling()?.selectFirst("h3")?.text()
+                        chapters.add(
+                            SChapter.create().apply {
+                                url = linkElement.absUrl("href")
+                                val comicName = linkElement.text()
+                                name = if (chapterHeader.isNullOrEmpty()) comicName else "$chapterHeader - $comicName"
+                                date_upload = element.selectFirst(".comicposttime, .nl-archivecomicposttime")?.text()?.toDate() ?: 0L
+                            },
+                        )
+                    }
+                } catch (_: Exception) {
+                    // Ignore and return empty list
+                }
+            }
+        }
+
+        return chapters
+            .mapIndexed { index, sChapter -> sChapter.apply { chapter_number = index.toFloat() } }
+            .reversed()
+    }
+
+    // ========================= Pages =========================
+    override fun pageListRequest(chapter: SChapter): Request {
+        val url = if (chapter.url.startsWith("http")) {
+            chapter.url
+        } else {
+            "$baseUrl${chapter.url}"
+        }
+        return GET(url, headers)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val jsp = response.asJsoup()
+        val pages: MutableList<Page> = arrayListOf()
+        val comic = jsp.selectFirst("div.is--comic-page")
+        if (comic != null) {
+            // Infinite Scroll layout (default)
+            for (child in comic.select("div.is--image-segment div img")) {
+                pages.add(
+                    Page(
+                        pages.size,
+                        response.request.url.toString(),
+                        child.attr("src"),
+                    ),
+                )
+            }
+            if (showAuthorsNotesPref()) {
+                for (child in comic.select("div.is--author-notes div.is--comment-box").withIndex()) {
+                    pages.add(
+                        Page(
+                            pages.size,
+                            response.request.url.toString(),
+                            TextInterceptorHelper.createUrl(
+                                jsp.selectFirst("a.is--comment-author")?.ownText()
+                                    ?.let { "Author's Notes from $it" }
+                                    .orEmpty(),
+                                jsp.selectFirst("div.is--comment-content")?.html().orEmpty(),
+                            ),
+                        ),
+                    )
+                }
+            }
+        } else {
+            // Custom layout fallback (Infinite Scroll disabled)
+            val images = jsp.select("#comicimage")
+            for (child in images) {
+                pages.add(
+                    Page(
+                        pages.size,
+                        response.request.url.toString(),
+                        child.attr("src"),
+                    ),
+                )
+            }
+        }
+        return pages
+    }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    // START OF AUTHOR NOTES //
+    private val preferences: SharedPreferences by getPreferencesLazy()
+
+    private fun showAuthorsNotesPref() = preferences.getBoolean(SHOW_AUTHORS_NOTES_KEY, false)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val authorsNotesPref = SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_AUTHORS_NOTES_KEY
+            title = "Show author's notes"
+            summary = "Enable to see the author's notes at the end of chapters (if they're there)."
+            setDefaultValue(false)
+        }
+        screen.addPreference(authorsNotesPref)
+    }
+    // END OF AUTHOR NOTES //
 
     // Date stuff
 
     private fun String.toDate(): Long {
         // remove st nd rd th (e.g. from 4th) but not from AuguST, and commas
-        val ret = this.replace(Regex("(?<=\\d)(st|nd|rd|th)|,"), "")
+        val ret = ordinalRegex.replace(this, "").trim()
 
         return when {
             ret.contains(":") -> date[0].parseTime(ret)
-            this.matches(Regex("\\d{1,2}\\s?\\w{3,9}\\s?\\w{2,4}")) -> date[1].parseTime(ret)
-            this.matches(Regex("\\w{3,9}\\s?\\d{1,2}\\s?\\d{2,4}")) -> date[2].parseTime(ret)
+            dateRegex1.matches(ret) -> date[1].parseTime(ret)
+            dateRegex2.matches(ret) -> date[2].parseTime(ret)
+            dotDateRegex.matches(ret) -> date[3].parseTime(ret)
             else -> 0
         }
     }
 
-    private val date = listOf("dd MMM yyyy hh:mm aa", "dd MMM yyyy", "MMM dd yyyy")
+    private val date = listOf("dd MMM yyyy hh:mm aa", "dd MMM yyyy", "MMM dd yyyy", "d.M.yyyy")
         .map { SimpleDateFormat(it, Locale.US) }
 
     private fun SimpleDateFormat.parseTime(string: String): Long = this.parse(string)?.time ?: 0
+
+    companion object {
+        private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
+        private val ordinalRegex = Regex("(?<=\\d)(st|nd|rd|th)|,")
+        private val dateRegex1 = Regex("\\d{1,2}\\s?\\w{3,9}\\s?\\w{2,4}")
+        private val dateRegex2 = Regex("\\w{3,9}\\s?\\d{1,2}\\s?\\d{2,4}")
+        private val dotDateRegex = Regex("\\d{1,2}\\.\\d{1,2}\\.\\d{4}")
+    }
 }

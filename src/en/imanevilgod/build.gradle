@@ -1,0 +1,10 @@
+ext {
+    extName = "I'm An Evil God"
+    extClass = '.IAmAnEvilGod'
+    themePkg = 'mangacatalog'
+    baseUrl = 'https://imanevilgod.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

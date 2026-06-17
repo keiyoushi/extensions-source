@@ -6,7 +6,6 @@ import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -26,10 +26,13 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.time.Duration.Companion.seconds
 
 class OlympusScanlation :
     HttpSource(),
     ConfigurableSource {
+    private val fetchedDomainUrlHost by lazy { fetchedDomainUrl.toHttpUrl().host }
+    private val apiBaseUrlHost by lazy { apiBaseUrl.toHttpUrl().host }
 
     override val versionId = 3
     private val isCi = System.getenv("CI") == "true"
@@ -39,7 +42,7 @@ class OlympusScanlation :
         else -> preferences.prefBaseUrl
     }
 
-    private val defaultBaseUrl: String = "https://olympusbiblioteca.com"
+    private val defaultBaseUrl: String = "https://olympusxyz.com"
 
     private val fetchedDomainUrl: String by lazy {
         if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
@@ -80,8 +83,8 @@ class OlympusScanlation :
 
     override val client by lazy {
         val client = network.client.newBuilder()
-            .rateLimitHost(fetchedDomainUrl.toHttpUrl(), 1, 2)
-            .rateLimitHost(apiBaseUrl.toHttpUrl(), 2, 1)
+            .rateLimit(1, 2.seconds) { it.host == fetchedDomainUrlHost }
+            .rateLimit(2, 1.seconds) { it.host == apiBaseUrlHost }
             .build()
 
         return@lazy client

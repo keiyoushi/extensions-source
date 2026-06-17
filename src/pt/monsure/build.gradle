@@ -3,7 +3,7 @@ ext {
     extClass = '.Monsure'
     themePkg = 'madara'
     baseUrl = 'https://monsuresu.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

@@ -3,7 +3,7 @@ ext {
     extClass = '.ColorcitoScan'
     themePkg = 'spicytheme'
     baseUrl = 'https://colorcitoscan.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

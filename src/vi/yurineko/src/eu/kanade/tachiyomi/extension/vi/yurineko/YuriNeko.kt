@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.yurineko
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl
@@ -21,20 +21,22 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.Instant
 import java.util.Base64
-import java.util.concurrent.TimeUnit
 
 class YuriNeko : HttpSource() {
     override val name = "YuriNeko"
     override val lang = "vi"
     override val baseUrl = "https://yurinekoz.com"
     override val supportsLatest = true
+
+    override val id: Long = 4413681066613655890
+
     private val apiUrl = "https://api.${baseUrl.toHttpUrl().host}"
     private val cdnUrl = "https://cdn.${baseUrl.toHttpUrl().host}"
     private val webApiUrl = "$baseUrl/api/v1"
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(apiUrl.toHttpUrl(), 20, 1, TimeUnit.MINUTES)
         .addInterceptor(ImageDecryptor::interceptor)
+        .rateLimit(3)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -342,9 +344,6 @@ class YuriNeko : HttpSource() {
     }
 
     // =============================== Related ================================
-
-    // disable suggested mangas on Komikku due to heavy rate limit
-    override val disableRelatedMangasBySearch = true
 
     override fun relatedMangaListRequest(manga: SManga): Request {
         val mangaId = "$baseUrl${manga.url}"

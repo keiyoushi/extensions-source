@@ -3,7 +3,7 @@ ext {
     extClass = '.ManhwaLatino'
     themePkg = 'madara'
     baseUrl = 'https://manhwa-latino.com'
-    overrideVersionCode = 10
+    overrideVersionCode = 11
     isNsfw = true
 }
 

@@ -1,14 +1,14 @@
 package eu.kanade.tachiyomi.extension.th.nekopost
 
 import eu.kanade.tachiyomi.extension.th.nekopost.model.EditorProject
-import eu.kanade.tachiyomi.extension.th.nekopost.model.LatestRequest
 import eu.kanade.tachiyomi.extension.th.nekopost.model.PagingInfo
-import eu.kanade.tachiyomi.extension.th.nekopost.model.PopularRequest
+import eu.kanade.tachiyomi.extension.th.nekopost.model.ProjectRequestBody
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawChapterInfo
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawLatestChapterList
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectInfo
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectSearchSummaryList
 import eu.kanade.tachiyomi.extension.th.nekopost.model.SearchRequest
+import eu.kanade.tachiyomi.extension.th.nekopost.model.UpdatesRequest
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Request
@@ -35,7 +36,7 @@ class Nekopost : HttpSource() {
     override val name = "Nekopost"
     override val supportsLatest = true
 
-    private val projectDataEndpoint = "https://api.osemocphoto.com/frontAPI/getProjectInfo"
+    private val projectDataEndpoint = "$baseUrl/api/project/detail2"
     private val fileHost = "https://www.osemocphoto.com"
 
     private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("th")) }
@@ -49,21 +50,21 @@ class Nekopost : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
-    private fun getStatus(status: String) = when (status) {
-        "1" -> SManga.ONGOING
-        "2" -> SManga.COMPLETED
-        "3" -> SManga.LICENSED
+    private fun getStatus(status: Int) = when (status) {
+        1 -> SManga.ONGOING
+        2 -> SManga.COMPLETED
+        3 -> SManga.LICENSED
         else -> SManga.UNKNOWN
     }
 
     override fun latestUpdatesRequest(page: Int) = projectRequest(
         "latest",
-        LatestRequest("m", PagingInfo(page, LATEST_PAGE_SIZE)),
+        UpdatesRequest("m", PagingInfo(page, LATEST_PAGE_SIZE)),
     )
 
     override fun popularMangaRequest(page: Int) = projectRequest(
         "list/popular",
-        PopularRequest("mc", PagingInfo(1, POPULAR_PAGE_SIZE)),
+        UpdatesRequest("mc", PagingInfo(1, POPULAR_PAGE_SIZE)),
     )
 
     private inline fun <reified T> projectRequest(endpoint: String, body: T): Request = POST(
@@ -86,7 +87,8 @@ class Nekopost : HttpSource() {
         return when {
             projectMatch != null -> {
                 val projectId = projectMatch.groupValues[1]
-                client.newCall(GET("$projectDataEndpoint/$projectId", headers))
+                val body = ProjectRequestBody(projectId.toInt()).toJsonRequestBody()
+                client.newCall(POST(projectDataEndpoint, headers, body))
                     .asObservableSuccess()
                     .map { response ->
                         if (response.peekBody(1024)
@@ -127,16 +129,16 @@ class Nekopost : HttpSource() {
     }
 
     private fun mangaFromProjectInfo(info: RawProjectInfo): SManga = SManga.create().apply {
-        val p = info.projectInfo
-        url = p.projectId
+        val p = info.info.project
+        url = p.projectId.toString()
         title = p.projectName
         artist = p.artistName
         author = p.authorName
         description = p.info
         status = getStatus(p.status)
-        thumbnail_url = buildCoverUrl(p.projectId)
+        thumbnail_url = buildCoverUrl(p.projectId.toString())
         genre =
-            info.projectCategoryUsed
+            info.info.category
                 ?.joinToString(", ") { it.categoryName }
                 .orEmpty()
         initialized = true
@@ -177,7 +179,7 @@ class Nekopost : HttpSource() {
                 SManga.create().apply {
                     url = it.pid.toString()
                     title = it.projectName
-                    status = getStatus(it.status)
+                    status = getStatus(it.status.toInt())
                     thumbnail_url =
                         buildCoverUrl(it.pid.toString(), it.coverVersion)
                     initialized = false
@@ -233,29 +235,32 @@ class Nekopost : HttpSource() {
         return if (coverVersion != null) "$base?ver=$coverVersion" else base
     }
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("$projectDataEndpoint/${manga.url}", headers)
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val body = ProjectRequestBody(manga.url.toInt()).toJsonRequestBody()
+        return POST(projectDataEndpoint, headers, body)
+    }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
 
     override fun mangaDetailsParse(response: Response): SManga = mangaFromProjectInfo(response.parseAs())
 
-    override fun chapterListRequest(manga: SManga) = GET("$projectDataEndpoint/${manga.url}", headers)
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val projectInfo = response.parseAs<RawProjectInfo>()
+        val info = response.parseAs<RawProjectInfo>().info
 
-        if (getStatus(projectInfo.projectInfo.status) == SManga.LICENSED) {
+        if (getStatus(info.project.status) == SManga.LICENSED) {
             throw Exception("Licensed")
         }
 
-        val projectId = projectInfo.projectInfo.projectId.toInt()
+        val projectId = info.project.projectId
 
-        return projectInfo.projectChapterList.orEmpty().map {
+        return info.chapter.orEmpty().map {
             SChapter.create().apply {
                 url = "$projectId/${it.chapterId}/${projectId}_${it.chapterId}.json"
                 name = it.chapterName
                 chapter_number = it.chapterNo.toFloat()
-                date_upload = dateFormat.parse(it.createDate)?.time ?: 0L
+                date_upload = dateFormat.parse(it.publishDate.value)?.time ?: 0L
                 scanlator = it.providerName
             }
         }

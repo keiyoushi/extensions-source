@@ -11,10 +11,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.e4p.E4PInterceptor
+import keiyoushi.lib.e4p.E4PManifestReader
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.parseAsProto
 import okhttp3.HttpUrl.Builder
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -32,13 +33,12 @@ class JNovel :
 
     private val viewerUrl = "https://labs.$domain/embed/v2"
     private val preferences by getPreferencesLazy()
-    private val decoder = Decoder()
     private val rscHeaders = headersBuilder()
         .set("rsc", "1")
         .build()
 
     override val client = network.client.newBuilder()
-        .addInterceptor(ImageInterceptor())
+        .addInterceptor(E4PInterceptor())
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -48,6 +48,8 @@ class JNovel :
             response
         }
         .build()
+
+    private val manifestReader = E4PManifestReader(client, headers)
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/series".toHttpUrl().newBuilder()
@@ -114,46 +116,7 @@ class JNovel :
         val embedDocument = client.newCall(GET(embedUrl, headers)).execute().asJsoup()
         val manifestUrlStr = embedDocument.body().absUrl("data-e4p-manifest")
         val manifestUrl = manifestUrlStr.toHttpUrl()
-        val manifestResponse = client.newCall(GET(manifestUrlStr, headers)).execute()
-        val ticketBytes = manifestResponse.parseAsProto<E4PQSTicket>()
-        val decoded = decoder.decodeManifestFull(ticketBytes)
-        val pub = decoded.pub
-        val manifestQueryNames = manifestUrl.queryParameterNames
-
-        val consumerIdStr = (ticketBytes.consumer + "0".repeat(32)).substring(0, 32)
-        val consumerId = consumerIdStr.toByteArray(Charsets.US_ASCII)
-
-        return pub.spine.mapIndexedNotNull { index, link ->
-            val h2048 = link.variants.firstOrNull {
-                it.link.contains("h2048") && it.image != null
-            } ?: return@mapIndexedNotNull null
-
-            val resolved = manifestUrl.resolve(h2048.link) ?: return@mapIndexedNotNull null
-            val withAuth = resolved.newBuilder().apply {
-                manifestQueryNames.forEach { name ->
-                    manifestUrl.queryParameter(name)?.let { setQueryParameter(name, it) }
-                }
-            }.build()
-
-            val drm = h2048.image?.drm
-            val iv = drm?.iv
-            val finalUrl = if (drm?.version == EdrmVersion.XEBP && iv != null && iv.size == 32 &&
-                decoded.pbexSeed != null && decoded.pbexSeed.size == 48
-            ) {
-                val xebpFragment = listOf(
-                    withAuth.fragment.orEmpty(),
-                    XebpDecoder.hex(iv),
-                    ticketBytes.contentId,
-                    XebpDecoder.hex(consumerId),
-                    XebpDecoder.hex(decoded.pbexSeed),
-                ).joinToString("\n")
-                withAuth.newBuilder().fragment(xebpFragment).build()
-            } else {
-                withAuth
-            }
-
-            Page(index, imageUrl = finalUrl.toString())
-        }
+        return manifestReader.extractPagesFromEncryptedManifest(manifestUrl)
     }
 
     override fun getFilterList() = FilterList(

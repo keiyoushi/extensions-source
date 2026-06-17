@@ -27,7 +27,16 @@ abstract class TriStateGroup(
     val excluded get() = state.filter { it.isExcluded() }.map { it.value }.takeUnless { it.isEmpty() }
 }
 
-class GenresFilter : TriStateGroup("Жанри", options) {
+class GenresFilter(blockedGenres: Set<String>) : TriStateGroup("Жанри", options) {
+    init {
+        if (blockedGenres.isNotEmpty()) {
+            state.forEach { filter ->
+                if (blockedGenres.contains(filter.value)) {
+                    filter.state = 2
+                }
+            }
+        }
+    }
     companion object {
         var options = emptyList<Pair<String, String>>()
     }
@@ -61,7 +70,7 @@ internal class OrderBy :
             "Останні оновлення" to "updated",
             "Нові тайтли" to "newest",
         ),
-        Selection(0, true),
+        Selection(1, true),
     )
 internal class CategoriesFilter :
     SelectFilter(

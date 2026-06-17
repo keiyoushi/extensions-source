@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.nhentaiclub
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -25,9 +25,11 @@ class NhentaiClub : HttpSource() {
 
     override val lang = "vi"
 
-    override val baseUrl = "https://nhentaiclub.site"
+    override val baseUrl = "https://nhentaiclub.space"
 
     override val supportsLatest = true
+
+    override val id: Long = 9124366814387777661
 
     override val client = network.client.newBuilder()
         .rateLimit(5)

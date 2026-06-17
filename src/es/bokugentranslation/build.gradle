@@ -3,7 +3,7 @@ ext {
     extClass = '.BokugenTranslation'
     themePkg = 'mangathemesia'
     baseUrl = 'https://bokugents.com'
-    overrideVersionCode = 17
+    overrideVersionCode = 18
     isNsfw = false
 }
 

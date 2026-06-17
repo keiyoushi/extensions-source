@@ -3,7 +3,7 @@ ext {
     extClass = '.HaremDeKira'
     themePkg = 'madara'
     baseUrl = 'https://kiraproject.lat'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 

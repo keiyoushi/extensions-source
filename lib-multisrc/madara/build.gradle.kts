@@ -4,7 +4,7 @@ plugins {
     alias(kei.plugins.multisrc)
 }
 
-baseVersionCode = 50
+baseVersionCode = 51
 
 dependencies {
     api(project(":lib:cryptoaes"))

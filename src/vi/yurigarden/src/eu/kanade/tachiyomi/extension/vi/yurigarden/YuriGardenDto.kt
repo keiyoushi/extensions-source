@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.yurigarden
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 class ComicsResponse(
@@ -72,4 +73,42 @@ class PageData(
 class EncryptedResponse(
     val encrypted: Boolean = false,
     val data: String? = null,
+)
+
+@Serializable
+class UserAuthRequest(
+    val email: String,
+    val name: String,
+    val avatar: String,
+    val token: String,
+)
+
+@Serializable
+class UserAuthResponse(
+    val accessToken: String,
+)
+
+@Serializable
+class WebViewAuthData(
+    val email: String? = null,
+    val displayName: String? = null,
+    val photoURL: String? = null,
+    val stsTokenManager: WebViewTokenManager? = null,
+)
+
+@Serializable
+class WebViewTokenManager(
+    val accessToken: String? = null,
+)
+
+@Serializable
+class ServerFnNode(
+    val s: JsonElement? = null,
+    val p: ServerFnProps? = null,
+)
+
+@Serializable
+class ServerFnProps(
+    val k: List<String> = emptyList(),
+    val v: List<ServerFnNode> = emptyList(),
 )

@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.sssscanlator
 
+import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,11 +9,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.extractNextJsRsc
+import keiyoushi.network.rateLimit
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -33,7 +38,7 @@ class YomuComics : HttpSource() {
     override val id = 1497838059713668619
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(2)
+        .rateLimit(5)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -126,12 +131,14 @@ class YomuComics : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val data = response.body.string().extractNextJsRsc<ChapterContentDto> {
-            it is JsonObject && "content" in it && "id" in it && "number" in it && it["content"] is JsonArray
+        val data = response.extractNextJs<ChapterPageDto> {
+            it is JsonObject &&
+                it["chapter"] is JsonObject &&
+                (it["chapter"] as JsonObject)["imagens_lista"] is JsonArray
         }
 
-        if (data != null && data.content.isNotEmpty()) {
-            return data.content.mapIndexed { index, imageUrl ->
+        if (data != null && data.chapter.images.isNotEmpty()) {
+            return data.chapter.images.mapIndexed { index, imageUrl ->
                 Page(index, imageUrl = imageUrl)
             }
         }
@@ -160,9 +167,35 @@ class YomuComics : HttpSource() {
     // Utils
 
     private fun parseLibraryResponse(response: Response): MangasPage {
-        val result = response.parseAs<LibraryResponseDto>()
-        val mangas = result.data.map(LibraryMangaDto::toSManga)
-        val hasNextPage = result.pagination.page < result.pagination.totalPages
+        val resultString = response.body.string()
+        val pagination = resultString.parseAs<LibraryResponseDto>().pagination
+
+        // mangas field name changes frequently
+        val mangasList = resultString
+            .parseAs<JsonElement>()
+            .jsonObject.values
+            .firstNotNullOfOrNull { v ->
+                val jsonArray = when (v) {
+                    is JsonArray -> v
+
+                    // value can be base64 encoded
+                    is JsonPrimitive -> v.contentOrNull?.let { base64Str ->
+                        runCatching {
+                            Base64.decode(base64Str, Base64.DEFAULT)
+                                .toString(Charsets.UTF_8)
+                                .parseAs<JsonArray>()
+                        }.getOrNull()
+                    }
+                    else -> null
+                }
+
+                jsonArray?.runCatching {
+                    map { it.parseAs<LibraryMangaDto>() }
+                }?.getOrNull()
+            } ?: emptyList()
+
+        val mangas = mangasList.map(LibraryMangaDto::toSManga)
+        val hasNextPage = pagination.page < pagination.totalPages
         return MangasPage(mangas, hasNextPage)
     }
 

@@ -1,0 +1,8 @@
+ext {
+    extName = 'Manta Comics'
+    extClass = '.MantaFactory'
+    extVersionCode = 9
+    isNsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"

@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.multisrc.madtheme
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -26,7 +26,7 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 abstract class MadTheme(
     override val name: String,
@@ -38,7 +38,6 @@ abstract class MadTheme(
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 1, TimeUnit.SECONDS)
         // Intercepts chapter image requests that have a fallback URL encoded in the fragment.
         // If the primary CDN returns a failure, we retry with the fallback URL.
         // The fallback is encoded as a fragment so the parser doesn't need to pre-decide
@@ -73,16 +72,17 @@ abstract class MadTheme(
                 return@addInterceptor chain.proceed(request.newBuilder().url(newUrl).build())
             }
             response
-        }.build()
+        }
+        .rateLimit(1, 1.seconds)
+        .build()
 
     protected open val useLegacyApi = false
 
     protected open val useSlugSearch = false
 
     // TODO: better cookie sharing
-    // TODO: don't count cached responses against rate limit
     private val chapterClient: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 12, TimeUnit.SECONDS)
+        .rateLimit(1, 12.seconds)
         .build()
 
     override fun headersBuilder() = Headers.Builder().apply {

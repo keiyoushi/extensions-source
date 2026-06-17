@@ -1,22 +1,22 @@
 package eu.kanade.tachiyomi.extension.en.suryascans
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
-import java.util.concurrent.TimeUnit
+import keiyoushi.network.rateLimit
+import kotlin.time.Duration.Companion.seconds
 
 class GenzToons :
     Keyoapp(
         "Genz Toons",
-        "https://genzupdates.com",
+        "https://genztoons.org",
         "en",
     ) {
 
     override val client = super.client.newBuilder()
+        .connectTimeout(90.seconds)
+        .writeTimeout(90.seconds)
+        .readTimeout(90.seconds)
         .rateLimit(3)
-        .connectTimeout(90, TimeUnit.SECONDS)
-        .writeTimeout(90, TimeUnit.SECONDS)
-        .readTimeout(90, TimeUnit.SECONDS)
         .build()
 
     override fun fetchPopularManga(page: Int) = fetchSearchManga(page, "", FilterList())

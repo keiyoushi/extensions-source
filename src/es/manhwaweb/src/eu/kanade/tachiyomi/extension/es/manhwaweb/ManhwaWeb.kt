@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.manhwaweb
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -157,6 +157,13 @@ class ManhwaWeb : HttpSource() {
         val result = json.decodeFromString<PayloadPageDto>(response.body.string())
         return result.data.images.filter { it.startsWith("http") }
             .mapIndexed { i, img -> Page(i, imageUrl = img) }
+    }
+
+    override fun imageRequest(page: Page): Request {
+        val headers = headersBuilder()
+            .add("Referer", "$baseUrl/")
+            .build()
+        return GET(page.imageUrl!!, headers)
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()

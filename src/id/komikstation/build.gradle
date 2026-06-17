@@ -3,7 +3,7 @@ ext {
     extClass = '.KomikStation'
     themePkg = 'mangathemesia'
     baseUrl = 'https://komikstation.org'
-    overrideVersionCode = 6
+    overrideVersionCode = 7
     isNsfw = false
 }
 

@@ -1,9 +1,7 @@
 ext {
     extName = 'Webdex Scans'
     extClass = '.WebdexScans'
-    themePkg = 'madara'
-    baseUrl = 'https://webdexscans.com'
-    overrideVersionCode = 1
+    extVersionCode = 52
     isNsfw = false
 }
 

@@ -50,7 +50,9 @@ private fun <T> extractValueNextJs(
  *   ([ReactFlightNumber] parses it to the real `Double`; JSON itself has no Infinity/NaN).
  * - `$Q<id>` -> Map, the outlined model at `<id>` is an array of `[key, value]` entries.
  * - `$W<id>` -> Set, the outlined model at `<id>` is an array of values.
- * - `$<id>` -> Looks up the ID in our ByteText cache.
+ * - `$<id>` / `$<id>:<path>` -> Outlined model reference ([ReactFlightServer]'s `getOutlinedModel`).
+ *   `<id>` is looked up in the ByteText [chunkCache] then the [modelCache]; any `:`-separated
+ *   `<path>` segments walk into the model by object key or array index.
  *
  * [modelCache] holds outlined JSON model rows by hex id (for `$Q`/`$W` and lazy refs);
  * [chunkCache] holds binary ByteText chunks by hex id. [resolving] guards against
@@ -78,13 +80,71 @@ private fun resolveNextJsRefs(
                 str[1] == 'n' -> JsonPrimitive(str.substring(2)) // BigInt -> strip '$n' for ReactFlightBigInt
                 str[1] == 'Q' -> resolveMapRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
                 str[1] == 'W' -> resolveSetRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
-                // RSC chunk reference -> look up in cache and replace with content if found
-                else -> chunkCache[str.substring(1)]?.let { JsonPrimitive(it) } ?: element
+                // RSC reference (`$<id>` or `$<id>:<path>`) -> resolve via chunk/model cache.
+                else -> resolveModelRef(str.substring(1), chunkCache, modelCache, resolving) ?: element
             }
         } else {
             element
         }
     }
+}
+
+/**
+ * Resolves a flight reference of the form `<id>` or `<id>:<seg>:<seg>...` into the referenced
+ * element, mirroring React's
+ * [getOutlinedModel](https://github.com/facebook/react/blob/main/packages/react-server/src/ReactFlightServer.js).
+ *
+ * A bare `<id>` first resolves against the binary [chunkCache] (ByteText). Otherwise `<id>` is
+ * looked up in the outlined [modelCache] and the remaining `:`-separated segments walk into that
+ * model row by object key or array index; the reached element is then resolved recursively, with
+ * `<id>` added to the [resolving] cycle guard. Returns `null` if the reference can't be resolved.
+ *
+ * React elements travel on the wire as `["$", type, key, props]` tuples (the leading `"$"` is
+ * [REACT_ELEMENT_TYPE]); the client turns them into element objects before walking. We mirror that
+ * by mapping the `type`/`key`/`props` segments onto tuple indices 1/2/3. A reference encountered
+ * mid-walk (e.g. a lazily-outlined `props`) is resolved before the next segment indexes into it.
+ */
+private fun resolveModelRef(
+    reference: String,
+    chunkCache: Map<String, String>,
+    modelCache: Map<String, JsonElement>,
+    resolving: Set<String>,
+): JsonElement? {
+    val segments = reference.split(':')
+    val id = segments[0]
+    // Bare reference: prefer the binary ByteText chunk if present.
+    if (segments.size == 1) {
+        chunkCache[id]?.let { return JsonPrimitive(it) }
+    }
+    if (id in resolving) return null // cycle
+    val guard = resolving + id
+    var value: JsonElement = modelCache[id] ?: return null
+    for (i in 1 until segments.size) {
+        // A node reached mid-walk may itself be a `$`-reference; resolve it before indexing in.
+        if (value is JsonPrimitive && value.isString && value.content.startsWith("$")) {
+            value = resolveNextJsRefs(value, chunkCache, modelCache, guard)
+        }
+        value = walkRefSegment(value, segments[i]) ?: return null
+    }
+    return resolveNextJsRefs(value, chunkCache, modelCache, guard)
+}
+
+/** Indexes [value] by a single path [segment], honouring the React element tuple shape. */
+private fun walkRefSegment(value: JsonElement, segment: String): JsonElement? = when (value) {
+    is JsonObject -> value[segment]
+    is JsonArray ->
+        // React element tuple ["$", type, key, props] -> map named props to their indices.
+        if (value.size >= 4 && (value[0] as? JsonPrimitive)?.takeIf { it.isString }?.content == "$") {
+            when (segment) {
+                "type" -> value[1]
+                "key" -> value[2]
+                "props" -> value[3]
+                else -> segment.toIntOrNull()?.let { value.getOrNull(it) }
+            }
+        } else {
+            segment.toIntOrNull()?.let { value.getOrNull(it) }
+        }
+    else -> null
 }
 
 /** Resolves the outlined model at [id] (a row of `[key, value]` pairs) into a [JsonObject]. */

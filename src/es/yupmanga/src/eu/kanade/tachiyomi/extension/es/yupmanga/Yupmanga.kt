@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.es.yupmanga
 
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,7 +10,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
+import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
@@ -30,50 +32,30 @@ class Yupmanga : HttpSource() {
 
     override val supportsLatest = true
 
-    // Cached CSRF token and data-k value, populated by the token interceptor during normal browsing flow.
+    // Cached CSRF token populated by the token interceptor during normal browsing flow.
     private var csrfToken: String = ""
-    private var dataK: String = ""
-    private var dataV: String = ""
-    private var anchorScript: String = ""
 
-    // Peeks at every HTML response to extract the token and data-k values without consuming the body.
+    // Peeks at every HTML response to extract the token values without consuming the body.
     private val tokenInterceptor = Interceptor { chain ->
         val response = chain.proceed(chain.request())
         if (response.header("Content-Type").orEmpty().contains("text/html")) {
             // Peak a max of 3MB of data to prevent OutOfMemoryError
             val html = response.peekBody(3 * 1024 * 1024L).string()
 
-            TOKEN_REGEX.find(html)?.groupValues?.get(1)?.let { csrfToken = it }
-            TOKEN_META_REGEX.find(html)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }?.let { csrfToken = it }
-            TOKEN_JS_REGEX.find(html)?.groupValues?.get(1)?.let { match ->
-                csrfToken = match.split(",").mapNotNull {
-                    val clean = it.trim()
-                    if (clean.startsWith("0x", ignoreCase = true)) {
-                        clean.substring(2).toIntOrNull(16)?.toChar()
-                    } else {
-                        clean.toIntOrNull()?.toChar()
-                    }
-                }.joinToString("")
+            val token = TOKEN_REGEX.find(html)?.groupValues?.get(1)
+                ?: TOKEN_META_REGEX.find(html)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
+                ?: TOKEN_JS_REGEX.decodeChars(html).takeIf { it.isNotBlank() }
+
+            if (!token.isNullOrEmpty()) {
+                csrfToken = token
             }
-            DATAK_REGEX.find(html)?.groupValues?.get(1)?.let { dataK = it }
-            DATAV_REGEX.find(html)?.groupValues?.get(1)?.let { match ->
-                dataV = match.split(",").mapNotNull {
-                    val clean = it.trim()
-                    if (clean.startsWith("0x", ignoreCase = true)) {
-                        clean.substring(2).toIntOrNull(16)?.toChar()
-                    } else {
-                        clean.toIntOrNull()?.toChar()
-                    }
-                }.joinToString("")
-            }
-            ANCHOR_SCRIPT_REGEX.find(html)?.groupValues?.get(1)?.let { anchorScript = it }
         }
         response
     }
 
     override val client = network.client.newBuilder()
-        .rateLimit(1)
         .addInterceptor(tokenInterceptor)
+        .rateLimit(1)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -237,80 +219,79 @@ class Yupmanga : HttpSource() {
             client.newCall(GET("$baseUrl/series.php?id=$mangaId", headers)).execute().close()
         }
 
-        val challengeUrl = "$baseUrl/ajax/get_challenge.php".toHttpUrl().newBuilder()
-            .addQueryParameter("chapter", chapterId)
+        val requestHeaders = apiHeaders.newBuilder().apply {
+            if (csrfToken.isNotEmpty()) {
+                add("X-CSRF-Token", csrfToken)
+            }
+        }.build()
+
+        val anchorUrl = "$baseUrl/ajax/get_anchor.php?s=$mangaId"
+        val anchorResponse = client.newCall(GET(anchorUrl, requestHeaders)).execute()
+        val anchorValue = anchorResponse.parseAs<AnchorDto>().v ?: throw Exception("Failed to get anchor")
+
+        val challengeBody = FormBody.Builder()
+            .add("chapter", chapterId)
             .apply {
-                if (mangaId.isNotEmpty()) addQueryParameter("s", mangaId)
+                if (mangaId.isNotEmpty()) add("s", mangaId)
             }
             .build()
+        val challengeUrl = "$baseUrl/ajax/get_challenge.php"
 
-        val challenge = client.newCall(GET(challengeUrl, apiHeaders)).execute().parseAs<ChallengeDto>()
+        val challenge = client.newCall(POST(challengeUrl, apiHeaders, challengeBody)).execute().parseAs<ChallengeDto>()
         if (!challenge.success || challenge.challengeJs == null || challenge.challengeId == null) {
             throw Exception("Error fetching challenge")
         }
 
-        // Broad mocking to avoid "cannot read property" crashes in QuickJs evaluation.
+        val sanitizedJs = challenge.challengeJs
+            .replace("return (async function(){", "return (function(){")
+            .replace(INNER_CHALLENGE_REGEX, "\"$anchorValue\"")
+
         val answer = QuickJs.create().use {
             it.evaluate(
                 """
-                var cssVars = {};
-                var window = {
-                    getComputedStyle: function(el) {
-                        return {
-                            getPropertyValue: function(prop) {
-                                return cssVars[prop] || "$csrfToken";
-                            }
-                        };
+                var document = {
+                    getElementById: function(id) {
+                        if (id === 'ym-fw') {
+                            return {
+                                elements: {
+                                    'w8': { value: "$anchorValue" }
+                                }
+                            };
+                        }
+                        return null;
                     }
                 };
-                var mockElem = {
-                    value: "$csrfToken",
-                    content: "$csrfToken",
-                    getAttribute: function(attr) {
-                        if (attr === 'data-k') return "$dataK";
-                        if (attr === 'data-v') return "${dataV.ifEmpty { csrfToken }}";
-                        if (attr === 'content') return "$csrfToken";
-                        return "$csrfToken";
-                    },
-                    dataset: { token: "$csrfToken", k: "$dataK", v: "$dataV" },
-                    textContent: "$csrfToken",
-                    innerText: "$csrfToken",
-                    innerHTML: "$csrfToken",
-                    id: "csrf_token",
-                    name: "_token",
-                    className: "_cr",
-                    style: {
-                        setProperty: function(prop, val) {
-                            cssVars[prop] = val;
+                var window = {};
+                var atob = function(input) {
+                    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+                    var str = String(input).replace(/=+$/, '');
+                    var output = '';
+                    for (var bc = 0, bs, fn, idx = 0; idx < str.length; ) {
+                        var char = str.charAt(idx++);
+                        var index = chars.indexOf(char);
+                        if (index === -1) continue;
+                        bs = bc % 4 ? bs * 64 + index : index;
+                        if (bc++ % 4) {
+                            output += String.fromCharCode(255 & bs >> (-2 * bc & 6));
                         }
                     }
+                    return output;
                 };
-                var document = {
-                    documentElement: mockElem,
-                    querySelector: function(sel) { return mockElem; },
-                    getElementById: function(id) { return mockElem; },
-                    getElementsByName: function(name) { return [mockElem]; },
-                    getElementsByTagName: function(tag) { return [mockElem]; },
-                    getElementsByClassName: function(cls) { return [mockElem]; },
-                    cookie: ""
-                };
-
-                try {
-                    $anchorScript
-                } catch(e) {}
-
-                (function(){ ${challenge.challengeJs} })();
+                (function() {
+                    $sanitizedJs
+                })();
                 """.trimIndent(),
             )?.toString()
         } ?: throw Exception("Failed to solve challenge")
 
-        val chapterTokenUrl = "$baseUrl/ajax/get_reader_token.php".toHttpUrl().newBuilder()
-            .addQueryParameter("chapter", chapterId)
-            .addQueryParameter("challenge_id", challenge.challengeId)
-            .addQueryParameter("answer", answer)
+        val formBody = FormBody.Builder()
+            .add("chapter", chapterId)
+            .add("challenge_id", challenge.challengeId)
+            .add("answer", answer)
             .build()
+        val request = POST("$baseUrl/ajax/get_reader_token.php", apiHeaders, formBody)
 
-        val tokenDto = client.newCall(GET(chapterTokenUrl, apiHeaders)).execute().parseAs<TokenDto>()
+        val tokenDto = client.newCall(request).execute().parseAs<TokenDto>()
         if (!tokenDto.success || tokenDto.token.isNullOrEmpty()) {
             throw Exception("Información desactualizada. Refresque la lista de capítulos.")
         }
@@ -356,12 +337,19 @@ class Yupmanga : HttpSource() {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
+    private fun Regex.decodeChars(html: String): String = find(html)?.groupValues?.get(1)?.split(",")?.mapNotNull {
+        val clean = it.trim()
+        if (clean.startsWith("0x", ignoreCase = true)) {
+            clean.substring(2).toIntOrNull(16)?.toChar()
+        } else {
+            clean.toIntOrNull()?.toChar()
+        }
+    }?.joinToString("") ?: ""
+
     companion object {
         private val TOKEN_REGEX = """id=["']csrf_token["']\s+value=["']([^"']+)["']""".toRegex()
         private val TOKEN_META_REGEX = """name=["']csrf-token["'][^>]*?content=["']([^"']+)["']""".toRegex()
         private val TOKEN_JS_REGEX = """(?:_token|csrf-token).*?String\.fromCharCode\(([^)]+)\)""".toRegex()
-        private val DATAK_REGEX = """id=["']app-cfg["']\s+data-k=["']([^"']+)["']""".toRegex()
-        private val DATAV_REGEX = """['"]data-v['"].*?String\.fromCharCode\(([^)]+)\)""".toRegex()
-        private val ANCHOR_SCRIPT_REGEX = """<script>\s*(\(\s*function\(\)\s*\{\s*document\.querySelector\(':root'\)[\s\S]*?\}\s*\)\(\);?)\s*</script>""".toRegex()
+        private val INNER_CHALLENGE_REGEX = """await\s+\(async\s+function\(\)\{[\s\S]+?\}\)\(\)""".toRegex()
     }
 }

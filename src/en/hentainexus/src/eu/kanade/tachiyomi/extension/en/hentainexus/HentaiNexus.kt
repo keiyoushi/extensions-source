@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.en.hentainexus
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
@@ -27,6 +27,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class HentaiNexus : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "HentaiNexus"
 
@@ -34,11 +35,11 @@ class HentaiNexus : HttpSource() {
 
     override val baseUrl = "https://hentainexus.com"
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     // Images on this site go through the free Jetpack Photon CDN.
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1)
+        .rateLimit(1) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -46,12 +47,7 @@ class HentaiNexus : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun popularMangaRequest(page: Int) = GET(
-        baseUrl + (if (page > 1) "/page/$page" else ""),
-        headers,
-    )
-
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun parseResponse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select(".container .column").map { element ->
             SManga.create().apply {
@@ -60,18 +56,30 @@ class HentaiNexus : HttpSource() {
                 thumbnail_url = element.selectFirst(".card-image img")?.absUrl("src")
             }
         }
-        val hasNextPage = document.selectFirst("a.pagination-next[href]") != null
+        val isPopularNow = response.request.url.encodedPath == POPULAR_NOW_PATH
+        val hasNextPage = isPopularNow || document.selectFirst("a.pagination-next[href]") != null
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = GET(
+        baseUrl + (if (page > 1) "/page/$page" else ""),
+        headers,
+    )
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = parseResponse(response)
+
+    override fun popularMangaRequest(page: Int): Request = if (page > 1) {
+        searchMangaRequest(page - 1, "sort:popular", getFilterList())
+    } else {
+        GET(baseUrl + POPULAR_NOW_PATH, headers)
+    }
+
+    override fun popularMangaParse(response: Response): MangasPage = parseResponse(response)
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
+            if (url.host != baseUrlHost) {
                 throw Exception("Unsupported url")
             }
             val id = url.pathSegments.getOrNull(1)
@@ -100,7 +108,7 @@ class HentaiNexus : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    override fun searchMangaParse(response: Response) = parseResponse(response)
 
     private val tagCountRegex = Regex("""\s*\([\d,]+\)$""")
 
@@ -196,5 +204,6 @@ class HentaiNexus : HttpSource() {
 
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
+        const val POPULAR_NOW_PATH = "/explore/hot"
     }
 }

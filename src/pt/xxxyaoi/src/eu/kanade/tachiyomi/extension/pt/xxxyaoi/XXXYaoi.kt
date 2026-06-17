@@ -2,16 +2,16 @@ package eu.kanade.tachiyomi.extension.pt.xxxyaoi
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 import kotlin.collections.plusAssign
+import kotlin.time.Duration.Companion.seconds
 
 class XXXYaoi :
     Madara(
@@ -33,7 +33,7 @@ class XXXYaoi :
         .set("Pragma", "no-cache")
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(3, 1, TimeUnit.SECONDS)
+        .rateLimit(3, 1.seconds)
         .build()
 
     override val useNewChapterEndpoint = true

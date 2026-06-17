@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaLivreTo'
     themePkg = 'madara'
     baseUrl = 'https://mangalivre.to'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 

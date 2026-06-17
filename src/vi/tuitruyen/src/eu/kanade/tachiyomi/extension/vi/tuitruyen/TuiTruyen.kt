@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.vi.tuitruyen
 
+import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,16 +10,25 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.security.MessageDigest
+import java.security.SecureRandom
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.ConcurrentHashMap
 
 class TuiTruyen : HttpSource() {
     override val name = "TuiTruyen"
@@ -27,7 +36,12 @@ class TuiTruyen : HttpSource() {
     override val baseUrl = "https://tuitruyen.top"
     override val supportsLatest = true
 
+    private val imgxGrants = ConcurrentHashMap<String, PageAccessEntry>()
+
+    private val secureRandom = SecureRandom()
+
     override val client = network.client.newBuilder()
+        .addInterceptor(imgxInterceptor())
         .rateLimit(3)
         .build()
 
@@ -266,6 +280,22 @@ class TuiTruyen : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
+        val readerEl = document.selectFirst("[data-reader-imgx-initial-pages]")
+
+        val accessUrl = readerEl?.attr("data-reader-imgx-access-url")?.ifBlank { null }
+
+        if (accessUrl != null) {
+            val fullAccessUrl = if (accessUrl.startsWith("http")) accessUrl else "$baseUrl$accessUrl"
+            val proofToken = readerEl.attr("data-reader-imgx-proof-token").ifBlank { null }
+            val totalPages = readerEl.attr("data-reader-total-pages").toIntOrNull()
+                ?: document.select("img.page-media").count { el ->
+                    !el.parents().any { it.tagName().equals("noscript", ignoreCase = true) }
+                }
+
+            return fetchPagesWithGrants(fullAccessUrl, totalPages, proofToken, document)
+        }
+
+        // Fallback no IMGx protection
         val imageUrls = document.select("img.page-media")
             .asSequence()
             .filterNot { element ->
@@ -283,6 +313,142 @@ class TuiTruyen : HttpSource() {
         return imageUrls.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }
+    }
+
+    private fun fetchPagesWithGrants(
+        accessUrl: String,
+        totalPages: Int,
+        proofToken: String?,
+        document: Document,
+    ): List<Page> {
+        val readerEl = document.selectFirst("[data-reader-imgx-initial-pages]")
+        val initialPagesJson = readerEl?.attr("data-reader-imgx-initial-pages")?.ifBlank { null }
+
+        val initialEntries = if (initialPagesJson != null) {
+            try {
+                val decoded = java.net.URLDecoder.decode(initialPagesJson, "UTF-8")
+                decoded.parseAs<List<PageAccessEntry>>()
+            } catch (_: Exception) {
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
+
+        for (entry in initialEntries) {
+            if (entry.downloadUrl.isNotBlank() && entry.grant != null) {
+                imgxGrants[entry.downloadUrl] = entry
+            }
+        }
+
+        val initialIndices = initialEntries.map { it.pageIndex }.toSet()
+        val remainingIndices = (0 until totalPages).filter { it !in initialIndices }
+
+        val pages = initialEntries.map { entry ->
+            Page(entry.pageIndex, imageUrl = entry.downloadUrl)
+        }.toMutableList()
+
+        val batchSize = 5
+        for (start in remainingIndices.indices step batchSize) {
+            val end = minOf(start + batchSize, remainingIndices.size)
+            val indices = remainingIndices.subList(start, end)
+            val proof = proofToken?.let { createPageAccessProof(accessUrl, indices, it) }
+            val body = PageAccessRequest(pageIndexes = indices, pageAccessProof = proof).toJsonRequestBody()
+
+            val request = Request.Builder()
+                .url(accessUrl)
+                .post(body)
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .apply {
+                    if (proof != null) {
+                        header("X-IMGX-Reader-Proof", proof.proof)
+                        header("X-IMGX-Reader-Proof-Version", proof.version)
+                    }
+                }
+                .build()
+
+            val response = client.newCall(request).execute()
+            val pageAccess = response.use { it.parseAs<PageAccessResponse>() }
+
+            for (entry in pageAccess.pages) {
+                if (entry.downloadUrl.isNotBlank() && entry.grant != null) {
+                    imgxGrants[entry.downloadUrl] = entry
+                    pages.add(Page(entry.pageIndex, imageUrl = entry.downloadUrl))
+                }
+            }
+        }
+
+        return pages.sortedBy { it.index }
+    }
+
+    private fun createPageAccessProof(
+        accessUrl: String,
+        pageIndexes: List<Int>,
+        token: String,
+    ): PageAccessProof {
+        val version = "imgx-page-access-proof-v1"
+        val issuedAt = System.currentTimeMillis()
+        val nonce = randomHex(16)
+        val accessPath = accessUrl.toHttpUrl().encodedPath
+        val pageIndexPart = pageIndexes.joinToString(",")
+        val proofInput = listOf(
+            version,
+            token,
+            accessPath,
+            "",
+            pageIndexPart,
+            issuedAt.toString(),
+            nonce.lowercase(Locale.ROOT),
+        ).joinToString("\n")
+
+        val proof = MessageDigest.getInstance("SHA-256")
+            .digest(proofInput.toByteArray(Charsets.UTF_8))
+            .base64UrlNoPadding()
+
+        return PageAccessProof(
+            version = version,
+            token = token,
+            issuedAt = issuedAt,
+            nonce = nonce,
+            proof = proof,
+        )
+    }
+
+    private fun randomHex(size: Int): String {
+        val bytes = ByteArray(size)
+        secureRandom.nextBytes(bytes)
+        return bytes.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+    }
+
+    private fun ByteArray.base64UrlNoPadding(): String = Base64.encodeToString(this, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+
+    private fun imgxInterceptor() = Interceptor { chain ->
+        val request = chain.request()
+        val url = request.url.toString()
+        val entry = imgxGrants.remove(url)
+
+        if (entry?.grant == null) {
+            return@Interceptor chain.proceed(request)
+        }
+
+        val response = chain.proceed(request)
+        val imgxData = response.body.bytes()
+
+        if (imgxData.size <= 13 ||
+            imgxData[0] != 0x49.toByte() || imgxData[1] != 0x4D.toByte() ||
+            imgxData[2] != 0x47.toByte() || imgxData[3] != 0x58.toByte()
+        ) {
+            return@Interceptor response.newBuilder()
+                .body(imgxData.toResponseBody(response.body.contentType()))
+                .build()
+        }
+
+        val webp = ImageDecryptor.decrypt(imgxData, entry.grant, entry.storageKey)
+
+        response.newBuilder()
+            .body(webp.toResponseBody("image/webp".toMediaType()))
+            .build()
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()

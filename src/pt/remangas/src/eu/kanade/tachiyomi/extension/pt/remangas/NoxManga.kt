@@ -8,23 +8,30 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import kotlin.time.Duration.Companion.seconds
 
 class NoxManga : HttpSource() {
 
     override val name: String = "NoxManga"
 
-    override val baseUrl: String = "https://noxmanga.co"
+    override val baseUrl: String = "https://noxtoons.com"
 
     override val lang: String = "pt-BR"
 
     override val supportsLatest: Boolean = true
 
     override val id: Long = 7462657023971681136
+
+    override val client: OkHttpClient = network.client.newBuilder()
+        .rateLimit(3, 1.seconds)
+        .build()
 
     private val apiUrl: String = "https://xodneo.site/api/v1/comics"
 
@@ -35,9 +42,10 @@ class NoxManga : HttpSource() {
 
     override fun popularMangaRequest(page: Int): Request {
         val url = apiUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("per_page", "20")
+            .addQueryParameter("per_page", "24")
             .addQueryParameter("sort", "popular")
             .addQueryParameter("period", "week")
+            .addQueryParameter("page", page.toString())
             .build()
         return GET(url, headers)
     }
@@ -52,9 +60,10 @@ class NoxManga : HttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = apiUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("per_page", "20")
+            .addQueryParameter("per_page", "24")
             .addQueryParameter("sort", "latest")
             .addQueryParameter("period", "week")
+            .addQueryParameter("page", page.toString())
             .build()
         return GET(url, headers)
     }

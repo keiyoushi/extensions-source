@@ -3,7 +3,7 @@ ext {
     extClass = '.FlowerMangaDotNet'
     themePkg = 'madara'
     baseUrl = 'https://flowermangas.net'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = true
 }
 

@@ -13,7 +13,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -22,6 +21,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -38,6 +38,7 @@ import java.util.concurrent.TimeUnit
 class AllManga :
     HttpSource(),
     ConfigurableSource {
+    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
 
     override val name = "AllManga"
 
@@ -56,7 +57,7 @@ class AllManga :
     private val preferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(apiUrl.toHttpUrl(), 1)
+        .rateLimit(1) { it.host == apiUrlHost }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

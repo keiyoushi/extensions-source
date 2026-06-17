@@ -6,13 +6,15 @@ import eu.kanade.tachiyomi.source.model.FilterList
 fun buildFilterList() = FilterList(
     Filter.Header("篩選條件（搜尋關鍵字時無效）"),
     ThemeFilter(), // 1
-    TypeFilter(), // 5
-    RegionFilter(), // 4
-    SortFilter(), // 0
-    AnimeFilter(), // 3
+    TypeFilter(), // 2
+    RegionFilter(), // 3
+    YearFilter(), // 4
+    SortFilter(), // 5
+    AnimeFilter(), // 6
     NovelFilter(), // 7
-    StatusFilter(), // 2
-    TimeFilter(), // 6
+    AwardFilter(), // 8
+    StatusFilter(), // 9
+    TimeFilter(), // 10
 )
 
 class ThemeFilter :
@@ -30,7 +32,7 @@ class ThemeFilter :
             "復仇", "鬥智", "惡役", "間諜", "治癒", "歡樂",
             "萌系", "末日", "大逃殺", "音樂", "美食", "性轉",
             "偽娘", "穿越", "童話", "轉生", "黑暗", "溫馨",
-            "超自然",
+            "超自然", "青春",
         ),
     ) {
     override fun toString(): String = arrayOf(
@@ -42,7 +44,7 @@ class ThemeFilter :
         "41", "42", "43", "44", "45", "46", "47", "48",
         "49", "50", "51", "52", "53", "54", "55", "56",
         "57", "58", "59", "60", "61", "62", "63", "64",
-        "65",
+        "65", "66",
     )[state]
 }
 
@@ -74,13 +76,13 @@ class SortFilter :
     Filter.Select<String>(
         "排序方式",
         arrayOf(
-            "最近更新", "月點擊", "周推薦", "月推薦", "周鮮花",
-            "月鮮花", "字數", "收藏數", "周點擊", "最新入庫",
+            "最近更新", "月點擊", "周點擊", "月推薦", "周推薦",
+            "月鮮花", "周鮮花", "字數", "收藏數", "最新入庫",
         ),
     ) {
     override fun toString(): String = arrayOf(
-        "lastupdate", "monthvisit", "weekvote", "monthvote", "weekflower",
-        "monthflower", "words", "goodnum", "weekvisit", "postdate",
+        "lastupdate", "monthvisit", "weekvisit", "monthvote", "weekvote",
+        "monthflower", "weekflower", "words", "goodnum", "postdate",
     )[state]
 }
 
@@ -102,4 +104,36 @@ class TimeFilter :
         arrayOf("不限", "三日內", "七日內", "半月內", "一月內"),
     ) {
     override fun toString() = arrayOf("0", "1", "2", "3", "4")[state]
+}
+
+class YearFilter :
+    Filter.Select<String>(
+        "發表年代",
+        arrayOf(
+            "不限", "2026年", "2025年", "2024年", "2023年", "2022年", "2021年",
+            "2020年", "2019年", "2018年", "2017年", "2016年", "2015年", "2014年",
+            "2013年", "2012年", "2011年", "2010年", "00年代", "90年代", "80年代", "更早",
+        ),
+    ) {
+    override fun toString(): String = arrayOf(
+        "0", "2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018",
+        "2017", "2016", "2015", "2014", "2013", "2012", "2011", "2010", "2000",
+        "1990", "1980", "1970",
+    )[state]
+}
+
+class AwardFilter :
+    Filter.Select<String>(
+        "這本漫畫真厲害",
+        arrayOf(
+            "不限", "2027", "2026", "2025", "2024", "2023", "2022", "2021", "2020",
+            "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012", "2011",
+            "2010", "2009", "2008", "2007", "2006",
+        ),
+    ) {
+    override fun toString(): String = arrayOf(
+        "0", "2027", "2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019",
+        "2018", "2017", "2016", "2015", "2014", "2013", "2012", "2011", "2010", "2009",
+        "2008", "2007", "2006",
+    )[state]
 }

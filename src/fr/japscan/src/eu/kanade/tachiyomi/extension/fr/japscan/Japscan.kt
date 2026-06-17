@@ -15,7 +15,6 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -23,8 +22,9 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
@@ -37,7 +37,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.Injekt
@@ -48,9 +47,10 @@ import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.collections.mapIndexed
+import kotlin.time.Duration.Companion.seconds
 
 class Japscan :
-    ParsedHttpSource(),
+    HttpSource(),
     ConfigurableSource {
 
     override val id: Long = 11
@@ -71,7 +71,7 @@ class Japscan :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 2)
+        .rateLimit(1, 2.seconds)
         .build()
 
     private val captchaRegex = """window\.__captcha\s*=\s*\{\s*needed\s*:\s*true\s*,?""".toRegex()
@@ -86,6 +86,7 @@ class Japscan :
             "height:0",
             "pointer-events:none",
             "clip-path:inset(100%",
+            "clip-path:circle(0)",
             "clip:rect(0,0,0,0",
             "font-size:0",
             "text-indent:-",
@@ -123,28 +124,25 @@ class Japscan :
     // Popular
     override fun popularMangaRequest(page: Int): Request = GET("$internalBaseUrl/mangas/?sort=popular&p=$page", headers)
 
-    override fun popularMangaNextPageSelector() = ".pagination > li:last-child:not(.disabled)"
-
-    override fun popularMangaSelector() = ".mangas-list .manga-block:not(:has(a[href='']))"
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        element.select("a").first()!!.let {
-            manga.setUrlWithoutDomain(it.attr("href"))
-            manga.title = it.text()
-            manga.thumbnail_url = it.selectFirst("img")?.attr("abs:data-src")
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val manga = document.select(".mangas-list .manga-block:not(:has(a[href='']))").map { element ->
+            SManga.create().apply {
+                element.select("a").first()!!.let {
+                    setUrlWithoutDomain(it.attr("href"))
+                    title = it.text()
+                    thumbnail_url = it.selectFirst("img")?.attr("abs:data-src")
+                }
+            }
         }
-        return manga
+        val hasNextPage = document.selectFirst(".pagination > li:last-child:not(.disabled)") != null
+        return MangasPage(manga, hasNextPage)
     }
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request = GET("$internalBaseUrl/mangas/?sort=updated&p=$page", headers)
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
+    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -174,10 +172,6 @@ class Japscan :
         }
     }
 
-    override fun searchMangaNextPageSelector(): String = popularMangaSelector()
-
-    override fun searchMangaSelector(): String = "div.card div.p-2"
-
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url.pathSegments.first() == "ls") {
             val jsonResult = json.parseToJsonElement(response.body.string()).jsonArray
@@ -190,23 +184,23 @@ class Japscan :
         val baseUrlHost = internalBaseUrl.toHttpUrl().host
         val document = response.asJsoup()
         val manga = document
-            .select(searchMangaSelector())
+            .select("div.card div.p-2")
             .filter { it ->
                 // Filter out ads masquerading as search results
                 it.select("p a").attr("abs:href").toHttpUrl().host == baseUrlHost
             }
-            .map(::searchMangaFromElement)
-        val hasNextPage = document.selectFirst(searchMangaNextPageSelector()) != null
+            .map { element ->
+                SManga.create().apply {
+                    thumbnail_url = element.select("img").attr("abs:src")
+                    element.select("p a").let {
+                        title = it.text()
+                        url = it.attr("href")
+                    }
+                }
+            }
+        val hasNextPage = document.selectFirst(".mangas-list .manga-block:not(:has(a[href='']))") != null
 
         return MangasPage(manga, hasNextPage)
-    }
-
-    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        thumbnail_url = element.select("img").attr("abs:src")
-        element.select("p a").let {
-            title = it.text()
-            url = it.attr("href")
-        }
     }
 
     private fun searchMangaFromJson(jsonObj: JsonObject): SManga = SManga.create().apply {
@@ -217,7 +211,8 @@ class Japscan :
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(internalBaseUrl + manga.url, headers)
 
-    override fun mangaDetailsParse(document: Document): SManga {
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
         val infoElement = document.selectFirst("#main .card-body")!!
         val manga = SManga.create()
 
@@ -252,7 +247,7 @@ class Japscan :
 
     override fun chapterListRequest(manga: SManga): Request = GET(internalBaseUrl + manga.url, headers)
 
-    override fun chapterListSelector() = "#list_chapters > div.collapse > div.list_chapters" +
+    private fun chapterListSelector() = "#list_chapters > div.collapse > div.list_chapters" +
         if (chapterListPref() == "hide") {
             ":not(:has(.badge:contains(SPOILER),.badge:contains(RAW),.badge:contains(VUS)))"
         } else {
@@ -300,8 +295,6 @@ class Japscan :
         if (typeIdx == -1 || typeIdx + 1 >= segments.size) return null
         return segments[typeIdx + 1].takeIf { it.isNotEmpty() }
     }
-
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     private fun isHidden(el: Element): Boolean {
         if (el.hasClass("d-none")) return true
@@ -362,6 +355,7 @@ class Japscan :
                 if (mangaSlug != null && segments[1] != mangaSlug) return@filter false
                 val urlNum = url.trimEnd('/').substringAfterLast('/')
                 if (!urlNum.all { it.isDigit() }) return@filter false
+                if (urlNum.length > 1 && urlNum.startsWith('0')) return@filter false
                 val chapterNum = Regex("""(?i)chapitre\s+([\d.]+)""").find(name)
                     ?.groupValues?.get(1)?.replace(".", "")
                     ?: name.split(Regex("[^0-9.]+")).filter { it.isNotEmpty() }
@@ -649,9 +643,9 @@ class Japscan :
         return Observable.just(images)
     }
 
-    override fun pageListParse(document: Document) = throw Exception("Not used")
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException("Not used")
 
-    override fun imageUrlParse(document: Document): String = ""
+    override fun imageUrlParse(response: Response): String = ""
 
     // Filters
     private class TextField(name: String) : Filter.Text(name)

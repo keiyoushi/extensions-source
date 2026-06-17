@@ -1,25 +1,22 @@
 package eu.kanade.tachiyomi.extension.th.nekopost.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class RawLatestChapterList(
+class RawLatestChapterList(
+    @SerialName("listChapter")
     val listChapter: List<RawLatestChapter>? = null,
 )
 
 @Serializable
-data class RawLatestChapter(
-    val noNewChapter: Int,
+class RawLatestChapter(
+    @SerialName("pid")
     val pid: Int,
+    @SerialName("projectName")
     val projectName: String,
-    val chapterId: Int,
-    val chapterNo: String,
-    val chapterName: String,
-    val releaseDate: String,
-    val cover: String,
-    val editorId: Int,
-    val editorName: String,
+    @SerialName("coverVersion")
     val coverVersion: Int,
+    @SerialName("status")
     val status: String,
-    val projectType: String,
 )

@@ -1,90 +1,101 @@
 package eu.kanade.tachiyomi.extension.en.philiascans
 
 import eu.kanade.tachiyomi.source.model.Filter
+import okhttp3.HttpUrl.Builder
 
-internal class CheckBoxVal(name: String, val value: String) : Filter.CheckBox(name)
+open class SelectFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    val value: String
+        get() = vals[state].second
+}
 
-internal class TypeFilter :
-    Filter.Group<CheckBoxVal>(
-        "Type",
-        listOf(
-            CheckBoxVal("Manga", "manga"),
-            CheckBoxVal("Manhwa", "manhwa"),
-            CheckBoxVal("Manhua", "manhua"),
-            CheckBoxVal("Webtoon", "webtoon"),
-            CheckBoxVal("Comic", "comic"),
-        ),
-    )
+class CheckBoxVal(name: String, val value: String) : Filter.CheckBox(name)
 
-internal class StatusFilter :
-    Filter.Group<CheckBoxVal>(
-        "Status",
-        listOf(
-            CheckBoxVal("On Going", "on_going"),
-            CheckBoxVal("Completed", "completed"),
-            CheckBoxVal("On Hold", "on_hold"),
-            CheckBoxVal("Canceled", "canceled"),
-        ),
-    )
+open class CheckBoxGroup(displayName: String, options: Array<Pair<String, String>>) : Filter.Group<CheckBoxVal>(displayName, options.map { CheckBoxVal(it.first, it.second) }) {
+    val checked get() = state.filter { it.state }.map { it.value }
+}
 
-internal class ContentRatingFilter :
-    Filter.Group<CheckBoxVal>(
-        "Content rating",
-        listOf(
-            CheckBoxVal("Safe", "safe"),
-            CheckBoxVal("Suggestive", "suggestive"),
-            CheckBoxVal("Mature", "mature"),
-            CheckBoxVal("Erotica", "erotica"),
-        ),
-    )
+fun Builder.addFilter(param: String, filter: SelectFilter?) = filter?.value?.takeIf(String::isNotBlank)?.let { addQueryParameter(param, it) }
 
-internal class SortFilter :
-    Filter.Sort(
-        "Sort",
+fun Builder.addFilter(param: String, filter: CheckBoxGroup?) = filter?.checked?.forEach { addQueryParameter(param, it) }
+
+class SortFilter :
+    SelectFilter(
+        "Sort by",
         arrayOf(
-            "Recently Updated",
-            "Trending",
-            "Most Viewed",
-            "Highest Rated",
-            "Alphabetical",
-            "New Manga",
+            "Recently Updated" to "",
+            "Trending" to "trending",
+            "Most Viewed" to "views",
+            "Highest Rating" to "rating",
+            "Alphabetical" to "title",
+            "New Manga" to "added",
         ),
-        Selection(0, false),
     )
 
-internal class GenreFilter :
-    Filter.Group<CheckBoxVal>(
+class OrderFilter :
+    SelectFilter(
+        "Order by",
+        arrayOf(
+            "Descending" to "desc",
+            "Ascending" to "asc",
+        ),
+    )
+
+class TypeFilter :
+    CheckBoxGroup(
+        "Types",
+        arrayOf(
+            "Manga" to "manga",
+            "Manhwa" to "manhwa",
+            "Manhua" to "manhua",
+            "Webtoon" to "webtoon",
+            "Comic" to "comic",
+        ),
+    )
+
+class StatusFilter :
+    CheckBoxGroup(
+        "Status",
+        arrayOf(
+            "On Going" to "on_going",
+            "Completed" to "completed",
+            "On Hold" to "on_hold",
+            "Canceled" to "canceled",
+        ),
+    )
+
+class GenreFilter :
+    CheckBoxGroup(
         "Genre",
-        listOf(
-            CheckBoxVal("Action", "action"),
-            CheckBoxVal("Adventure", "adventure"),
-            CheckBoxVal("Comedy", "comedy"),
-            CheckBoxVal("Drama", "drama"),
-            CheckBoxVal("Ecchi", "ecchi"),
-            CheckBoxVal("Fantasy", "fantasy"),
-            CheckBoxVal("Gourmet", "gourmet"),
-            CheckBoxVal("Harem", "harem"),
-            CheckBoxVal("Historical", "historical"),
-            CheckBoxVal("Isekai", "isekai"),
-            CheckBoxVal("Josei", "josei"),
-            CheckBoxVal("Magic", "magic"),
-            CheckBoxVal("Martial Arts", "martial-arts"),
-            CheckBoxVal("Monsters", "monsters"),
-            CheckBoxVal("Music", "music"),
-            CheckBoxVal("Mystery", "mystery"),
-            CheckBoxVal("Psychological", "psychological"),
-            CheckBoxVal("Regression", "regression"),
-            CheckBoxVal("Romance", "romance"),
-            CheckBoxVal("School Life", "school-life"),
-            CheckBoxVal("Sci-Fi", "sci-fi"),
-            CheckBoxVal("Seinen", "seinen"),
-            CheckBoxVal("Shoujo", "shoujo"),
-            CheckBoxVal("Shounen", "shounen"),
-            CheckBoxVal("Slice of Life", "slice-of-life"),
-            CheckBoxVal("Supernatural", "supernatural"),
-            CheckBoxVal("Survival", "survival"),
-            CheckBoxVal("Tragedy", "tragedy"),
-            CheckBoxVal("Villainess", "villainess"),
-            CheckBoxVal("War", "war"),
+        arrayOf(
+            "Action" to "action",
+            "Adventure" to "adventure",
+            "Comedy" to "comedy",
+            "Drama" to "drama",
+            "Ecchi" to "ecchi",
+            "Fantasy" to "fantasy",
+            "Gourmet" to "gourmet",
+            "Harem" to "harem",
+            "Historical" to "historical",
+            "Isekai" to "isekai",
+            "Josei" to "josei",
+            "Magic" to "magic",
+            "Martial Arts" to "martial-arts",
+            "Monsters" to "monsters",
+            "Music" to "music",
+            "Mystery" to "mystery",
+            "Psychological" to "psychological",
+            "Regression" to "regression",
+            "Romance" to "romance",
+            "School Life" to "school-life",
+            "Sci-Fi" to "sci-fi",
+            "Seinen" to "seinen",
+            "Shoujo" to "shoujo",
+            "Shounen" to "shounen",
+            "Slice of Life" to "slice-of-life",
+            "Supernatural" to "supernatural",
+            "Survival" to "survival",
+            "Tragedy" to "tragedy",
+            "Villainess" to "villainess",
+            "War" to "war",
         ),
     )

@@ -13,6 +13,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneId
 import java.util.Locale
 import java.util.TimeZone
 
@@ -59,8 +61,10 @@ class MangaDto(
     private val synopsis: String? = null,
     @JsonNames("genres", "tags")
     private val genres: JsonElement? = null,
+    private val released: Long? = null,
     private val status: String? = null,
     private val type: String? = null,
+    private val views: JsonElement? = null,
     private val otherNames: List<String>? = null,
     private val avgRating: Float? = null,
     val scanlators: List<ScanlatorDto>? = null,
@@ -120,6 +124,16 @@ class MangaDto(
         description = buildList {
             avgRating?.takeIf { it > 0 }?.let {
                 add("Rating: %.2f/10".format(Locale.ENGLISH, it))
+            }
+
+            released?.takeIf { it > 0 }?.let {
+                val releaseYear = Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).year
+                add("Year: $releaseYear")
+            }
+
+            // can be Int or formatted String
+            views?.jsonPrimitive?.content?.let {
+                add("Views: $it")
             }
 
             synopsis?.takeIf { it.isNotBlank() }?.let {

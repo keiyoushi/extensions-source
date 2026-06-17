@@ -3,10 +3,6 @@ package eu.kanade.tachiyomi.extension.zh.happymh
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.extension.zh.happymh.dto.ChapterByPageResponse
-import eu.kanade.tachiyomi.extension.zh.happymh.dto.ChapterByPageResponseData
-import eu.kanade.tachiyomi.extension.zh.happymh.dto.PageListResponseDto
-import eu.kanade.tachiyomi.extension.zh.happymh.dto.PopularResponseDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -18,8 +14,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
+import keiyoushi.utils.parseAs
 import okhttp3.Cookie
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -31,7 +26,6 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 
 const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua_"
 
@@ -41,11 +35,10 @@ class Happymh :
     override val name: String = "嗨皮漫画"
     override val lang: String = "zh"
     override val supportsLatest: Boolean = true
-
     override val baseUrl: String = "https://m.happymh.com"
-    private val json: Json by injectLazy()
 
     private val preferences = getPreferences()
+    private val decoder = Decoder()
 
     init {
         val oldUa = preferences.getString("userAgent", null)
@@ -247,7 +240,7 @@ class Happymh :
         val url = "$baseUrl/v2.0/apis/manga/reading".toHttpUrl().newBuilder()
             .addQueryParameter("code", comicId)
             .addQueryParameter("cid", chapterId)
-            .addQueryParameter("v", "v4.203411")
+            .addQueryParameter("v", "v4.300101")
             .addQueryParameter("_t", requestId)
             .build()
         val headers = ajaxHeadersBuilder(requestId, accept = "application/json")
@@ -269,18 +262,22 @@ class Happymh :
         return GET(url, headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageListResponseDto>().data.scans
-        // If n == 1, the image is from next chapter
-        .filter { it.n == 0 }
-        .mapIndexed { index, it ->
-            // Strip q=... for large images (> 16383px) to avoid WebpExceedRange error
-            val url = if (it.width > 16383 || it.height > 16383) {
-                it.url.substringBefore("?q=")
-            } else {
-                it.url
-            }
-            Page(index, "", url)
+    override fun pageListParse(response: Response): List<Page> {
+        val dto = response.parseAs<PageListResponseDto>()
+
+        val pages = if (dto.data.isEncode) {
+            decoder.decodeScans(dto.data.scans)
+        } else {
+            dto.data.scans
         }
+
+        return pages.parseAs<List<PageDto>>()
+            // If n == 1, the image is from next chapter
+            .filter { it.n == 0 }
+            .mapIndexed { index, page ->
+                Page(index, imageUrl = page.url.substringBefore("?q="))
+            }
+    }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
@@ -310,10 +307,6 @@ class Happymh :
                 }
             }
         }.let(screen::addPreference)
-    }
-
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromStream(it.body.byteStream())
     }
 
     private fun ajaxHeadersBuilder(

@@ -25,14 +25,20 @@ class MangaList(
     private val pagination: Pagination,
     val allGenres: List<String> = emptyList(),
 ) {
-    fun hasNextPage() = pagination.current < pagination.total
+    fun hasNextPage() = when {
+        pagination.current != null && pagination.total != null -> pagination.current < pagination.total
+        pagination.nextCursor != null -> true
+        else -> false
+    }
 
     @Serializable
     class Pagination(
         @SerialName("total_pages")
-        val total: Int,
+        val total: Int? = null,
         @SerialName("current_page")
-        val current: Int,
+        val current: Int? = null,
+        @SerialName("next_cursor")
+        val nextCursor: String? = null,
     )
 }
 
@@ -121,6 +127,18 @@ class Manga(
     private val malID: Long? = null,
     @SerialName("kitsu_id")
     private val kitsuID: Long? = null,
+    @SerialName("mangadex_id")
+    private val mangadexID: String? = null,
+    @SerialName("year")
+    private val year: Int? = null,
+    @SerialName("chapter_count")
+    private val chapterCount: Int? = null,
+    @SerialName("tracked_count")
+    private val trackedCount: Int? = null,
+    @SerialName("rating_count")
+    private val ratingCount: Int? = null,
+    @SerialName("content_rating")
+    private val contentRating: String? = null,
     private val authors: String? = null,
     private val artists: String? = null,
 ) {
@@ -166,6 +184,19 @@ class Manga(
                 append("${"★".repeat(stars)}${"☆".repeat(5 - stars)} $rating\n\n")
             }
 
+            val metaInfo = buildList {
+                year?.let { add("**Year:** $it") }
+                chapterCount?.let { add("**Chapters:** $it") }
+                trackedCount?.let { add("**Tracked:** $it") }
+                contentRating?.let {
+                    add("**Content Rating:** ${it.replaceFirstChar { c -> c.uppercase() }}")
+                }
+                ratingCount?.takeIf { it > 0 }?.let { add("$it ratings") }
+            }
+            if (metaInfo.isNotEmpty()) {
+                append(metaInfo.joinToString(" · "), "\n\n")
+            }
+
             this@Manga.description?.let {
                 append(
                     it.replace("\r\n", "\n")
@@ -182,10 +213,11 @@ class Manga(
                 mangabakaID?.let { "[MangaBaka](https://mangabaka.org/$it)" },
                 malID?.let { "[MyAnimeList](https://myanimelist.net/manga/$it)" },
                 kitsuID?.let { "[Kitsu](https://kitsu.app/manga/$it)" },
+                mangadexID?.let { "[MangaDex](https://mangadex.org/title/$it)" },
                 sourceUrl?.let { "[Source]($it)" },
             ).also { links ->
                 if (links.isNotEmpty()) {
-                    append("\nLinks:\n")
+                    append("\n**Links:**\n")
                     links.forEach { link ->
                         append("- ", link, "\n")
                     }
@@ -193,7 +225,7 @@ class Manga(
             }
 
             if (altTitles.isNotEmpty()) {
-                append("\nAlternative Names:\n")
+                append("\n**Alternative Names:**\n")
                 altTitles.forEach { altTitle ->
                     append("- ", altTitle.trim(), "\n")
                 }

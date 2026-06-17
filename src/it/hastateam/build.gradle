@@ -3,7 +3,7 @@ ext {
     extClass = '.HastaTeam'
     themePkg = 'pizzareader'
     baseUrl = 'https://reader.hastateam.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 

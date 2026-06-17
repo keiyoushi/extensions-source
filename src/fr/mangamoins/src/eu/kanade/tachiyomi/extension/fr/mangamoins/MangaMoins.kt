@@ -130,7 +130,7 @@ class MangaMoins : HttpSource() {
                     val chapterName = "Chapitre ${ch.num.toString().removeSuffix(".0")}"
                     append(chapterName)
                     val title = ch.title.unescapeHtml()
-                    if (title.isNotBlank() && !title.equals(chapterName, ignoreCase = true)) {
+                    if (title.isNotBlank() && title.lowercase() != chapterName.lowercase()) {
                         append(" - ")
                         append(title)
                     }
@@ -170,23 +170,29 @@ class MangaMoins : HttpSource() {
             client.newCall(GET(scriptUrl, headers)).execute().use { response ->
                 val script = response.body.string()
 
-                val matchParams = DECODER_PARAMS_REGEX.find(script)
-                val mult = matchParams?.groupValues?.get(1)?.toLong(16) ?: 3L
-                val offset = matchParams?.groupValues?.get(2)?.toLong(16) ?: 7L
+                val pathSegment = pagesBaseUrl.removeSuffix("/").substringAfterLast("/")
+                val salts = mutableListOf<String>()
 
-                val salts = HEX_ARRAY_REGEX.findAll(script)
-                    .map { match ->
-                        match.value.removeSurrounding("[", "]").split(",")
-                            .map { it.trim().removePrefix("0x").toLong(16) }
-                            .map { ALPHABET[((it * mult + offset) % ALPHABET.length).toInt()] }
-                            .joinToString("")
+                val polochonMatch = POLOCHON_REGEX.find(script)
+                if (polochonMatch != null) {
+                    val polochonVal = polochonMatch.groupValues[1]
+                    if (polochonVal.isNotEmpty() && pathSegment.contains(polochonVal)) {
+                        salts.add(polochonVal)
                     }
-                    .filter { it.length > 5 && pagesBaseUrl.contains(it) }
-                    .distinct()
-                    .toList()
+                }
 
-                if (salts.isNotEmpty()) {
-                    cachedSalts = salts
+                STRINGS_REGEX.findAll(script).forEach { match ->
+                    val s = match.groupValues[1].replace(ESCAPE_REGEX) { m ->
+                        m.groupValues[1].toInt(16).toChar().toString()
+                    }
+                    if (s.length >= 3 && pathSegment.contains(s)) {
+                        salts.add(s)
+                    }
+                }
+
+                val result = salts.distinct().sortedByDescending { it.length }
+                if (result.isNotEmpty()) {
+                    cachedSalts = result
                     lastSaltFetch = now
                 }
             }
@@ -199,7 +205,9 @@ class MangaMoins : HttpSource() {
         val data = response.parseAs<ScanResponse>()
         val salts = getSalts(data.pagesBaseUrl)
 
-        val baseUrl = salts.fold(data.pagesBaseUrl.removeSuffix("/")) { url, salt -> url.replace(salt, "") }
+        val baseUrl = salts.fold(data.pagesBaseUrl.removeSuffix("/")) { url, salt ->
+            url.replace(salt, "")
+        }
 
         return (1..data.pageNumbers).map { i ->
             val pageNum = i.toString().padStart(2, '0')
@@ -211,11 +219,11 @@ class MangaMoins : HttpSource() {
 
     companion object {
         private const val MANGA_PAGE_LIMIT = 20
-        private val FALLBACK_SALTS = listOf("qbtb8822zh", "ebzb882bzh8")
+        private val FALLBACK_SALTS = listOf("a1f", "Z0_9")
         private const val SALT_EXPIRY = 3 * 60 * 60 * 1000L // 3 hours
+        private val POLOCHON_REGEX = Regex("""polochon['"]?\s*\]?\s*=\s*['"]([^'"]+)['"]""")
 
-        private val HEX_ARRAY_REGEX = Regex("""\[0x[a-f0-9]+(?:,0x[a-f0-9]+)+\]""")
-        private val DECODER_PARAMS_REGEX = Regex("""\*0x([a-f0-9]+)\+0x([a-f0-9]+)""")
-        private const val ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
+        private val STRINGS_REGEX = Regex("""['"]([^'"]*)['"]""")
+        private val ESCAPE_REGEX = Regex("""\\x([a-f\d]{2})""", RegexOption.IGNORE_CASE)
     }
 }

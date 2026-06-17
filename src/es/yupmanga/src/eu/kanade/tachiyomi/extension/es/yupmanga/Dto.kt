@@ -25,3 +25,9 @@ class ChallengeDto(
     @SerialName("challenge_id") val challengeId: String? = null,
     @SerialName("challenge_js") val challengeJs: String? = null,
 )
+
+@Serializable
+class AnchorDto(
+    val success: Boolean = false,
+    val v: String? = null,
+)

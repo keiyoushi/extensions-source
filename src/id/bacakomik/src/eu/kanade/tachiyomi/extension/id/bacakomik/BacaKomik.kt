@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.bacakomik
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -19,6 +19,7 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class BacaKomik : HttpSource() {
     override val name = "BacaKomik"
@@ -32,7 +33,7 @@ class BacaKomik : HttpSource() {
     override val id = 4383360263234319058
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(12, 3)
+        .rateLimit(12, 3.seconds)
         .build()
 
     private fun pagePath(page: Int) = if (page > 1) "page/$page/" else ""

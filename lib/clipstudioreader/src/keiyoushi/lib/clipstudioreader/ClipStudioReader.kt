@@ -12,7 +12,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.parser.Parser
 
 abstract class ClipStudioReader : HttpSource() {
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(Deobfuscator())
         .addInterceptor(ImageInterceptor())
         .build()
