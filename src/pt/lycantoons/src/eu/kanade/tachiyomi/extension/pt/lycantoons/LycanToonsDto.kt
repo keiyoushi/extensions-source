@@ -87,6 +87,13 @@ class ChapterDto(
     }
 }
 
+@Serializable
+class FetchResult(
+    val success: Boolean,
+    val result: String,
+    val contentType: String? = null,
+)
+
 private fun parseStatus(status: String?) = when (status?.lowercase()) {
     "ongoing" -> SManga.ONGOING
     "completed" -> SManga.COMPLETED
