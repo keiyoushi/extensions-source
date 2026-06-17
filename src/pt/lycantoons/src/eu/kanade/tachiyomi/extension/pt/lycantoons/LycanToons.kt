@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import okhttp3.Request
@@ -33,8 +34,13 @@ class LycanToons : HttpSource() {
         .rateLimit(2)
         .build()
 
+    private val rscHeaders by lazy {
+        headers.newBuilder()
+            .add("RSC", "1")
+            .build()
+    }
+
     override fun headersBuilder() = super.headersBuilder()
-        .add("sec-fetch-site", "same-origin")
         .add("Referer", "$baseUrl/")
 
     // =====================Popular=====================
@@ -81,9 +87,9 @@ class LycanToons : HttpSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request = seriesRequest(manga.slug())
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/series/${manga.slug()}", rscHeaders)
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<SeriesDto>().toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = response.extractNextJs<SeriesDto>()!!.toSManga()
 
     // =====================Chapters=====================
 
@@ -148,12 +154,10 @@ class LycanToons : HttpSource() {
 
     private fun metricsRequest(path: String, page: Int): Request = GET("$baseUrl/api/metrics/$path?limit=$PAGE_LIMIT&page=$page", headers)
 
-    private fun seriesRequest(slug: String): Request = GET("$baseUrl/api/series/$slug", headers)
-
     private fun SManga.slug(): String = url.substringAfterLast("/")
 
     companion object {
-        private const val PAGE_LIMIT = 13
+        private const val PAGE_LIMIT = 20
         private const val CHAPTER_LIMIT = 100
         private val PAGES_REGEX = """"imageUrls":([^]]+])""".toRegex()
     }
