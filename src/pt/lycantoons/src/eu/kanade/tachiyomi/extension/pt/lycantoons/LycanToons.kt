@@ -32,7 +32,7 @@ class LycanToons : HttpSource() {
 
     override val client = network.client.newBuilder()
         .addInterceptor(WebViewInterceptor(headers["User-Agent"]))
-        .rateLimit(5)
+        .rateLimit(2)
         .build()
 
     private val pageHeaders by lazy {
@@ -129,7 +129,7 @@ class LycanToons : HttpSource() {
 
     private fun metricsRequest(path: String, page: Int): Request = GET("$baseUrl/api/metrics/$path?limit=$PAGE_LIMIT&page=$page", headers)
 
-    private fun List<SeriesDto>.toMangasPage(): MangasPage = MangasPage(map { it.toSManga() }, this.size > 0)
+    private fun List<SeriesDto>.toMangasPage(): MangasPage = MangasPage(map { it.toSManga() }, false)
 
     private fun seriesRequest(slug: String): Request = GET("$baseUrl/api/series/$slug", headers)
 
@@ -138,7 +138,7 @@ class LycanToons : HttpSource() {
     private val json by lazy { jsonInstance }
 
     companion object {
-        private const val PAGE_LIMIT = 20
+        private const val PAGE_LIMIT = 13
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
         private val PAGES_REGEX = """"imageUrls":([^]]+])""".toRegex()
     }
