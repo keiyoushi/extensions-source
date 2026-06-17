@@ -32,7 +32,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -66,7 +65,16 @@ class BookWalkerJp :
 
     override val client = network.client.newBuilder()
         .addInterceptor(PublusInterceptor())
-        .addInterceptor(::coverFallbackIntercept)
+        .addInterceptor {
+            val request = it.request()
+            val response = it.proceed(request)
+            val fallbackUrl = request.url.fragment
+            if (response.isSuccessful || fallbackUrl.isNullOrEmpty() || !request.url.encodedPath.contains("/coverImage_")) {
+                return@addInterceptor response
+            }
+            response.close()
+            it.proceed(GET(fallbackUrl, request.headers))
+        }
         .build()
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -91,7 +99,7 @@ class BookWalkerJp :
         val url = "$baseUrl/search/".toHttpUrl().newBuilder()
             .addQueryParameter("word", query)
             .addQueryParameter("order", "score")
-            .addQueryParameter("np", "1")
+            .addQueryParameter("np", "0")
             .addQueryParameter("page", page.toString())
             .build()
         return client.newCall(GET(url, desktopHeaders)).awaitSuccess().asJsoup().toMangasPage()
@@ -144,13 +152,14 @@ class BookWalkerJp :
     }
 
     private suspend fun chapterList(seriesId: String): List<SChapter> {
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val chapters = mutableListOf<SChapter>()
         var page = 1
         while (true) {
             val document = client.newCall(seriesListRequest(seriesId, page)).awaitSuccess().asJsoup()
-            val pageChapters = document.toSChapters()
-            if (pageChapters.isEmpty()) break
-            chapters += pageChapters
+            val items = document.select(".m-tile-list .m-book-item")
+            if (items.isEmpty()) break
+            items.mapNotNullTo(chapters) { it.toSChapter(hideLocked) }
             if (!document.hasNextPage()) break
             page++
         }
@@ -179,10 +188,17 @@ class BookWalkerJp :
         return GET(url, desktopHeaders)
     }
 
-    private fun Document.toSChapters(): List<SChapter> = select(".m-tile-list .m-book-item").map {
-        val link = it.bookLink()
-        SChapter.create().apply {
-            name = link.text()
+    private fun Element.toSChapter(hideLocked: Boolean): SChapter? {
+        val prefix = when {
+            selectFirst(".a-icon-btn--read, .a-icon-btn--free") != null -> ""
+            selectFirst(".a-icon-btn--trial") != null -> "🔒 (Preview) "
+            else -> "🔒 "
+        }
+        if (hideLocked && prefix.isNotEmpty()) return null
+
+        val link = bookLink()
+        return SChapter.create().apply {
+            name = prefix + link.text()
             setUrlWithoutDomain(link.absUrl("href").toHttpUrl().pathSegments.first())
         }
     }
@@ -194,10 +210,10 @@ class BookWalkerJp :
 
     private val authCache = ConcurrentHashMap<String, Pair<AuthInfo, Long>>()
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}/"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.newCall(GET("$baseUrl/${chapter.url}", headers))
+        val document = client.newCall(GET("$baseUrl/${chapter.url}/", desktopHeaders))
             .awaitSuccess()
             // .let { validateLogin(it) }
             .asJsoup()
@@ -206,7 +222,7 @@ class BookWalkerJp :
             ?: document.selectFirst("#js-read-check-book-cover-main-button a")?.absUrl("href")
             ?: throw Exception("No preview available, or you aren't logged in.")
 
-        val chapterUrl = client.newCall(GET(readerUrl, headers)).await().request.url
+        val chapterUrl = client.newCall(GET(readerUrl, desktopHeaders)).await().request.url
         val cid = chapterUrl.queryParameter("cid")
         val cty = chapterUrl.queryParameter("cty")?.toIntOrNull()
         val isTrial = chapterUrl.host == "viewer-trial.$domain"
@@ -458,17 +474,6 @@ class BookWalkerJp :
         } ?: return null
 
         return "$cUrl/coverImage_${numericId - 1}.$extension#$this"
-    }
-
-    private fun coverFallbackIntercept(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val response = chain.proceed(request)
-        val fallbackUrl = request.url.fragment
-        if (response.isSuccessful || fallbackUrl.isNullOrEmpty() || !request.url.encodedPath.contains("/coverImage_")) {
-            return response
-        }
-        response.close()
-        return chain.proceed(GET(fallbackUrl, request.headers))
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
