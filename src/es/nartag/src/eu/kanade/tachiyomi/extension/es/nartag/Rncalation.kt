@@ -45,11 +45,11 @@ class Rncalation : HttpSource() {
         val mangas = document.select(".lib-grid a.comic-card").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
-                title = element.select("p.leading-snug").text()
-                thumbnail_url = element.select("img").attr("abs:src")
+                title = element.selectFirst("p.leading-snug")!!.text()
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
         }
-        val hasNextPage = document.select("a.lib-page-btn--nav:last-child").isNotEmpty()
+        val hasNextPage = document.selectFirst("a.lib-page-btn--nav:last-child") != null
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -95,8 +95,8 @@ class Rncalation : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.select(".comic-hero-wrap h1").text()
-            thumbnail_url = document.select(".comic-hero-wrap img").attr("abs:src")
+            title = document.selectFirst(".comic-hero-wrap h1")!!.text()
+            thumbnail_url = document.selectFirst(".comic-hero-wrap img")?.attr("abs:src")
             description = document.select(".comic-hero-wrap p.leading-relaxed").text()
 
             author = document.select(".comic-hero-wrap span:contains(Autor)").text().substringAfter("Autor:").ifEmpty { null }
@@ -123,7 +123,7 @@ class Rncalation : HttpSource() {
             chapters.add(chapterFromElement(element))
         }
 
-        document.select("template#chapters-extra").firstOrNull()?.let { template ->
+        document.selectFirst("template#chapters-extra")?.let { template ->
             val extraHtml = template.html()
             val extraDoc = Jsoup.parseBodyFragment(extraHtml, document.baseUri())
             extraDoc.select("a").forEach { element ->
@@ -136,11 +136,9 @@ class Rncalation : HttpSource() {
 
     private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.absUrl("href"))
-        name = element.select("span.flex-1").text()
+        name = element.selectFirst("span.flex-1")!!.text()
 
-        val dateText = element.select("span").firstOrNull {
-            it.text().contains("/") && it.text().length in 8..10
-        }?.text()
+        val dateText = element.selectFirst("span:matches(\\d{1,2}/\\d{1,2}/\\d{4})")?.text()
         date_upload = dateFormat.tryParse(dateText)
 
         scanlator = element.select("span").firstOrNull {
