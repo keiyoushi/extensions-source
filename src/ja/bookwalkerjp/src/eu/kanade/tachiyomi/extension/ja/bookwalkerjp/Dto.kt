@@ -17,6 +17,7 @@ class DetailsResponse(
     private val seriesNameKana: String?,
 ) {
     fun toSManga() = SManga.create().apply {
+        url = seriesId.toString()
         title = seriesName
         author = authors?.joinToString { it.authorName }
         description = buildString {

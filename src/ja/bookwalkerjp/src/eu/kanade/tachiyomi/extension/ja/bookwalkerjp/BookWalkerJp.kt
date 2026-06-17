@@ -27,18 +27,17 @@ import keiyoushi.lib.publus.generatePages
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import rx.Observable
-import rx.Single
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
@@ -68,6 +67,7 @@ class BookWalkerJp :
 
     override val client = network.client.newBuilder()
         .addInterceptor(PublusInterceptor())
+        .addInterceptor(::coverFallbackIntercept)
         .build()
 
     override fun popularMangaRequest(page: Int): Request {
@@ -107,83 +107,103 @@ class BookWalkerJp :
         val mangas = document.select(".m-tile").map {
             SManga.create().apply {
                 title = it.selectFirst("a.m-book-item__title")!!.text()
-                thumbnail_url = it.selectFirst(".m-thumb__image img")?.absUrl("data-original")
+                val cover = it.selectFirst(".m-thumb__image img")?.absUrl("data-original")
+                thumbnail_url = cover.getHiResCoverFromLegacyUrl() ?: cover
                 val href = it.selectFirst("a.m-book-item__title")!!.absUrl("href").toHttpUrl().pathSegments
                 val path = if (href.first() == "series") href[1] else href[0]
                 setUrlWithoutDomain(path)
             }
         }
-        val hasNextPage = document.selectFirst(".o-pager-next a:not(.o-pager-box-btn_hidden)") != null
-        return MangasPage(mangas, hasNextPage)
+        return MangasPage(mangas, document.hasNextPage())
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        if (manga.url.startsWith("de")) {
-            val url = "$memberApiUrl/books/updates".toHttpUrl().newBuilder()
-                .addQueryParameter("fileType", "EPUB")
-                .addQueryParameter(manga.url, "0")
-                .build()
-            return GET(url, headers)
+        val bookId = if (manga.url.startsWith("de")) {
+            manga.url
+        } else {
+            client.newCall(seriesListRequest(manga.url, 1)).execute().asJsoup().firstBookId()
         }
-        val listUrl = "$baseUrl/series/${manga.url}/list/".toHttpUrl().newBuilder()
-            .addQueryParameter("order", "title")
-            .addQueryParameter("detail", "0")
-            .build()
-        val listDocument = client.newCall(GET(listUrl, desktopHeaders)).execute().asJsoup()
-        val uuid = listDocument.first() // first uuid
+        return booksUpdatesRequest(bookId)
+    }
+
+    override fun getMangaUrl(manga: SManga): String = runBlocking(Dispatchers.IO) {
+        client.newCall(mangaDetailsRequest(manga)).execute()
+            .parseAs<List<DetailsResponse>>().first().seriesId
+            .let { "$baseUrl/series/$it/list/" }
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<List<DetailsResponse>>().first().toSManga()
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable { runBlocking { getChapterList(manga) } }
+
+    private suspend fun getChapterList(manga: SManga): List<SChapter> {
+        val seriesId = resolveSeriesId(manga)
+        val chapters = mutableListOf<SChapter>()
+        var page = 1
+        while (true) {
+            val document = client.newCall(seriesListRequest(seriesId, page)).awaitSuccess().asJsoup()
+            val pageChapters = document.toSChapters()
+            if (pageChapters.isEmpty()) break
+            chapters += pageChapters
+            if (!document.hasNextPage()) break
+            page++
+        }
+
+        return chapters.reversed()
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().toSChapters()
+
+    private suspend fun resolveSeriesId(manga: SManga): String {
+        if (!manga.url.startsWith("de")) return manga.url
+        return client.newCall(booksUpdatesRequest(manga.url)).awaitSuccess().parseAs<List<DetailsResponse>>().first().seriesId.toString()
+    }
+
+    private fun booksUpdatesRequest(bookId: String): Request {
         val url = "$memberApiUrl/books/updates".toHttpUrl().newBuilder()
             .addQueryParameter("fileType", "EPUB")
-            .addQueryParameter(uuid, "0")
+            .addQueryParameter(bookId.removePrefix("de"), "0")
             .build()
         return GET(url, headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<DetailsResponse>().toSManga()
-
-    override fun chapterListRequest(manga: SManga): Request {
-        if (manga.url.startsWith("de")) {
-            val detailsUrl = "$memberApiUrl/books/updates".toHttpUrl().newBuilder()
-                .addQueryParameter("fileType", "EPUB")
-                .addQueryParameter(manga.url, "0")
-                .build()
-            val detailsResponse = client.newCall(GET(detailsUrl, headers)).execute()
-            val result = detailsResponse.parseAs<DetailsResponse>().seriesId
-            val url = "$baseUrl/series/$result/list/".toHttpUrl().newBuilder()
-                .addQueryParameter("order", "title")
-                .addQueryParameter("detail", "0")
-                .build()
-            return GET(url, desktopHeaders)
-        }
-
-        val url = "$baseUrl/series/${manga.url}/list/".toHttpUrl().newBuilder()
+    private fun seriesListRequest(seriesId: String, page: Int): Request {
+        val url = "$baseUrl/series/$seriesId/list/".toHttpUrl().newBuilder()
             .addQueryParameter("order", "title")
             .addQueryParameter("detail", "0")
-            .addQueryParameter("page", page)
+            .addQueryParameter("page", page.toString())
             .build()
         return GET(url, desktopHeaders)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        // val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        TODO("Not yet implemented")
+    private fun Document.toSChapters(): List<SChapter> = select(".m-tile-list .m-book-item").map {
+        val link = it.bookLink()
+        SChapter.create().apply {
+            name = link.text()
+            setUrlWithoutDomain(link.absUrl("href").toHttpUrl().pathSegments.first())
+        }
     }
+
+    private fun Document.firstBookId(): String = selectFirst(".m-tile-list .m-book-item")!!.bookId()
+    private fun Document.hasNextPage(): Boolean = selectFirst(".o-pager-next a:not(.o-pager-box-btn_hidden)") != null
+    private fun Element.bookLink(): Element = selectFirst("a.m-book-item__title")!!
+    private fun Element.bookId(): String = bookLink().absUrl("href").toHttpUrl().pathSegments.first()
 
     private val authCache = ConcurrentHashMap<String, Pair<AuthInfo, Long>>()
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = rxSingle {
-        val document = client.newCall(GET(baseUrl + chapter.url, headers))
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}"
+
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable { runBlocking { getPageList(chapter) } }
+
+    private suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.newCall(GET("$baseUrl/${chapter.url}", headers))
             .awaitSuccess()
-            .let { validateLogin(it) }
+            // .let { validateLogin(it) }
             .asJsoup()
 
-        val isFreeChapter = document.selectFirst(".a-cart-btn:contains(Free)") != null
-        val readerUrl = document.selectFirst("a.a-read-on-btn")?.attr("href")
-            ?: if (isFreeChapter) {
-                document.selectFirst(".free-preview > a")?.attr("href")
-                    ?: throw Exception("No preview available")
-            } else {
-                throw Exception("You don't own this chapter, or you aren't logged in")
-            }
+        val readerUrl = document.selectFirst(".t-c-read-button a")?.absUrl("href")
+            ?: document.selectFirst("#js-read-check-book-cover-main-button a")?.absUrl("href")
+            ?: throw Exception("No preview available, or you aren't logged in.")
 
         val chapterUrl = client.newCall(GET(readerUrl, headers)).await().request.url
         val cid = chapterUrl.queryParameter("cid")
@@ -194,13 +214,12 @@ class BookWalkerJp :
         val u1 = cookies.find { it.name == "u1" }?.value
         val u2 = cookies.find { it.name == "u2" }?.value
 
-        if (cid != null) {
+        return if (cid != null) {
             if (cty != null && cty != 1 && cty != 2) {
                 throw Exception("Novels are not supported!")
             }
 
             var cr: String? = null
-
             if (!isTrial) {
                 val loaderUrl = "$viewerUrl/browserWebApi/03/getLoader"
                 val loaderScript =
@@ -308,11 +327,9 @@ class BookWalkerJp :
         } else {
             throw Exception("Novels are not supported!")
         }
-    }.toObservable()
-
-    override fun pageListParse(response: Response): List<Page> {
-        TODO("Not yet implemented")
     }
+
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun fetchCr(scriptContent: String, viewerUrl: String): String? {
@@ -424,36 +441,37 @@ class BookWalkerJp :
             return response
         }
          */
-            val profileUrl = "https://member.bookwalker.jp/app/03/my/profile"
-            val redirectedResponse = client.newCall(GET(profileUrl, headers)).await()
-            if (redirectedResponse.request.url.toString() == "https://member.bookwalker.jp/app/03/login") {
-                throw Exception("Auth expired, log in via WebView again.")
-            }
+        val profileUrl = "https://member.bookwalker.jp/app/03/my/profile"
+        val redirectedResponse = client.newCall(GET(profileUrl, headers)).await()
+        if (redirectedResponse.request.url.toString() == "https://member.bookwalker.jp/app/03/login") {
+            throw Exception("Auth expired, log in via WebView again.")
+        }
         return response
     }
 
-    private fun <T> rxSingle(dispatcher: CoroutineDispatcher = Dispatchers.IO, block: suspend CoroutineScope.() -> T): Single<T> = Single.create { sub ->
-        CoroutineScope(dispatcher).launch {
-            try {
-                sub.onSuccess(block())
-            } catch (e: Throwable) {
-                sub.onError(e)
-            }
-        }
-    }
-
-    private fun getHiResCoverFromLegacyUrl(url: String?): String? {
-        if (url.isNullOrEmpty()) return url
-        val segments = url.toHttpUrlOrNull()?.pathSegments ?: return url
+    private fun String?.getHiResCoverFromLegacyUrl(): String? {
+        if (this.isNullOrEmpty()) return null
+        val segments = this.toHttpUrlOrNull()?.pathSegments ?: return null
         val fileName = segments.last()
         val extension = fileName.substringAfterLast('.')
         val numericId = when {
-            url.startsWith(rimgUrl) -> segments.first().reversed().toLongOrNull()
+            this.startsWith(rimgUrl) -> segments.first().reversed().toLongOrNull()
             fileName.startsWith("thumbnailImage_") -> fileName.substringAfter("thumbnailImage_").substringBefore('.').toLongOrNull()
             else -> null
-        } ?: return url
+        } ?: return null
 
-        return "$cUrl/coverImage_${numericId - 1}.$extension"
+        return "$cUrl/coverImage_${numericId - 1}.$extension#$this"
+    }
+
+    private fun coverFallbackIntercept(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+        val fallbackUrl = request.url.fragment
+        if (response.isSuccessful || fallbackUrl.isNullOrEmpty() || !request.url.encodedPath.contains("/coverImage_")) {
+            return response
+        }
+        response.close()
+        return chain.proceed(GET(fallbackUrl, request.headers))
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
