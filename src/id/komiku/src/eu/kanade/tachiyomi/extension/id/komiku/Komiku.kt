@@ -8,8 +8,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
@@ -26,6 +28,11 @@ class Komiku : HttpSource() {
     override val lang = "id"
 
     override val supportsLatest = true
+
+    override val client = network.client.newBuilder()
+        .addInterceptor(::headersInterceptor)
+        .rateLimit(4)
+        .build()
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int): Request = GET(mangaApiUrlBuilder(page).addQueryParameter("orderby", "meta_value_num").build(), headers)
@@ -153,6 +160,32 @@ class Komiku : HttpSource() {
     )
 
     // ============================= Utilities ==============================
+    private fun headersInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val url = request.url
+        val urlString = url.toString()
+
+        if (urlString.contains("komiku.org") || urlString.contains("komikid.org")) {
+            val newHeaders = request.headers.newBuilder().apply {
+                removeAll("X-Requested-With")
+                if (url.host.contains("img") || url.host.contains("thumbnail") || url.host.contains("update")) {
+                    set("Referer", "$baseUrl/")
+                    set("Sec-Fetch-Dest", "image")
+                    set("Sec-Fetch-Mode", "no-cors")
+                    set("Sec-Fetch-Site", "cross-site")
+                }
+            }.build()
+
+            return chain.proceed(
+                request.newBuilder()
+                    .headers(newHeaders)
+                    .build(),
+            )
+        }
+
+        return chain.proceed(request)
+    }
+
     private fun mangaListParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select("div.bge").map { element ->
