@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.onfmangas
 
+import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -28,8 +29,6 @@ class OnfMangas : HttpSource() {
     override val lang = "es"
     override val supportsLatest = true
 
-    val tokenRegex = Regex("""var token="([^"]+)"""")
-
     override val client = super.client.newBuilder()
         .addInterceptor(::onfTokenInterceptor)
         .build()
@@ -39,13 +38,33 @@ class OnfMangas : HttpSource() {
         val response = chain.proceed(request)
 
         val body = response.peekBody(8192).string()
-        val token = tokenRegex.find(body)?.groupValues?.get(1) ?: return response
+        if (!body.contains("Verificando")) return response
 
-        response.close()
-        val cookie = Cookie.parse(request.url, "__onf_chk=$token; path=/")
+        val cookieString = solveOnfCheck(response) ?: error("Failed to solve cookie challange")
+        val cookie = Cookie.parse(request.url, cookieString)
         client.cookieJar.saveFromResponse(request.url, listOfNotNull(cookie))
 
         return chain.proceed(request)
+    }
+
+    private fun solveOnfCheck(response: Response): String? {
+        val document = response.asJsoup()
+        val script = document.selectFirst("script")?.data() ?: error("Failed to find cookie challange script")
+
+        return QuickJs.create().use { js ->
+            js.evaluate(
+                """
+            var window = { location: {} };
+            var document = { cookie: null };
+            var location = window.location;
+            var setTimeout = function(fn, _) { fn(); };
+
+            $script
+
+            document.cookie;
+                """.trimIndent(),
+            )?.toString()
+        }
     }
 
     // Mimic a standard desktop browser to bypass Cloudflare WAF 403s
