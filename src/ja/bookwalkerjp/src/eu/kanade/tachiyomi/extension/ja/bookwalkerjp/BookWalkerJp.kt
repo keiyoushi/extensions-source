@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.ja.bookwalkerjp
 import android.annotation.SuppressLint
 import android.os.Handler
 import android.os.Looper
-import android.util.Base64
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.preference.PreferenceScreen
@@ -20,24 +19,20 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.lib.publus.Decoder
-import keiyoushi.lib.publus.PublusFragment
+import keiyoushi.lib.publus.PublusAuthHandler
+import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
-import keiyoushi.lib.publus.PublusPage
-import keiyoushi.lib.publus.generatePages
+import keiyoushi.lib.publus.fetchPages
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.nio.charset.StandardCharsets
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -208,7 +203,22 @@ class BookWalkerJp :
     private fun Element.bookLink(): Element = selectFirst("a.m-book-item__title")!!
     private fun Element.bookId(): String = bookLink().absUrl("href").toHttpUrl().pathSegments.first()
 
-    private val authCache = ConcurrentHashMap<String, Pair<AuthInfo, Long>>()
+    private val publusAuth = PublusAuthHandler(
+        client = client,
+        refreshSeconds = AUTH_REFRESH_SECONDS,
+        cookieUrl = "$viewerUrl/browserWebApi/c".toHttpUrl(),
+        bid = "0",
+    ) { session, cookies ->
+        val refreshUrl = "$viewerUrl/browserWebApi/c".toHttpUrl().newBuilder().apply {
+            addQueryParameter("cid", session["cid"])
+            addQueryParameter("BID", "0")
+            addQueryParameter("cr", session["cr"])
+            cookies.find { it.name == "u1" }?.let { addQueryParameter("u1", it.value) }
+            cookies.find { it.name == "u2" }?.let { addQueryParameter("u2", it.value) }
+        }.build()
+
+        GET(refreshUrl, headers)
+    }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}/"
 
@@ -256,91 +266,24 @@ class BookWalkerJp :
             }.build()
 
             val cResponse = client.newCall(GET(cApiUrl, headers)).awaitSuccess()
-            val content = cResponse.parseAs<CPhpResponse>()
+            val content = cResponse.parseAs<PublusContent>()
             if (content.cty != 1 && content.cty != 2) {
                 throw Exception("Novels are not supported!")
             }
 
-            // For trial pages, auth data is valid for 1 hour.
-            // For normal pages, auth data is valid for 60 seconds.
-            if (!isTrial) {
-                authCache[cid] = Pair(content.authInfo, System.currentTimeMillis())
-            }
-
-            val contentUrl = content.url
-            val configUrl = (contentUrl + "configuration_pack.json").toHttpUrl().newBuilder().apply {
-                if (!isTrial) {
-                    addQueryParameter("hti", content.authInfo.hti)
-                    addQueryParameter("cfg", content.authInfo.cfg.toString())
-                    addQueryParameter("BID", "0")
-                    addQueryParameter("uuid", content.authInfo.uuid)
-                }
-                addQueryParameter("pfCd", content.authInfo.pfCd)
-                addQueryParameter("Policy", content.authInfo.policy)
-                addQueryParameter("Signature", content.authInfo.signature)
-                addQueryParameter("Key-Pair-Id", content.authInfo.keyPairId)
-            }.build()
-
-            val keys: List<IntArray>
-            val rootJson: Map<String, JsonElement>
-
-            val configResponse = client.newCall(GET(configUrl, headers)).awaitSuccess()
-            if (isTrial) {
-                rootJson = configResponse.parseAs()
-                keys = listOf(IntArray(0), IntArray(0), IntArray(0))
-            } else {
-                val packData = configResponse.parseAs<ConfigPack>().data
-                val result = Decoder(packData).decode()
-                rootJson = result.json.parseAs()
-                keys = result.keys
-            }
-
-            val configElement = rootJson["configuration"] ?: throw Exception("Configuration not found in decrypted JSON")
-            val container = configElement.parseAs<PublusConfiguration>()
-
-            val sessionData = mutableMapOf<String, String>().apply {
+            val sessionData = buildMap {
                 put("cid", cid)
                 put("isTrial", isTrial.toString())
                 if (cr != null) put("cr", cr)
-                if (u1 != null) put("u1", u1)
-                if (u2 != null) put("u2", u2)
             }
 
-            val pageContent = container.contents.map {
-                val pageJson = rootJson[it.file]
-                    ?: throw Exception("Page config not found for ${it.file}")
+            val auth = content.authInfo?.toAuth(bid = "0", includeBookAuth = !isTrial)
 
-                val pageConfig = pageJson.toString().parseAs<PublusPageConfig>()
-                val details = pageConfig.fileLinkInfo.pageLinkInfoList[0].page
-                val isScrambled = !isTrial && details.blockWidth > 0 && details.blockHeight > 0
-                val bw = if (details.blockWidth == 0) 32 else details.blockWidth
-                val bh = if (details.blockHeight == 0) 32 else details.blockHeight
-
-                PublusPage(
-                    index = it.index,
-                    filename = it.file,
-                    no = details.no,
-                    ns = details.ns,
-                    ps = details.ps,
-                    rs = details.rs,
-                    blockWidth = bw,
-                    blockHeight = bh,
-                    width = details.size.width,
-                    height = details.size.height,
-                    hti = content.authInfo.hti,
-                    cfg = content.authInfo.cfg?.toString(),
-                    bid = "0",
-                    uuid = content.authInfo.uuid,
-                    pfCd = content.authInfo.pfCd,
-                    policy = content.authInfo.policy,
-                    signature = content.authInfo.signature,
-                    keyPairId = content.authInfo.keyPairId,
-                    extra = sessionData,
-                    scrambled = isScrambled,
-                )
+            if (!isTrial && auth != null) {
+                publusAuth.store(cid, auth)
             }
 
-            generatePages(pageContent, keys, contentUrl)
+            fetchPages(content.url, headers, client, auth, sessionData)
         } else {
             throw Exception("Novels are not supported!")
         }
@@ -381,72 +324,7 @@ class BookWalkerJp :
         return result
     }
 
-    override fun imageRequest(page: Page): Request {
-        val imageUrl = page.imageUrl!!
-        if (imageUrl.contains("#")) {
-            val fragment = imageUrl.substringAfter("#")
-            val fragmentJson = String(Base64.decode(fragment, Base64.URL_SAFE), StandardCharsets.UTF_8)
-            val params = fragmentJson.parseAs<PublusFragment>()
-            val extra = params.extra
-            if (extra?.get("isTrial") == "true") {
-                return GET(imageUrl, headers)
-            }
-
-            if (extra != null && extra.containsKey("cid")) {
-                val cid = extra["cid"]!!
-                val cached = authCache[cid]
-
-                var authInfo = cached?.first
-
-                // Auth data expires after 60 seconds
-                if (cached == null || System.currentTimeMillis() - cached.second > 45000) {
-                    synchronized(authCache) {
-                        val currentCache = authCache[cid]
-                        if (currentCache == null || System.currentTimeMillis() - currentCache.second > 45000) {
-                            try {
-                                val refreshUrl = "$viewerUrl/browserWebApi/c".toHttpUrl().newBuilder().apply {
-                                    addQueryParameter("cid", cid)
-                                    addQueryParameter("BID", "0")
-                                    addQueryParameter("cr", extra["cr"])
-                                    extra["u1"]?.let { addQueryParameter("u1", it) }
-                                    extra["u2"]?.let { addQueryParameter("u2", it) }
-                                }.build()
-
-                                val response = client.newCall(GET(refreshUrl, headers)).execute()
-                                if (response.isSuccessful) {
-                                    val newCData = response.parseAs<CPhpResponse>()
-                                    authInfo = newCData.authInfo
-                                    authCache[cid] = Pair(newCData.authInfo, System.currentTimeMillis())
-                                }
-                                response.close()
-                            } catch (_: Exception) {
-                            }
-                        } else {
-                            authInfo = currentCache.first
-                        }
-                    }
-                }
-
-                authInfo?.let {
-                    val baseUrl = imageUrl.substringBefore("?")
-                    val newUrl = baseUrl.toHttpUrl().newBuilder().apply {
-                        addQueryParameter("hti", it.hti)
-                        addQueryParameter("cfg", it.cfg.toString())
-                        addQueryParameter("BID", "0")
-                        addQueryParameter("uuid", it.uuid)
-                        addQueryParameter("pfCd", it.pfCd)
-                        addQueryParameter("Policy", it.policy)
-                        addQueryParameter("Signature", it.signature)
-                        addQueryParameter("Key-Pair-Id", it.keyPairId)
-                    }.build().toString()
-
-                    return GET("$newUrl#$fragment", headers)
-                }
-            }
-            return GET(imageUrl, headers)
-        }
-        throw Exception("Invalid image URL")
-    }
+    override fun imageRequest(page: Page): Request = GET(publusAuth.authorize(page.imageUrl!!), headers)
 
     private suspend fun validateLogin(response: Response): Response {
         /*
@@ -486,5 +364,8 @@ class BookWalkerJp :
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+
+        // Normal (non-trial) auth data expires after 60s
+        private const val AUTH_REFRESH_SECONDS = 45L
     }
 }
