@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.readcomiconline
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
@@ -23,6 +22,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.randomua.UserAgentType
 import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -37,7 +37,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
@@ -72,7 +71,6 @@ class Readcomiconline :
     override val client: OkHttpClient = network.client.newBuilder()
         .addNetworkInterceptor(::captchaInterceptor).build()
 
-    private val context: Application by injectLazy()
     private val handler by lazy { Handler(Looper.getMainLooper()) }
 
     private fun captchaInterceptor(chain: Interceptor.Chain): Response {
@@ -298,13 +296,15 @@ class Readcomiconline :
         return Observable.just(images)
     }
 
+    private val bridgeName = "bridge_" + ('a'..'z').shuffled().take(10).joinToString("")
+
     fun decodeImagesWv(chapterDoc: Document, totalImages: Int): List<String> {
         var innerWv: WebView? = null
         val latch = CountDownLatch(1)
         var jsonResult = ""
 
         handler.post {
-            innerWv = WebView(context)
+            innerWv = WebView(applicationContext)
             innerWv.settings.loadsImagesAutomatically = false
             innerWv.settings.blockNetworkImage = true
             innerWv.settings.javaScriptEnabled = true
@@ -336,7 +336,7 @@ class Readcomiconline :
                         latch.countDown()
                     }
                 },
-                "AndroidBridge",
+                bridgeName,
             )
 
             chapterDoc.select("script[defer]").remove()
@@ -351,7 +351,7 @@ class Readcomiconline :
                         for (var i = 0; i < imgs.length; i++) {
                             resolved.add(imgs[i].src);
                         }
-                        AndroidBridge.onImagesExtracted(JSON.stringify(Array.from(resolved)));
+                        $bridgeName.onImagesExtracted(JSON.stringify(Array.from(resolved)));
                     }
 
                     setTimeout(function() {
