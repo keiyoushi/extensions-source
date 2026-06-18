@@ -162,7 +162,7 @@ class Mangadotnet :
         updateGenres(data.allGenres)
 
         return MangasPage(
-            data.data.mangaList.map { it.toSManga(baseUrl) },
+            data.data.mangaList.orEmpty().map { it.toSManga(baseUrl) },
             data.data.hasNextPage(),
         )
     }
@@ -335,7 +335,7 @@ class Mangadotnet :
         val data = response.decodeRscAs<Data<MangaList>>().data
         updateGenres(data.allGenres)
 
-        return MangasPage(data.mangaList.map { it.toSManga(baseUrl) }, data.hasNextPage())
+        return MangasPage(data.mangaList.orEmpty().map { it.toSManga(baseUrl) }, data.hasNextPage())
     }
 
     // ============================== Details ==============================
