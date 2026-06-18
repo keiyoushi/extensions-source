@@ -30,7 +30,7 @@ class SeriesDto(
 ) {
     fun toSManga() = SManga.create().apply {
         this.title = this@SeriesDto.title
-        this.url = "/series/$slug"
+        this.url = slug
         this.description = this@SeriesDto.description
         this.thumbnail_url = coverImageUrl
         this.author = this@SeriesDto.author
@@ -76,7 +76,7 @@ class ChapterDto(
         }
 
         chapter_number = chapterNumber
-        date_upload = dateFormat.tryParse(createdAt?.removePrefix($$"$D"))
+        date_upload = dateFormat.tryParse(createdAt)
     }
 
     fun toPageList(): List<Page> = pages.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
