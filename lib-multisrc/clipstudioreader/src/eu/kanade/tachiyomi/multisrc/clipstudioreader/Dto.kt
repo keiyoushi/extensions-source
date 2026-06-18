@@ -1,4 +1,4 @@
-package keiyoushi.lib.clipstudioreader
+package eu.kanade.tachiyomi.multisrc.clipstudioreader
 
 import kotlinx.serialization.Serializable
 

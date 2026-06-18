@@ -1,4 +1,4 @@
-package keiyoushi.lib.clipstudioreader
+package eu.kanade.tachiyomi.multisrc.clipstudioreader
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,7 +11,11 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.parser.Parser
 
-abstract class ClipStudioReader : HttpSource() {
+abstract class ClipStudioReader(
+    override val name: String,
+    override val baseUrl: String,
+    override val lang: String,
+) : HttpSource() {
     override val client = network.client.newBuilder()
         .addInterceptor(Deobfuscator())
         .addInterceptor(ImageInterceptor())

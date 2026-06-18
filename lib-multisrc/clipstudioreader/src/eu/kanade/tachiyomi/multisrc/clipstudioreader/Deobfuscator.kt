@@ -1,4 +1,4 @@
-package keiyoushi.lib.clipstudioreader
+package eu.kanade.tachiyomi.multisrc.clipstudioreader
 
 import okhttp3.Interceptor
 import okhttp3.Response
