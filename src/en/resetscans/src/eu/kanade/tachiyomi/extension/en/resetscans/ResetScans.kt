@@ -1,41 +1,45 @@
 package eu.kanade.tachiyomi.extension.en.resetscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SChapter
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 
 class ResetScans :
     Madara(
         "Reset Scans",
         "https://reset-scans.org",
         "en",
-        dateFormat = SimpleDateFormat("dd-MMM", Locale.US),
+        dateFormat = dateFormat,
     ) {
     // Moved from FuzzyDoodle to Madara
     override val versionId = 3
 
     override val useNewChapterEndpoint = true
 
+    override fun popularMangaSelector() = ".rs-manga-library__card"
+    override val popularMangaUrlSelector = popularMangaSelector() + " a"
+
+    override fun searchMangaSelector() = popularMangaSelector()
+    override val searchMangaUrlSelector = popularMangaUrlSelector
+
     override fun chapterListSelector() = "li.wp-manga-chapter:not(:has(a[href*='#']))"
-
-    override fun searchMangaSelector() = ".rs-manga-library__card"
-    override val searchMangaUrlSelector = ".rs-manga-library__card-title a"
-
-    override fun popularMangaSelector() = searchMangaSelector()
-    override val popularMangaUrlSelector = searchMangaUrlSelector
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = super.chapterListParse(response)
 
-        var currentYear = Calendar.getInstance().get(Calendar.YEAR)
+        var currentYear = Calendar.getInstance(utcZone).get(Calendar.YEAR)
         var previousMonth = -1
 
         for (chapter in chapters) {
             if (chapter.date_upload > 0L) {
-                val cal = Calendar.getInstance()
+                val cal = Calendar.getInstance(utcZone)
                 cal.timeInMillis = chapter.date_upload
 
                 // 1970 means the date was parsed without a year
@@ -69,4 +73,22 @@ class ResetScans :
 
         return chapters
     }
+
+    override fun genresRequest() = GET("$baseUrl/$mangaSubString", headers)
+
+    override fun parseGenres(document: Document): List<Genre> = document.select("a.rs-manga-library__genre, a.rs-manga-library__genre-link").mapNotNull { a ->
+        val name = a.selectFirst("span")?.text() ?: a.text()
+        if (name.lowercase() == "all") return@mapNotNull null
+
+        val url = a.absUrl("href").toHttpUrlOrNull() ?: return@mapNotNull null
+        val slug = url.pathSegments.last { it.isNotEmpty() }
+
+        Genre(name, slug)
+    }
+}
+
+private val utcZone = TimeZone.getTimeZone("UTC")
+
+private val dateFormat = SimpleDateFormat("dd-MMM", Locale.US).apply {
+    timeZone = utcZone
 }

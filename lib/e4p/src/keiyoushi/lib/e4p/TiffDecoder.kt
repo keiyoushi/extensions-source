@@ -1,13 +1,14 @@
 package keiyoushi.lib.e4p
 
+import keiyoushi.utils.readIntLittleEndian
+import keiyoushi.utils.readUShortLittleEndian
 import okio.Buffer
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
+import okio.BufferedSink
 
 // https://cs.opensource.google/go/x/image
 // https://pkg.go.dev/golang.org/x/image/tiff/lzw
 object TiffDecoder {
-    class RgbaImage(val width: Int, val height: Int, val rgba: ByteArray)
+    class Argb8888(val width: Int, val height: Int, val pixels: IntArray)
 
     // TIFF tags we care about
     private const val TAG_IMAGE_WIDTH = 256
@@ -29,15 +30,13 @@ object TiffDecoder {
     private const val TYPE_LONG = 4
     private const val TYPE_RATIONAL = 5
 
-    fun decode(tiff: ByteArray): RgbaImage {
+    fun decode(tiff: ByteArray): Argb8888 {
         require(tiff.size >= 8) { "TIFF too small: ${tiff.size}" }
         require(tiff[0] == 0x49.toByte() && tiff[1] == 0x49.toByte()) { "TIFF must be little-endian" }
         require(tiff[2] == 0x2A.toByte() && tiff[3] == 0x00.toByte()) { "TIFF magic mismatch" }
 
-        val bb = ByteBuffer.wrap(tiff).order(ByteOrder.LITTLE_ENDIAN)
-        val ifdOffset = bb.getInt(4)
-
-        val numEntries = bb.getShort(ifdOffset).toInt() and 0xFFFF
+        val ifdOffset = tiff.readIntLittleEndian(4)
+        val numEntries = tiff.readUShortLittleEndian(ifdOffset)
 
         var width = 0
         var height = 0
@@ -53,12 +52,12 @@ object TiffDecoder {
 
         for (i in 0 until numEntries) {
             val entryOff = ifdOffset + 2 + i * 12
-            val tag = bb.getShort(entryOff).toInt() and 0xFFFF
-            val type = bb.getShort(entryOff + 2).toInt() and 0xFFFF
-            val count = bb.getInt(entryOff + 4)
+            val tag = tiff.readUShortLittleEndian(entryOff)
+            val type = tiff.readUShortLittleEndian(entryOff + 2)
+            val count = tiff.readIntLittleEndian(entryOff + 4)
             val valueOff = entryOff + 8
 
-            val readValue = { readValues(bb, type, count, valueOff) }
+            val readValue = { readValues(tiff, type, count, valueOff) }
 
             when (tag) {
                 TAG_IMAGE_WIDTH -> width = readValue().first()
@@ -88,31 +87,29 @@ object TiffDecoder {
         val h = height
         val spp = samplesPerPixel
 
-        val decompressedStrips = stripOffsets.indices.map { i ->
-            val raw = ByteArray(stripByteCounts[i])
-            System.arraycopy(tiff, stripOffsets[i], raw, 0, stripByteCounts[i])
-            if (compression == 5) decompressLzw(raw) else raw
-        }
-        val rawBytes = ByteArray(decompressedStrips.sumOf { it.size })
-        var dst = 0
-        for (strip in decompressedStrips) {
-            System.arraycopy(strip, 0, rawBytes, dst, strip.size)
-            dst += strip.size
+        val rawBytes: ByteArray = if (stripOffsets.size == 1 && compression == 1) {
+            val off = stripOffsets[0]
+            tiff.copyOfRange(off, off + stripByteCounts[0])
+        } else {
+            val out = Buffer()
+            for (i in stripOffsets.indices) {
+                val start = stripOffsets[i]
+                val end = start + stripByteCounts[i]
+                if (compression == 5) {
+                    decompressLzw(out, tiff, start, end)
+                } else {
+                    out.write(tiff, start, end - start)
+                }
+            }
+            out.readByteArray()
         }
 
         if (predictor == 2) {
             val rowBytes = w * spp
-            @Suppress("EmptyRange")
             for (row in 0 until h) {
-                val rs = row * rowBytes
-                for (x in 1 until w) {
-                    for (c in 0 until spp) {
-                        rawBytes[rs + x * spp + c] =
-                            (
-                                (rawBytes[rs + (x - 1) * spp + c].toInt() and 0xFF) +
-                                    (rawBytes[rs + x * spp + c].toInt() and 0xFF)
-                                ).toByte()
-                    }
+                val rowStart = row * rowBytes
+                for (i in rowStart + spp until rowStart + rowBytes) {
+                    rawBytes[i] = (rawBytes[i] + rawBytes[i - spp]).toByte()
                 }
             }
         }
@@ -131,23 +128,20 @@ object TiffDecoder {
         bps: IntArray,
         spp: Int,
         raw: ByteArray,
-    ): RgbaImage {
+    ): Argb8888 {
         require(bps.all { it == 8 }) { "RGB TIFF: only 8bps supported, got ${bps.toList()}" }
         require(spp == 3 || spp == 4) { "RGB TIFF: spp must be 3 or 4, got $spp" }
 
-        val hasAlpha = spp == 4
-        val rgba = ByteArray(width * height * 4)
+        val pixels = IntArray(width * height)
         var src = 0
-        var dst = 0
-        (0 until width * height).forEach { _ ->
-            rgba[dst] = raw[src] // R
-            rgba[dst + 1] = raw[src + 1] // G
-            rgba[dst + 2] = raw[src + 2] // B
-            rgba[dst + 3] = if (hasAlpha) raw[src + 3] else 0xFF.toByte()
+        for (p in 0 until width * height) {
+            val r = raw[src].toInt() and 0xFF
+            val g = raw[src + 1].toInt() and 0xFF
+            val b = raw[src + 2].toInt() and 0xFF
+            pixels[p] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
             src += spp
-            dst += 4
         }
-        return RgbaImage(width, height, rgba)
+        return Argb8888(width, height, pixels)
     }
 
     private fun decodeGrayscale(
@@ -157,25 +151,19 @@ object TiffDecoder {
         spp: Int,
         raw: ByteArray,
         invert: Boolean,
-    ): RgbaImage {
+    ): Argb8888 {
         require(bps.size == 1 && bps[0] == 8) { "Grayscale: only 8bps supported" }
         require(spp == 1 || spp == 2) { "Grayscale: spp must be 1 or 2, got $spp" }
 
-        val hasAlpha = spp == 2
-        val rgba = ByteArray(width * height * 4)
+        val pixels = IntArray(width * height)
         var src = 0
-        var dst = 0
-        (0 until width * height).forEach { _ ->
-            val v = if (invert) (raw[src].toInt() and 0xFF).inv() and 0xFF else raw[src].toInt() and 0xFF
-            val b = v.toByte()
-            rgba[dst] = b
-            rgba[dst + 1] = b
-            rgba[dst + 2] = b
-            rgba[dst + 3] = if (hasAlpha) raw[src + 1] else 0xFF.toByte()
+        for (p in 0 until width * height) {
+            var v = raw[src].toInt() and 0xFF
+            if (invert) v = v.inv() and 0xFF
+            pixels[p] = (0xFF shl 24) or (v shl 16) or (v shl 8) or v
             src += spp
-            dst += 4
         }
-        return RgbaImage(width, height, rgba)
+        return Argb8888(width, height, pixels)
     }
 
     private fun decodePalette(
@@ -185,7 +173,7 @@ object TiffDecoder {
         spp: Int,
         raw: ByteArray,
         colorMap: IntArray,
-    ): RgbaImage {
+    ): Argb8888 {
         require(bps.size == 1 && bps[0] == 8) { "Palette: only 8bps supported" }
         require(spp == 1) { "Palette: spp must be 1, got $spp" }
         // Palette: 3 * 2^bits entries, each uint16. Order: all reds, then all greens, then all blues
@@ -194,20 +182,18 @@ object TiffDecoder {
             "ColorMap size mismatch: ${colorMap.size} vs ${3 * nColors}"
         }
 
-        val rgba = ByteArray(width * height * 4)
-        var dst = 0
-        for (src in 0 until width * height) {
-            val idx = raw[src].toInt() and 0xFF
-            rgba[dst] = (colorMap[idx] ushr 8).toByte()
-            rgba[dst + 1] = (colorMap[nColors + idx] ushr 8).toByte()
-            rgba[dst + 2] = (colorMap[2 * nColors + idx] ushr 8).toByte()
-            rgba[dst + 3] = 0xFF.toByte()
-            dst += 4
+        val pixels = IntArray(width * height)
+        for (p in 0 until width * height) {
+            val idx = raw[p].toInt() and 0xFF
+            val r = (colorMap[idx] ushr 8) and 0xFF
+            val g = (colorMap[nColors + idx] ushr 8) and 0xFF
+            val b = (colorMap[2 * nColors + idx] ushr 8) and 0xFF
+            pixels[p] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
         }
-        return RgbaImage(width, height, rgba)
+        return Argb8888(width, height, pixels)
     }
 
-    private fun readValues(bb: ByteBuffer, type: Int, count: Int, valueOff: Int): IntArray {
+    private fun readValues(tiff: ByteArray, type: Int, count: Int, valueOff: Int): IntArray {
         val elemSize = when (type) {
             TYPE_BYTE, TYPE_ASCII -> 1
             TYPE_SHORT -> 2
@@ -216,45 +202,45 @@ object TiffDecoder {
             else -> throw Exception("Unsupported TIFF type: $type")
         }
         val totalSize = elemSize * count
-        val base = if (totalSize <= 4) valueOff else bb.getInt(valueOff)
+        val base = if (totalSize <= 4) valueOff else tiff.readIntLittleEndian(valueOff)
 
         val out = IntArray(count)
         for (i in 0 until count) {
             out[i] = when (type) {
-                TYPE_BYTE -> bb.get(base + i).toInt() and 0xFF
-                TYPE_SHORT -> bb.getShort(base + i * 2).toInt() and 0xFFFF
-                TYPE_LONG -> bb.getInt(base + i * 4)
+                TYPE_BYTE -> tiff[base + i].toInt() and 0xFF
+                TYPE_SHORT -> tiff.readUShortLittleEndian(base + i * 2)
+                TYPE_LONG -> tiff.readIntLittleEndian(base + i * 4)
                 else -> throw Exception("Unexpected type in readValues: $type")
             }
         }
         return out
     }
 
-    private fun decompressLzw(input: ByteArray): ByteArray {
-        val out = Buffer()
-
+    private fun decompressLzw(sink: BufferedSink, input: ByteArray, start: Int, end: Int) {
         val clearCode = 256
         val eoiCode = 257
 
-        // Dictionary: each entry is a byte sequence
-        // Pre-fill 0..255 with single-byte values; 256 and 257 are reserved
-        val dict = ArrayList<ByteArray>(4096)
-        for (i in 0 until 256) dict.add(byteArrayOf(i.toByte()))
-        dict.add(ByteArray(0)) // 256 = clear
-        dict.add(ByteArray(0)) // 257 = eoi
+        // Dictionary as prefix-link + suffix-byte per code; strings rebuilt via the stack
+        val prefix = IntArray(4096)
+        val suffix = ByteArray(4096)
+        val stack = ByteArray(4096)
+        for (i in 0 until 256) suffix[i] = i.toByte()
+
+        var nextCode = 258
+        var codeWidth = 9
+        var prevCode = -1
+        var firstByte = 0
 
         var bitBuf = 0L
         var bitCount = 0
-        var inputPos = 0
-        var codeWidth = 9
-        var prevCode = -1
+        var inputPos = start
 
         while (true) {
             // Refill bit buffer until we have enough bits for one code
             while (bitCount < codeWidth) {
-                if (inputPos >= input.size) {
+                if (inputPos >= end) {
                     // Stream ended without EOI, treat as clean end
-                    return out.readByteArray()
+                    return
                 }
                 bitBuf = (bitBuf shl 8) or (input[inputPos].toLong() and 0xFF)
                 inputPos++
@@ -266,43 +252,59 @@ object TiffDecoder {
 
             if (code == eoiCode) break
             if (code == clearCode) {
-                while (dict.size > 258) dict.removeAt(dict.size - 1)
+                nextCode = 258
                 codeWidth = 9
                 prevCode = -1
                 continue
             }
 
-            val entry: ByteArray = when {
-                code < dict.size -> dict[code]
-                code == dict.size && prevCode >= 0 -> {
-                    // KwKwK case: code == nextAvailable
-                    val prev = dict[prevCode]
-                    val ext = ByteArray(prev.size + 1)
-                    System.arraycopy(prev, 0, ext, 0, prev.size)
-                    ext[prev.size] = prev[0]
-                    ext
+            var sp = 0
+            when {
+                code < nextCode -> {
+                    var c = code
+                    while (c >= 256) {
+                        stack[sp++] = suffix[c]
+                        c = prefix[c]
+                    }
+                    firstByte = c
+                    stack[sp++] = c.toByte()
                 }
-                else -> throw Exception(
-                    "LZW invalid code $code (dict size ${dict.size}, prev $prevCode)",
-                )
+                code == nextCode && prevCode >= 0 -> {
+                    // KwKwK: string == previous string + its own first byte
+                    stack[sp++] = firstByte.toByte()
+                    var c = prevCode
+                    while (c >= 256) {
+                        stack[sp++] = suffix[c]
+                        c = prefix[c]
+                    }
+                    firstByte = c
+                    stack[sp++] = c.toByte()
+                }
+                else -> throw Exception("LZW invalid code $code (next $nextCode, prev $prevCode)")
             }
-            out.write(entry)
 
-            // Add new dictionary entry: prevEntry + entry[0]
-            if (prevCode >= 0 && dict.size < 4096) {
-                val prev = dict[prevCode]
-                val newEntry = ByteArray(prev.size + 1)
-                System.arraycopy(prev, 0, newEntry, 0, prev.size)
-                newEntry[prev.size] = entry[0]
-                dict.add(newEntry)
+            // stack holds the string reversed
+            var lo = 0
+            var hi = sp - 1
+            while (lo < hi) {
+                val t = stack[lo]
+                stack[lo] = stack[hi]
+                stack[hi] = t
+                lo++
+                hi--
+            }
+            sink.write(stack, 0, sp)
 
-                // TIFF "early change"
-                if (dict.size == (1 shl codeWidth) - 1 && codeWidth < 12) {
+            // New entry = prevString + firstByte(currentString); TIFF "early change" width bump
+            if (prevCode >= 0 && nextCode < 4096) {
+                prefix[nextCode] = prevCode
+                suffix[nextCode] = firstByte.toByte()
+                nextCode++
+                if (nextCode == (1 shl codeWidth) - 1 && codeWidth < 12) {
                     codeWidth++
                 }
             }
             prevCode = code
         }
-        return out.readByteArray()
     }
 }

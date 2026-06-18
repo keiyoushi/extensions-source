@@ -262,9 +262,9 @@ class DrmFile(
 @Serializable
 class ImageRequestData(
     val zipUrl: String,
-    val zipStartOffset: Long,
     val localFileHeaderOffset: Long,
-    val compressedSize: Int,
+    val compressedSize: Long,
+    val method: Int,
     val key: String,
     val iv: String,
     val originalFileSize: Long,

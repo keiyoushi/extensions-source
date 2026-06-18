@@ -25,8 +25,6 @@ import org.jsoup.nodes.Element
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
-import kotlin.math.absoluteValue
-import kotlin.random.Random
 
 class Nudemoon :
     HttpSource(),
@@ -39,11 +37,9 @@ class Nudemoon :
 
     private val dateParseRu = SimpleDateFormat("d MMMM yyyy", Locale("ru"))
     private val cookieManager by lazy { CookieManager.getInstance() }
-    private val userAgentRandomizer = "${Random.nextInt().absoluteValue}"
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("User-Agent", "Mozilla/5.0 (Linux; Android 10; SM-G980F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.$userAgentRandomizer Mobile Safari/537.36")
-        .add("Referer", baseUrl)
+        .add("Referer", "$baseUrl/")
 
     init {
         cookieManager.setCookie(baseUrl, "nm_mobile=1; Domain=" + baseUrl.split("//")[1])

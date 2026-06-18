@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.fr.raijinscans
 
 import android.content.SharedPreferences
-import android.util.Base64
 import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -16,26 +15,15 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.boolean
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.coroutines.runBlocking
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MultipartBody
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import java.net.URI
 import java.util.Calendar
 import java.util.Locale
@@ -60,15 +48,15 @@ class RaijinScans :
     private val preferences: SharedPreferences by getPreferencesLazy()
     private val nonceRegex = """"nonce"\s*:\s*"([^"]+)"""".toRegex()
     private val numberRegex = """(\d+)""".toRegex()
-    private val descriptionScriptRegex = """content\.innerHTML = `([\s\S]+?)`;""".toRegex()
-    private val manifestObjectRegex = """(\{"m":"[\s\S]*\})""".toRegex()
-    private val imageExtRegex = """\.(webp|jpe?g|png|gif|avif)""".toRegex(RegexOption.IGNORE_CASE)
-    private val json: Json by lazy {
-        Json {
-            ignoreUnknownKeys = true
-            isLenient = true
-        }
-    }
+
+    // Capture only within a single template literal (no backtick inside). The page also has a
+    // "view all" toggle whose `content.innerHTML = ``` assignments are empty; a [\s\S]+? capture
+    // would span across them and yield garbage, so a description-less page must fail to match here
+    // and fall back to div.description-content.
+    private val descriptionScriptRegex = """content\.innerHTML = `([^`]+)`;""".toRegex()
+
+    private val scriptManager by lazy { ReaderScriptManager(client, preferences) }
+    private val pageListInterpreter by lazy { PageListInterpreter(client) }
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
@@ -249,11 +237,21 @@ class RaijinScans :
 
     // ========================== Page List =============================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    // Descrambler logic lives in an external JS bundle ([ReaderScriptManager]) run in a sandboxed
+    // WebView ([PageListInterpreter]), so it can be updated server-side without a new APK.
+    // Network runs here, off the main thread, not in pageListParse (parse methods must not block).
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        client.newCall(pageListRequest(chapter)).execute().use(::pageList)
+    }
 
-        // left connexion check just in case cause url returned by the website is /connexion but then it wont show in chapters list
-        // so i made it so it goes to /{mangaurl}/{chapter number} which should show in almost all case the buy premium page and if it doesnt whatever it throw a 404
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException("Handled in fetchPageList.")
+
+    private fun pageList(response: Response): List<Page> {
+        val html = response.body.string()
+        val document = Jsoup.parse(html, baseUrl)
+
+        // /connexion isn't in the chapter list, so we route to /{manga}/{chapter} which lands on the
+        // premium page (or a 404). Treat either signal as premium.
         val isPremium = document.select(".subscription-required-message").isNotEmpty() || response.request.url.toString().contains("connexion")
         if (isPremium) {
             throw Exception("This chapter is premium. Please connect via the webview to view.")
@@ -267,118 +265,29 @@ class RaijinScans :
             .add("Origin", baseUrl)
             .build()
 
-        // The chapter HTML injects a manifest object into a window["rjfr_xxx"] array. The
-        // injection syntax has varied over time (e.g. `.push({...})` and `[…length] = {...}`),
-        // so we extract the object literal directly rather than depend on the surrounding code:
-        //   {
-        //     "m": "hex1|...",  // order of fragments
-        //     "c": {               // key-value pairs of b64 fragments
-        //       "hex1": "base64fragment1", ... }
-        //   }
-        // config = m.split("|").map { key -> c[key] }.joinToString("") -> Base64 decode
-
-        val manifestScript = document.select("script").find { it.data().contains("rjfr_") }
-            ?: throw Exception("No reader manifest found. Open the chapter in WebView.")
-        val scriptData = manifestScript.data()
-        val match = manifestObjectRegex.find(scriptData) ?: throw Exception("Invalid manifest format")
-
-        val manifestJson = match.groupValues[1].parseAs<JsonObject>()
-        val mOrder = manifestJson["m"]!!.jsonPrimitive.content.split("|")
-        val cObj = manifestJson["c"]!!.jsonObject
-        val fragments = mOrder.map { cObj[it]!!.jsonPrimitive.content }
-        val b64 = fragments.joinToString("")
-
-        val config = String(Base64.decode(b64, Base64.DEFAULT)).parseAs<JsonObject>()
-        val shuffled = config["d"]!!.jsonArray
-        val perm = config["m"]!!.jsonArray.map { it.jsonPrimitive.int }
-        val order = config["l"]!!.jsonArray.map { it.jsonPrimitive.int }
-
-        // The reader uses two permutations to assemble the request. 'm' descrambles 'd' into
-        // an intermediate array via ordered[m[i]] = d[i]; 'l' then maps that into the canonical
-        // request layout via vals[i] = ordered[l[i]]. The manifest is randomized on every page
-        // load (arrays/values land at different positions each time), so reading fixed positions
-        // of the descrambled array is NOT reliable — both permutations must be applied.
-        val ordered = arrayOfNulls<JsonElement>(shuffled.size)
-        perm.forEachIndexed { i, p -> ordered[p] = shuffled[i] }
-        val vals = order.map {
-            ordered.getOrNull(it)
-                ?: throw Exception("Reader manifest layout changed. Open the chapter in WebView.")
-        }
-
-        // Canonical layout of vals:
-        //  1..6 : request content values, passed positionally to keyArr[0..5]
-        //         (["", token, X, mangaId, chapterSlug, instanceId] — order matters, identity does not)
-        //  13   : keyArr - request form field names (first 10 used)
-        // The form action ("rjfr_...") is picked by content: it is the only string starting with
-        // "rjfr_" (the rjfr instance token uses a hyphen, "rjfr-", so it won't collide).
-        val action = vals.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
-            .first { it.startsWith("rjfr_") }
-        val keyArr = vals[13].jsonArray.map { it.jsonPrimitive.content }
-        val contentValues = (1..6).map { vals[it].jsonPrimitive.content }
-
-        val rjfrValue = document.select("[data-rj-free-reader-root]").attr("data-rj-free-reader-root")
-
-        val pages = mutableListOf<Page>()
-        var cursor = ""
-        var run = true
-        var guard = 0
-
-        while (run && guard++ < MAX_PAGE_REQUESTS) {
-            val builder = MultipartBody.Builder().setType(MultipartBody.FORM)
-                .addFormDataPart("action", action)
-            contentValues.forEachIndexed { j, v -> builder.addFormDataPart(keyArr[j], v) }
-            builder.addFormDataPart(keyArr[6], "0")
-                .addFormDataPart(keyArr[7], "0") // offset, always 0; pagination is cursor-only
-                .addFormDataPart(keyArr[8], rjfrValue)
-                .addFormDataPart(keyArr[9], cursor)
-            val body = builder.build()
-
-            val response = client.newCall(POST("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, body)).execute()
-
-            if (!response.isSuccessful) error("Failed to get page: ${response.code}")
-            val root = response.parseAs<JsonObject>()
-
-            // Parse by content, not position, so we don't depend on the (randomized) response key
-            // names, the response nesting depth, or decoy wrapper objects/arrays the site mixes in:
-            // images = the array of image objects found anywhere in the tree (an image object holds
-            // an http string whose path is an actual image); payload = its parent object, which also
-            // carries the cursor (its only string primitive) and hasMore (its only boolean primitive).
-            val (payload, images) = findImages(root)
-                ?: throw Exception("Reader response format changed. Open the chapter in WebView.")
-
-            images.forEach { image ->
-                image.imageUrlOrNull()?.let { pages.add(Page(pages.size, imageUrl = it)) }
+        return runBlocking {
+            val attempt: suspend (String) -> List<Page> = { script ->
+                pageListInterpreter.getPages(
+                    script = script,
+                    baseUrl = baseUrl,
+                    chapterUrl = chapterUrl,
+                    html = html,
+                    ajaxHeaders = ajaxHeaders,
+                    maxPageRequests = MAX_PAGE_REQUESTS,
+                )
             }
 
-            cursor = payload.values.filterIsInstance<JsonPrimitive>()
-                .firstOrNull { it.isString }?.content ?: ""
-            run = payload.values.filterIsInstance<JsonPrimitive>()
-                .firstOrNull { it.booleanOrNull != null }?.boolean ?: false
-        }
-
-        return pages
-    }
-
-    // The real image url = the http string whose path is an actual image. Each image object also
-    // carries a decoy http string (the admin-ajax endpoint), so a plain "starts with http" is not enough.
-    private fun JsonElement.imageUrlOrNull(): String? = (this as? JsonObject)?.values
-        ?.filterIsInstance<JsonPrimitive>()
-        ?.map { it.content }
-        ?.firstOrNull { it.startsWith("http") && imageExtRegex.containsMatchIn(it) }
-
-    private fun JsonArray.isImageArray(): Boolean = firstOrNull()?.imageUrlOrNull() != null
-
-    // Find the array of image objects anywhere in the tree and return it with its parent object.
-    private fun findImages(element: JsonElement): Pair<JsonObject, JsonArray>? {
-        when (element) {
-            is JsonObject -> {
-                element.values.forEach { if (it is JsonArray && it.isImageArray()) return element to it }
-                element.values.forEach { child -> findImages(child)?.let { return it } }
+            val script = scriptManager.getScript()
+            try {
+                attempt(script)
+            } catch (e: Exception) {
+                // Cached script may be stale while a fixed one is published. Refetch and retry once;
+                // if identical, retrying is pointless, so surface the original error.
+                val fresh = scriptManager.refreshScript()
+                if (fresh == script) throw e
+                attempt(fresh)
             }
-            is JsonArray -> element.forEach { child -> findImages(child)?.let { return it } }
-            else -> {}
         }
-        return null
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
