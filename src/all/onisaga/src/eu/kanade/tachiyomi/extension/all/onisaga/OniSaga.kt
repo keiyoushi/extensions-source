@@ -50,6 +50,10 @@ class OniSaga(
         .rateLimit(4)
         .build()
 
+    @Volatile private var cachedStateUrl: String? = null
+
+    @Volatile private var cachedState: LivewireState? = null
+
     private val apiLock = Any()
 
     @Volatile private var lastRequestTime = 0L
@@ -136,15 +140,23 @@ class OniSaga(
         page: Int,
         updates: PostFilterUpdatesDto? = null,
     ): MangasPage {
-        val doc = client.newCall(GET(url, headers)).execute().use { it.asJsoup() }
-
-        val state = doc.extractLivewireState("post-filter")
-            ?: throw Exception("Could not find Livewire state for pagination")
-
         val prefExcluded = excludedGenresPref()
 
-        if (page == 1 && updates == null && prefExcluded.isEmpty()) {
-            return parseMangaList(doc)
+        val state = if (cachedStateUrl == url && cachedState != null) {
+            cachedState!!
+        } else {
+            val doc = client.newCall(GET(url, headers)).execute().use { it.asJsoup() }
+
+            if (page == 1 && updates == null && prefExcluded.isEmpty()) {
+                return parseMangaList(doc)
+            }
+
+            val newState = doc.extractLivewireState("post-filter")
+                ?: throw Exception("Could not find Livewire state for pagination")
+
+            cachedStateUrl = url
+            cachedState = newState
+            newState
         }
 
         val effectiveUpdates = (updates ?: PostFilterUpdatesDto()).also { dto ->
@@ -173,9 +185,14 @@ class OniSaga(
             POST("$baseUrl/livewire/update", buildLivewireHeaders(url.substringBefore("?")), request.toJsonRequestBody(livewireJson)),
         ).execute().use { response ->
             if (!response.isSuccessful) {
+                cachedState = null
                 throw Exception("Livewire error (HTTP ${response.code}): ${response.body.string()}")
             }
             response.parseAs<LivewireResponse>()
+        }
+
+        dto.components.firstOrNull()?.snapshot?.let { newSnapshot ->
+            cachedState = LivewireState(newSnapshot, state.token)
         }
 
         val html = dto.components.firstOrNull()?.effects?.html ?: ""
@@ -485,7 +502,7 @@ class OniSaga(
             val state = doc.extractLivewireState("manga.chapter-list")
                 ?: return@fromCallable emptyList()
 
-            val chapters = parseChaptersFromDoc(doc, langKey).toMutableList()
+            var chapters = parseChaptersFromDoc(doc, langKey)
             var currentSnapshot = state.snapshot
 
             while (true) {
@@ -521,8 +538,7 @@ class OniSaga(
 
                 if (newChapters.size <= chapters.size) break
 
-                chapters.clear()
-                chapters.addAll(newChapters)
+                chapters = newChapters
                 currentSnapshot = dto.components.first().snapshot
             }
 
