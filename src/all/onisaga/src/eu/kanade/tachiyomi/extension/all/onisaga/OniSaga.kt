@@ -31,7 +31,6 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import rx.Observable
-import java.util.Calendar
 
 class OniSaga(
     override val lang: String,
@@ -618,18 +617,10 @@ class OniSaga(
         val date = dateStr.lowercase().trim()
         if (date.isEmpty()) return 0L
 
-        val calendar = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
+        val now = System.currentTimeMillis()
 
-        if (date.contains("today")) return calendar.timeInMillis
-        if (date.contains("yesterday")) {
-            calendar.add(Calendar.DAY_OF_YEAR, -1)
-            return calendar.timeInMillis
-        }
+        if (date.contains("today")) return now
+        if (date.contains("yesterday")) return now - 86_400_000L
 
         val regex = Regex("(\\d+)\\s+(minute|hour|day|week|month|year)s?\\s+ago")
         val match = regex.find(date) ?: return 0L
@@ -637,27 +628,13 @@ class OniSaga(
         val value = match.groupValues[1].toInt()
         val unit = match.groupValues[2]
 
-        val now = System.currentTimeMillis()
-
         return when (unit) {
             "minute" -> now - (value * 60_000L)
             "hour" -> now - (value * 3_600_000L)
-            "day" -> {
-                calendar.add(Calendar.DAY_OF_YEAR, -value)
-                calendar.timeInMillis
-            }
-            "week" -> {
-                calendar.add(Calendar.WEEK_OF_YEAR, -value)
-                calendar.timeInMillis
-            }
-            "month" -> {
-                calendar.add(Calendar.MONTH, -value)
-                calendar.timeInMillis
-            }
-            "year" -> {
-                calendar.add(Calendar.YEAR, -value)
-                calendar.timeInMillis
-            }
+            "day" -> now - (value * 86_400_000L)
+            "week" -> now - (value * 604_800_000L)
+            "month" -> now - (value * 2_592_000_000L)
+            "year" -> now - (value * 31_536_000_000L)
             else -> 0L
         }
     }
