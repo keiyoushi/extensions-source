@@ -1,13 +1,12 @@
 package keiyoushi.lib.e4p
 
 import android.graphics.Bitmap
-import android.graphics.Bitmap.createBitmap
+import android.graphics.BitmapFactory
 import android.graphics.BitmapFactory.decodeByteArray
-import android.graphics.Canvas
 import keiyoushi.utils.decodeHex
+import keiyoushi.utils.readIntLittleEndian
+import keiyoushi.utils.writeIntLittleEndian
 import okio.Buffer
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 // XEBP watermark remover
 // Watermark also contains a barcode to identify the user.
@@ -20,23 +19,22 @@ object XebpDecoder {
     // TIFF little-endian magic "II*\x00", must appear after tfix decrypt
     private val TIFF_MAGIC_LE = byteArrayOf(0x49, 0x49, 0x2A, 0x00)
 
-    fun decrypt(xebpBytes: ByteArray, ctx: XebpContext): ByteArray {
+    fun decrypt(xebpBytes: ByteArray, ctx: XebpContext): Buffer {
         val container = parseContainer(xebpBytes)
         val zstrMeta = parseZstr(container.zstr)
-        val encryptedPayload = ctx.pbexSeed.copyOfRange(16, 48)
-        val perImageKey = ByteArray(32) { i ->
-            (encryptedPayload[i].toInt() xor ctx.iv[i].toInt()).toByte()
+        val perImageKey = ByteArray(32) {
+            (ctx.pbexSeed[16 + it].toInt() xor ctx.iv[it].toInt()).toByte()
         }
 
         // WASM f_ln(c+80, ..., 1821454, ...)
-        val workspace = container.tfix.copyOf()
-        val xorLen = minOf(zstrMeta.xorLen, workspace.size)
-        for (i in 0 until xorLen) workspace[i] = (workspace[i].toInt() xor 0x11).toByte()
-        val tiffBytes = chaCha8Decrypt(workspace, perImageKey, zstrMeta.nonce, zstrMeta.xorLen.toLong())
+        val tfix = container.tfix
+        val xorLen = minOf(zstrMeta.xorLen, tfix.size)
+        for (i in 0 until xorLen) tfix[i] = (tfix[i].toInt() xor 0x11).toByte()
+        val tiffBytes = chaCha8Decrypt(tfix, perImageKey, zstrMeta.nonce, zstrMeta.xorLen.toLong())
 
         if (!tiffBytes.copyOfRange(0, 4).contentEquals(TIFF_MAGIC_LE)) {
             throw IllegalStateException(
-                "tfix did not decrypt to TIFF (expected II*\\0, got ${hex(tiffBytes.copyOfRange(0, 4))})",
+                "tfix did not decrypt to TIFF (expected II*\\0, got ${(tiffBytes.copyOfRange(0, 4)).toHexString()})",
             )
         }
 
@@ -45,7 +43,6 @@ object XebpDecoder {
     }
 
     private class Container(
-        val vp8: ByteArray,
         val vp8RiffAsWebp: ByteArray,
         val zstr: ByteArray,
         val tfix: ByteArray,
@@ -58,7 +55,6 @@ object XebpDecoder {
                 xebp[2] == 'F'.code.toByte() && xebp[3] == 'F'.code.toByte(),
         ) { "XEBP missing RIFF magic" }
 
-        val bb = ByteBuffer.wrap(xebp).order(ByteOrder.LITTLE_ENDIAN)
         // Skip RIFF + size; next 4 bytes are WEBP
         // Then chunks: 4 fourcc + 4 size + payload (padded to even)
         var off = 12
@@ -70,7 +66,7 @@ object XebpDecoder {
         var tfixLen = -1
         while (off + 8 <= xebp.size) {
             val fourCC = String(xebp, off, 4, Charsets.ISO_8859_1)
-            val size = bb.getInt(off + 4)
+            val size = xebp.readIntLittleEndian(off + 4)
             val payloadStart = off + 8
             when (fourCC) {
                 "VP8 ", "VP8L", "VP8X" -> {
@@ -98,10 +94,7 @@ object XebpDecoder {
             val out = ByteArray(vp8ChunkEnd)
             System.arraycopy(xebp, 0, out, 0, vp8ChunkEnd)
             val newSize = vp8ChunkEnd - 8
-            out[4] = (newSize and 0xFF).toByte()
-            out[5] = ((newSize ushr 8) and 0xFF).toByte()
-            out[6] = ((newSize ushr 16) and 0xFF).toByte()
-            out[7] = ((newSize ushr 24) and 0xFF).toByte()
+            out.writeIntLittleEndian(4, newSize)
             out[8] = 'W'.code.toByte()
             out[9] = 'E'.code.toByte()
             out[10] = 'B'.code.toByte()
@@ -112,7 +105,6 @@ object XebpDecoder {
         }
 
         return Container(
-            vp8 = if (vp8Start >= 0) xebp.copyOfRange(vp8Start + 8, vp8Start + 8 + vp8Len) else ByteArray(0),
             vp8RiffAsWebp = vp8RiffAsWebp,
             zstr = xebp.copyOfRange(zstrStart, zstrStart + zstrLen),
             tfix = xebp.copyOfRange(tfixStart, tfixStart + tfixLen),
@@ -145,7 +137,7 @@ object XebpDecoder {
 
         val encrypted = encryptedHex.decodeHex()
         val u32s = IntArray(countU32)
-        for (i in 0 until countU32) u32s[i] = le32(encrypted, i * 4)
+        for (i in 0 until countU32) u32s[i] = encrypted.readIntLittleEndian(i * 4)
 
         xxteaDecrypt(u32s, XXTEA_KEY)
 
@@ -177,9 +169,9 @@ object XebpDecoder {
         state[1] = 0x3320646E // "nd 3"
         state[2] = 0x79622D32 // "2-by"
         state[3] = 0x6B206574 // "te k"
-        for (i in 0 until 8) state[4 + i] = le32(key, i * 4)
-        state[14] = le32(nonce, 0)
-        state[15] = le32(nonce, 4)
+        for (i in 0 until 8) state[4 + i] = key.readIntLittleEndian(i * 4)
+        state[14] = nonce.readIntLittleEndian(0)
+        state[15] = nonce.readIntLittleEndian(4)
 
         val out = ByteArray(data.size)
         val work = IntArray(16)
@@ -231,7 +223,7 @@ object XebpDecoder {
     private fun xxteaDecrypt(v: IntArray, keyBytes: ByteArray) {
         val n = v.size
         if (n < 2) return
-        val k = IntArray(4) { le32(keyBytes, it * 4) }
+        val k = IntArray(4) { keyBytes.readIntLittleEndian(it * 4) }
         val rounds = 6 + 52 / n
         var sum = (rounds * DELTA.toLong()).toInt()
         var y = v[0]
@@ -253,46 +245,19 @@ object XebpDecoder {
         }
     }
 
-    private fun compositePatch(vp8Webp: ByteArray, patch: TiffDecoder.RgbaImage): ByteArray {
-        val decoded = decodeByteArray(vp8Webp, 0, vp8Webp.size)
-            ?: throw Exception("Failed to decode VP8 WebP (${vp8Webp.size} bytes)")
+    private fun compositePatch(vp8Webp: ByteArray, patch: TiffDecoder.Argb8888): Buffer {
+        val opts = BitmapFactory.Options().apply {
+            inMutable = true
+        }
 
-        val result = createBitmap(
-            decoded.width,
-            decoded.height,
-            Bitmap.Config.ARGB_8888,
-        )
-        Canvas(result).drawBitmap(decoded, 0f, 0f, null)
-        decoded.recycle()
-
+        val result = decodeByteArray(vp8Webp, 0, vp8Webp.size, opts)
         val pw = minOf(patch.width, result.width)
         val ph = minOf(patch.height, result.height)
-        val px = IntArray(pw * ph)
-        for (y in 0 until ph) {
-            for (x in 0 until pw) {
-                val srcOff = (y * patch.width + x) * 4
-                val r = patch.rgba[srcOff].toInt() and 0xFF
-                val g = patch.rgba[srcOff + 1].toInt() and 0xFF
-                val b = patch.rgba[srcOff + 2].toInt() and 0xFF
-                px[y * pw + x] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
-            }
-        }
-        result.setPixels(px, 0, pw, 0, 0, pw, ph)
+        result.setPixels(patch.pixels, 0, patch.width, 0, 0, pw, ph)
 
-        val out = Buffer()
-        result.compress(Bitmap.CompressFormat.WEBP, 100, out.outputStream())
+        val buffer = Buffer()
+        result.compress(Bitmap.CompressFormat.WEBP, 100, buffer.outputStream())
         result.recycle()
-        return out.readByteArray()
-    }
-
-    private fun le32(b: ByteArray, off: Int): Int = (b[off].toInt() and 0xFF) or
-        ((b[off + 1].toInt() and 0xFF) shl 8) or
-        ((b[off + 2].toInt() and 0xFF) shl 16) or
-        ((b[off + 3].toInt() and 0xFF) shl 24)
-
-    internal fun hex(b: ByteArray): String {
-        val sb = StringBuilder(b.size * 2)
-        for (x in b) sb.append(String.format("%02x", x.toInt() and 0xFF))
-        return sb.toString()
+        return buffer
     }
 }

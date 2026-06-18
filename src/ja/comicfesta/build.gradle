@@ -1,7 +1,9 @@
 ext {
     extName = "Comic Festa"
     extClass = ".ComicFesta"
-    extVersionCode = 1
+    themePkg = "clipstudioreader"
+    baseUrl = "https://comic.iowl.jp"
+    overrideVersionCode = 0
     isNsfw = true
 }
 
@@ -9,5 +11,4 @@ apply plugin: "kei.plugins.extension.legacy"
 
 dependencies {
     implementation(project(":lib:cookieinterceptor"))
-    implementation(project(":lib:clipstudioreader"))
 }

@@ -2,13 +2,16 @@ package eu.kanade.tachiyomi.extension.ja.mangasaison
 
 import android.util.Base64
 import keiyoushi.utils.decodeHex
+import keiyoushi.zip.dataRange
+import keiyoushi.zip.range
+import keiyoushi.zip.readEntry
 import okhttp3.Interceptor
 import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
-import okio.Buffer
+import okio.BufferedSource
 import okio.buffer
 import okio.cipherSource
 import java.security.MessageDigest
@@ -24,26 +27,25 @@ class ImageInterceptor : Interceptor {
         if (fragment.isNullOrEmpty()) return chain.proceed(request)
 
         val parts = fragment.split(";")
-        if (parts.size < 5) return chain.proceed(request)
+        if (parts.size < 4) return chain.proceed(request)
 
-        val (token, startStr, endStr, compSizeStr, methodStr) = parts
-        val start = startStr.toLong()
-        val end = endStr.toLong()
+        val (token, offsetStr, compSizeStr, methodStr) = parts
+        val offset = offsetStr.toLong()
         val compressedSize = compSizeStr.toLong()
         val method = methodStr.toInt()
-
-        val fileRequest = request.newBuilder().header("Range", "bytes=$start-$end").build()
-        val fileResponse = chain.proceed(fileRequest)
-        if (!fileResponse.isSuccessful) return fileResponse
 
         val key = resolveKey(token)
         // wasm func 217 (LSUZR::getData) AES-CBC
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
         cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(IMAGE_IV_HEX))
 
-        val image = fileResponse.body.source().use { src ->
-            Utils.readEntry(src, compressedSize, method) { it.cipherSource(cipher).buffer() }
-        }
+        val range = dataRange(offset, compressedSize)
+        val fileRequest = request.newBuilder().range(range).build()
+        val fileResponse = chain.proceed(fileRequest)
+        if (!fileResponse.isSuccessful) return fileResponse
+
+        val image = readEntry(fileResponse.body.source(), compressedSize, method).cipherSource(cipher).buffer()
+        val mediaType = image.detectImageType()
 
         return fileResponse.newBuilder()
             .removeHeader("Content-Range")
@@ -51,7 +53,7 @@ class ImageInterceptor : Interceptor {
             .code(200)
             .message("OK")
             .protocol(Protocol.HTTP_1_1)
-            .body(image.asResponseBody(image.detectImageType(), image.size))
+            .body(image.asResponseBody(mediaType))
             .build()
     }
 
@@ -84,8 +86,9 @@ class ImageInterceptor : Interceptor {
         return imageKey
     }
 
-    private fun Buffer.detectImageType(): MediaType {
-        val magic = peek().readByteArray(minOf(12L, size))
+    private fun BufferedSource.detectImageType(): MediaType {
+        val peek = peek()
+        val magic = if (peek.request(12L)) peek.readByteArray(12L) else peek.readByteArray()
         return when {
             magic.size >= 3 && magic[0] == 0xFF.toByte() && magic[1] == 0xD8.toByte() && magic[2] == 0xFF.toByte() -> JPEG
 

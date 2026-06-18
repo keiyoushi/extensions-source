@@ -3,7 +3,7 @@ ext {
     extClass = '.FenixProject'
     themePkg = 'madara'
     baseUrl = 'https://fenixproject.site'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 

@@ -32,7 +32,7 @@ class MunTruyen :
 
     override val lang = "vi"
 
-    private val defaultBaseUrl = "https://munhihi.icu"
+    private val defaultBaseUrl = "https://moonnovel.store"
 
     override val baseUrl get() = getPrefBaseUrl()
 
