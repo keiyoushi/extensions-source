@@ -17,10 +17,12 @@ import keiyoushi.utils.graphQLPost
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseGraphQLAs
 import keiyoushi.utils.toJsonRequestBody
+import keiyoushi.zip.readZipEntry
+import keiyoushi.zip.zipDirectory
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import okio.Buffer
+import okio.buffer
 import java.io.IOException
 import java.net.URLEncoder
 
@@ -155,41 +157,20 @@ class MangaSaison :
         val uzeUrl = access.url
         val token = access.token
 
-        val tailResponse = rangeGet(uzeUrl, "bytes=-${Utils.MAX_EOCD_SEARCH}")
-        val totalSize = tailResponse.header("Content-Range")?.substringAfter('/', "")?.toLongOrNull()
-        val tail = tailResponse.body.bytes()
-        val tailStart = if (totalSize != null) totalSize - tail.size else 0L
-
-        val eocd = Utils.findEocd(tail)
-
-        val cdBytes = if (totalSize != null && eocd.cdOffset >= tailStart) {
-            val from = (eocd.cdOffset - tailStart).toInt()
-            tail.copyOfRange(from, from + eocd.cdSize.toInt())
-        } else {
-            rangeGet(uzeUrl, "bytes=${eocd.cdOffset}-${eocd.cdOffset + eocd.cdSize - 1}").body.bytes()
-        }
-        val entries = Utils.parseCentralDirectory(cdBytes)
+        val entries = client.zipDirectory(uzeUrl, headers).entries
         val byName = entries.associateBy { it.name }
-
-        val ordered = entries.sortedBy { it.localHeaderOffset }
-        val spanEnd = HashMap<String, Long>(ordered.size)
-        for (i in ordered.indices) {
-            val end = if (i + 1 < ordered.size) ordered[i + 1].localHeaderOffset - 1 else eocd.cdOffset - 1
-            spanEnd[ordered[i].name] = end
-        }
 
         val pkgEntry = byName[PACKAGE_JSON]
             ?: entries.firstOrNull { it.name == "package.json" || it.name.endsWith("/package.json") }
             ?: throw Exception("manifest not found in .uze (looked for $PACKAGE_JSON). ${entries.size} entries, ${entries.take(5).joinToString { it.name }}")
 
-        val pkg = readPlainEntry(uzeUrl, pkgEntry, spanEnd.getValue(pkgEntry.name)).inputStream().parseAs<MdPackage>()
+        val pkg = client.readZipEntry(uzeUrl, pkgEntry, headers).buffer().inputStream().parseAs<MdPackage>()
 
         return pkg.spine.mapIndexedNotNull { index, item ->
             val entry = byName[item.href] ?: return@mapIndexedNotNull null
             val fragment = listOf(
                 token,
                 entry.localHeaderOffset,
-                spanEnd.getValue(entry.name),
                 entry.compressedSize,
                 entry.method,
             ).joinToString(";")
@@ -200,17 +181,6 @@ class MangaSaison :
                 .toString()
             Page(index, imageUrl = pageUrl)
         }
-    }
-
-    private fun rangeGet(url: String, range: String): Response {
-        val request = GET(url, headers).newBuilder()
-            .header("Range", range)
-            .build()
-        return client.newCall(request).execute()
-    }
-
-    private fun readPlainEntry(url: String, entry: Utils.Entry, end: Long): Buffer = rangeGet(url, "bytes=${entry.localHeaderOffset}-$end").body.source().use {
-        Utils.readEntry(it, entry.compressedSize, entry.method)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

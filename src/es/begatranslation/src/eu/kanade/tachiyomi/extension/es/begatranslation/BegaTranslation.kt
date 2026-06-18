@@ -27,11 +27,12 @@ class BegaTranslation :
     override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
         thumbnail_url = thumbnail_url?.replaceFirst("-175x238", "")
     }
+
     override fun searchMangaFromElement(element: Element): SManga = super.searchMangaFromElement(element).apply {
         thumbnail_url = thumbnail_url?.replaceFirst("-193x278", "")
     }
 
-    val rkJsonRegex = """(?s)var\s+RK\s*=\s*(\{.*?\});""".toRegex()
+    private val rkJsonRegex = """(?s)var\s+RK\s*=\s*(\{.*?\});""".toRegex()
 
     override fun pageListParse(document: Document): List<Page> {
         val pages = super.pageListParse(document)
@@ -53,16 +54,21 @@ class BegaTranslation :
 
         val readerLanding = client.newCall(POST(rkData.readerApi, headers, formBody)).execute().asJsoup()
 
-        val readerUrl = readerLanding.selectFirst("a.rk-btn-read")!!.absUrl("href")
+        val readerBtn = readerLanding.selectFirst("a.rk-btn-read")
 
-        val readerHeaders = headersBuilder()
-            .set("Referer", readerLanding.location())
-            .build()
+        val chapterReader = if (readerBtn != null) {
+            val readerUrl = readerBtn.absUrl("href")
+            val readerHeaders = headersBuilder()
+                .set("Referer", readerLanding.location())
+                .build()
 
-        val chapterReader = client.newCall(GET(readerUrl, readerHeaders)).execute().asJsoup()
+            client.newCall(GET(readerUrl, readerHeaders)).execute().asJsoup()
+        } else {
+            readerLanding
+        }
 
-        return chapterReader.select("img.rk-img").mapIndexed { index, elements ->
-            Page(index, imageUrl = elements.absUrl("src"))
+        return chapterReader.select("img.rk-img").mapIndexed { index, element ->
+            Page(index, imageUrl = element.absUrl("src"))
         }
     }
 
