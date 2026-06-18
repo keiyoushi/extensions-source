@@ -110,8 +110,4 @@ class Sacachispa : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    // ============================== Filters ==============================
-
-    override fun getFilterList() = FilterList()
 }
