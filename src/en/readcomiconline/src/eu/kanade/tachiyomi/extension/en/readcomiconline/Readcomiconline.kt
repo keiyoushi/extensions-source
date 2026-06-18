@@ -1,9 +1,16 @@
 package eu.kanade.tachiyomi.extension.en.readcomiconline
 
+import android.app.Application
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
+import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -20,22 +27,22 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
 import rx.Observable
-import java.io.IOException
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Locale
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.collections.mapIndexed
 
 class Readcomiconline :
     HttpSource(),
@@ -64,6 +71,9 @@ class Readcomiconline :
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addNetworkInterceptor(::captchaInterceptor).build()
+
+    private val context: Application by injectLazy()
+    private val handler by lazy { Handler(Looper.getMainLooper()) }
 
     private fun captchaInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -273,60 +283,103 @@ class Readcomiconline :
 
     private val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val qualitySuffix = "&s=${serverPref()}&quality=${qualityPref()}&readType=1"
-        return GET(baseUrl + chapter.url + qualitySuffix, headers)
+        val chapterUrl = baseUrl + chapter.url + qualitySuffix
+
+        val chapterDoc = client.newCall(GET(chapterUrl, headers)).execute().asJsoup()
+        val totalImages = chapterDoc.select("#divImage img").size
+
+        val images = decodeImagesWv(chapterDoc, totalImages)
+            .mapIndexed { i, url ->
+                Page(i, imageUrl = url)
+            }
+
+        return Observable.just(images)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        // Declare some important values first
-        var encryptedLinks = mutableListOf<String>()
-        val useSecondServer = serverPref() == "s2"
+    fun decodeImagesWv(chapterDoc: Document, totalImages: Int): List<String> {
+        var innerWv: WebView? = null
+        val latch = CountDownLatch(1)
+        var jsonResult = ""
 
-        if (remoteConfigItem == null) {
-            throw IOException("Failed to retrieve configuration")
-        }
+        handler.post {
+            innerWv = WebView(context)
+            innerWv.settings.loadsImagesAutomatically = false
+            innerWv.settings.blockNetworkImage = true
+            innerWv.settings.javaScriptEnabled = true
+            innerWv.settings.userAgentString = headers["User-Agent"]
 
-        // Combine all js scripts (so baeu() URL detection and link extraction see the same content)
-        // baeu() is function call in the source code that sometimes contain a custom URL for the base URL for images
-        // in that case we bypass choosing server1 or server2 base URLs and use the custom URL instead
-        val combinedScripts = document.select("script").joinToString("\n") { it.data().trimIndent() }
+            innerWv.webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(
+                    view: WebView?,
+                    req: WebResourceRequest?,
+                ): WebResourceResponse? {
+                    val url = req?.url?.toString() ?: return null
 
-        QuickJs.create().use {
-            val eval =
-                "let _encryptedString = ${Json.encodeToString(combinedScripts)};let _useServer2 = $useSecondServer;${remoteConfigItem!!.imageDecryptEval}"
-            val evalResult = (it.evaluate(eval) as String).parseAs<List<String>>()
-            encryptedLinks.addAll(evalResult)
-        }
-
-        encryptedLinks = encryptedLinks.let { links ->
-            if (remoteConfigItem!!.postDecryptEval != null) {
-                QuickJs.create().use {
-                    val eval = "let _decryptedLinks = ${Json.encodeToString(links)};let _useServer2 = $useSecondServer;${remoteConfigItem!!.postDecryptEval}"
-                    (it.evaluate(eval) as String).parseAs<MutableList<String>>()
-                }
-            } else {
-                links
-            }
-        }
-
-        return encryptedLinks.mapIndexedNotNull { idx, url ->
-            if (!remoteConfigItem!!.shouldVerifyLinks) {
-                Page(idx, imageUrl = url)
-            } else {
-                val request = Request.Builder().url(url).head().build()
-
-                client.newCall(request).execute().use {
-                    if (it.isSuccessful) {
-                        Page(idx, imageUrl = url)
+                    return if (
+                        url.contains(".js") ||
+                        url.startsWith("data:") // initial loadDataWithBaseURL
+                    ) {
+                        null
                     } else {
-                        null // Remove from list
+                        WebResourceResponse("text/plain", "utf-8", null)
                     }
                 }
             }
+
+            innerWv.addJavascriptInterface(
+                object {
+                    @JavascriptInterface
+                    fun onImagesExtracted(payload: String) {
+                        jsonResult = payload
+                        latch.countDown()
+                    }
+                },
+                "AndroidBridge",
+            )
+
+            chapterDoc.select("script[defer]").remove()
+            chapterDoc.body().append(
+                """
+                <script>
+                (function() {
+                    var resolved = new Set();
+
+                    function sendFinal() {
+                        var imgs = document.querySelectorAll('#divImage img');
+                        for (var i = 0; i < imgs.length; i++) {
+                            resolved.add(imgs[i].src);
+                        }
+                        AndroidBridge.onImagesExtracted(JSON.stringify(Array.from(resolved)));
+                    }
+
+                    setTimeout(function() {
+                        LoadNextPages($totalImages);
+                        setTimeout(sendFinal, 500);
+                    }, 300);
+                })();
+                </script>
+                """.trimIndent(),
+            )
+
+            innerWv.loadDataWithBaseURL(chapterDoc.location(), chapterDoc.outerHtml(), "text/html", "UTF-8", null)
+        }
+
+        return try {
+            if (!latch.await(8, TimeUnit.SECONDS) || jsonResult.isEmpty()) {
+                error("Url decoding timed out, try again")
+            }
+            jsonResult.parseAs<List<String>>()
+        } finally {
+            handler.post {
+                innerWv?.stopLoading()
+                innerWv?.destroy()
+            }
         }
     }
+
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException("Not used")
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
@@ -478,34 +531,6 @@ class Readcomiconline :
 
     private fun serverPref() = preferences.getString(SERVER_PREF, "")
 
-    private var remoteConfigItem: RemoteConfigDTO? = null
-        get() {
-            if (field != null) {
-                return field
-            }
-
-            val configLink = IMAGE_REMOTE_CONFIG_DEFAULT.addBustQuery()
-
-            try {
-                val configResponse = client.newCall(GET(configLink)).execute()
-
-                field = configResponse.parseAs<RemoteConfigDTO>()
-                configResponse.close()
-                return field
-            } catch (_: IOException) {
-                return null
-            }
-        }
-
-    private fun String.addBustQuery(): String = "$this?bust=${Calendar.getInstance().time.time}"
-
-    @Serializable
-    private class RemoteConfigDTO(
-        val imageDecryptEval: String,
-        val postDecryptEval: String?,
-        val shouldVerifyLinks: Boolean,
-    )
-
     companion object {
         private const val QUALITY_PREF_TITLE = "Image Quality Selector"
         private const val QUALITY_PREF = "qualitypref"
@@ -515,7 +540,5 @@ class Readcomiconline :
         private const val MIRROR_PREF = "mirrorpref"
         private val MIRROR_NAMES = arrayOf("readcomiconline.li", "rcostation.xyz")
         private val MIRROR_URLS = arrayOf("https://readcomiconline.li", "https://rcostation.xyz")
-        private const val IMAGE_REMOTE_CONFIG_DEFAULT =
-            "https://raw.githubusercontent.com/keiyoushi/extensions-source/refs/heads/main/src/en/readcomiconline/config.json"
     }
 }
