@@ -336,7 +336,7 @@ class OniSaga(
         return SManga.create().apply {
             title = doc.selectFirst("h1")?.text()
                 ?: doc.selectFirst("[data-flux-heading]")?.text()
-                ?: ""
+                ?: throw Exception("Could not find manga title")
 
             thumbnail_url = doc.selectFirst(".w-32 > picture:nth-child(1) > img:nth-child(3)")?.let { resolveImageUrl(it) }
 
