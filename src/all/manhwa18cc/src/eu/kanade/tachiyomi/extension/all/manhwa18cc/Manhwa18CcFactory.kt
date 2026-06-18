@@ -4,7 +4,9 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Element
@@ -55,16 +57,52 @@ abstract class Manhwa18Cc(
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        // After searching and go back to popular page, it always sent empty query thus display
-        // "No results found" message. So this fix redirect to popular page.
-        if (query.isBlank()) return popularMangaRequest(page)
+        if (!query.isBlank()) {
+            val url = baseUrl.toHttpUrl().newBuilder()
+                .addPathSegment("search")
+                .addQueryParameter("q", query)
+                .addQueryParameter("page", page.toString())
+                .build()
 
-        val url = "$baseUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("q", query)
-            .addQueryParameter("page", page.toString())
-            .build()
+            return GET(url, headers)
+        }
 
-        return GET(url, headers)
+        filters.firstInstanceOrNull<Manhwa18GenreFilter>()
+            ?.takeIf { it.selected != null }
+            ?.let {
+                val url = baseUrl.toHttpUrl().newBuilder()
+                    .addPathSegment("webtoon-genre")
+                    .addPathSegment(it.selected.toString())
+                    .addPathSegment(page.toString())
+                    .build()
+
+                return GET(url, headers)
+            }
+
+        filters.firstInstanceOrNull<Manhwa18OrderFilter>()
+            ?.takeIf { it.selected != null }
+            ?.let {
+                val url = baseUrl.toHttpUrl().newBuilder()
+                    .addPathSegment("webtoons")
+                    .addPathSegment(page.toString())
+                    .addQueryParameter("orderby", it.selected.toString())
+                    .build()
+
+                return GET(url, headers)
+            }
+
+        filters.firstInstanceOrNull<Manhwa18StatusFilter>()
+            ?.takeIf { it.selected != null }
+            ?.let {
+                val url = baseUrl.toHttpUrl().newBuilder()
+                    .addPathSegment(it.selected.toString())
+                    .addPathSegment(page.toString())
+                    .build()
+
+                return GET(url, headers)
+            }
+
+        return popularMangaRequest(page)
     }
 
     override val mangaSubString = "webtoon"
@@ -76,4 +114,17 @@ abstract class Manhwa18Cc(
     override fun chapterDateSelector() = "span.chapter-time"
 
     override val pageListParseSelector = "div.read-content img"
+
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("Filters are ignored when using text search."),
+        Manhwa18OrderFilter(intl["order_by_filter_title"]),
+        Filter.Separator(),
+        Manhwa18GenreFilter(intl["genre_filter_title"]),
+        Filter.Separator(),
+        Manhwa18StatusFilter(intl["status_filter_title"]),
+        Filter.Separator(),
+        Filter.Header("Only one filter can be used"),
+        Filter.Header("If more than one is selected, they will be applied based on priority"),
+        Filter.Header("Priority: Genre > Order > Status"),
+    )
 }
