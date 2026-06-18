@@ -56,6 +56,8 @@ class Sacachispa : HttpSource() {
 
     // ============================== Details ==============================
 
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/series/${manga.url}", headers)
+
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
@@ -80,6 +82,8 @@ class Sacachispa : HttpSource() {
     }
 
     // ============================= Chapters ==============================
+
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val dto = response.extractNextJs<RscChaptersDto> {
