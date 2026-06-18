@@ -1,0 +1,283 @@
+package keiyoushi.source
+
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import eu.kanade.tachiyomi.source.online.HttpSource
+import okhttp3.Headers
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Response
+import okhttp3.brotli.BrotliInterceptor
+import okhttp3.logging.HttpLoggingInterceptor
+import rx.Observable
+import kotlin.time.Duration.Companion.seconds
+
+abstract class KeiSource : HttpSource() {
+
+    /**
+     * Customizes the OkHttpClient builder. Subclasses can override this to configure timeouts,
+     * add application/network interceptors, or configure cookie/cache/dns settings.
+     */
+    protected open fun OkHttpClient.Builder.configureClient() = this
+
+    final override val client: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .cookieJar(network.client.cookieJar)
+            .connectTimeout(30.seconds)
+            .readTimeout(30.seconds)
+            .writeTimeout(30.seconds)
+            .cache(network.client.cache)
+            .dns(network.client.dns)
+            .apply {
+                val upstreamInterceptors = network.client.interceptors
+
+                network.client.networkInterceptors.firstOrNull { it is HttpLoggingInterceptor }
+                    ?.also(::addNetworkInterceptor)
+
+                upstreamInterceptors.firstOrNull { it.javaClass.simpleName == "UncaughtExceptionInterceptor" }
+                    ?.also(::addInterceptor)
+                    ?: throw Exception("UncaughtExceptionInterceptor not found")
+
+                upstreamInterceptors.firstOrNull { it.javaClass.simpleName == "UserAgentInterceptor" }
+                    ?.also(::addInterceptor)
+                    ?: throw Exception("UserAgentInterceptor not found")
+
+                configureClient()
+
+                upstreamInterceptors.firstOrNull { it.javaClass.simpleName == "CloudflareInterceptor" }
+                    ?.also(::addInterceptor)
+                    ?: throw Exception("CloudflareInterceptor not found")
+
+                // brotli interceptor must be last application interceptor
+                addInterceptor(BrotliInterceptor)
+            }
+            .build()
+    }
+
+    /**
+     * Customizes the base Headers builder. Subclasses can override this to append source-specific
+     * headers.
+     *
+     * Note: "User-Agent", "Referer", and "Origin" are already added by default.
+     */
+    protected open fun Headers.Builder.configureHeaders(): Headers.Builder = this
+
+    final override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
+        .set("Origin", baseUrl)
+        .configureHeaders()
+
+    /**
+     * Fetches a page of popular manga from the source.
+     *
+     * @param page The page number to retrieve.
+     * @return A [MangasPage] containing the list of manga and whether there is a next page.
+     */
+    abstract suspend fun getPopularMangaList(page: Int): MangasPage
+
+    final override suspend fun getPopularManga(page: Int): MangasPage = getPopularMangaList(page)
+
+    /**
+     * Whether the source supports fetching a list of latest manga updates.
+     */
+    override val supportsLatest get() = true
+
+    /**
+     * Fetches a page of latest manga updates from the source.
+     *
+     * @param page The page number to retrieve.
+     * @return A [MangasPage] containing the list of updated manga and whether there is a next page.
+     */
+    abstract suspend fun getLatestMangaList(page: Int): MangasPage
+
+    final override suspend fun getLatestUpdates(page: Int): MangasPage = getLatestMangaList(page)
+
+    /**
+     * Fetches a page of manga matching the query and filters.
+     *
+     * @param page The page number to retrieve.
+     * @param query The search query.
+     * @param filterList The list of filters to apply.
+     * @return A [MangasPage] containing the matching manga and whether there is a next page.
+     */
+    abstract suspend fun getSearchMangaList(page: Int, query: String, filterList: FilterList): MangasPage
+
+    /**
+     * Fetches details of a single manga directly using its HTTP URL.
+     * Used for resolving URL search queries in the browser or search bar.
+     *
+     * @param url The [HttpUrl] of the manga.
+     * @return The [SManga] details if resolved successfully, or null.
+     */
+    abstract suspend fun getMangaByUrl(url: HttpUrl): SManga?
+
+    final override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
+        query.toHttpUrlOrNull()?.also { url ->
+            val manga = getMangaByUrl(url)
+
+            return MangasPage(listOfNotNull(manga), hasNextPage = false)
+        }
+
+        return getSearchMangaList(page, query, filters)
+    }
+
+    /**
+     * Fetches updated information for a manga.
+     *
+     * Depending on the provided flags or source availability, this may include
+     * updated manga metadata, available chapters, or both.
+     *
+     * If a value is not requested, the existing provided value can be returned as-is.
+     * The host app may apply any returned updates regardless of the flags,
+     * so it’s best to avoid returning unintended or inaccurate data.
+     *
+     * @param manga The manga to fetch updates for.
+     * @param chapters Existing chapters of the manga
+     * @param fetchDetails Whether to include updated manga details.
+     * @param fetchChapters Whether to include available chapters.
+     */
+    abstract override suspend fun getMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate
+
+    /**
+     * Whether the source supports retrieving related manga.
+     */
+    override val supportsRelatedMangas = true
+
+    /**
+     * Whether to fall back to searching the source by the manga's title if a direct related manga list is unavailable.
+     */
+    protected open val supportRelatedMangasBySearch = false
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override val disableRelatedMangasBySearch get() = !supportRelatedMangasBySearch
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override val disableRelatedMangas = false
+
+    /**
+     * Fetches a list of related manga for the specified manga.
+     *
+     * @param manga The reference manga.
+     * @return A list of related [SManga].
+     */
+    abstract suspend fun getRelatedMangaList(manga: SManga): List<SManga>
+
+    final override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = getRelatedMangaList(manga)
+
+    /**
+     * Returns the absolute web URL for the provided manga.
+     * Used for the WebView ("Open in WebView") and sharing features.
+     *
+     * @param manga The manga.
+     * @return The absolute URL of the manga.
+     */
+    abstract override fun getMangaUrl(manga: SManga): String
+
+    /**
+     * Returns the absolute web URL for the provided chapter.
+     * Used for the WebView ("Open in WebView") and sharing features.
+     *
+     * @param chapter The chapter.
+     * @return The absolute URL of the chapter.
+     */
+    abstract override fun getChapterUrl(chapter: SChapter): String
+
+    /**
+     * Get the list of pages a chapter has. Pages should be returned
+     * in the expected order; the index is ignored.
+     *
+     * @param chapter the chapter.
+     * @return the pages for the chapter.
+     */
+    abstract override suspend fun getPageList(chapter: SChapter): List<Page>
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    @Suppress("DEPRECATION")
+    final override fun fetchPopularManga(page: Int): Observable<MangasPage> = super.fetchPopularManga(page)
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    @Suppress("DEPRECATION")
+    final override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = super.fetchLatestUpdates(page)
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    @Suppress("DEPRECATION")
+    final override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = super.fetchSearchManga(page, query, filters)
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    @Suppress("DEPRECATION")
+    final override fun fetchMangaDetails(manga: SManga): Observable<SManga> = super.fetchMangaDetails(manga)
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override fun mangaDetailsRequest(manga: SManga) = throw UnsupportedOperationException()
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override fun relatedMangaListRequest(manga: SManga) = throw UnsupportedOperationException()
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override fun relatedMangaListParse(response: Response): List<SManga> = throw UnsupportedOperationException()
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    @Suppress("DEPRECATION")
+    final override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = super.fetchChapterList(manga)
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override fun chapterListRequest(manga: SManga) = throw UnsupportedOperationException()
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    @Suppress("DEPRECATION")
+    final override fun prepareNewChapter(chapter: SChapter, manga: SManga) = super.prepareNewChapter(chapter, manga)
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    @Suppress("DEPRECATION")
+    final override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = super.fetchPageList(chapter)
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override fun pageListRequest(chapter: SChapter) = throw UnsupportedOperationException()
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override fun pageListParse(response: Response) = throw UnsupportedOperationException()
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    @Suppress("DEPRECATION")
+    final override fun fetchImageUrl(page: Page): Observable<String> = super.fetchImageUrl(page)
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override fun imageUrlRequest(page: Page) = throw UnsupportedOperationException()
+
+    @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
+    final override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+}
