@@ -43,7 +43,6 @@ class YomuComics : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-        .add("x-yomu-web", "true")
 
     // Popular
 
@@ -174,7 +173,7 @@ class YomuComics : HttpSource() {
         val mangasList = resultString
             .parseAs<JsonElement>()
             .jsonObject.values
-            .firstNotNullOfOrNull { v ->
+            .mapNotNull { v ->
                 val jsonArray = when (v) {
                     is JsonArray -> v
 
@@ -192,7 +191,9 @@ class YomuComics : HttpSource() {
                 jsonArray?.runCatching {
                     map { it.parseAs<LibraryMangaDto>() }
                 }?.getOrNull()
-            } ?: emptyList()
+            }
+            .maxByOrNull { it.size } // ignore fake key
+            ?: emptyList()
 
         val mangas = mangasList.map(LibraryMangaDto::toSManga)
         val hasNextPage = pagination.page < pagination.totalPages
