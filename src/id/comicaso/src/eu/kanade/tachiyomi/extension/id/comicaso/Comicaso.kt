@@ -165,7 +165,16 @@ class Comicaso : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val res = response.parseAs<MangaDetailResponseDto>()
         val source = response.request.url.queryParameter("source") ?: "all"
-        return res.data.chapters?.map { it.toSChapter(source, res.data.slug) }?.reversed()
+
+        return res.data.chapters?.map { it.toSChapter(source, res.data.slug) }
+            ?.sortedWith(
+                compareByDescending<SChapter> { chapter ->
+                    chapterNumberRegex.find(chapter.name)?.groupValues?.get(1)?.toFloatOrNull()
+                        ?: chapterNumberFallbackRegex.find(chapter.name)?.value?.toFloatOrNull()
+                        ?: chapterNumberFallbackRegex.find(chapter.url.substringAfterLast('/'))?.value?.toFloatOrNull()
+                        ?: -1f
+                }.thenByDescending { it.name },
+            )
             ?: emptyList()
     }
 
@@ -212,5 +221,7 @@ class Comicaso : HttpSource() {
 
     companion object {
         private const val PAGE_SIZE = 60
+        private val chapterNumberRegex = Regex("""(?i)(?:bab|chapter|ch|ep|episode)\s*(?:[-:]\s*)?(\d+(?:\.\d+)?)""")
+        private val chapterNumberFallbackRegex = Regex("""\d+(?:\.\d+)?""")
     }
 }
