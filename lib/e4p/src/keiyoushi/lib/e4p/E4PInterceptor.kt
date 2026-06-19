@@ -1,6 +1,7 @@
 package keiyoushi.lib.e4p
 
 import keiyoushi.utils.decodeHex
+import keiyoushi.utils.readIntLittleEndian
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -8,30 +9,23 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import java.io.IOException
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 // drm_worker.js f128 + wasm xebp_render
 class E4PInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val response = chain.proceed(request)
-        val url = request.url
-        val fragmentParts = url.fragment?.split("\n")
+        val fragmentParts = request.url.fragment?.split("\n")
         val qscKey = fragmentParts?.firstOrNull()
 
-        if (qscKey.isNullOrEmpty() || !response.isSuccessful) {
-            return response
-        }
+        if (qscKey.isNullOrEmpty()) return chain.proceed(request)
 
-        response.close()
-
-        val dirRequest = request.newBuilder()
-            .header("Range", "bytes=0-${QscArchive.DIR_SIZE - 1}")
-            .build()
-
-        val dirResponse = chain.proceed(dirRequest)
-        val dirBytes = dirResponse.body.bytes().also { dirResponse.close() }
+        val dirResponse = chain.proceed(
+            request.newBuilder()
+                .header("Range", "bytes=0-${QscArchive.DIR_SIZE - 1}")
+                .build(),
+        )
+        if (!dirResponse.isSuccessful) return dirResponse
+        val dirBytes = dirResponse.body.bytes()
 
         val entry = QscArchive.findEntry(dirBytes, qscKey)
             ?: throw IOException("QSC file not found: $qscKey")
@@ -43,7 +37,7 @@ class E4PInterceptor : Interceptor {
             .build()
 
         val fileResponse = chain.proceed(fileRequest)
-        val xebpBytes = fileResponse.body.bytes().also { fileResponse.close() }
+        val xebpBytes = fileResponse.body.bytes()
 
         val ctx = if (fragmentParts.size == 5) {
             XebpContext(
@@ -55,13 +49,12 @@ class E4PInterceptor : Interceptor {
         } else {
             null
         }
-        val (finalBytes, mediaType) = if (ctx != null) {
-            XebpDecoder.decrypt(xebpBytes, ctx) to WEBP_MEDIA_TYPE
-        } else {
-            stripToWebp(xebpBytes) to WEBP_MEDIA_TYPE
-        }
 
-        val body = Buffer().apply { write(finalBytes) }.asResponseBody(mediaType, finalBytes.size.toLong())
+        val body = if (ctx != null) {
+            XebpDecoder.decrypt(xebpBytes, ctx)
+        } else {
+            stripToWebp(xebpBytes)
+        }.let { it.asResponseBody(WEBP_MEDIA_TYPE, it.size) }
 
         return fileResponse.newBuilder()
             .removeHeader("Content-Range")
@@ -73,29 +66,21 @@ class E4PInterceptor : Interceptor {
             .build()
     }
 
-    private fun stripToWebp(xebp: ByteArray): ByteArray {
-        if (xebp.size < 20 ||
-            xebp[0] != 'R'.code.toByte() || xebp[1] != 'I'.code.toByte() ||
-            xebp[2] != 'F'.code.toByte() || xebp[3] != 'F'.code.toByte()
-        ) {
-            return xebp
-        }
+    private fun stripToWebp(xebp: ByteArray): Buffer {
+        val out = Buffer()
+        val isRiff = xebp.size >= 20 &&
+            xebp[0] == 'R'.code.toByte() && xebp[1] == 'I'.code.toByte() &&
+            xebp[2] == 'F'.code.toByte() && xebp[3] == 'F'.code.toByte()
+        if (!isRiff) return out.write(xebp)
 
-        val vp8Size = ByteBuffer.wrap(xebp, 16, 4)
-            .order(ByteOrder.LITTLE_ENDIAN).int
+        val vp8Size = xebp.readIntLittleEndian(16)
         val webpEnd = 20 + vp8Size + (vp8Size and 1)
-        if (webpEnd > xebp.size) return xebp
+        if (webpEnd > xebp.size) return out.write(xebp)
 
-        val out = xebp.copyOf(webpEnd)
-        val newRiffSize = webpEnd - 8
-        out[4] = (newRiffSize and 0xFF).toByte()
-        out[5] = ((newRiffSize ushr 8) and 0xFF).toByte()
-        out[6] = ((newRiffSize ushr 16) and 0xFF).toByte()
-        out[7] = ((newRiffSize ushr 24) and 0xFF).toByte()
-        out[8] = 'W'.code.toByte()
-        out[9] = 'E'.code.toByte()
-        out[10] = 'B'.code.toByte()
-        out[11] = 'P'.code.toByte()
+        out.writeUtf8("RIFF")
+        out.writeIntLe(webpEnd - 8)
+        out.writeUtf8("WEBP")
+        out.write(xebp, 12, webpEnd - 12)
         return out
     }
 
@@ -142,10 +127,7 @@ object QscArchive {
         var runningOffset = 0
         for (i in 0 until ENTRY_COUNT) {
             val base = 32 + i * ENTRY_SIZE
-            val size = (directory[base + 4].toInt() and 0xFF) or
-                ((directory[base + 5].toInt() and 0xFF) shl 8) or
-                ((directory[base + 6].toInt() and 0xFF) shl 16) or
-                ((directory[base + 7].toInt() and 0xFF) shl 24)
+            val size = directory.readIntLittleEndian(base + 4)
             if (size == 0) break
             val fourCC = String(directory, base, 4, Charsets.ISO_8859_1)
             val rawName = String(directory, base + 8, 24, Charsets.ISO_8859_1)

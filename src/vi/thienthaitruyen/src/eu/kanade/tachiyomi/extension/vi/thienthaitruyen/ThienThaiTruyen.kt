@@ -24,7 +24,7 @@ import java.util.TimeZone
 class ThienThaiTruyen : HttpSource() {
     override val name = "ThienThaiTruyen"
     override val lang = "vi"
-    override val baseUrl = "https://thienthaitruyen9.com"
+    override val baseUrl = "https://thienthaitruyen10.com"
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()

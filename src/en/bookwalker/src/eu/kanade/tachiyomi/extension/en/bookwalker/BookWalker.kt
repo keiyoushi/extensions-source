@@ -18,7 +18,8 @@ import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SearchResponseDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SeriesFormat
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SortDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.TagKind
-import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.ViewerRequestBody
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.ViewerResponse
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -28,17 +29,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.e4p.E4PInterceptor
 import keiyoushi.lib.e4p.E4PManifestReader
-import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAsProto
-import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import java.io.IOException
 
 class BookWalker :
     HttpSource(),
@@ -58,6 +57,14 @@ class BookWalker :
 
     override val client = network.client.newBuilder()
         .addInterceptor(E4PInterceptor())
+        .addInterceptor {
+            val request = it.request()
+            val response = it.proceed(request)
+            if (response.code == 400 && request.url.encodedPath == "/api/kyon/kyon.v1.ReadService/Open") {
+                throw IOException("Failed to load. You may need to log in via WebView and purchase it to view.")
+            }
+            response
+        }
         .build()
 
     private val manifestReader = E4PManifestReader(client, headers)
@@ -306,23 +313,28 @@ class BookWalker :
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBefore("?")
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(GET(getChapterUrl(chapter), headers)).asObservableSuccess().map { response ->
-        val manifestInfo = response.asJsoup().extractNextJs<ManifestContainer>()
-            ?: throw Exception("Failed to load chapter. You may need to log in and purchase it to view.")
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments[1]
+        return POST(
+            endpoint("ReadService/Open"),
+            headers,
+            ViewerRequestBody("PRD_$chapterId").toProtoRequestBody(),
+        )
+    }
 
-        when (manifestInfo.mimetype) {
-            "application/vnd.e4p.prpb+deflate+vnd.e4p.qst" ->
-                manifestReader.extractPagesFromEncryptedManifest(manifestInfo.manifestUrl.toHttpUrl())
-            "application/vnd.e4p.prpb" ->
-                manifestReader.extractPagesFromUnencryptedManifest(manifestInfo.manifestUrl.toHttpUrl())
-            else -> throw Exception("Unknown manifest MIME type ${manifestInfo.mimetype}")
+    override fun pageListParse(response: Response): List<Page> {
+        val result = response.parseAsProto<ViewerResponse>().details
+        val manifest = result.manifestUrl
+        return when (result.mimeType) {
+            "application/vnd.e4p.prpb+deflate+vnd.e4p.qst" -> manifestReader.extractPagesFromEncryptedManifest(manifest.toHttpUrl())
+            "application/vnd.e4p.prpb" -> manifestReader.extractPagesFromUnencryptedManifest(manifest.toHttpUrl())
+            else -> throw Exception("Unknown manifest MIME type $manifest")
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    fun checkOldBookWalker(manga: SManga) {
+    private fun checkOldBookWalker(manga: SManga) {
         // This logic can probably be removed at some point, but it is useful to assist existing users with the migration.
         if (manga.url.startsWith("/de") || manga.url.endsWith("/")) {
             throw Exception("This manga is from old BookWalker and needs to be migrated")
@@ -340,7 +352,7 @@ class BookWalker :
     companion object {
         private val fallbackFilters = listOf(TaggedTriState("Press reset to load filters", ""))
 
-        const val PAGE_SIZE = 60
+        private const val PAGE_SIZE = 60
 
         private const val PURCHASE_ICON = "\uD83D\uDCB5" // dollar bill emoji
         private const val PREORDER_ICON = "\uD83D\uDD51" // two-o-clock emoji
@@ -354,6 +366,3 @@ class BookWalker :
         )
     }
 }
-
-@Serializable
-private class ManifestContainer(val mimetype: String, val manifestUrl: String)
