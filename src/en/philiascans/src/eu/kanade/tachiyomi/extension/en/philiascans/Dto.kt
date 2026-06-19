@@ -45,9 +45,9 @@ class DetailsResponse(
         title = this@DetailsResponse.title
         description = buildString {
             synopsis?.let { append(it) }
-            alternativeTitles?.let {
+            alternativeTitles?.takeIf { it.isNotEmpty() }?.let {
                 append("\n\nAlternative Titles:\n")
-                append(alternativeTitles.joinToString("\n") { "- $it" })
+                append(it.joinToString("\n") { altTitle -> "- $altTitle" })
             }
         }
         author = authors?.joinToString { it.name }
@@ -87,7 +87,8 @@ class ChapterItem(
     fun toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
         url = "$mangaSlug/$slug"
         val lock = if (isLocked) "🔒 " else ""
-        name = lock + (title?.takeIf { it.isNotBlank() } ?: "Chapter $number")
+        val validTitle = title?.takeIf { it.isNotBlank() && it != "null" && it != number }
+        name = lock + if (validTitle != null) "Chapter $number - $validTitle" else "Chapter $number"
         date_upload = dateFormat.tryParse(publishedAt)
         chapter_number = number.toFloat()
     }
