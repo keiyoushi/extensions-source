@@ -47,7 +47,7 @@ class DetailsResponse(
             synopsis?.let { append(it) }
             alternativeTitles?.takeIf { it.isNotEmpty() }?.let {
                 append("\n\nAlternative Titles:\n")
-                append(alternativeTitles.joinToString("\n") { "- $it" })
+                append(it.joinToString("\n") { altTitle -> "- $altTitle" })
             }
         }
         author = authors?.joinToString { it.name }
