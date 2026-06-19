@@ -315,7 +315,27 @@ class Comix :
 
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchMangaListFromBrowse(searchMangaRequest(page, query, filters))
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        titlePathFromQuery(query)?.let { titlePath ->
+            return fetchMangaDetails(SManga.create().apply { url = titlePath })
+                .map { MangasPage(listOf(it), false) }
+        }
+
+        return fetchMangaListFromBrowse(searchMangaRequest(page, query, filters))
+    }
+
+    private fun titlePathFromQuery(query: String): String? {
+        val queryUrl = query.trim()
+            .takeIf { it.isNotEmpty() }
+            ?.toHttpUrlOrNull()
+            ?: return null
+        val host = queryUrl.host.removePrefix("www.")
+        if (host != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
+        if (queryUrl.pathSegments.size < 2 || queryUrl.pathSegments[0] != "title") return null
+......................................
+        val mangaId = queryUrl.pathSegments[1].substringBefore("-")
+        return mangaId.takeIf { it.isNotBlank() }?.let { "/$it" }
+    }
 
     /**
      * Apply every content-related source-level preference (rating, types,
