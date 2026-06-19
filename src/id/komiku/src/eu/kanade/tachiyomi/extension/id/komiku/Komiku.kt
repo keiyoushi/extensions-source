@@ -29,7 +29,7 @@ class Komiku : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(::headersInterceptor)
         .rateLimit(2)
         .build()
