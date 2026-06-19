@@ -45,7 +45,7 @@ class DetailsResponse(
         title = this@DetailsResponse.title
         description = buildString {
             synopsis?.let { append(it) }
-            alternativeTitles?.let {
+            alternativeTitles?.takeIf { it.isNotEmpty() }?.let {
                 append("\n\nAlternative Titles:\n")
                 append(alternativeTitles.joinToString("\n") { "- $it" })
             }
