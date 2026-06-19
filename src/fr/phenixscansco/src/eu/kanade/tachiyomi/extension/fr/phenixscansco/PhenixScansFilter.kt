@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.fr.phenixscans
+package eu.kanade.tachiyomi.extension.fr.phenixscansco
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter

@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.fr.phenixscans
+package eu.kanade.tachiyomi.extension.fr.phenixscansco
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -20,9 +20,8 @@ class PhenixScans : HttpSource() {
     override val baseUrl = "https://phenix-scans.co"
     private val apiBaseUrl = "https://api.phenix-scans.co/api"
     override val lang = "fr"
-    override val name = "Phenix Scans"
+    override val name = "Phenix Scans (unoriginal)"
     override val supportsLatest = true
-    override val versionId = 2
 
     private val simpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.FRENCH)
 
