@@ -332,7 +332,7 @@ class Comix :
         val host = queryUrl.host.removePrefix("www.")
         if (host != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
         if (queryUrl.pathSegments.size < 2 || queryUrl.pathSegments[0] != "title") return null
-......................................
+
         val mangaId = queryUrl.pathSegments[1].substringBefore("-")
         return mangaId.takeIf { it.isNotBlank() }?.let { "/$it" }
     }
