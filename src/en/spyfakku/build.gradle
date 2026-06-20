@@ -1,8 +1,0 @@
-ext {
-    extName = 'SpyFakku'
-    extClass = '.SpyFakku'
-    extVersionCode = 15
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

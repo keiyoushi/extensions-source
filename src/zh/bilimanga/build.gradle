@@ -1,8 +1,0 @@
-ext {
-    extName = 'BiliManga'
-    extClass = '.BiliManga'
-    extVersionCode = 10
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

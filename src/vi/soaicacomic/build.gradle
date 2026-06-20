@@ -1,8 +1,0 @@
-ext {
-    extName = 'SoaiCaComic'
-    extClass = '.SoaiCaComic'
-    extVersionCode = 3
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

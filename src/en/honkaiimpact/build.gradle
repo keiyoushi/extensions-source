@@ -1,8 +1,0 @@
-ext {
-    extName = 'HonkaiImpact3'
-    extClass = '.Honkaiimpact'
-    extVersionCode = 4
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

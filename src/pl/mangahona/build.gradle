@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaHoNa'
-    extClass = '.MangaHoNa'
-    baseUrl = 'https://mangahona.pl'
-    extVersionCode = 51
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

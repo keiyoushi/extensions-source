@@ -1,8 +1,0 @@
-ext {
-    extName = 'Gunnerkrigg Court'
-    extClass = '.GunnerkriggCourt'
-    extVersionCode = 3
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"
