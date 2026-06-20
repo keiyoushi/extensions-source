@@ -44,7 +44,7 @@ class KuroMangas :
 
     private val cdnUrl = "https://cdn.kuromangas.com"
 
-    private val decryptor = KuroMangasDecryptor()
+    private val decryptor = KuroMangasDecryptor(baseUrl, network.client)
 
     override val client by lazy {
         val token = getToken()

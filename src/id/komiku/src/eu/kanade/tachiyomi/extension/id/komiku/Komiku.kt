@@ -8,8 +8,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
@@ -26,6 +28,11 @@ class Komiku : HttpSource() {
     override val lang = "id"
 
     override val supportsLatest = true
+
+    override val client = network.client.newBuilder()
+        .addInterceptor(::headersInterceptor)
+        .rateLimit(2)
+        .build()
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int): Request = GET(mangaApiUrlBuilder(page).addQueryParameter("orderby", "meta_value_num").build(), headers)
@@ -137,9 +144,17 @@ class Komiku : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
+        val url = response.request.url.toString()
         return document.select("#Baca_Komik img").mapIndexed { i, element ->
-            Page(i, "", element.attr("abs:src"))
+            Page(i, url, element.attr("abs:src"))
         }
+    }
+
+    override fun imageRequest(page: Page): Request {
+        val headers = headersBuilder()
+            .set("Referer", page.url)
+            .build()
+        return GET(page.imageUrl!!, headers)
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -153,6 +168,38 @@ class Komiku : HttpSource() {
     )
 
     // ============================= Utilities ==============================
+    private fun headersInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val url = request.url
+        val urlString = url.toString()
+
+        if (urlString.contains("komiku.org") || urlString.contains("komikid.org")) {
+            val newHeaders = request.headers.newBuilder().apply {
+                removeAll("X-Requested-With")
+                set("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7")
+
+                if (url.host.contains("img") || url.host.contains("thumbnail") || url.host.contains("update")) {
+                    val referer = request.header("Referer")
+                    if (referer == null || !referer.contains(baseUrl)) {
+                        set("Referer", "$baseUrl/")
+                    }
+                    set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+                    set("Sec-Fetch-Dest", "image")
+                    set("Sec-Fetch-Mode", "no-cors")
+                    set("Sec-Fetch-Site", if (urlString.contains("komiku.org")) "same-site" else "cross-site")
+                }
+            }.build()
+
+            return chain.proceed(
+                request.newBuilder()
+                    .headers(newHeaders)
+                    .build(),
+            )
+        }
+
+        return chain.proceed(request)
+    }
+
     private fun mangaListParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select("div.bge").map { element ->

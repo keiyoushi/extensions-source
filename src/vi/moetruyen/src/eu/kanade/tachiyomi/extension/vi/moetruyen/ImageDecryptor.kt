@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.extension.vi.moetruyen
 
 import android.util.Base64
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.readIntBigEndian
+import keiyoushi.utils.readUShortBigEndian
 import kotlinx.serialization.Serializable
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
@@ -42,7 +44,7 @@ object ImageDecryptor {
             return decryptV3AesGcm(imgxData, grant, storageKey)
         }
 
-        val headerSize = (imgxData[6].toUByte().toInt() shl 8) or imgxData[7].toUByte().toInt()
+        val headerSize = imgxData.readUShortBigEndian(6)
         val headerBytes = imgxData.copyOfRange(8, 8 + headerSize)
         val header = String(headerBytes, Charsets.UTF_8).parseAs<ImgxV3Header>()
 
@@ -61,8 +63,8 @@ object ImageDecryptor {
     private fun decryptV3AesGcm(imgxData: ByteArray, grant: ImgxGrant, storageKey: String): ByteArray {
         require(imgxData.size > 41) { "IMGX v3 payload empty" }
 
-        val width = readUInt32(imgxData, 5)
-        val height = readUInt32(imgxData, 9)
+        val width = imgxData.readIntBigEndian(5)
+        val height = imgxData.readIntBigEndian(9)
         require(width > 0 && height > 0) { "IMGX dimensions invalid" }
 
         val key = unwrapContentKey(grant, storageKey)
@@ -168,14 +170,6 @@ object ImageDecryptor {
             .toByteArray(Charsets.UTF_8)
     }
 
-    private fun readUInt32(data: ByteArray, offset: Int): Int {
-        require(data.size >= offset + 4) { "IMGX header invalid" }
-        return (data[offset].toUByte().toInt() shl 24) or
-            (data[offset + 1].toUByte().toInt() shl 16) or
-            (data[offset + 2].toUByte().toInt() shl 8) or
-            data[offset + 3].toUByte().toInt()
-    }
-
     private fun deriveKeyFromString(input: String, length: Int): ByteArray {
         val key = ByteArray(length)
         var hash = fnv1a(input.toByteArray(Charsets.UTF_8))
@@ -230,10 +224,7 @@ object ImageDecryptor {
 
     private fun seedFromKey(key: ByteArray): UInt {
         require(key.size >= 4) { "IMGX key invalid" }
-        val seed = (key[0].toUByte().toUInt() shl 24) or
-            (key[1].toUByte().toUInt() shl 16) or
-            (key[2].toUByte().toUInt() shl 8) or
-            key[3].toUByte().toUInt()
+        val seed = key.readIntBigEndian(0).toUInt()
         return if (seed == 0u) GOLDEN_RATIO else seed
     }
 

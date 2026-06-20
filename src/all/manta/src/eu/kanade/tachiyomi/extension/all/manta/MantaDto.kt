@@ -65,7 +65,7 @@ class Episode(
     val id: Int,
     val ord: Int,
     val data: EpisodeData? = null,
-    private val lockData: LockData? = null,
+    val lockData: LockData? = null,
     private val openAt: String? = null,
     private val createdAt: String? = null,
     val cutImages: List<Image>? = null,
