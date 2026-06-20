@@ -1,7 +1,0 @@
-ext {
-    extName = 'OTruyen'
-    extClass = '.OTruyen'
-    extVersionCode = 2
-}
-
-apply plugin: "kei.plugins.extension.legacy"
