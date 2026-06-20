@@ -99,6 +99,13 @@ class Filters {
             Pair("Manhua", "manhua"),
             Pair("Other", "other"),
         )
+
+        fun getContentRatingsUpTo(maxRating: String): List<String> {
+            if (maxRating.isEmpty()) return emptyList()
+            val ratings = listOf("safe", "suggestive", "erotica", "pornographic")
+            val index = ratings.indexOf(maxRating)
+            return if (index == -1) emptyList() else ratings.take(index + 1)
+        }
     }
 
     fun getFilterList() = FilterList(
@@ -258,7 +265,7 @@ class Filters {
         override fun addToUri(builder: HttpUrl.Builder) {
             // The "Any" option intentionally keeps the parameter unset so the
             // site doesn't cap the results at a particular year.
-            if (state != 0) super.addToUri(builder)
+            if (state > 0) super.addToUri(builder)
         }
     }
 
@@ -283,8 +290,8 @@ class Filters {
             ),
         )
 
-    // The site filters by an inclusive cap: passing "suggestive" returns safe
-    // and suggestive titles, "erotica" adds those too, and so on.
+    // Keep the extension's old "up to" behavior even though the site now
+    // expects an explicit comma-separated list of selected content ratings.
     private class ContentRatingFilter :
         UriPartFilter(
             "Content rating",
@@ -300,7 +307,18 @@ class Filters {
         override fun addToUri(builder: HttpUrl.Builder) {
             // Index 0 is "Use preference" — let the source-level setting drive
             // the parameter instead of the manual filter.
-            if (state != 0) super.addToUri(builder)
+            if (state != 0) {
+                val selected = when (state) {
+                    1 -> "safe"
+                    2 -> "suggestive"
+                    3 -> "erotica"
+                    4 -> "pornographic"
+                    else -> ""
+                }
+                Filters.getContentRatingsUpTo(selected)
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { builder.addQueryParameter("content_rating", it.joinToString(",")) }
+            }
         }
     }
 
