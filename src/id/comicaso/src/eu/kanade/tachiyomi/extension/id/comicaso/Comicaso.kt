@@ -1,12 +1,16 @@
 package eu.kanade.tachiyomi.extension.id.comicaso
 
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.lib.randomua.addRandomUAPreference
+import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -19,7 +23,9 @@ import okhttp3.Response
 import rx.Observable
 import java.io.IOException
 
-class Comicaso : HttpSource() {
+class Comicaso :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Comicaso"
 
@@ -38,11 +44,18 @@ class Comicaso : HttpSource() {
         super.headersBuilder().build()["User-Agent"]
     }
 
-    // A current Chrome Android UA is set here so Mihon's WebView inherits it
-    // and passes Google's browser security check during Google Sign-In.
+    // Android Chrome UA is the default fallback used by Mihon's WebView (for
+    // both solving this site's Cloudflare challenge and the Google sign-in
+    // step). It is NOT sent on background API calls — see authInterceptor.
+    // If either Cloudflare or Google starts rejecting this default for a
+    // given user, they can override it via Settings > Random user agent
+    // instead of requiring an extension update.
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
-        .set("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36")
+        .set("User-Agent", DEFAULT_USER_AGENT)
+        .setRandomUserAgent(
+            filterInclude = listOf("Chrome", "Safari"),
+        )
 
     private fun authInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request().newBuilder()
@@ -165,7 +178,6 @@ class Comicaso : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val res = response.parseAs<MangaDetailResponseDto>()
         val source = response.request.url.queryParameter("source") ?: "all"
-
         return res.data.chapters?.map { it.toSChapter(source, res.data.slug) }
             ?.sortedWith(
                 compareByDescending<SChapter> { chapter ->
@@ -213,6 +225,12 @@ class Comicaso : HttpSource() {
         GenreFilter(),
     )
 
+    // ============================ Preferences =============================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        screen.addRandomUAPreference()
+    }
+
     // ============================= Utilities =============================
 
     private fun SManga.urlSegments() = "$baseUrl/$url".toHttpUrl().pathSegments
@@ -223,5 +241,7 @@ class Comicaso : HttpSource() {
         private const val PAGE_SIZE = 60
         private val chapterNumberRegex = Regex("""(?i)(?:bab|chapter|ch|ep|episode)\s*(?:[-:]\s*)?(\d+(?:\.\d+)?)""")
         private val chapterNumberFallbackRegex = Regex("""\d+(?:\.\d+)?""")
+        private const val DEFAULT_USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36"
     }
 }
