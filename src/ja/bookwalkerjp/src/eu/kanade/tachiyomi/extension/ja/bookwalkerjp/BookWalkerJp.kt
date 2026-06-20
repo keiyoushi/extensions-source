@@ -19,10 +19,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.publus.PublusAuthHandler
 import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
+import keiyoushi.lib.publus.parseFragmentOrNull
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -30,9 +32,9 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -59,11 +61,16 @@ class BookWalkerJp :
         .set("Referer", "$baseUrl/")
 
     override val client = network.client.newBuilder()
+        .addInterceptor(CookieInterceptor(domain, "holdBook-series" to "1"))
         .addInterceptor(PublusInterceptor())
         .addInterceptor {
             val request = it.request()
             val response = it.proceed(request)
             val fallbackUrl = request.url.fragment
+            if (response.request.url.encodedPath == "/app/03/login") {
+                throw IOException("Auth expired. Log in via Webview again.")
+            }
+
             if (response.isSuccessful || fallbackUrl.isNullOrEmpty() || !request.url.encodedPath.contains("/coverImage_")) {
                 return@addInterceptor response
             }
@@ -90,6 +97,7 @@ class BookWalkerJp :
         return client.newCall(GET(url, desktopHeaders)).awaitSuccess().asJsoup().toMangasPage()
     }
 
+    // TODO own library filter; how implement wayomi?
     override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/search/".toHttpUrl().newBuilder()
             .addQueryParameter("word", query)
@@ -183,10 +191,13 @@ class BookWalkerJp :
         return GET(url, desktopHeaders)
     }
 
+    // TODO check memo, how?
     private fun Element.toSChapter(hideLocked: Boolean): SChapter? {
+        val readButton = selectFirst(".a-icon-btn--read, .a-icon-btn--free")
+        val trialButton = selectFirst(".a-icon-btn--trial")
         val prefix = when {
-            selectFirst(".a-icon-btn--read, .a-icon-btn--free") != null -> ""
-            selectFirst(".a-icon-btn--trial") != null -> "🔒 (Preview) "
+            readButton != null -> ""
+            trialButton != null -> "🔒 (Preview) "
             else -> "🔒 "
         }
         if (hideLocked && prefix.isNotEmpty()) return null
@@ -194,7 +205,7 @@ class BookWalkerJp :
         val link = bookLink()
         return SChapter.create().apply {
             name = prefix + link.text()
-            setUrlWithoutDomain(link.absUrl("href").toHttpUrl().pathSegments.first())
+            url = (readButton ?: trialButton)?.absUrl("href") ?: link.absUrl("href")
         }
     }
 
@@ -220,19 +231,10 @@ class BookWalkerJp :
         GET(refreshUrl, headers)
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}/"
+    override fun getChapterUrl(chapter: SChapter): String = chapter.url
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.newCall(GET("$baseUrl/${chapter.url}/", desktopHeaders))
-            .awaitSuccess()
-            // .let { validateLogin(it) }
-            .asJsoup()
-
-        val readerUrl = document.selectFirst(".t-c-read-button a")?.absUrl("href")
-            ?: document.selectFirst("#js-read-check-book-cover-main-button a")?.absUrl("href")
-            ?: throw Exception("No preview available, or you aren't logged in.")
-
-        val chapterUrl = client.newCall(GET(readerUrl, desktopHeaders)).await().request.url
+        val chapterUrl = client.newCall(GET(getChapterUrl(chapter), desktopHeaders)).await().request.url
         val cid = chapterUrl.queryParameter("cid")
         val cty = chapterUrl.queryParameter("cty")?.toIntOrNull()
         val isTrial = chapterUrl.host == "viewer-trial.$domain"
@@ -249,8 +251,7 @@ class BookWalkerJp :
             var cr: String? = null
             if (!isTrial) {
                 val loaderUrl = "$viewerUrl/browserWebApi/03/getLoader"
-                val loaderScript =
-                    client.newCall(GET(loaderUrl, headers)).awaitSuccess().body.string()
+                val loaderScript = client.newCall(GET(loaderUrl, headers)).awaitSuccess().body.string()
                 cr = fetchCr(loaderScript, chapterUrl.toString())
             }
 
@@ -283,9 +284,9 @@ class BookWalkerJp :
                 publusAuth.store(cid, auth)
             }
 
-            fetchPages(content.url, headers, client, auth, sessionData)
+            fetchPages(content.url!!, headers, client, auth, sessionData)
         } else {
-            throw Exception("Novels are not supported!")
+            throw Exception("No preview available, or you aren't logged in via Webview.")
         }
     }
 
@@ -324,21 +325,17 @@ class BookWalkerJp :
         return result
     }
 
-    override fun imageRequest(page: Page): Request = GET(publusAuth.authorize(page.imageUrl!!), headers)
+    private fun authorize(imageUrl: String): String {
+        val url = imageUrl.toHttpUrlOrNull() ?: return imageUrl
+        val session = url.fragment?.parseFragmentOrNull()?.extra ?: return imageUrl
+        if (session["isTrial"] == "true") return imageUrl
+        val key = session["cid"] ?: return imageUrl
 
-    private suspend fun validateLogin(response: Response): Response {
-        /*
-        if (!shouldValidateLogin) {
-            return response
-        }
-         */
-        val profileUrl = "https://member.bookwalker.jp/app/03/my/profile"
-        val redirectedResponse = client.newCall(GET(profileUrl, headers)).await()
-        if (redirectedResponse.request.url.toString() == "https://member.bookwalker.jp/app/03/login") {
-            throw Exception("Auth expired, log in via WebView again.")
-        }
-        return response
+        val auth = publusAuth.currentAuth(key, session) ?: return imageUrl
+        return auth.applyTo(url.newBuilder().query(null)).build().toString()
     }
+
+    override fun imageRequest(page: Page): Request = GET(authorize(page.imageUrl!!), headers)
 
     private fun String?.getHiResCoverFromLegacyUrl(): String? {
         if (this.isNullOrEmpty()) return null
