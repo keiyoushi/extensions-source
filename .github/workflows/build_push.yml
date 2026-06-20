@@ -98,7 +98,7 @@ jobs:
           retention-days: 1
 
       - name: Clean up CI files
-        run: rm signingkey.jks
+        run: rm -f signingkey.jks
 
   publish:
     name: Publish extension repo
