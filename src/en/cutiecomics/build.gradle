@@ -1,8 +1,0 @@
-ext {
-    extName = 'Cutie Comics'
-    extClass = '.CutieComics'
-    extVersionCode = 5
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

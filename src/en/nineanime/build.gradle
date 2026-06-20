@@ -1,8 +1,0 @@
-ext {
-    extName = 'NineAnime'
-    extClass = '.NineAnime'
-    extVersionCode = 6
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

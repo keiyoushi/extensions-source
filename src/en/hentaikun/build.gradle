@@ -1,8 +1,0 @@
-ext {
-    extName = 'HentaiKun'
-    extClass = '.HentaiKun'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

@@ -1,8 +1,0 @@
-ext {
-    extName = 'Voyce.Me'
-    extClass = '.VoyceMe'
-    extVersionCode = 6
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"
