@@ -40,12 +40,18 @@ class PluginMultiSrc : Plugin<Project> {
 
         dependencies {
             compileOnly(libs.bundles.common)
-            if (libVersion == "1.6") {
-                compileOnly(libs.tachiyomi.lib.v16)
-            } else {
-                compileOnly(libs.tachiyomi.lib.v14)
-            }
             implementation(project(":core"))
+        }
+
+        afterEvaluate {
+            val libVersion = target.libVersion
+            dependencies {
+                if (libVersion == "1.6") {
+                    compileOnly(libs.tachiyomi.lib.v16)
+                } else {
+                    compileOnly(libs.tachiyomi.lib.v14)
+                }
+            }
         }
     }
 }
