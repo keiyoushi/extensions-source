@@ -1,12 +1,12 @@
-package eu.kanade.tachiyomi.extension.all.nhentai
+package eu.kanade.tachiyomi.extension.all.nh
 
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.extension.all.nhentai.NHUtils.getArtists
-import eu.kanade.tachiyomi.extension.all.nhentai.NHUtils.getGroups
-import eu.kanade.tachiyomi.extension.all.nhentai.NHUtils.getTagDescription
-import eu.kanade.tachiyomi.extension.all.nhentai.NHUtils.getTags
+import eu.kanade.tachiyomi.extension.all.nh.NHUtils.getArtists
+import eu.kanade.tachiyomi.extension.all.nh.NHUtils.getGroups
+import eu.kanade.tachiyomi.extension.all.nh.NHUtils.getTagDescription
+import eu.kanade.tachiyomi.extension.all.nh.NHUtils.getTags
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource

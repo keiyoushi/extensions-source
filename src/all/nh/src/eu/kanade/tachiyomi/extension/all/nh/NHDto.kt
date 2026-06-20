@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.nhentai
+package eu.kanade.tachiyomi.extension.all.nh
 
 import kotlinx.serialization.Serializable
 
