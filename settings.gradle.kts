@@ -33,8 +33,8 @@ rootProject.name = "Keiyoushi"
 /**
  * Add or remove modules to load as needed for local development here.
  */
-loadAllIndividualExtensions()
-// loadIndividualExtension("all", "mangadex")
+// loadAllIndividualExtensions()
+loadIndividualExtension("es", "tmohentai")
 
 /**
  * ===================================== COMMON CONFIGURATION ======================================
@@ -55,6 +55,11 @@ fun loadAllIndividualExtensions() {
         dir.eachDir { subdir ->
             include("src:${dir.name}:${subdir.name}")
         }
+    }
+}
+fun loadSpanishExtensions() {
+    File(rootDir, "src/es").eachDir { subdir ->
+        include("src:es:${subdir.name}")
     }
 }
 fun loadIndividualExtension(lang: String, name: String) {
