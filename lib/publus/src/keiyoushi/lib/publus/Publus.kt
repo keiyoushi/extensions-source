@@ -4,51 +4,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
-import kotlinx.serialization.Serializable
 import java.nio.charset.StandardCharsets
 import kotlin.math.floor
-
-@Serializable
-class PublusFragment(
-    val file: String,
-    val no: Int,
-    val ns: Long = 0,
-    val ps: Long = 0,
-    val rs: Long = 0,
-    val bw: Int = 0, // Block Width
-    val bh: Int = 0, // Block Height
-    val cw: Int = 0, // Content Width
-    val ch: Int = 0, // Content Height
-    val k1: List<Int> = emptyList(),
-    val k2: List<Int> = emptyList(),
-    val k3: List<Int> = emptyList(),
-    val extra: Map<String, String>? = null,
-    val s: Boolean = true,
-)
-
-class PublusPage(
-    val index: Int,
-    val filename: String,
-    val no: Int,
-    val ns: Long,
-    val ps: Long,
-    val rs: Long,
-    val blockWidth: Int,
-    val blockHeight: Int,
-    val dummyWidth: Int? = null,
-    val width: Int,
-    val height: Int,
-    val hti: String? = null,
-    val cfg: String? = null,
-    val bid: String? = null,
-    val uuid: String? = null,
-    val pfCd: String? = null,
-    val policy: String? = null,
-    val signature: String? = null,
-    val keyPairId: String? = null,
-    val extra: Map<String, String>? = null,
-    val scrambled: Boolean = true,
-)
 
 class PublusPageAttributes(
     val no: Int,
@@ -63,7 +20,8 @@ class PublusPageAttributes(
 
 class Decoder(private val data: String, private val filename: String = "configuration_pack.json") {
     fun decode(): DecodedResult {
-        val filenameKey = filename.toByteArray(StandardCharsets.UTF_8).map { it.toInt() and 0xFF }.toIntArray()
+        val filenameBytes = filename.toByteArray(StandardCharsets.UTF_8)
+        val filenameKey = IntArray(filenameBytes.size) { filenameBytes[it].toInt() and 0xFF }
 
         val state = mod9Base64Decode(data)
 
@@ -132,34 +90,55 @@ class Decoder(private val data: String, private val filename: String = "configur
         }
 
         // Body Parsing
-        val payloadStr = dataStr.substring(128)
-        val payloadBytes = Base64.decode(payloadStr, Base64.DEFAULT)
-        val payloadInts = payloadBytes.map { it.toInt() and 0xFF }.toIntArray()
+        val payloadBytes = Base64.decode(dataStr.substring(128), Base64.DEFAULT)
+        val payloadInts = IntArray(payloadBytes.size) { payloadBytes[it].toInt() and 0xFF }
 
         return State(payloadInts, payloadInts.size, key1, key2, key3)
     }
 
-    @Suppress("ktlint:standard:property-naming")
     private fun mod14Mutate(mode: Int, state: State) {
-        val (l, v, h, uKey, p) = when (mode) {
-            3 -> listOf(state.key1, 32, state.key2, state.key3, null)
-            2 -> listOf(state.key2, 32, state.key1, state.key3, null)
-            1 -> listOf(state.key3, 32, state.key1, state.key2, null)
-            else -> listOf(state.payload, state.length, state.key1, state.key2, state.key3)
+        val lArr: IntArray
+        val vInt: Int
+        val hArr: IntArray
+        val uArr: IntArray
+        val pArr: IntArray?
+        when (mode) {
+            3 -> {
+                lArr = state.key1
+                vInt = 32
+                hArr = state.key2
+                uArr = state.key3
+                pArr = null
+            }
+            2 -> {
+                lArr = state.key2
+                vInt = 32
+                hArr = state.key1
+                uArr = state.key3
+                pArr = null
+            }
+            1 -> {
+                lArr = state.key3
+                vInt = 32
+                hArr = state.key1
+                uArr = state.key2
+                pArr = null
+            }
+            else -> {
+                lArr = state.payload
+                vInt = state.length
+                hArr = state.key1
+                uArr = state.key2
+                pArr = state.key3
+            }
         }
 
-        val lArr = l as IntArray
-        val vInt = v as Int
-        val hArr = h as IntArray
-        val uArr = uKey as IntArray
-        val pArr = p as? IntArray
-
         var w = 0
-        var A = 0
+        var xorSum = 0
         fun nFunc(arr: IntArray) {
             for (a in 0 until 32) {
                 w = (w + arr[a]) and 255
-                A = A xor arr[a]
+                xorSum = xorSum xor arr[a]
             }
         }
 
@@ -170,11 +149,11 @@ class Decoder(private val data: String, private val filename: String = "configur
         val kFlag = (w and 2) == 0
         val yFlag = (w and 4) == 0
         val mFlag = (w and 8) == 0
-        val m = (A shr 5) and 0x7
-        val C = 8 - m
+        val m = (xorSum shr 5) and 0x7
+        val highShift = 8 - m
 
         var g = 0
-        val O = IntArray(32)
+        val buffer = IntArray(32)
 
         fun swap(arr: IntArray, i: Int, j: Int) {
             val tmp = arr[i]
@@ -192,61 +171,61 @@ class Decoder(private val data: String, private val filename: String = "configur
         }
 
         while (g < vInt) {
-            var E = g + 32
-            val S = E > vInt
-            val j = if (S) {
-                E = vInt
-                E - g
+            var blockEnd = g + 32
+            val isLast = blockEnd > vInt
+            val j = if (isLast) {
+                blockEnd = vInt
+                blockEnd - g
             } else {
                 32
             }
 
-            var PVal = w
-            var UVal = A
+            var runSum = w
+            var runXor = xorSum
 
             for (q in 0 until j) {
                 var x = lArr[g + q]
                 if (kFlag) x = ((85 and x) shl 1) or ((x shr 1) and 85)
                 if (yFlag) x = ((51 and x) shl 2) or ((x shr 2) and 51)
                 if (mFlag) x = ((15 and x) shl 4) or ((x shr 4) and 15)
-                O[q] = x
-                PVal = (PVal + x) and 255
-                UVal = UVal xor x
+                buffer[q] = x
+                runSum = (runSum + x) and 255
+                runXor = runXor xor x
             }
 
-            for (K in 0 until j) {
-                for (R in 1..6) {
-                    val D = 1 shl R
-                    if ((K and (D - 1)) != (D - 1)) break
-                    if ((PVal and D) != D) {
-                        val startSwap = K - (1 shl (R - 1))
-                        uFuncBlockSwap(startSwap, K, O)
+            for (pos in 0 until j) {
+                for (r in 1..6) {
+                    val bit = 1 shl r
+                    if ((pos and (bit - 1)) != (bit - 1)) break
+                    if ((runSum and bit) != bit) {
+                        val startSwap = pos - (1 shl (r - 1))
+                        uFuncBlockSwap(startSwap, pos, buffer)
                     }
                 }
             }
 
-            var J = UVal shr 3
-            if (S) J %= j else J = J and 31
+            var rot = runXor shr 3
+            if (isLast) rot %= j else rot = rot and 31
 
             if (m == 0) {
-                var KIdx = j - J
-                if (KIdx == j) KIdx = 0
-                for (R in g until E) {
-                    lArr[R] = O[KIdx]
-                    KIdx++
-                    if (KIdx == j) KIdx = 0
+                var srcIdx = j - rot
+                if (srcIdx == j) srcIdx = 0
+                for (r in g until blockEnd) {
+                    lArr[r] = buffer[srcIdx]
+                    srcIdx++
+                    if (srcIdx == j) srcIdx = 0
                 }
             } else {
-                var KIdx = j - J - 1
-                for (R in g until E) {
-                    var x = (O[KIdx] shl C) and 0xFF
-                    KIdx++
-                    if (KIdx == j) KIdx = 0
-                    x = x or (O[KIdx] shr m)
-                    lArr[R] = x and 255
+                var srcIdx = j - rot - 1
+                for (r in g until blockEnd) {
+                    var x = (buffer[srcIdx] shl highShift) and 0xFF
+                    srcIdx++
+                    if (srcIdx == j) srcIdx = 0
+                    x = x or (buffer[srcIdx] shr m)
+                    lArr[r] = x and 255
                 }
             }
-            g = E
+            g = blockEnd
         }
     }
 
@@ -619,16 +598,7 @@ object PublusImage {
         vy4j += blocksY * 2
         process(vx4j, vy4j, lastBlockWidth, page.blockHeight)
 
-        val result = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(result)
-        val srcRect = Rect()
-        val dstRect = Rect()
-
-        moves.forEach { m ->
-            srcRect.set(m.destX, m.destY, m.destX + m.width, m.destY + m.height)
-            dstRect.set(m.srcX, m.srcY, m.srcX + m.width, m.srcY + m.height)
-            canvas.drawBitmap(bitmap, srcRect, dstRect, null)
-        }
+        val result = applyMoves(bitmap, moves)
 
         if (page.contentWidth > 0 && page.contentHeight > 0 &&
             (result.width != page.contentWidth || result.height != page.contentHeight)
@@ -639,7 +609,14 @@ object PublusImage {
         return result
     }
 
-    fun unscrambleNoKeys(bitmap: Bitmap, pattern: Int, blockWidth: Int = 64, blockHeight: Int = 64): Bitmap {
+    fun unscrambleNoKeys(
+        bitmap: Bitmap,
+        pattern: Int,
+        blockWidth: Int = 64,
+        blockHeight: Int = 64,
+        contentWidth: Int = 0,
+        contentHeight: Int = 0,
+    ): Bitmap {
         val width = bitmap.width
         val height = bitmap.height
 
@@ -708,15 +685,12 @@ object PublusImage {
             }
         }
 
-        val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(result)
-        val srcRect = Rect()
-        val dstRect = Rect()
+        val result = applyMoves(bitmap, moves)
 
-        moves.forEach { m ->
-            srcRect.set(m.destX, m.destY, m.destX + m.width, m.destY + m.height)
-            dstRect.set(m.srcX, m.srcY, m.srcX + m.width, m.srcY + m.height)
-            canvas.drawBitmap(bitmap, srcRect, dstRect, null)
+        if (contentWidth > 0 && contentHeight > 0 &&
+            (result.width != contentWidth || result.height != contentHeight)
+        ) {
+            return Bitmap.createBitmap(result, 0, 0, contentWidth, contentHeight)
         }
 
         return result
@@ -757,6 +731,19 @@ object PublusImage {
     private fun calcYCoordinateYRest(a: Int, f: Int, b: Int): Int = if (f == 0) 0 else (a + 73 * b) % f
 
     class Move(val srcX: Int, val srcY: Int, val destX: Int, val destY: Int, val width: Int, val height: Int)
+
+    private fun applyMoves(source: Bitmap, moves: List<Move>): Bitmap {
+        val result = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        val srcRect = Rect()
+        val dstRect = Rect()
+        for (m in moves) {
+            srcRect.set(m.destX, m.destY, m.destX + m.width, m.destY + m.height)
+            dstRect.set(m.srcX, m.srcY, m.srcX + m.width, m.srcY + m.height)
+            canvas.drawBitmap(source, srcRect, dstRect, null)
+        }
+        return result
+    }
 
     private fun vMhf(arr: IntArray): Int {
         var vNhf = 0
@@ -904,11 +891,13 @@ object PublusImage {
     }
 
     private fun vQpg(p1: Int, p2: Int, p3: IntArray, p4: IntArray, p5: IntArray, p6: IntArray, p7: IntArray, p8: Int, p9: Int, p10: IntArray, p11: IntArray, p12: Int, p13: Int): IntArray {
-        val result = mutableListOf<Int>()
         val v1qg = p1 + 1
         val v2qg = p2 + 1
         val v3qg = v1qg shl 1
         val v4qg = v2qg shl 1
+
+        val result = IntArray(v3qg * v2qg)
+        var o = 0
 
         for (vVpg in 0 until p1) {
             for (vWpg in 0 until p2) {
@@ -919,30 +908,30 @@ object PublusImage {
                 val vSpg = if (vWpg < p10[vVpg]) vWpg else vWpg + v2qg
                 val vTpg = if (vXpg < p7[vYpg]) vXpg else vXpg + v1qg
                 val vUpg = if (vYpg < p6[vXpg]) vYpg else vYpg + v2qg
-                result.add(vUpg * v3qg + vRpg)
-                result.add(vTpg * v4qg + vSpg)
+                result[o++] = vUpg * v3qg + vRpg
+                result[o++] = vTpg * v4qg + vSpg
             }
         }
-        result.add(p9 * v3qg + p12)
-        result.add(p8 * v4qg + p13)
+        result[o++] = p9 * v3qg + p12
+        result[o++] = p8 * v4qg + p13
 
         for (vVpg in 0 until p1) {
             val vXpg = p4[vVpg]
             val vRpg = if (vVpg < p12) vVpg else vVpg + v1qg
             val vTpg = if (vXpg < p8) vXpg else vXpg + v1qg
-            result.add(p6[vXpg] * v3qg + vRpg)
-            result.add(vTpg * v4qg + p10[vVpg])
+            result[o++] = p6[vXpg] * v3qg + vRpg
+            result[o++] = vTpg * v4qg + p10[vVpg]
         }
 
         for (vWpg in 0 until p2) {
             val vYpg = p5[vWpg]
             val vSpg = if (vWpg < p13) vWpg else vWpg + v2qg
             val vUpg = if (vYpg < p9) vYpg else vYpg + v2qg
-            result.add(vUpg * v3qg + p11[vWpg])
-            result.add(p7[vYpg] * v4qg + vSpg)
+            result[o++] = vUpg * v3qg + p11[vWpg]
+            result[o++] = p7[vYpg] * v4qg + vSpg
         }
 
-        return result.toIntArray()
+        return result
     }
 }
 
