@@ -35,6 +35,7 @@ rootProject.name = "Keiyoushi"
  */
 // loadAllIndividualExtensions()
 loadIndividualExtension("es", "tmohentai")
+loadIndividualExtension("es", "zonatmoorg")
 
 /**
  * ===================================== COMMON CONFIGURATION ======================================

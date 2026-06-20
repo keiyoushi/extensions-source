@@ -27,7 +27,6 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import kotlin.time.Duration.Companion.seconds
 
 class TMOHentai :
     HttpSource(),
@@ -52,7 +51,7 @@ class TMOHentai :
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::cloudflareInterceptor)
-        .rateLimit(1, 2.seconds)
+        .rateLimit(10)
         .build()
 
     /**
@@ -169,16 +168,10 @@ class TMOHentai :
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val images = document.select(".reader-img-wrap img, img.reader-img")
+        val images = document.select(".reader-img-wrap img, .reader-img-wrap source, img.reader-img, source.reader-img")
         return images.mapIndexedNotNull { index, element ->
-            var imageUrl = element.absUrl("data-src").trim()
-            if (imageUrl.isEmpty()) {
-                imageUrl = element.absUrl("src").trim()
-            }
-            if (imageUrl.isEmpty()) {
-                imageUrl = element.attr("data-src").trim().ifEmpty { element.attr("src").trim() }
-            }
-            if (imageUrl.isEmpty() || imageUrl.startsWith("data:") || !imageUrl.startsWith("http")) {
+            val imageUrl = element.extractImageUrl()
+            if (imageUrl == null) {
                 null
             } else {
                 Page(index, "", imageUrl)
@@ -189,6 +182,7 @@ class TMOHentai :
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val searchQuery = query.trim()
         var isTopRange = false
         var topRangeVal = ""
 
@@ -204,54 +198,59 @@ class TMOHentai :
             }
         }
 
-        if (isTopRange && query.isEmpty()) {
+        if (isTopRange && searchQuery.isEmpty()) {
             return GET("$baseUrl/?range=$topRangeVal", headers)
         }
 
-        val url = "$baseUrl/biblioteca".toHttpUrl().newBuilder()
-
-        if (query.isNotEmpty()) {
-            url.addQueryParameter("title", query)
-        }
-        url.addQueryParameter("page", page.toString())
+        // Collect selected genres and content type to decide which endpoint to use.
+        val selectedGenres = mutableListOf<String>()
+        var contentType = ""
+        var sortItem = ""
+        var sortDir = ""
 
         filterList.forEach { filter ->
             when (filter) {
-                is ContentType -> {
-                    val part = filter.toUriPart()
-                    if (part.isNotEmpty()) {
-                        url.addQueryParameter("content", part)
-                    }
-                }
-
-                is GenreList -> {
-                    filter.state
-                        .filter { genre -> genre.state }
-                        .forEach { genre -> url.addQueryParameter("tags[]", genre.id) }
-                }
-
+                is ContentType -> contentType = filter.toUriPart()
+                is GenreList -> filter.state.filter { it.state }.forEach { selectedGenres.add(it.id) }
                 is SortBy -> {
                     if (filter.state != null) {
-                        url.addQueryParameter("order_item", SORTABLES[filter.state!!.index].second)
-                        url.addQueryParameter(
-                            "order_dir",
-                            if (filter.state!!.ascending) "asc" else "desc",
-                        )
+                        sortItem = SORTABLES[filter.state!!.index].second
+                        sortDir = if (filter.state!!.ascending) "asc" else "desc"
                     }
                 }
-
                 else -> {}
             }
         }
 
-        return GET(url.build(), headers)
+        val hasTagsOrQuery = searchQuery.isNotEmpty() || selectedGenres.isNotEmpty() || contentType.isNotEmpty()
+
+        return if (hasTagsOrQuery) {
+            // Root URL is the correct endpoint for text/tag/content searches and supports pagination.
+            // e.g. https://tmohentai.app/?title=X&content=Y&tags[]=Z&page=P
+            val url = baseUrl.toHttpUrl().newBuilder()
+            url.addQueryParameter("title", searchQuery)
+            url.addQueryParameter("content", contentType)
+            selectedGenres.forEach { id -> url.addQueryParameter("tags[]", id) }
+            url.addQueryParameter("page", page.toString())
+            GET(url.build(), headers)
+        } else {
+            // /biblioteca is for sort-only browsing (no tag/text filter).
+            val url = "$baseUrl/biblioteca".toHttpUrl().newBuilder()
+            url.addQueryParameter("page", page.toString())
+            if (sortItem.isNotEmpty()) {
+                url.addQueryParameter("order_item", sortItem)
+                url.addQueryParameter("order_dir", sortDir)
+            }
+            GET(url.build(), headers)
+        }
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val url = response.request.url
 
-        if (url.toString() == "$baseUrl/" || url.toString() == baseUrl || url.queryParameter("range") != null) {
+        // Popular range (top_today / top_weekly / top_monthly) — no pagination.
+        if (url.queryParameter("range") != null) {
             val range = url.queryParameter("range") ?: "today"
             val containerId = when (range) {
                 "today" -> "#top_today"
@@ -264,7 +263,7 @@ class TMOHentai :
         }
 
         val mangas = document.select("a.manga-card").map { popularMangaFromElement(it) }
-        val hasNextPage = document.select(".pagination a[rel=next], .pagination a:contains(»), a.page-link:contains(»)").isNotEmpty()
+        val hasNextPage = document.selectFirst(".pagination a[rel=next], .pagination a:contains(»), a.page-link:contains(»)") != null
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -702,8 +701,37 @@ class TMOHentai :
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {}
 
+    private fun Element.extractImageUrl(): String? {
+        val candidates = listOf(
+            attr("abs:data-src"),
+            attr("abs:data-lazy-src"),
+            attr("abs:data-original"),
+            attr("abs:src"),
+            attr("abs:data-srcset").firstUrlFromSrcSet(),
+            attr("abs:data-lazy-srcset").firstUrlFromSrcSet(),
+            attr("abs:srcset").firstUrlFromSrcSet(),
+            attr("data-src").trim(),
+            attr("data-lazy-src").trim(),
+            attr("data-original").trim(),
+            attr("src").trim(),
+            attr("data-srcset").firstUrlFromSrcSet(),
+            attr("data-lazy-srcset").firstUrlFromSrcSet(),
+            attr("srcset").firstUrlFromSrcSet(),
+        )
+
+        candidates.firstOrNull { it.isNotBlank() && it.startsWith("http") && !it.startsWith("data:") }?.let { return it }
+
+        return attr("style")
+            .takeIf { it.isNotBlank() }
+            ?.let { style -> BACKGROUND_IMAGE_URL_REGEX.find(style)?.groupValues?.getOrNull(1) }
+    }
+
+    private fun String.firstUrlFromSrcSet(): String = trim().split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull().orEmpty()
+
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
+
+        private val BACKGROUND_IMAGE_URL_REGEX = Regex("""background-image\s*:\s*url\(['\"]?([^'\")]+)['\"]?\)""")
 
         private val SORTABLES = listOf(
             Pair("Más populares", "likes_count"),
