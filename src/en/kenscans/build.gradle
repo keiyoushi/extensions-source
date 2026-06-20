@@ -3,7 +3,7 @@ ext {
     extClass = '.KenScans'
     themePkg = 'iken'
     baseUrl = 'https://kencomics.com'
-    overrideVersionCode = 9
+    overrideVersionCode = 10
     isNsfw = false
 }
 
