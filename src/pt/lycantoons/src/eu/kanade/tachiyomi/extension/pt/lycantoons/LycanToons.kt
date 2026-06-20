@@ -31,7 +31,7 @@ class LycanToons : HttpSource() {
 
     override val client = network.client.newBuilder()
         .addInterceptor(WebViewInterceptor(headers["User-Agent"]))
-        .rateLimit(2)
+        .rateLimit(5)
         .build()
 
     private val rscHeaders by lazy {

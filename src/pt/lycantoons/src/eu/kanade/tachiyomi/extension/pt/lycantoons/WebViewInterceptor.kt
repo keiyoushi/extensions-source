@@ -1,13 +1,12 @@
 package eu.kanade.tachiyomi.extension.pt.lycantoons
 
-import android.annotation.SuppressLint
-import android.app.Application
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.toJsonString
 import okhttp3.Headers
 import okhttp3.Interceptor
@@ -17,15 +16,15 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
-import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
+const val REUSE_TIMEOUT_MS = 30 * 1000L // 30s
+
 // proxy Request through WebView since OkHttp gets 403 and fails Cloudflare TLS signature checks
 class WebViewInterceptor(private val userAgent: String?) : Interceptor {
 
-    private val context: Application by injectLazy()
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -42,7 +41,7 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
         }
 
         val resultData = fetchViaJs(url, req.method, req.headers, requestBody, isImage)
-        if (!resultData.success) throw IOException("[JS]: " + resultData.result)
+        if (!resultData.success) throw IOException("[WebView]: " + resultData.result)
 
         val resultConentType = resultData.contentType ?: "text/html"
         return if (isImage) {
@@ -52,7 +51,32 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
         }
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
+    private var cachedWv: WebView? = null
+    private var accessTime = 0L
+
+    private val globalWebView: WebView
+        get() {
+            val currentTime = System.currentTimeMillis()
+
+            if (cachedWv != null && (currentTime - accessTime) > REUSE_TIMEOUT_MS) {
+                cachedWv?.destroy()
+                cachedWv = null
+            }
+
+            if (cachedWv == null) {
+                cachedWv = WebView(applicationContext).apply {
+                    settings.apply {
+                        javaScriptEnabled = true
+                        domStorageEnabled = true
+                        userAgentString = userAgent
+                    }
+                }
+            }
+            accessTime = currentTime
+            return cachedWv!!
+        }
+
+    @Synchronized
     private fun fetchViaJs(
         url: String,
         method: String,
@@ -60,19 +84,14 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
         requestBody: String?,
         isImage: Boolean,
     ): FetchResult {
+        val bridgeName = "Lycan_${System.currentTimeMillis()}"
         val latch = CountDownLatch(1)
-        lateinit var result: FetchResult
-        var localWebView: WebView? = null
+        var result: FetchResult? = null
+        var errorMessage: Throwable? = null
 
         mainHandler.post {
             try {
-                val webView = WebView(context).also { localWebView = it }
-                webView.settings.apply {
-                    javaScriptEnabled = true
-                    domStorageEnabled = true
-                    databaseEnabled = true
-                    userAgentString = userAgent
-                }
+                val webView = globalWebView
 
                 webView.addJavascriptInterface(
                     object {
@@ -88,7 +107,7 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
                             latch.countDown()
                         }
                     },
-                    "Bridge",
+                    bridgeName,
                 )
 
                 webView.webViewClient = object : WebViewClient() {
@@ -103,11 +122,11 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
                             .then(blob => {
                                 var reader = new FileReader();
                                 reader.onloadend = function() {
-                                    if (!reader.result) { window.Bridge.passError('Empty payload'); return; }
+                                    if (!reader.result) { window.$bridgeName.passError('Empty payload'); return; }
                                     var parts = reader.result.split(',');
-                                    window.Bridge.passResult(parts.length > 1 ? parts[1] : parts[0], contentType);
+                                    window.$bridgeName.passResult(parts.length > 1 ? parts[1] : parts[0], contentType);
                                 };
-                                reader.onerror = function() { window.Bridge.passError('Reader failed'); };
+                                reader.onerror = function() { window.$bridgeName.passError('Reader failed'); };
                                 reader.readAsDataURL(blob);
                             })
                             """
@@ -118,7 +137,7 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
                                 contentType = res.headers.get('content-type')
                                 return res.text();
                             })
-                            .then(text => window.Bridge.passResult(text, contentType))
+                            .then(text => window.$bridgeName.passResult(text, contentType))
                             """
                         }
 
@@ -141,7 +160,7 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
                                     $requestBody
                                 })
                                 $handlingScript
-                                .catch(err => window.Bridge.passError(err.message));
+                                .catch(err => window.$bridgeName.passError(err.message));
                             })();
                         """.trimIndent()
 
@@ -150,23 +169,14 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
                 }
 
                 webView.loadDataWithBaseURL(url, " ", "text/html", "utf-8", null)
-            } catch (_: Throwable) {
+            } catch (e: Throwable) {
+                errorMessage = e
                 latch.countDown()
             }
         }
 
-        val completed = latch.await(8, TimeUnit.SECONDS)
-
-        mainHandler.post {
-            try {
-                localWebView?.apply {
-                    stopLoading()
-                    destroy()
-                }
-            } catch (_: Throwable) {}
-        }
-
-        return if (completed) result else FetchResult(false, "Timed out")
+        latch.await(if (isImage) 10 else 5, TimeUnit.SECONDS)
+        return result ?: FetchResult(false, (errorMessage ?: "Timed out").toString())
     }
 
     private fun String.toResponse(request: Request, contentType: String): Response = this.toByteArray(Charsets.UTF_8).toResponse(request, contentType)
