@@ -21,15 +21,15 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 open class NHentai(
     override val lang: String,
@@ -44,8 +44,6 @@ open class NHentai(
     override val name = "NHentai"
 
     override val supportsLatest = true
-
-    private val json: Json by injectLazy()
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -64,9 +62,11 @@ open class NHentai(
     }
 
     private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
-    private val dataRegex = Regex("""JSON\.parse\(\s*"(.*)"\s*\)""")
-    private val hentaiSelector = "script:containsData(JSON.parse):not(:containsData(media_server)):not(:containsData(avatar_url))"
     private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
+
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
@@ -197,23 +197,38 @@ open class NHentai(
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-        val data = document.getHentaiData()
-        val cdnUrl = document.getCdnUrls(thumbnail = true).random()
+        val tags = document.parseTags()
+
+        val fullTitle = listOfNotNull(
+            document.selectFirst("h1 .before")?.text(),
+            document.selectFirst("h1 .pretty")?.text(),
+            document.selectFirst("h1 .after")?.text(),
+        ).joinToString("").trim()
+        val prettyTitle = document.selectFirst("h1 .pretty")?.text()?.trim() ?: fullTitle
+        val japaneseTitle = document.selectFirst("h2.title")?.text()?.trim()
+        val pages = document.select(".tag-container.field-name")
+            .firstOrNull { "pages" in it.ownText().lowercase() }
+            ?.selectFirst(".name")?.text() ?: "?"
+        val favorites = document.selectFirst(".btn-primary .nobold")?.text()
+            ?.trim()?.removeSurrounding("(", ")") ?: "?"
+
         return SManga.create().apply {
-            title = if (displayFullTitle) data.title.english ?: data.title.japanese ?: data.title.pretty!! else data.title.pretty ?: (data.title.english ?: data.title.japanese)!!.shortenTitle()
-            thumbnail_url = "https://$cdnUrl/galleries/${data.media_id}/1t.${data.images.pages[0].extension}"
+            title = if (displayFullTitle) fullTitle else prettyTitle
+            thumbnail_url = document.selectFirst("#cover img")?.let { img ->
+                if (img.hasAttr("data-src")) img.attr("abs:data-src") else img.attr("abs:src")
+            }
             status = SManga.COMPLETED
-            artist = getArtists(data)
-            author = getGroups(data) ?: getArtists(data)
-            // Some people want these additional details in description
-            description = "Full English and Japanese titles:\n"
-                .plus("${data.title.english ?: data.title.japanese ?: data.title.pretty ?: ""}\n")
-                .plus(data.title.japanese ?: "")
-                .plus("\n\n")
-                .plus("Pages: ${data.images.pages.size}\n")
-                .plus("Favorited by: ${data.num_favorites}\n")
-                .plus(getTagDescription(data))
-            genre = getTags(data)
+            artist = getArtists(tags)
+            author = getGroups(tags) ?: getArtists(tags)
+            description = buildString {
+                append(fullTitle, "\n")
+                if (!japaneseTitle.isNullOrBlank()) append(japaneseTitle, "\n")
+                append("\n")
+                append("Pages: $pages\n")
+                append("Favorited by: $favorites\n")
+                append(getTagDescription(tags))
+            }
+            genre = getTags(tags)
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
     }
@@ -221,47 +236,54 @@ open class NHentai(
     override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.asJsoup().getHentaiData()
+        val document = response.asJsoup()
+        val tags = document.parseTags()
+        val uploadDate = document.selectFirst("time[datetime]")?.attr("datetime")
+            ?.let { runCatching { dateFormat.parse(it)?.time }.getOrNull() } ?: 0L
+
         return listOf(
             SChapter.create().apply {
                 name = "Chapter"
-                scanlator = getGroups(data)
-                date_upload = data.upload_date * 1000
+                scanlator = getGroups(tags)
+                date_upload = uploadDate
                 url = response.request.url.encodedPath
             },
         )
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val data = document.getHentaiData()
-        val cdnUrls = document.getCdnUrls(thumbnail = false)
+        // The new SvelteKit site embeds page thumbnails directly in the gallery HTML.
+        // Thumbnail URL pattern: https://t4.nhentai.net/galleries/{media_id}/{page}t.jpg
+        // Full image URL pattern: https://i4.nhentai.net/galleries/{media_id}/{page}.jpg
+        val cdnPattern = Regex("""//t(\d+)\.nhentai""")
+        val thumbPattern = Regex("""(\d+)t\.(\w+)$""")
 
-        return data.images.pages.mapIndexed { i, image ->
-            Page(
-                index = i,
-                imageUrl = "https://${cdnUrls.random()}/galleries/${data.media_id}/${i + 1}.${image.extension}",
-            )
+        return response.asJsoup()
+            .select("#thumbnail-container .thumb-container img")
+            .mapIndexed { i, img ->
+                val thumbSrc = img.attr("src")
+                val imageUrl = cdnPattern.replace(thumbSrc) { "//i${it.groupValues[1]}.nhentai" }
+                    .let { thumbPattern.replace(it) { m -> "${m.groupValues[1]}.${m.groupValues[2]}" } }
+                Page(index = i, imageUrl = imageUrl)
+            }
+    }
+
+    private fun Document.parseTags(): List<Tag> {
+        return select("#tags .tag-container.field-name").flatMap { container ->
+            val type = when (container.ownText().trim().lowercase().removeSuffix(":").trim()) {
+                "artists" -> "artist"
+                "groups" -> "group"
+                "characters" -> "character"
+                "parodies" -> "parody"
+                "tags" -> "tag"
+                "languages" -> "language"
+                "categories" -> "category"
+                else -> return@flatMap emptyList()
+            }
+            container.select("a[href] .name").mapNotNull { el ->
+                el.text().trim().takeIf { it.isNotBlank() }?.let { Tag(name = it, type = type) }
+            }
         }
-    }
-
-    private fun Document.getHentaiData(): Hentai {
-        val script = selectFirst(hentaiSelector)!!.data()
-        return dataRegex.find(script)!!.groupValues[1].parseAs()
-    }
-
-    private fun Document.getCdnUrls(thumbnail: Boolean): List<String> {
-        val regex = Regex(
-            if (thumbnail) {
-                """thumb_cdn_urls:\s*(\[.*])"""
-            } else {
-                """image_cdn_urls:\s*(\[.*])"""
-            },
-        )
-        val html = body().html()
-        val cdnJson = regex.find(html)!!.groupValues[1]
-
-        return cdnJson.parseAs<List<String>>()
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -313,15 +335,6 @@ open class NHentai(
                 Pair("Recent", "date"),
             ),
         )
-
-    private inline fun <reified T> String.parseAs(): T {
-        val data = Regex("""\\u([0-9A-Fa-f]{4})""").replace(this) {
-            it.groupValues[1].toInt(16).toChar().toString()
-        }
-        return json.decodeFromString(
-            data,
-        )
-    }
 
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
