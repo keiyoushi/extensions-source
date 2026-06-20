@@ -315,16 +315,17 @@ open class NHentai(
 
     private class FavoriteFilter : Filter.CheckBox("Show favorites only", false)
 
-    private class SortFilter : UriPartFilter(
-        "Sort By",
-        arrayOf(
-            Pair("Popular: All Time", "popular"),
-            Pair("Popular: Month", "popular-month"),
-            Pair("Popular: Week", "popular-week"),
-            Pair("Popular: Today", "popular-today"),
-            Pair("Recent", "date"),
-        ),
-    )
+    private class SortFilter :
+        UriPartFilter(
+            "Sort By",
+            arrayOf(
+                Pair("Popular: All Time", "popular"),
+                Pair("Popular: Month", "popular-month"),
+                Pair("Popular: Week", "popular-week"),
+                Pair("Popular: Today", "popular-today"),
+                Pair("Recent", "date"),
+            ),
+        )
 
     private inline fun <reified T> String.parseAs(): T {
         val data = Regex("""\\u([0-9A-Fa-f]{4})""").replace(this) {
@@ -335,8 +336,7 @@ open class NHentai(
         )
     }
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 
