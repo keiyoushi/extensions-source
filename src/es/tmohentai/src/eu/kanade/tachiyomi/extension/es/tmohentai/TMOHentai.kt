@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.extension.es.tmohentai
 
+import android.app.Application
 import android.content.SharedPreferences
+import android.webkit.WebSettings
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -16,12 +18,15 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import kotlin.time.Duration.Companion.seconds
 
 class TMOHentai :
@@ -36,20 +41,68 @@ class TMOHentai :
 
     override val supportsLatest = true
 
+    // Use the WebView's native UA so that the cf_clearance cookie issued during
+    // the WebView Cloudflare solve stays valid (Cloudflare binds the cookie to the
+    // exact User-Agent that solved the challenge).
+    private val webViewUserAgent: String? by lazy {
+        runCatching { WebSettings.getDefaultUserAgent(Injekt.get<Application>()) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+    }
+
     override val client: OkHttpClient = network.client.newBuilder()
+        .addInterceptor(::cloudflareInterceptor)
         .rateLimit(1, 2.seconds)
         .build()
 
+    /**
+     * On 403 + cf-ray header (=Cloudflare challenge), load the base URL in a hidden WebView
+     * so the Cloudflare Turnstile can auto-solve and set cf_clearance in the shared
+     * CookieManager. The next OkHttp call will carry that cookie automatically.
+     */
+    private fun cloudflareInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+
+        if (response.code == 403 && response.header("cf-ray") != null) {
+            response.close()
+            // Resolve against the base URL; cf_clearance covers the whole domain.
+            CloudflareResolver.resolve(
+                loadUrl = baseUrl,
+                cookieUrl = baseUrl,
+                userAgent = webViewUserAgent,
+            )
+            return chain.proceed(request)
+        }
+
+        return response
+    }
+
     override fun headersBuilder() = super.headersBuilder().apply {
         add("Referer", "$baseUrl/")
+        add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+        add("Accept-Language", "es-ES,es;q=0.9,en;q=0.8")
+        // Sync UA with the WebView one (set lazily; no-op if null since addHeader ignores blank)
+        webViewUserAgent?.let { set("User-Agent", it) }
     }
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/biblioteca?order_item=likes_count&order_dir=desc&page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = if (page == 1) {
+        GET(baseUrl, headers)
+    } else {
+        GET("$baseUrl/biblioteca?order_item=likes_count&order_dir=desc&page=$page", headers)
+    }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
+        val url = response.request.url
+
+        if (url.toString() == "$baseUrl/" || url.toString() == baseUrl) {
+            val mangas = document.select("#top_today a.manga-card").map { popularMangaFromElement(it) }
+            return MangasPage(mangas, false)
+        }
+
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
         val hasNextPage = document.select(".pagination a[rel=next], .pagination a:contains(»), a.page-link:contains(»)").isNotEmpty()
         return MangasPage(mangas, hasNextPage)
@@ -58,8 +111,11 @@ class TMOHentai :
     private fun popularMangaSelector() = "a.manga-card"
 
     private fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        title = element.attr("title").ifEmpty { element.select("h3").text() }
-        thumbnail_url = element.select("img").attr("abs:src")
+        title = element.attr("title").ifEmpty {
+            element.select("h3.manga-card__title, h3").text()
+        }.trim()
+        val img = element.select("img.manga-card__cover, img")
+        thumbnail_url = img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
         setUrlWithoutDomain(element.attr("href"))
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
@@ -114,15 +170,44 @@ class TMOHentai :
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val images = document.select(".reader-img-wrap img, img.reader-img")
-        return images.mapIndexed { index, element ->
-            val imageUrl = element.attr("abs:data-src").ifEmpty { element.attr("abs:src") }
-            Page(index, "", imageUrl)
+        return images.mapIndexedNotNull { index, element ->
+            var imageUrl = element.absUrl("data-src").trim()
+            if (imageUrl.isEmpty()) {
+                imageUrl = element.absUrl("src").trim()
+            }
+            if (imageUrl.isEmpty()) {
+                imageUrl = element.attr("data-src").trim().ifEmpty { element.attr("src").trim() }
+            }
+            if (imageUrl.isEmpty() || imageUrl.startsWith("data:") || !imageUrl.startsWith("http")) {
+                null
+            } else {
+                Page(index, "", imageUrl)
+            }
         }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        var isTopRange = false
+        var topRangeVal = ""
+
+        val filterList = if (filters.isEmpty()) getFilterList() else filters
+
+        filterList.forEach { filter ->
+            if (filter is PopularRangeFilter) {
+                val value = filter.toUriPart()
+                if (value.isNotEmpty()) {
+                    isTopRange = true
+                    topRangeVal = value
+                }
+            }
+        }
+
+        if (isTopRange && query.isEmpty()) {
+            return GET("$baseUrl/?range=$topRangeVal", headers)
+        }
+
         val url = "$baseUrl/biblioteca".toHttpUrl().newBuilder()
 
         if (query.isNotEmpty()) {
@@ -130,7 +215,7 @@ class TMOHentai :
         }
         url.addQueryParameter("page", page.toString())
 
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+        filterList.forEach { filter ->
             when (filter) {
                 is ContentType -> {
                     val part = filter.toUriPart()
@@ -162,7 +247,26 @@ class TMOHentai :
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val url = response.request.url
+
+        if (url.toString() == "$baseUrl/" || url.toString() == baseUrl || url.queryParameter("range") != null) {
+            val range = url.queryParameter("range") ?: "today"
+            val containerId = when (range) {
+                "today" -> "#top_today"
+                "weekly" -> "#top_weekly"
+                "monthly" -> "#top_monthly"
+                else -> "#top_today"
+            }
+            val mangas = document.select("$containerId a.manga-card").map { popularMangaFromElement(it) }
+            return MangasPage(mangas, false)
+        }
+
+        val mangas = document.select("a.manga-card").map { popularMangaFromElement(it) }
+        val hasNextPage = document.select(".pagination a[rel=next], .pagination a:contains(»), a.page-link:contains(»)").isNotEmpty()
+        return MangasPage(mangas, hasNextPage)
+    }
 
     private fun searchMangaSelector() = popularMangaSelector()
 
@@ -201,6 +305,8 @@ class TMOHentai :
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Géneros", genres)
 
     override fun getFilterList() = FilterList(
+        PopularRangeFilter(),
+        Filter.Separator(),
         ContentType(),
         Filter.Separator(),
         SortBy(),
@@ -211,6 +317,17 @@ class TMOHentai :
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
+
+    private class PopularRangeFilter :
+        UriPartFilter(
+            "Rango de populares (Solo portada)",
+            arrayOf(
+                Pair("Todo (Biblioteca)", ""),
+                Pair("Top Hoy", "today"),
+                Pair("Top Semanal (7 días)", "weekly"),
+                Pair("Top Mensual (30 días)", "monthly"),
+            ),
+        )
 
     private class ContentType :
         UriPartFilter(
