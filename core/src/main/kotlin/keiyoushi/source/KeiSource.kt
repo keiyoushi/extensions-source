@@ -78,9 +78,7 @@ abstract class KeiSource : HttpSource() {
      * @param page The page number to retrieve.
      * @return A [MangasPage] containing the list of manga and whether there is a next page.
      */
-    abstract suspend fun getPopularMangaList(page: Int): MangasPage
-
-    final override suspend fun getPopularManga(page: Int): MangasPage = getPopularMangaList(page)
+    abstract override suspend fun getPopularManga(page: Int): MangasPage
 
     /**
      * Whether the source supports fetching a list of latest manga updates.
@@ -93,9 +91,7 @@ abstract class KeiSource : HttpSource() {
      * @param page The page number to retrieve.
      * @return A [MangasPage] containing the list of updated manga and whether there is a next page.
      */
-    abstract suspend fun getLatestMangaList(page: Int): MangasPage
-
-    final override suspend fun getLatestUpdates(page: Int): MangasPage = getLatestMangaList(page)
+    abstract override suspend fun getLatestUpdates(page: Int): MangasPage
 
     /**
      * Fetches a page of manga matching the query and filters.
@@ -170,9 +166,7 @@ abstract class KeiSource : HttpSource() {
      * @param manga The reference manga.
      * @return A list of related [SManga].
      */
-    abstract suspend fun getRelatedMangaList(manga: SManga): List<SManga>
-
-    final override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = getRelatedMangaList(manga)
+    abstract override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga>
 
     /**
      * Returns the absolute web URL for the provided manga.
