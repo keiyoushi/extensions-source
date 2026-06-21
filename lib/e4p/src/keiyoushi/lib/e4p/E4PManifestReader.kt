@@ -37,10 +37,10 @@ class E4PManifestReader(private val client: OkHttpClient, private val requestHea
             ) {
                 val xebpFragment = listOf(
                     withAuth.fragment.orEmpty(),
-                    XebpDecoder.hex(iv),
+                    iv.toHexString(),
                     ticketBytes.contentId,
-                    XebpDecoder.hex(consumerId),
-                    XebpDecoder.hex(decoded.pbexSeed),
+                    consumerId.toHexString(),
+                    decoded.pbexSeed.toHexString(),
                 ).joinToString("\n")
                 withAuth.newBuilder().fragment(xebpFragment).build()
             } else {

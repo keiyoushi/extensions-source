@@ -101,6 +101,7 @@ class Ono :
         headersBuilder()
             .add("Origin", baseUrl)
             .add("Referer", "$baseUrl/")
+            .add("age-confirmed", "true")
             .add("ono-platform", "website")
             .add("ono-product", "FR")
             .build()

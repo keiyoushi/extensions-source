@@ -30,12 +30,14 @@ object Descrambler {
         val rawScrambleSeed = response.header("x-scramble-seed")
         val rawScrambleGrid = response.header("x-scramble-grid")
         val rawScrambleAlgo = response.header("x-scramble-algo")
+        val rawScrambleHash = response.header("x-scramble-hash")
         val rawEncSeed = response.header("x-enc-seed")
         val rawEncAlgo = response.header("x-enc-algo")
 
         val encSeed = rawEncSeed?.toLongOrNull()?.toInt()
         val encLen = response.header("x-enc-len")?.toIntOrNull()
         val scrambleSeed = rawScrambleSeed?.toLongOrNull()?.toInt()
+        val scrambleHash = decodeScrambleHash(rawScrambleHash)
 
         val needsXor = encSeed != null && encSeed != 0 && encLen != null
         val shouldDescrambleGrid = rawScrambleGrid == "5x5" &&
@@ -62,7 +64,7 @@ object Descrambler {
                     .body("Failed to decode image".toResponseBody("text/plain".toMediaType()))
                     .build()
 
-            val descrambled = descramble(bitmap, scrambleSeed, rawScrambleAlgo)
+            val descrambled = descramble(bitmap, scrambleSeed xor scrambleHash, rawScrambleAlgo)
             bitmap.recycle()
 
             val output = Buffer()
@@ -140,6 +142,11 @@ object Descrambler {
         next = next xor (next shl 13)
         next = next xor (next ushr 17)
         return next xor (next shl 5)
+    }
+
+    private fun decodeScrambleHash(hash: String?): Int = when (hash?.trim()) {
+        "03632" -> 58414
+        else -> 0
     }
 
     private fun ByteArray.hasImageSignature(): Boolean = size >= 12 && (

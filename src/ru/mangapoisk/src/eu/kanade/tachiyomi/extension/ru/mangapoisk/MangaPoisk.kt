@@ -25,7 +25,7 @@ private val dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale("ru"))
 class MangaPoisk : HttpSource() {
     override val name = "MangaPoisk"
 
-    override val baseUrl = "https://mangap.ru"
+    override val baseUrl = "https://mangapsk.ru"
 
     override val lang = "ru"
 

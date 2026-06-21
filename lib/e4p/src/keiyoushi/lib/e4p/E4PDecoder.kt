@@ -2,13 +2,13 @@ package keiyoushi.lib.e4p
 
 import android.util.Base64
 import keiyoushi.utils.decodeProto
+import keiyoushi.utils.inflate
 import keiyoushi.utils.rc4
-import okio.Buffer
-import okio.InflaterSource
-import okio.buffer
+import keiyoushi.utils.readIntBigEndian
+import keiyoushi.utils.readIntLittleEndian
+import keiyoushi.utils.writeIntBigEndian
 import org.kotlincrypto.hash.blake2.BLAKE2b
 import java.security.MessageDigest
-import java.util.zip.Inflater
 
 class DecodedManifest(val pub: ProtoPub, val pbexSeed: ByteArray?)
 
@@ -34,7 +34,7 @@ class E4PDecoder {
 
         val inflated = when (wrapper.dataType) {
             DataType.PROTOPUB -> payload
-            DataType.PROTOPUB_ZLIB -> zlibInflate(payload)
+            DataType.PROTOPUB_ZLIB -> payload.inflate()
             else -> throw Exception("Unsupported dataType: ${wrapper.dataType}")
         }
 
@@ -162,17 +162,6 @@ class E4PDecoder {
         return key
     }
 
-    private fun zlibInflate(data: ByteArray): ByteArray {
-        val inflater = Inflater()
-        return try {
-            val buffer = Buffer().write(data)
-            val inflated = InflaterSource(buffer, inflater).buffer()
-            inflated.readByteArray()
-        } finally {
-            inflater.end()
-        }
-    }
-
     companion object {
         // vA6 table in drm_worker.js, 19-byte XOR-mask table
         private val A6 = intArrayOf(
@@ -208,19 +197,14 @@ class E4PDecoder {
             0xAD.toByte(),
         )
 
-        private fun le32(b: ByteArray, off: Int): Int = (b[off].toInt() and 0xFF) or
-            ((b[off + 1].toInt() and 0xFF) shl 8) or
-            ((b[off + 2].toInt() and 0xFF) shl 16) or
-            ((b[off + 3].toInt() and 0xFF) shl 24)
-
         // Blowfish-CBC decrypt with custom P-array and S-boxes (drm_worker.js)
         private class BlowfishTables(val p: IntArray, val s: Array<IntArray>)
 
         private val BLOWFISH: BlowfishTables by lazy {
             val sBytes = rc4(UNDEFINED_KEY, Base64.decode(BLOWFISH_S_B64, Base64.NO_WRAP), 769)
             val pBytes = rc4(UNDEFINED_KEY, Base64.decode(BLOWFISH_P_B64, Base64.NO_WRAP), 769)
-            val p = IntArray(18) { i -> le32(pBytes, i * 4) }
-            val s = Array(4) { box -> IntArray(256) { i -> le32(sBytes, (box * 256 + i) * 4) } }
+            val p = IntArray(18) { i -> pBytes.readIntLittleEndian(i * 4) }
+            val s = Array(4) { box -> IntArray(256) { i -> sBytes.readIntLittleEndian((box * 256 + i) * 4) } }
             BlowfishTables(p, s)
         }
 
@@ -232,19 +216,19 @@ class E4PDecoder {
             val t = BLOWFISH
 
             // IV split into two big-endian uint32s
-            var prevL = be32(iv, 0)
-            var prevR = be32(iv, 4)
+            var prevL = iv.readIntBigEndian(0)
+            var prevR = iv.readIntBigEndian(4)
 
             val out = ByteArray(ciphertext.size)
             var off = 0
             while (off < ciphertext.size) {
-                val cl = be32(ciphertext, off)
-                val cr = be32(ciphertext, off + 4)
+                val cl = ciphertext.readIntBigEndian(off)
+                val cr = ciphertext.readIntBigEndian(off + 4)
                 val (dl, dr) = blowfishDecryptBlock(cl, cr, t)
                 val pl = dl xor prevL
                 val pr = dr xor prevR
-                writeBe32(out, off, pl)
-                writeBe32(out, off + 4, pr)
+                out.writeIntBigEndian(off, pl)
+                out.writeIntBigEndian(off + 4, pr)
                 prevL = cl
                 prevR = cr
                 off += 8
@@ -288,18 +272,6 @@ class E4PDecoder {
             val c = (x ushr 8) and 0xFF
             val d = x and 0xFF
             return ((t.s[0][a] + t.s[1][b]) xor t.s[2][c]) + t.s[3][d]
-        }
-
-        private fun be32(buf: ByteArray, off: Int): Int = ((buf[off].toInt() and 0xFF) shl 24) or
-            ((buf[off + 1].toInt() and 0xFF) shl 16) or
-            ((buf[off + 2].toInt() and 0xFF) shl 8) or
-            (buf[off + 3].toInt() and 0xFF)
-
-        private fun writeBe32(buf: ByteArray, off: Int, v: Int) {
-            buf[off] = (v ushr 24).toByte()
-            buf[off + 1] = (v ushr 16).toByte()
-            buf[off + 2] = (v ushr 8).toByte()
-            buf[off + 3] = v.toByte()
         }
 
         // vA0_0x5cc756.Er

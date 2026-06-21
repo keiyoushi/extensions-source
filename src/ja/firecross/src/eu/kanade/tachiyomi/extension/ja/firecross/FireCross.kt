@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.ja.firecross
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.multisrc.clipstudioreader.ClipStudioReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservable
@@ -14,7 +15,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.lib.clipstudioreader.ClipStudioReader
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -29,11 +29,12 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class FireCross :
-    ClipStudioReader(),
+    ClipStudioReader(
+        "FireCross",
+        "https://firecross.jp",
+        "ja",
+    ),
     ConfigurableSource {
-    override val name = "FireCross"
-    override val baseUrl = "https://firecross.jp"
-    override val lang = "ja"
     override val supportsLatest = false
 
     private val apiUrl = "$baseUrl/api"
