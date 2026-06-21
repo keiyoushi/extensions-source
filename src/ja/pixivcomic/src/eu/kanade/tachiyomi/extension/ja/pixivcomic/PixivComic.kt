@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.ja.pixivcomic
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -12,21 +11,24 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
@@ -45,12 +47,11 @@ abstract class PixivComic : HttpSource() {
 
     private var serialSearchHasMore = true
     private var storeSearchHasMore = true
-    private var categoryList: List<String> = emptyList()
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(ImageInterceptor())
-        .addInterceptor(PublusInterceptor())
-        .addInterceptor {
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(ImageInterceptor())
+        addInterceptor(PublusInterceptor())
+        addInterceptor {
             val request = it.request()
             val response = it.proceed(request)
             if (response.code == 400 && request.url.pathSegments.last() == "master") {
@@ -58,11 +59,9 @@ abstract class PixivComic : HttpSource() {
             }
             response
         }
-        .build()
+    }
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
-        .set("X-Requested-With", "pixivcomic")
+    override fun Headers.Builder.configureHeaders() = set("X-Requested-With", "pixivcomic")
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         if (page == 1) alreadyLoadedPopularMangaIds.clear()
@@ -72,7 +71,7 @@ abstract class PixivComic : HttpSource() {
             .addQueryParameter("count", count.toString())
             .build()
 
-        val ranking = client.newCall(GET(url, headers)).awaitSuccess().parseAs<ApiResponse<PopularResponse>>().data.ranking
+        val ranking = client.get(url).parseAs<ApiResponse<PopularResponse>>().data.ranking
         val mangas = ranking
             .filter { alreadyLoadedPopularMangaIds.add(it.id) }
             .map { it.toSManga() }
@@ -84,13 +83,13 @@ abstract class PixivComic : HttpSource() {
         val url = "$apiUrl/works/recent_updates/v2".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        return client.newCall(GET(url, headers)).awaitSuccess().toMangasPage()
+        return client.get(url).toMangasPage()
     }
 
-    override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage = coroutineScope {
+    override suspend fun getSearchMangaList(page: Int, query: String, filterList: FilterList): MangasPage = coroutineScope {
         if (query.isBlank()) {
-            val tag = filters.firstInstanceOrNull<TagsFilter>()?.state?.trim()?.removePrefix("#")
-            val category = filters.firstInstanceOrNull<CategoryFilter>()?.selected
+            val tag = filterList.firstInstanceOrNull<TagsFilter>()?.state?.trim()?.removePrefix("#")
+            val category = filterList.firstInstanceOrNull<CategoryFilter>()?.selected
             val url = if (!tag.isNullOrEmpty()) {
                 "$apiUrl/tags".toHttpUrl().newBuilder()
                     .addPathSegment(tag)
@@ -104,7 +103,7 @@ abstract class PixivComic : HttpSource() {
                     .addQueryParameter("page", page.toString())
                     .build()
             }
-            return@coroutineScope client.newCall(GET(url, headers)).awaitSuccess().toMangasPage()
+            return@coroutineScope client.get(url).toMangasPage()
         }
 
         if (page == 1) {
@@ -118,7 +117,7 @@ abstract class PixivComic : HttpSource() {
                     .addPathSegment(query)
                     .addQueryParameter("page", page.toString())
                     .build()
-                client.newCall(GET(url, headers)).awaitSuccess().parseAs<ApiResponse<SeriesResponse>>().data
+                client.get(url).parseAs<ApiResponse<SeriesResponse>>().data
             }
         } else {
             null
@@ -129,7 +128,7 @@ abstract class PixivComic : HttpSource() {
                     .addPathSegment(query)
                     .addQueryParameter("page", page.toString())
                     .build()
-                client.newCall(GET(url, headers)).awaitSuccess().parseAs<ApiResponse<StoreSearchResponse>>().data
+                client.get(url).parseAs<ApiResponse<StoreSearchResponse>>().data
             }
         } else {
             null
@@ -150,27 +149,21 @@ abstract class PixivComic : HttpSource() {
         return MangasPage(mangas, result.data.hasNextPage())
     }
 
-    override fun getFilterList() = FilterList(
-        Filter.Header("Search query replaces the filters below!"),
-        Filter.Header("Only one filter can be used at a time!"),
-        TagsFilter(),
-        if (categoryList.isEmpty()) {
-            Filter.Header("Press 'Reset' to load categories")
-        } else {
-            CategoryFilter(categoryList)
-        },
-    ).apply { fetchCategoryList() }
+    override val supportsFilterFetching = true
 
-    private fun fetchCategoryList() {
-        if (categoryList.isNotEmpty()) return
-        CoroutineScope(Dispatchers.IO).launch {
-            runCatching {
-                client.newCall(GET("$apiUrl/categories", headers)).awaitSuccess()
-                    .parseAs<ApiResponse<CategoryResponse>>()
-                    .data.categories.map { it.name }
-            }.onSuccess { categoryList = it }
-        }
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val categories = data?.parseAs<List<String>>().orEmpty()
+        return FilterList(
+            buildList {
+                add(Filter.Header("Search query replaces the filters below!"))
+                add(Filter.Header("Only one filter can be used at a time!"))
+                add(TagsFilter())
+                if (categories.isNotEmpty()) add(CategoryFilter(categories))
+            },
+        )
     }
+
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/categories").parseAs<ApiResponse<CategoryResponse>>().data.categories.map { it.name }.toJsonElement()
 
     override fun getMangaUrl(manga: SManga): String {
         val url = "$baseUrl/${manga.url}".toHttpUrl().pathSegments
@@ -232,13 +225,13 @@ abstract class PixivComic : HttpSource() {
         SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    private suspend fun fetchOfficialWork(mangaId: String): OfficialWork = client.newCall(GET("$apiUrl/works/v5/$mangaId", headers)).awaitSuccess().parseAs<ApiResponse<DetailsResponse>>().data.officialWork
+    private suspend fun fetchOfficialWork(mangaId: String): OfficialWork = client.get("$apiUrl/works/v5/$mangaId").parseAs<ApiResponse<DetailsResponse>>().data.officialWork
 
     private suspend fun fetchEpisodes(mangaId: String): List<Episode> {
         val url = "$apiUrl/works/$mangaId/episodes/v2".toHttpUrl().newBuilder()
             .addQueryParameter("order", "desc")
             .build()
-        return client.newCall(GET(url, headers)).awaitSuccess()
+        return client.get(url)
             .parseAs<ApiResponse<ChapterResponse>>()
             .data.episodes
             .mapNotNull { it.episode }
@@ -249,12 +242,12 @@ abstract class PixivComic : HttpSource() {
             .addQueryParameter("order", "desc")
             .addQueryParameter("view_type", "product_detail")
             .build()
-        return client.newCall(GET(url, headers)).awaitSuccess()
+        return client.get(url)
             .parseAs<ApiResponse<VolumeResponse>>()
             .data.variants
     }
 
-    private suspend fun fetchProduct(storeProductKey: String): ProductResponse = client.newCall(GET("$apiUrl/store/products/v2/$storeProductKey", headers)).awaitSuccess().parseAs<ApiResponse<ProductResponse>>().data
+    private suspend fun fetchProduct(storeProductKey: String): ProductResponse = client.get("$apiUrl/store/products/v2/$storeProductKey").parseAs<ApiResponse<ProductResponse>>().data
 
     override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.any { it.isLetter() }) {
         "$baseUrl/store/viewers/${chapter.url}/master"
@@ -263,7 +256,7 @@ abstract class PixivComic : HttpSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterResponse = client.newCall(GET(getChapterUrl(chapter), headers)).awaitSuccess()
+        val chapterResponse = client.get(getChapterUrl(chapter))
         if (chapter.url.any { it.isLetter() }) {
             val authUrl = generateSequence(chapterResponse) { it.priorResponse }
                 .map { it.request.url }
@@ -283,7 +276,7 @@ abstract class PixivComic : HttpSource() {
                     }
                 }.build()
 
-            val content = client.newCall(GET(cUrl, headers)).execute().parseAs<PublusContent>()
+            val content = client.get(cUrl).parseAs<PublusContent>()
 
             if (content.url.isNullOrEmpty()) {
                 throw Exception("Log in via WebView and purchase this volume to read it, even if it's free.")
@@ -298,7 +291,7 @@ abstract class PixivComic : HttpSource() {
             .add("X-Client-Time", time)
             .add("X-Client-Hash", hash)
             .build()
-        val pages = client.newCall(GET("$apiUrl/episodes/${chapter.url}/read_v4", header)).awaitSuccess()
+        val pages = client.get("$apiUrl/episodes/${chapter.url}/read_v4", header)
             .parseAs<ApiResponse<ViewerResponse>>()
             .data.readingEpisode.pages
         if (pages.isNullOrEmpty()) {
@@ -330,6 +323,9 @@ abstract class PixivComic : HttpSource() {
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga = throw UnsupportedOperationException()
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"

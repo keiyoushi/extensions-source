@@ -3,6 +3,7 @@ ext {
     extClass = '.PixivComic'
     extVersionCode = 4
     nsfw = true
+    libVersion = "1.6"
 }
 
 apply plugin: "kei.plugins.extension.legacy"
