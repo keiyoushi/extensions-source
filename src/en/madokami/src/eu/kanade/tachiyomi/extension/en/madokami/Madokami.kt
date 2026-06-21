@@ -213,10 +213,12 @@ class Madokami :
         screen.addPreference(password)
     }
 
+    companion object {
+        private val ARCHIVE_EXTENSIONS = listOf(".zip", ".cbz", ".rar", ".cbr", ".7z", ".cb7", ".tar", ".cbt")
+    }
+
     private fun isArchiveUrl(url: String): Boolean {
         val path = url.substringBefore("?").substringBefore("#").lowercase(Locale.ROOT)
-        return path.endsWith(".zip") || path.endsWith(".cbz") || path.endsWith(".rar") ||
-            path.endsWith(".cbr") || path.endsWith(".7z") || path.endsWith(".cb7") || path.endsWith(".tar") ||
-            path.endsWith(".cbt")
+        return ARCHIVE_EXTENSIONS.any { path.endsWith(it) }
     }
 }
