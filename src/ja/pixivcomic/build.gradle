@@ -1,0 +1,12 @@
+ext {
+    extName = 'Pixiv Comic'
+    extClass = '.PixivComic'
+    extVersionCode = 4
+    nsfw = true
+}
+
+apply plugin: "kei.plugins.extension.legacy"
+
+dependencies {
+    implementation(project(":lib:publus"))
+}
