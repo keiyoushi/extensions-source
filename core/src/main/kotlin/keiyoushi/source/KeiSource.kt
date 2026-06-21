@@ -1,5 +1,6 @@
 package keiyoushi.source
 
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -7,6 +8,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.applicationContext
+import keiyoushi.utils.jsonInstance
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.okio.decodeFromBufferedSource
+import kotlinx.serialization.json.okio.encodeToBufferedSink
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -14,7 +24,17 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import okhttp3.logging.HttpLoggingInterceptor
+import okio.GzipSink
+import okio.GzipSource
+import okio.buffer
+import okio.sink
+import okio.source
 import rx.Observable
+import java.io.File
+import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.seconds
 
 abstract class KeiSource : HttpSource() {
@@ -120,6 +140,141 @@ abstract class KeiSource : HttpSource() {
         }
 
         return getSearchMangaList(page, query, filters)
+    }
+
+    private val filterFetchInFlight = AtomicBoolean(false)
+
+    private val filterFetchAttemptCount = AtomicInteger(0)
+
+    private val maxFilterFetchAttempts = 3
+
+    private val filterCacheDir: File by lazy {
+        applicationContext.cacheDir.resolve("source_$id").apply { mkdirs() }
+    }
+
+    private val filterCacheFile: File by lazy { filterCacheDir.resolve("filters.json.gz") }
+
+    /**
+     * Whether this source fetches its filters from the network (vs. having a static,
+     * hardcoded [FilterList]). When false, none of the caching/background-fetch machinery
+     * below runs — [getFilterList] just calls [getFilterList] with `null` directly — and
+     * [fetchFilterData] / the data-aware [getFilterList] overload don't need to be
+     * implemented.
+     */
+    protected open val supportsFilterFetching: Boolean = false
+
+    /**
+     * Fetches raw filter data from the network.
+     *
+     * Only called when [supportsFilterFetching] is true, on a background coroutine —
+     * never on the calling thread of [getFilterList]. Implementations should perform
+     * whatever requests are necessary (e.g. scraping a search/filter page) and return
+     * the result as a [JsonElement], or null if the source genuinely has no dynamic
+     * filters to offer.
+     *
+     * Throwing is treated as a failed attempt and retried (see [maxFilterFetchAttempts]);
+     * returning null is treated as "no filters" and is not retried.
+     */
+    protected open suspend fun fetchFilterData(): JsonElement? = null
+
+    /**
+     * Builds a [FilterList] from previously cached/fetched filter data.
+     *
+     * This is called synchronously every time [getFilterList] is invoked, so it must be
+     * fast and must NOT perform I/O or network requests — only convert [data] into filters.
+     *
+     * @param data The cached filter data, freshly fetched data, or null when no (fresh)
+     *  data is available yet (e.g. first launch, cache expired and fetch still pending in
+     *  the background, fetching failed permanently, or the source returned no data).
+     */
+    protected open fun getFilterList(data: JsonElement?): FilterList = FilterList()
+
+    final override fun getFilterList(): FilterList {
+        if (!supportsFilterFetching) {
+            return getFilterList(data = null)
+        }
+
+        val (cached, isFresh) = readFilterCacheState()
+        val parsedResult = cached?.runCatching { getFilterList(this) }
+        val parseFailed = parsedResult?.isFailure == true
+
+        if (parseFailed || !isFresh || cached == null) {
+            if (parseFailed) {
+                filterFetchAttemptCount.set(0)
+                runCatching { filterCacheFile.delete() }
+            }
+            triggerBackgroundFilterFetch()
+        }
+
+        val filters = parsedResult?.getOrNull() ?: getFilterList(data = null)
+
+        val hint = if (filterFetchAttemptCount.get() >= maxFilterFetchAttempts) {
+            Filter.Header("Failed to fetch filters, restart the app to retry")
+        } else {
+            Filter.Header("Press 'Reset' to fetch more filters")
+        }
+
+        return FilterList(filters + Filter.Separator() + hint)
+    }
+
+    private data class FilterCacheState(val data: JsonElement?, val isFresh: Boolean)
+
+    private fun readFilterCacheState(): FilterCacheState {
+        val file = filterCacheFile
+        if (!file.exists()) return FilterCacheState(data = null, isFresh = false)
+
+        val age = System.currentTimeMillis() - file.lastModified()
+        val isFresh = age <= 1.days.inWholeMilliseconds
+
+        val data = try {
+            GzipSource(file.source()).buffer().use { source ->
+                jsonInstance.decodeFromBufferedSource(JsonElement.serializer(), source)
+            }
+        } catch (_: Throwable) {
+            null
+        }
+
+        return FilterCacheState(data, isFresh)
+    }
+
+    private fun writeFilterCache(data: JsonElement) {
+        filterCacheDir.mkdirs()
+        val tmpFile = File.createTempFile("filters", ".tmp", filterCacheDir)
+
+        try {
+            GzipSink(tmpFile.sink()).buffer().use { sink ->
+                jsonInstance.encodeToBufferedSink(JsonElement.serializer(), data, sink)
+            }
+
+            if (!tmpFile.renameTo(filterCacheFile)) {
+                filterCacheFile.delete()
+                if (!tmpFile.renameTo(filterCacheFile)) {
+                    throw IOException("Failed to move $tmpFile to $filterCacheFile")
+                }
+            }
+        } finally {
+            tmpFile.delete()
+        }
+    }
+
+    @OptIn(DelicateCoroutinesApi::class)
+    private fun triggerBackgroundFilterFetch() {
+        if (filterFetchAttemptCount.get() >= maxFilterFetchAttempts) return
+        if (!filterFetchInFlight.compareAndSet(false, true)) return
+
+        GlobalScope.launch(Dispatchers.IO) {
+            try {
+                val data = fetchFilterData()
+                if (data != null) {
+                    writeFilterCache(data)
+                    filterFetchAttemptCount.set(0) // Reset counter on success
+                }
+            } catch (_: Throwable) {
+                filterFetchAttemptCount.incrementAndGet()
+            } finally {
+                filterFetchInFlight.set(false)
+            }
+        }
     }
 
     /**
