@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.okio.decodeFromBufferedSource
 import kotlinx.serialization.json.okio.encodeToBufferedSink
 import okhttp3.Headers
@@ -158,8 +159,7 @@ abstract class KeiSource : HttpSource() {
      * Whether this source fetches its filters from the network (vs. having a static,
      * hardcoded [FilterList]). When false, none of the caching/background-fetch machinery
      * below runs — [getFilterList] just calls [getFilterList] with `null` directly — and
-     * [fetchFilterData] / the data-aware [getFilterList] overload don't need to be
-     * implemented.
+     * [fetchFilterData] don't need to be implemented.
      */
     protected open val supportsFilterFetching: Boolean = false
 
@@ -175,7 +175,7 @@ abstract class KeiSource : HttpSource() {
      * Throwing is treated as a failed attempt and retried (see [maxFilterFetchAttempts]);
      * returning null is treated as "no filters" and is not retried.
      */
-    protected open suspend fun fetchFilterData(): JsonElement? = null
+    protected open suspend fun fetchFilterData(): JsonElement = JsonNull
 
     /**
      * Builds a [FilterList] from previously cached/fetched filter data.
@@ -190,35 +190,36 @@ abstract class KeiSource : HttpSource() {
     protected open fun getFilterList(data: JsonElement?): FilterList = FilterList()
 
     final override fun getFilterList(): FilterList {
-        if (!supportsFilterFetching) {
-            return getFilterList(data = null)
-        }
+        if (!supportsFilterFetching) return getFilterList(data = null)
 
         val (cached, isFresh) = readFilterCacheState()
-        val parsedResult = cached?.runCatching { getFilterList(this) }
-        val parseFailed = parsedResult?.isFailure == true
-
-        if (parseFailed || !isFresh || cached == null) {
-            if (parseFailed) {
-                filterFetchAttemptCount.set(0) // Reset counter to force retry on schema mismatch
-                runCatching { filterCacheFile.delete() }
+        val parsed = cached?.let {
+            try {
+                getFilterList(it)
+            } catch (_: Throwable) {
+                null
             }
+        }
+
+        if (cached != null && parsed == null) {
+            // Cache existed but rejected by source class
+            // assume old scheme, refresh
+            runCatching { filterCacheFile.delete() }
+            filterFetchAttemptCount.set(0)
+        }
+
+        if (parsed == null || !isFresh) {
             triggerBackgroundFilterFetch()
         }
 
-        val filters = parsedResult?.getOrNull() ?: getFilterList(data = null)
-        val showHint = cached == null || parseFailed
+        if (parsed != null) return parsed
 
-        return if (showHint) {
-            val hint = if (filterFetchAttemptCount.get() >= maxFilterFetchAttempts) {
-                Filter.Header("Failed to fetch filters, restart the app to retry")
-            } else {
-                Filter.Header("Press 'Reset' to fetch more filters")
-            }
-            FilterList(filters + Filter.Separator() + hint)
+        val hint = if (filterFetchAttemptCount.get() >= maxFilterFetchAttempts) {
+            Filter.Header("Failed to fetch filters, restart the app to retry")
         } else {
-            filters
+            Filter.Header("Press 'Reset' to fetch more filters")
         }
+        return FilterList(getFilterList(data = null) + Filter.Separator() + hint)
     }
 
     private data class FilterCacheState(val data: JsonElement?, val isFresh: Boolean)
@@ -269,10 +270,8 @@ abstract class KeiSource : HttpSource() {
         GlobalScope.launch(Dispatchers.IO) {
             try {
                 val data = fetchFilterData()
-                if (data != null) {
-                    writeFilterCache(data)
-                    filterFetchAttemptCount.set(0) // Reset counter on success
-                }
+                writeFilterCache(data)
+                filterFetchAttemptCount.set(0)
             } catch (_: Throwable) {
                 filterFetchAttemptCount.incrementAndGet()
             } finally {
