@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.ja.pixivcomic
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -29,7 +28,6 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 
@@ -49,7 +47,6 @@ abstract class PixivComic : HttpSource() {
     private var storeSearchHasMore = true
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(ImageInterceptor())
         addInterceptor(PublusInterceptor())
         addInterceptor {
             val request = it.request()
@@ -299,21 +296,9 @@ abstract class PixivComic : HttpSource() {
         }
 
         return pages.mapIndexed { i, page ->
-            Page(i, imageUrl = "${page.url}#key=${page.key}")
+            val url = page.url.toHttpUrl().newBuilder().removePathSegment(1).removePathSegment(0).build().toString()
+            Page(i, imageUrl = url)
         }
-    }
-
-    override fun imageRequest(page: Page): Request {
-        val pageUrl = page.imageUrl!!.toHttpUrl()
-        if (pageUrl.host.contains("publus") || !pageUrl.fragment!!.startsWith("key=")) {
-            return super.imageRequest(page)
-        }
-
-        val key = pageUrl.fragment!!.substringAfter("key=")
-        val newHeaders = headersBuilder()
-            .add("X-Cobalt-Thumber-Parameter-GridShuffle-Key", key)
-            .build()
-        return GET(page.imageUrl!!, newHeaders)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
