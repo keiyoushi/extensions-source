@@ -40,6 +40,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import okio.Buffer
+import org.json.JSONObject
 import org.jsoup.nodes.Document
 import rx.Observable
 import java.util.concurrent.Semaphore
@@ -137,7 +138,14 @@ class Comix :
         }
         val contentRating = request.url.queryParameter("content_rating")
             ?: preferences.contentRating()
-        val effectiveContentRating = contentRating.ifEmpty { "pornographic" }
+        val effectiveContentRating = contentRating
+            .split(',')
+            .lastOrNull { it.isNotBlank() }
+            .orEmpty()
+            .ifEmpty { "pornographic" }
+        val expectedKeyword = JSONObject.quote(
+            request.url.queryParameter("q") ?: request.url.queryParameter("keyword").orEmpty(),
+        )
         val searchResponse = document.extractBrowseResponse() ?: runInWebView(
             document = document,
             initializationScript = """
@@ -159,13 +167,17 @@ class Comix :
                 """
                     (function () {
                         const payloadKey = '__comixBrowsePayload';
-                        const capture = parsed => {
+                        const expectedKeyword = $expectedKeyword;
+                        const capture = (parsed, allowEmpty = false) => {
                             try {
+                                if (parsed && Array.isArray(parsed.items)) {
+                                    parsed = { result: parsed };
+                                }
                                 if (
                                     parsed &&
                                     parsed.result &&
                                     Array.isArray(parsed.result.items) &&
-                                    parsed.result.items.length > 0
+                                    (allowEmpty || parsed.result.items.length > 0)
                                 ) {
                                     window[payloadKey] = JSON.stringify(parsed);
                                     window.$interfaceName.passPayload(window[payloadKey]);
@@ -184,16 +196,66 @@ class Comix :
                         } catch (e) {}
 
                         if (window[payloadKey]) return window[payloadKey];
-                        if (JSON.parse.__comixBrowseCaptureInstalled) return null;
+                        if (window.__comixBrowseCaptureInstalled) return null;
+                        window.__comixBrowseCaptureInstalled = true;
+
+                        const captureText = text => {
+                            try {
+                                if (text) capture(JSON.parse(text), true);
+                            } catch (e) {}
+                        };
+
+                        const shouldCaptureUrl = rawUrl => {
+                            try {
+                                const url = new URL(rawUrl || '', window.location.origin);
+                                if (!url.pathname.includes('/api/v1/manga')) return false;
+                                if (!expectedKeyword) return true;
+                                return url.searchParams.get('keyword') === expectedKeyword;
+                            } catch (e) {
+                                return false;
+                            }
+                        };
+
+                        const originalFetch = window.fetch;
+                        if (typeof originalFetch === 'function') {
+                            window.fetch = function () {
+                                return originalFetch.apply(this, arguments).then(response => {
+                                    try {
+                                        const url = response && response.url || '';
+                                        if (shouldCaptureUrl(url)) {
+                                            response.clone().text().then(captureText).catch(() => {});
+                                        }
+                                    } catch (e) {}
+                                    return response;
+                                });
+                            };
+                        }
+
+                        const originalOpen = XMLHttpRequest.prototype.open;
+                        const originalSend = XMLHttpRequest.prototype.send;
+                        XMLHttpRequest.prototype.open = function (method, url) {
+                            this.__comixBrowseUrl = String(url || '');
+                            return originalOpen.apply(this, arguments);
+                        };
+                        XMLHttpRequest.prototype.send = function () {
+                            this.addEventListener('load', function () {
+                                try {
+                                    if (shouldCaptureUrl(this.__comixBrowseUrl)) {
+                                        captureText(this.responseText);
+                                    }
+                                } catch (e) {}
+                            });
+                            return originalSend.apply(this, arguments);
+                        };
+
                         const originalParse = JSON.parse;
                         const proxiedParse = new Proxy(originalParse, {
                             apply(target, thisArg, args) {
                                 const parsed = Reflect.apply(target, thisArg, args);
-                                capture(parsed);
+                                if (!expectedKeyword) capture(parsed);
                                 return parsed;
                             }
                         });
-                        proxiedParse.__comixBrowseCaptureInstalled = true;
                         JSON.parse = proxiedParse;
                         return window[payloadKey] || null;
                     })();
@@ -240,17 +302,6 @@ class Comix :
 
     // ============================== Search ===============================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotBlank()) {
-            val queryUrl = query.trim().toHttpUrlOrNull()
-            if (queryUrl != null) {
-                val host = queryUrl.host.removePrefix("www.")
-                if (host == baseUrl.toHttpUrl().host.removePrefix("www.") && queryUrl.pathSegments.size >= 2 && queryUrl.pathSegments[0] == "title") {
-                    val mangaId = queryUrl.pathSegments[1].substringBefore("-")
-                    return mangaDetailsRequest(SManga.create().apply { this.url = "/$mangaId" })
-                }
-            }
-        }
-
         val withFilters = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment("browse")
             .apply {
@@ -300,11 +351,11 @@ class Comix :
             }
 
             if (query.isNotBlank()) {
-                addQueryParameter("keyword", query)
+                addQueryParameter("q", query)
                 build().queryParameterNames
                     .filter { it.startsWith("order[") }
                     .forEach(::removeAllQueryParameters)
-                addQueryParameter("order[relevance]", "desc")
+                addQueryParameter("sort", "relevance:desc")
             }
 
             addQueryParameter("page", page.toString())
@@ -315,7 +366,28 @@ class Comix :
 
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchMangaListFromBrowse(searchMangaRequest(page, query, filters))
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        titlePathFromQuery(query)?.let { titlePath ->
+            return fetchMangaDetails(SManga.create().apply { url = titlePath })
+                .map { MangasPage(listOf(it), false) }
+        }
+
+        return fetchMangaListFromBrowse(searchMangaRequest(page, query, filters))
+    }
+
+    private fun titlePathFromQuery(query: String): String? {
+        val queryUrl = query.trim()
+            .takeIf { it.isNotEmpty() }
+            ?.toHttpUrlOrNull()
+            ?: return null
+
+        val host = queryUrl.host.removePrefix("www.")
+        if (host != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
+        if (queryUrl.pathSegments.size < 2 || queryUrl.pathSegments[0] != "title") return null
+
+        val mangaId = queryUrl.pathSegments[1].substringBefore("-")
+        return mangaId.takeIf { it.isNotBlank() }?.let { "/$it" }
+    }
 
     /**
      * Apply every content-related source-level preference (rating, types,
@@ -332,8 +404,8 @@ class Comix :
     }
 
     private fun HttpUrl.Builder.applyContentRatingPreference() {
-        preferences.contentRating().takeIf { it.isNotEmpty() }?.let {
-            addQueryParameter("content_rating", it)
+        Filters.getContentRatingsUpTo(preferences.contentRating()).takeIf { it.isNotEmpty() }?.let {
+            addQueryParameter("content_rating", it.joinToString(","))
         }
     }
 
