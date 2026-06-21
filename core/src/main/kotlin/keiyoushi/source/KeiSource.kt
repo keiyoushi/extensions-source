@@ -200,21 +200,25 @@ abstract class KeiSource : HttpSource() {
 
         if (parseFailed || !isFresh || cached == null) {
             if (parseFailed) {
-                filterFetchAttemptCount.set(0)
+                filterFetchAttemptCount.set(0) // Reset counter to force retry on schema mismatch
                 runCatching { filterCacheFile.delete() }
             }
             triggerBackgroundFilterFetch()
         }
 
         val filters = parsedResult?.getOrNull() ?: getFilterList(data = null)
+        val showHint = cached == null || parseFailed
 
-        val hint = if (filterFetchAttemptCount.get() >= maxFilterFetchAttempts) {
-            Filter.Header("Failed to fetch filters, restart the app to retry")
+        return if (showHint) {
+            val hint = if (filterFetchAttemptCount.get() >= maxFilterFetchAttempts) {
+                Filter.Header("Failed to fetch filters, restart the app to retry")
+            } else {
+                Filter.Header("Press 'Reset' to fetch more filters")
+            }
+            FilterList(filters + Filter.Separator() + hint)
         } else {
-            Filter.Header("Press 'Reset' to fetch more filters")
+            filters
         }
-
-        return FilterList(filters + Filter.Separator() + hint)
     }
 
     private data class FilterCacheState(val data: JsonElement?, val isFresh: Boolean)
