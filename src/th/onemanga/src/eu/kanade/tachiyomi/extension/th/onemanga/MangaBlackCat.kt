@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.th.mangablackcat
+package eu.kanade.tachiyomi.extension.th.onemanga
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -26,6 +26,9 @@ class MangaBlackCat : HttpSource() {
     override val baseUrl = "https://mangablackcat.com"
     override val lang = "th"
     override val supportsLatest = true
+
+    // migration from OneManga
+    override val id: Long = 2248402620929558947L
 
     private val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")).apply {
         timeZone = TimeZone.getTimeZone("Asia/Bangkok")
