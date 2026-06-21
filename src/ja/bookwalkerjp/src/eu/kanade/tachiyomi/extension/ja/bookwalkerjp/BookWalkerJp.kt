@@ -370,7 +370,7 @@ class BookWalkerJp :
     }
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga = throw UnsupportedOperationException()
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = null
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
