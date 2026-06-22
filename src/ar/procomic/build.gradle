@@ -1,0 +1,55 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlinx-serialization'
+
+android {
+    compileSdkVersion 33
+    defaultConfig {
+        applicationId "ar.procomic"
+        minSdkVersion 21
+        targetSdkVersion 33
+        versionCode 1
+        versionName "1.0.0"
+    }
+    
+    buildFeatures {
+        viewBinding false
+    }
+    
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+}
+
+dependencies {
+    // Kotlin
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1"
+    
+    // Tachiyomi Extensions
+    compileOnly 'org.tachiyomi.extension:extension-lib:2.0.0'
+    
+    // HTTP & JSON
+    implementation "com.squareup.okhttp3:okhttp:4.11.0"
+    implementation "org.jsoup:jsoup:1.15.3"
+    implementation "com.google.code.gson:gson:2.10.1"
+    
+    // Injection
+    implementation "uy.kohesive.injekt:injekt-core:1.16.1"
+    
+    // Android Preferences
+    implementation "androidx.preference:preference-ktx:1.2.1"
+}
+
+repositories {
+    mavenCentral()
+    google()
+    maven { url 'https://jitpack.io' }
+}
