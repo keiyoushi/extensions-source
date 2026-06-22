@@ -42,7 +42,11 @@ class Rncalation : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(".lib-grid a.comic-card").map { element ->
+        val mangas = document.select(".lib-grid a.comic-card").mapNotNull { element ->
+            val type = element.selectFirst("span.absolute.top-2.left-2")?.text()
+            if (type != null && type.contains("Novel", ignoreCase = true)) {
+                return@mapNotNull null
+            }
             SManga.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
                 title = element.selectFirst("p.leading-snug")!!.text()

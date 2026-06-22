@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.es.nartag
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class TypeFilter : Filter.Select<String>("Tipo", arrayOf("Todos", "Manga", "Manhwa", "Manhua", "Novel", "Other"))
+class TypeFilter : Filter.Select<String>("Tipo", arrayOf("Todos", "Manga", "Manhwa", "Manhua", "Other"))
 
 class StatusFilter : Filter.Select<String>("Estado", arrayOf("Todos", "Ongoing", "Completed", "Hiatus", "Cancelled"))
 
