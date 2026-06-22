@@ -30,7 +30,7 @@ class Rncalation : HttpSource() {
         .rateLimit(2)
         .build()
 
-    private val dateFormat = SimpleDateFormat("M/d/yyyy", Locale.US)
+    private val dateFormat = SimpleDateFormat("M/d/yyyy", Locale.ROOT)
 
     // ============================== Popular ===============================
 
@@ -46,7 +46,7 @@ class Rncalation : HttpSource() {
         val document = response.asJsoup()
         val mangas = document.select("a.comic-card").map { element ->
             SManga.create().apply {
-                setUrlWithoutDomain(element.attr("href"))
+                setUrlWithoutDomain(element.absUrl("href"))
                 title = element.selectFirst("p[class*=line-clamp-2]")!!.text()
                 thumbnail_url = element.selectFirst("img.card-media")?.let {
                     it.absUrl("src")
@@ -110,7 +110,7 @@ class Rncalation : HttpSource() {
         val document = response.asJsoup()
         return document.select("a[href*=/cap/][class*=flex items-center gap-3]").map { element ->
             SChapter.create().apply {
-                setUrlWithoutDomain(element.attr("href"))
+                setUrlWithoutDomain(element.absUrl("href"))
                 name = element.selectFirst("span[class*=flex-1]")!!.text()
                 date_upload = element.selectFirst("span[class*=text-\\[.65rem\\]]")?.text()
                     ?.let { dateFormat.tryParse(it) } ?: 0L
