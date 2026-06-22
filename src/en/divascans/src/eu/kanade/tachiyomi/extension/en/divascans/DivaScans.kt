@@ -11,13 +11,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -26,7 +21,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
-import uy.kohesive.injekt.injectLazy
 import java.util.Locale
 
 class DivaScans :
@@ -39,8 +33,6 @@ class DivaScans :
     override val lang = "en"
     override val supportsLatest = true
     private val preferences by getPreferencesLazy()
-
-    private val json: Json by injectLazy()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept", "application/json, text/plain, */*")
@@ -114,27 +106,23 @@ class DivaScans :
     override fun searchMangaParse(response: Response): MangasPage = parseJsonMangaList(response)
 
     private fun parseJsonMangaList(response: Response): MangasPage {
-        val jsonString = response.body.string()
-        val jsonElement = runCatching { json.parseToJsonElement(jsonString) }.getOrNull() ?: return MangasPage(emptyList(), false)
+        val bodyString = response.body.string()
 
-        val jsonArray = when (jsonElement) {
-            is JsonArray -> jsonElement
-            is JsonObject -> {
-                val keys = listOf("data", "series", "items", "results", "mangas")
-                keys.firstNotNullOfOrNull { key ->
-                    jsonElement[key] as? JsonArray
-                }
-            }
-            else -> null
-        } ?: return MangasPage(emptyList(), false)
+        // The API sometimes returns a bare array, and sometimes an object with the
+        // list nested under one of a few possible keys depending on the endpoint.
+        val envelope = runCatching { bodyString.parseAs<List<MangaDto>>() }
+            .map { SeriesResponse(data = it) }
+            .getOrNull()
+            ?: runCatching { bodyString.parseAs<SeriesResponse>() }.getOrNull()
+            ?: return MangasPage(emptyList(), false)
+
+        val items = envelope.mangaList ?: return MangasPage(emptyList(), false)
 
         val savedGenres = preferences.getStringSet(GENRES_PREF_KEY, mutableSetOf())?.toMutableSet() ?: mutableSetOf()
         val savedTags = preferences.getStringSet(TAGS_PREF_KEY, mutableSetOf())?.toMutableSet() ?: mutableSetOf()
         var prefsChanged = false
 
-        val mangas = jsonArray.mapNotNull { itemElement ->
-            val item = runCatching { json.decodeFromJsonElement<MangaDto>(itemElement) }.getOrNull() ?: return@mapNotNull null
-
+        val mangas = items.mapNotNull { item ->
             val genresArr = item.genres
             if (genresArr != null) {
                 for (genreObj in genresArr) {
@@ -175,23 +163,11 @@ class DivaScans :
                 .apply()
         }
 
-        val hasNextPage = if (jsonElement is JsonObject) {
-            val meta = jsonElement["meta"]?.jsonObject
-            val pagination = meta?.get("pagination")?.jsonObject
-            val pageCount = pagination?.get("pageCount")?.jsonPrimitive?.intOrNull
-                ?: jsonElement["totalPages"]?.jsonPrimitive?.intOrNull
+        val pageCount = envelope.meta?.pagination?.pageCount ?: envelope.totalPages
+        val currentPage = envelope.meta?.pagination?.page
+            ?: response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
 
-            val currentPage = pagination?.get("page")?.jsonPrimitive?.intOrNull
-                ?: response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
-
-            if (pageCount != null) {
-                currentPage < pageCount
-            } else {
-                mangas.size >= 10
-            }
-        } else {
-            mangas.size >= 10
-        }
+        val hasNextPage = if (pageCount != null) currentPage < pageCount else mangas.size >= 10
 
         return MangasPage(mangas, hasNextPage)
     }
@@ -208,7 +184,7 @@ class DivaScans :
             runCatching {
                 // Use the proven raw-string unescaper method
                 val jsonPayload = """{"d": "${match.groupValues[1]}"}"""
-                val payload = json.decodeFromString<HydrationPayload>(jsonPayload)
+                val payload = jsonPayload.parseAs<HydrationPayload>()
                 val unescapedStr = payload.d
                 if (!unescapedStr.isNullOrEmpty()) {
                     sb.append(unescapedStr)
@@ -237,13 +213,18 @@ class DivaScans :
         if (match != null) {
             runCatching {
                 val jsonStr = match.groupValues[1].replace("\\\"", "\"")
-                val item = json.decodeFromString<MangaDto>(jsonStr)
+                val item = jsonStr.parseAs<MangaDto>()
 
                 manga.title = item.title ?: ""
                 manga.thumbnail_url = cleanImageUrl(item.coverImage ?: "")
                 manga.description = item.description?.let {
-                    val descDoc = Jsoup.parseBodyFragment(it.replace("<br>", "[[n]]").replace("<p>", "[[n]]"))
-                    descDoc.text().replace("[[n]]", "\n").trim()
+                    val cleaned = it
+                        .replace("\\n", "\n") // literal \n → real newline
+                        .replace("<br/>", "[[n]]") // also catch self-closing br
+                        .replace("<br />", "[[n]]")
+                        .replace("<br>", "[[n]]")
+                        .replace("<p>", "[[n]]")
+                    Jsoup.parseBodyFragment(cleaned).text().replace("[[n]]", "\n").trim()
                 }
                 manga.author = item.author
                 manga.artist = item.artist ?: manga.author
@@ -283,8 +264,13 @@ class DivaScans :
         if (manga.description.isNullOrBlank()) {
             val synopsisEl = doc.selectFirst("div:containsOwn(Synopsis), div:containsOwn(Description), div:containsOwn(synopsis)")?.nextElementSibling()
             manga.description = if (synopsisEl != null) {
-                val descDoc = Jsoup.parseBodyFragment(synopsisEl.html().replace("<br>", "[[n]]").replace("<p>", "[[n]]"))
-                descDoc.text().replace("[[n]]", "\n").trim()
+                val cleaned = synopsisEl.html()
+                    .replace("\\n", "\n")
+                    .replace("<br/>", "[[n]]")
+                    .replace("<br />", "[[n]]")
+                    .replace("<br>", "[[n]]")
+                    .replace("<p>", "[[n]]")
+                Jsoup.parseBodyFragment(cleaned).text().replace("[[n]]", "\n").trim()
             } else {
                 doc.selectFirst("main p")?.text()
             }
@@ -335,7 +321,7 @@ class DivaScans :
 
         chapterJsonRegex.findAll(fullContent).forEach { match ->
             runCatching {
-                val element = json.decodeFromString<List<ChapterDto>>(match.groupValues[1])
+                val element = match.groupValues[1].parseAs<List<ChapterDto>>()
                 chaptersArrays.add(element)
             }
         }

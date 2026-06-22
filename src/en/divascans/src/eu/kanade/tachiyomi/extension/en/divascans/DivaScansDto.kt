@@ -8,8 +8,14 @@ data class SeriesResponse(
     val data: List<MangaDto>? = null,
     val series: List<MangaDto>? = null,
     val items: List<MangaDto>? = null,
+    val results: List<MangaDto>? = null,
+    val mangas: List<MangaDto>? = null,
     val meta: MetaDto? = null,
-)
+    val totalPages: Int? = null,
+) {
+    val mangaList: List<MangaDto>?
+        get() = data ?: series ?: items ?: results ?: mangas
+}
 
 @Serializable
 data class MetaDto(
