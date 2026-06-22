@@ -128,10 +128,3 @@ data class ChapterPagesResponse(
     val id: Int,
     val pages: List<String>,
 )
-
-// ========================= Auth =========================
-
-@Serializable
-data class LoginResponse(
-    val token: String,
-)

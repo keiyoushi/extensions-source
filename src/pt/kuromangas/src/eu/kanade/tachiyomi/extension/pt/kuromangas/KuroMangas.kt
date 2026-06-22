@@ -22,6 +22,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -46,17 +47,22 @@ class KuroMangas :
 
     private var kuroXsrfToken: String? = null
 
+    private var isAuthorized: Boolean? = null
+
     private val decryptor = KuroMangasDecryptor(baseUrl, network.client)
 
     override val client by lazy {
-        val token = getToken()
         val cdnHost = cdnUrl.toHttpUrl().host
+
         network.client.newBuilder()
             .apply {
 
                 addInterceptor(decryptor.vSecureInterceptor())
 
                 addInterceptor { chain ->
+                    isAuthorized ?: checkLogin()?.also { isAuthorized = it }
+                        ?: throw IOException(LOGIN_REQUIRED_MESSAGE)
+
                     val request = chain.request()
                     if (request.url.host == cdnHost) {
                         return@addInterceptor chain.proceed(request)
@@ -67,7 +73,14 @@ class KuroMangas :
                         if (xsrfToken != null) header("X-Csrf-Token", xsrfToken)
                     }.build()
 
-                    chain.proceed(newRequest)
+                    val resp = chain.proceed(newRequest)
+                    if (resp.code == 401 || resp.code == 403) {
+                        isAuthorized = null
+                        kuroXsrfToken = null
+                        resp.close()
+                        throw IOException("Cookies expired, open webview and retry.")
+                    }
+                    resp
                 }
             }
             .rateLimit(2)
@@ -88,27 +101,9 @@ class KuroMangas :
         }
     }
 
-    private fun getToken(): String {
-        val email = preferences.getString(PREF_EMAIL, "") ?: ""
-        val password = preferences.getString(PREF_PASSWORD, "") ?: ""
-        if (email.isEmpty() || password.isEmpty()) {
-            return ""
-        }
-        return runCatching { login(email, password) }.getOrDefault("")
-    }
-
-    private fun checkLogin() {
-        val email = preferences.getString(PREF_EMAIL, "") ?: ""
-        val password = preferences.getString(PREF_PASSWORD, "") ?: ""
-        if (email.isEmpty() || password.isEmpty()) {
-            throw Exception(LOGIN_REQUIRED_MESSAGE)
-        }
-    }
-
     // ============================= Popular ================================
 
     override fun popularMangaRequest(page: Int): Request {
-        checkLogin()
         val url = "$apiUrl/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", PAGE_LIMIT.toString())
@@ -127,7 +122,6 @@ class KuroMangas :
     // ============================= Latest =================================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        checkLogin()
         val url = "$apiUrl/chapters/recent".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", PAGE_LIMIT.toString())
@@ -145,7 +139,6 @@ class KuroMangas :
     // ============================= Search =================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        checkLogin()
         val url = "$apiUrl/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", PAGE_LIMIT.toString())
@@ -174,7 +167,6 @@ class KuroMangas :
     // ============================= Details ================================
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        checkLogin()
         val mangaId = manga.url.substringAfterLast("/")
         return GET("$apiUrl/mangas/$mangaId", headers)
     }
@@ -187,7 +179,6 @@ class KuroMangas :
     // ============================= Chapters ===============================
 
     override fun chapterListRequest(manga: SManga): Request {
-        checkLogin()
         val mangaId = manga.url.substringAfterLast("/")
         return GET("$apiUrl/mangas/$mangaId", headers)
     }
@@ -203,7 +194,6 @@ class KuroMangas :
     // ============================= Pages ==================================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        checkLogin()
         val chapterId = chapter.url.substringAfterLast("/")
         return GET("$apiUrl/chapters/$chapterId", headers)
     }
@@ -242,12 +232,27 @@ class KuroMangas :
     }
 
     // ============================= Auth ===================================
+
     private fun getCookie(cookie: String): String? {
         val cookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
         return cookies.firstOrNull { it.name == cookie }?.value?.takeUnless { it.isEmpty() }
     }
 
-    private fun login(email: String, password: String): String {
+    private fun checkLogin(): Boolean? {
+        getCookie("kuro_session")?.also { return true }
+
+        val email = preferences.getString(PREF_EMAIL, "") ?: ""
+        val password = preferences.getString(PREF_PASSWORD, "") ?: ""
+        if (email.isEmpty() || password.isEmpty()) {
+            return null
+        }
+        login(email, password)
+
+        return getCookie("kuro_session").let { true }
+    }
+
+    // Implicit set-cookie: kuro_session + kuro_csrf
+    private fun login(email: String, password: String) {
         val payload = buildJsonObject {
             put("email", email)
             put("password", password)
@@ -255,11 +260,6 @@ class KuroMangas :
         val requestBody = payload.toRequestBody(JSON_MEDIA_TYPE)
         val request = POST("$apiUrl/auth/login", headers, requestBody)
         val response = network.client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            response.close()
-            throw Exception("Login failed: ${response.code}")
-        }
-        return response.parseAs<LoginResponse>().token
     }
 
     // ============================= Preferences ============================
@@ -298,7 +298,7 @@ class KuroMangas :
         private const val API_HOST = "beta.kuromangas.com"
         private const val PREF_EMAIL = "kuromangas_email"
         private const val PREF_PASSWORD = "kuromangas_password"
-        private const val LOGIN_REQUIRED_MESSAGE = "Por favor, insira um email e uma senha nas configurações para logar"
+        private const val LOGIN_REQUIRED_MESSAGE = "Faça login no WebView ou insira email e senha nas configurações e tente novamente."
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 }
