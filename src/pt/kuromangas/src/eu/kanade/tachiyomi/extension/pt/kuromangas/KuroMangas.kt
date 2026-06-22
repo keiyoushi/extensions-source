@@ -44,6 +44,8 @@ class KuroMangas :
 
     private val cdnUrl = "https://cdn.kuromangas.com"
 
+    private var kuroXsrfToken: String? = null
+
     private val decryptor = KuroMangasDecryptor(baseUrl, network.client)
 
     override val client by lazy {
@@ -54,17 +56,18 @@ class KuroMangas :
 
                 addInterceptor(decryptor.vSecureInterceptor())
 
-                if (token.isNotEmpty()) {
-                    addInterceptor { chain ->
-                        val request = chain.request()
-                        if (request.url.host == cdnHost) {
-                            return@addInterceptor chain.proceed(request)
-                        }
-                        val newRequest = request.newBuilder()
-                            .header("Authorization", "Bearer $token")
-                            .build()
-                        chain.proceed(newRequest)
+                addInterceptor { chain ->
+                    val request = chain.request()
+                    if (request.url.host == cdnHost) {
+                        return@addInterceptor chain.proceed(request)
                     }
+                    val newRequest = request.newBuilder().apply {
+                        val xsrfToken = kuroXsrfToken
+                            ?: getCookie("kuro_csrf").also { kuroXsrfToken = it }
+                        if (xsrfToken != null) header("X-Csrf-Token", xsrfToken)
+                    }.build()
+
+                    chain.proceed(newRequest)
                 }
             }
             .rateLimit(2)
@@ -239,6 +242,10 @@ class KuroMangas :
     }
 
     // ============================= Auth ===================================
+    private fun getCookie(cookie: String): String? {
+        val cookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
+        return cookies.firstOrNull { it.name == cookie }?.value?.takeUnless { it.isEmpty() }
+    }
 
     private fun login(email: String, password: String): String {
         val payload = buildJsonObject {
