@@ -68,25 +68,77 @@ function XHRProxy() {
 
 XHRProxy.prototype = XHR.prototype;
 window.XMLHttpRequest = XHRProxy;
+Object.defineProperty(window.XMLHttpRequest, 'name', {
+    value: "XMLHttpRequest"
+});
 
 const interval = window.setInterval;
 window.setInterval = function (callback, delay, ...args) {
   return interval(callback, delay * 0.01, ...args);
 };
 
-Object.defineProperty(window, "setInterval", {
-  value: window.setInterval,
-  writable: false,
-  configurable: false,
-});
-
 const timeout = window.setTimeout;
 window.setTimeout = function (callback, delay, ...args) {
   return timeout(callback, delay * 0.01, ...args);
 };
 
-Object.defineProperty(window, "setTimeout", {
-  value: window.setTimeout,
-  writable: false,
-  configurable: false,
+Object.defineProperty(window.setTimeout, 'name', {
+    value: "setTimeout"
 });
+
+const _Worker = window.Worker;
+
+function WorkerMock(scriptURL, options) {
+  const fakeWorkerInstance = {
+    onmessage: null,
+    onerror: null,
+    postMessage: function (messageData) {
+      const originalSelfPostMessage =
+        typeof self !== "undefined" ? self.postMessage : undefined;
+
+      self.postMessage = (replyData) => {
+        if (fakeWorkerInstance.onmessage) {
+          fakeWorkerInstance.onmessage({ data: replyData });
+        }
+      };
+      const fakeEvent = { data: messageData };
+
+      try {
+        if (typeof self.onmessage === "function") {
+          self.onmessage(fakeEvent);
+        }
+      } catch (err) {
+        if (fakeWorkerInstance.onerror) fakeWorkerInstance.onerror(err);
+      } finally {
+        if (originalSelfPostMessage) self.postMessage = originalSelfPostMessage;
+      }
+    },
+
+    terminate: function () {/* do nothing */ },
+  };
+
+  if (typeof scriptURL === "string" && scriptURL.startsWith("blob:")) {
+
+    ['POST', 'GET'].forEach(method => {
+        const xhr = new XHR();
+        xhr.open(method, scriptURL);
+        xhr.send();
+    })
+
+    const workerScriptText = xhr.responseText;
+
+    try {
+      new Function(workerScriptText)();
+    } catch (_) { /* do nothing */ }
+  }
+
+  return fakeWorkerInstance;
+}
+
+WorkerMock.prototype = _Worker.prototype;
+
+window.Worker = WorkerMock;
+Object.defineProperty(window.Worker, 'name', {
+    value: "Worker"
+});
+

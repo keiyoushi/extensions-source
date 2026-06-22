@@ -19,6 +19,11 @@ internal fun buildThumbnailUrl(cdnUrl: String, path: String): String {
 }
 
 @Serializable
+class SecureDto(
+    @SerialName("_v_secure") val vSecure: String,
+)
+
+@Serializable
 data class MangaListResponse(
     val data: List<MangaDto>,
     val pagination: PaginationDto,

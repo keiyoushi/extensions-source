@@ -5,7 +5,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -15,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
@@ -26,6 +26,7 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.getValue
+import kotlin.time.Duration.Companion.seconds
 
 class Mangainua :
     HttpSource(),
@@ -39,10 +40,11 @@ class Mangainua :
     private val preferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", baseUrl)
+        .add("Origin", "$baseUrl/")
+        .add("Referer", "$baseUrl/")
 
     override val client = network.client.newBuilder()
-        .rateLimit(1, 2)
+        .rateLimit(1, 2.seconds)
         .build()
 
     // ============================== Popular ===============================
@@ -60,7 +62,7 @@ class Mangainua :
 
     override fun searchMangaParse(response: Response) = mangaParse(response, true)
 
-    private fun makeSearchRequest(sortBy: String? = null, page: Int, query: String = "", filters: FilterList = FilterList()): Request {
+    private fun makeSearchRequest(sortBy: String? = null, page: Int, query: String = "", filters: FilterList? = null): Request {
         // Search by title
         if (query.isNotEmpty()) {
             if (query.length < 3) {
@@ -83,33 +85,25 @@ class Mangainua :
 
         // Search by filters
         val url = "$baseUrl/filter".toHttpUrl().newBuilder().apply {
-            val ignoredTagsSettings = ignoreTags()
-            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+            filters?.forEach { filter ->
                 when (filter) {
                     is TagFilter -> {
                         filter.included?.let { addPathSegment("cat=${it.joinToString(",")}") }
-                        filter.excluded?.let {
-                            val filter = when {
-                                ignoredTagsSettings.isNotEmpty() -> (ignoredTagsSettings + it).distinct().joinToString(",")
-                                else -> it.joinToString(",")
-                            }
-                            addPathSegment("!cat=$filter")
-                        } ?: run {
-                            if (ignoredTagsSettings.isNotEmpty()) {
-                                addPathSegment("!cat=${ignoredTagsSettings.joinToString(",")}")
-                            }
-                        }
+                        filter.excluded?.let { addPathSegment("!cat=${it.joinToString(",")}") }
                     }
                     is StatusFilter -> filter.selected?.let { addPathSegment("b.tra=$it") }
                     is CategoriesFilter -> filter.selected?.let { addPathSegment("b.type=$it") }
                     is AgeFilter -> filter.selected?.let { addPathSegment("b.vik=$it") }
                     is SizeFilter -> filter.selected?.let { addPathSegment("c.lastchappr=$it") }
                     is YearsFilter -> filter.selected?.let { addPathSegment("c.yer=$it") }
-                    is SortFilter -> {
-                        addPathSegment("sort=${sortBy ?: filter.selected}")
-                    }
+                    is SortFilter -> addPathSegment("sort=${filter.selected}")
                     else -> {}
                 }
+            }
+            if (filters.isNullOrEmpty()) {
+                val ignoredTagsSettings = ignoreTags()
+                if (ignoredTagsSettings.isNotEmpty()) addPathSegment("!cat=${ignoredTagsSettings.joinToString(",")}")
+                addPathSegment("sort=$sortBy")
             }
             if (page > 1) addPathSegments("page/$page/")
         }.build()
@@ -260,7 +254,7 @@ class Mangainua :
         Filter.Header("Фільтри не застосовуються під час пошуку за назвою"),
         CategoriesFilter(),
         StatusFilter(),
-        TagFilter(),
+        TagFilter(ignoreTags()),
         SortFilter("news_read;desc"),
         SizeFilter(),
         AgeFilter(),

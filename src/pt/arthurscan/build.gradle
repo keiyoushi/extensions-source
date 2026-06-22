@@ -3,7 +3,7 @@ ext {
     extClass = '.ArthurScan'
     themePkg = 'madara'
     baseUrl = 'https://arthurscan.xyz'
-    overrideVersionCode = 6
+    overrideVersionCode = 7
     isNsfw = false
 }
 

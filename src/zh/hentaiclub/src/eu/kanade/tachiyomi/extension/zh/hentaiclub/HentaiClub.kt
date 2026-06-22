@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.hentaiclub
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -18,6 +18,7 @@ import okhttp3.Response
 import rx.Observable
 
 class HentaiClub : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "绅士会所"
     override val baseUrl = "https://www.hentaiclub.net"
@@ -25,7 +26,7 @@ class HentaiClub : HttpSource() {
     override val supportsLatest = false
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

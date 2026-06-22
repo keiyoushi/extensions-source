@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -25,7 +25,8 @@ import uy.kohesive.injekt.api.get
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 class Manhastro :
     HttpSource(),
@@ -44,13 +45,13 @@ class Manhastro :
     private val preferences by getPreferencesLazy()
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(2)
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(30.seconds)
+        .readTimeout(30.seconds)
         .apply {
             val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
             if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
         }
+        .rateLimit(2)
         .build()
 
     private val dataClient = client.newBuilder()
@@ -233,7 +234,7 @@ class Manhastro :
         val request = GET(
             "$apiUrl/dados",
             headers,
-            CacheControl.Builder().maxStale(30, TimeUnit.MINUTES).build(),
+            CacheControl.Builder().maxStale(30.minutes).build(),
         )
         val response = dataClient.newCall(request).execute()
         return response.parseAs<ApiResponse<List<MangaDto>>>(transform = ::cleanJsonResponse).data

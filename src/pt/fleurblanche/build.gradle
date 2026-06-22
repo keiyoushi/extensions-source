@@ -3,7 +3,7 @@ ext {
     extClass = '.FleurBlanche'
     themePkg = 'madara'
     baseUrl = 'https://fbsquadx.com'
-    overrideVersionCode = 4
+    overrideVersionCode = 5
     isNsfw = true
 }
 

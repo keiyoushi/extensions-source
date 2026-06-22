@@ -2,7 +2,7 @@ ext {
     extName = 'Lura Toon'
     extClass = '.LuraToon'
     baseUrl = 'https://luratoons.net'
-    extVersionCode = 58
+    extVersionCode = 59
 }
 
 apply plugin: "kei.plugins.extension.legacy"

@@ -4,4 +4,4 @@ plugins {
     alias(kei.plugins.multisrc)
 }
 
-baseVersionCode = 2
+baseVersionCode = 3

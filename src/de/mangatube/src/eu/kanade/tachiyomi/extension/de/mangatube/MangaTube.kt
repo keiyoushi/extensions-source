@@ -13,7 +13,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
 
 class MangaTube : HttpSource() {
 
@@ -27,9 +27,9 @@ class MangaTube : HttpSource() {
 
     override val client: OkHttpClient by lazy {
         val baseClient = network.client.newBuilder()
-            .connectTimeout(1, TimeUnit.MINUTES)
-            .readTimeout(1, TimeUnit.MINUTES)
-            .writeTimeout(1, TimeUnit.MINUTES)
+            .connectTimeout(1.minutes)
+            .readTimeout(1.minutes)
+            .writeTimeout(1.minutes)
             .build()
 
         baseClient.newBuilder()

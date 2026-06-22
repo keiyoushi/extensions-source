@@ -3,7 +3,7 @@ ext {
     extClass = '.EsMi2Manga'
     themePkg = 'madara'
     baseUrl = 'https://es.mi2manga.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

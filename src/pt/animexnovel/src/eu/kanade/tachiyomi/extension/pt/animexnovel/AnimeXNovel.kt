@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.pt.animexnovel
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,9 +23,10 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import java.util.concurrent.TimeUnit
 import kotlin.collections.map
 import kotlin.collections.plusAssign
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 class AnimeXNovel : HttpSource() {
 
@@ -40,9 +41,9 @@ class AnimeXNovel : HttpSource() {
     override val versionId: Int = 2
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .readTimeout(1, TimeUnit.MINUTES)
-        .callTimeout(1, TimeUnit.MINUTES)
-        .rateLimit(3, 1)
+        .readTimeout(1.minutes)
+        .callTimeout(1.minutes)
+        .rateLimit(3, 1.seconds)
         .build()
 
     // ========================== Popular ===================================

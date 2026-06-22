@@ -44,8 +44,10 @@ class ScanManga :
     ConfigurableSource {
     override val name = "Scan-Manga"
 
-    override val baseUrl = "https://m.scan-manga.com"
-    private val baseImageUrl = "https://static.scan-manga.com/img/manga"
+    private val domain = "scan-manga.com"
+    override val baseUrl = "https://m.$domain"
+    private val baseImageUrl = "https://static.$domain/img/manga"
+    private val baseSearchUrl = "https://bqj.$domain/search/quick.json"
 
     override val lang = "fr"
 
@@ -125,7 +127,7 @@ class ScanManga :
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/api/search/quick.json"
+        val url = baseSearchUrl
             .toHttpUrl().newBuilder()
             .addQueryParameter("term", query)
             .build()

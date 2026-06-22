@@ -320,7 +320,7 @@ abstract class Kagane(
                     null
                 }
         }
-        return dto.toSManga(sourceName, baseUrl, preferences.showEdition, preferences.showSource)
+        return dto.toSManga(apiUrl, sourceName, baseUrl, preferences.showEdition, preferences.showSource)
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request = mangaDetailsRequest(manga.url)

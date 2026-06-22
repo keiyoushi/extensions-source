@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.pt.mangalivre
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -12,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
@@ -19,10 +19,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import kotlin.time.Duration.Companion.seconds
 
 class MangaLivre :
     HttpSource(),
     ConfigurableSource {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name: String = "Manga Livre"
 
@@ -35,7 +37,7 @@ class MangaLivre :
     override val versionId: Int = 2
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2, 1)
+        .rateLimit(2, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     private val apiUrl: String = "$baseUrl/api"

@@ -21,19 +21,14 @@ data class ChapterDto(
     val number: Int,
     val title: String,
     val volume: Int?,
-    @SerialName("manga_id")
-    val mangaId: String,
-    @SerialName("release_date")
+    val mangaId: Int,
     val releaseDate: String,
-    @SerialName("page_count")
     val pageCount: Int,
-    @SerialName("created_at")
-    val createdAt: String = "",
 )
 
 @Serializable
 data class MangaDto(
-    val id: String,
+    val id: Int,
     val title: String,
     val author: String,
     val artist: String,

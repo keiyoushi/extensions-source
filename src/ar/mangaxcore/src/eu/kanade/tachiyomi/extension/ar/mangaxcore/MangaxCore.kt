@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.ar.mangaxcore
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
 
 class MangaxCore :
     Madara(
@@ -10,9 +10,9 @@ class MangaxCore :
         "ar",
     ) {
     override val client = super.client.newBuilder()
-        .connectTimeout(1, TimeUnit.MINUTES)
-        .readTimeout(1, TimeUnit.MINUTES)
-        .callTimeout(2, TimeUnit.MINUTES)
+        .connectTimeout(1.minutes)
+        .readTimeout(1.minutes)
+        .callTimeout(2.minutes)
         .build()
 
     override val mangaSubString = "works"

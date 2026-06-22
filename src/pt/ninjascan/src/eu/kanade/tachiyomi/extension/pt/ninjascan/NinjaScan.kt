@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.extension.pt.ninjascan
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
 
 class NinjaScan :
     Madara(
@@ -14,8 +14,8 @@ class NinjaScan :
         SimpleDateFormat("dd 'de' MMMMM 'de' yyyy", Locale("pt", "BR")),
     ) {
     override val client = super.client.newBuilder()
-        .connectTimeout(5, TimeUnit.MINUTES)
-        .readTimeout(5, TimeUnit.MINUTES)
+        .connectTimeout(5.minutes)
+        .readTimeout(5.minutes)
         .rateLimit(2)
         .build()
 

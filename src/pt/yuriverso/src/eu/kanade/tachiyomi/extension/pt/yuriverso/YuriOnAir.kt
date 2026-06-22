@@ -1,11 +1,11 @@
 package eu.kanade.tachiyomi.extension.pt.yuriverso
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class YuriOnAir :
     Madara(
@@ -19,6 +19,6 @@ class YuriOnAir :
     override val id = 4476506734614164770
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(1, 2.seconds)
         .build()
 }

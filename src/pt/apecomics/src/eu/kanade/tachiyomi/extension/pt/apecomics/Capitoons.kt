@@ -10,13 +10,13 @@ class Capitoons :
     ) {
     override val id: Long = 4475020039832513819
 
-    override fun getOrderFilterOptions() = CapitoonsFilters.orderFilterOptions
+    override fun getOrderFilterOptions() = orderFilterOptions
 
-    override fun getStatusFilterOptions() = CapitoonsFilters.statusFilterOptions
+    override fun getStatusFilterOptions() = statusFilterOptions
 
-    override fun getTypeFilterOptions() = CapitoonsFilters.typeFilterOptions
+    override fun getTypeFilterOptions() = typeFilterOptions
 
-    override fun getGenreFilterOptions() = CapitoonsFilters.genreFilterOptions
+    override fun getGenreFilterOptions() = genreFilterOptions
 
-    override fun getYearFilterOptions() = CapitoonsFilters.yearFilterOptions
+    override fun getYearFilterOptions() = yearFilterOptions
 }

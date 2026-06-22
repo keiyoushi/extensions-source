@@ -27,36 +27,42 @@ class ManhuaRush : HttpSource() {
         headersBuilder().add("RSC", "1").build()
     }
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/collections/all?p=all", headers)
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val mangas = document.select("a.card-link").map { element ->
-            val img = element.selectFirst("img")!!
+        val mangas = document.select("li a.nav-link[href=/ttp-providence]").map { element ->
             SManga.create().apply {
-                url = element.attr("href").substringBefore("?")
-                title = img.attr("alt")
-                thumbnail_url = img.attr("abs:src")
+                url = element.attr("href")
+                title = document.select("footer .footer-tagline strong").text()
+                thumbnail_url = document.select("div[style*=background-image]").attr("style")
+                    .substringAfter("url('")
+                    .substringBefore("'")
+                    .let { "$baseUrl$it" }
             }
         }
 
         return MangasPage(mangas, false)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, rscHeaders)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val dto = response.body.string().extractNextJsRsc<MangaDetailsDto>()
-            ?: throw Exception("Failed to extract manga details")
+        val document = response.asJsoup()
 
-        return dto.toSManga()
+        return SManga.create().apply {
+            title = document.select("h1.manga-title").text()
+            description = document.select(".manga-desc p").text()
+            thumbnail_url = document.select(".cover img").attr("abs:src")
+            genre = document.select(".tag-pill").joinToString { it.text() }
+        }
     }
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, rscHeaders)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val dto = response.body.string().extractNextJsRsc<MangaDetailsDto>()
+        val dto = response.body.string().extractNextJsRsc<ChaptersDto>()
             ?: throw Exception("Failed to extract chapters")
 
         return dto.chapters.map { it.toSChapter(dto.mangadexId) }

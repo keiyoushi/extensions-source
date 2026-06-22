@@ -6,7 +6,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -17,6 +16,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -32,6 +32,7 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class Honeytoon(
     private val language: Language,
@@ -52,7 +53,6 @@ class Honeytoon(
         get() = preferences.getBoolean(PREF_ADULT_KEY, false)
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3, 1)
         .addInterceptor { chain ->
             val fragment = chain.request().url.fragment
             if (fragment != null && fragment.contains("locked")) {
@@ -67,6 +67,7 @@ class Honeytoon(
                 else -> CookieInterceptor(baseUrl.substringAfter("//"), "eighteen" to "0")
             },
         )
+        .rateLimit(3, 1.seconds)
         .build()
 
     private val intl = Intl(

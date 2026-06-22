@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.darthsdroids
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,25 +9,28 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 // Dear Darths & Droids creators:
 // I’m sorry if this extension causes too much traffic for your site.
 // Unfortunately we can’t just download and use your Zip downloads.
 // Shall problems arise, we’ll reduce the rate limit.
 class DarthsDroids : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val name = "Darths & Droids"
     override val baseUrl = "https://www.darthsanddroids.net"
     override val lang = "en"
     override val supportsLatest = false
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 10, 1, TimeUnit.SECONDS)
+        .rateLimit(10, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     // Picks a thumbnail from the profile pictures of the »cast« pages:

@@ -12,7 +12,7 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
 
 class Kaguya :
     Madara(
@@ -23,7 +23,7 @@ class Kaguya :
     ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .readTimeout(1, TimeUnit.MINUTES)
+        .readTimeout(1.minutes)
         .build()
 
     override val id = 1557304490417397104

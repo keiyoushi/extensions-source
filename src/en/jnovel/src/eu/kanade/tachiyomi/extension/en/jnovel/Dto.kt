@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.jnovel
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
@@ -119,4 +120,9 @@ class Time(
 @Serializable
 class Rental(
     val expiresAt: Time?,
+)
+
+@Serializable
+class Manifest(
+    @SerialName("e4p-manifest") val e4pManifest: String,
 )

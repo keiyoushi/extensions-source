@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.codearc
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,14 +8,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class CodeArc : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "Code Arc Mangas"
     override val baseUrl = "https://mangas.codearctraducciones.com"
@@ -24,10 +25,10 @@ class CodeArc : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
-        .rateLimitHost("https://cdn.codearctraducciones.com".toHttpUrl(), 1, 1)
+        .connectTimeout(15.seconds)
+        .readTimeout(30.seconds)
+        .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
+        .rateLimit(1, 1.seconds) { it.host == "cdn.codearctraducciones.com" }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -196,13 +197,24 @@ class CodeArc : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
-        val readerData = response.extractNextJs<ReaderDto>()
-        if (readerData != null && readerData.pages.isNotEmpty()) {
-            return readerData.pages.mapIndexed { index, page ->
-                Page(index, imageUrl = page.imagenUrl)
+        val readerData = response.extractNextJs<ReaderDto>() ?: return emptyList()
+        val pages = readerData.initialPages.toMutableList()
+        val pagesFetchUrl = baseUrl.toHttpUrl().resolve(readerData.pagesFetchUrl) ?: return emptyList()
+
+        while (pages.size < readerData.totalPages) {
+            val url = pagesFetchUrl.newBuilder()
+                .setQueryParameter("offset", pages.size.toString())
+                .build()
+            val newPages = client.newCall(GET(url, headers)).execute().use { apiResponse ->
+                apiResponse.parseAs<ReaderPagesDto>().items
             }
+            if (newPages.isEmpty()) break
+            pages += newPages
         }
-        return emptyList()
+
+        return pages.mapIndexed { index, page ->
+            Page(index, imageUrl = page.imagenUrl)
+        }
     }
 
     override fun getFilterList(): FilterList = getFilters()

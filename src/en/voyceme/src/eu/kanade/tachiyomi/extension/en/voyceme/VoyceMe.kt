@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.extension.en.voyceme
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.graphQLPost
 import keiyoushi.utils.parseGraphQLAs
 import okhttp3.Headers
@@ -15,9 +15,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class VoyceMe : HttpSource() {
+    private val graphqlurlHost by lazy { GRAPHQL_URL.toHttpUrl().host }
+    private val staticurlHost by lazy { STATIC_URL.toHttpUrl().host }
 
     // Renamed from "Voyce.Me" to "VoyceMe" as the site uses.
     override val id = 4815322300278778429
@@ -31,8 +33,8 @@ class VoyceMe : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimitHost(GRAPHQL_URL.toHttpUrl(), 1, 1, TimeUnit.SECONDS)
-        .rateLimitHost(STATIC_URL.toHttpUrl(), 2, 1, TimeUnit.SECONDS)
+        .rateLimit(1, 1.seconds) { it.host == graphqlurlHost }
+        .rateLimit(2, 1.seconds) { it.host == staticurlHost }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

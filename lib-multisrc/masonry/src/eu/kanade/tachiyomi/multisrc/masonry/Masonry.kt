@@ -8,21 +8,20 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import java.lang.UnsupportedOperationException
 
 abstract class Masonry(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-) : ParsedHttpSource() {
+) : HttpSource() {
 
     override val supportsLatest = true
 
@@ -35,43 +34,39 @@ abstract class Masonry(
             2 -> "$baseUrl/archive/"
             else -> "$baseUrl/archive/page/${page - 1}/"
         }
-
         return GET(url, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
         getTags()
-        return super.popularMangaParse(response)
-    }
-
-    override fun popularMangaSelector() = ".list-gallery:not(.static) figure:not(:has(a[href*=/video/]))"
-    override fun popularMangaNextPageSelector() = ".pagination-a li.next"
-
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        element.selectFirst("a")!!.also {
-            setUrlWithoutDomain(it.absUrl("href"))
-            title = it.attr("title")
-        }
-        thumbnail_url = element.selectFirst("img")?.imgAttr()
+        val document = response.asJsoup()
+        val mangas = document.select(".list-gallery:not(.static) figure:not(:has(a[href*=/video/]))")
+            .map { element ->
+                SManga.create().apply {
+                    element.selectFirst("a")!!.also {
+                        setUrlWithoutDomain(it.absUrl("href"))
+                        title = it.attr("title")
+                    }
+                    thumbnail_url = element.selectFirst("img")?.imgAttr()
+                }
+            }
+        val hasNextPage = document.selectFirst(".pagination-a li.next") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/updates/sort/newest/mpage/$page/", headers)
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-    override fun latestUpdatesSelector() = popularMangaSelector()
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isNotEmpty()) {
         val url = "$baseUrl/search/post/".toHttpUrl().newBuilder()
             .addPathSegment(query.trim())
             .addEncodedPathSegments("mpage/$page/")
             .build()
-
         GET(url, headers)
     } else {
-        val tagFilter = filters.filterIsInstance<TagFilter>().firstOrNull()
-        val sortFilter = filters.filterIsInstance<SortFilter>().first()
+        val tagFilter = filters.firstInstanceOrNull<TagFilter>()
+        val sortFilter = filters.firstInstanceOrNull<SortFilter>()!!
 
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             if (tagFilter == null || tagFilter.selected == "") {
@@ -100,6 +95,8 @@ abstract class Masonry(
 
         GET(url, headers)
     }
+
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     private var tags = emptyList<Pair<String, String>>()
     private var tagsFetchAttempt = 0
@@ -143,20 +140,18 @@ abstract class Masonry(
         return FilterList(filters)
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
-    override fun searchMangaSelector() = popularMangaSelector()
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        document.selectFirst("p.link-btn")?.run {
-            artist = select("a[href*=/model/]").eachText().joinToString()
-            genre = select("a[href*=/tag/]").eachText().joinToString()
-            author = selectFirst("a")?.text()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            document.selectFirst("p.link-btn")?.run {
+                artist = select("a[href*=/model/]").eachText().joinToString()
+                genre = select("a[href*=/tag/]").eachText().joinToString()
+                author = selectFirst("a")?.text()
+            }
+            description = document.selectFirst("#content > p")?.text()
+            status = SManga.COMPLETED
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
-        description = document.selectFirst("#content > p")?.text()
-        status = SManga.COMPLETED
-        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
@@ -168,14 +163,16 @@ abstract class Masonry(
         ),
     )
 
-    override fun chapterListSelector() = throw UnsupportedOperationException()
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document): List<Page> = document.select(".list-gallery a[href^=https://cdn.]").mapIndexed { idx, img ->
-        Page(idx, imageUrl = img.absUrl("href"))
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select(".list-gallery a[href^=https://cdn.]").mapIndexed { idx, img ->
+            Page(idx, imageUrl = img.absUrl("href"))
+        }
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     protected fun Element.imgAttr(): String? = when {
         hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")

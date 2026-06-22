@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -30,7 +31,7 @@ class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
             if (page > 1) addQueryParameter("page", page.toString())
             if (query.isNotBlank()) addQueryParameter("title", query)
-            (filters.firstOrNull { it is GenreList } as? GenreList)?.state
+            filters.firstInstanceOrNull<GenreList>()?.state
                 ?.filter { it.state }
                 ?.forEach { addQueryParameter("genre", it.id) }
         }.build()
@@ -71,8 +72,8 @@ class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
         return (1..data.numberOfPages).mapIndexed { i, page ->
             Page(
                 i,
-                document.location(),
-                "$baseUrl/storage/series/webtoon/$seriesID/chapters/$chapterID/${page.toString().padStart(3, '0')}.jpg",
+                url = document.location(),
+                imageUrl = "$baseUrl/storage/series/webtoon/$seriesID/chapters/$chapterID/${page.toString().padStart(3, '0')}.jpg",
             )
         }
     }

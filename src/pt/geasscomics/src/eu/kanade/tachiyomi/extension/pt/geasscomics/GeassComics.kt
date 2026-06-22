@@ -9,7 +9,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -18,6 +17,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -58,7 +58,6 @@ class GeassComics :
 
     override val client: OkHttpClient by lazy {
         network.client.newBuilder()
-            .rateLimit(2)
             .addInterceptor { chain ->
                 val request = chain.request()
                 val token = getToken()
@@ -71,6 +70,7 @@ class GeassComics :
                 }
                 chain.proceed(newRequest)
             }
+            .rateLimit(2)
             .build()
     }
 

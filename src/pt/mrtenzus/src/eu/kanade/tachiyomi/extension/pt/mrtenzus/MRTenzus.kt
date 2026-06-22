@@ -1,11 +1,11 @@
 package eu.kanade.tachiyomi.extension.pt.mrtenzus
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class MRTenzus :
     Madara(
@@ -16,7 +16,7 @@ class MRTenzus :
     ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(3, 1, TimeUnit.SECONDS)
+        .rateLimit(3, 1.seconds)
         .build()
 
     override val useNewChapterEndpoint = true

@@ -238,13 +238,19 @@ abstract class Madara(
     }
 
     // load more
-    protected fun loadMoreRequest(page: Int, popular: Boolean): Request {
+    protected open fun loadMoreRequest(page: Int, popular: Boolean): Request {
         val formBody = FormBody.Builder().apply {
             add("action", "madara_load_more")
             add("page", (page - 1).toString())
             add("template", "madara-core/content/content-archive")
             add("vars[orderby]", "meta_value_num")
             add("vars[paged]", "1")
+
+            if (filterNonMangaItems) {
+                add("vars[meta_query][0][key]", "_wp_manga_chapter_type")
+                add("vars[meta_query][0][value]", "manga")
+            }
+
             add("vars[post_type]", "wp-manga")
             add("vars[post_status]", "publish")
             add("vars[meta_key]", if (popular) "_wp_manga_views" else "_latest_update")

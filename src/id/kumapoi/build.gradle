@@ -3,7 +3,7 @@ ext {
     extClass = '.KumaPoi'
     themePkg = 'mangathemesia'
     baseUrl = 'https://kumapoi.info'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = true
 }
 

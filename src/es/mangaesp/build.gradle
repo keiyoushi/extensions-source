@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaEsp'
     themePkg = 'mangathemesia'
     baseUrl = 'https://mangaesp.topmanhuas.org'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 

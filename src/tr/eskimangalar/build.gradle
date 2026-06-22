@@ -1,0 +1,9 @@
+ext {
+    extName = 'Eski Mangalar'
+    extClass = '.EskiMangalar'
+    themePkg = 'uzaymanga'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

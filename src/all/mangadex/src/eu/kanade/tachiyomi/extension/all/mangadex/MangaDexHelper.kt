@@ -47,7 +47,7 @@ import okhttp3.Request
 import org.jsoup.parser.Parser
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class MangaDexHelper(lang: String) {
 
@@ -195,7 +195,7 @@ class MangaDexHelper(lang: String) {
 
     companion object {
         val USE_CACHE = CacheControl.Builder()
-            .maxStale(Integer.MAX_VALUE, TimeUnit.SECONDS)
+            .maxStale(Int.MAX_VALUE.seconds)
             .build()
 
         val markdownLinksRegex = "\\[([^]]+)\\]\\(([^)]+)\\)".toRegex()

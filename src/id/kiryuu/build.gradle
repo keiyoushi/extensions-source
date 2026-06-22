@@ -2,9 +2,9 @@ ext {
     extName = 'Kiryuu'
     extClass = '.Kiryuu'
     themePkg = 'natsuid'
-    baseUrl = 'https://v5.kiryuu.to'
-    overrideVersionCode = 49
-    isNsfw = false
+    baseUrl = 'https://v6.kiryuu.to'
+    overrideVersionCode = 51
+    isNsfw = true
 }
 
 apply plugin: "kei.plugins.extension.legacy"

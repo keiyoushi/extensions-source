@@ -21,7 +21,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.net.URLDecoder
 import java.text.SimpleDateFormat
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
 
 abstract class ToomicsGlobal(
     private val siteLang: String,
@@ -37,9 +37,9 @@ abstract class ToomicsGlobal(
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .connectTimeout(1, TimeUnit.MINUTES)
-        .readTimeout(1, TimeUnit.MINUTES)
-        .writeTimeout(1, TimeUnit.MINUTES)
+        .connectTimeout(1.minutes)
+        .readTimeout(1.minutes)
+        .writeTimeout(1.minutes)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

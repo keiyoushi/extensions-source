@@ -3,7 +3,7 @@ ext {
     extClass = '.DatGarScanlation'
     themePkg = 'zeistmanga'
     baseUrl = 'https://datgarscanlation.blogspot.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 

@@ -1,0 +1,10 @@
+ext {
+    extName = "HERO'S Web"
+    extClass = ".HerosWeb"
+    themePkg = 'comiciviewer'
+    baseUrl = "https://heros-web.com"
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"

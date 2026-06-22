@@ -118,12 +118,23 @@ class PhiliaScans :
 
         val isScrambled = if (result.chapter.scrambled) "1" else "0"
         val pageKeyResponse = client.newCall(GET("$apiUrl/chapters/${result.chapter.id}/page-keys", readerHeaders)).execute().parseAs<PageKeys>()
-        val openResponse = client.newCall(POST("$apiUrl/chapters/${result.chapter.id}/open", readerHeaders)).execute().parseAs<OpenResponse>()
-        val drmResponse = client.newCall(GET("$apiUrl/chapters/${result.chapter.id}/get-drm?session=${openResponse.sessionId}", readerHeaders)).execute().parseAs<DrmResponse>()
+        val (payloadA, payloadB) = if (pageKeyResponse.sessionDefault) {
+            val openResponse = client.newCall(POST("$apiUrl/chapters/${result.chapter.id}/open", readerHeaders)).execute().parseAs<OpenResponse>()
+            val drmCall = client.newCall(GET("$apiUrl/chapters/${result.chapter.id}/get-drm?session=${openResponse.sessionId}", readerHeaders)).execute()
+            val drmResponse = if (drmCall.isSuccessful) {
+                drmCall.parseAs<DrmResponse>()
+            } else {
+                drmCall.close()
+                null
+            }
+            openResponse.payloadA to drmResponse?.payloadB
+        } else {
+            null to null
+        }
 
         return result.chapter.pages.sortedBy { it.position }.mapIndexed { i, page ->
             val imageUrl = if (page.url.startsWith("http")) page.url else "$baseUrl/${page.url}"
-            Page(i, imageUrl = "$imageUrl#$isScrambled;${page.mime};${pageKeyResponse.chapterKeyB64};${pageKeyResponse.gridSize};${openResponse.payloadA};${drmResponse.payloadB};$i")
+            Page(i, imageUrl = "$imageUrl#$isScrambled;${page.mime};${pageKeyResponse.chapterKeyB64};${pageKeyResponse.gridSize};$payloadA;$payloadB;$i")
         }
     }
 

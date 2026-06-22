@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.readerstore
 
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
+import keiyoushi.utils.readIntLittleEndian
+import keiyoushi.utils.writeIntLittleEndian
 
 class Decoder {
     private val schedule = IntArray(SCHEDULE_SIZE)
@@ -156,17 +156,14 @@ class Decoder {
     }
 
     private fun ByteArray.toLeIntArray(): IntArray {
-        val result = IntArray((size + 3) / 4)
-        val buffer = ByteBuffer.wrap(copyOf(result.size * 4)).order(ByteOrder.LITTLE_ENDIAN)
-        for (i in result.indices) result[i] = buffer.int
-        return result
+        val padded = copyOf((size + 3) / 4 * 4)
+        return IntArray(padded.size / 4) { padded.readIntLittleEndian(it * 4) }
     }
 
     private fun IntArray.toLeByteArray(byteSize: Int): ByteArray {
         val result = ByteArray(byteSize)
         val full = byteSize / 4
-        val buffer = ByteBuffer.wrap(result).order(ByteOrder.LITTLE_ENDIAN)
-        for (i in 0 until full) buffer.putInt(this[i])
+        for (i in 0 until full) result.writeIntLittleEndian(i * 4, this[i])
         val rem = byteSize and 3
         if (rem != 0) {
             val last = this[full]

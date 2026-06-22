@@ -1,11 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.blackoutcomics
 
-import android.content.SharedPreferences
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,11 +9,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Cookie
-import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -27,9 +20,7 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class BlackoutComics :
-    HttpSource(),
-    ConfigurableSource {
+class BlackoutComics : HttpSource() {
 
     override val name = "Blackout Comics"
 
@@ -39,9 +30,7 @@ class BlackoutComics :
 
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences by getPreferencesLazy()
-
-    private var loginState = LoginState.UNCHECKED
+    private val baseHttpUrl = baseUrl.toHttpUrl()
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::ageGateInterceptor)
@@ -51,6 +40,11 @@ class BlackoutComics :
         .add("DNT", "1")
         .add("Sec-GPC", "1")
         .add("Upgrade-Insecure-Requests", "1")
+        .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+        .add("Accept-Language", "pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3")
+        .add("Sec-Fetch-Dest", "document")
+        .add("Sec-Fetch-Mode", "navigate")
+        .add("Sec-Fetch-Site", "same-origin")
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ranking", headers)
@@ -60,7 +54,7 @@ class BlackoutComics :
         val mangas = doc.select(".ranking-grid a.webtoon-card").map { el ->
             SManga.create().apply {
                 setUrlWithoutDomain(el.attr("abs:href"))
-                title = el.select(".card-title span").text().trim()
+                title = el.select(".card-title span").text()
                 thumbnail_url = el.select(".card-thumb img").attr("abs:src")
             }
         }
@@ -75,7 +69,7 @@ class BlackoutComics :
         val mangas = doc.select(".webtoon-grid a.webtoon-card").map { el ->
             SManga.create().apply {
                 setUrlWithoutDomain(el.attr("abs:href"))
-                title = el.select(".card-title span").text().trim()
+                title = el.select(".card-title span").text()
                 thumbnail_url = el.select(".card-thumb img").attr("abs:src")
             }
         }
@@ -105,20 +99,14 @@ class BlackoutComics :
 
     override fun searchMangaParse(response: Response): MangasPage = if (response.request.url.queryParameter("format") == "json") {
         val searchResponse = response.parseAs<SearchResponse>()
-        val mangas = searchResponse.items.map { item ->
-            SManga.create().apply {
-                title = item.name
-                url = "/comics/${item.id}"
-                thumbnail_url = item.imgUrl ?: ("$baseUrl/" + item.imgPr)
-            }
-        }
+        val mangas = searchResponse.items.map { it.toSManga(baseUrl) }
         MangasPage(mangas, false)
     } else {
         val doc = response.asJsoup()
         val mangas = doc.select(".webtoon-grid a.webtoon-card").map { el ->
             SManga.create().apply {
                 setUrlWithoutDomain(el.attr("abs:href"))
-                title = el.select(".card-title span").text().trim()
+                title = el.select(".card-title span").text()
                 thumbnail_url = el.select(".card-thumb img").attr("abs:src")
             }
         }
@@ -129,12 +117,12 @@ class BlackoutComics :
     override fun mangaDetailsParse(response: Response): SManga {
         val doc = response.asJsoup()
         return SManga.create().apply {
-            title = doc.select(".project-title").text().trim()
+            title = doc.select(".project-title").text()
             thumbnail_url = doc.select(".project-cover").attr("abs:src")
-            author = doc.select(".quick-info-item:has(.fa-pen-nib) strong").text().trim()
-            artist = doc.select(".quick-info-item:has(.fa-palette) strong").text().trim()
-            description = doc.select(".project-description").text().trim()
-            genre = doc.select(".project-genres .genre-tag").joinToString { it.text().trim() }
+            author = doc.select(".quick-info-item:has(.fa-pen-nib) strong").text()
+            artist = doc.select(".quick-info-item:has(.fa-palette) strong").text()
+            description = doc.select(".project-description").text()
+            genre = doc.select(".project-genres .genre-tag").joinToString { it.text() }
 
             val statusText = doc.select(".status-pill").text().lowercase()
             status = when {
@@ -153,7 +141,7 @@ class BlackoutComics :
         return doc.select("#tab-capitulos-list .normal_ep").map { el ->
             SChapter.create().apply {
                 val linkElement = el.selectFirst("a[href]")
-                val num = el.select(".num").text().trim()
+                val num = el.select(".num").text()
 
                 if (linkElement != null) {
                     setUrlWithoutDomain(linkElement.attr("abs:href"))
@@ -162,45 +150,48 @@ class BlackoutComics :
                 }
 
                 var chapterName = "Capítulo $num"
-                val title = el.select(".cell-title strong.line-3").text().trim()
+                val title = el.select(".cell-title strong.line-3").text()
                 if (title.isNotEmpty()) {
                     chapterName += " - $title"
                 }
                 name = chapterName
 
-                date_upload = dateFormat.tryParse(el.select(".cell-num .text-muted").text().trim())
+                date_upload = dateFormat.tryParse(el.select(".cell-num .text-muted").text())
             }
         }
     }
 
     // =============================== Pages ================================
-    override fun pageListRequest(chapter: SChapter): Request {
-        ensureLoggedIn()
-        return super.pageListRequest(chapter)
-    }
-
     override fun pageListParse(response: Response): List<Page> {
-        val html = response.body.string()
+        val doc = response.asJsoup()
 
-        val scriptMatch = Regex("""S\s*=\s*(\[.*?\])""").find(html)
-        if (scriptMatch == null) {
-            if (html.contains("showLoginModal()")) {
-                throw Exception("Faça login nas configurações da extensão para ler os capítulos.")
+        for (script in doc.select("script:not([src])")) {
+            val match = PAGE_LIST_REGEX.find(script.html()) ?: continue
+            val urls = match.groupValues[1].parseAs<List<String>>()
+            return urls.mapIndexed { i, url ->
+                Page(i, imageUrl = if (url.startsWith("http")) url else "$baseUrl$url")
             }
-            throw Exception("Nenhuma página encontrada ou estrutura do site foi alterada.")
         }
 
-        val jsonString = scriptMatch.groupValues[1]
-        val urls = jsonString.parseAs<List<String>>()
-
-        return urls.mapIndexed { i, url ->
-            Page(i, imageUrl = url)
+        if (doc.html().contains("showLoginModal()")) {
+            throw Exception(
+                "Necessário fazer login. Abra o site no WebView (ícone de navegador " +
+                    "no canto superior direito), faça login com sua conta e tente novamente.",
+            )
         }
+        throw Exception("Nenhuma página encontrada ou estrutura do site foi alterada.")
     }
 
     override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
-        .removeHeader("Referer") // Images will 403 Forbidden/Fail if the Referer is present.
-        .header("Accept", "image/*")
+        .removeHeader("Referer")
+        .removeHeader("Upgrade-Insecure-Requests")
+        .removeHeader("Sec-Fetch-Dest")
+        .removeHeader("Sec-Fetch-Mode")
+        .removeHeader("Sec-Fetch-Site")
+        .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+        .header("Sec-Fetch-Dest", "image")
+        .header("Sec-Fetch-Mode", "no-cors")
+        .header("Sec-Fetch-Site", "same-origin")
         .build()
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -211,40 +202,12 @@ class BlackoutComics :
         GenreFilter(),
     )
 
-    // ============================= Preferences ============================
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val emailPref = EditTextPreference(screen.context).apply {
-            key = PREF_EMAIL_KEY
-            title = "Email de Login"
-            summary = "Email para acessar capítulos restritos"
-            dialogTitle = "Email"
-            setDefaultValue("")
-            setOnPreferenceChangeListener { _, _ ->
-                loginState = LoginState.UNCHECKED
-                true
-            }
-        }
-        val passPref = EditTextPreference(screen.context).apply {
-            key = PREF_PASSWORD_KEY
-            title = "Senha"
-            summary = "Senha da sua conta"
-            dialogTitle = "Senha"
-            setDefaultValue("")
-            setOnPreferenceChangeListener { _, _ ->
-                loginState = LoginState.UNCHECKED
-                true
-            }
-        }
-        screen.addPreference(emailPref)
-        screen.addPreference(passPref)
-    }
-
     // ============================== Utilities =============================
     private fun ageGateInterceptor(chain: Interceptor.Chain): Response {
         val original = chain.request()
         val url = original.url
 
-        if (url.host == baseUrl.toHttpUrl().host) {
+        if (url.host == baseHttpUrl.host) {
             val cookies = client.cookieJar.loadForRequest(url)
             if (cookies.none { it.name == "age_gate_consent" }) {
                 val ageCookie = Cookie.Builder()
@@ -267,58 +230,9 @@ class BlackoutComics :
         return chain.proceed(original)
     }
 
-    private fun ensureLoggedIn() {
-        val email = preferences.getString(PREF_EMAIL_KEY, "") ?: ""
-        val password = preferences.getString(PREF_PASSWORD_KEY, "") ?: ""
-
-        if (email.isBlank() || password.isBlank()) {
-            throw Exception("Por favor, insira suas credenciais (Email e Senha) nas configurações da extensão para ler os capítulos.")
-        }
-
-        if (loginState == LoginState.LOGGED_IN) return
-
-        synchronized(this) {
-            if (loginState == LoginState.LOGGED_IN) return
-
-            val initRes = client.newCall(GET(baseUrl, headers)).execute()
-            val initDoc = initRes.asJsoup()
-            val csrfToken = initDoc.select("meta[name=csrf-token]").attr("content")
-
-            if (csrfToken.isEmpty()) {
-                throw Exception("Não foi possível encontrar o token de sessão CSRF.")
-            }
-
-            val formBody = FormBody.Builder()
-                .add("_token", csrfToken)
-                .add("USE_EMAIL", email)
-                .add("password", password)
-                .build()
-
-            val loginHeaders = headersBuilder()
-                .add("X-CSRF-TOKEN", csrfToken)
-                .add("X-Requested-With", "XMLHttpRequest")
-                .add("Origin", baseUrl)
-                .add("Referer", "$baseUrl/")
-                .build()
-
-            val loginRes = client.newCall(POST("$baseUrl/entrar", loginHeaders, formBody)).execute()
-            val loginBody = loginRes.body.string()
-
-            if (loginBody.contains("sucesso", true) || loginRes.isSuccessful) {
-                loginState = LoginState.LOGGED_IN
-            } else {
-                loginState = LoginState.FAILED
-                throw Exception("Falha no login. Verifique suas credenciais nas configurações.")
-            }
-        }
-    }
-
-    private enum class LoginState { UNCHECKED, LOGGED_IN, FAILED }
-
     companion object {
-        private const val PREF_EMAIL_KEY = "pref_email"
-        private const val PREF_PASSWORD_KEY = "pref_password"
-
         private val dateFormat = SimpleDateFormat("dd.MM.yy", Locale.ROOT)
+
+        private val PAGE_LIST_REGEX = Regex("""S\s*=\s*(\[[\s\S]*?])""")
     }
 }

@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.vi.mimihentai
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonObject
@@ -25,9 +25,10 @@ import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
 import java.io.IOException
 import java.util.Calendar
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
 
 class MiMiHentai : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val name = "MiMiHentai"
 
@@ -41,7 +42,6 @@ class MiMiHentai : HttpSource() {
         .add("Referer", "$baseUrl/")
 
     override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 14, 1, TimeUnit.MINUTES)
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -68,6 +68,7 @@ class MiMiHentai : HttpSource() {
             }
             response
         }
+        .rateLimit(14, 1.minutes) { it.host == baseUrlHost }
         .build()
 
     // ============================== Popular ===============================

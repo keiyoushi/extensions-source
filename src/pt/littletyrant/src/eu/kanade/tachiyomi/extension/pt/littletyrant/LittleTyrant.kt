@@ -1,21 +1,25 @@
 package eu.kanade.tachiyomi.extension.pt.littletyrant
 
-import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import okhttp3.FormBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class LittleTyrant :
     Madara(
@@ -24,17 +28,19 @@ class LittleTyrant :
         "pt-BR",
         dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("pt", "BR")),
     ) {
-    override val client = super.client.newBuilder()
-        .rateLimit(3, 1)
+
+    override val client: OkHttpClient = network.client.newBuilder()
+        .rateLimit(3, 1.seconds)
         .build()
+
+    private val decoder by lazy { Decoder() }
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     // =============================== Popular =================================
 
-    override fun popularMangaSelector() = ".manga-grid .littletyrant-archive-item"
-
-    override val popularMangaUrlSelector = ".card-littletyrant a"
+    override fun popularMangaSelector() = "[id*=manga-item-]"
+    override val popularMangaUrlSelector = ".card-title a"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         title = element.selectFirst("h3")!!.text()
@@ -44,11 +50,16 @@ class LittleTyrant :
 
     // =============================== Details =================================
 
-    override val mangaDetailsSelectorGenre = ".manga-pills-minimal a"
-    override val mangaDetailsSelectorDescription = ".manga-summary-premium p"
-    override val mangaDetailsSelectorAuthor = ".manga-attributes-grid span:contains(AUTOR) + span"
-    override val mangaDetailsSelectorArtist = ".manga-attributes-grid span:contains(ARTISTA) + span"
-    override val mangaDetailsSelectorStatus = ".manga-attributes-grid span:contains(STATUS) + span"
+    override val mangaDetailsSelectorGenre = ".mc-genres-pills a"
+    override val mangaDetailsSelectorDescription = ".mc-description-box"
+    override val mangaDetailsSelectorAuthor = ".mc-meta-grid .attr-item:has(.attr-label:contains(AUTOR)) .attr-value"
+    override val mangaDetailsSelectorArtist = ".mc-meta-grid .attr-item:has(.attr-label:contains(ARTISTA)) .attr-value"
+    override val mangaDetailsSelectorStatus = ".mc-meta-grid .attr-item:has(.attr-label:contains(STATUS)) .attr-value"
+
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+        author = author?.replace(COMMA_REGEX, ", ")?.takeUnless { it.contains("---") }
+        artist = artist?.replace(COMMA_REGEX, ", ")?.takeUnless { it.contains("---") }
+    }
 
     // =============================== Chapters =================================
 
@@ -74,32 +85,42 @@ class LittleTyrant :
     }
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        name = element.selectFirst(".chapter-name")!!.text()
-        date_upload = dateFormat.tryParse(element.selectFirst(".chapter-release-date")?.text())
+        name = element.selectFirst("span.mc-chapter-title")!!.text()
+        date_upload = parseChapterDate(element.selectFirst(".mc-chapter-date")?.text())
         // The source chapter list is out of order, so extract the number here for later sorting
-        CHAPTER_NUMBER_REGEX.find(name)?.groupValues?.last()?.let {
-            chapter_number = it.toFloat()
+        CHAPTER_NUMBER_REGEX.find(name)?.groupValues?.last()?.toFloatOrNull()?.let {
+            chapter_number = it
         }
-        setUrlWithoutDomain(element.selectFirst(".chapter-card-link")!!.absUrl("href"))
+        setUrlWithoutDomain(element.selectFirst("a.mc-chapter-link")!!.absUrl("href"))
     }
 
     // =============================== Pages =================================
 
-    private val b64Pages = Regex("""var pages = \[(.*?)\];""")
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
+        .asObservableSuccess()
+        .map { response ->
+            val doc = response.asJsoup()
+            launchIO { countViews(doc) }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val doc = response.asJsoup()
-        launchIO { countViews(doc) }
+            decoder.extractPaths(doc).mapIndexed { idx, url ->
+                Page(idx, imageUrl = url)
+            }
+        }
 
-        val match = b64Pages.find(doc.select("script").joinToString("\n") { it.data() })
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
-        return match?.groupValues?.get(1)?.split(",")?.mapIndexed { i, it ->
-            val imageUrl = String(Base64.decode(it.trim().trim('\''), Base64.DEFAULT))
-            Page(i, imageUrl = imageUrl)
-        } ?: emptyList()
+    // =============================== Images =================================
+
+    override fun imageRequest(page: Page): Request {
+        val imageHeaders = headers.newBuilder()
+            .set("Accept", "image/webp,image/*,*/*")
+            .set("Referer", "$baseUrl/")
+            .build()
+        return GET(page.imageUrl!!, imageHeaders)
     }
 
     companion object {
         private val CHAPTER_NUMBER_REGEX = """\d+(?:\.\d+)?""".toRegex()
+        private val COMMA_REGEX = """,\s*""".toRegex()
     }
 }
