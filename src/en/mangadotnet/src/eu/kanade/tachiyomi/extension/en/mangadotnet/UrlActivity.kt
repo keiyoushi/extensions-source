@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.mangadotnet
 
 import android.app.Activity
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -10,17 +9,22 @@ import kotlin.system.exitProcess
 class UrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val intentData = intent?.data?.toString()
 
-        val mainIntent = Intent().apply {
-            action = "eu.kanade.tachiyomi.SEARCH"
-            putExtra("query", intent.data.toString())
-            putExtra("filter", packageName)
-        }
+        if (intentData != null) {
+            val mainIntent = Intent().apply {
+                action = "eu.kanade.tachiyomi.SEARCH"
+                putExtra("query", intentData)
+                putExtra("filter", packageName)
+            }
 
-        try {
-            startActivity(mainIntent)
-        } catch (e: ActivityNotFoundException) {
-            Log.e("Mangadotnet", "Unable to launch activity", e)
+            try {
+                startActivity(mainIntent)
+            } catch (e: Throwable) {
+                Log.e("Mangadotnet", e.toString())
+            }
+        } else {
+            Log.e("Mangadotnet", "could not parse uri from intent $intent")
         }
 
         finish()

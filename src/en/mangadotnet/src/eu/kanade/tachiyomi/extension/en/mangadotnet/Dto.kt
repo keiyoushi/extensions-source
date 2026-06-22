@@ -13,7 +13,6 @@ import kotlinx.serialization.json.JsonTransformingSerializer
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.serializer
-import kotlin.collections.emptyMap
 import kotlin.math.roundToInt
 
 @Serializable
@@ -153,6 +152,11 @@ class Manga(
     private val authors: String? = null,
     private val artists: String? = null,
 ) {
+    companion object {
+        private val multipleNewlinesRegex = Regex("\n{3,}")
+        private val listRegex = Regex("\n\n(-|•|\\d+\\.)")
+    }
+
     fun toSManga(baseUrl: String) = SManga.create().apply {
         url = id.toString()
         title = this@Manga.title
@@ -211,8 +215,8 @@ class Manga(
             this@Manga.description?.let {
                 append(
                     it.replace("\r\n", "\n")
-                        .replace(Regex("\n{3,}"), "\n\n")
-                        .replace(Regex("\n\n(-|•|\\d+\\.)"), "\n$1")
+                        .replace(multipleNewlinesRegex, "\n\n")
+                        .replace(listRegex, "\n$1")
                         .trim(),
                     "\n\n",
                 )

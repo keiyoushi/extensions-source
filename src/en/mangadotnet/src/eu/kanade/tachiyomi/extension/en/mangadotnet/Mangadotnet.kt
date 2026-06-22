@@ -39,6 +39,7 @@ import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.internal.closeQuietly
@@ -205,9 +206,11 @@ class Mangadotnet :
             return super.fetchSearchManga(page, "", FilterList(newFilters))
         }
         if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
+            val url = query.toHttpUrlOrNull()
             if (
+                url != null &&
                 (url.host == baseUrl.toHttpUrl().host) &&
+                url.pathSize > 1 &&
                 (url.pathSegments[0] in listOf("manga", "chapter"))
             ) {
                 return if (url.pathSegments[0] == "manga") {
@@ -390,7 +393,7 @@ class Mangadotnet :
                         .map { volume ->
                             SChapter.create().apply {
                                 url = ChapterUrl(volume.id.toString(), volume.source, true).toJsonString()
-                                name = "Volume ${(volume.volume ?: 0f).toString().substringBefore(".0")}"
+                                name = "Volume ${(volume.volume ?: 0f).toString().removeSuffix(".0")}"
                                 chapter_number = 0f
                                 scanlator = (volume.group ?: volume.scanlator)?.takeIf { it.isNotBlank() }
                                 date_upload = dateFormat.tryParse(volume.date?.substringBefore("+"))
@@ -471,7 +474,7 @@ class Mangadotnet :
                 SChapter.create().apply {
                     url = ChapterUrl(chapter.id.toString(), chapter.source, false).toJsonString()
                     name = buildString {
-                        val number = chapter.number?.toString()?.substringBefore(".0") ?: "0"
+                        val number = chapter.number?.toString()?.removeSuffix(".0") ?: "0"
                         val name = chapter.name ?: ""
                         if (!name.contains(number)) append("Chapter ", number, ": ")
                         append(name.trim())
