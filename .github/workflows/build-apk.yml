@@ -29,5 +29,5 @@ jobs:
     - name: Upload APK to Artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: ProComic-APK
+        name: procomic-APK
         path: src/ar/procomic/build/outputs/apk/release/*.apk
