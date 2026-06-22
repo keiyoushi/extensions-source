@@ -36,3 +36,27 @@ class DetailsResponse(
 class Author(
     val authorName: String,
 )
+
+@Serializable
+class LibraryResponse(
+    val holdBookList: HoldBookList,
+)
+
+@Serializable
+class HoldBookList(
+    val entities: List<Entity>,
+    val totalPage: Int,
+)
+
+@Serializable
+class Entity(
+    private val seriesId: Int,
+    private val seriesName: String,
+    private val imageUrl: String?,
+) {
+    fun toSManga() = SManga.create().apply {
+        url = seriesId.toString()
+        title = seriesName
+        thumbnail_url = imageUrl?.getHiResCoverFromLegacyUrl()
+    }
+}

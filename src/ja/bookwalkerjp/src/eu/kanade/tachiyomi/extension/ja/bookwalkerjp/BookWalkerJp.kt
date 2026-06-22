@@ -47,27 +47,30 @@ class BookWalkerJp :
     ConfigurableSource {
     override val name = "BookWalker Japan"
     private val domain = "bookwalker.jp"
-    override val baseUrl = "https://$domain"
+    override val baseUrl = "https://$DOMAIN"
     override val lang = "ja"
 
-    private val rimgUrl = "https://rimg.$domain"
-    private val cUrl = "https://c.$domain"
-    private val memberApiUrl = "https://member.$domain/api"
-    private val viewerUrl = "https://viewer.$domain"
-    private val trialUrl = "https://viewer-trial.$domain"
+    private val memberApiUrl = "https://member.$DOMAIN/api"
+    private val viewerUrl = "https://viewer.$DOMAIN"
+    private val trialUrl = "https://viewer-trial.$DOMAIN"
     private val preferences by getPreferencesLazy()
     private val desktopHeaders = headersBuilder()
         .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36")
         .build()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(CookieInterceptor(domain, listOf("holdBook-series" to "1", "safeSearch" to "111", "mySetting/showCoverR15" to "1")))
+        addInterceptor(CookieInterceptor(DOMAIN, listOf("holdBook-series" to "1", "safeSearch" to "111", "mySetting/showCoverR15" to "1")))
         addInterceptor(PublusInterceptor())
         addInterceptor {
             val request = it.request()
             val response = it.proceed(request)
             val fallbackUrl = request.url.fragment
-            if (response.request.url.encodedPath == "/app/03/login") {
+            val url = response.request.url
+            if (response.code == 401 || url.pathSegments[1] == "holdBooks-api") {
+                throw IOException("Log in via WebView to access your library.")
+            }
+
+            if (url.encodedPath == "/app/03/login") {
                 throw IOException("Auth expired. Log in via WebView again.")
             }
 
@@ -97,13 +100,17 @@ class BookWalkerJp :
         return client.get(url, desktopHeaders).asJsoup().toMangasPage()
     }
 
-    // TODO own library filter; how implement wayomi?
+    // TODO how implement wayomi?
     override suspend fun getSearchMangaList(page: Int, query: String, filterList: FilterList): MangasPage {
         val search = filterList.firstInstance<SearchFilter>()
         val sort = filterList.firstInstance<SortFilter>()
         val library = filterList.firstInstance<LibraryFilter>()
         if (library.state) {
-            throw Exception("stub/todo")
+            val response = client.get("$baseUrl/prx/holdBooks-api/hold-book-list/?page=$page", headers)
+            val result = response.parseAs<LibraryResponse>().holdBookList
+            val hasNextPage = response.request.url.queryParameter("page")!!.toInt() < result.totalPage
+            val mangas = result.entities.map { it.toSManga() }
+            return MangasPage(mangas, hasNextPage)
         }
 
         val url = "$baseUrl/search/".toHttpUrl().newBuilder()
@@ -261,11 +268,13 @@ class BookWalkerJp :
 
             var cr: String? = null
             if (!isTrial) {
+                // TODO wayomi (if viewer-df.bookwalker.jp): https://viewer-df.bookwalker.jp/browserWebApi4/04/getLoader
                 val loaderUrl = "$viewerUrl/browserWebApi/03/getLoader"
                 val loaderScript = client.get(loaderUrl).body.string()
                 cr = fetchCr(loaderScript, chapterUrl.toString())
             }
 
+            // TODO wayomi https://viewer-df.bookwalker.jp/browserWebApi4/c
             val cApiBase = if (isTrial) "$trialUrl/trial-page/c" else "$viewerUrl/browserWebApi/c"
             val cApiUrl = cApiBase.toHttpUrl().newBuilder().apply {
                 addQueryParameter("cid", cid)
@@ -347,20 +356,6 @@ class BookWalkerJp :
 
     override fun imageRequest(page: Page): Request = GET(authorize(page.imageUrl!!), headers)
 
-    private fun String?.getHiResCoverFromLegacyUrl(): String? {
-        if (this.isNullOrEmpty()) return null
-        val segments = this.toHttpUrlOrNull()?.pathSegments ?: return null
-        val fileName = segments.last()
-        val extension = fileName.substringAfterLast('.')
-        val numericId = when {
-            this.startsWith(rimgUrl) -> segments.first().reversed().toLongOrNull()
-            fileName.startsWith("thumbnailImage_") -> fileName.substringAfter("thumbnailImage_").substringBefore('.').toLongOrNull()
-            else -> null
-        } ?: return null
-
-        return "$cUrl/coverImage_${numericId - 1}.$extension#$this"
-    }
-
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = HIDE_LOCKED_PREF_KEY
@@ -373,9 +368,8 @@ class BookWalkerJp :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? = null
 
     companion object {
-        private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
-
         // Normal (non-trial) auth data expires after 60s
         private const val AUTH_REFRESH_SECONDS = 45L
+        private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
     }
 }
