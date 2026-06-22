@@ -69,8 +69,14 @@ class PublusAuthInfo(
  */
 @Serializable
 class PublusContent(
+    val status: String?,
     val url: String?,
+    val lp: Int?,
     val cty: Int? = null,
+    val lin: Int?,
+    val lpd: Int?,
+    val bs: Int?,
+    val ms: Int?,
     @SerialName("auth_info") val authInfo: PublusAuthInfo? = null,
 )
 
