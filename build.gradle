@@ -1,0 +1,20 @@
+plugins {
+    id "com.android.application" version "7.4.2" apply false
+    id "kotlin-android" version "1.9.0" apply false
+    id "kotlinx-serialization" version "1.9.0" apply false
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
+    }
+}
+
+ext {
+    kotlin_version = "1.9.0"
+    compileSdkVersion = 33
+    targetSdkVersion = 33
+    minSdkVersion = 21
+}
