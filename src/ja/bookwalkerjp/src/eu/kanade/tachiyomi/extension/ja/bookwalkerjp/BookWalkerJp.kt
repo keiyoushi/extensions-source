@@ -46,13 +46,13 @@ class BookWalkerJp :
     KeiSource(),
     ConfigurableSource {
     override val name = "BookWalker Japan"
-    private val domain = "bookwalker.jp"
     override val baseUrl = "https://$DOMAIN"
     override val lang = "ja"
 
     private val memberApiUrl = "https://member.$DOMAIN/api"
     private val viewerUrl = "https://viewer.$DOMAIN"
     private val trialUrl = "https://viewer-trial.$DOMAIN"
+    private val dfViewer = "https://viewer-df.$DOMAIN"
     private val preferences by getPreferencesLazy()
     private val desktopHeaders = headersBuilder()
         .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36")
@@ -66,7 +66,7 @@ class BookWalkerJp :
             val response = it.proceed(request)
             val fallbackUrl = request.url.fragment
             val url = response.request.url
-            if (response.code == 401 || url.pathSegments[1] == "holdBooks-api") {
+            if (response.code == 401 && url.pathSegments[1] == "holdBooks-api") {
                 throw IOException("Log in via WebView to access your library.")
             }
 
@@ -100,7 +100,6 @@ class BookWalkerJp :
         return client.get(url, desktopHeaders).asJsoup().toMangasPage()
     }
 
-    // TODO how implement wayomi?
     override suspend fun getSearchMangaList(page: Int, query: String, filterList: FilterList): MangasPage {
         val search = filterList.firstInstance<SearchFilter>()
         val sort = filterList.firstInstance<SortFilter>()
@@ -120,7 +119,7 @@ class BookWalkerJp :
             .addQueryParameter("np", "0")
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url, desktopHeaders).asJsoup().toMangasPage()
+        return client.get(url, desktopHeaders).asJsoup().toMangasPage(wayomi = search.value == "1")
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
@@ -132,19 +131,27 @@ class BookWalkerJp :
         LibraryFilter(),
     )
 
-    private fun Document.toMangasPage(): MangasPage {
-        val mangas = select(".m-tile").map {
+    private fun Document.toMangasPage(wayomi: Boolean = false): MangasPage {
+        val tileSelector = if (wayomi) ".o-tile--series" else ".m-tile"
+        val linkSelector = if (wayomi) ".o-tile-ttl a" else "a.m-book-item__title"
+        val imgSelector = if (wayomi) ".o-tile-book-img img" else ".m-thumb__image img"
+
+        val mangas = select(tileSelector).map {
+            val link = it.selectFirst(linkSelector)!!
             SManga.create().apply {
-                title = it.selectFirst("a.m-book-item__title")!!.text()
-                val cover = it.selectFirst(".m-thumb__image img")?.absUrl("data-original")
+                title = link.text()
+                val cover = it.selectFirst(imgSelector)?.absUrl("data-original")
                 thumbnail_url = cover.getHiResCoverFromLegacyUrl() ?: cover
-                val href = it.selectFirst("a.m-book-item__title")!!.absUrl("href").toHttpUrl().pathSegments
+                val href = link.absUrl("href").toHttpUrl().pathSegments
                 setUrlWithoutDomain(if (href.first() == "series") href[1] else href[0])
             }
         }
-        return MangasPage(mangas, hasNextPage())
+
+        val hasNext = if (wayomi) selectFirst("a[data-action-label=次のページへ]:not(.o-pager-box-btn_hidden)") != null else hasNextPage()
+        return MangasPage(mangas, hasNext)
     }
 
+    // TODO how implement wayomi?
     override suspend fun getMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -235,10 +242,11 @@ class BookWalkerJp :
     private val publusAuth = PublusAuthHandler(
         client = client,
         refreshSeconds = AUTH_REFRESH_SECONDS,
-        cookieUrl = "$viewerUrl/browserWebApi/c".toHttpUrl(),
         bid = "0",
-    ) { session, cookies ->
-        val refreshUrl = "$viewerUrl/browserWebApi/c".toHttpUrl().newBuilder().apply {
+    ) { session, _ ->
+        val cUrl = session["cUrl"]!!.toHttpUrl()
+        val cookies = client.cookieJar.loadForRequest(cUrl)
+        val refreshUrl = cUrl.newBuilder().apply {
             addQueryParameter("cid", session["cid"])
             addQueryParameter("BID", "0")
             addQueryParameter("cr", session["cr"])
@@ -255,7 +263,9 @@ class BookWalkerJp :
         val chapterUrl = client.get(getChapterUrl(chapter), desktopHeaders, ensureSuccess = false).request.url
         val cid = chapterUrl.queryParameter("cid")
         val cty = chapterUrl.queryParameter("cty")?.toIntOrNull()
-        val isTrial = chapterUrl.host == "viewer-trial.$domain"
+        val host = chapterUrl.host
+        val isTrial = host == trialUrl.toHttpUrl().host
+        val isDf = host == dfViewer.toHttpUrl().host
 
         val cookies = client.cookieJar.loadForRequest(chapterUrl)
         val u1 = cookies.find { it.name == "u1" }?.value
@@ -268,14 +278,21 @@ class BookWalkerJp :
 
             var cr: String? = null
             if (!isTrial) {
-                // TODO wayomi (if viewer-df.bookwalker.jp): https://viewer-df.bookwalker.jp/browserWebApi4/04/getLoader
-                val loaderUrl = "$viewerUrl/browserWebApi/03/getLoader"
+                val loaderUrl = if (isDf) {
+                    "$viewerUrl/browserWebApi4/04/getLoader"
+                } else {
+                    "$viewerUrl/browserWebApi/03/getLoader"
+                }
                 val loaderScript = client.get(loaderUrl).body.string()
                 cr = fetchCr(loaderScript, chapterUrl.toString())
             }
 
-            // TODO wayomi https://viewer-df.bookwalker.jp/browserWebApi4/c
-            val cApiBase = if (isTrial) "$trialUrl/trial-page/c" else "$viewerUrl/browserWebApi/c"
+            val cApiBase = when {
+                isTrial -> "$trialUrl/trial-page/c"
+                isDf -> "$dfViewer/browserWebApi4/c"
+                else -> "$viewerUrl/browserWebApi/c"
+            }
+
             val cApiUrl = cApiBase.toHttpUrl().newBuilder().apply {
                 addQueryParameter("cid", cid)
                 if (!isTrial) {
@@ -294,6 +311,7 @@ class BookWalkerJp :
             val sessionData = buildMap {
                 put("cid", cid)
                 put("isTrial", isTrial.toString())
+                put("cUrl", cApiBase)
                 if (cr != null) put("cr", cr)
             }
 
