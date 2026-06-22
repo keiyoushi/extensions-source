@@ -186,13 +186,6 @@ abstract class KeiSource : HttpSource() {
             }
         }
 
-        if (cached != null && parsed == null) {
-            // Cache existed but rejected by source class
-            // assume old scheme, refresh
-            runCatching { filterCacheFile.delete() }
-            filterFetchAttemptCount.set(0)
-        }
-
         if (parsed == null || !isFresh) {
             triggerBackgroundFilterFetch()
         }
