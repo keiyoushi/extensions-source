@@ -61,7 +61,7 @@ class Mangadotnet :
     override val baseUrl = "https://mangadot.net"
     override val supportsLatest = true
 
-    override val client = network.client
+    override val client = network.cloudflareClient
 
     // ============================== Setup ===============================
     private val preferences = getPreferences {
@@ -335,7 +335,16 @@ class Mangadotnet :
         val data = response.decodeRscAs<Data<MangaList>>().data
         updateGenres(data.allGenres)
 
-        return MangasPage(data.mangaList.orEmpty().map { it.toSManga(baseUrl) }, data.hasNextPage())
+        val mode = adultModePref()
+        val filteredManga = data.mangaList.orEmpty().filter { manga ->
+            when (mode) {
+                "none" -> !manga.isAdult
+                "1" -> manga.isAdult
+                else -> true
+            }
+        }
+
+        return MangasPage(filteredManga.map { it.toSManga(baseUrl) }, data.hasNextPage())
     }
 
     // ============================== Details ==============================
