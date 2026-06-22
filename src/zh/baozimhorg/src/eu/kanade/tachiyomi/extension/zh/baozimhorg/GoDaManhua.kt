@@ -49,10 +49,14 @@ class GoDaManhua :
 
     override fun pageListRequest(mangaId: String, chapterId: String): Request {
         if (mangaId.isEmpty() || chapterId.isEmpty()) throw Exception("请刷新漫画")
-        return GET("https://api-get-v3.mgsearcher.com/api/chapter/getinfo?m=$mangaId&c=$chapterId", headers)
+        return GET("https://api-get-v3.mgsearcher.com/api/v2/chapter/getinfo?m=$mangaId&c=$chapterId", headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> = json.decodeFromString<ResponseDto<PageListDto>>(response.body.string()).data.info.images.images.map { it.toPage() }
+    override fun pageListParse(response: Response): List<Page> {
+        val info = json.decodeFromString<ResponseDto<PageListDto>>(response.body.string()).data.info
+        val decoded = ChapterImageDecoder.decode(info.images.images)
+        return json.decodeFromString<List<ImageDto>>(decoded).map { it.toPage() }
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
