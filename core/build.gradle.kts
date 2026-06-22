@@ -22,8 +22,6 @@ dependencies {
     compileOnly(libs.bundles.common)
     compileOnly(libs.tachiyomi.lib.v16)
     compileOnly(libs.okhttp.brotli)
-    compileOnly(libs.okhttp.logging)
-    compileOnly(libs.okhttp.dnsOverHttps)
 
     testImplementation(libs.bundles.common)
     testImplementation(libs.junit)

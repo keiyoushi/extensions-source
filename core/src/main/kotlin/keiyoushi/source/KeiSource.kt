@@ -24,7 +24,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
-import okhttp3.logging.HttpLoggingInterceptor
 import okio.GzipSink
 import okio.GzipSource
 import okio.buffer
@@ -36,7 +35,6 @@ import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.days
-import kotlin.time.Duration.Companion.seconds
 
 abstract class KeiSource : HttpSource() {
 
@@ -47,37 +45,24 @@ abstract class KeiSource : HttpSource() {
     protected open fun OkHttpClient.Builder.configureClient() = this
 
     final override val client: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .cookieJar(network.client.cookieJar)
-            .connectTimeout(30.seconds)
-            .readTimeout(30.seconds)
-            .writeTimeout(30.seconds)
-            .cache(network.client.cache)
-            .dns(network.client.dns)
-            .apply {
-                val upstreamInterceptors = network.client.interceptors
+        network.client.newBuilder().apply {
+            val networkInterceptors = networkInterceptors()
 
-                network.client.networkInterceptors.firstOrNull { it is HttpLoggingInterceptor }
-                    ?.also(::addNetworkInterceptor)
+            networkInterceptors
+                .indexOfFirst { it.javaClass.simpleName == "IgnoreGzipInterceptor" }
+                .takeIf { it != -1 }
+                ?.also { networkInterceptors.removeAt(it) }
 
-                upstreamInterceptors.firstOrNull { it.javaClass.simpleName == "UncaughtExceptionInterceptor" }
-                    ?.also(::addInterceptor)
-                    ?: throw Exception("UncaughtExceptionInterceptor not found")
+            networkInterceptors
+                .indexOfFirst { it is BrotliInterceptor }
+                .takeIf { it != -1 }
+                ?.also { networkInterceptors.removeAt(it) }
 
-                upstreamInterceptors.firstOrNull { it.javaClass.simpleName == "UserAgentInterceptor" }
-                    ?.also(::addInterceptor)
-                    ?: throw Exception("UserAgentInterceptor not found")
+            configureClient()
 
-                configureClient()
-
-                upstreamInterceptors.firstOrNull { it.javaClass.simpleName == "CloudflareInterceptor" }
-                    ?.also(::addInterceptor)
-                    ?: throw Exception("CloudflareInterceptor not found")
-
-                // brotli interceptor must be last application interceptor
-                addInterceptor(BrotliInterceptor)
-            }
-            .build()
+            // last application interceptor
+            addInterceptor(BrotliInterceptor)
+        }.build()
     }
 
     /**
