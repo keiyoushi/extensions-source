@@ -8,7 +8,10 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.serializer
 import kotlin.collections.emptyMap
 import kotlin.math.roundToInt
@@ -53,7 +56,15 @@ class BrowseManga(
     private val id: Int,
     private val title: String,
     private val photo: String? = null,
+    @SerialName("is_blurworthy")
+    private val isBlurworthy: JsonElement? = null,
 ) {
+    val isAdult: Boolean
+        get() = when (isBlurworthy) {
+            is JsonPrimitive -> isBlurworthy.intOrNull == 1 || isBlurworthy.booleanOrNull == true
+            else -> false
+        }
+
     fun toSManga(baseUrl: String) = SManga.create().apply {
         url = id.toString()
         title = this@BrowseManga.title
