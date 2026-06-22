@@ -1,5 +1,6 @@
 package keiyoushi.source
 
+import android.util.Log
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -181,7 +182,8 @@ abstract class KeiSource : HttpSource() {
         val parsed = cached?.let {
             try {
                 getFilterList(it)
-            } catch (_: Throwable) {
+            } catch (e: Throwable) {
+                Log.e(name, "Failed to parse filter data", e)
                 null
             }
         }
@@ -250,7 +252,8 @@ abstract class KeiSource : HttpSource() {
                 val data = fetchFilterData()
                 writeFilterCache(data)
                 filterFetchAttemptCount.set(0)
-            } catch (_: Throwable) {
+            } catch (e: Throwable) {
+                Log.e(name, "Failed to fetch filter data", e)
                 filterFetchAttemptCount.incrementAndGet()
             } finally {
                 filterFetchInFlight.set(false)
