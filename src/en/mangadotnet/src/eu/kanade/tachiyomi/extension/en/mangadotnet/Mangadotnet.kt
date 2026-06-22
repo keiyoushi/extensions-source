@@ -136,24 +136,9 @@ class Mangadotnet :
 
     private fun getGenreList(isAdult: Boolean): List<String>? {
         val list = getGenreLists().let { if (isAdult) it.adult else it.normal }
-            ?: fetchGenres(isAdult)
 
         return list?.filter { it !in demographicNames }
             ?.sortedBy { it.lowercase(Locale.ROOT) }
-    }
-
-    private fun fetchGenres(isAdult: Boolean): List<String>? = runBlocking {
-        runCatching {
-            val url = "$baseUrl/view-all/${popularModePref()}.data".toHttpUrl().newBuilder().apply {
-                addQueryParameter("adult", if (isAdult) "both" else "0")
-                addQueryParameter("_routes", "pages/ViewAllPage")
-            }.build()
-            val response = client.newCall(GET(url, headers)).execute()
-            val rsc = response.decodeRscAs<Data<ViewAllData>>().data
-            val genres = rsc.allGenres.ifEmpty { rsc.data.allGenres }
-            updateGenres(genres, isAdult)
-            genres
-        }.getOrNull()
     }
 
     private fun HttpUrl.Builder.addAdultParam(): HttpUrl.Builder {
@@ -524,18 +509,9 @@ class Mangadotnet :
     // =============================== Pages ===============================
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterUrl = chapter.url.parseAs<ChapterUrl>()
+        val segment = if (chapterUrl.source == "user") "uploads" else "chapters"
 
-        val url = "$baseUrl/api/".toHttpUrl().newBuilder().apply {
-            if (chapterUrl.source == "user") {
-                addPathSegment("uploads")
-            } else {
-                addPathSegment("chapters")
-            }
-            addPathSegment(chapterUrl.id)
-            addPathSegment("images")
-        }.build()
-
-        return GET(url, headers)
+        return GET("$baseUrl/api/$segment/${chapterUrl.id}/images", headers)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -550,7 +526,7 @@ class Mangadotnet :
             if (chapterUrl.isVolume) {
                 addQueryParameter("mode", "volume")
             }
-        }.toString()
+        }.build().toString()
     }
 
     override fun pageListParse(response: Response): List<Page> {
