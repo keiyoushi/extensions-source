@@ -180,7 +180,11 @@ abstract class PixivComic : HttpSource() {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val url = "$baseUrl/${manga.url}".toHttpUrl().pathSegments
         if (url.first() == "store") {
-            val product = fetchProduct(url.last())
+            val product = try {
+                fetchProduct(url.last())
+            } catch (_: Exception) {
+                throw Exception("Log in via WebView and enable R-18 content at https://www.pixiv.net/settings/viewing")
+            }
             val updatedManga = if (fetchDetails) product.product.toSManga() else manga
             val updatedChapters = if (fetchChapters) {
                 product.variants
@@ -207,13 +211,23 @@ abstract class PixivComic : HttpSource() {
         val updatedManga = if (fetchDetails) officialWorkResult!!.toSManga() else manga
 
         val updatedChapters = if (fetchChapters) {
-            val storeProductKey = officialWorkResult?.storeProductKey
-            val volumeChapters = storeProductKey?.takeIf(String::isNotEmpty)?.let { fetchVolumes(it) }.orEmpty()
-                .filter { !hideLocked || !it.isLocked }
-                .map { it.toSChapter() }
             val episodeChapters = episodes!!.await()
                 .filter { !hideLocked || !it.isLocked }
                 .map { it.toSChapter() }
+
+            val storeProductKey = officialWorkResult?.storeProductKey
+            val volumeChapters = if (storeProductKey.isNullOrEmpty()) {
+                emptyList()
+            } else {
+                try {
+                    fetchVolumes(storeProductKey)
+                        .filter { !hideLocked || !it.isLocked }
+                        .map { it.toSChapter() }
+                } catch (_: Exception) {
+                    emptyList()
+                }
+            }
+
             episodeChapters + volumeChapters
         } else {
             chapters
@@ -239,12 +253,12 @@ abstract class PixivComic : HttpSource() {
             .addQueryParameter("order", "desc")
             .addQueryParameter("view_type", "product_detail")
             .build()
-        return client.get(url)
+        return client.get(url, ensureSuccess = false)
             .parseAs<ApiResponse<VolumeResponse>>()
             .data.variants
     }
 
-    private suspend fun fetchProduct(storeProductKey: String): ProductResponse = client.get("$apiUrl/store/products/v2/$storeProductKey").parseAs<ApiResponse<ProductResponse>>().data
+    private suspend fun fetchProduct(storeProductKey: String): ProductResponse = client.get("$apiUrl/store/products/v2/$storeProductKey", ensureSuccess = false).parseAs<ApiResponse<ProductResponse>>().data
 
     override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.any { it.isLetter() }) {
         "$baseUrl/store/viewers/${chapter.url}/master"
