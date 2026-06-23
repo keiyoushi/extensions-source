@@ -2,94 +2,80 @@ package eu.kanade.tachiyomi.extension.id.comicaso
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.descriptors.PrimitiveKind
-import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonDecoder
-import kotlinx.serialization.json.JsonPrimitive
+import org.jsoup.Jsoup
 
-object SafeStringSerializer : KSerializer<String?> {
-    override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor("SafeString", PrimitiveKind.STRING)
+@Serializable
+class HomeResponseDto(
+    val data: List<MangaDto> = emptyList(),
+    @SerialName("has_more") val hasMore: Boolean = false,
+)
 
-    override fun serialize(encoder: Encoder, value: String?) {
-        if (value == null) {
-            encoder.encodeNull()
-        } else {
-            encoder.encodeString(value)
-        }
-    }
+@Serializable
+class TrendingResponseDto(
+    val data: List<MangaDto> = emptyList(),
+)
 
-    override fun deserialize(decoder: Decoder): String? {
-        val jsonDecoder = decoder as? JsonDecoder ?: return try {
-            decoder.decodeString()
-        } catch (_: Exception) {
-            null
-        }
-
-        return try {
-            val element = jsonDecoder.decodeJsonElement()
-            if (element is JsonPrimitive && element.isString) {
-                element.content
-            } else {
-                null
-            }
-        } catch (_: Exception) {
-            null
-        }
+@Serializable
+class MangaDto(
+    private val slug: String,
+    private val title: String,
+    private val thumbnail: String? = null,
+    private val source: String? = null,
+) {
+    fun toSManga() = SManga.create().apply {
+        url = "${this@MangaDto.source ?: "all"}/$slug"
+        title = this@MangaDto.title
+        thumbnail_url = thumbnail
     }
 }
 
 @Serializable
-class MangaDto(
+class MangaDetailResponseDto(
+    val data: MangaDetailDto,
+)
+
+@Serializable
+class MangaDetailDto(
     val slug: String,
-    val title: String,
-    @Serializable(SafeStringSerializer::class)
-    val thumbnail: String? = null,
-    val status: String? = null,
-    val type: String? = null,
-    val genres: List<String>? = emptyList(),
-    @SerialName("manga_date") val mangaDate: Long? = null,
-    @SerialName("updated_at") val updatedAt: Long? = null,
+    private val title: String,
+    private val thumbnail: String? = null,
+    private val synopsis: String? = null,
+    private val alternative: String? = null,
+    private val status: String? = null,
+    private val author: String? = null,
+    private val artist: String? = null,
+    private val genres: List<String>? = emptyList(),
+    val chapters: List<ChapterDto>? = emptyList(),
 ) {
     fun toSManga(source: String) = SManga.create().apply {
         url = "$source/$slug"
-        title = this@MangaDto.title
+        title = this@MangaDetailDto.title
         thumbnail_url = thumbnail
+        description = buildString {
+            synopsis?.let { append(Jsoup.parseBodyFragment(it, "").text()) }
+            alternative?.takeIf { it.isNotBlank() }?.let {
+                if (isNotEmpty()) append("\n\n")
+                append("Alternative: $it")
+            }
+        }
+        author = this@MangaDetailDto.author
+        artist = this@MangaDetailDto.artist
         genre = genres?.joinToString()
-        status = when (this@MangaDto.status) {
-            "on-going" -> SManga.ONGOING
-            "end" -> SManga.COMPLETED
+        status = when (this@MangaDetailDto.status?.lowercase()) {
+            "on-going", "ongoing" -> SManga.ONGOING
+            "end", "completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
     }
 }
 
 @Serializable
-class MangaDetailDto(
-    val slug: String,
-    val title: String,
-    @Serializable(SafeStringSerializer::class)
-    val thumbnail: String? = null,
-    val synopsis: String? = null,
-    val alternative: String? = null,
-    val status: String? = null,
-    val author: String? = null,
-    val artist: String? = null,
-    val genres: List<String>? = emptyList(),
-    val chapters: List<ChapterDto>? = emptyList(),
-)
-
-@Serializable
 class ChapterDto(
-    val slug: String,
-    val title: String,
-    val date: Long? = null,
+    private val slug: String,
+    private val title: String,
+    private val date: Long? = null,
 ) {
     fun toSChapter(source: String, mangaSlug: String) = SChapter.create().apply {
         url = "$source/$mangaSlug/$slug"
@@ -99,6 +85,11 @@ class ChapterDto(
 }
 
 @Serializable
+class ChapterResponseDto(
+    val data: ChapterImagesDto,
+)
+
+@Serializable
 class ChapterImagesDto(
-    val images: List<String>,
+    val images: List<String>? = null,
 )

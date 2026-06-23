@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
 import keiyoushi.utils.getPreferencesLazy
@@ -169,7 +170,7 @@ abstract class Dmm :
     override fun chapterListParse(response: Response): List<SChapter> {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         return response.parseAs<ChapterResponse>().volumeBooks
-            .filter { !hideLocked || !it.isLocked }
+            .filter { !hideLocked || (!it.isLocked || !it.isPreview) }
             .map { it.toSChapter(baseUrl) }
     }
 
@@ -177,15 +178,18 @@ abstract class Dmm :
 
     override fun pageListParse(response: Response): List<Page> {
         val cid = response.request.url.queryParameter("cid")
+        val lin = response.request.url.queryParameter("lin")
         val cUrl = "$baseUrl/viewerapi/auth/".toHttpUrl().newBuilder()
             .addQueryParameter("cid", cid)
-            .build()
+            .apply {
+                if (lin != null) {
+                    addQueryParameter("lin", lin)
+                }
+            }.build()
 
-        val cRequest = GET(cUrl, headers)
-        val cResponse = client.newCall(cRequest).execute()
-        val contentPhp = cResponse.parseAs<CPhpResponse>().url
+        val content = client.newCall(GET(cUrl, headers)).execute().parseAs<PublusContent>()
 
-        return fetchPages(contentPhp, headers, client)
+        return fetchPages(content.url!!, headers, client, content.authInfo?.toAuth())
     }
 
     override fun imageUrlParse(response: Response): String = response.request.url.toString()

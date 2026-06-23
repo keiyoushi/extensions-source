@@ -14,6 +14,8 @@ class KaynScans :
         "https://api.kaynscan.org",
     ) {
 
+    override val sortPagesByFilename = true
+
     // Migrate from Keyoapp to Iken by checking non slug-only urls
     override fun chapterListRequest(m: SManga): Request {
         if (m.url.startsWith('/')) {
