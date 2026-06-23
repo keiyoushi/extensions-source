@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.th.onemanga
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,14 +9,17 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.Serializable
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONObject
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -136,31 +140,26 @@ class MangaBlackCat : HttpSource() {
 
     private fun chapterListParse(response: Response, requestedPages: MutableSet<String>): Observable<List<SChapter>> {
         val document = response.asJsoup()
-        val chapters = parseChapters(document).toMutableList()
-        val requestedPages = mutableSetOf(document.location().ifBlank { response.request.url.toString() })
-        var nextPageUrl = document.nextChapterPageUrl()
+        val chapters = parseChapters(document)
+        val nextPageUrl = document.nextChapterPageUrl()
 
-        while (true) {
-            val currentNextPageUrl = nextPageUrl?.takeUnless { it.isBlank() } ?: break
-            if (!requestedPages.add(currentNextPageUrl)) break
-
-            val nextPageRequest = GET(
-                currentNextPageUrl,
-                headersBuilder()
-                    .set("Referer", response.request.url.toString())
-                    .build(),
-            )
-
-            client.newCall(nextPageRequest).execute().use { nextPageResponse ->
-                val nextPageDocument = nextPageResponse.asJsoup()
-                chapters += parseChapters(nextPageDocument)
-                nextPageUrl = nextPageDocument.nextChapterPageUrl()
-            }
+        if (nextPageUrl == null || !requestedPages.add(nextPageUrl)) {
+            return Observable.just(chapters)
         }
 
-        return chapters
-            .distinctBy { it.url }
-            .sortedByDescending { it.chapter_number }
+        val nextPageRequest = GET(
+            nextPageUrl,
+            headersBuilder()
+                .set("Referer", response.request.url.toString())
+                .build(),
+        )
+
+        return client.newCall(nextPageRequest)
+            .asObservableSuccess()
+            .flatMap { nextPageResponse ->
+                chapterListParse(nextPageResponse, requestedPages)
+                    .map { nextPageChapters -> chapters + nextPageChapters }
+            }
     }
 
     private fun parseChapters(document: Document): List<SChapter> {
@@ -274,13 +273,18 @@ class MangaBlackCat : HttpSource() {
     private fun decodeBootImage(rawJsonString: String): String? {
         val decoded = Parser.unescapeEntities(rawJsonString, false).decodeJavaScriptString()
         return try {
-            JSONObject(decoded).optString("image").takeUnless { it.isBlank() }
+            decoded.parseAs<BootImageDto>().toImageUrl()
         } catch (_: Exception) {
             null
         }
     }
 
-    private fun cleanText(text: String): String = Parser.unescapeEntities(text, false).trim()
+    @Serializable
+    private class BootImageDto(
+        private val image: String? = null,
+    ) {
+        fun toImageUrl(): String? = image?.takeUnless { it.isBlank() }
+    }
 
     private fun String.decodeJavaScriptString(): String = replace(UNICODE_ESCAPE_REGEX) { match ->
         match.groupValues[1].toInt(16).toChar().toString()
