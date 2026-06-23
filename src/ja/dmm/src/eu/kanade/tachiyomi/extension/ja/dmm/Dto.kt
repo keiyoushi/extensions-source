@@ -87,15 +87,20 @@ class VolumeBook(
     @SerialName("volume_number") private val volumeNumber: Int?,
     @SerialName("content_publish_date") private val contentPublishDate: String?,
     @SerialName("free_streaming_url") private val freeStreamingUrl: List<String>?,
+    @SerialName("tachiyomi_url") private val tachiyomiUrl: String?,
     private val purchased: Purchased?,
 ) {
     val isLocked: Boolean
         get() = purchased == null && freeStreamingUrl == null
 
+    val isPreview: Boolean
+        get() = isLocked && tachiyomiUrl != null
+
     fun toSChapter(baseUrl: String): SChapter = SChapter.create().apply {
         val lock = if (isLocked) "🔒 " else ""
-        url = purchased?.streamingUrl ?: freeStreamingUrl?.first() ?: "$baseUrl/$contentId#locked"
-        name = lock + title
+        val preview = if (isPreview) "(Preview) " else ""
+        url = purchased?.streamingUrl ?: freeStreamingUrl?.first() ?: tachiyomiUrl ?: "$baseUrl/$contentId#locked"
+        name = lock + preview + title
         date_upload = dateFormat.tryParse(contentPublishDate)
         chapter_number = volumeNumber?.toFloat() ?: -1f
     }
@@ -108,9 +113,4 @@ private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).
 @Serializable
 class Purchased(
     @SerialName("streaming_url") val streamingUrl: String,
-)
-
-@Serializable
-class CPhpResponse(
-    val url: String,
 )

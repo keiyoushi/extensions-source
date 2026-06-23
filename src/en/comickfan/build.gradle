@@ -2,7 +2,7 @@ ext {
     extName = 'ComicK Fanmade'
     extClass = '.ComicKFan'
     baseUrl = 'https://comickfan.com'
-    extVersionCode = 2
+    extVersionCode = 3
     isNsfw = true
 }
 

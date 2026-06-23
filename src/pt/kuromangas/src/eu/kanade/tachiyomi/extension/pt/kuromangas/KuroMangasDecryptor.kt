@@ -1,25 +1,34 @@
 package eu.kanade.tachiyomi.extension.pt.kuromangas
 
 import android.util.Base64
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.readIntBigEndian
 import keiyoushi.utils.readIntLittleEndian
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.ResponseBody.Companion.toResponseBody
 import java.security.MessageDigest
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-const val VITE_API_ENC_KEY = "5ato8l674shksfE2oMwajkun9TuYTusF4jKdqEwhUEft9787147pasde345h"
 const val HOSTNAME_PART = "kuromangas.com::v2"
 const val ANTIBOT = "x9_4v2_b"
+const val DEFAULT_ENC_KEY = "5ato8l674shksfE2oMmieshonuYTusF4jKdqEwhUEft9787147sadr322"
 
-class KuroMangasDecryptor {
+private val encKeyRegex = Regex("""ENCRYPTION_KEY\s*[:=]\s*["']([^"']+)["']""")
+
+class KuroMangasDecryptor(val baseUrl: String, val client: OkHttpClient) {
+    private var viteApiEncKey: String? = DEFAULT_ENC_KEY
+    private var hasErrored: Boolean = false
 
     fun vSecureInterceptor() = Interceptor { chain ->
-        val response = chain.proceed(chain.request())
+        val req = chain.request()
+
+        val response = chain.proceed(req)
         val dataKey = response.headers["x-kuro-datakey"] ?: return@Interceptor response
 
         val secureDto = response.parseAs<SecureDto>()
@@ -30,7 +39,22 @@ class KuroMangasDecryptor {
             .build()
     }
 
-    // index-Dn_X_unp.js: Ik2() + Hk2()
+    fun reloadEncKey() {
+        val indexJs = client.newCall(GET(baseUrl)).execute()
+            .asJsoup()
+            .selectFirst("script[src*=index]")
+            ?.absUrl("src")
+
+        viteApiEncKey = if (indexJs != null) {
+            client.newCall(GET(indexJs)).execute()
+                .body.string()
+                .let { encKeyRegex.find(it)?.groupValues?.get(1) }
+        } else {
+            null
+        }
+    }
+
+    // index-*.js: Ik2() + Hk2()
     fun decrypt(vSecure: String, dataKey: String): String {
         val password = derivePassword()
         val encrypted = Base64.decode(vSecure, Base64.DEFAULT)
@@ -44,8 +68,18 @@ class KuroMangasDecryptor {
         rabbit.crypt(plaintext)
 
         val jsonStr = String(plaintext, Charsets.UTF_8)
-        val wrapper = jsonStr.parseAs<JsonElement>()
-        val inner = wrapper.jsonObject[dataKey] ?: error("Failed to decrypt response")
+
+        val wrapper = try {
+            jsonStr.parseAs<JsonElement>()
+        } catch (e: Exception) {
+            if (!hasErrored) {
+                hasErrored = true
+                reloadEncKey()
+                return decrypt(vSecure, dataKey)
+            }
+            error("Decryption failed: ${e.message}")
+        }
+        val inner = wrapper.jsonObject[dataKey] ?: error("Failed to find dataKey")
         return inner.toString()
     }
 
@@ -55,7 +89,7 @@ class KuroMangasDecryptor {
             .digest(toHash.toByteArray())
             .joinToString("") { "%02x".format(it) }
             .substring(0, 8)
-        return VITE_API_ENC_KEY + md5Part
+        return viteApiEncKey + md5Part
     }
 
     fun evpBytesToKey(password: ByteArray, salt: ByteArray, keyLen: Int = 16, ivLen: Int = 8): Pair<ByteArray, ByteArray> {

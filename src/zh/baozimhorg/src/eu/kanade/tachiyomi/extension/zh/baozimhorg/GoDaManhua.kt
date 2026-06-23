@@ -8,14 +8,11 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.utils.getPreferences
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import okio.IOException
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 class GoDaManhua :
     GoDa("GoDa漫画", "", "zh"),
@@ -40,19 +37,21 @@ class GoDaManhua :
 
     override val client = super.client.newBuilder().addInterceptor(NotFoundInterceptor()).build()
 
-    private val json: Json = Injekt.get()
-
     override fun fetchChapterList(mangaId: String): List<SChapter> {
         val response = client.newCall(GET("https://api-get-v3.mgsearcher.com/api/manga/get?mid=$mangaId&mode=all", headers)).execute()
-        return json.decodeFromString<ResponseDto<ChapterListDto>>(response.body.string()).data.toChapterList()
+        return response.parseAs<ResponseDto<ChapterListDto>>().data.toChapterList()
     }
 
     override fun pageListRequest(mangaId: String, chapterId: String): Request {
         if (mangaId.isEmpty() || chapterId.isEmpty()) throw Exception("请刷新漫画")
-        return GET("https://api-get-v3.mgsearcher.com/api/chapter/getinfo?m=$mangaId&c=$chapterId", headers)
+        return GET("https://api-get-v3.mgsearcher.com/api/v2/chapter/getinfo?m=$mangaId&c=$chapterId", headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> = json.decodeFromString<ResponseDto<PageListDto>>(response.body.string()).data.info.images.images.map { it.toPage() }
+    override fun pageListParse(response: Response): List<Page> {
+        val info = response.parseAs<ResponseDto<PageListDto>>().data.info
+        val decoded = ChapterImageDecoder.decode(info.images.images)
+        return decoded.parseAs<List<ImageDto>>().map { it.toPage() }
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {

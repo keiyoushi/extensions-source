@@ -288,16 +288,24 @@ abstract class Liliana(
     }
 
     protected open fun pageListParse(document: Document): List<Page> = if (document.selectFirst("div.separator[data-index]") == null) {
-        document.select("div.separator").mapIndexed { i, page ->
-            val url = page.selectFirst("a")!!.attr("abs:href")
-            Page(i, imageUrl = url)
-        }
+        document.select("div.separator")
+            .mapNotNull { page -> page.selectFirst("a")?.attr("abs:href") }
+            .filter(::isPageImageUrl)
+            .mapIndexed { i, url -> Page(i, imageUrl = url) }
     } else {
-        document.select("div.separator[data-index]").map { page ->
-            val index = page.attr("data-index").toInt()
-            val url = page.selectFirst("a")!!.attr("abs:href")
-            Page(index, imageUrl = url)
-        }.sortedBy { it.index }
+        document.select("div.separator[data-index]")
+            .mapNotNull { page ->
+                val url = page.selectFirst("a")?.attr("abs:href") ?: return@mapNotNull null
+                if (!isPageImageUrl(url)) return@mapNotNull null
+                Page(page.attr("data-index").toInt(), imageUrl = url)
+            }
+            .sortedBy { it.index }
+    }
+
+    private fun isPageImageUrl(url: String): Boolean {
+        val lowerUrl = url.lowercase()
+        val path = lowerUrl.substringBefore('?').substringBefore('#')
+        return !path.endsWith(".svg") && !lowerUrl.contains("loading_comments")
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
