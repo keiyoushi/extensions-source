@@ -312,14 +312,16 @@ class Softkomik : HttpSource() {
         }
 
         val route = resolveSessionRoute(request.url)
-        val sessionResult = getSession(route)
-        val newRequest = request.newBuilder()
-            // Clean garabage at trailing
-            .header("X-Token", sessionResult.token.substringBeforeLast('=') + '=')
-            .header("X-Sign", sessionResult.sign.take(64))
-            .build()
+        val apiSession = getSession(route)
+        val newRequest = request.withHeaders(apiSession)
 
-        return chain.proceed(newRequest)
+        var response = chain.proceed(newRequest)
+        if (response.isSuccessful) return response
+
+        // Fallback to webivew just in case credentials were still invalid
+        response.close()
+        val webviewSession = getSessionViaWebView(route)
+        return chain.proceed(request.withHeaders(webviewSession))
     }
 
     private fun getBearerTokenFromCookie(): BearerTokenDto? {
@@ -542,4 +544,12 @@ class Softkomik : HttpSource() {
         "https://img.softdevices.my.id/softkomik-image",
         "https://image.softkomik.com/softkomik",
     )
+
+    // Clean garabage at trailing of signature and token
+    fun Request.withHeaders(session: SessionDto): Request = this.newBuilder()
+        .header("X-Token", session.token.cleanB64())
+        .header("X-Sign", session.sign.take(64))
+        .build()
+
+    fun String.cleanB64(): String = substringBefore('=').let { it -> it + "=".repeat((4 - (it.length % 4)) % 4) }
 }
