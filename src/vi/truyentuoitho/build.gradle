@@ -2,8 +2,8 @@ ext {
     extName = 'TruyenTuoiTho'
     extClass = '.TruyenTuoiTho'
     themePkg = 'madara'
-    baseUrl = 'https://truyentuoitho.com'
-    overrideVersionCode = 2
+    baseUrl = 'https://truyentuoitho.online'
+    overrideVersionCode = 3
     isNsfw = false
 }
 
