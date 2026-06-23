@@ -24,7 +24,7 @@ class ResetScans :
     override val useNewChapterEndpoint = true
 
     override fun popularMangaSelector() = ".rs-manga-library__card"
-    override val popularMangaUrlSelector = popularMangaSelector() + " a"
+    override val popularMangaUrlSelector = popularMangaSelector() + "-title a"
 
     override fun searchMangaSelector() = popularMangaSelector()
     override val searchMangaUrlSelector = popularMangaUrlSelector
