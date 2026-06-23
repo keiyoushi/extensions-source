@@ -26,6 +26,7 @@ const val REUSE_TIMEOUT_MS = 30 * 1000L // 30s
 class WebViewInterceptor(private val userAgent: String?) : Interceptor {
 
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+    private var destroyWv: Runnable? = null
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val req = chain.request()
@@ -56,12 +57,7 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
 
     private val globalWebView: WebView
         get() {
-            val currentTime = System.currentTimeMillis()
-
-            if (cachedWv != null && (currentTime - accessTime) > REUSE_TIMEOUT_MS) {
-                cachedWv?.destroy()
-                cachedWv = null
-            }
+            destroyWv?.let { mainHandler.removeCallbacks(it) }
 
             if (cachedWv == null) {
                 cachedWv = WebView(applicationContext).apply {
@@ -72,7 +68,15 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
                     }
                 }
             }
-            accessTime = currentTime
+
+            destroyWv = Runnable {
+                cachedWv?.destroy()
+                cachedWv = null
+                destroyWv = null
+            }.also {
+                mainHandler.postDelayed(it, REUSE_TIMEOUT_MS)
+            }
+
             return cachedWv!!
         }
 
