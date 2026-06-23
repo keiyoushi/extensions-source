@@ -1,23 +1,48 @@
 package eu.kanade.tachiyomi.extension.pt.kuromangas
 
 import android.util.Base64
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.readIntBigEndian
+import keiyoushi.utils.readIntLittleEndian
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.ResponseBody.Companion.toResponseBody
 import java.security.MessageDigest
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-const val VITE_API_ENC_KEY = "5ato8l674shksfE2oMwajkun9TuYTusF4jKdqEwhUEft9787147pasde345h"
 const val HOSTNAME_PART = "kuromangas.com::v2"
 const val ANTIBOT = "x9_4v2_b"
+const val DEFAULT_ENC_KEY = "5ato8l674shksfE2oMwajkun9TuYTusF4jKdqEwhUEft9787147pasdssde345h"
 
-class KuroMangasDecryptor {
+private val encKeyRegex = Regex("""ENCRYPTION_KEY\s*[:=]\s*["']([^"']+)["']""")
+
+class KuroMangasDecryptor(val baseUrl: String, val client: OkHttpClient) {
+    private var viteApiEncKey: String? = null
+    private var hasErrored: Boolean = false
 
     fun vSecureInterceptor() = Interceptor { chain ->
-        val response = chain.proceed(chain.request())
+        val req = chain.request()
+        if (viteApiEncKey == null || hasErrored) {
+            val indexJs = client.newCall(GET(baseUrl, req.headers)).execute()
+                .asJsoup()
+                .selectFirst("script[src*=index]")
+                ?.absUrl("src")
+
+            viteApiEncKey = if (indexJs != null) {
+                client.newCall(GET(indexJs, req.headers)).execute()
+                    .body.string()
+                    .let { encKeyRegex.find(it)?.groupValues?.get(1) }
+            } else {
+                null
+            } ?: DEFAULT_ENC_KEY
+        }
+
+        val response = chain.proceed(req)
         val dataKey = response.headers["x-kuro-datakey"] ?: return@Interceptor response
 
         val secureDto = response.parseAs<SecureDto>()
@@ -28,7 +53,7 @@ class KuroMangasDecryptor {
             .build()
     }
 
-    // index-Dn_X_unp.js: Ik2() + Hk2()
+    // index-*.js: Ik2() + Hk2()
     fun decrypt(vSecure: String, dataKey: String): String {
         val password = derivePassword()
         val encrypted = Base64.decode(vSecure, Base64.DEFAULT)
@@ -42,8 +67,14 @@ class KuroMangasDecryptor {
         rabbit.crypt(plaintext)
 
         val jsonStr = String(plaintext, Charsets.UTF_8)
-        val wrapper = jsonStr.parseAs<JsonElement>()
-        val inner = wrapper.jsonObject[dataKey] ?: error("Failed to decrypt response")
+
+        val wrapper = try {
+            jsonStr.parseAs<JsonElement>()
+        } catch (e: Exception) {
+            hasErrored = true
+            error("Decryption failed: ${e.message}")
+        }
+        val inner = wrapper.jsonObject[dataKey] ?: error("Failed to find dataKey")
         return inner.toString()
     }
 
@@ -53,7 +84,7 @@ class KuroMangasDecryptor {
             .digest(toHash.toByteArray())
             .joinToString("") { "%02x".format(it) }
             .substring(0, 8)
-        return VITE_API_ENC_KEY + md5Part
+        return viteApiEncKey + md5Part
     }
 
     fun evpBytesToKey(password: ByteArray, salt: ByteArray, keyLen: Int = 16, ivLen: Int = 8): Pair<ByteArray, ByteArray> {
@@ -84,10 +115,7 @@ class Rabbit {
     fun setup(key: ByteArray, iv: ByteArray) {
         val kw = IntArray(4)
         for (i in 0 until 4) {
-            kw[i] = (key[i * 4 + 3].toInt() and 0xFF shl 24) or
-                (key[i * 4 + 2].toInt() and 0xFF shl 16) or
-                (key[i * 4 + 1].toInt() and 0xFF shl 8) or
-                (key[i * 4].toInt() and 0xFF)
+            kw[i] = key.readIntLittleEndian(i * 4)
         }
 
         x[0] = kw[0]
@@ -117,14 +145,8 @@ class Rabbit {
         }
 
         if (iv.isNotEmpty()) {
-            val iv0 = (iv[0].toInt() and 0xFF shl 24) or
-                (iv[1].toInt() and 0xFF shl 16) or
-                (iv[2].toInt() and 0xFF shl 8) or
-                (iv[3].toInt() and 0xFF)
-            val iv1 = (iv[4].toInt() and 0xFF shl 24) or
-                (iv[5].toInt() and 0xFF shl 16) or
-                (iv[6].toInt() and 0xFF shl 8) or
-                (iv[7].toInt() and 0xFF)
+            val iv0 = iv.readIntBigEndian(0)
+            val iv1 = iv.readIntBigEndian(4)
 
             fun swap(w: Int) = ((w and 0xFF) shl 24) or
                 ((w and 0xFF00) shl 8) or

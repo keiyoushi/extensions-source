@@ -1,12 +1,10 @@
 ext {
     extName = "FireCross"
     extClass = ".FireCross"
-    extVersionCode = 3
+    themePkg = "clipstudioreader"
+    baseUrl = "https://firecross.jp"
+    overrideVersionCode = 2
     isNsfw = false
 }
 
 apply plugin: "kei.plugins.extension.legacy"
-
-dependencies {
-    implementation(project(":lib:clipstudioreader"))
-}

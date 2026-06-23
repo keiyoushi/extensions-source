@@ -13,6 +13,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
+import keiyoushi.zip.zipDirectory
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -114,8 +116,17 @@ class Mokuro :
             .encodedPath(url.encodedPath.removeSuffix(".mokuro") + ".cbz")
             .build()
 
+        val byName = client.zipDirectory(cbzUrl.toString(), headers).entries.associateBy { it.name }
+
         return mokuro.pages.mapIndexed { index, page ->
-            Page(index, imageUrl = "$cbzUrl#${page.imgPath}")
+            val entry = byName[page.imgPath] ?: throw Exception("Entry not found in CBZ: ${page.imgPath}")
+            val data = ImageRequest(
+                page.imgPath,
+                entry.localHeaderOffset,
+                entry.compressedSize,
+                entry.method,
+            ).toJsonString()
+            Page(index, imageUrl = "$cbzUrl#$data")
         }
     }
 

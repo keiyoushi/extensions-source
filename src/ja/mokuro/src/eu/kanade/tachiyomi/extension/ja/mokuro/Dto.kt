@@ -60,4 +60,12 @@ class MokuroPageDto(
     @SerialName("img_path") val imgPath: String,
 )
 
+@Serializable
+class ImageRequest(
+    val name: String,
+    val offset: Long,
+    val compressedSize: Long,
+    val method: Int,
+)
+
 private val chapterNumberRegex = """(\d+(\.\d+)?)""".toRegex()

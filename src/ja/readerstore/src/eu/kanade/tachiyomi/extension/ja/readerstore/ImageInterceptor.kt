@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.readIntLittleEndian
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -180,14 +181,9 @@ class ImageInterceptor : Interceptor {
 
     private fun sliceEncryptedHeader(page: ByteArray): ByteArray {
         val start = HEADER_SIZE_PREFIX + MAC_SIZE
-        val end = page.leInt(0) + HEADER_SIZE_PREFIX
+        val end = page.readIntLittleEndian(0) + HEADER_SIZE_PREFIX
         return page.copyOfRange(start, end)
     }
-
-    private fun ByteArray.leInt(offset: Int): Int = (this[offset].toInt() and 0xFF) or
-        ((this[offset + 1].toInt() and 0xFF) shl 8) or
-        ((this[offset + 2].toInt() and 0xFF) shl 16) or
-        ((this[offset + 3].toInt() and 0xFF) shl 24)
 
     private fun parseScrambleOrder(decryptedHeader: ByteArray): Pair<Int, List<Int>> {
         if (decryptedHeader.size < SCRAMBLE_ORDER_OFFSET + 4) return 0 to emptyList()

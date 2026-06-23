@@ -3,7 +3,7 @@ ext {
     extClass = '.BegaTranslation'
     themePkg = 'madara'
     baseUrl = 'https://begatranslation.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 

@@ -1,10 +1,11 @@
 package eu.kanade.tachiyomi.extension.zh.happymh
 
 import android.util.Base64
+import keiyoushi.utils.decodeHex
+import keiyoushi.utils.writeIntBigEndian
 import okio.Buffer
 import okio.InflaterSource
 import okio.buffer
-import okio.source
 import java.security.MessageDigest
 import java.util.zip.Inflater
 
@@ -23,8 +24,8 @@ class Decoder {
 
         // key, nonce, and ciphertext from offsets
         val str = encryptedScans
-        val key = hexToBytes(str.substring(off1 + 8, off1 + 72))
-        val nonce = hexToBytes(str.substring(off1 + 72 + off2, off1 + 72 + off2 + 32))
+        val key = str.substring(off1 + 8, off1 + 72).decodeHex()
+        val nonce = str.substring(off1 + 72 + off2, off1 + 72 + off2 + 32).decodeHex()
         val ciphertext = Base64.decode(str.substring(off1 + 72 + off2 + 32 + off3), Base64.DEFAULT)
 
         // CTR: key (32) + nonce (16) + counter (4)
@@ -36,10 +37,7 @@ class Decoder {
         for (i in ciphertext.indices step 32) {
             val blockIdx = i / 32
             // counter from 48-51 positions
-            state[48] = (blockIdx ushr 24).toByte()
-            state[49] = (blockIdx ushr 16).toByte()
-            state[50] = (blockIdx ushr 8).toByte()
-            state[51] = blockIdx.toByte()
+            state.writeIntBigEndian(48, blockIdx)
 
             val keystream = sha256(state)
             val blockSize = minOf(32, ciphertext.size - i)
@@ -57,12 +55,6 @@ class Decoder {
     }
 
     private fun sha256(data: ByteArray) = MessageDigest.getInstance("SHA-256").digest(data)
-
-    private fun hexToBytes(hex: String): ByteArray = ByteArray(hex.length / 2).also { bytes ->
-        for (i in hex.indices step 2) {
-            bytes[i / 2] = hex.substring(i, i + 2).toInt(16).toByte()
-        }
-    }
 
     private fun zlibDecompress(data: ByteArray): ByteArray {
         val inflater = Inflater(true)
