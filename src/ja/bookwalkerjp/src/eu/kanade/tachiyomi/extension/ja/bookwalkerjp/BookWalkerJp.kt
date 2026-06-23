@@ -31,6 +31,9 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -59,7 +62,7 @@ class BookWalkerJp :
         .build()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(CookieInterceptor(DOMAIN, listOf("holdBook-series" to "1", "safeSearch" to "111", "mySetting/showCoverR15" to "1")))
+        addNetworkInterceptor(CookieInterceptor(DOMAIN, listOf("holdBook-series" to "1", "safeSearch" to "111", "mySetting/showCoverR15" to "1")))
         addInterceptor(PublusInterceptor())
         addInterceptor {
             val request = it.request()
@@ -151,23 +154,34 @@ class BookWalkerJp :
         return MangasPage(mangas, hasNext)
     }
 
-    // TODO how implement wayomi?
     override suspend fun getMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = if (fetchDetails || (fetchChapters && manga.url.startsWith("de"))) {
-            fetchBookDetails(manga)
+        val isBook = manga.url.startsWith("de")
+
+        val seriesDoc = if (!isBook && (fetchDetails || fetchChapters)) {
+            client.get(seriesUrl(manga.url), desktopHeaders).asJsoup()
         } else {
             null
         }
-        val seriesId = details?.seriesId?.toString() ?: manga.url
+        val wayomi = seriesDoc?.selectFirst(".p-episode__list") != null
+
+        val details = if (fetchDetails || (fetchChapters && (isBook || wayomi))) {
+            fetchBookDetails(manga, seriesDoc, wayomi)
+        } else {
+            null
+        }
 
         return SMangaUpdate(
             manga = if (fetchDetails) details!!.toSManga() else manga,
-            chapters = if (fetchChapters) chapterList(seriesId) else chapters,
+            chapters = when {
+                !fetchChapters -> chapters
+                wayomi -> seriesDoc.toWayomiChapters(preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false))
+                else -> chapterList(details?.seriesId?.toString() ?: manga.url)
+            },
         )
     }
 
@@ -176,11 +190,11 @@ class BookWalkerJp :
         return "$baseUrl/series/$seriesId/list/"
     }
 
-    private suspend fun fetchBookDetails(manga: SManga): DetailsResponse {
-        val bookId = if (manga.url.startsWith("de")) {
-            manga.url
-        } else {
-            client.get(seriesListUrl(manga.url, 1), desktopHeaders).asJsoup().firstBookId()
+    private suspend fun fetchBookDetails(manga: SManga, seriesDoc: Document?, wayomi: Boolean): DetailsResponse {
+        val bookId = when {
+            manga.url.startsWith("de") -> manga.url
+            wayomi -> seriesDoc!!.firstEpisodeId()
+            else -> client.get(seriesListUrl(manga.url, 1), desktopHeaders).asJsoup().firstBookId()
         }
         return client.get(booksUpdatesUrl(bookId)).parseAs<List<DetailsResponse>>().first()
     }
@@ -216,7 +230,6 @@ class BookWalkerJp :
         .addQueryParameter("page", page.toString())
         .build()
 
-    // TODO check memo, how?
     private fun Element.toSChapter(hideLocked: Boolean): SChapter? {
         val readButton = selectFirst(".a-icon-btn--read, .a-icon-btn--free")
         val trialButton = selectFirst(".a-icon-btn--trial")
@@ -234,6 +247,27 @@ class BookWalkerJp :
         }
     }
 
+    private fun Document.toWayomiChapters(hideLocked: Boolean): List<SChapter> = select(".p-episode__list a[data-book-uuid]")
+        .mapNotNull { it.toWayomiChapter(hideLocked) }
+        .reversed()
+
+    private fun Element.toWayomiChapter(hideLocked: Boolean): SChapter? {
+        val free = attr("data-is-free") == "1"
+        val rented = attr("data-is-now-rental") == "1"
+        val unlocked = free || rented || attr("data-is-settled") == "1"
+        if (hideLocked && !unlocked) return null
+
+        return SChapter.create().apply {
+            name = (if (unlocked) "" else "🔒 ") + selectFirst(".o-ttsk-list-item__title")!!.text()
+            url = if (free) absUrl("href") else attr("data-viewer-url")
+            if (rented) {
+                memo = buildJsonObject { put("df", attr("data-df-viewer-url")) }
+            }
+        }
+    }
+
+    private fun seriesUrl(seriesId: String): HttpUrl = "$baseUrl/series/$seriesId/".toHttpUrl()
+    private fun Document.firstEpisodeId(): String = "de" + selectFirst(".p-episode__list a[data-book-uuid]")!!.attr("data-book-uuid")
     private fun Document.firstBookId(): String = selectFirst(".m-tile-list .m-book-item")!!.bookId()
     private fun Document.hasNextPage(): Boolean = selectFirst(".o-pager-next a:not(.o-pager-box-btn_hidden)") != null
     private fun Element.bookLink(): Element = selectFirst("a.m-book-item__title")!!
@@ -257,7 +291,7 @@ class BookWalkerJp :
         GET(refreshUrl, headers)
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = chapter.url
+    override fun getChapterUrl(chapter: SChapter): String = chapter.memo["df"]?.jsonPrimitive?.content ?: chapter.url
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = client.get(getChapterUrl(chapter), desktopHeaders, ensureSuccess = false).request.url
@@ -304,6 +338,15 @@ class BookWalkerJp :
             }.build()
 
             val content = client.get(cApiUrl).parseAs<PublusContent>()
+
+            if (content.status == "503") {
+                throw Exception("This chapter can only be viewed on one device. Log out and log in again.")
+            }
+
+            if (content.status == "401" || content.status == "403") {
+                throw Exception("Log in via WebView and purchase this chapter to read.")
+            }
+
             if (content.cty != 1 && content.cty != 2) {
                 throw Exception("Novels are not supported!")
             }
