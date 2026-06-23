@@ -95,6 +95,11 @@ object ChapterImageDecoder {
     private const val SUFFIX = "nQ"
     private const val GROUP = 7
 
+    // Precomputed lookup: custom-alphabet char code -> standard base64url char (-1 = invalid)
+    private val DECODE_TABLE = IntArray(128) { -1 }.apply {
+        for (i in CUSTOM.indices) this[CUSTOM[i].code] = STD[i].code
+    }
+
     fun decode(input: String): String {
         require(input.startsWith(PREFIX) && input.endsWith(SUFFIX)) { "未知的章节数据格式" }
         val body = input.substring(PREFIX.length, input.length - SUFFIX.length)
@@ -133,9 +138,9 @@ object ChapterImageDecoder {
     private fun mapAlphabet(s: String): String {
         val sb = StringBuilder(s.length)
         for (ch in s) {
-            val idx = CUSTOM.indexOf(ch)
-            require(idx >= 0) { "无效的章节数据字符" }
-            sb.append(STD[idx])
+            val mapped = if (ch.code < DECODE_TABLE.size) DECODE_TABLE[ch.code] else -1
+            require(mapped >= 0) { "无效的章节数据字符" }
+            sb.append(mapped.toChar())
         }
         return sb.toString()
     }
