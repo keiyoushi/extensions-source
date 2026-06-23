@@ -47,9 +47,11 @@ class MangaLivre :
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept", "*/*")
         .add("Accept-Language", "pt-BR,en-US;q=0.9,en;q=0.8")
+        .add("Referer", "$baseUrl/")
         .add("Sec-Fetch-Dest", "empty")
         .add("Sec-Fetch-Mode", "cors")
         .add("Sec-Fetch-Site", "same-origin")
+        .add("x-toonlivre-client", "web-v8")
 
     // ============================== Popular =======================================
 
