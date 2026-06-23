@@ -64,16 +64,21 @@ class BrowseManga(
             else -> false
         }
 
-    fun toSManga(baseUrl: String) = SManga.create().apply {
+    fun toSManga(baseUrl: String, hideAdultCovers: Boolean = false) = SManga.create().apply {
         url = id.toString()
-        title = this@BrowseManga.title
-        thumbnail_url = photo?.let {
-            if (it.startsWith("/")) {
-                baseUrl + it
-            } else if (it.startsWith("http")) {
-                it
-            } else {
-                null
+        title = if (isAdult && hideAdultCovers) "[18+] ${this@BrowseManga.title}" else this@BrowseManga.title
+
+        thumbnail_url = if (isAdult && hideAdultCovers) {
+            "$baseUrl/nsfw-cover.jpg"
+        } else {
+            photo?.let {
+                if (it.startsWith("/")) {
+                    baseUrl + it
+                } else if (it.startsWith("http")) {
+                    it
+                } else {
+                    null
+                }
             }
         }
     }

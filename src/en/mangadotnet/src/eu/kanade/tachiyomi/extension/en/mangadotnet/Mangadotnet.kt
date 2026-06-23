@@ -41,9 +41,10 @@ import okhttp3.Callback
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.internal.closeQuietly
+import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.IOException
 import rx.Observable
 import uy.kohesive.injekt.Injekt
@@ -63,7 +64,22 @@ class Mangadotnet :
     override val baseUrl = "https://mangadot.net"
     override val supportsLatest = true
 
-    override val client = network.client
+    override val client = network.client.newBuilder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+
+            if (request.url.encodedPath == "/nsfw-cover.jpg") {
+                return@addInterceptor Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(404)
+                    .message("NSFW Cover")
+                    .body("".toResponseBody(null))
+                    .build()
+            }
+            chain.proceed(request)
+        }
+        .build()
 
     // ============================== Setup ===============================
     private val preferences = getPreferences {
@@ -352,7 +368,9 @@ class Mangadotnet :
         val data = response.decodeRscAs<Data<MangaList>>().data
         updateGenres(data.allGenres, adultModePref() != "none")
 
-        return MangasPage(data.mangaList.orEmpty().map { it.toSManga(baseUrl) }, data.hasNextPage())
+        val hideAdultCovers = adultModePref() == "none"
+
+        return MangasPage(data.mangaList.orEmpty().map { it.toSManga(baseUrl, hideAdultCovers) }, data.hasNextPage())
     }
 
     // ============================== Details ==============================
@@ -547,9 +565,10 @@ class Mangadotnet :
             .enqueue(
                 object : Callback {
                     override fun onResponse(call: Call, response: Response) {
-                        response.closeQuietly()
-                        if (!response.isSuccessful) {
-                            Log.e(name, "Failed to count views: HTTP Error ${response.code}")
+                        response.use {
+                            if (!response.isSuccessful) {
+                                Log.e(name, "Failed to count views: HTTP Error ${response.code}")
+                            }
                         }
                     }
                     override fun onFailure(call: Call, e: IOException) {
