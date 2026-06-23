@@ -87,7 +87,7 @@ class MangaBlackCat : HttpSource() {
             ?: link.attr("title")
 
         return SManga.create().apply {
-            title = cleanText(rawTitle)
+            title = rawTitle.trim()
             thumbnail_url = image?.imgAttr()
             setUrlWithoutDomain(link.attr("abs:href"))
         }
@@ -97,7 +97,7 @@ class MangaBlackCat : HttpSource() {
         val document = response.asJsoup()
 
         return SManga.create().apply {
-            title = cleanText(document.selectFirst("article h1, main h1")?.text().orEmpty())
+            title = document.selectFirst("article h1, main h1")?.text().orEmpty()
             thumbnail_url = document.selectFirst("article figure img, main figure img")?.imgAttr()
             author = document.selectFirst("article span span.text-base-content, main span span.text-base-content")
                 ?.text()
@@ -113,7 +113,6 @@ class MangaBlackCat : HttpSource() {
             description = document.select("article [class*=leading-relaxed], main [class*=leading-relaxed]")
                 .map { it.text() }
                 .firstOrNull { it.length > 80 }
-                ?.let(::cleanText)
                 .orEmpty()
         }
     }
@@ -164,7 +163,7 @@ class MangaBlackCat : HttpSource() {
     private fun Element.toChapter(): SChapter = SChapter.create().apply {
         val chapterNumber = attr("data-chapter-number").toFloatOrNull()
         setUrlWithoutDomain(attr("abs:href"))
-        name = cleanText(selectFirst("h4")?.text().orEmpty()).ifBlank {
+        name = selectFirst("h4")?.text().orEmpty().ifBlank {
             "ตอนที่ ${chapterNumber?.toString()?.removeSuffix(".0").orEmpty()}"
         }
         chapter_number = chapterNumber ?: parseChapterNumber(url)
@@ -185,7 +184,7 @@ class MangaBlackCat : HttpSource() {
                     ?.toFloatOrNull()
                     ?: return@mapNotNull null
 
-                val text = cleanText(link.text())
+                val text = link.text()
                 if (!text.contains("ตอน") && !text.contains(chapterNumber.toString().removeSuffix(".0"))) {
                     return@mapNotNull null
                 }
