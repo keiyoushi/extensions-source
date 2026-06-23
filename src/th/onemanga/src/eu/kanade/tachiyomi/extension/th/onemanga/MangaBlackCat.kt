@@ -246,13 +246,11 @@ class MangaBlackCat : HttpSource() {
     }
 
     private fun String?.parseChapterDate(): Long {
-        val date = this?.trim().orEmpty()
-        if (date.isBlank() || date.contains("ago", ignoreCase = true)) return 0L
-
-        return try {
-            dateFormat.parse(date)?.time ?: 0L
-        } catch (_: Exception) {
-            0L
+        val date = this?.trim()
+        return when {
+            date.isNullOrBlank() -> 0L
+            date.contains("ago", ignoreCase = true) -> 0L
+            else -> dateFormat.tryParse(date)
         }
     }
 
