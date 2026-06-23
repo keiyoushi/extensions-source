@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.fr.phenixscans
+package eu.kanade.tachiyomi.extension.fr.phenixscansco
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
