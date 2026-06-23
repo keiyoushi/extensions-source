@@ -121,7 +121,20 @@ class MangaBlackCat : HttpSource() {
 
     override fun chapterListRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
+        .asObservableSuccess()
+        .flatMap { response ->
+            chapterListParse(response, mutableSetOf(getMangaUrl(manga)))
+        }
+        .map { chapters ->
+            chapters
+                .distinctBy { it.url }
+                .sortedByDescending { it.chapter_number }
+        }
+
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
+
+    private fun chapterListParse(response: Response, requestedPages: MutableSet<String>): Observable<List<SChapter>> {
         val document = response.asJsoup()
         val chapters = parseChapters(document).toMutableList()
         val requestedPages = mutableSetOf(document.location().ifBlank { response.request.url.toString() })
