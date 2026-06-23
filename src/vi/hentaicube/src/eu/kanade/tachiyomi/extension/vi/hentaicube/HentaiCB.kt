@@ -1,8 +1,16 @@
 package eu.kanade.tachiyomi.extension.vi.hentaicube
 
+import android.annotation.SuppressLint
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.View
+import android.view.ViewGroup
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Button
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -17,19 +25,19 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
 
 class HentaiCB :
     Madara(
@@ -195,21 +203,137 @@ class HentaiCB :
         return request.newBuilder().url(url).build()
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        document.selectFirst("#manga-secure-reader")
-            ?: return super.pageListParse(document).distinctBy { it.imageUrl }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        val request = pageListRequest(chapter)
+        val url = request.url.toString()
+        runInWebView(url)
+    }
 
-        val chapterUrl = document.location()
-        val apiHeaders = headers.newBuilder()
-            .set("Referer", chapterUrl)
-            .set("Accept", "application/json")
-            .build()
-        val images = client.newCall(GET("$baseUrl/wp-json/manga-reader/v1/images", apiHeaders)).execute()
-            .parseAs<SecureReaderDto>()
-            .images
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
-        return images.mapIndexed { index, imageUrl ->
-            Page(index, chapterUrl, imageUrl)
+    @SuppressLint("SetJavaScriptEnabled")
+    @Synchronized
+    private fun runInWebView(url: String): List<Page> {
+        val handler = Handler(Looper.getMainLooper())
+        val result = WebViewImageResult()
+        val pool = ('a'..'z') + ('A'..'Z')
+        val interfaceName = (1..(10..20).random())
+            .map { pool.random() }
+            .joinToString("")
+        val active = java.util.concurrent.atomic.AtomicBoolean(true)
+        val started = Semaphore(0)
+        val startupError = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+
+        var webView: WebView? = null
+        var lastUrl = url
+
+        handler.post {
+            try {
+                if (!active.get()) return@post
+
+                val view = WebView(applicationContext)
+                webView = view
+
+                runCatching {
+                    view.layoutParams = ViewGroup.LayoutParams(WEBVIEW_WIDTH, WEBVIEW_HEIGHT)
+                    view.measure(
+                        View.MeasureSpec.makeMeasureSpec(WEBVIEW_WIDTH, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(WEBVIEW_HEIGHT, View.MeasureSpec.EXACTLY),
+                    )
+                    view.layout(0, 0, WEBVIEW_WIDTH, WEBVIEW_HEIGHT)
+                }
+
+                with(view.settings) {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    databaseEnabled = true
+                    loadWithOverviewMode = true
+                    useWideViewPort = true
+                    blockNetworkImage = false
+                    userAgentString = headers["User-Agent"]
+                }
+
+                view.addJavascriptInterface(result, interfaceName)
+
+                val checkImagesScript = """
+                    (function() {
+                        var imgs = document.querySelectorAll('#manga-secure-reader img');
+                        if (imgs.length > 0) {
+                            var urls = [];
+                            imgs.forEach(function(img) {
+                                var src = img.getAttribute('data-src') || img.getAttribute('src') || '';
+                                if (src && src.indexOf('data:image') === -1) {
+                                    urls.push(src);
+                                }
+                            });
+                            if (urls.length > 0) {
+                                window.$interfaceName.passImages(JSON.stringify(urls));
+                                return true;
+                            }
+                        }
+                        return false;
+                    })();
+                """.trimIndent()
+
+                view.webViewClient = object : WebViewClient() {
+                    override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                        super.onPageStarted(view, url, favicon)
+                        if (url != null) lastUrl = url
+                    }
+
+                    override fun onPageFinished(view: WebView, url: String?) {
+                        super.onPageFinished(view, url)
+                        if (url != null) lastUrl = url
+                        if (active.get() && result.images == null) {
+                            runCatching { view.evaluateJavascript(checkImagesScript, null) }
+                        }
+                    }
+                }
+
+                view.loadUrl(url)
+
+                val pollRunnable = object : Runnable {
+                    override fun run() {
+                        if (!active.get() || result.images != null) return
+                        runCatching { view.evaluateJavascript(checkImagesScript, null) }
+                        if (active.get() && result.images == null) {
+                            handler.postDelayed(this, POLL_INTERVAL_MS)
+                        }
+                    }
+                }
+                handler.postDelayed(pollRunnable, POLL_INTERVAL_MS)
+
+                started.release()
+            } catch (error: Throwable) {
+                startupError.set(error)
+                started.release()
+            }
+        }
+
+        val completed = try {
+            if (!started.tryAcquire(WEBVIEW_START_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                throw Exception("Timed out starting WebView (url=$lastUrl)")
+            }
+            startupError.get()?.let {
+                throw Exception("Failed to start WebView (url=$lastUrl)", it)
+            }
+            result.await(WEBVIEW_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        } finally {
+            active.set(false)
+            handler.post {
+                val view = webView
+                webView = null
+                runCatching { view?.stopLoading() }
+                runCatching { view?.destroy() }
+            }
+        }
+
+        if (!completed || result.images.isNullOrEmpty()) {
+            throw Exception("Failed to load images from WebView (url=$lastUrl)")
+        }
+
+        return result.images!!.mapIndexed { index, imageUrl ->
+            Page(index, url, imageUrl)
         }
     }
 
@@ -257,10 +381,27 @@ class HentaiCB :
         }.let(screen::addPreference)
     }
 
-    @Serializable
-    class SecureReaderDto(
-        val images: List<String>,
-    )
+    private class WebViewImageResult {
+        private val signal = Semaphore(0)
+
+        @Volatile
+        var images: List<String>? = null
+            private set
+
+        @JavascriptInterface
+        @Suppress("UNUSED")
+        fun passImages(data: String) {
+            if (images == null) {
+                try {
+                    val jsonArray = org.json.JSONArray(data)
+                    images = (0 until jsonArray.length()).map { jsonArray.getString(it) }
+                    signal.release()
+                } catch (_: Exception) {}
+            }
+        }
+
+        fun await(timeout: Long, unit: TimeUnit): Boolean = signal.tryAcquire(timeout, unit) && images != null
+    }
 
     companion object {
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
@@ -271,5 +412,10 @@ class HentaiCB :
                 "Để trống để sử dụng URL mặc định.\n" +
                 "Hiện tại sử dụng: "
         private val domainRegex = Regex("""^https?://(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9]{1,6}$""")
+        private const val WEBVIEW_WIDTH = 1080
+        private const val WEBVIEW_HEIGHT = 1920
+        private const val WEBVIEW_START_TIMEOUT_SECONDS = 10L
+        private const val WEBVIEW_TIMEOUT_SECONDS = 30L
+        private const val POLL_INTERVAL_MS = 2000L
     }
 }
