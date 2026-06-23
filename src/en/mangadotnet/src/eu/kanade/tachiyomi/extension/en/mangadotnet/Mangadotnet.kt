@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
@@ -114,9 +115,9 @@ class Mangadotnet :
             edit().putString(POPULAR_MODE_PREF, "most-tracked").apply()
         }
 
-        val cacheVersionKey = "pref_genre_cache_v2"
+        val cacheVersionKey = "pref_genre_cache"
         if (!contains(cacheVersionKey)) {
-            val cacheDir = Injekt.get<Application>().cacheDir.resolve("source_$id")
+            val cacheDir = applicationContext.cacheDir.resolve("source_$id")
             cacheDir.resolve("genres_normal.json").delete()
             cacheDir.resolve("genres_adult.json").delete()
             edit().putBoolean(cacheVersionKey, true).apply()
@@ -349,18 +350,9 @@ class Mangadotnet :
 
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.decodeRscAs<Data<MangaList>>().data
-        updateGenres(data.allGenres, true)
+        updateGenres(data.allGenres, adultModePref() != "none")
 
-        val mode = adultModePref()
-        val filteredManga = data.mangaList.orEmpty().filter { manga ->
-            when (mode) {
-                "none" -> !manga.isAdult
-                "1" -> manga.isAdult
-                else -> true
-            }
-        }
-
-        return MangasPage(filteredManga.map { it.toSManga(baseUrl) }, data.hasNextPage())
+        return MangasPage(data.mangaList.orEmpty().map { it.toSManga(baseUrl) }, data.hasNextPage())
     }
 
     // ============================== Details ==============================
