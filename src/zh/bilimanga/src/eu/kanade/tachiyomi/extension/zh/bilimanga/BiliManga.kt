@@ -26,7 +26,7 @@ import kotlin.time.Duration.Companion.seconds
 class BiliManga :
     HttpSource(),
     ConfigurableSource {
-
+    override val id = 7289707411592168382
     override val baseUrl = "https://www.bilimanga.net"
 
     override val lang = "zh"
