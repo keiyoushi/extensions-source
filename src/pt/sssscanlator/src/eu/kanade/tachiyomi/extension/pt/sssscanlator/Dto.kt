@@ -25,6 +25,7 @@ class LibraryMangaDto(
     val title: String,
     val cover: String? = null,
     val slug: String,
+    val type: String? = null,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         title = this@LibraryMangaDto.title
