@@ -1,9 +1,7 @@
 ext {
-    extName = 'Traducciones Amistosas'
-    extClass = '.Nartag'
-    themePkg = 'madara'
-    baseUrl = 'https://nartag.com'
-    overrideVersionCode = 6
+    extName = 'Rncalation'
+    extClass = '.Rncalation'
+    extVersionCode = 58
     isNsfw = true
 }
 
