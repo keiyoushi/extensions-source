@@ -236,11 +236,13 @@ class MangaBlackCat : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private fun parseStatus(status: String?): Int = when {
-        status == null -> SManga.UNKNOWN
-        status.contains("กำลังอัพเดท") || status.contains("ongoing", ignoreCase = true) -> SManga.ONGOING
-        status.contains("จบแล้ว") || status.contains("completed", ignoreCase = true) -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
+    private fun parseStatus(status: String?): Int = when (val normalizedStatus = status?.lowercase(Locale.ROOT)) {
+        null -> SManga.UNKNOWN
+        else -> when {
+            normalizedStatus.contains("กำลังอัพเดท") || normalizedStatus.contains("ongoing") -> SManga.ONGOING
+            normalizedStatus.contains("จบแล้ว") || normalizedStatus.contains("completed") -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
     }
 
     private fun String?.parseChapterDate(): Long {
