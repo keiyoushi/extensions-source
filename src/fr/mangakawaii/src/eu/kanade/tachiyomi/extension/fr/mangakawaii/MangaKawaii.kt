@@ -53,7 +53,7 @@ class MangaKawaii :
         .addInterceptor { chain ->
             // fetch lang path to get encrypted cookie that server uses for lang check
             if (currentLang != language) {
-                network.client.newCall(GET("$baseUrl/lang/$language", headers)).execute()
+                network.client.newCall(GET("$baseUrl/lang/$language", headers)).execute().close()
                 currentLang = language
             }
             chain.proceed(chain.request())
