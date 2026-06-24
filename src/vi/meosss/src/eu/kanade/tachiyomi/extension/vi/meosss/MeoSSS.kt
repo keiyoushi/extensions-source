@@ -60,7 +60,7 @@ class MeoSSS :
     private fun Element.mangaFromPopularElement(): SManga = SManga.create().apply {
         setUrlWithoutDomain(select("a[href*=/truyen/]").first()!!.absUrl("href"))
         title = select("h2.uk-text-bold a").first()!!.text()
-        thumbnail_url = select("img").firstOrNull()?.imgUrl()
+        thumbnail_url = selectFirst("img")?.imgUrl()
     }
 
     // ============================== Latest ===============================
