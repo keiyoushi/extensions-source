@@ -2,8 +2,8 @@ ext {
     extName = 'Moon Daisy Scans'
     extClass = '.MoonDaisyScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://moondaisyscans.site'
-    overrideVersionCode = 5
+    baseUrl = 'https://moondaisyscans.pro'
+    overrideVersionCode = 6
     isNsfw = true
 }
 
