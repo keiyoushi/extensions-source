@@ -7,10 +7,11 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import keiyoushi.utils.applicationContext
-import org.json.JSONArray
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Semaphore
@@ -21,7 +22,8 @@ import java.util.concurrent.atomic.AtomicReference
 /**
  * 1. Load chapter page in WebView → Cloudflare Turnstile solved by site JS.
  * 2. Decode image URLs from the obfuscated K/P inline script in the DOM.
- * 3. Pass URLs back via `@JavascriptInterface`.
+ * 3. Capture the `Token` header from CDN requests via `shouldInterceptRequest`.
+ * 4. Wait for both URLs + token → call back.
  */
 object TokenResolver {
 
@@ -40,6 +42,9 @@ object TokenResolver {
     private fun buildExtractionScript(interfaceName: String): String = """
         (function(){
             try {
+                var t = (typeof window.__capturedToken !== 'undefined' && window.__capturedToken)
+                    ? String(window.__capturedToken) : '';
+
                 var s = [];
                 var scripts = document.querySelectorAll('script');
                 for (var i = 0; i < scripts.length; i++) {
@@ -67,12 +72,24 @@ object TokenResolver {
                         break;
                     }
                 }
+
                 if (s.length === 0 && Array.isArray(window.__imgSrcs)) {
                     s = window.__imgSrcs.filter(function(x) {
                         return typeof x === 'string' && x.length > 0;
                     });
                 }
-                if (s.length > 0) $interfaceName.passSrcs(JSON.stringify(s));
+
+                if (s.length === 0) return;
+
+                if (t.length === 0) {
+                    if (!window.__tokenWaitStart) window.__tokenWaitStart = Date.now();
+                    if (Date.now() - window.__tokenWaitStart > 15000) {
+                        $interfaceName.passResult(JSON.stringify({token: t, srcs: s}));
+                    }
+                    return;
+                }
+
+                $interfaceName.passResult(JSON.stringify({token: t, srcs: s}));
             } catch(e) {}
         })();
     """.trimIndent()
@@ -107,6 +124,7 @@ object TokenResolver {
         val active = AtomicBoolean(true)
         val started = Semaphore(0)
         val startupError = AtomicReference<Throwable?>()
+        val capturedToken = AtomicReference<String>()
 
         var webView: WebView? = null
         var injectScript: Runnable? = null
@@ -116,7 +134,8 @@ object TokenResolver {
             try {
                 if (!active.get()) return@post
 
-                val view = WebView(applicationContext)
+                val context = applicationContext
+                val view = WebView(context)
                 webView = view
 
                 runCatching {
@@ -147,10 +166,34 @@ object TokenResolver {
                 view.addJavascriptInterface(payloadResult, interfaceName)
 
                 view.webViewClient = object : WebViewClient() {
+                    override fun shouldInterceptRequest(
+                        view: WebView,
+                        request: WebResourceRequest,
+                    ): WebResourceResponse? {
+                        val url = request.url?.toString() ?: return null
+
+                        if (url.contains("lxmanga.xyz") && capturedToken.get().isNullOrEmpty()) {
+                            val token = request.requestHeaders?.get("Token")
+                            if (!token.isNullOrEmpty()) {
+                                capturedToken.set(token)
+                                handler.post {
+                                    if (active.get()) {
+                                        view.evaluateJavascript(
+                                            "window.__capturedToken='$token'",
+                                            null,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        return super.shouldInterceptRequest(view, request)
+                    }
+
                     override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                         super.onPageStarted(view, url, favicon)
                         if (url != null) lastUrl = url
-                        if (active.get() && !payloadResult.isComplete) {
+                        if (active.get() && payloadResult.payload == null) {
                             runCatching { view.evaluateJavascript(script, null) }
                         }
                     }
@@ -158,7 +201,7 @@ object TokenResolver {
                     override fun onPageFinished(view: WebView, url: String?) {
                         super.onPageFinished(view, url)
                         if (url != null) lastUrl = url
-                        if (active.get() && !payloadResult.isComplete) {
+                        if (active.get() && payloadResult.payload == null) {
                             runCatching { view.evaluateJavascript(script, null) }
                         }
                     }
@@ -166,9 +209,20 @@ object TokenResolver {
 
                 val retry = object : Runnable {
                     override fun run() {
-                        if (!active.get() || payloadResult.isComplete) return
+                        if (!active.get() || payloadResult.payload != null) return
+
+                        val netToken = capturedToken.get()
+                        if (!netToken.isNullOrEmpty()) {
+                            runCatching {
+                                view.evaluateJavascript(
+                                    "if(!window.__capturedToken)window.__capturedToken='$netToken'",
+                                    null,
+                                )
+                            }
+                        }
+
                         runCatching { view.evaluateJavascript(script, null) }
-                        if (active.get() && !payloadResult.isComplete) {
+                        if (active.get() && payloadResult.payload == null) {
                             handler.postDelayed(this, SCRIPT_RETRY_INTERVAL_MS)
                         }
                     }
@@ -206,35 +260,36 @@ object TokenResolver {
         if (!completed) {
             throw IOException("Không tìm thấy dữ liệu ảnh (url=$lastUrl)")
         }
-        return payloadResult.result ?: throw IOException("Failed to capture WebView payload")
+        return payloadResult.payload ?: throw IOException("Failed to capture WebView payload")
     }
 
     private class WebViewPayloadResult {
-        private val srcsReady = Semaphore(0)
+        private val signal = Semaphore(0)
 
         @Volatile
-        private var srcs: List<String>? = null
-
-        val isComplete: Boolean get() = srcs != null
-
-        val result: Result?
-            get() {
-                val s = srcs ?: return null
-                return Result(srcs = s)
-            }
+        var payload: Result? = null
+            private set
 
         @JavascriptInterface
         @Suppress("UNUSED")
-        fun passSrcs(data: String) {
-            if (srcs == null) {
+        fun passResult(data: String) {
+            if (payload == null) {
                 runCatching {
-                    val arr = JSONArray(data)
-                    srcs = (0 until arr.length()).map { arr.getString(it) }
+                    val json = org.json.JSONObject(data)
+                    val token = json.optString("token", "")
+                    val srcsArray = json.getJSONArray("srcs")
+                    val srcs = (0 until srcsArray.length()).map { srcsArray.getString(it) }
+                    payload = Result(token, srcs)
                 }
-                srcsReady.release()
+                signal.release()
             }
         }
 
-        fun await(timeout: Long, unit: TimeUnit): Boolean = srcsReady.tryAcquire(timeout, unit)
+        fun await(timeout: Long, unit: TimeUnit): Boolean {
+            while (payload == null) {
+                if (!signal.tryAcquire(timeout, unit)) return false
+            }
+            return true
+        }
     }
 }
