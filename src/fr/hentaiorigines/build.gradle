@@ -2,8 +2,8 @@ ext {
     extName = 'Hentai Origines'
     extClass = '.HentaiOrigines'
     themePkg = 'madara'
-    baseUrl = 'https://hentai-origines.fr'
-    overrideVersionCode = 0
+    baseUrl = 'https://hentai-origines.com'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
