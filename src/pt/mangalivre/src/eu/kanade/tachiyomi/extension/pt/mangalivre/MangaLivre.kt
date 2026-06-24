@@ -35,7 +35,7 @@ class MangaLivre :
 
     override val supportsLatest: Boolean = true
 
-    override val versionId: Int = 4
+    override val versionId: Int = 3
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(2, 1.seconds) { it.host == baseUrlHost }
