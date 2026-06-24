@@ -150,7 +150,7 @@ class DoujinDesu :
         OrderBy(orderBy),
         GenreList(getGenreList()),
         Filter.Separator(),
-        Filter.Header("Type Filter Is Ignored When Searching"),
+        Filter.Header("Filter Tipe Diabaikan Saat Menggunakan Pencarian"),
         AuthorGroupSeriesFilter(authorGroupSeriesOptions),
         AuthorGroupSeriesValueFilter(),
     )
@@ -180,7 +180,7 @@ class DoujinDesu :
 
     fun SManga.getSlug() = url.removePrefix("/manga/").removeSuffix("/")
 
-    fun SChapter.getIdOrError(): String = if (!url.startsWith('/')) url else throw IOException("Refresh to reload chapters.")
+    fun SChapter.getIdOrError(): String = if (!url.startsWith('/')) url else throw IOException("Segarkan untuk memuat ulang bab.")
 
     companion object {
         private const val APP_SECRET = "dfdf72051dbfdc7d76889ebd31324e74"

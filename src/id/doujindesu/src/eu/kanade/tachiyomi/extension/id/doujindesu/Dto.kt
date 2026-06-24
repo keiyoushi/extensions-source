@@ -64,12 +64,12 @@ class MangaItem(
                 append(it.cleanHtml()) // clean raw escape then remove tags
                 append("\n\n")
             }
-            append("Type: ${this@MangaItem.type.replaceFirstChar { it.uppercase() }}\n")
+            append("Tipe: ${this@MangaItem.type.replaceFirstChar { it.uppercase() }}\n")
             termMap["group"]?.let { append("Group: ${it.joinToString()}\n") }
-            termMap["character"]?.let { append("Characters: ${it.joinToString()}\n") }
-            termMap["series"]?.let { append("Series: ${it.joinToString()}\n") }
+            termMap["character"]?.let { append("Karakter: ${it.joinToString()}\n") }
+            termMap["series"]?.let { append("Seri: ${it.joinToString()}\n") }
             this@MangaItem.altTitles?.takeIf { it.isNotBlank() }?.let {
-                append("Alternative Titles: $it\n")
+                append("Judul Alternatif: $it\n")
             }
         }.trim()
 
