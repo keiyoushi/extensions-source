@@ -42,7 +42,6 @@ val statusList = arrayOf(
     Status("Semua", ""),
     Status("Berlanjut", "ongoing"),
     Status("Selesai", "completed"),
-    Status("Hiatus", "hiatus"),
 )
 
 val categoryNames = arrayOf(

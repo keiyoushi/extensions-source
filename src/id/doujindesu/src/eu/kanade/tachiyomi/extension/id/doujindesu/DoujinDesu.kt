@@ -90,7 +90,7 @@ class DoujinDesu :
             }
         }
 
-        // Usual query search + other filter
+        // Usual query search + other filters
         val offset = (page - 1) * LIMIT
         val builder = "$API_URL/manga".toHttpUrl().newBuilder()
             .addQueryParameter("limit", LIMIT.toString())
