@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.id.mgkomik
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.network.rateLimit
@@ -90,8 +89,8 @@ class MGKomik :
             when (filter) {
                 is AuthorFilter -> filter.state.isNotBlank()
                 is ArtistFilter -> filter.state.isNotBlank()
-                is YearFilter   -> filter.state.isNotBlank()
-                is GenreList    -> filter.state.any { it.state }
+                is YearFilter -> filter.state.isNotBlank()
+                is GenreList -> filter.state.any { it.state }
                 else -> false
             }
         }
