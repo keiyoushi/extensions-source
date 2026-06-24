@@ -35,7 +35,7 @@ class MangaLivre :
 
     override val supportsLatest: Boolean = true
 
-    override val versionId: Int = 3
+    override val versionId: Int = 4
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(2, 1.seconds) { it.host == baseUrlHost }
@@ -180,11 +180,15 @@ class MangaLivre :
     private fun signedChapterHeaders(url: String): Headers {
         val path = url.toHttpUrl().encodedPath
         val time = System.currentTimeMillis().toString()
-        val sig = sha256("$path|$time|$CHAPTER_SIGNATURE_SECRET")
+        val signatureTime = (time.toLong() * 2).toString()
+        val signature = sha256("$signatureTime|$CHAPTER_SIGNATURE_STYLE_VALUE|${path.reversed()}")
+        val legacySignature = sha256("$path|$time|$CHAPTER_LEGACY_SIGNATURE_SECRET")
 
         return headers.newBuilder()
+            .set("X-Request-Timestamp", time)
+            .set("X-Signature-Key", signature)
             .set("x-toon-time", time)
-            .set("x-toon-sig", sig)
+            .set("x-toon-sig", legacySignature)
             .build()
     }
 
@@ -200,7 +204,8 @@ class MangaLivre :
 
     companion object {
         private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
-        private const val CHAPTER_SIGNATURE_SECRET = "ToonLivreSecureV1_2026"
+        private const val CHAPTER_SIGNATURE_STYLE_VALUE = "#1a1a24"
+        private const val CHAPTER_LEGACY_SIGNATURE_SECRET = "ToonLivreSecureV1_2026"
         private const val HEX_CHARS = "0123456789abcdef"
     }
 }
