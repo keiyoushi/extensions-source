@@ -45,18 +45,19 @@ class DoujinDesu :
         .add("x-app-secret", APP_SECRET)
         .add("Referer", "$baseUrl/")
 
-    private fun searchRequest(page: Int, sort: String?): Request {
+    private fun searchRequest(page: Int, sort: String = "latest_chapter"): Request {
         val offset = (page - 1) * LIMIT
         val url = "$API_URL/manga".toHttpUrl().newBuilder()
             .addQueryParameter("limit", LIMIT.toString())
             .addQueryParameter("offset", offset.toString())
-            .addQueryParameter("sort", sort ?: "")
+            .addQueryParameter("sort", sort)
+            .fragment(page.toString()) // for parse to know end of pagination
             .build()
         return GET(url, headers)
     }
 
     override fun popularMangaRequest(page: Int): Request = searchRequest(page, "rating")
-    override fun latestUpdatesRequest(page: Int): Request = searchRequest(page, "newest")
+    override fun latestUpdatesRequest(page: Int): Request = searchRequest(page)
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
@@ -98,11 +99,7 @@ class DoujinDesu :
         }
 
         // Usual query search + other filters
-        val offset = (page - 1) * LIMIT
-        val builder = "$API_URL/manga".toHttpUrl().newBuilder()
-            .addQueryParameter("limit", LIMIT.toString())
-            .addQueryParameter("offset", offset.toString())
-            .fragment(page.toString()) // for parse to know end of pagination
+        val builder = searchRequest(page).url.newBuilder()
 
         if (hasQuery) builder.addQueryParameter("search", query)
 
@@ -158,15 +155,14 @@ class DoujinDesu :
     }
 
     override fun getFilterList() = FilterList(
+        Filter.Header("Filter Tipe Diabaikan Saat Menggunakan Pencarian"),
+        AuthorGroupSeriesFilter(authorGroupSeriesOptions),
+        AuthorGroupSeriesValueFilter(),
         Filter.Separator(),
         StatusList(statusList),
         CategoryNames(categoryNames),
         OrderBy(orderBy),
         GenreList(getGenreList()),
-        Filter.Separator(),
-        Filter.Header("Filter Tipe Diabaikan Saat Menggunakan Pencarian"),
-        AuthorGroupSeriesFilter(authorGroupSeriesOptions),
-        AuthorGroupSeriesValueFilter(),
     )
 
     // Detail Parse

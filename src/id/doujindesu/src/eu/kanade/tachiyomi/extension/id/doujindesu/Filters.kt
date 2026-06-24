@@ -32,10 +32,11 @@ class StatusList(statuses: Array<Status>) : Filter.Select<Status>("Status", stat
 
 val orderBy = arrayOf(
     Order("Semua", ""),
-    Order("A-Z", "title_asc"),
-    Order("Update Terbaru", "latest_chapters"),
     Order("Baru Ditambahkan", "newest"),
+    Order("Terlama", "oldest"),
     Order("Populer", "rating"),
+    Order("A-Z", "title_asc"),
+
 )
 
 val statusList = arrayOf(
