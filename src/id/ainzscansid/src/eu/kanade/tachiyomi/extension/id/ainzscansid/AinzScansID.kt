@@ -20,7 +20,7 @@ class AinzScansID : HttpSource() {
 
     override val name = "Ainz Scans ID"
 
-    override val baseUrl = "https://v1.ainzscans01.com"
+    override val baseUrl = "https://v2.ainzscans01.com"
 
     override val lang = "id"
 
