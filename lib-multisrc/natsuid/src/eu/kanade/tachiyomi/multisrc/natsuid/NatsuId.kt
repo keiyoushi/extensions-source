@@ -97,7 +97,8 @@ abstract class NatsuId(
             }
             addFormDataPart("author", "[]")
             addFormDataPart("artist", "[]")
-            addFormDataPart("project", "0")
+            val isProject = filters.firstInstanceOrNull<ProjectFilter>()
+addFormDataPart("project", if (isProject?.state == true) "1" else "0")
             filters.firstInstanceOrNull<TypeFilter>()?.checked.orEmpty().also {
                 addFormDataPart("type", it.toJsonString())
             }
