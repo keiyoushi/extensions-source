@@ -22,7 +22,7 @@ class AuthorGroupSeriesOption(val display: String, val key: String) {
     override fun toString(): String = display
 }
 
-class AuthorGroupSeriesFilter(options: Array<AuthorGroupSeriesOption>) : Filter.Select<AuthorGroupSeriesOption>("Filter by type", options, 0)
+class AuthorGroupSeriesFilter(options: Array<AuthorGroupSeriesOption>) : Filter.Select<AuthorGroupSeriesOption>("Filter Tipe", options, 0)
 class AuthorGroupSeriesValueFilter : Filter.Text("Nama")
 class CharacterFilter : Filter.Text("Karakter")
 class CategoryNames(categories: Array<Category>) : Filter.Select<Category>("Kategori", categories, 0)
@@ -52,12 +52,12 @@ val categoryNames = arrayOf(
 )
 
 val authorGroupSeriesOptions = arrayOf(
-    AuthorGroupSeriesOption("None", ""),
-    AuthorGroupSeriesOption("Author", "authors"),
-    AuthorGroupSeriesOption("Group", "groups"),
-    AuthorGroupSeriesOption("Genres", "genres"),
-    AuthorGroupSeriesOption("Series", "series"),
-    AuthorGroupSeriesOption("Character", "characters"),
+    AuthorGroupSeriesOption("Tidak Ada", ""),
+    AuthorGroupSeriesOption("Penulis", "authors"),
+    AuthorGroupSeriesOption("Grup", "groups"),
+    AuthorGroupSeriesOption("Genre", "genres"),
+    AuthorGroupSeriesOption("Seri", "series"),
+    AuthorGroupSeriesOption("Karakter", "characters"),
 )
 
 fun getGenreList() = listOf(
