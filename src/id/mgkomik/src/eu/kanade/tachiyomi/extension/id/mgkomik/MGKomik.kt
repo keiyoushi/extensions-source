@@ -21,22 +21,26 @@ class MGKomik :
 
     override val mangaSubString = "komik"
 
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
+
     override fun headersBuilder() = super.headersBuilder().apply {
-        set("Upgrade-Insecure-Requests", "1")
         set("Referer", "$baseUrl/")
-        set("Sec-Fetch-Site", "none")
     }
 
     override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val headers = request.headers.newBuilder().apply {
-                removeAll("X-Requested-With")
+                if (!request.url.toString().contains("admin-ajax.php") &&
+                    !request.url.toString().contains("ajax/chapters")
+                ) {
+                    removeAll("X-Requested-With")
+                }
             }.build()
 
             chain.proceed(request.newBuilder().headers(headers).build())
         }
-        .rateLimit(2)
+        .rateLimit(1)
         .build()
 
     // ================================== Popular ======================================

@@ -27,7 +27,7 @@ class ComicKFan : HttpSource() {
     override val lang = "en"
     override val supportsLatest = true
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssSSSSSS'Z'", Locale.ROOT).apply {
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
@@ -172,6 +172,6 @@ class ComicKFan : HttpSource() {
         name = "Chapter $chapter"
         scanlator = groupNames.joinToString()
         chapter.toFloatOrNull()?.also { chapter_number = it }
-        date_upload = dateFormat.tryParse(publishedAt ?: createdAt)
+        date_upload = dateFormat.tryParse(createdAt ?: publishedAt)
     }
 }

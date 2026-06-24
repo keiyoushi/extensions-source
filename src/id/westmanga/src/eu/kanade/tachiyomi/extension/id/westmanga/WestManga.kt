@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.extension.id.westmanga
 
+import android.os.Handler
+import android.os.Looper
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -8,11 +12,14 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
@@ -132,7 +139,7 @@ class WestManga : HttpSource() {
         genresFetchJob = true
 
         val url = "$apiUrl/api/contents/genres".toHttpUrl()
-        val request = apiRequest(url)
+        val request = apiRequest(url, true)
         client.newCall(request).enqueue(object : okhttp3.Callback {
             override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
                 genresFetchJob = false
@@ -153,7 +160,38 @@ class WestManga : HttpSource() {
         })
     }
 
-    private fun apiRequest(url: HttpUrl): Request {
+    private var tokenCache: String? = null
+
+    val bearerToken: String?
+        get() {
+            if (tokenCache != null) return tokenCache
+
+            val handler = Handler(Looper.getMainLooper())
+            val latch = CountDownLatch(1)
+
+            handler.post {
+                val webview = WebView(applicationContext)
+                with(webview.settings) {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                }
+
+                webview.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        view?.evaluateJavascript("localStorage.getItem('access_token')") {
+                            tokenCache = it.takeIf { it != "null" }?.trim('"') ?: "" // don't check again
+                            latch.countDown()
+                            webview.destroy()
+                        }
+                    }
+                }
+                webview.loadDataWithBaseURL(baseUrl, " ", "text/html", "utf-8", null)
+            }
+            latch.await(8, TimeUnit.SECONDS)
+            return tokenCache
+        }
+
+    private fun apiRequest(url: HttpUrl, isGenre: Boolean = false): Request {
         val timestamp = (System.currentTimeMillis() / 1000).toString()
         val message = "wm-api-request"
         val key = timestamp + "GET" + url.encodedPath + ACCESS_KEY + SECRET_KEY
@@ -163,11 +201,14 @@ class WestManga : HttpSource() {
         val hash = mac.doFinal(message.toByteArray(Charsets.UTF_8))
         val signature = hash.joinToString("") { "%02x".format(it) }
 
-        val apiHeaders = headersBuilder()
-            .set("x-wm-request-time", timestamp)
-            .set("x-wm-accses-key", ACCESS_KEY)
-            .set("x-wm-request-signature", signature)
-            .build()
+        val apiHeaders = headersBuilder().apply {
+            if (!isGenre) {
+                bearerToken?.takeUnless { it.isEmpty() }?.let { set("Authorization", "Bearer $it") }
+            }
+            set("x-wm-request-time", timestamp)
+            set("x-wm-accses-key", ACCESS_KEY)
+            set("x-wm-request-signature", signature)
+        }.build()
 
         return GET(url, apiHeaders)
     }

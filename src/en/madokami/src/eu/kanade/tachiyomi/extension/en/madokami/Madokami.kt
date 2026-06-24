@@ -60,7 +60,7 @@ class Madokami :
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("table.mobile-files-table tbody tr td:nth-child(1) a:nth-child(1)").map { element ->
+        val mangas = document.select("table.mobile-files-table tbody tr td:nth-child(1) a:nth-child(1)").mapNotNull { element ->
             mangaFromElement(element)
         }
         return MangasPage(mangas, false)
@@ -76,21 +76,26 @@ class Madokami :
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("div.container table tbody tr td:nth-child(1) a:nth-child(1)").map { element ->
+        val mangas = document.select("div.container table tbody tr td:nth-child(1) a:nth-child(1)").mapNotNull { element ->
             mangaFromElement(element)
         }
         return MangasPage(mangas, false)
     }
 
-    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.absUrl("href"))
-        val pathSegments = element.absUrl("href").toHttpUrl().pathSegments
-        description = URLDecoder.decode(pathSegments.last(), "UTF-8")
-        var i = pathSegments.lastIndex
-        while (i > 0 && URLDecoder.decode(pathSegments[i], "UTF-8").startsWith("!")) {
-            i--
+    private fun mangaFromElement(element: Element): SManga? {
+        val url = element.absUrl("href")
+        if (isArchiveUrl(url)) return null
+
+        return SManga.create().apply {
+            setUrlWithoutDomain(url)
+            val pathSegments = url.toHttpUrl().pathSegments
+            description = URLDecoder.decode(pathSegments.last(), "UTF-8")
+            var i = pathSegments.lastIndex
+            while (i > 0 && URLDecoder.decode(pathSegments[i], "UTF-8").startsWith("!")) {
+                i--
+            }
+            title = URLDecoder.decode(pathSegments[i], "UTF-8")
         }
-        title = URLDecoder.decode(pathSegments[i], "UTF-8")
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
@@ -206,5 +211,14 @@ class Madokami :
 
         screen.addPreference(username)
         screen.addPreference(password)
+    }
+
+    companion object {
+        private val ARCHIVE_EXTENSIONS = listOf(".zip", ".cbz", ".rar", ".cbr", ".7z", ".cb7", ".tar", ".cbt")
+    }
+
+    private fun isArchiveUrl(url: String): Boolean {
+        val path = url.substringBefore("?").substringBefore("#").lowercase(Locale.ROOT)
+        return ARCHIVE_EXTENSIONS.any { path.endsWith(it) }
     }
 }

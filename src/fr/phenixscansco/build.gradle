@@ -1,0 +1,9 @@
+ext {
+    extName = 'PhenixScans (unoriginal)'
+    extClass = '.PhenixScans'
+    baseUrl = 'https://phenix-scans.co'
+    extVersionCode = 1
+    isNsfw = false
+}
+
+apply plugin: "kei.plugins.extension.legacy"
