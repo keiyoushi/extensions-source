@@ -21,7 +21,6 @@ android {
 dependencies {
     compileOnly(libs.bundles.common)
     compileOnly(libs.tachiyomi.lib.v16)
-    compileOnly(libs.okhttp.brotli)
 
     testImplementation(libs.bundles.common)
     testImplementation(libs.junit)

@@ -19,12 +19,16 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.okio.decodeFromBufferedSource
 import kotlinx.serialization.json.okio.encodeToBufferedSink
+import okhttp3.CompressionInterceptor
+import okhttp3.Gzip
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import okhttp3.brotli.Brotli
 import okhttp3.brotli.BrotliInterceptor
+import okhttp3.zstd.Zstd
 import okio.GzipSink
 import okio.GzipSource
 import okio.buffer
@@ -47,22 +51,30 @@ abstract class KeiSource : HttpSource() {
 
     final override val client: OkHttpClient by lazy {
         network.client.newBuilder().apply {
+            val interceptors = interceptors()
+
+            assert(
+                interceptors.indexOfFirst { it.javaClass.simpleName == "UncaughtExceptionInterceptor" } != -1,
+            ) { "UncaughtExceptionInterceptor must be present in default client" }
+
+            assert(
+                interceptors.indexOfFirst { it.javaClass.simpleName == "UserAgentInterceptor" } != -1,
+            ) { "UserAgentInterceptor must be present in default client" }
+
             val networkInterceptors = networkInterceptors()
 
-            networkInterceptors
-                .indexOfFirst { it.javaClass.simpleName == "IgnoreGzipInterceptor" }
-                .takeIf { it != -1 }
-                ?.also { networkInterceptors.removeAt(it) }
+            assert(
+                networkInterceptors.indexOfFirst { it.javaClass.simpleName == "IgnoreGzipInterceptor" } == -1,
+            ) { "IgnoreGzipInterceptor must not be present in default client" }
 
-            networkInterceptors
-                .indexOfFirst { it is BrotliInterceptor }
-                .takeIf { it != -1 }
-                ?.also { networkInterceptors.removeAt(it) }
+            assert(
+                networkInterceptors.indexOfFirst { it is BrotliInterceptor } == -1,
+            ) { "BrotliInterceptor must not be present in default client" }
 
             configureClient()
 
             // last application interceptor
-            addInterceptor(BrotliInterceptor)
+            addInterceptor(CompressionInterceptor(Gzip, Brotli, Zstd))
         }.build()
     }
 
@@ -194,12 +206,19 @@ abstract class KeiSource : HttpSource() {
 
         if (parsed != null) return parsed
 
-        val hint = if (filterFetchAttemptCount.get() >= maxFilterFetchAttempts) {
-            Filter.Header("Failed to fetch filters, restart the app to retry")
-        } else {
-            Filter.Header("Press 'Reset' to fetch more filters")
-        }
-        return FilterList(getFilterList(data = null) + Filter.Separator() + hint)
+        return FilterList(
+            buildList {
+                addAll(getFilterList(data = null))
+                if (isNotEmpty()) {
+                    add(Filter.Separator())
+                }
+                Filter.Header(
+                    when (lang) {
+                        else -> "Press 'Reset' to load filters"
+                    },
+                )
+            },
+        )
     }
 
     private data class FilterCacheState(val data: JsonElement?, val isFresh: Boolean)
