@@ -148,6 +148,7 @@ abstract class NatsuId(
             SortFilter(),
             TypeFilter(),
             StatusFilter(),
+            ProjectFilter(),
         )
 
         val url = "$baseUrl/wp-json/wp/v2/genre?per_page=100&page=1&orderby=count&order=desc"
