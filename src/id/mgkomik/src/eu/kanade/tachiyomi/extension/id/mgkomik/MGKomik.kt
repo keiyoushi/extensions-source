@@ -2,11 +2,10 @@ package eu.kanade.tachiyomi.extension.id.mgkomik
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.network.rateLimit
+import okhttp3.Request
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -15,70 +14,70 @@ class MGKomik :
         "MG Komik",
         "https://id.mgkomik.cc",
         "id",
-        dateFormat,
+        SimpleDateFormat("dd MMM yy", Locale.US),
     ) {
-    override val useNewChapterEndpoint = true
-
-    override val mangaSubString = "komik"
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
-    override fun headersBuilder() = super.headersBuilder().apply {
-        set("Referer", "$baseUrl/")
-    }
-
-    override val client = network.client.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val headers = request.headers.newBuilder().apply {
-                if (!request.url.toString().contains("admin-ajax.php") &&
-                    !request.url.toString().contains("ajax/chapters")
-                ) {
-                    removeAll("X-Requested-With")
-                }
-            }.build()
-
-            chain.proceed(request.newBuilder().headers(headers).build())
-        }
-        .rateLimit(1)
-        .build()
-
-    // ================================== Popular ======================================
-
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        element.select("div.item-thumb a").let {
-            setUrlWithoutDomain(it.attr("abs:href"))
-            title = it.attr("title")
-            thumbnail_url = it.select("img").attr("abs:src")
-        }
-    }
-
-    // ================================ Chapters ================================
+    override val mangaSubString = "komik"
 
     override val chapterUrlSuffix = ""
 
-    // ================================ Filters ================================
+    // HEADERS
+    override fun headersBuilder() = super.headersBuilder().apply {
+        set("User-Agent", USER_AGENT)
+        set("Sec-CH-UA-Model", "\"\"")
+    }
 
-    override fun getFilterList(): FilterList {
-        val filters = super.getFilterList().list.filterNot {
-            it.name.contains("Adult Content", ignoreCase = true)
+    // CLIENT — interceptor injects XHR headers into AJAX requests
+    override val client = network.client.newBuilder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val path = request.url.encodedPath
+            val isAjax = path.contains("admin-ajax.php") ||
+                path.contains("wp-json") ||
+                path.endsWith("/ajax/chapters")
+            if (isAjax) {
+                chain.proceed(
+                    request.newBuilder()
+                        .header("X-Requested-With", "XMLHttpRequest")
+                        .header("Sec-Fetch-Dest", "empty")
+                        .header("Sec-Fetch-Mode", "cors")
+                        .header("Sec-Fetch-Site", "same-origin")
+                        .header("Origin", baseUrl)
+                        .header("Priority", "u=1, i")
+                        .removeHeader("Sec-Fetch-User")
+                        .removeHeader("Upgrade-Insecure-Requests")
+                        .build(),
+                )
+            } else {
+                chain.proceed(request)
+            }
         }
+        .rateLimit(3)
+        .build()
 
-        return FilterList(filters)
+    // POPULAR
+    override fun popularMangaRequest(page: Int): Request {
+        val url = "$baseUrl/$mangaSubString${if (page > 1) "/page/$page/" else "/"}?m_orderby=trending"
+        return GET(url, headers)
     }
 
-    override fun genresRequest() = GET("$baseUrl/$mangaSubString", headers)
+    override val mangaDetailsSelectorDescription = "div.description-summary div.summary__content p"
 
-    override fun parseGenres(document: Document): List<Genre> = document.select(".row.genres li a").map { a ->
-        Genre(
-            a.ownText(),
-            a.absUrl("href")
-                .trimEnd('/')
-                .substringAfterLast('/'),
-        )
-    }
+    override fun parseGenres(document: Document): List<Genre> =
+        document.select("div.checkbox-group div.checkbox")
+            .mapNotNull { cb ->
+                val label = cb.selectFirst("label")?.text() ?: return@mapNotNull null
+                val value = cb.selectFirst("input[type=checkbox]")?.`val`() ?: return@mapNotNull null
+                if (value.matches(Regex("""^\d+[kKmM]?$"""))) return@mapNotNull null
+                Genre(label, value)
+            }
 
     companion object {
-        private val dateFormat = SimpleDateFormat("dd MMM yy", Locale.US)
+        private const val CH_VERSION = "147"
+        private const val USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/$CH_VERSION.0.0.0 Mobile Safari/537.36"
     }
 }
