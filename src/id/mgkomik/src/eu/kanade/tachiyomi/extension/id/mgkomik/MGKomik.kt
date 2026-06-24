@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.id.mgkomik
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.network.rateLimit
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -65,14 +64,13 @@ class MGKomik :
 
     override val mangaDetailsSelectorDescription = "div.description-summary div.summary__content p"
 
-    override fun parseGenres(document: Document): List<Genre> =
-        document.select("div.checkbox-group div.checkbox")
-            .mapNotNull { cb ->
-                val label = cb.selectFirst("label")?.text() ?: return@mapNotNull null
-                val value = cb.selectFirst("input[type=checkbox]")?.`val`() ?: return@mapNotNull null
-                if (value.matches(Regex("""^\d+[kKmM]?$"""))) return@mapNotNull null
-                Genre(label, value)
-            }
+    override fun parseGenres(document: Document): List<Genre> = document.select("div.checkbox-group div.checkbox")
+        .mapNotNull { cb ->
+            val label = cb.selectFirst("label")?.text() ?: return@mapNotNull null
+            val value = cb.selectFirst("input[type=checkbox]")?.`val`() ?: return@mapNotNull null
+            if (value.matches(Regex("""^\d+[kKmM]?$"""))) return@mapNotNull null
+            Genre(label, value)
+        }
 
     companion object {
         private const val CH_VERSION = "147"
