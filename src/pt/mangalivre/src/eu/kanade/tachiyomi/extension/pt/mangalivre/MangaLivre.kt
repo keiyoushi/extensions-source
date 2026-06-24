@@ -19,6 +19,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import java.security.MessageDigest
 import kotlin.time.Duration.Companion.seconds
 
 class MangaLivre :
@@ -34,7 +35,7 @@ class MangaLivre :
 
     override val supportsLatest: Boolean = true
 
-    override val versionId: Int = 2
+    override val versionId: Int = 3
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(2, 1.seconds) { it.host == baseUrlHost }
@@ -128,7 +129,8 @@ class MangaLivre :
 
     override fun pageListRequest(chapter: SChapter): Request {
         val dto = chapter.url.substringAfterLast("#").parseAs<ChapterReferenceDto>()
-        return GET("$apiUrl/mangas/${dto.mangaId}/chapters/${dto.chapterId}", headers)
+        val url = "$apiUrl/mangas/${dto.mangaId}/chapters/${dto.chapterId}"
+        return GET(url, signedChapterHeaders(url))
     }
 
     override fun pageListParse(response: Response): List<Page> = response.parseAs<PageDto>().toPageList()
@@ -175,7 +177,30 @@ class MangaLivre :
         }.also(screen::addPreference)
     }
 
+    private fun signedChapterHeaders(url: String): Headers {
+        val path = url.toHttpUrl().encodedPath
+        val time = System.currentTimeMillis().toString()
+        val sig = sha256("$path|$time|$CHAPTER_SIGNATURE_SECRET")
+
+        return headers.newBuilder()
+            .set("x-toon-time", time)
+            .set("x-toon-sig", sig)
+            .build()
+    }
+
+    private fun sha256(input: String): String {
+        val bytes = MessageDigest.getInstance("SHA-256").digest(input.toByteArray())
+        return buildString(bytes.size * 2) {
+            bytes.forEach { byte ->
+                append(HEX_CHARS[(byte.toInt() ushr 4) and 0x0F])
+                append(HEX_CHARS[byte.toInt() and 0x0F])
+            }
+        }
+    }
+
     companion object {
         private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
+        private const val CHAPTER_SIGNATURE_SECRET = "ToonLivreSecureV1_2026"
+        private const val HEX_CHARS = "0123456789abcdef"
     }
 }
