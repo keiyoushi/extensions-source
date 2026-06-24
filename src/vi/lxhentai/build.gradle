@@ -1,7 +1,7 @@
 ext {
     extName = 'LXManga'
     extClass = '.LxHentai'
-    extVersionCode = 31
+    extVersionCode = 32
     isNsfw = true
 }
 
