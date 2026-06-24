@@ -23,6 +23,13 @@ class Term(
 @Serializable
 class TaxonomyMangas(
     val mangaList: List<MangaItem>,
+    val pagination: Pagination,
+)
+
+@Serializable
+class Pagination(
+    val page: Int,
+    val totalPages: Int,
 )
 
 @Serializable

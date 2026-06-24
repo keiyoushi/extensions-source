@@ -58,6 +58,11 @@ class DoujinDesu :
     override fun popularMangaRequest(page: Int): Request = searchRequest(page, "rating")
     override fun latestUpdatesRequest(page: Int): Request = searchRequest(page, "newest")
 
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
+
+    private val slugCache = mutableMapOf<String, String>()
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         // priority when query exists: usual filter > type filter, otherwise opposite
         val hasQuery = query.isNotBlank()
@@ -68,17 +73,19 @@ class DoujinDesu :
         if (!hasQuery && agsFilter != null && agsFilter.state in agsFilter.values.indices) {
             val selected = agsFilter.values[agsFilter.state]
             val type = selected.key
+            val cacheKey = "$type:$agsValue"
 
             if (type.isNotBlank() && !agsValue.isNullOrBlank()) {
-                // Search the input and pick a slug
-                val url = "$API_URL/taxonomy/$type/".toHttpUrl().newBuilder()
-                    .addQueryParameter("search", agsValue)
-                    .addQueryParameter("limit", "1")
-                    .build()
-
-                val termRes = client.newCall(GET(url, headers)).execute()
-
-                val slug = termRes.parseAs<TermsResult>().terms.firstOrNull()?.let { it.slug } ?: throw IOException("Failed to find $type")
+                // Search the input and pick a slug if not cached
+                val slug = slugCache[cacheKey] ?: run {
+                    val url = "$API_URL/taxonomy/$type/".toHttpUrl().newBuilder()
+                        .addQueryParameter("search", agsValue)
+                        .addQueryParameter("limit", "1")
+                        .build()
+                    val termRes = client.newCall(GET(url, headers)).execute()
+                    termRes.parseAs<TermsResult>().terms.firstOrNull()?.slug
+                        ?: throw IOException("Gagal menemukan: $agsValue")
+                }.also { slugCache[cacheKey] = it }
 
                 val url2 = "$API_URL/taxonomy/$type/$slug".toHttpUrl().newBuilder()
                     .addQueryParameter("limit", LIMIT.toString())
@@ -86,7 +93,7 @@ class DoujinDesu :
                     .build()
                 return GET(url2, headers)
             } else if (type.isBlank() && !agsValue.isNullOrBlank()) {
-                throw IOException("Select a filter type")
+                throw IOException("Pilih tipe filter")
             }
         }
 
@@ -95,6 +102,7 @@ class DoujinDesu :
         val builder = "$API_URL/manga".toHttpUrl().newBuilder()
             .addQueryParameter("limit", LIMIT.toString())
             .addQueryParameter("offset", offset.toString())
+            .fragment(page.toString()) // for parse to know end of pagination
 
         if (hasQuery) builder.addQueryParameter("search", query)
 
@@ -131,16 +139,22 @@ class DoujinDesu :
         return GET(builder.build(), headers)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
-
     override fun searchMangaParse(response: Response): MangasPage {
-        val mangas = if (response.request.url.pathSegments.contains("manga")) {
+        val url = response.request.url
+
+        var hasNextPage = false
+
+        val mangas = if (url.pathSegments.contains("manga")) {
+            val total = response.headers["x-total-count"]?.toIntOrNull()
+            val currentPage = url.fragment?.toIntOrNull() ?: 1
+            hasNextPage = total?.let { currentPage * LIMIT < it } ?: true
             response.parseAs<List<MangaItem>>()
         } else {
-            response.parseAs<TaxonomyMangas>().mangaList
+            val taxonomyDto = response.parseAs<TaxonomyMangas>()
+            hasNextPage = taxonomyDto.pagination.page < taxonomyDto.pagination.totalPages
+            taxonomyDto.mangaList
         }
-        return MangasPage(mangas.map { it.toSManga() }, hasNextPage = mangas.isNotEmpty())
+        return MangasPage(mangas.map { it.toSManga() }, hasNextPage)
     }
 
     override fun getFilterList() = FilterList(
