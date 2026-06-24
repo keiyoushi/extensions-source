@@ -70,15 +70,12 @@ class MangaBlaze :
 
     // The detail page no longer embeds the chapter list nor the
     // manga-chapters-holder wrapper that Madara relies on to trigger the
-    // AJAX fetch, so always request the chapters endpoint directly.
-    // It returns classic Madara markup; premium chapters are locked
-    // (href="#") so they are excluded.
+    // AJAX fetch, so request the chapters endpoint directly.
+    override fun chapterListRequest(manga: SManga) = xhrChaptersRequest(baseUrl + manga.url.removeSuffix("/"))
+
+    // The endpoint returns classic Madara markup; premium chapters are
+    // locked (href="#") so they are excluded.
     override fun chapterListSelector() = "li.wp-manga-chapter:not(.premium-block)"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaUrl = response.asJsoup().location().removeSuffix("/")
-        return client.newCall(xhrChaptersRequest(mangaUrl)).execute().use { xhr ->
-            xhr.asJsoup().select(chapterListSelector()).map(::chapterFromElement)
-        }
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select(chapterListSelector()).map(::chapterFromElement)
 }
