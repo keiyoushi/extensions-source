@@ -1,8 +1,10 @@
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.gradle.tasks.PackageAndroidArtifact
+import keiyoushi.gradle.extensions.KeiyoushiExtension
+import keiyoushi.gradle.extensions.KeiyoushiMultisrcExtension
+import keiyoushi.gradle.extensions.VALID_LIB_VERSIONS
 import keiyoushi.gradle.extensions.alias
-import keiyoushi.gradle.extensions.baseVersionCode
 import keiyoushi.gradle.extensions.compileOnly
 import keiyoushi.gradle.extensions.implementation
 import keiyoushi.gradle.extensions.kei
@@ -13,15 +15,13 @@ import keiyoushi.gradle.utils.assertWithoutFlag
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.plugins.BasePluginExtension
-import org.gradle.api.plugins.ExtraPropertiesExtension
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.dependencies
-import org.gradle.kotlin.dsl.extra
 import org.gradle.kotlin.dsl.register
 import org.gradle.kotlin.dsl.withType
 
 @Suppress("UNUSED")
-class PluginExtensionLegacy : Plugin<Project> {
+class PluginExtension : Plugin<Project> {
     override fun apply(target: Project): Unit = with(target) {
         plugins {
             alias(libs.plugins.android.application)
@@ -31,16 +31,15 @@ class PluginExtensionLegacy : Plugin<Project> {
             alias(kei.plugins.spotless)
         }
 
-        assertWithoutFlag(!extra.has("pkgNameSuffix")) { "Gradle configuration cannot contain 'pkgNameSuffix'" }
-        assertWithoutFlag(!extra.has("libVersion")) { "Gradle configuration cannot contain 'libVersion'" }
-
-        assertWithoutFlag(extName.max().code < 0x180) { "Extension name should be romanized" }
-
-        val theme: Project? = if (extra.has("themePkg")) project(":lib-multisrc:$themePkg") else null
-        if (theme != null) evaluationDependsOn(theme.path)
+        val keiyoushi = extensions.create("keiyoushi", KeiyoushiExtension::class.java)
+        val applicationIdSuffix = "${project.parent?.name}.${project.name}"
 
         android {
             namespace = "eu.kanade.tachiyomi.extension"
+
+            defaultConfig {
+                this.applicationIdSuffix = applicationIdSuffix
+            }
 
             sourceSets {
                 named("main") {
@@ -53,30 +52,6 @@ class PluginExtensionLegacy : Plugin<Project> {
                     res.directories.add("res")
                     assets.directories.clear()
                     assets.directories.add("assets")
-                }
-            }
-
-            defaultConfig {
-                applicationIdSuffix = project.parent?.name + "." + project.name
-                versionCode = if (theme == null) extVersionCode else theme.baseVersionCode + overrideVersionCode
-                versionName = "1.4.$versionCode"
-                base {
-                    archivesName.set("tachiyomi-$applicationIdSuffix-v$versionName")
-                }
-                assertWithoutFlag(extClass.startsWith(".")) { "'extClass' must start with '.'" }
-                manifestPlaceholders += mapOf(
-                    "appName" to "Tachiyomi: $extName",
-                    "extClass" to extClass,
-                    "nsfw" to if (isNsfw) 1 else 0,
-                )
-                if (theme != null && baseUrl.isNotEmpty()) {
-                    val split = baseUrl.split("://")
-                    assertWithoutFlag(split.size == 2) { "'baseUrl' must be in the format of 'https://example.com'" }
-                    val path = split[1].split("/")
-                    manifestPlaceholders += mapOf(
-                        "SOURCEHOST" to path[0],
-                        "SOURCESCHEME" to split[0],
-                    )
                 }
             }
 
@@ -120,6 +95,52 @@ class PluginExtensionLegacy : Plugin<Project> {
             }
         }
 
+        val extClassProvider = keiyoushi.className.map { if (it.startsWith(".")) it else ".$it" }
+
+        val versionCodeProvider = keiyoushi.theme.map { themeName ->
+            val themeProject = project(":lib-multisrc:$themeName")
+            val themeKeiyoushi = themeProject.extensions.findByType(KeiyoushiMultisrcExtension::class.java)
+                ?: throw AssertionError("Theme project ${themeProject.path} must apply kei.plugins.multisrc")
+            val themeLibVersion = themeKeiyoushi.libVersion.get()
+            val extLibVersion = keiyoushi.libVersion.get()
+            assertWithoutFlag(themeLibVersion == extLibVersion) {
+                "Multisrc ($themeName) libVersion ($themeLibVersion) and extension libVersion ($extLibVersion) must match."
+            }
+            themeKeiyoushi.baseVersionCode.get() + keiyoushi.versionCode.get()
+        }.orElse(keiyoushi.versionCode)
+
+        val versionNameProvider = keiyoushi.libVersion.flatMap { libVersion ->
+            assertWithoutFlag(libVersion in VALID_LIB_VERSIONS) {
+                "libVersion $libVersion is not supported. Supported versions: $VALID_LIB_VERSIONS"
+            }
+            versionCodeProvider.map { "$libVersion.$it" }
+        }
+
+        val appNameProvider = keiyoushi.name.map { name ->
+            assertWithoutFlag(name.all { it.code < 0x180 }) { "Extension name should be romanized" }
+            "Tachiyomi: $name"
+        }
+
+        val nsfwProvider = keiyoushi.contentWarning.map { if (it == ContentWarning.SAFE) "0" else "1" }
+
+        val contentWarningProvider = keiyoushi.contentWarning.map {
+            when (it) {
+                ContentWarning.SAFE -> "0"
+                ContentWarning.MIXED -> "1"
+                ContentWarning.NSFW -> "2"
+            }
+        }
+
+        val sourceHostProvider = keiyoushi.baseUrl.map { baseUrl ->
+            if (baseUrl.isEmpty()) {
+                ""
+            } else {
+                val split = baseUrl.split("://")
+                assertWithoutFlag(split.size == 2) { "'baseUrl' must be in the format of 'https://example.com'" }
+                split[1].split("/")[0]
+            }
+        }.orElse("")
+
         androidComponents {
             onVariants { variant ->
                 val variantName = variant.name.replaceFirstChar { it.uppercase() }
@@ -129,22 +150,47 @@ class PluginExtensionLegacy : Plugin<Project> {
                 if (keepRules != null) {
                     val task = tasks.register<GenerateKeepRulesTask>("generate${variantName}KeepRules") {
                         this.applicationId.set(variant.applicationId)
-                        this.extClass.set(this@with.extClass)
+                        this.extClass.set(extClassProvider)
                     }
                     keepRules.addGeneratedSourceDirectory(task) { it.outputDir }
                 }
 
                 variant.sources.manifests.addStaticManifestFile("AndroidManifest.xml")
+
+                variant.outputs.forEach { output ->
+                    output.versionCode.set(versionCodeProvider)
+                    output.versionName.set(versionNameProvider)
+                }
+
+                variant.manifestPlaceholders.put("appName", appNameProvider)
+                variant.manifestPlaceholders.put("tachiyomix.name", keiyoushi.name)
+                variant.manifestPlaceholders.put("extClass", extClassProvider)
+                variant.manifestPlaceholders.put("nsfw", nsfwProvider)
+                variant.manifestPlaceholders.put("tachiyomix.contentWarning", contentWarningProvider)
+                variant.manifestPlaceholders.put("tachiyomix.extensionLib", keiyoushi.libVersion.map { it.toString() })
+                variant.manifestPlaceholders.put("SOURCEHOST", sourceHostProvider)
+                variant.manifestPlaceholders.put("SOURCESCHEME", "https")
             }
         }
 
-        dependencies {
-            if (theme != null) implementation(theme) // Overrides core launcher icons
-            implementation(project(":core"))
-            compileOnly(libs.bundles.common)
+        base {
+            archivesName.set(versionNameProvider.map { "tachiyomi-$applicationIdSuffix-v$it" })
         }
 
         afterEvaluate {
+            val themeName = keiyoushi.theme.orNull
+            if (themeName != null) {
+                evaluationDependsOn(":lib-multisrc:$themeName")
+            }
+
+            dependencies {
+                if (themeName != null) {
+                    implementation(project(":lib-multisrc:$themeName"))
+                }
+                implementation(project(":core"))
+                compileOnly(libs.bundles.common)
+            }
+
             tasks.withType<PackageAndroidArtifact>().configureEach {
                 createdBy.set("")
                 doFirst {
@@ -166,26 +212,3 @@ private fun Project.androidComponents(block: ApplicationAndroidComponentsExtensi
 private fun Project.base(block: BasePluginExtension.() -> Unit) {
     extensions.configure(block)
 }
-
-private val Project.extName: String
-    get() = extra.get("extName") as String
-
-private val Project.extVersionCode: Int
-    get() = extra.get("extVersionCode") as Int
-
-private val Project.extClass: String
-    get() = extra.get("extClass") as String
-
-private val Project.isNsfw: Boolean
-    get() = extra.getOrNull("isNsfw") == true
-
-private val Project.baseUrl: String
-    get() = (extra.getOrNull("baseUrl") as String?).orEmpty()
-
-private val Project.overrideVersionCode: Int
-    get() = extra.get("overrideVersionCode") as Int
-
-private val Project.themePkg: String
-    get() = extra.get("themePkg") as String
-
-private fun ExtraPropertiesExtension.getOrNull(name: String) = if (has(name)) get(name) else null
