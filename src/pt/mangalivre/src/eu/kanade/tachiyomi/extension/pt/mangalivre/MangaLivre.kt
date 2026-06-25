@@ -38,8 +38,8 @@ class MangaLivre :
     override val versionId: Int = 2
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(2, 1.seconds) { it.host == baseUrlHost }
         .addInterceptor(::clientHeaderInterceptor)
+        .rateLimit(2, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     private val scrapeClient: OkHttpClient by lazy {
