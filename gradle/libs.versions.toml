@@ -1,10 +1,10 @@
 [versions]
 android-gradle = "9.2.1"
-coroutines = "1.10.2"
+coroutines = "1.11.0"
 junit = "4.13.2"
-kotlin-gradle = "2.3.21"
+kotlin-gradle = "2.4.0"
 ktlint = "1.8.0"
-spotless = "8.5.0"
+spotless = "8.7.0"
 tapmoc = "0.4.2"
 
 # 1.8 and beyond switched to `all-compatibility` mode
@@ -25,12 +25,13 @@ tapmoc-gradle = { module = "com.gradleup.tapmoc:tapmoc-gradle-plugin", version.r
 coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 injekt-core = { module = "com.github.null2264.injekt:injekt-core", version = "4135455a2a" }
-jsoup = { module = "org.jsoup:jsoup", version = "1.22.1" }
+jsoup = { module = "org.jsoup:jsoup", version = "1.22.2" }
 kotlin-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 kotlin-protobuf = { module = "org.jetbrains.kotlinx:kotlinx-serialization-protobuf", version.ref = "serialization" }
 kotlin-json-okio = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json-okio", version.ref = "serialization" }
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib-jdk8", version.ref = "kotlin-gradle" }
-okhttp = { module = "com.squareup.okhttp3:okhttp", version = "5.3.2" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version = "5.4.0" }
+#noinspection Aligned16KB
 quickjs = { module = "app.cash.quickjs:quickjs-android", version = "0.9.2" }
 rxjava = { module = "io.reactivex:rxjava", version = "1.3.8" }
 tachiyomi-lib = { module = "com.github.keiyoushi:extensions-lib", version = "18a8e26be2" }
