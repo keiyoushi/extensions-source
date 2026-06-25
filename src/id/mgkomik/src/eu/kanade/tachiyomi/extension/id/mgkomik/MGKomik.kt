@@ -24,7 +24,6 @@ class MGKomik :
     override val chapterUrlSuffix = ""
 
     override fun headersBuilder() = super.headersBuilder().apply {
-        set("User-Agent", USER_AGENT)
         set("Sec-CH-UA-Model", "\"\"")
     }
 
@@ -106,12 +105,5 @@ class MGKomik :
         }.build()
 
         return superRequest.newBuilder().post(newBody).build()
-    }
-
-    companion object {
-        private const val CH_VERSION = "147"
-        private const val USER_AGENT =
-            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/$CH_VERSION.0.0.0 Mobile Safari/537.36"
     }
 }
