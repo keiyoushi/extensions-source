@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.fr.animesama
 
 import android.app.Activity
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -20,7 +19,7 @@ class UrlActivity : Activity() {
             }
             try {
                 startActivity(mainIntent)
-            } catch (e: ActivityNotFoundException) {
+            } catch (e: Throwable) {
                 Log.e("AnimeSama", e.toString())
             }
         }
