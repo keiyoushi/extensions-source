@@ -51,7 +51,7 @@ class MangaLivre :
         .add("Sec-Fetch-Dest", "empty")
         .add("Sec-Fetch-Mode", "cors")
         .add("Sec-Fetch-Site", "same-origin")
-        .add("x-toonlivre-client", "web-t")
+        .add("x-toonlivre-client", "web-x")
 
     // ============================== Popular =======================================
 
