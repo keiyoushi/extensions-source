@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.id.doujindesu
 import keiyoushi.utils.parseAs
 import okhttp3.Interceptor
 import okhttp3.ResponseBody.Companion.toResponseBody
+import java.io.IOException
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import kotlin.math.abs
@@ -16,7 +17,7 @@ class Decryptor(val apiUrl: String) {
         val response = chain.proceed(request)
 
         val dto = response.parseAs<EncryptedDto>()
-        val decryptedJson = decrypt(dto.encrypted) ?: error("Decryption failed")
+        val decryptedJson = decrypt(dto.encrypted) ?: throw IOException("Decryption failed")
 
         response.newBuilder()
             .body(decryptedJson.toResponseBody(response.body.contentType()))

@@ -1,10 +1,8 @@
 package eu.kanade.tachiyomi.extension.id.doujindesu
 
-import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -21,21 +19,27 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
-
-private const val DOMAIN = "doujin.desu.xxx"
+import java.util.LinkedHashMap
 
 class DoujinDesu :
     HttpSource(),
     ConfigurableSource {
 
     override val name = "Doujindesu"
-    override val baseUrl by lazy { preferences.getString(PREF_DOMAIN_KEY, PREF_DOMAIN_DEFAULT)!! }
+
+    private val defaultBaseUrl = "https://doujin.desu.xxx"
+
+    override val baseUrl by lazy { getDefaultBaseUrl() }
+
+    private val apiUrl: String
+        get() = "$baseUrl/api"
+
     override val lang = "id"
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy()
 
-    val decryptor = Decryptor(API_URL)
+    val decryptor = Decryptor(apiUrl)
 
     override val client = super.client.newBuilder()
         .addInterceptor(decryptor.xorInterceptor())
@@ -47,7 +51,7 @@ class DoujinDesu :
 
     private fun searchRequest(page: Int, sort: String = "latest_chapter"): Request {
         val offset = (page - 1) * LIMIT
-        val url = "$API_URL/manga".toHttpUrl().newBuilder()
+        val url = "$apiUrl/manga".toHttpUrl().newBuilder()
             .addQueryParameter("limit", LIMIT.toString())
             .addQueryParameter("offset", offset.toString())
             .addQueryParameter("sort", sort)
@@ -62,7 +66,9 @@ class DoujinDesu :
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
-    private val slugCache = mutableMapOf<String, String>()
+    private val slugCache = object : LinkedHashMap<String, String>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 30
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         // priority when query exists: usual filter > type filter, otherwise opposite
@@ -79,7 +85,7 @@ class DoujinDesu :
             if (type.isNotBlank() && !agsValue.isNullOrBlank()) {
                 // Search the input and pick a slug if not cached
                 val slug = slugCache[cacheKey] ?: run {
-                    val url = "$API_URL/taxonomy/$type/".toHttpUrl().newBuilder()
+                    val url = "$apiUrl/taxonomy/$type/".toHttpUrl().newBuilder()
                         .addQueryParameter("search", agsValue)
                         .addQueryParameter("limit", "1")
                         .build()
@@ -88,7 +94,7 @@ class DoujinDesu :
                         ?: throw IOException("Gagal menemukan: $agsValue")
                 }.also { slugCache[cacheKey] = it }
 
-                val url2 = "$API_URL/taxonomy/$type/$slug".toHttpUrl().newBuilder()
+                val url2 = "$apiUrl/taxonomy/$type/$slug".toHttpUrl().newBuilder()
                     .addQueryParameter("limit", LIMIT.toString())
                     .addQueryParameter("page", page.toString())
                     .build()
@@ -168,7 +174,7 @@ class DoujinDesu :
     // Detail Parse
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.getSlug()}"
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("$API_URL/manga/${manga.getSlug()}", headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET("$apiUrl/manga/${manga.getSlug()}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaItem>().toSManga()
 
@@ -182,7 +188,7 @@ class DoujinDesu :
     // More parser stuff
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$API_URL/chapters/${chapter.getIdOrError()}", headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/chapters/${chapter.getIdOrError()}", headers)
 
     override fun pageListParse(response: Response): List<Page> = response.parseAs<PageList>().pages.mapIndexed { i, imgUrl ->
         Page(i, imageUrl = imgUrl)
@@ -194,28 +200,44 @@ class DoujinDesu :
 
     companion object {
         private const val APP_SECRET = "dfdf72051dbfdc7d76889ebd31324e74"
-        private const val API_URL = "https://$DOMAIN/api"
         private const val LIMIT = 24
 
-        private val PREF_DOMAIN_KEY = "preferred_domain_name_v${AppInfo.getVersionName()}"
-        private const val PREF_DOMAIN_TITLE = "Mengganti BaseUrl"
-        private const val PREF_DOMAIN_DEFAULT = "https://$DOMAIN"
-        private const val PREF_DOMAIN_SUMMARY = "Mengganti domain default dengan domain yang berbeda"
+        private const val PREF_BASE_URL = "defaultBaseUrl"
+        private const val PREF_CUSTOM_BASE_URL = "customBaseUrl"
+        private const val PREF_BASE_URL_TITLE = "Mengganti BaseUrl"
+        private const val PREF_BASE_URL_SUMMARY = "Mengganti domain default dengan domain yang berbeda"
+        private const val RESTART_MSG = "Mulai ulang aplikasi untuk menerapkan pengaturan baru"
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = PREF_DOMAIN_KEY
-            title = PREF_DOMAIN_TITLE
-            dialogTitle = PREF_DOMAIN_TITLE
-            summary = PREF_DOMAIN_SUMMARY
-            dialogMessage = "Default: $PREF_DOMAIN_DEFAULT"
-            setDefaultValue(PREF_DOMAIN_DEFAULT)
+        val baseUrlPref =
+            EditTextPreference(screen.context).apply {
+                key = PREF_CUSTOM_BASE_URL
+                title = PREF_BASE_URL_TITLE
+                summary = PREF_BASE_URL_SUMMARY
+                this.setDefaultValue(defaultBaseUrl)
+                dialogTitle = PREF_BASE_URL_TITLE
+                dialogMessage = "Default: $defaultBaseUrl"
 
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Mulai ulang aplikasi untuk menerapkan pengaturan baru.", Toast.LENGTH_LONG).show()
-                true
+                setOnPreferenceChangeListener { _, _ ->
+                    Toast.makeText(screen.context, RESTART_MSG, Toast.LENGTH_LONG).show()
+                    true
+                }
             }
-        }.also(screen::addPreference)
+        screen.addPreference(baseUrlPref)
+    }
+
+    private fun getDefaultBaseUrl(): String = preferences.getString(PREF_CUSTOM_BASE_URL, defaultBaseUrl)!!
+
+    init {
+        preferences.getString(PREF_BASE_URL, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != defaultBaseUrl) {
+                preferences
+                    .edit()
+                    .putString(PREF_CUSTOM_BASE_URL, defaultBaseUrl)
+                    .putString(PREF_BASE_URL, defaultBaseUrl)
+                    .apply()
+            }
+        }
     }
 }
