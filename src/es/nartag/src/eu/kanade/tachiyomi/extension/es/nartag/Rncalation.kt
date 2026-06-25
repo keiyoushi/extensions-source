@@ -123,14 +123,14 @@ class Rncalation : HttpSource() {
         val document = response.asJsoup()
         val chapters = mutableListOf<SChapter>()
 
-        document.select("#chapter-list a").forEach { element ->
+        document.select("#chapter-list a[data-chapter-id]").forEach { element ->
             chapters.add(chapterFromElement(element))
         }
 
         document.selectFirst("template#chapters-extra")?.let { template ->
             val extraHtml = template.html()
             val extraDoc = Jsoup.parseBodyFragment(extraHtml, document.baseUri())
-            extraDoc.select("a").forEach { element ->
+            extraDoc.select("a[data-chapter-id]").forEach { element ->
                 chapters.add(chapterFromElement(element))
             }
         }
