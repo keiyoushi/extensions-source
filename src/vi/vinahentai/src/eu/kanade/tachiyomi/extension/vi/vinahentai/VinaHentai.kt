@@ -33,7 +33,7 @@ class VinaHentai :
     override val name = "VinaHentai"
     override val lang = "vi"
 
-    private val defaultBaseUrl = "https://vinahentai.shop"
+    private val defaultBaseUrl = "https://vinahentai.cloud"
 
     override val baseUrl get() = getPrefBaseUrl()
 

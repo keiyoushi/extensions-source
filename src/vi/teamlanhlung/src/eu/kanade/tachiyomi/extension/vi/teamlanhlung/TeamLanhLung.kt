@@ -35,7 +35,7 @@ class TeamLanhLung :
 
     override val name: String = "Team Lạnh Lùng"
 
-    private val defaultBaseUrl = "https://lunghihi.icu"
+    private val defaultBaseUrl = "https://icecoldcore.com"
 
     override val baseUrl: String get() = getPrefBaseUrl()
 
