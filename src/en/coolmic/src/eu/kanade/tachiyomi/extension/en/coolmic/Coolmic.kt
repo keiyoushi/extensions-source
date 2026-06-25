@@ -39,7 +39,7 @@ class Coolmic :
         .set("Referer", "$baseUrl/")
 
     override val client = network.client.newBuilder()
-        .addInterceptor(CookieInterceptor(domain, "is_mature" to "true"))
+        .addNetworkInterceptor(CookieInterceptor(domain, "is_mature" to "true"))
         .addInterceptor(ImageInterceptor())
         .build()
 
