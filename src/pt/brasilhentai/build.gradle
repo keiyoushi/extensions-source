@@ -1,8 +1,0 @@
-ext {
-    extName = 'Brasil Hentai'
-    extClass = '.BrasilHentai'
-    extVersionCode = 5
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

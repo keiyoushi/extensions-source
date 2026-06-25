@@ -1,8 +1,0 @@
-ext {
-    extName = 'West Manga'
-    extClass = '.WestManga'
-    extVersionCode = 43
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

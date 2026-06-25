@@ -1,9 +1,0 @@
-ext {
-    extName = 'RawZO'
-    extClass = '.RawXZ'
-    baseUrl = 'https://rawzo.net'
-    extVersionCode = 51
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

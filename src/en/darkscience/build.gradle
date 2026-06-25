@@ -1,7 +1,0 @@
-ext {
-    extName = 'Dark Science'
-    extClass = '.DarkScience'
-    extVersionCode = 1
-}
-
-apply plugin: "kei.plugins.extension.legacy"

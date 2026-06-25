@@ -1,7 +1,0 @@
-ext {
-    extName = 'Saikai Scan'
-    extClass = '.SaikaiScan'
-    extVersionCode = 13
-}
-
-apply plugin: "kei.plugins.extension.legacy"

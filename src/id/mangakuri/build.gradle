@@ -1,8 +1,0 @@
-ext {
-    extName = 'Mangakuri'
-    extClass = '.Mangakuri'
-    extVersionCode = 32
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"
