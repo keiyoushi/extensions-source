@@ -22,11 +22,11 @@ class RankingResponse(
 
 @Serializable
 class Ranking(
-    private val slug: String,
+    private val hash: String,
     private val img: RankingImg,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = "/series/$slug"
+        url = "/series/$hash"
         title = img.alt
         thumbnail_url = img.thumbnail
     }
@@ -45,7 +45,7 @@ class RankingImg(
 object RankingMangaSerializer : JsonTransformingSerializer<Ranking>(Ranking.serializer()) {
     override fun transformDeserialize(element: JsonElement) = buildJsonObject {
         val tuple = element.jsonArray
-        put("slug", tuple[2])
+        put("hash", tuple[2])
         put("img", tuple.findImg()!!)
     }
 }
