@@ -6,6 +6,7 @@ import keiyoushi.gradle.extensions.baseVersionCode
 import keiyoushi.gradle.extensions.compileOnly
 import keiyoushi.gradle.extensions.implementation
 import keiyoushi.gradle.extensions.kei
+import keiyoushi.gradle.extensions.libVersion
 import keiyoushi.gradle.extensions.libs
 import keiyoushi.gradle.extensions.plugins
 import keiyoushi.gradle.tasks.GenerateKeepRulesTask
@@ -32,12 +33,13 @@ class PluginExtensionLegacy : Plugin<Project> {
         }
 
         assertWithoutFlag(!extra.has("pkgNameSuffix")) { "Gradle configuration cannot contain 'pkgNameSuffix'" }
-        assertWithoutFlag(!extra.has("libVersion")) { "Gradle configuration cannot contain 'libVersion'" }
 
         assertWithoutFlag(extName.max().code < 0x180) { "Extension name should be romanized" }
 
         val theme: Project? = if (extra.has("themePkg")) project(":lib-multisrc:$themePkg") else null
         if (theme != null) evaluationDependsOn(theme.path)
+
+        val libVersion = if (extra.has("libVersion")) target.libVersion else (theme?.libVersion ?: "1.4")
 
         android {
             namespace = "eu.kanade.tachiyomi.extension"
@@ -59,7 +61,7 @@ class PluginExtensionLegacy : Plugin<Project> {
             defaultConfig {
                 applicationIdSuffix = project.parent?.name + "." + project.name
                 versionCode = if (theme == null) extVersionCode else theme.baseVersionCode + overrideVersionCode
-                versionName = "1.4.$versionCode"
+                versionName = "$libVersion.$versionCode"
                 base {
                     archivesName.set("tachiyomi-$applicationIdSuffix-v$versionName")
                 }
@@ -142,6 +144,11 @@ class PluginExtensionLegacy : Plugin<Project> {
             if (theme != null) implementation(theme) // Overrides core launcher icons
             implementation(project(":core"))
             compileOnly(libs.bundles.common)
+            if (libVersion == "1.6") {
+                compileOnly(libs.tachiyomi.lib.v16)
+            } else {
+                compileOnly(libs.tachiyomi.lib.v14)
+            }
         }
 
         afterEvaluate {
