@@ -26,12 +26,12 @@ import kotlin.time.Duration.Companion.seconds
 class BiliManga :
     HttpSource(),
     ConfigurableSource {
-
+    override val id = 7289707411592168382
     override val baseUrl = "https://www.bilimanga.net"
 
     override val lang = "zh"
 
-    override val name = "Bilimanga.net"
+    override val name = "嗶哩漫畫"
 
     override val supportsLatest = true
 
@@ -75,9 +75,7 @@ class BiliManga :
                 "A" -> {
                     desc.insert(
                         0,
-                        doc.selectFirst(".notice")?.let { "> ${it.formatText("\n")}\n\n" }
-                            ?.replace(URL_REGEX, "<$0>")
-                            ?: "",
+                        doc.selectFirst(".notice")?.let { "> ${it.formatText("\n")}\n\n" } ?: "",
                     )
                 }
 
@@ -101,8 +99,6 @@ class BiliManga :
     }
 
     companion object {
-        val URL_REGEX =
-            Regex("https?://(?:www\\.)?([-a-zA-Z0-9@:%._+~#=]{2,256}\\.[a-z]{2,6}\\b)*(/[/\\w.-]*)*[?]*(.+)*", RegexOption.IGNORE_CASE)
         val NEWLINE_REGEX = Regex("(?:\n\r\n)+")
         val META_REGEX = Regex("收藏|推薦|連載中|已完結")
         val DATE_REGEX = Regex("\\d{4}-\\d{1,2}-\\d{1,2}")
@@ -186,6 +182,7 @@ class BiliManga :
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val doc = response.asJsoup()
+        doc.selectFirst(".aui-ver-form")?.let { throw Exception(it.text()) }
         val meta = doc.select(".book-meta em").map(Element::text)
         val (main, extra) = meta.partition(META_REGEX::containsMatchIn)
         setUrlWithoutDomain(doc.location())
