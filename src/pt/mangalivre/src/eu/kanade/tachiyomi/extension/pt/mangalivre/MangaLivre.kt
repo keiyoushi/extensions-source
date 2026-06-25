@@ -50,9 +50,9 @@ class MangaLivre :
         .add("Accept-Language", "pt-BR,en-US;q=0.9,en;q=0.8")
         .add("Referer", "$baseUrl/")
         .add("Sec-Fetch-Dest", "empty")
+        .add("x-toonlivre-client", "web-v8")
         .add("Sec-Fetch-Mode", "cors")
         .add("Sec-Fetch-Site", "same-origin")
-        .add("x-toonlivre-client", "web-v8")
 
     // ============================== Popular =======================================
 
@@ -180,15 +180,11 @@ class MangaLivre :
     private fun signedChapterHeaders(url: String): Headers {
         val path = url.toHttpUrl().encodedPath
         val time = System.currentTimeMillis().toString()
-        val signatureTime = (time.toLong() * 2).toString()
-        val signature = sha256("$signatureTime|$CHAPTER_SIGNATURE_STYLE_VALUE|${path.reversed()}")
-        val legacySignature = sha256("$path|$time|$CHAPTER_LEGACY_SIGNATURE_SECRET")
+        val sig = sha256("$path|$time|$CHAPTER_SIGNATURE_SECRET")
 
         return headers.newBuilder()
-            .set("X-Request-Timestamp", time)
-            .set("X-Signature-Key", signature)
             .set("x-toon-time", time)
-            .set("x-toon-sig", legacySignature)
+            .set("x-toon-sig", sig)
             .build()
     }
 
@@ -201,11 +197,9 @@ class MangaLivre :
             }
         }
     }
-
     companion object {
         private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
-        private const val CHAPTER_SIGNATURE_STYLE_VALUE = "#1a1a24"
-        private const val CHAPTER_LEGACY_SIGNATURE_SECRET = "ToonLivreSecureV1_2026"
+        private const val CHAPTER_SIGNATURE_SECRET = "ToonLivreSecureV1_2026"
         private const val HEX_CHARS = "0123456789abcdef"
     }
 }
