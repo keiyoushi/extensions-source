@@ -183,7 +183,7 @@ class MangaLivre :
     }
 
     // ============================== Helper =======================================
-    
+
     @Volatile
     private var cachedClientValue: String? = null
 
@@ -206,15 +206,13 @@ class MangaLivre :
         )
     }
 
-    private fun currentClientValue(): String =
-        cachedClientValue ?: synchronized(this) {
-            cachedClientValue ?: scrapeClientValue().also { cachedClientValue = it }
-        }
+    private fun currentClientValue(): String = cachedClientValue ?: synchronized(this) {
+        cachedClientValue ?: scrapeClientValue().also { cachedClientValue = it }
+    }
 
-    private fun refreshClientValue(): String =
-        synchronized(this) {
-            scrapeClientValue().also { cachedClientValue = it }
-        }
+    private fun refreshClientValue(): String = synchronized(this) {
+        scrapeClientValue().also { cachedClientValue = it }
+    }
 
     private fun scrapeClientValue(): String {
         return try {
@@ -238,12 +236,11 @@ class MangaLivre :
             .singleOrNull()
     }
 
-    private fun Response.isOfficialAppError(): Boolean =
-        try {
-            peekBody(MAX_PEEK).string().contains("aplicativo oficial", ignoreCase = true)
-        } catch (_: Exception) {
-            false
-        }
+    private fun Response.isOfficialAppError(): Boolean = try {
+        peekBody(MAX_PEEK).string().contains("aplicativo oficial", ignoreCase = true)
+    } catch (_: Exception) {
+        false
+    }
 
     companion object {
         private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
