@@ -214,6 +214,8 @@ abstract class KeiSource : HttpSource() {
                 }
                 Filter.Header(
                     when (lang) {
+                        "de" -> "Tippe auf „Zurücksetzen“, um die Filter zu laden"
+                        "ja" -> "「リセット」をタップしてフィルターを読み込む"
                         "es", "es-419" -> "Pulse 'Restablecer' para cargar los filtros"
                         else -> "Tap 'Reset' to load filters"
                     },
