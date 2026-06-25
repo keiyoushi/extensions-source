@@ -20,6 +20,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -191,8 +192,10 @@ class MeoSSS :
 
     // ============================== Chapters ===============================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaUrl = response.request.url.toString().removeSuffix("/")
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+        val mangaUrl = baseUrl + manga.url
         val chapters = mutableListOf<SChapter>()
         var page = 1
 
@@ -212,7 +215,7 @@ class MeoSSS :
             page++
         }
 
-        return chapters
+        chapters
     }
 
     private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
