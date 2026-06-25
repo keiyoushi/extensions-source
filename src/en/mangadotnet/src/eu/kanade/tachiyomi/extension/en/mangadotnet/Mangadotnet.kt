@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangadotnet
 
-import android.app.Application
 import android.util.Log
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
@@ -41,14 +40,10 @@ import okhttp3.Callback
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.IOException
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -64,22 +59,7 @@ class Mangadotnet :
     override val baseUrl = "https://mangadot.net"
     override val supportsLatest = true
 
-    override val client = network.client.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-
-            if (request.url.encodedPath == "/nsfw-cover.jpg") {
-                return@addInterceptor Response.Builder()
-                    .request(request)
-                    .protocol(Protocol.HTTP_1_1)
-                    .code(404)
-                    .message("NSFW Cover")
-                    .body("".toResponseBody(null))
-                    .build()
-            }
-            chain.proceed(request)
-        }
-        .build()
+    override val client = network.client.newBuilder().build()
 
     // ============================== Setup ===============================
     private val preferences = getPreferences {
@@ -129,14 +109,6 @@ class Mangadotnet :
 
         if (getString(POPULAR_MODE_PREF, null) == "trending") {
             edit().putString(POPULAR_MODE_PREF, "most-tracked").apply()
-        }
-
-        val cacheVersionKey = "pref_genre_cache"
-        if (!contains(cacheVersionKey)) {
-            val cacheDir = applicationContext.cacheDir.resolve("source_$id")
-            cacheDir.resolve("genres_normal.json").delete()
-            cacheDir.resolve("genres_adult.json").delete()
-            edit().putBoolean(cacheVersionKey, true).apply()
         }
     }
 
@@ -612,11 +584,11 @@ class Mangadotnet :
 
     // =========================== Genre Cache =============================
     private val genreCacheNormalFile: File by lazy {
-        Injekt.get<Application>().cacheDir.resolve("source_$id/genres_normal.json")
+        applicationContext.cacheDir.resolve("source_$id/genres_normal.json")
     }
 
     private val genreCacheAdultFile: File by lazy {
-        Injekt.get<Application>().cacheDir.resolve("source_$id/genres_adult.json")
+        applicationContext.cacheDir.resolve("source_$id/genres_adult.json")
     }
 
     private val genresLock = ReentrantLock()

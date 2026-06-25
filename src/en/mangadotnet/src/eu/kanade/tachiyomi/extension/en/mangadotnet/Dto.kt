@@ -66,10 +66,10 @@ class BrowseManga(
 
     fun toSManga(baseUrl: String, hideAdultCovers: Boolean = false) = SManga.create().apply {
         url = id.toString()
-        title = if (isAdult && hideAdultCovers) "[18+] ${this@BrowseManga.title}" else this@BrowseManga.title
+        title = this@BrowseManga.title
 
         thumbnail_url = if (isAdult && hideAdultCovers) {
-            "$baseUrl/nsfw-cover.jpg"
+            "https://fakeimg.pl/400x600/?text=NSFW"
         } else {
             photo?.let {
                 if (it.startsWith("/")) {
