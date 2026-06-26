@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.lycantoons
 
-import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -9,14 +8,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Element
 import rx.Observable
 
 class LycanToons : HttpSource() {
@@ -30,12 +27,14 @@ class LycanToons : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .addInterceptor(WebViewInterceptor(headers["User-Agent"]))
+        .addInterceptor(WebViewInterceptor(baseUrl, headers["User-Agent"]))
         .rateLimit(5)
         .build()
 
     private val rscHeaders by lazy {
         headers.newBuilder()
+            .add("next-router-state-tree", "%5B%22%22%2C%7B%7D%5D")
+            .add("next-url", "/")
             .add("RSC", "1")
             .build()
     }
@@ -124,27 +123,12 @@ class LycanToons : HttpSource() {
 
     // =====================Pages========================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val script = document.select("script:containsData(self.__next_f)")
-            .joinToString("\n", transform = Element::data)
+        val dto = response.extractNextJs<PageList>()
 
-        val content = QuickJs.create().use {
-            it.evaluate(
-                """
-                globalThis.self = globalThis;
-                $script
-                self.__next_f.map(it => it[it.length - 1]).join('')
-                """.trimIndent(),
-            ) as String
-        }
-
-        return PAGES_REGEX.find(content)
-            ?.groupValues?.last()
-            ?.parseAs<List<String>>()
-            ?.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
+        return dto?.imageUrls?.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
             ?: emptyList()
     }
 

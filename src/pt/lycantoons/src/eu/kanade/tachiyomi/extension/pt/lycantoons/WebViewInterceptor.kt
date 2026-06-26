@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit
 const val REUSE_TIMEOUT_MS = 30 * 1000L // 30s
 
 // proxy Request through WebView since OkHttp gets 403 and fails Cloudflare TLS signature checks
-class WebViewInterceptor(private val userAgent: String?) : Interceptor {
+class WebViewInterceptor(val baseUrl: String, private val userAgent: String?) : Interceptor {
 
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private var destroyWv: Runnable? = null
@@ -116,44 +116,41 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
 
                 webView.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, pageUrl: String?) {
-                        val handlingScript = if (isImage) {
+                        val jsScript = if (isImage) {
                             """
-                            .then(res => {
-                                if (!res.ok) throw new Error('HTTP ' + res.status);
-                                contentType = res.headers.get('content-type')
-                                return res.blob();
-                            })
-                            .then(blob => {
-                                var reader = new FileReader();
-                                reader.onloadend = function() {
-                                    if (!reader.result) { window.$bridgeName.passError('Empty payload'); return; }
-                                    var parts = reader.result.split(',');
-                                    window.$bridgeName.passResult(parts.length > 1 ? parts[1] : parts[0], contentType);
+                            (function() {
+                                const img = document.getElementById('_image');
+                                const toBase64 = (data, type) => {
+                                    if (data instanceof Blob) {
+                                        const reader = new FileReader();
+                                        reader.onload = () => window.$bridgeName.passResult(btoa(reader.result), type);
+                                        reader.onerror = () => window.$bridgeName.passError('Reader error');
+                                        reader.readAsBinaryString(data);
+                                    } else {
+                                        window.$bridgeName.passResult(data.toDataURL('image/jpeg', 0.8), 'image/jpeg');
+                                    }
                                 };
-                                reader.onerror = function() { window.$bridgeName.passError('Reader failed'); };
-                                reader.readAsDataURL(blob);
-                            })
-                            """
+                                fetch(img.src, { cache: 'force-cache' })    // refech url to get compressed version
+                                    .then(r => r.blob())
+                                    .then(b => toBase64(b, b.type))
+                                    .catch(() => {                         // Fallback to canvas just in case if webivew acts up
+                                        const canvas = document.createElement('canvas');
+                                        canvas.width = img.naturalWidth;
+                                        canvas.height = img.naturalHeight;
+                                        canvas.getContext('2d').drawImage(img, 0, 0);
+                                        toBase64(canvas);
+                                    });
+                            })();
+                            """.trimIndent()
                         } else {
+                            val jsHeaders = buildMap {
+                                headers.names().forEach { name ->
+                                    put(name, headers[name])
+                                }
+                            }.toJsonString()
+
+                            val requestBody = if (requestBody != null) "body: `$requestBody`," else ""
                             """
-                            .then(res => {
-                                if (!res.ok) throw new Error('HTTP ' + res.status);
-                                contentType = res.headers.get('content-type')
-                                return res.text();
-                            })
-                            .then(text => window.$bridgeName.passResult(text, contentType))
-                            """
-                        }
-
-                        val jsHeaders = buildMap {
-                            headers.names().forEach { name ->
-                                put(name, headers[name])
-                            }
-                        }.toJsonString()
-
-                        val requestBody = if (requestBody != null) "body: `$requestBody`," else ""
-
-                        val jsFetchScript = """
                             (function() {
                                 let contentType;
 
@@ -163,16 +160,26 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
                                     headers: $jsHeaders,
                                     $requestBody
                                 })
-                                $handlingScript
+
+                                .then(res => {
+                                if (!res.ok) throw new Error('HTTP ' + res.status);
+                                contentType = res.headers.get('content-type')
+                                return res.text();
+                            })
+                            .then(text => window.$bridgeName.passResult(text, contentType))
+
                                 .catch(err => window.$bridgeName.passError(err.message));
                             })();
-                        """.trimIndent()
+                            """.trimIndent()
+                        }
 
-                        view.evaluateJavascript(jsFetchScript, null)
+                        view.evaluateJavascript(jsScript, null)
                     }
                 }
 
-                webView.loadDataWithBaseURL(url, " ", "text/html", "utf-8", null)
+                val pageHtml = if (isImage) "<html><body><img id='_image' src='$url'/></body></html>" else " " // fetch-dest as image
+
+                webView.loadDataWithBaseURL(baseUrl, pageHtml, "text/html", "utf-8", null)
             } catch (e: Throwable) {
                 errorMessage = e
                 latch.countDown()
@@ -180,6 +187,7 @@ class WebViewInterceptor(private val userAgent: String?) : Interceptor {
         }
 
         latch.await(if (isImage) 10 else 5, TimeUnit.SECONDS)
+
         return result ?: FetchResult(false, (errorMessage ?: "Timed out").toString())
     }
 
