@@ -9,4 +9,9 @@ keiyoushi {
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     baseUrl = "https://kumaraw.com"
+
+    deeplink {
+        host("kumaraw.com")
+        path("/manga/..*")
+    }
 }

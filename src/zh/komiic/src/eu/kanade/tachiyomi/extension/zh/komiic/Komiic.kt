@@ -174,3 +174,5 @@ class Komiic :
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }
+
+const val PREFIX_ID_SEARCH = "id:"

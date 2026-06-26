@@ -8,6 +8,11 @@ keiyoushi {
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    deeplink {
+        host("reimanga.com")
+        path("/manga/..*")
+    }
 }
 
 dependencies {

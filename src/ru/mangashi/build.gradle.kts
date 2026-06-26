@@ -8,4 +8,9 @@ keiyoushi {
     versionCode = 52
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    deeplink {
+        host("manga-shi.org")
+        path("/manga/..*")
+    }
 }

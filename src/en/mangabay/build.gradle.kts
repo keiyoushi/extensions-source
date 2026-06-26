@@ -8,4 +8,9 @@ keiyoushi {
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    deeplink {
+        host("read.manga-bay.org")
+        path("/..*-..*\\.html")
+    }
 }

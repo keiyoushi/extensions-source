@@ -8,4 +8,9 @@ keiyoushi {
     versionCode = 10
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    deeplink {
+        host("akuma.moe")
+        path("/g/..*")
+    }
 }
