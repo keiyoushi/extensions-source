@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.readcomiconline
 
 import android.content.SharedPreferences
-import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import app.cash.quickjs.QuickJs
@@ -454,19 +453,6 @@ class Readcomiconline :
             summary = "%s"
         }
 
-        val remoteConfigPref = EditTextPreference(screen.context).apply {
-            key = IMAGE_REMOTE_CONFIG_PREF
-            title = IMAGE_REMOTE_CONFIG_TITLE
-            summary = IMAGE_REMOTE_CONFIG_SUMMARY
-            setDefaultValue(IMAGE_REMOTE_CONFIG_DEFAULT)
-
-            setOnPreferenceChangeListener { _, _ ->
-                // Reset cached config so it's re-fetched from the new link
-                remoteConfigItem = null
-                true
-            }
-        }
-
         val qualityPref = ListPreference(screen.context).apply {
             key = QUALITY_PREF
             title = QUALITY_PREF_TITLE
@@ -484,7 +470,6 @@ class Readcomiconline :
         }
 
         screen.addPreference(mirrorPref)
-        screen.addPreference(remoteConfigPref)
         screen.addPreference(qualityPref)
         screen.addPreference(serverPref)
     }
@@ -499,10 +484,7 @@ class Readcomiconline :
                 return field
             }
 
-            val configLink = preferences.getString(IMAGE_REMOTE_CONFIG_PREF, IMAGE_REMOTE_CONFIG_DEFAULT)
-                ?.ifBlank { IMAGE_REMOTE_CONFIG_DEFAULT }
-                ?.addBustQuery()
-                ?: IMAGE_REMOTE_CONFIG_DEFAULT.addBustQuery()
+            val configLink = IMAGE_REMOTE_CONFIG_DEFAULT.addBustQuery()
 
             try {
                 val configResponse = client.newCall(GET(configLink)).execute()
@@ -533,10 +515,7 @@ class Readcomiconline :
         private const val MIRROR_PREF = "mirrorpref"
         private val MIRROR_NAMES = arrayOf("readcomiconline.li", "rcostation.xyz")
         private val MIRROR_URLS = arrayOf("https://readcomiconline.li", "https://rcostation.xyz")
-        private const val IMAGE_REMOTE_CONFIG_TITLE = "Remote Config"
-        private const val IMAGE_REMOTE_CONFIG_SUMMARY = "Remote Config Link"
-        private const val IMAGE_REMOTE_CONFIG_PREF = "imageuseremotelinkpref"
         private const val IMAGE_REMOTE_CONFIG_DEFAULT =
-            "https://raw.githubusercontent.com/keiyoushi/extensions-source/refs/heads/main/src/en/readcomiconline/config.json"
+            "https://raw.githubusercontent.com/keiyoushi/rco-script/refs/heads/main/decrypt.json"
     }
 }
