@@ -2,8 +2,8 @@ ext {
     extName = 'Opiatoon'
     extClass = '.Opiatoon'
     themePkg = 'madara'
-    baseUrl = 'https://opiatoon.lat'
-    overrideVersionCode = 3
+    baseUrl = 'https://opiatoon.pics'
+    overrideVersionCode = 4
     isNsfw = true
 }
 
