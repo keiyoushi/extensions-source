@@ -21,9 +21,11 @@ import okhttp3.Response
 import java.io.IOException
 import java.util.LinkedHashMap
 
-class DoujinDesu :
+class Doujindesu :
     HttpSource(),
     ConfigurableSource {
+
+    override val id = 7704282043609669342L
 
     override val name = "Doujindesu"
 
@@ -194,7 +196,11 @@ class DoujinDesu :
         Page(i, imageUrl = imgUrl)
     }
 
-    fun SManga.getSlug() = url.removePrefix("/manga/").removeSuffix("/")
+    fun SManga.getSlug(): String = if (url.startsWith("http")) {
+        url.toHttpUrl().pathSegments.last { it.isNotBlank() }
+    } else {
+        url.removePrefix("/manga/").removeSuffix("/")
+    }
 
     fun SChapter.getIdOrError(): String = if (!url.startsWith('/')) url else throw IOException("Segarkan untuk memuat ulang bab.")
 
