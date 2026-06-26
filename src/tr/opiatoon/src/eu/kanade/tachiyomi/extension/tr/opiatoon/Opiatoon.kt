@@ -11,7 +11,7 @@ import java.util.Locale
 class Opiatoon :
     Madara(
         "Opiatoon",
-        "https://opiatoon.lat",
+        "https://opiatoon.pics",
         "tr",
         dateFormat = SimpleDateFormat("d MMMM", Locale("tr")),
     ) {
