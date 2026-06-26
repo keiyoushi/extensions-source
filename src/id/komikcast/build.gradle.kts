@@ -5,7 +5,7 @@ plugins {
 keiyoushi {
     name = "Komik Cast"
     className = "KomikCast"
-    versionCode = 81
+    versionCode = 82
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 }
