@@ -1,9 +1,0 @@
-ext {
-    extName = 'New Manhwa'
-    extClass = '.NewManhwa'
-    baseUrl = 'https://newmanhwa.com'
-    extVersionCode = 34
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

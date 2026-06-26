@@ -1,8 +1,0 @@
-ext {
-    extName = 'MangaGeko'
-    extClass = '.MangaRawClub'
-    extVersionCode = 32
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

@@ -1,8 +1,0 @@
-ext {
-    extName = 'Asura Scans'
-    extClass = '.AsuraScans'
-    extVersionCode = 62
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

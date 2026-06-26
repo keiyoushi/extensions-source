@@ -1,8 +1,0 @@
-ext {
-    extName = 'Dynasty'
-    extClass = '.Dynasty'
-    extVersionCode = 30
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

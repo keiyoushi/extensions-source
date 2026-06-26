@@ -1,7 +1,0 @@
-ext {
-    extName = 'Darths & Droids'
-    extClass = '.DarthsDroids'
-    extVersionCode = 2
-}
-
-apply plugin: "kei.plugins.extension.legacy"

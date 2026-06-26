@@ -1,8 +1,0 @@
-ext {
-    extName = 'Manga Tales'
-    extClass = '.MangaTales'
-    themePkg = 'gmanga'
-    overrideVersionCode = 0
-}
-
-apply plugin: "kei.plugins.extension.legacy"

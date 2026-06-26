@@ -1,8 +1,0 @@
-ext {
-    extName = 'Oppai Stream'
-    extClass = '.OppaiStream'
-    extVersionCode = 5
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"
