@@ -179,7 +179,7 @@ class PluginExtension : Plugin<Project> {
                 variant.manifestPlaceholders.put("extClass", extClassProvider)
                 variant.manifestPlaceholders.put("nsfw", nsfwProvider)
                 variant.manifestPlaceholders.put("tachiyomix.contentWarning", contentWarningProvider)
-                variant.manifestPlaceholders.put("tachiyomix.extensionLib", keiyoushi.libVersion.map { it.toString() })
+                variant.manifestPlaceholders.put("tachiyomix.extensionLib", keiyoushi.libVersion)
             }
         }
 
@@ -187,20 +187,13 @@ class PluginExtension : Plugin<Project> {
             archivesName.set(versionNameProvider.map { "tachiyomi-$applicationIdSuffix-v$it" })
         }
 
+        dependencies {
+            addProvider("implementation", keiyoushi.theme.map { project(":lib-multisrc:$it") })
+            implementation(project(":core"))
+            compileOnly(libs.bundles.common)
+        }
+
         afterEvaluate {
-            val themeName = keiyoushi.theme.orNull
-            if (themeName != null) {
-                evaluationDependsOn(":lib-multisrc:$themeName")
-            }
-
-            dependencies {
-                if (themeName != null) {
-                    implementation(project(":lib-multisrc:$themeName"))
-                }
-                implementation(project(":core"))
-                compileOnly(libs.bundles.common)
-            }
-
             tasks.withType<PackageAndroidArtifact>().configureEach {
                 createdBy.set("")
                 doFirst {
