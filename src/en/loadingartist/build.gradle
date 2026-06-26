@@ -1,7 +1,0 @@
-ext {
-    extName = 'Loading Artist'
-    extClass = '.LoadingArtist'
-    extVersionCode = 3
-}
-
-apply plugin: "kei.plugins.extension.legacy"

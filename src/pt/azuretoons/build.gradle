@@ -1,9 +1,0 @@
-ext {
-    extName = 'Azuretoons'
-    extClass = '.Azuretoons'
-    baseUrl = 'https://azuretoons.com'
-    extVersionCode = 3
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

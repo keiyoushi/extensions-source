@@ -1,7 +1,0 @@
-ext {
-    extName = 'Elan School'
-    extClass = '.ElanSchool'
-    extVersionCode = 1
-}
-
-apply plugin: "kei.plugins.extension.legacy"

@@ -1,8 +1,0 @@
-ext {
-    extName = 'Komik Cast'
-    extClass = '.KomikCast'
-    extVersionCode = 81
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

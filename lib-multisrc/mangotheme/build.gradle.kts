@@ -1,11 +1,12 @@
-import keiyoushi.gradle.extensions.baseVersionCode
-
 plugins {
     alias(kei.plugins.multisrc)
 }
 
-baseVersionCode = 2
-
 dependencies {
     api(project(":lib:cookieinterceptor"))
+}
+
+keiyoushi {
+    baseVersionCode = 2
+    libVersion = "1.4"
 }

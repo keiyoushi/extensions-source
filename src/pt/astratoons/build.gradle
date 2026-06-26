@@ -1,8 +1,0 @@
-ext {
-    extName = 'Astratoons'
-    extClass = '.Astratoons'
-    extVersionCode = 9
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

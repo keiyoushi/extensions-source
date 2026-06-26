@@ -1,8 +1,0 @@
-ext {
-    extName = 'Xscans'
-    extClass = '.Xscans'
-    extVersionCode = 1
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

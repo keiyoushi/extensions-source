@@ -1,8 +1,0 @@
-ext {
-    extName = 'Manga-shi'
-    extClass = '.MangaShi'
-    extVersionCode = 52
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"
