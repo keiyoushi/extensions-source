@@ -1,8 +1,0 @@
-ext {
-    extName = 'GoDa'
-    extClass = '.GoDaManhua'
-    themePkg = 'goda'
-    overrideVersionCode = 33
-}
-
-apply plugin: "kei.plugins.extension.legacy"

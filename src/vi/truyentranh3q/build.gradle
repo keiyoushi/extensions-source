@@ -1,9 +1,0 @@
-ext {
-    extName = 'TruyenTranh3Q'
-    extClass = '.TruyenTranh3Q'
-    baseUrl = 'https://manhua3q.com'
-    extVersionCode = 9
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

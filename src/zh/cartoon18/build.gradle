@@ -1,8 +1,0 @@
-ext {
-    extName = 'Cartoon18'
-    extClass = '.Cartoon18'
-    extVersionCode = 4
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

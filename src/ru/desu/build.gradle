@@ -1,8 +1,0 @@
-ext {
-    extName = 'Desu'
-    extClass = '.Desu'
-    extVersionCode = 33
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

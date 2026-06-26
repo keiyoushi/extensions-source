@@ -1,8 +1,0 @@
-ext {
-    extName = 'TruyenHentaiz'
-    extClass = '.TruyenHentaiz'
-    extVersionCode = 2
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

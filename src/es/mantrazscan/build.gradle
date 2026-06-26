@@ -1,8 +1,0 @@
-ext {
-    extName = 'Manhwa Scan'
-    extClass = '.ManhwaScan'
-    extVersionCode = 56
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

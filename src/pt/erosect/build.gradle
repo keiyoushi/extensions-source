@@ -1,8 +1,0 @@
-ext {
-    extName = 'Ero Sect'
-    extClass = '.EroSect'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"
