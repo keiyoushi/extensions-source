@@ -67,7 +67,7 @@ index = index_pb2.Index(
                 extensionLib=str(extension.get("libVersion")) if "libVersion" in extension else extract_extension_lib(extension["version"]),
                 versionCode=extension["code"],
                 versionName=extension["version"],
-                contentWarning=int(extension.get("contentWarning", 2 if extension.get("nsfw", 0) == 1 else 0)),
+                contentWarning=int(extension.get("contentWarning", 2 if extension.get("nsfw", 0) == 1 else 0)) + 1,
                 sources=[
                     index_pb2.Source(
                         id=int(source["id"]),
