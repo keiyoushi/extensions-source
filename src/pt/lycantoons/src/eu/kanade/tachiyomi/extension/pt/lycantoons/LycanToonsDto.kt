@@ -88,6 +88,11 @@ class ChapterDto(
 }
 
 @Serializable
+class PageList(
+    val imageUrls: List<String>,
+)
+
+@Serializable
 class FetchResult(
     val success: Boolean,
     val result: String,
