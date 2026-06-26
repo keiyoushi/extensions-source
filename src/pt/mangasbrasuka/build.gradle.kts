@@ -5,7 +5,7 @@ plugins {
 keiyoushi {
     name = "Mangas Brasuka"
     className = "MangasBrasuka"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
