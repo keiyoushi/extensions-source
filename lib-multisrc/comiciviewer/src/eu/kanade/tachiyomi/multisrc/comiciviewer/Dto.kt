@@ -5,6 +5,56 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+
+@Serializable
+class RankingResponse(
+    val children: List<
+        @Serializable(RankingMangaSerializer::class)
+        Ranking,
+        >,
+)
+
+@Serializable
+class Ranking(
+    private val hash: String,
+    private val img: RankingImg,
+) {
+    fun toSManga() = SManga.create().apply {
+        url = "/series/$hash"
+        title = img.alt
+        thumbnail_url = img.thumbnail
+    }
+}
+
+@Serializable
+class RankingImg(
+    val alt: String,
+    private val src: String?,
+    private val srcSet: String?,
+) {
+    val thumbnail: String?
+        get() = srcSet?.substringAfterLast(", ")?.substringBefore(" ") ?: src
+}
+
+object RankingMangaSerializer : JsonTransformingSerializer<Ranking>(Ranking.serializer()) {
+    override fun transformDeserialize(element: JsonElement) = buildJsonObject {
+        val tuple = element.jsonArray
+        put("hash", tuple[2])
+        put("img", tuple.findImg()!!)
+    }
+}
+
+internal fun JsonElement.findImg(): JsonObject? = when (this) {
+    is JsonObject -> takeIf { "src" in it } ?: values.firstNotNullOfOrNull { it.findImg() }
+    is JsonArray -> firstNotNullOfOrNull { it.findImg() }
+    else -> null
+}
 
 @Serializable
 class ViewerResponse(
@@ -80,7 +130,7 @@ class SeriesSummary(
     private val author: List<Author>?,
     private val images: List<SeriesImage>?,
     private val tag: List<Tag>?,
-    private val isCompleted: Boolean,
+    private val isCompleted: Boolean?,
 ) {
     fun toSManga(seriesHash: String): SManga = SManga.create().apply {
         url = "/series/$seriesHash"
@@ -94,7 +144,7 @@ class SeriesSummary(
             ?: this@SeriesSummary.description
         genre = tag?.joinToString { it.name }
         thumbnail_url = images?.joinToString { it.url }
-        status = if (isCompleted) SManga.COMPLETED else SManga.ONGOING
+        status = if (isCompleted == true) SManga.COMPLETED else SManga.ONGOING
     }
 }
 

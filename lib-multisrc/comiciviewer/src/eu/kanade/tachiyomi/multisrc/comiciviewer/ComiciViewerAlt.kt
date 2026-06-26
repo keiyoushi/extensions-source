@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.comiciviewer
 
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -13,9 +12,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.CacheControl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -27,11 +29,15 @@ abstract class ComiciViewerAlt(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-    private val apiUrl: String,
+    protected open val apiUrl: String,
 ) : HttpSource(),
     ConfigurableSource {
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    protected open val preferences by getPreferencesLazy()
     protected open val timeZone: TimeZone = TimeZone.getTimeZone("Asia/Tokyo")
+    protected open val rankingFromNextJs: Boolean = true
+    protected open val rscHeaders = headersBuilder()
+        .set("rsc", "1")
+        .build()
 
     override val supportsLatest = true
 
@@ -42,9 +48,24 @@ abstract class ComiciViewerAlt(
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ranking/manga", headers)
+    override fun popularMangaRequest(page: Int): Request {
+        if (rankingFromNextJs) {
+            return GET("$baseUrl/ranking/manga", rscHeaders)
+        }
+        return GET("$baseUrl/ranking/manga", headers)
+    }
 
-    override fun popularMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
+    override fun popularMangaParse(response: Response): MangasPage {
+        if (rankingFromNextJs) {
+            val body = response.body.string().replace(LAZY_REF) { "$" + it.groupValues[1] }
+            val page = body.extractNextJsRsc<RankingResponse> {
+                it is JsonObject && (it["className"] as? JsonPrimitive)?.content == "series-list mode-ranking"
+            }
+            val mangas = page?.children.orEmpty().map { it.toSManga() }
+            return MangasPage(mangas, false)
+        }
+        return latestUpdatesParse(response)
+    }
 
     override fun latestUpdatesRequest(page: Int): Request {
         val day = Calendar.getInstance(timeZone)
@@ -79,23 +100,28 @@ abstract class ComiciViewerAlt(
         val browseFilter = filterList.firstInstance<BrowseFilter>()
         val path = getFilterOptions()[browseFilter.state].second
 
-        val url = if (path == "/ranking/manga") {
-            "$baseUrl$path"
-        } else {
-            "$baseUrl$path/$page"
+        if (path == "/ranking/manga") {
+            return popularMangaRequest(page)
         }
-        return GET(url, headers)
+
+        return GET("$baseUrl$path/$page", headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val url = response.request.url.pathSegments
-        if (url.contains("api") && url.contains("search")) {
+        val url = response.request.url
+        val segments = url.pathSegments
+        if (segments.contains("api") && segments.contains("search")) {
             val result = response.parseAs<SearchApiResponse>().searchResult.series
             val mangas = result.series.map { it.toSManga() }
             val page = response.request.url.queryParameter("page")!!.toInt()
             val hasNextPage = result.total > page * SEARCH_PAGE_SIZE
             return MangasPage(mangas, hasNextPage)
         }
+
+        if (segments.first() == "ranking") {
+            return popularMangaParse(response)
+        }
+
         return latestUpdatesParse(response)
     }
 
@@ -235,5 +261,6 @@ abstract class ComiciViewerAlt(
         private const val SHOW_LOCKED_PREF_KEY = "pref_show_locked_chapters"
         private const val SHOW_CAMPAIGN_LOCKED_PREF_KEY = "pref_show_campaign_locked_chapters"
         const val LOGIN_SUFFIX = "#LOGIN"
+        private val LAZY_REF = Regex($$"\\$L([0-9a-f]+)")
     }
 }

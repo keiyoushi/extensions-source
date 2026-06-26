@@ -11,6 +11,8 @@ class MangaBang :
         "ja",
         "https://comics.manga-bang.com/api",
     ) {
+    override val rankingFromNextJs = false
+
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/category/manga/$page", headers)
 
     override fun getFilterOptions(): List<Pair<String, String>> = listOf(
