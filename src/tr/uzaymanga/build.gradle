@@ -1,9 +1,0 @@
-ext {
-    extName = 'Uzay Manga'
-    extClass = '.UzayManga'
-    themePkg = 'uzaymanga'
-    overrideVersionCode = 42
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

@@ -1,8 +1,0 @@
-ext {
-    extName = 'SchaleNetwork'
-    extClass = '.KoharuFactory'
-    extVersionCode = 20
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

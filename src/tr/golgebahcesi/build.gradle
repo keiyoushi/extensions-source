@@ -1,8 +1,0 @@
-ext {
-    extName = 'Gölge Bahçesi'
-    extClass = '.GolgeBahcesi'
-    extVersionCode = 33
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

@@ -1,8 +1,0 @@
-ext {
-    extName = 'BoyLove'
-    extClass = '.BoyLove'
-    extVersionCode = 17
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

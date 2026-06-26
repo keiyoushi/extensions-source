@@ -1,8 +1,0 @@
-ext {
-    extName = 'Corocoro Online'
-    extClass = '.CorocoroOnline'
-    extVersionCode = 10
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

@@ -176,7 +176,7 @@ class HentaiNexus : HttpSource() {
 
         return json.parseToJsonElement(data).jsonArray
             .filter { it.jsonObject["type"]!!.jsonPrimitive.content == "image" }
-            .mapIndexed { i, it -> Page(i, imageUrl = it.jsonObject["image"]!!.jsonPrimitive.content) }
+            .mapIndexed { i, it -> Page(i, imageUrl = (it.jsonObject["image"] ?: it.jsonObject["image_fallback"])!!.jsonPrimitive.content) }
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()

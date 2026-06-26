@@ -1,8 +1,0 @@
-ext {
-    extName = 'Manga Bahçesi'
-    extClass = '.MangaBahcesi'
-    extVersionCode = 4
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"
