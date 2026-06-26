@@ -1,8 +1,0 @@
-ext {
-    extName = 'StoneScape'
-    extClass = '.StoneScape'
-    extVersionCode = 49
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

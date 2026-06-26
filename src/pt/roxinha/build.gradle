@@ -1,8 +1,0 @@
-ext {
-    extName = 'Roxinha'
-    extClass = '.Roxinha'
-    extVersionCode = 2
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

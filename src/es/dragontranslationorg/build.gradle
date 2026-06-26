@@ -1,9 +1,0 @@
-ext {
-    extName = 'DragonTranslation.org'
-    extClass = '.DragonTranslationOrg'
-    overrideVersionCode = 1
-    isNsfw = true
-    themePkg = 'madara'
-    baseUrl = 'https://dragontranslation.org'
-}
-apply plugin: "kei.plugins.extension.legacy"

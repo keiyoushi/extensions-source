@@ -1,8 +1,0 @@
-ext {
-    extName = 'NeoManga'
-    extClass = '.NeoManga'
-    extVersionCode = 1
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

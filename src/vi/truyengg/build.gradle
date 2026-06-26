@@ -1,7 +1,0 @@
-ext {
-    extName = 'FoxTruyen'
-    extClass = '.TruyenGG'
-    extVersionCode = 13
-}
-
-apply plugin: "kei.plugins.extension.legacy"

@@ -1,8 +1,0 @@
-ext {
-    extName = 'Mangahub'
-    extClass = '.Mangahub'
-    extVersionCode = 23
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

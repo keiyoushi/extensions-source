@@ -1,7 +1,0 @@
-ext {
-    extName = 'TruyenQQ'
-    extClass = '.TruyenQQ'
-    extVersionCode = 24
-}
-
-apply plugin: "kei.plugins.extension.legacy"

@@ -1,8 +1,0 @@
-ext {
-    extName = 'TCB Scans'
-    extClass = '.TCBScans'
-    extVersionCode = 12
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

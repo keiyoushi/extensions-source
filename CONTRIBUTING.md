@@ -281,29 +281,33 @@ Your extension code must be placed in the package `eu.kanade.tachiyomi.extension
 You only need to create this file if you want to add deep linking to your extension.
 See [URL intent filter](#url-intent-filter) for more information.
 
-#### build.gradle
+#### build.gradle.kts
 
-Make sure that your new extension's `build.gradle` file follows the following structure:
+Make sure that your new extension's `build.gradle.kts` file follows the following structure:
 
-```groovy
-ext {
-    extName = '<My source name>'
-    extClass = '.<MySourceName>'
-    extVersionCode = 1
-    isNsfw = true
+```kotlin
+plugins {
+    alias(kei.plugins.extension)
 }
 
-apply plugin: "kei.plugins.extension.legacy"
+keiyoushi {
+    name = "<My source name>"
+    className = "<MySourceName>"
+    versionCode = 1
+    contentWarning = ContentWarning.NSFW // Options: ContentWarning.SAFE, ContentWarning.MIXED, ContentWarning.NSFW
+    libVersion = 1.4
+}
 ```
 
 | Field            | Description                                                                                                                                                                                                          |
 |------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `extName`        | The name of the extension. Should be romanized if site name is not in English.                                                                                                                                       |
-| `extClass`       | Points to the class that implements `Source`. You can use a relative path starting with a dot (the package name is the base path). This is used to find and instantiate the source(s).                               |
-| `extVersionCode` | The extension version code. This must be a positive integer and incremented with any change to the code. Do not bump for changes that do not affect users, such as changing a private function to a public function. |
-| `isNsfw`         | Flag to indicate that a source contains NSFW content. Should always be set explicitly to either `true` or `false`. Falls back to `false` if not set.                                                                 |
+| `name`           | The name of the extension. Should be romanized if site name is not in English.                                                                                                                                       |
+| `className`      | Points to the class that implements `Source`. The relative path starting with a dot is inferred automatically. This is used to find and instantiate the source(s).                                                  |
+| `versionCode`    | The extension version code. This must be a positive integer and incremented with any change to the code. Do not bump for changes that do not affect users, such as changing a private function to a public function. |
+| `contentWarning` | Content safety classification. Must be set explicitly to one of `ContentWarning.SAFE`, `ContentWarning.MIXED`, or `ContentWarning.NSFW`.                                                                             |
+| `libVersion`     | The extension library version. Always set to `1.4`.                                                                                                                                                                  |
 
-The extension's version name is generated automatically by concatenating `1.4` and `extVersionCode`.
+The extension's version name is generated automatically by concatenating `libVersion` and the calculated version code.
 With the example used above, the version would be `1.4.1`.
 
 ### Core dependencies
@@ -343,19 +347,19 @@ use case. Each lib is self-documented via KDoc comments and/or a README in its o
 
 #### Adding a lib dependency
 
-Declare the module in your extension's `build.gradle`:
+Declare the module in your extension's `build.gradle.kts`:
 
-```groovy
+```kotlin
 dependencies {
-    implementation(project(':lib:<name>'))
+    implementation(project(":lib:<name>"))
 }
 ```
 
 For example:
 
-```groovy
+```kotlin
 dependencies {
-    implementation(project(':lib:dataimage'))
+    implementation(project(":lib:dataimage"))
 }
 ```
 
@@ -1102,21 +1106,24 @@ abstract class <ThemeName>(
 
 ### Using a Theme
 
-To use a theme in your extension, follow the regular extension creation steps and add the `themePkg` property to your `build.gradle`:
+To use a theme in your extension, follow the regular extension creation steps and configure `theme` in your `build.gradle.kts`:
 
-```groovy
-ext {
-    extName = '<My source name>'
-    extClass = '.<MySourceName>'
-    themePkg = '<theme_name>'
-    overrideVersionCode = 1
-    isNsfw = true
+```kotlin
+plugins {
+    alias(kei.plugins.extension)
 }
 
-apply plugin: "kei.plugins.extension.legacy"
+keiyoushi {
+    name = "<My source name>"
+    className = "<MySourceName>"
+    theme = "<theme_name>"
+    versionCode = 1
+    contentWarning = ContentWarning.NSFW // Options: ContentWarning.SAFE, ContentWarning.MIXED, ContentWarning.NSFW
+    libVersion = 1.4
+}
 ```
 
-Notice that instead of `extVersionCode`, extensions using a theme must use `overrideVersionCode`. The final extension version code (`extVersionCode`) is automatically calculated during the build process as `theme.baseVersionCode + ext.overrideVersionCode`.
+The final extension version code is automatically calculated during the build process as `theme.baseVersionCode + versionCode`.
 
 Because themes are provided as libraries, your extension's main class will directly inherit from the theme's base class.
 
@@ -1311,10 +1318,10 @@ can find it below.
 
 ### Pull Request checklist
 
-- Updated `extVersionCode` value in `build.gradle` for individual extensions
-- Updated `overrideVersionCode` or `baseVersionCode` as needed for all multisrc extensions
+- Updated `versionCode` value in `build.gradle.kts`
+- Updated `baseVersionCode` in `build.gradle.kts` (if updated multisrc theme code)
 - Referenced all related issues in the PR body (e.g. "Closes #xyz")
-- Added the `isNsfw = true` flag in `build.gradle` when appropriate
+- Set the `contentWarning` configuration in `build.gradle.kts` appropriately
 - Have not changed source names
 - Have explicitly kept the `id` if a source's name or language were changed
 - Have tested the modifications by compiling and running the extension through Android Studio

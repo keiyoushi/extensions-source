@@ -1,8 +1,0 @@
-ext {
-    extName = 'BlossomManhwa'
-    extClass = '.BlossomManhwa'
-    extVersionCode = 5
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

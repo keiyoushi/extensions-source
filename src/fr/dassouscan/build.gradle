@@ -1,8 +1,0 @@
-ext {
-    extName = 'Dassou Scan'
-    extClass = '.DassouScan'
-    extVersionCode = 51
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"
