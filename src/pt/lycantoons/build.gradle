@@ -2,7 +2,7 @@ ext {
     extName = 'Lycan Toons'
     extClass = '.LycanToons'
     baseUrl = 'https://lycantoons.com'
-    extVersionCode = 5
+    extVersionCode = 4
     isNsfw = false
 }
 
