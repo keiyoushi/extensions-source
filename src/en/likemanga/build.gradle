@@ -1,8 +1,0 @@
-ext {
-    extName = 'LikeManga'
-    extClass = '.LikeManga'
-    extVersionCode = 8
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

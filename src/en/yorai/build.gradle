@@ -1,8 +1,0 @@
-ext {
-    extName = 'Yorai'
-    extClass = '.Yorai'
-    extVersionCode = 2
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

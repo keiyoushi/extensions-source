@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaTek'
-    extClass = '.MangaTek'
-    baseUrl = 'https://mangatek.com'
-    extVersionCode = 3
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"
