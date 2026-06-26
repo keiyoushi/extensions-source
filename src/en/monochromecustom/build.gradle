@@ -1,8 +1,0 @@
-ext {
-    extName = 'Monochrome Custom'
-    extClass = '.MonochromeCustom'
-    themePkg = 'monochrome'
-    overrideVersionCode = 1
-}
-
-apply plugin: "kei.plugins.extension.legacy"

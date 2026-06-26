@@ -1,8 +1,0 @@
-ext {
-    extName = 'Raijin Scans'
-    extClass = '.RaijinScans'
-    extVersionCode = 68
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

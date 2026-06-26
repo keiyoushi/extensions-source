@@ -1,8 +1,0 @@
-ext {
-    extName = 'The Duck Webcomics'
-    extClass = '.TheDuckWebcomics'
-    extVersionCode = 3
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

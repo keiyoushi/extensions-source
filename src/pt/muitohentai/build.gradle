@@ -1,8 +1,0 @@
-ext {
-    extName = 'Muito Hentai'
-    extClass = '.MuitoHentai'
-    extVersionCode = 4
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

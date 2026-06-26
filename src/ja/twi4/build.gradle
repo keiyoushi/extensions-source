@@ -1,7 +1,0 @@
-ext {
-    extName = 'Twi4'
-    extClass = '.Twi4'
-    extVersionCode = 6
-}
-
-apply plugin: "kei.plugins.extension.legacy"

@@ -1,8 +1,0 @@
-ext {
-    extName = 'UniComics'
-    extClass = '.UniComics'
-    extVersionCode = 10
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

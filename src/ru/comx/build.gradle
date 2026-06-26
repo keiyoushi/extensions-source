@@ -1,8 +1,0 @@
-ext {
-    extName = 'Com-X'
-    extClass = '.ComX'
-    extVersionCode = 39
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"
