@@ -1,9 +1,0 @@
-ext {
-    extName = 'VCPVMP'
-    extClass = '.VCPVMPFactory'
-    themePkg = 'vercomics'
-    overrideVersionCode = 9
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

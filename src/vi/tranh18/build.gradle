@@ -1,8 +1,0 @@
-ext {
-    extName = 'Tranh18'
-    extClass = '.Tranh18'
-    extVersionCode = 5
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

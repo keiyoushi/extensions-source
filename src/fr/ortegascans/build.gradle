@@ -1,8 +1,0 @@
-ext {
-	extName = 'Ortega Scans'
-	extClass = '.OrtegaScans'
-	extVersionCode = 1
-	isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

@@ -62,6 +62,8 @@ class SortFilter(
     }
 }
 
+class ProjectFilter : Filter.CheckBox("Project Only")
+
 class GenreFilter(
     genres: List<Pair<String, String>>,
 ) : TriStateGroupFilter<String>("Genre", genres)

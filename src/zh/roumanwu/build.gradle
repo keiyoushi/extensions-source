@@ -1,8 +1,0 @@
-ext {
-    extName = 'Roumanwu'
-    extClass = '.Roumanwu'
-    extVersionCode = 18
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

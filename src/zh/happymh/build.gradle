@@ -1,7 +1,0 @@
-ext {
-    extName = 'Happymh'
-    extClass = '.Happymh'
-    extVersionCode = 24
-}
-
-apply plugin: "kei.plugins.extension.legacy"

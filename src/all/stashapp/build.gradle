@@ -1,8 +1,0 @@
-ext {
-    extName = 'StashApp'
-    extClass = '.StashApp'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"
