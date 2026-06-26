@@ -30,12 +30,15 @@ class LycanToons : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .addInterceptor(WebViewInterceptor(headers["User-Agent"]))
+        .addInterceptor(WebViewInterceptor(baseUrl, headers["User-Agent"]))
         .rateLimit(5)
         .build()
 
     private val rscHeaders by lazy {
         headers.newBuilder()
+            .add("next-router-state-tree", "%5B%22%22%2C%7B%7D%5D")
+            .add("next-url", "/")
+            .add("next-router-prefetch", "1")
             .add("RSC", "1")
             .build()
     }
@@ -124,7 +127,7 @@ class LycanToons : HttpSource() {
 
     // =====================Pages========================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", rscHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
