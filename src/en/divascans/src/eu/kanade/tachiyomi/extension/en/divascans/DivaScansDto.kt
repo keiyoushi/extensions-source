@@ -30,6 +30,12 @@ data class PaginationDto(
 )
 
 @Serializable
+data class SeriesPageDto(
+    val series: MangaDto? = null,
+    val chapters: List<ChapterDto>? = null,
+)
+
+@Serializable
 data class MangaDto(
     val title: String? = null,
     val name: String? = null,
@@ -52,6 +58,8 @@ data class MangaDto(
 @Serializable
 data class GenreWrapperDto(
     val genre: GenreDto? = null,
+    val name: String? = null,
+    val slug: String? = null,
 )
 
 @Serializable
@@ -63,7 +71,8 @@ data class GenreDto(
 @Serializable
 data class TagWrapperDto(
     val tag: TagDto? = null,
-    val slug: String? = null, // Sometimes tags are flat
+    val name: String? = null,
+    val slug: String? = null,
 )
 
 @Serializable
@@ -78,9 +87,16 @@ data class ChapterDto(
     val title: String? = null,
     val isLocked: Boolean? = null,
     val coinPrice: Int? = null,
+    val publishedAt: String? = null,
 )
 
 @Serializable
-data class HydrationPayload(
-    val d: String? = null,
+data class ChapterPageDataDto(
+    val pages: List<PageDto>? = null,
+)
+
+@Serializable
+data class PageDto(
+    val imageUrl: String? = null,
+    val pageNumber: Int? = null,
 )
