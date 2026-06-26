@@ -1,9 +1,0 @@
-ext {
-    extName = 'PornComix'
-    extClass = '.PornComix'
-    baseUrl = 'https://bestporncomix.com'
-    extVersionCode = 49
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

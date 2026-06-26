@@ -1,9 +1,0 @@
-ext {
-    extName = 'DreamTeams Scans'
-    extClass = '.DreamTeamsScans'
-    extVersionCode = 33
-    baseUrl = 'https://dreamteams.space'
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

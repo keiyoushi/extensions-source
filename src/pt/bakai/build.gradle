@@ -1,8 +1,0 @@
-ext {
-    extName = 'Bakai'
-    extClass = '.Bakai'
-    extVersionCode = 16
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

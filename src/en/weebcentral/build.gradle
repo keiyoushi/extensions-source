@@ -1,8 +1,0 @@
-ext {
-    extName = 'Weeb Central'
-    extClass = '.WeebCentral'
-    extVersionCode = 22
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

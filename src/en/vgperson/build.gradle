@@ -1,8 +1,0 @@
-ext {
-    extName = 'vgperson'
-    extClass = '.Vgperson'
-    extVersionCode = 7
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

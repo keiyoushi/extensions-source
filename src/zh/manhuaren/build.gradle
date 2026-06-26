@@ -1,7 +1,0 @@
-ext {
-    extName = 'Manhuaren'
-    extClass = '.Manhuaren'
-    extVersionCode = 18
-}
-
-apply plugin: "kei.plugins.extension.legacy"
