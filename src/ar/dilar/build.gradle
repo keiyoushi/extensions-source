@@ -1,7 +1,0 @@
-ext {
-    extName = 'Dilar'
-    extClass = '.Dilar'
-    extVersionCode = 8
-}
-
-apply plugin: "kei.plugins.extension.legacy"

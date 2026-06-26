@@ -34,7 +34,7 @@ class ComicFesta :
         .build()
 
     override val client = super.client.newBuilder()
-        .addInterceptor(CookieInterceptor(domain, listOf("checked_age" to "1", "sp_display" to "1", "cf_checked_age_guest" to "1", "cf_checked_age" to "1")))
+        .addNetworkInterceptor(CookieInterceptor(domain, listOf("checked_age" to "1", "sp_display" to "1", "cf_checked_age_guest" to "1", "cf_checked_age" to "1")))
         .addInterceptor {
             val request = it.request()
             val response = it.proceed(request)

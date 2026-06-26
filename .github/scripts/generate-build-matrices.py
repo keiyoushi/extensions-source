@@ -12,7 +12,7 @@ MULTISRC_LIB_REGEX = re.compile(r"^lib-multisrc/(?P<multisrc>\w+)")
 LIB_REGEX = re.compile(r"^lib/(?P<lib>\w+)")
 MODULE_REGEX = re.compile(r"^:src:(?P<lang>\w+):(?P<extension>\w+)$")
 CORE_FILES_REGEX = re.compile(
-    r"^(common/|core/|gradle/|build\.gradle\.kts|common\.gradle|gradle\.properties|settings\.gradle\.kts|.github/scripts)"
+    r"^(common/|core/|gradle/|build\.gradle\.kts|gradle\.properties|settings\.gradle\.kts|.github/scripts)"
 )
 
 def run_command(command: str) -> str:
@@ -98,7 +98,7 @@ def resolve_ext(multisrcs: set[str], libs: set[str]) -> set[tuple[str, str]]:
 
     patterns = []
     if multisrc_pattern:
-        patterns.append(rf"themePkg\s*=\s*['\"]({multisrc_pattern})['\"]")
+        patterns.append(rf"theme\s*=\s*['\"]({multisrc_pattern})['\"]")
     if lib_pattern:
         patterns.append(rf"project\([\"']:(?:lib):({lib_pattern})[\"']\)")
 
@@ -108,7 +108,7 @@ def resolve_ext(multisrcs: set[str], libs: set[str]) -> set[tuple[str, str]]:
 
     for lang in Path("src").iterdir():
         for extension in lang.iterdir():
-            build_file = extension / "build.gradle"
+            build_file = extension / "build.gradle.kts"
             if not build_file.is_file():
                 continue
 

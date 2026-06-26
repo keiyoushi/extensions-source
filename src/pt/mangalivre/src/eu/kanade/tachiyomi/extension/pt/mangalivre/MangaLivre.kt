@@ -16,6 +16,7 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -37,8 +38,15 @@ class MangaLivre :
     override val versionId: Int = 2
 
     override val client: OkHttpClient = network.client.newBuilder()
+        .addInterceptor(::clientHeaderInterceptor)
         .rateLimit(2, 1.seconds) { it.host == baseUrlHost }
         .build()
+
+    private val scrapeClient: OkHttpClient by lazy {
+        network.client.newBuilder()
+            .followRedirects(false)
+            .build()
+    }
 
     private val apiUrl: String = "$baseUrl/api"
 
@@ -47,6 +55,7 @@ class MangaLivre :
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept", "*/*")
         .add("Accept-Language", "pt-BR,en-US;q=0.9,en;q=0.8")
+        .add("Referer", "$baseUrl/")
         .add("Sec-Fetch-Dest", "empty")
         .add("Sec-Fetch-Mode", "cors")
         .add("Sec-Fetch-Site", "same-origin")
@@ -173,7 +182,73 @@ class MangaLivre :
         }.also(screen::addPreference)
     }
 
+    // ============================== Helper =======================================
+
+    @Volatile
+    private var cachedClientValue: String? = null
+
+    private fun clientHeaderInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        if (request.url.host != baseUrlHost) {
+            return chain.proceed(request)
+        }
+
+        val response = chain.proceed(
+            request.newBuilder().header(CLIENT_HEADER, currentClientValue()).build(),
+        )
+        if (response.code != 403 || !response.isOfficialAppError()) {
+            return response
+        }
+
+        response.close()
+        return chain.proceed(
+            request.newBuilder().header(CLIENT_HEADER, refreshClientValue()).build(),
+        )
+    }
+
+    private fun currentClientValue(): String = cachedClientValue ?: synchronized(this) {
+        cachedClientValue ?: scrapeClientValue().also { cachedClientValue = it }
+    }
+
+    private fun refreshClientValue(): String = synchronized(this) {
+        scrapeClientValue().also { cachedClientValue = it }
+    }
+
+    private fun scrapeClientValue(): String {
+        return try {
+            val html = scrapeClient.newCall(GET("$baseUrl/index.html", headers)).execute()
+                .use { if (it.isSuccessful) it.body?.string().orEmpty() else "" }
+            val assetPath = ASSET_REGEX.find(html)?.value ?: return DEFAULT_CLIENT
+            val js = scrapeClient.newCall(GET("$baseUrl$assetPath", headers)).execute()
+                .use { if (it.isSuccessful) it.body?.string() else null }
+                ?: return DEFAULT_CLIENT
+            extractClientValue(js) ?: DEFAULT_CLIENT
+        } catch (_: Exception) {
+            DEFAULT_CLIENT
+        }
+    }
+
+    private fun extractClientValue(js: String): String? {
+        ANCHORED_REGEX.find(js)?.let { return it.groupValues[1] }
+        return SHAPE_REGEX.findAll(js)
+            .map { it.groupValues[1] }
+            .toSet()
+            .singleOrNull()
+    }
+
+    private fun Response.isOfficialAppError(): Boolean = try {
+        peekBody(MAX_PEEK).string().contains("aplicativo oficial", ignoreCase = true)
+    } catch (_: Exception) {
+        false
+    }
+
     companion object {
         private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
+        private const val CLIENT_HEADER = "x-toonlivre-client"
+        private const val DEFAULT_CLIENT = "web-x"
+        private const val MAX_PEEK = 1024L
+        private val ASSET_REGEX = Regex("/assets/index-[\\w-]+\\.js")
+        private val ANCHORED_REGEX = Regex("\"x-toonlivre-client\"\\s*,\\s*\"([\\w.-]+)\"")
+        private val SHAPE_REGEX = Regex("\"(web-[a-z0-9]+)\"")
     }
 }

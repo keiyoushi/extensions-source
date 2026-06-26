@@ -7,6 +7,7 @@ import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -113,7 +114,10 @@ class ChapterDetailResponse(
     val data: ChapterItem,
 )
 
-private val chapterNumberFormatter = DecimalFormat("#.##")
+private val chapterNumberFormatter = DecimalFormat(
+    "#.##",
+    DecimalFormatSymbols.getInstance(Locale.US),
+)
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.ROOT)
 

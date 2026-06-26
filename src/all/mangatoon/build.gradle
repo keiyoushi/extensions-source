@@ -1,8 +1,0 @@
-ext {
-    extName = 'MangaToon (Limited)'
-    extClass = '.MangaToonFactory'
-    extVersionCode = 8
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

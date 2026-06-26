@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangadotnet
 
-import android.app.Application
 import android.util.Log
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
@@ -19,6 +18,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
@@ -39,13 +39,11 @@ import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.internal.closeQuietly
 import okio.IOException
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -61,7 +59,7 @@ class Mangadotnet :
     override val baseUrl = "https://mangadot.net"
     override val supportsLatest = true
 
-    override val client = network.client
+    override val client = network.client.newBuilder().build()
 
     // ============================== Setup ===============================
     private val preferences = getPreferences {
@@ -125,6 +123,13 @@ class Mangadotnet :
 
     private val demographicNames = setOf("Josei", "Seinen", "Shoujo", "Shounen")
 
+    private fun getGenreList(isAdult: Boolean): List<String>? {
+        val list = getGenreLists().let { if (isAdult) it.adult else it.normal }
+
+        return list?.filter { it !in demographicNames }
+            ?.sortedBy { it.lowercase(Locale.ROOT) }
+    }
+
     private fun HttpUrl.Builder.addAdultParam(): HttpUrl.Builder {
         when (adultModePref()) {
             "none" -> addQueryParameter("adult", "0")
@@ -159,7 +164,7 @@ class Mangadotnet :
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.decodeRscAs<Data<ViewAllData>>().data
-        updateGenres(data.allGenres)
+        updateGenres(data.allGenres.ifEmpty { data.data.allGenres }, adultModePref() != "none")
 
         return MangasPage(
             data.data.mangaList.orEmpty().map { it.toSManga(baseUrl) },
@@ -205,9 +210,11 @@ class Mangadotnet :
             return super.fetchSearchManga(page, "", FilterList(newFilters))
         }
         if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
+            val url = query.toHttpUrlOrNull()
             if (
+                url != null &&
                 (url.host == baseUrl.toHttpUrl().host) &&
+                url.pathSize > 1 &&
                 (url.pathSegments[0] in listOf("manga", "chapter"))
             ) {
                 return if (url.pathSegments[0] == "manga") {
@@ -254,7 +261,7 @@ class Mangadotnet :
             addQueryParameter("page", page.toString())
 
             filters.firstInstanceOrNull<SortFilter>()?.also { filter ->
-                if (filter.sort == "relevance" && query.isBlank()) {
+                if (filter.sort == "" && query.isBlank()) {
                     addQueryParameter("sortBy", "latest")
                 } else {
                     addQueryParameter("sortBy", filter.sort)
@@ -316,13 +323,11 @@ class Mangadotnet :
             ArtistFilter(),
         )
 
-        val genres = getGenreLists()
-        val genreList = if (adultModePref().let { it == "1" || it == "both" }) genres.adult else genres.normal
+        val isAdult = adultModePref().let { it == "1" || it == "both" }
+        val genreList = getGenreList(isAdult)
+
         if (genreList != null) {
-            val filteredGenres = genreList
-                .filter { it !in demographicNames }
-                .sortedBy { it.lowercase(Locale.ROOT) }
-            filters.add(4, GenreFilter(filteredGenres, excludedGenresPref()))
+            filters.add(4, GenreFilter(genreList, excludedGenresPref()))
         } else {
             filters.add(4, Filter.Separator())
             filters.add(5, Filter.Header("Press 'reset' to load genres"))
@@ -333,9 +338,11 @@ class Mangadotnet :
 
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.decodeRscAs<Data<MangaList>>().data
-        updateGenres(data.allGenres)
+        updateGenres(data.allGenres, adultModePref() != "none")
 
-        return MangasPage(data.mangaList.orEmpty().map { it.toSManga(baseUrl) }, data.hasNextPage())
+        val hideAdultCovers = adultModePref() == "none"
+
+        return MangasPage(data.mangaList.orEmpty().map { it.toSManga(baseUrl, hideAdultCovers) }, data.hasNextPage())
     }
 
     // ============================== Details ==============================
@@ -381,7 +388,7 @@ class Mangadotnet :
                         .map { volume ->
                             SChapter.create().apply {
                                 url = ChapterUrl(volume.id.toString(), volume.source, true).toJsonString()
-                                name = "Volume ${(volume.volume ?: 0f).toString().substringBefore(".0")}"
+                                name = "Volume ${(volume.volume ?: 0f).toString().removeSuffix(".0")}"
                                 chapter_number = 0f
                                 scanlator = (volume.group ?: volume.scanlator)?.takeIf { it.isNotBlank() }
                                 date_upload = dateFormat.tryParse(volume.date?.substringBefore("+"))
@@ -462,7 +469,7 @@ class Mangadotnet :
                 SChapter.create().apply {
                     url = ChapterUrl(chapter.id.toString(), chapter.source, false).toJsonString()
                     name = buildString {
-                        val number = chapter.number?.toString()?.substringBefore(".0") ?: "0"
+                        val number = chapter.number?.toString()?.removeSuffix(".0") ?: "0"
                         val name = chapter.name ?: ""
                         if (!name.contains(number)) append("Chapter ", number, ": ")
                         append(name.trim())
@@ -484,18 +491,9 @@ class Mangadotnet :
     // =============================== Pages ===============================
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterUrl = chapter.url.parseAs<ChapterUrl>()
+        val segment = if (chapterUrl.source == "user") "uploads" else "chapters"
 
-        val url = "$baseUrl/api/".toHttpUrl().newBuilder().apply {
-            if (chapterUrl.source == "user") {
-                addPathSegment("uploads")
-            } else {
-                addPathSegment("chapters")
-            }
-            addPathSegment(chapterUrl.id)
-            addPathSegment("images")
-        }.build()
-
-        return GET(url, headers)
+        return GET("$baseUrl/api/$segment/${chapterUrl.id}/images", headers)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -510,7 +508,7 @@ class Mangadotnet :
             if (chapterUrl.isVolume) {
                 addQueryParameter("mode", "volume")
             }
-        }.toString()
+        }.build().toString()
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -539,9 +537,10 @@ class Mangadotnet :
             .enqueue(
                 object : Callback {
                     override fun onResponse(call: Call, response: Response) {
-                        response.closeQuietly()
-                        if (!response.isSuccessful) {
-                            Log.e(name, "Failed to count views: HTTP Error ${response.code}")
+                        response.use {
+                            if (!response.isSuccessful) {
+                                Log.e(name, "Failed to count views: HTTP Error ${response.code}")
+                            }
                         }
                     }
                     override fun onFailure(call: Call, e: IOException) {
@@ -585,11 +584,11 @@ class Mangadotnet :
 
     // =========================== Genre Cache =============================
     private val genreCacheNormalFile: File by lazy {
-        Injekt.get<Application>().cacheDir.resolve("source_$id/genres_normal.json")
+        applicationContext.cacheDir.resolve("source_$id/genres_normal.json")
     }
 
     private val genreCacheAdultFile: File by lazy {
-        Injekt.get<Application>().cacheDir.resolve("source_$id/genres_adult.json")
+        applicationContext.cacheDir.resolve("source_$id/genres_adult.json")
     }
 
     private val genresLock = ReentrantLock()
@@ -603,26 +602,32 @@ class Mangadotnet :
         genresLock.withLock {
             val normal = runCatching { genreCacheNormalFile.readText().parseAs<List<String>>() }.getOrNull()
             val adult = runCatching { genreCacheAdultFile.readText().parseAs<List<String>>() }.getOrNull()
-            return GenreLists(
-                normal = normal ?: adult,
-                adult = adult ?: normal,
-            )
+            return GenreLists(normal = normal, adult = adult)
         }
     }
 
-    private fun updateGenres(newGenres: List<String>) {
+    private fun updateGenres(newGenres: List<String>, isAdult: Boolean) {
         if (newGenres.isEmpty()) return
         if (!genresLock.tryLock()) return
         try {
-            val isAdult = adultModePref().let { it == "1" || it == "both" }
+            val genres = newGenres.filter { it !in demographicNames }
             val file = if (isAdult) genreCacheAdultFile else genreCacheNormalFile
-            if (file.exists() && System.currentTimeMillis() - file.lastModified() < 60_000) return
+
             val currentGenres = runCatching {
                 if (file.exists()) file.readText().parseAs<List<String>>() else null
             }.getOrNull()
-            if (newGenres.toSet() != currentGenres?.toSet()) {
+
+            if (genres.toSet() != currentGenres?.toSet()) {
                 file.parentFile?.mkdirs()
-                file.writeText(newGenres.toJsonString())
+                val json = genres.toJsonString()
+                file.writeText(json)
+
+                if (!isAdult) {
+                    val otherFile = genreCacheAdultFile
+                    if (!otherFile.exists()) {
+                        otherFile.writeText(json)
+                    }
+                }
             }
         } finally {
             genresLock.unlock()
@@ -632,7 +637,6 @@ class Mangadotnet :
     // ============================= Settings ==============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val mode = adultModePref()
-        val genres = getGenreLists()
 
         val excludedNormal = preferences.getStringSet(EXCLUDE_GENRE_PREF, emptySet())!!
         val excludedAdult = preferences.getStringSet(EXCLUDE_GENRE_ADULT_PREF, emptySet())!!
@@ -723,46 +727,40 @@ class Mangadotnet :
             key = EXCLUDE_DEMOGRAPHIC_PREF
             title = "Demographic Blacklist"
             summary = "Exclude demographics when browsing."
-            entries = arrayOf("Josei", "Seinen", "Shoujo", "Shounen")
-            entryValues = arrayOf("Josei", "Seinen", "Shoujo", "Shounen")
+            entries = demographicNames.toTypedArray()
+            entryValues = demographicNames.toTypedArray()
             setDefaultValue(emptySet<String>())
         }
         screen.addPreference(demographicPref)
 
-        val normalEntries = genres.normal
-            ?.filter { it !in demographicNames }
-            ?.sortedBy { it.lowercase(Locale.ROOT) }
-            ?: excludedNormal.filter { it !in demographicNames }.toList().sortedBy { it.lowercase(Locale.ROOT) }
+        val normalGenres = getGenreList(false) ?: excludedNormal.filter { it !in demographicNames }.sortedBy { it.lowercase(Locale.ROOT) }
         val normalGenrePref = MultiSelectListPreference(screen.context).apply {
             key = EXCLUDE_GENRE_PREF
             title = "Genre Blacklist"
             summary = "Exclude genres when browsing without 18+ content."
-            this.entries = normalEntries.toTypedArray()
-            entryValues = normalEntries.toTypedArray()
+            entries = normalGenres.toTypedArray()
+            entryValues = normalGenres.toTypedArray()
             setDefaultValue(emptySet<String>())
-            setEnabled((genres.normal != null || excludedNormal.isNotEmpty()) && mode == "none")
+            setEnabled(normalGenres.isNotEmpty() && mode == "none")
         }
         screen.addPreference(normalGenrePref)
 
-        val adultEntries = genres.adult
-            ?.filter { it !in demographicNames }
-            ?.sortedBy { it.lowercase(Locale.ROOT) }
-            ?: excludedAdult.filter { it !in demographicNames }.toList().sortedBy { it.lowercase(Locale.ROOT) }
+        val adultGenres = getGenreList(true) ?: excludedAdult.filter { it !in demographicNames }.sortedBy { it.lowercase(Locale.ROOT) }
         val adultGenrePref = MultiSelectListPreference(screen.context).apply {
             key = EXCLUDE_GENRE_ADULT_PREF
             title = "Genre Blacklist (Adult Mode)"
             summary = "Exclude genres when browsing with 18+ content."
-            this.entries = adultEntries.toTypedArray()
-            entryValues = adultEntries.toTypedArray()
+            entries = adultGenres.toTypedArray()
+            entryValues = adultGenres.toTypedArray()
             setDefaultValue(emptySet<String>())
-            setEnabled((genres.adult != null || excludedAdult.isNotEmpty()) && (mode == "1" || mode == "both"))
+            setEnabled(adultGenres.isNotEmpty() && (mode == "1" || mode == "both"))
         }
         screen.addPreference(adultGenrePref)
 
         nsfwPref.setOnPreferenceChangeListener { _, newValue ->
             val newMode = newValue as String
-            normalGenrePref.setEnabled((genres.normal != null || excludedNormal.isNotEmpty()) && newMode == "none")
-            adultGenrePref.setEnabled((genres.adult != null || excludedAdult.isNotEmpty()) && (newMode == "1" || newMode == "both"))
+            normalGenrePref.setEnabled(normalGenres.isNotEmpty() && newMode == "none")
+            adultGenrePref.setEnabled(adultGenres.isNotEmpty() && (newMode == "1" || newMode == "both"))
             true
         }
     }

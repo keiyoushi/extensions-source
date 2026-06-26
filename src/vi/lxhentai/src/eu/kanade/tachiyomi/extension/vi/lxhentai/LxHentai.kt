@@ -268,10 +268,6 @@ class LxHentai :
                 .toList()
         }.getOrDefault(emptyList())
 
-        // Token that images require as the `Token` header must come from /get_token, which
-        // is gated behind Cloudflare Turnstile. Run the chapter page in a headless WebView
-        // so the site's own JS solves Turnstile, calls /get_token and exposes the result via
-        // window.actionToken (and the decoded URLs via window.__imgSrcs).
         val webViewData = TokenResolver.resolve(chapterUrl)
 
         val imageUrls = webViewData.srcs.filter { it.isNotBlank() }
@@ -339,7 +335,7 @@ class LxHentai :
 
     private fun decodePageMetadata(rawMetadata: String): Pair<String, String> {
         val separatorIndex = rawMetadata.lastIndexOf('\n')
-        if (separatorIndex <= 0 || separatorIndex == rawMetadata.lastIndex) {
+        if (separatorIndex <= 0) {
             throw Exception("Không đọc được thông tin token ảnh")
         }
 

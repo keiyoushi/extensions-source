@@ -1,8 +1,0 @@
-ext {
-    extName = 'Kill Six Billion Demons'
-    extClass = '.KillSixBillionDemons'
-    extVersionCode = 6
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

@@ -1,8 +1,0 @@
-ext {
-    extName = 'Yupmanga'
-    extClass = '.Yupmanga'
-    extVersionCode = 16
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Yomu Comics'
-    extClass = '.YomuComics'
-    extVersionCode = 52
-    isNsfw = true
-
-}
-
-apply plugin: "kei.plugins.extension.legacy"

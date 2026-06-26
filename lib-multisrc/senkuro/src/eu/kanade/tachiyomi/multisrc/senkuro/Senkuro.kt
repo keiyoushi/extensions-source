@@ -58,7 +58,7 @@ abstract class Senkuro(
     override fun popularMangaRequest(page: Int): Request {
         fetchTachiyomiSearchFilters(page)
 
-        val offset = (page - 1) * 20
+        val offset = (page - 1) * OFFSET_COUNT
         val request = graphQLPost(
             url = apiUrl,
             headers = headers,
@@ -76,7 +76,7 @@ abstract class Senkuro(
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseGraphQLAs<TachiyomiSearchResponseDto>()
         val mangasList = data.mangaTachiyomiSearch.mangas.map { it.toSManga() }
-        return MangasPage(mangasList, mangasList.size >= 20)
+        return MangasPage(mangasList, mangasList.size >= OFFSET_COUNT)
     }
 
     // ============================== Latest ===============================
@@ -165,7 +165,7 @@ abstract class Senkuro(
             }
         }
 
-        val offset = (page - 1) * 20
+        val offset = (page - 1) * OFFSET_COUNT
 
         val request = graphQLPost(
             url = apiUrl,
@@ -413,5 +413,6 @@ abstract class Senkuro(
         private const val API_DOMAIN_PREF = "MangaApiDomain"
         private const val API_DOMAIN_TITLE = "Домен"
         private const val API_DOMAIN_DEFAULT = "https://api.senkuro.com"
+        private const val OFFSET_COUNT = 10
     }
 }

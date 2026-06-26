@@ -1,8 +1,0 @@
-ext {
-    extName = 'Ainz Scans ID'
-    extClass = '.AinzScansID'
-    extVersionCode = 34
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"
