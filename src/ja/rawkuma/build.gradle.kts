@@ -10,4 +10,9 @@ keiyoushi {
     libVersion = "1.4"
     theme = "natsuid"
     baseUrl = "https://rawkuma.net"
+
+    deeplink {
+        host("rawkuma.net")
+        path("/manga/..*")
+    }
 }

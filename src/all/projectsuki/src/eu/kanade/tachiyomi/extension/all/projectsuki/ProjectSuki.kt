@@ -2,10 +2,6 @@ package eu.kanade.tachiyomi.extension.all.projectsuki
 
 import android.os.Build
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.extension.all.projectsuki.activities.INTENT_BOOK_QUERY_PREFIX
-import eu.kanade.tachiyomi.extension.all.projectsuki.activities.INTENT_READ_QUERY_PREFIX
-import eu.kanade.tachiyomi.extension.all.projectsuki.activities.INTENT_SEARCH_QUERY_PREFIX
-import eu.kanade.tachiyomi.extension.all.projectsuki.activities.ProjectSukiSearchUrlActivity
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -346,7 +342,7 @@ class ProjectSuki :
      * Otherwise Tachiyomi will just wait for the Observable forever (or until a timeout).
      *
      * Most of the times you won't need to override this function: [searchMangaRequest] and [searchMangaParse] will suffice.
-     * But if you need to replace the default search behaviour (e.g. because of an [Url Activity][ProjectSukiSearchUrlActivity]),
+     * But if you need to replace the default search behaviour (e.g. because of a Url Activity),
      * you might need to override this function.
      */
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
@@ -693,3 +689,7 @@ class ProjectSuki :
         private const val DESCRIPTION_DIVIDER: String = "/=/-/=/-/=/-/=/-/=/-/=/-/=/-/=/"
     }
 }
+
+internal const val INTENT_SEARCH_QUERY_PREFIX: String = """${'$'}$SHORT_FORM_ID-search:"""
+internal const val INTENT_BOOK_QUERY_PREFIX: String = """${'$'}$SHORT_FORM_ID-book:"""
+internal const val INTENT_READ_QUERY_PREFIX: String = """${'$'}$SHORT_FORM_ID-read:"""

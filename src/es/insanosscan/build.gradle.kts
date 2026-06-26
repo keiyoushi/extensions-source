@@ -8,4 +8,9 @@ keiyoushi {
     versionCode = 31
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    deeplink {
+        host("insanoslibrary.com")
+        path("/manga/..*")
+    }
 }

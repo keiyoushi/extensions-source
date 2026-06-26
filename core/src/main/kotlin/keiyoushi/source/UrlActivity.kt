@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.ahottie
+package keiyoushi.source
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -8,26 +8,21 @@ import android.util.Log
 import kotlin.system.exitProcess
 
 class UrlActivity : Activity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.isNotEmpty()) {
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", intent.data.toString())
+        val data = intent.data
+        if (data != null) {
+            val intent = Intent().apply {
+                setAction("eu.kanade.tachiyomi.SEARCH")
+                putExtra("query", data.toString())
                 putExtra("filter", packageName)
             }
-
             try {
-                startActivity(mainIntent)
+                startActivity(intent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("AHottie", e.toString())
+                Log.e(packageName, "Unable to launch activity", e)
             }
-        } else {
-            Log.e("AHottie", "could not parse uri from intent $intent")
         }
-
         finish()
         exitProcess(0)
     }

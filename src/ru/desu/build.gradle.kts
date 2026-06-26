@@ -8,4 +8,10 @@ keiyoushi {
     versionCode = 33
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    deeplink {
+        host("desu.me")
+        host("desu.win")
+        path("/manga/..*")
+    }
 }

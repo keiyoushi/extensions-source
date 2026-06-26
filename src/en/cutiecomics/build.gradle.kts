@@ -8,4 +8,9 @@ keiyoushi {
     versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    deeplink {
+        host("cutiecomics.com")
+        path("/..*")
+    }
 }

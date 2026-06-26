@@ -9,4 +9,10 @@ keiyoushi {
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     baseUrl = "https://mangahona.pl"
+
+    deeplink {
+        host("mangahona.pl")
+        path("/manga/.*")
+        path("/czytaj/.*/.*")
+    }
 }

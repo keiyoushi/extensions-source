@@ -9,4 +9,10 @@ keiyoushi {
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     baseUrl = "https://newmanhwa.com"
+
+    deeplink {
+        host("newmanhwa.com")
+        host("fullmanhwa.com")
+        path("/..*")
+    }
 }

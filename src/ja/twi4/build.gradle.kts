@@ -8,4 +8,9 @@ keiyoushi {
     versionCode = 6
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    deeplink {
+        host("sai-zen-sen.jp")
+        path("/comics/twi4/..*/.*")
+    }
 }
