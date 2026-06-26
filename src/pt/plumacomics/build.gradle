@@ -1,8 +1,0 @@
-ext {
-    extName = 'Pluma Comics'
-    extClass = '.PlumaComics'
-    extVersionCode = 48
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

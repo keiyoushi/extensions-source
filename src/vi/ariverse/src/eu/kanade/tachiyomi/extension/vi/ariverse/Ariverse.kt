@@ -45,9 +45,13 @@ class Ariverse :
 
     override val lang = "vi"
 
-    private val defaultBaseUrl = "https://www.arigl.xyz"
+    private val defaultBaseUrl = "https://arigl.xyz"
 
     override val baseUrl get() = getPrefBaseUrl()
+
+    private val apiUrl get() = baseUrl.replace("https://", "https://be.") + "/api/v1"
+
+    private val imageUrl get() = baseUrl.replace("https://", "https://img.")
 
     override val supportsLatest = true
 
@@ -86,10 +90,6 @@ class Ariverse :
     private fun apiHeaders() = headersBuilder().apply {
         authToken?.let { set("Authorization", "Bearer $it") }
     }.build()
-
-    private val apiUrl get() = "$baseUrl/api/v1"
-
-    private val imageUrl get() = baseUrl.replace("www.", "img.")
 
     private val allowR18 get() = preferences.getBoolean("pref_r18", false)
 

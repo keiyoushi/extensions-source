@@ -1,8 +1,0 @@
-ext {
-    extName = 'Doujin.io - J18'
-    extClass = '.Doujinio'
-    extVersionCode = 3
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

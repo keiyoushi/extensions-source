@@ -1,8 +1,0 @@
-ext {
-    extName = 'Revistas e Quadrinhos'
-    extClass = '.RevistasEQuadrinhos'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

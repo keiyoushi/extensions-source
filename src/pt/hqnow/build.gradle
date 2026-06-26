@@ -1,7 +1,0 @@
-ext {
-    extName = 'HQ Now!'
-    extClass = '.HQNow'
-    extVersionCode = 8
-}
-
-apply plugin: "kei.plugins.extension.legacy"

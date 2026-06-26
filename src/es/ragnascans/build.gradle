@@ -1,8 +1,0 @@
-ext {
-    extName = 'Ragna Scans'
-    extClass = '.RagnaScans'
-    extVersionCode = 2
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

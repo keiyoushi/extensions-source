@@ -1,8 +1,0 @@
-ext {
-    extName = 'Zerobyw'
-    extClass = '.Zerobyw'
-    extVersionCode = 21
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"
