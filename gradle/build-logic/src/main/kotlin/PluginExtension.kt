@@ -100,16 +100,18 @@ class PluginExtension : Plugin<Project> {
 
         val extClassProvider = keiyoushi.className.map { if (it.startsWith(".")) it else ".$it" }
 
-        val versionCodeProvider = keiyoushi.theme.map { themeName ->
-            val themeProject = project(":lib-multisrc:$themeName")
-            val themeKeiyoushi = themeProject.extensions.findByType(KeiyoushiMultisrcExtension::class.java)
-                ?: throw AssertionError("Theme project ${themeProject.path} must apply kei.plugins.multisrc")
-            val themeLibVersion = themeKeiyoushi.libVersion.get()
-            val extLibVersion = keiyoushi.libVersion.get()
-            assertWithoutFlag(themeLibVersion == extLibVersion) {
-                "Multisrc ($themeName) libVersion ($themeLibVersion) and extension libVersion ($extLibVersion) must match."
+        val themeExtension = keiyoushi.theme.map { themeName ->
+            project(":lib-multisrc:$themeName").extensions.findByType(KeiyoushiMultisrcExtension::class.java)
+                ?: throw AssertionError("Theme project :lib-multisrc:$themeName must apply kei.plugins.multisrc")
+        }
+
+        val versionCodeProvider = themeExtension.flatMap { themeKeiyoushi ->
+            val themeLib = themeKeiyoushi.libVersion.get()
+            val extLib = keiyoushi.libVersion.get()
+            assertWithoutFlag(themeLib == extLib) {
+                "Multisrc libVersion ($themeLib) and extension libVersion ($extLib) must match."
             }
-            themeKeiyoushi.baseVersionCode.get() + keiyoushi.versionCode.get()
+            themeKeiyoushi.baseVersionCode.zip(keiyoushi.versionCode) { base, ext -> base + ext }
         }.orElse(keiyoushi.versionCode)
 
         val versionNameProvider = keiyoushi.libVersion.flatMap { libVersion ->
@@ -134,19 +136,19 @@ class PluginExtension : Plugin<Project> {
             }
         }
 
-        val deeplinksProvider = provider {
-            val defaultHost = keiyoushi.baseUrl.orNull
-                ?.split("://")?.getOrNull(1)
-                ?.split("/")?.first()
-                ?.takeIf { it.isNotEmpty() }
-            val localSpecs = keiyoushi.deeplinks.getOrElse(emptyList())
-            val themeSpecs = keiyoushi.theme.orNull?.let { themeName ->
-                project(":lib-multisrc:$themeName")
-                    .extensions.findByType(KeiyoushiMultisrcExtension::class.java)
-                    ?.deeplinks?.getOrElse(emptyList())
-            }.orEmpty()
-            specsToFilters(localSpecs + themeSpecs, defaultHost)
-        }
+        val themeDeeplinks = themeExtension
+            .flatMap { it.deeplinks }
+            .orElse(emptyList())
+
+        val deeplinksProvider = keiyoushi.deeplinks
+            .zip(themeDeeplinks) { local, theme -> local + theme }
+            .zip(keiyoushi.baseUrl.orElse("")) { specs, baseUrl ->
+                val defaultHost = baseUrl.takeIf { it.isNotEmpty() }
+                    ?.split("://")?.getOrNull(1)
+                    ?.split("/")?.first()
+                    ?.takeIf { it.isNotEmpty() }
+                specsToFilters(specs, defaultHost)
+            }
 
         val manifestTask = tasks.register<GenerateExtensionManifestTask>("generateExtensionManifest") {
             this.filters.set(deeplinksProvider)
