@@ -1,8 +1,0 @@
-ext {
-    extName = "Oh Joy Sex Toy"
-    extClass = ".OhJoySexToy"
-    extVersionCode = 3
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

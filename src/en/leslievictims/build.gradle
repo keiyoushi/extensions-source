@@ -1,8 +1,0 @@
-ext {
-    extName = 'Leslie&Victims'
-    extClass = '.LeslieAndVictims'
-    extVersionCode = 1
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

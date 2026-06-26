@@ -1,8 +1,0 @@
-ext {
-    extName = 'Nude-Moon'
-    extClass = '.Nudemoon'
-    extVersionCode = 29
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

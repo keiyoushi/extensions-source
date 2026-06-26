@@ -1,8 +1,0 @@
-ext {
-    extName = 'H-Comic'
-    extClass = '.HComic'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"
