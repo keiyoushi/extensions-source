@@ -88,12 +88,11 @@ class ThunderScans :
         mangaUrlDirectory = "/comics",
     ) {
 
-    override fun chapterFromElement(element: Element): SChapter =
-        super.chapterFromElement(element).apply {
-            if (url.isBlank()) {
-                val a = element.selectFirst("a")!!
-                url = "#locked-${a.attr("data-id")}"
-                name = "🔒 $name"
-            }
+    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+        if (url.isBlank()) {
+            val a = element.selectFirst("a")!!
+            url = "#locked-${a.attr("data-id")}"
+            name = "🔒 $name"
         }
+    }
 }
