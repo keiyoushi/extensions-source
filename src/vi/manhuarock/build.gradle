@@ -1,7 +1,0 @@
-ext {
-    extName = "ManhuaRock"
-    extClass = ".ManhuaRock"
-    extVersionCode = 18
-}
-
-apply plugin: "kei.plugins.extension.legacy"

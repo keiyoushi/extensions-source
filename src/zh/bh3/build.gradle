@@ -1,8 +1,0 @@
-ext {
-    extName = 'BH3'
-    extClass = '.BH3'
-    extVersionCode = 4
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

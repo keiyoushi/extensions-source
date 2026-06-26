@@ -1,9 +1,9 @@
 Checklist:
 
-- [ ] Updated `extVersionCode` value in `build.gradle` for individual extensions
-- [ ] Updated `overrideVersionCode` or `baseVersionCode` as needed for all multisrc extensions
+- [ ] Updated `versionCode` value in `build.gradle.kts`
+- [ ] Updated `baseVersionCode` in `build.gradle.kts` (if updated multisrc theme code)
 - [ ] Referenced all related issues in the PR body (e.g. "Closes #xyz")
-- [ ] Added the `isNsfw = true` flag in `build.gradle` when appropriate
+- [ ] Set the `contentWarning` configuration in `build.gradle.kts` appropriately
 - [ ] Have not changed source names
 - [ ] Have explicitly kept the `id` if a source's name or language were changed
 - [ ] Have tested the modifications by compiling and running the extension through Android Studio

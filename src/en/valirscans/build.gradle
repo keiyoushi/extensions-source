@@ -1,9 +1,0 @@
-ext {
-    extName = 'Valir Scans'
-    extClass = '.ValirScans'
-    baseUrl = 'https://valirscans.org'
-    extVersionCode = 22
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

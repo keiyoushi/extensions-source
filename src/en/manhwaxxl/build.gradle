@@ -1,8 +1,0 @@
-ext {
-    extName = "Manhwa XXL"
-    extClass = ".ManhwaXXL"
-    extVersionCode = 6
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"
