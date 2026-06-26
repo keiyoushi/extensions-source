@@ -50,6 +50,9 @@ class Mangago :
     override val name = "Mangago"
 
     private val domain = "mangago.me"
+
+    // Chapter reader mirror; "/chapter/..." paths 404 on the main domain.
+    private val readerDomain = "www.mangago.zone"
     override val baseUrl = "https://www.$domain"
 
     override val lang = "en"
@@ -220,8 +223,12 @@ class Mangago :
                 SChapter.create().apply {
                     val link = element.select("a.chico")
 
-                    val urlOriginal = link.attr("href")
-                    if (urlOriginal.startsWith("http")) url = urlOriginal else setUrlWithoutDomain(urlOriginal)
+                    // The site rotates chapter links between mirror domains
+                    // (e.g. mangago.zone, youhim.me) on every page load. Store only
+                    // the path so the chapter URL stays stable across refreshes,
+                    // otherwise the app treats chapters as new entries and read
+                    // state is lost for unnumbered chapters such as "Special.".
+                    setUrlWithoutDomain(link.attr("href"))
                     name = link.text().trim()
                     date_upload = runCatching {
                         dateFormat.parse(element.select("td:last-child").text().trim())?.time
@@ -300,10 +307,26 @@ class Mangago :
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
+        // Absolute URLs may still be present in the library from older
+        // versions of the extension.
         if (chapter.url.startsWith("http")) {
             return GET(chapter.url, headers)
         }
+        // Reader paths only resolve on the mirror domains, not on baseUrl.
+        if (chapter.url.startsWith("/chapter/")) {
+            return GET("https://$readerDomain${chapter.url}", headers)
+        }
         return super.pageListRequest(chapter)
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        if (chapter.url.startsWith("http")) {
+            return chapter.url
+        }
+        if (chapter.url.startsWith("/chapter/")) {
+            return "https://$readerDomain${chapter.url}"
+        }
+        return super.getChapterUrl(chapter)
     }
 
     override fun imageUrlParse(response: Response): String {
