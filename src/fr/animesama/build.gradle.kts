@@ -5,7 +5,7 @@ plugins {
 keiyoushi {
     name = "AnimeSama"
     className = "AnimeSama"
-    versionCode = 16
+    versionCode = 17
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 }
