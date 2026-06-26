@@ -1,7 +1,0 @@
-ext {
-    extName = 'Commit Strip'
-    extClass = '.CommitStripFactory'
-    extVersionCode = 4
-}
-
-apply plugin: "kei.plugins.extension.legacy"

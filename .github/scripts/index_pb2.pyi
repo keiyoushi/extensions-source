@@ -9,9 +9,11 @@ DESCRIPTOR: _descriptor.FileDescriptor
 
 class ContentWarning(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
+    CONTENT_WARNING_UNSPECIFIED: _ClassVar[ContentWarning]
     CONTENT_WARNING_SAFE: _ClassVar[ContentWarning]
     CONTENT_WARNING_MIXED: _ClassVar[ContentWarning]
     CONTENT_WARNING_NSFW: _ClassVar[ContentWarning]
+CONTENT_WARNING_UNSPECIFIED: ContentWarning
 CONTENT_WARNING_SAFE: ContentWarning
 CONTENT_WARNING_MIXED: ContentWarning
 CONTENT_WARNING_NSFW: ContentWarning

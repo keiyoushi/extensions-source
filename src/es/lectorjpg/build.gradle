@@ -1,8 +1,0 @@
-ext {
-    extName = 'LectorJPG'
-    extClass = '.LectorJpg'
-    extVersionCode = 50
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

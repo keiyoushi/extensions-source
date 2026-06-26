@@ -1,8 +1,0 @@
-ext {
-    extName = 'BatCave'
-    extClass = '.BatCave'
-    extVersionCode = 6
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

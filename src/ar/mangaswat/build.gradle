@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaSwat'
-    extClass = '.MangaSwat'
-    baseUrl = 'https://meshmanga.com'
-    extVersionCode = 61
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

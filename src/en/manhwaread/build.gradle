@@ -1,9 +1,0 @@
-ext {
-    extName = 'ManhwaRead'
-    extClass = '.ManhwaRead'
-    baseUrl = 'https://manhwaread.com'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

@@ -1,8 +1,0 @@
-ext {
-    extName = "KadoComi"
-    extClass = ".KadoComi"
-    extVersionCode = 3
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

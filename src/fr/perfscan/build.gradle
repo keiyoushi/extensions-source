@@ -1,9 +1,0 @@
-ext {
-    extName = 'Perf Scan'
-    extClass = '.PerfScan'
-    baseUrl = 'https://perf-scan.xyz'
-    extVersionCode = 31
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"
