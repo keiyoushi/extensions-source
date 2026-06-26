@@ -929,8 +929,15 @@ override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Ob
             val typeIndex = url.pathSegments.indexOfFirst { it == "detail" || it == "view" }
             if (typeIndex != -1 && typeIndex + 1 < url.pathSize) {
                 val id = url.pathSegments[typeIndex + 1]
-                return GET("$apiUrl/Book?select=id,judul,cover&type=not.ilike.*novel*&id=eq.$id", apiHeaders)
+                val manga = SManga.create().apply { 
+                    this@apply.url = "/Book?select=id,judul,cover&type=not.ilike.*novel*&id=eq.$id"
+                    initialized = true
+                }
+                return fetchMangaDetails(manga)
+                    .map { MangasPage(listOf(it), false) }
             }
+
+            throw Exception("Unsupported url")
         }
     }
     // normal search flow...
