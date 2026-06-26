@@ -1,8 +1,0 @@
-ext {
-    extName = 'MangaMen'
-    extClass = '.MangaMen'
-    extVersionCode = 2
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

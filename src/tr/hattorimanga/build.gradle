@@ -1,8 +1,0 @@
-ext {
-    extName = 'Hattori Manga'
-    extClass = '.HattoriManga'
-    extVersionCode = 44
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

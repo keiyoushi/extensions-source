@@ -1,8 +1,0 @@
-ext {
-    extName = 'Blackout Comics'
-    extClass = '.BlackoutComics'
-    extVersionCode = 10
-    isNsfw = true
-}
-
-apply plugin: "kei.plugins.extension.legacy"

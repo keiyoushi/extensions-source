@@ -1,8 +1,0 @@
-ext {
-    extName = 'Sabrina Online'
-    extClass = '.SabrinaOnline'
-    extVersionCode = 1
-    isNsfw = false
-}
-
-apply plugin: "kei.plugins.extension.legacy"

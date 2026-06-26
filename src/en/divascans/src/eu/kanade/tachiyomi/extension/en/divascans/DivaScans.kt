@@ -10,8 +10,11 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
@@ -20,7 +23,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
+import java.text.SimpleDateFormat
 import java.util.Locale
 
 class DivaScans :
@@ -126,7 +129,7 @@ class DivaScans :
             val genresArr = item.genres
             if (genresArr != null) {
                 for (genreObj in genresArr) {
-                    val genreSlug = genreObj.genre?.slug
+                    val genreSlug = genreObj.genre?.slug ?: genreObj.slug
                     if (!genreSlug.isNullOrEmpty() && savedGenres.add(formatSlug(genreSlug))) prefsChanged = true
                 }
             }
@@ -174,81 +177,50 @@ class DivaScans :
 
     private fun formatSlug(slug: String): String = slug.replace("-", " ").replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
 
-    private fun getHydratedDocument(html: String): Document {
-        val doc = Jsoup.parse(html)
-        if (doc.select("a[href*='/chapter/']").size > 1) return doc
-
-        val sb = StringBuilder()
-
-        rscRegex.findAll(html).forEach { match ->
-            runCatching {
-                // Use the proven raw-string unescaper method
-                val jsonPayload = """{"d": "${match.groupValues[1]}"}"""
-                val payload = jsonPayload.parseAs<HydrationPayload>()
-                val unescapedStr = payload.d
-                if (!unescapedStr.isNullOrEmpty()) {
-                    sb.append(unescapedStr)
-                }
-            }
-        }
-
-        if (sb.isNotEmpty()) {
-            doc.body().append("<div id='hydrated-data' style='display:none;'>$sb</div>")
-        }
-        return doc
-    }
-
     // --- HTML Details Layer ---
 
     override fun mangaDetailsParse(response: Response): SManga {
         val html = response.body.string()
 
-        val doc = getHydratedDocument(html)
+        val doc = Jsoup.parse(html)
         val manga = SManga.create()
 
-        val fullContent = doc.body().html()
-
-        // 1. JSON Attempt (Hydrated)
-        val match = seriesRegex.find(fullContent)
-        if (match != null) {
-            runCatching {
-                val jsonStr = match.groupValues[1].replace("\\\"", "\"")
-                val item = jsonStr.parseAs<MangaDto>()
-
-                manga.title = item.title ?: ""
-                manga.thumbnail_url = cleanImageUrl(item.coverImage ?: "")
-                manga.description = item.description?.let {
-                    val cleaned = it
-                        .replace("\\n", "\n") // literal \n → real newline
-                        .replace("<br/>", "[[n]]") // also catch self-closing br
-                        .replace("<br />", "[[n]]")
-                        .replace("<br>", "[[n]]")
-                        .replace("<p>", "[[n]]")
-                    Jsoup.parseBodyFragment(cleaned).text().replace("[[n]]", "\n").trim()
-                }
-                manga.author = item.author
-                manga.artist = item.artist ?: manga.author
-
-                val statusStr = item.status ?: ""
-                manga.status = when {
-                    statusStr.contains("Ongoing", true) -> SManga.ONGOING
-                    statusStr.contains("Completed", true) -> SManga.COMPLETED
-                    statusStr.contains("Hiatus", true) -> SManga.ON_HIATUS
-                    else -> SManga.UNKNOWN
-                }
-
-                val origin = item.origin?.let { formatSlug(it) }
-                val genresList = item.genres?.mapNotNull {
-                    it.genre?.name
-                }
-                val tagsList = item.tags?.mapNotNull {
-                    it.tag?.name
-                }
-
-                manga.genre = listOfNotNull(origin).plus(genresList ?: emptyList()).plus(tagsList ?: emptyList()).joinToString()
-
-                if (!manga.description.isNullOrBlank()) return manga
+        // 1. Next.js RSC extraction
+        val item = extractSeriesData(doc)?.series
+        if (item != null) {
+            manga.title = item.title ?: ""
+            manga.thumbnail_url = cleanImageUrl(item.coverImage ?: "")
+            manga.description = item.description?.let {
+                val cleaned = it
+                    .replace("\\n", "\n")
+                    .replace("<br/>", "[[n]]")
+                    .replace("<br />", "[[n]]")
+                    .replace("<br>", "[[n]]")
+                    .replace("<p>", "[[n]]")
+                Jsoup.parseBodyFragment(cleaned).text().replace("[[n]]", "\n").trim()
             }
+            manga.author = item.author
+            manga.artist = item.artist ?: manga.author
+
+            val statusStr = item.status ?: ""
+            manga.status = when {
+                statusStr.contains("Ongoing", true) -> SManga.ONGOING
+                statusStr.contains("Completed", true) -> SManga.COMPLETED
+                statusStr.contains("Hiatus", true) -> SManga.ON_HIATUS
+                else -> SManga.UNKNOWN
+            }
+
+            val origin = item.origin?.let { formatSlug(it) }
+            val genresList = item.genres?.mapNotNull {
+                it.genre?.name ?: it.name
+            }
+            val tagsList = item.tags?.mapNotNull {
+                it.tag?.name ?: it.name
+            }
+
+            manga.genre = listOfNotNull(origin).plus(genresList ?: emptyList()).plus(tagsList ?: emptyList()).joinToString()
+
+            if (!manga.description.isNullOrBlank()) return manga
         }
 
         // 2. DOM Fallback
@@ -311,22 +283,10 @@ class DivaScans :
         val showPaid = preferences.getBoolean(SHOW_PAID_CHAPTERS_PREF, false)
         val slug = response.request.url.pathSegments.last()
 
-        // Hydrate to unescape RSC payloads which contain the chapter data
-        val doc = getHydratedDocument(html)
-        val fullContent = doc.body().html()
+        val doc = Jsoup.parse(html)
 
-        // 1. Improved JSON extraction from HYDRATED content
-        val chaptersArrays = mutableListOf<List<ChapterDto>>()
-        // Match both "chapters":[...] and \"chapters\":[...]
-
-        chapterJsonRegex.findAll(fullContent).forEach { match ->
-            runCatching {
-                val element = match.groupValues[1].parseAs<List<ChapterDto>>()
-                chaptersArrays.add(element)
-            }
-        }
-
-        val chaptersArray = chaptersArrays.maxByOrNull { it.size }
+        // 1. Next.js RSC extraction
+        val chaptersArray = extractSeriesData(doc)?.let { it.chapters ?: it.series?.chapters }
         if (!chaptersArray.isNullOrEmpty()) {
             val chapters = chaptersArray.mapNotNull { chap ->
                 val isLocked = (chap.isLocked ?: false) || (chap.coinPrice ?: 0) > 0
@@ -347,16 +307,22 @@ class DivaScans :
 
                     val prefix = if (isLocked) "\uD83D\uDD12 " else ""
                     val suffix = if (isLocked && coinPrice > 0) " ($coinPrice coins)" else ""
-                    val baseName = chap.title?.takeIf { it != "null" && it.isNotBlank() } ?: "Chapter $numStr"
+                    val title = chap.title?.takeIf { it != "null" && it.isNotBlank() }
+                    val baseName = when {
+                        title == null -> "Chapter $numStr"
+                        title.equals("Chapter $numStr", true) -> title
+                        else -> "Chapter $numStr - $title"
+                    }
 
                     name = "$prefix$baseName$suffix"
                     chapter_number = numStr.toFloatOrNull() ?: 0f
+                    date_upload = dateFormat.tryParse(chap.publishedAt)
                 }
             }
             if (chapters.size > 1) return chapters.sortedByDescending { it.chapter_number }
         }
 
-        // 2. Fallback: Parse via DOM from hydrated document
+        // 2. Fallback: Parse via DOM
         val chapterElements = doc.select("a[href*='/chapter/']")
         if (chapterElements.isNotEmpty()) {
             val chapters = chapterElements.mapNotNull { element ->
@@ -406,9 +372,23 @@ class DivaScans :
 
     override fun pageListParse(response: Response): List<Page> {
         val html = response.body.string()
-        val document = getHydratedDocument(html)
+        val doc = Jsoup.parse(html)
 
-        val domImages = document.select("div.reader-images img, div.chapter-container img, main img[src*='chapter']")
+        // 1. RSC extraction — find pages array in flight data
+        val pages = runCatching {
+            doc.extractNextJs<ChapterPageDataDto> { element ->
+                element is JsonObject && "pages" in element
+            }?.pages
+        }.getOrNull()
+
+        if (!pages.isNullOrEmpty()) {
+            return pages.mapIndexed { index, page ->
+                Page(index, "", cleanImageUrl(page.imageUrl ?: ""))
+            }
+        }
+
+        // 2. Fallback: DOM images (server-rendered)
+        val domImages = doc.select("div.reader-images img, div.chapter-container img, main img[src*='chapter']")
         if (domImages.isNotEmpty()) {
             return domImages.mapIndexed { index, element ->
                 val imgUrl = element.absUrl("data-src").ifEmpty { element.absUrl("src") }
@@ -416,17 +396,16 @@ class DivaScans :
             }
         }
 
-        val urls = imgRegex.findAll(document.html()).map { it.groupValues[1] }.distinct().toList()
-
-        val pageUrls = urls.filter { url ->
-            val path = (if (url.startsWith("/")) "$baseUrl$url" else url).toHttpUrl().pathSegments
-            path.contains("chapters") || path.contains("pages")
-        }
-
-        return pageUrls.ifEmpty { urls }.mapIndexed { index, url -> Page(index, "", cleanImageUrl(url)) }
+        return emptyList()
     }
 
     // --- Utilities ---
+
+    private fun extractSeriesData(doc: org.jsoup.nodes.Document): SeriesPageDto? = runCatching {
+        doc.extractNextJs<SeriesPageDto> { element ->
+            element is JsonObject && "series" in element
+        }
+    }.getOrNull()
 
     private fun cleanImageUrl(url: String): String {
         if (url.isEmpty() || url.startsWith("data:")) return url
@@ -456,10 +435,6 @@ class DivaScans :
         private const val SHOW_PAID_CHAPTERS_PREF = "show_paid_chapters"
         private const val GENRES_PREF_KEY = "saved_genres"
         private const val TAGS_PREF_KEY = "saved_tags"
-
-        private val rscRegex = Regex("""self\.__next_f\.push\(\[\d+,\s*"((?:[^"\\]|\\.)*)"\]\)""")
-        private val seriesRegex = Regex("""(?s)\\?"series\\?"\s*:\s*(\{(?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})*\})*\})""")
-        private val chapterJsonRegex = Regex("""(?s)\\?"chapters\\?"\s*:\s*(\[(?:[^{}\[\]]|\{(?:[^{}]|\{[^{}]*\})*\}|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\])""")
-        private val imgRegex = Regex("""(https?://[^"'\\]+\.(?:jpg|jpeg|png|webp))""")
+        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
     }
 }

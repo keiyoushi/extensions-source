@@ -17,7 +17,7 @@ import java.util.Locale
 class TruyenTuoiTho :
     Madara(
         "TruyenTuoiTho",
-        "https://truyentuoitho.com",
+        "https://truyentuoitho.online",
         "vi",
         SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
     ) {

@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.lycantoons
 
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
@@ -11,34 +12,46 @@ import java.util.Locale
 import java.util.TimeZone
 
 @Serializable
-data class PopularResponse(
-    val data: List<SeriesDto>,
-    val pagination: PaginationDto? = null,
-)
+class PopularResponse(
+    private val data: List<SeriesDto>,
+    private val pagination: PaginationDto? = null,
+) {
+    fun toMangasPage() = MangasPage(data.map { it.toSManga() }, pagination?.hasNext == true)
+}
 
 @Serializable
-data class SeriesDto(
-    val title: String,
-    val slug: String,
-    val coverUrl: String? = null,
-    val author: String? = null,
-    val artist: String? = null,
-    val description: String? = null,
-    val genre: List<String>? = null,
-    val status: String? = null,
-    val seriesType: String? = null,
-    val capitulos: List<ChapterDto>? = null,
-)
+class SeriesDto(
+    private val title: String,
+    private val slug: String,
+    private val coverUrl: String? = null,
+    private val author: String? = null,
+    private val artist: String? = null,
+    private val description: String? = null,
+    private val genre: List<String>? = null,
+    private val status: String? = null,
+) {
+    fun toSManga() = SManga.create().apply {
+        title = this@SeriesDto.title
+        url = "/series/$slug"
+        thumbnail_url = coverUrl
+        author = this@SeriesDto.author?.takeIf { it.isNotBlank() && it != "-" }
+        artist = this@SeriesDto.artist?.takeIf { it.isNotBlank() && it != "-" }
+        genre = this@SeriesDto.genre?.takeIf { it.isNotEmpty() }
+            ?.map { tagMapping[it] ?: it }
+            ?.joinToString()
+        description = this@SeriesDto.description
+        status = parseStatus(this@SeriesDto.status)
+        initialized = true
+    }
+}
 
 @Serializable
-data class PaginationDto(
-    val page: Int? = null,
-    val totalPages: Int? = null,
+class PaginationDto(
     val hasNext: Boolean? = null,
 )
 
 @Serializable
-data class SearchRequestBody(
+class SearchRequestBody(
     val limit: Int,
     val page: Int,
     val search: String,
@@ -48,51 +61,49 @@ data class SearchRequestBody(
 )
 
 @Serializable
-data class ChapterDto(
-    val id: Int,
-    val numero: JsonElement,
-    val createdAt: String? = null,
-    val coverUrl: String? = null,
-    val capaUrl: String? = null,
-    val pageCount: Int? = null,
+class SearchResponse(
+    private val series: List<SeriesDto>,
+) {
+    fun toMangasPage() = MangasPage(series.map { it.toSManga() }, false)
+}
+
+@Serializable
+class ChapterResponse(
+    val chapters: List<ChapterDto>,
 )
 
 @Serializable
-data class PageListDto(
-    val numero: JsonElement,
-    val pageCount: Int,
+class ChapterDto(
+    private val numero: JsonElement,
+    private val createdAt: String? = null,
+    private val pageCount: Int? = null,
+) {
+    fun toSChapter(slug: String) = SChapter.create().apply {
+        val numberString = numero.jsonPrimitive.content
+        name = "Capítulo $numberString"
+        url = "/series/$slug/$numberString" + (pageCount?.let { "?pages=$it" }.orEmpty())
+        date_upload = dateFormat.tryParse(createdAt)
+        chapter_number = numberString.toFloatOrNull() ?: -1f
+    }
+}
+
+@Serializable
+class PageList(
+    val imageUrls: List<String>,
 )
 
 @Serializable
-data class SearchResponse(
-    val series: List<SeriesDto>,
+class FetchResult(
+    val success: Boolean,
+    val result: String,
+    val contentType: String? = null,
 )
 
-fun SeriesDto.toSManga(): SManga = SManga.create().apply {
-    title = this@toSManga.title
-    url = "/series/$slug"
-    thumbnail_url = coverUrl
-    author = this@toSManga.author?.takeIf { it.isNotBlank() }
-    artist = this@toSManga.artist?.takeIf { it.isNotBlank() }
-    genre = this@toSManga.genre?.takeIf { it.isNotEmpty() }?.joinToString()
-    description = this@toSManga.description
-    status = parseStatus(this@toSManga.status)
-}
-
-fun ChapterDto.toSChapter(slug: String): SChapter = SChapter.create().apply {
-    val numberString = numero.jsonPrimitive.content
-    name = "Capítulo $numberString"
-    val pagesQuery = pageCount?.let { "?pages=$it" }.orEmpty()
-    url = "/series/$slug/$numberString$pagesQuery"
-    date_upload = dateFormat.tryParse(createdAt)
-    chapter_number = numberString.toFloatOrNull() ?: -1f
-}
-
-private fun parseStatus(status: String?): Int = when (status) {
-    "ONGOING" -> SManga.ONGOING
-    "COMPLETED" -> SManga.COMPLETED
-    "HIATUS" -> SManga.ON_HIATUS
-    "CANCELLED" -> SManga.CANCELLED
+private fun parseStatus(status: String?) = when (status?.lowercase()) {
+    "ongoing" -> SManga.ONGOING
+    "completed" -> SManga.COMPLETED
+    "hiatus" -> SManga.ON_HIATUS
+    "cancelled" -> SManga.CANCELLED
     else -> SManga.UNKNOWN
 }
 
