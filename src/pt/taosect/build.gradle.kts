@@ -8,4 +8,9 @@ keiyoushi {
     versionCode = 22
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    deeplink {
+        host("taosect.com")
+        path("/projeto/..*")
+    }
 }

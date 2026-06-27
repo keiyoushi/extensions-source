@@ -9,4 +9,10 @@ keiyoushi {
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     baseUrl = "https://manhwaread.com"
+
+    deeplink {
+        host("manhwaread.com")
+        host("manhwaread.org")
+        path("/manhwa/..*")
+    }
 }

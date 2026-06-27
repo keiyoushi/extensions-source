@@ -8,6 +8,12 @@ keiyoushi {
     versionCode = 43
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    deeplink {
+        host("readcomiconline.li")
+        host("rcostation.xyz")
+        path("/Comic/..*")
+    }
 }
 
 dependencies {
