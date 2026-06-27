@@ -96,7 +96,7 @@ suspend fun OkHttpClient.get(
 ): Response = get(url, source.headers, cacheControl, ensureSuccess)
 
 /**
- * Executes a POST request asynchronously using an [HttpUrl] and returns the response.
+ * Executes a POST request asynchronously and returns the response.
  *
  * @param url The [HttpUrl] to request.
  * @param headers The headers to include in the request.
@@ -125,7 +125,7 @@ suspend fun OkHttpClient.post(
 }
 
 /**
- * Executes a POST request asynchronously and returns the response.
+ * Executes a POST request asynchronously using a URL string and returns the response.
  *
  * @param url The URL string to request.
  * @param headers The headers to include in the request.
@@ -141,7 +141,7 @@ suspend fun OkHttpClient.post(
 ): Response = post(url.toHttpUrl(), headers, body, ensureSuccess)
 
 /**
- * Executes a POST request asynchronously using an [HttpUrl], automatically retrieving the
+ * Executes a POST request asynchronously, automatically retrieving the
  * headers from the current [HttpSource] context receiver.
  *
  * @param url The [HttpUrl] to request.
@@ -157,8 +157,8 @@ suspend fun OkHttpClient.post(
 ): Response = post(url, source.headers, body, ensureSuccess)
 
 /**
- * Executes a POST request asynchronously, automatically retrieving the headers from the
- * current [HttpSource] context receiver.
+ * Executes a POST request asynchronously using a URL string, automatically retrieving the
+ * headers from the current [HttpSource] context receiver.
  *
  * @param url The URL string to request.
  * @param body The request body payload.
@@ -173,7 +173,7 @@ suspend fun OkHttpClient.post(
 ): Response = post(url, source.headers, body, ensureSuccess)
 
 /**
- * Executes a PUT request asynchronously using an [HttpUrl] and returns the response.
+ * Executes a PUT request asynchronously and returns the response.
  *
  * @param url The [HttpUrl] to request.
  * @param headers The headers to include in the request.
@@ -202,7 +202,7 @@ suspend fun OkHttpClient.put(
 }
 
 /**
- * Executes a PUT request asynchronously and returns the response.
+ * Executes a PUT request asynchronously using a URL string and returns the response.
  *
  * @param url The URL string to request.
  * @param headers The headers to include in the request.
@@ -218,8 +218,8 @@ suspend fun OkHttpClient.put(
 ): Response = put(url.toHttpUrl(), headers, body, ensureSuccess)
 
 /**
- * Executes a PUT request asynchronously, automatically retrieving the headers from the
- * current [HttpSource] context receiver.
+ * Executes a PUT request asynchronously using a URL string, automatically retrieving the
+ * headers from the current [HttpSource] context receiver.
  *
  * @param url The URL string to request.
  * @param body The request body payload.
@@ -234,7 +234,7 @@ suspend fun OkHttpClient.put(
 ): Response = put(url, source.headers, body, ensureSuccess)
 
 /**
- * Executes a PUT request asynchronously using an [HttpUrl], automatically retrieving the
+ * Executes a PUT request asynchronously, automatically retrieving the
  * headers from the current [HttpSource] context receiver.
  *
  * @param url The [HttpUrl] to request.
@@ -250,7 +250,7 @@ suspend fun OkHttpClient.put(
 ): Response = put(url, source.headers, body, ensureSuccess)
 
 /**
- * Executes a HEAD request asynchronously using an [HttpUrl] and returns the response.
+ * Executes a HEAD request asynchronously and returns the response.
  *
  * @param url The [HttpUrl] to request.
  * @param headers The headers to include in the request.
@@ -280,7 +280,7 @@ suspend fun OkHttpClient.head(
 }
 
 /**
- * Executes a HEAD request asynchronously and returns the response.
+ * Executes a HEAD request asynchronously using a URL string and returns the response.
  *
  * @param url The URL string to request.
  * @param headers The headers to include in the request.
@@ -312,7 +312,7 @@ suspend fun OkHttpClient.head(
 ): Response = head(url, source.headers, cacheControl, ensureSuccess)
 
 /**
- * Executes a HEAD request asynchronously using an [HttpUrl], automatically retrieving the
+ * Executes a HEAD request asynchronously, automatically retrieving the
  * headers from the current [HttpSource] context receiver.
  *
  * @param url The [HttpUrl] to request.
