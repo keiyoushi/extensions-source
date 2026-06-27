@@ -70,9 +70,6 @@ with REMOTE_REPO.joinpath("index.json").open("w", encoding="utf-8") as f:
     )
 
 with REMOTE_REPO.joinpath("index.pb").open("wb") as f:
-    f.write(index.SerializeToString())
-
-with REMOTE_REPO.joinpath("index.pb.gz").open("wb") as f:
     f.write(gzip.compress(index.SerializeToString()))
 
 
