@@ -1,7 +1,5 @@
 package keiyoushi.network
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -35,7 +33,12 @@ suspend fun OkHttpClient.get(
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
 ): Response {
-    val call = newCall(GET(url, headers, cacheControl))
+    val request = Request.Builder()
+        .url(url)
+        .headers(headers)
+        .cacheControl(cacheControl)
+        .build()
+    val call = newCall(request)
 
     return if (ensureSuccess) {
         call.awaitSuccess()
@@ -93,6 +96,35 @@ suspend fun OkHttpClient.get(
 ): Response = get(url, source.headers, cacheControl, ensureSuccess)
 
 /**
+ * Executes a POST request asynchronously using an [HttpUrl] and returns the response.
+ *
+ * @param url The [HttpUrl] to request.
+ * @param headers The headers to include in the request.
+ * @param body The request body payload.
+ * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
+ * @return The HTTP [Response].
+ */
+suspend fun OkHttpClient.post(
+    url: HttpUrl,
+    headers: Headers,
+    body: RequestBody,
+    ensureSuccess: Boolean = true,
+): Response {
+    val request = Request.Builder()
+        .url(url)
+        .headers(headers)
+        .post(body)
+        .build()
+    val call = newCall(request)
+
+    return if (ensureSuccess) {
+        call.awaitSuccess()
+    } else {
+        call.await()
+    }
+}
+
+/**
  * Executes a POST request asynchronously and returns the response.
  *
  * @param url The URL string to request.
@@ -106,15 +138,23 @@ suspend fun OkHttpClient.post(
     headers: Headers,
     body: RequestBody,
     ensureSuccess: Boolean = true,
-): Response {
-    val call = newCall(POST(url, headers, body))
+): Response = post(url.toHttpUrl(), headers, body, ensureSuccess)
 
-    return if (ensureSuccess) {
-        call.awaitSuccess()
-    } else {
-        call.await()
-    }
-}
+/**
+ * Executes a POST request asynchronously using an [HttpUrl], automatically retrieving the
+ * headers from the current [HttpSource] context receiver.
+ *
+ * @param url The [HttpUrl] to request.
+ * @param body The request body payload.
+ * @param ensureSuccess If true, throws an exception if the response code is not 2xx.
+ * @return The HTTP [Response].
+ */
+context(source: HttpSource)
+suspend fun OkHttpClient.post(
+    url: HttpUrl,
+    body: RequestBody,
+    ensureSuccess: Boolean = true,
+): Response = post(url, source.headers, body, ensureSuccess)
 
 /**
  * Executes a POST request asynchronously, automatically retrieving the headers from the
