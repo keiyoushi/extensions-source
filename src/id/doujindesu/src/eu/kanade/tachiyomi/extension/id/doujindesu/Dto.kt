@@ -7,8 +7,12 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
-val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
+    timeZone = TimeZone.getTimeZone("UTC")
+}
 
 @Serializable
 class TermsResult(
@@ -22,31 +26,32 @@ class Term(
 
 @Serializable
 class TaxonomyMangas(
-    val mangaList: List<MangaItem>,
+    @SerialName("manga_list") val mangaList: List<MangaItem>,
     val pagination: Pagination,
 )
 
 @Serializable
 class Pagination(
     val page: Int,
-    val totalPages: Int,
+    @SerialName("total_pages") val totalPages: Int,
 )
 
 @Serializable
 class MangaItem(
-    val title: String,
+    private val title: String,
     val slug: String,
-    val description: String?,
-    val author: String?,
-    val status: String,
-    val type: String,
+    private val description: String?,
+    private val author: String?,
+    private val status: String,
+    private val type: String,
     val chapters: List<Chapter>,
-    @SerialName("created_at") val createdAt: String,
-    @SerialName("alt_titles") val altTitles: String?,
-    @SerialName("term_list") val termList: String? = null,
-    @SerialName("cover_url") val coverUrl: String,
-
+    @SerialName("created_at") private val createdAt: String,
+    @SerialName("alt_titles") private val altTitles: String?,
+    @SerialName("term_list") private val termList: String? = null,
+    @SerialName("cover_url") private val coverUrl: String,
 ) {
+    fun isCompleted(): Boolean = status.equals("completed", true) || status.equals("finished", true)
+
     fun toSManga(): SManga = SManga.create().apply {
         url = "/manga/$slug/"
         title = this@MangaItem.title
@@ -83,29 +88,29 @@ class MangaItem(
         genre = termMap["genre"]?.joinToString()
     }
 
-    fun String.cleanHtml(): String = Jsoup.parse(this).text().trim()
+    private fun String.cleanHtml(): String = Jsoup.parseBodyFragment(this).text()
 }
 
 @Serializable
 class Chapter(
-    val id: String,
-    @SerialName("chapter_number") val chapterNumber: Float,
-    @SerialName("created_at") val createdAt: String,
-    val title: String? = null,
+    private val id: String,
+    @SerialName("chapter_number") private val chapterNumber: Float,
+    @SerialName("created_at") private val createdAt: String,
+    private val title: String? = null,
 ) {
-    fun toSChapter(): SChapter = SChapter.create().apply {
+    fun toSChapter(isLast: Boolean = false): SChapter = SChapter.create().apply {
         url = id
-        name = "Chapter ${chapterNumber.format()}"
+        name = "Chapter ${chapterNumber.format()}${if (isLast) " END" else ""}"
         chapter_number = chapterNumber
         date_upload = dateFormat.tryParse(createdAt)
     }
 
-    private fun Float.format(): String = if (this % 1f == 0f) toInt().toString() else toString()
+    private fun Float.format(): String = toString().removeSuffix(".0")
 }
 
 @Serializable
 class PageList(
-    @SerialName("content_urls") val contentUrls: List<String>,
+    @SerialName("content_urls") private val contentUrls: List<String>,
 ) {
     val pages: List<String>
         get() = contentUrls.map { page ->
