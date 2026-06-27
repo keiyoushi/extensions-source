@@ -9,4 +9,9 @@ keiyoushi {
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     baseUrl = "https://comickfan.com"
+
+    deeplink {
+        host("comickfan.com")
+        path("/manga/..*")
+    }
 }

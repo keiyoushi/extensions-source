@@ -20,8 +20,7 @@ or fixing it directly by submitting a Pull Request.
     - [Setting up a new Gradle module](#setting-up-a-new-gradle-module)
     - [Loading a subset of Gradle modules](#loading-a-subset-of-gradle-modules)
       - [Extension file structure](#extension-file-structure)
-      - [AndroidManifest.xml (optional)](#androidmanifestxml-optional)
-      - [build.gradle](#buildgradle)
+      - [build.gradle.kts](#buildgradlekts)
     - [Core dependencies](#core-dependencies)
       - [Extension API](#extension-api)
       - [lib tools](#lib-tools)
@@ -240,8 +239,7 @@ The simplest extension structure looks like this:
 ```console
 $ tree src/<lang>/<mysourcename>/
 src/<lang>/<mysourcename>/
-├── AndroidManifest.xml (optional)
-├── build.gradle
+├── build.gradle.kts
 ├── res
 │   ├── mipmap-hdpi
 │   │   └── ic_launcher.png
@@ -262,8 +260,7 @@ src/<lang>/<mysourcename>/
                         └── <mysourcename>
                             ├── <MySourceName>.kt
                             ├── <Dto>.kt (optional)
-                            ├── <Filters>.kt (optional)
-                            └── <UrlActivity>.kt (optional)
+                            └── <Filters>.kt (optional)
 
 ```
 
@@ -272,14 +269,9 @@ should be adapted from the site name, and can only contain lowercase ASCII lette
 Your extension code must be placed in the package `eu.kanade.tachiyomi.extension.<lang>.<mysourcename>`.
 
 > [!TIP]
-> Additional files in the extension package (like `Dto.kt`, `Filters.kt`, `UrlActivity.kt`)
+> Additional files in the extension package (like `Dto.kt`, `Filters.kt`)
 > should NOT repeat the extension name (e.g. use `Dto.kt` instead of `MySourceNameDto.kt`).
 > Note: While older extensions might use the repeated name pattern, avoiding it is a newly enforced convention to maintain consistency across the repository.
-
-#### AndroidManifest.xml (optional)
-
-You only need to create this file if you want to add deep linking to your extension.
-See [URL intent filter](#url-intent-filter) for more information.
 
 #### build.gradle.kts
 
@@ -295,7 +287,7 @@ keiyoushi {
     className = "<MySourceName>"
     versionCode = 1
     contentWarning = ContentWarning.NSFW // Options: ContentWarning.SAFE, ContentWarning.MIXED, ContentWarning.NSFW
-    libVersion = 1.4
+    libVersion = "1.4"
 }
 ```
 
@@ -305,7 +297,8 @@ keiyoushi {
 | `className`      | Points to the class that implements `Source`. The relative path starting with a dot is inferred automatically. This is used to find and instantiate the source(s).                                                  |
 | `versionCode`    | The extension version code. This must be a positive integer and incremented with any change to the code. Do not bump for changes that do not affect users, such as changing a private function to a public function. |
 | `contentWarning` | Content safety classification. Must be set explicitly to one of `ContentWarning.SAFE`, `ContentWarning.MIXED`, or `ContentWarning.NSFW`.                                                                             |
-| `libVersion`     | The extension library version. Always set to `1.4`.                                                                                                                                                                  |
+| `libVersion`     | The extension library version. Always set to `"1.4"`.                                                                                                                                                                |
+| `deeplink {}`    | Declares a URL deeplink intent filter. See [URL intent filter](#url-intent-filter).                                                                                                                                  |
 
 The extension's version name is generated automatically by concatenating `libVersion` and the calculated version code.
 With the example used above, the version would be `1.4.1`.
@@ -876,7 +869,6 @@ empty, so the app will skip the `fetchImageUrl` step and directly call `fetchIma
 - **Avoid hardcoded host checks:** When checking URLs in deep links or search overrides, avoid hardcoding the host string (e.g., `queryUrl.host == "site.com"`). This breaks if mirrors are added. Prefer checking against the source's `baseUrl` dynamically.
 - **Empty Lists vs Exceptions:** If `pageListParse` or `chapterListParse` finds no items (e.g., a locked or empty chapter), return `emptyList()` instead of throwing a hardcoded exception. The app will display a properly localized error message to the user.
 - **Avoid excessive comments:** Do not add verbose, redundant, or AI-generated comments that explain obvious code. Keep the code clean and self-documenting.
-- **UrlActivity exceptions:** Catch `Throwable` instead of `Exception` in `UrlActivity` to ensure all potential crashes are handled gracefully.
 
 #### Configurable Sources and Preferences
 
@@ -887,111 +879,72 @@ empty, so the app will skip the `fetchImageUrl` step and directly call `fetchIma
 
 #### URL intent filter
 
-Extensions can define a URL pattern so that these URLs can be opened in Mihon.
+Extensions can handle URLs from a browser or other apps by declaring deeplinks in `build.gradle.kts`. When a matching URL is opened on the device, Mihon launches and receives the URL as a search query.
 
-To do this, you need two files:
-
-- `AndroidManifest.xml` which must be placed in the root directory of your extension (Example: `src/id/riztranslation/AndroidManifest.xml`)
-- `UrlActivity.kt` which should be placed next to your main file. (Example: `src/id/riztranslation/src/eu/kanade/tachiyomi/extension/id/riztranslation/UrlActivity.kt`)
-
-`AndroidManifest.xml` example :
-
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <application>
-        <activity
-            android:name=".id.riztranslation.UrlActivity"
-            android:excludeFromRecents="true"
-            android:exported="true"
-            android:theme="@android:style/Theme.NoDisplay">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data
-                    android:host="riztranslation.pages.dev"
-                    android:pathPattern="/..*"
-                    android:scheme="https" />
-                <data
-                    android:host="riztranslation.rf.gd"
-                    android:pathPattern="/..*"
-                    android:scheme="https" />
-            </intent-filter>
-        </activity>
-    </application>
-</manifest>
-```
-
-The `AndroidManifest.xml` file will contain an `android:name` attribute that refers to the path of your `UrlActivity.kt` file. For example, if the extension is Riztranslation, the `android:name` will be `.id.riztranslation.UrlActivity`.
-
-Next, you have the `<data android:scheme="https" android:host="host" android:pathPattern="/..*" />` element; you can have it multiple times, which allows you to specify the URL that can be opened in Mihon. You can read more about this in Android's [`<data>` documentation](https://developer.android.com/guide/topics/manifest/data-element).
-
-Now, as for `UrlActivity`, you can just use the example below.
-
-> [!CAUTION]
-> The activity does not support any Kotlin Intrinsics specific methods or calls,
-> and using them will cause crashes in the activity. Consider using Java's equivalent
-> methods instead, such as using `String`'s `equals()` instead of using `==`.
->
-> You can use Kotlin Intrinsics in the extension source class, this limitation only
-> applies to the activity classes.
-
-To explain how it works, it will trigger Mihon's `SEARCH` action, passing the URL as a query and specifying that it comes from your extension to narrow down the search. Avoid putting any logic in this file; instead, implement it in your extension's class.
+Add one or more `deeplink {}` blocks inside the `keiyoushi {}` block:
 
 ```kotlin
-class UrlActivity : Activity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        val intentData = intent?.data?.toString()
-        if (intentData != null) {
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", intentData)
-                putExtra("filter", packageName)
-            }
-            try {
-                startActivity(mainIntent)
-            } catch (e: Throwable) {
-                Log.e("RiztranslationUrl", e.toString())
-            }
-        } else {
-            Log.e("RiztranslationUrl", "could not parse uri from intent $intent")
-        }
+keiyoushi {
+    name = "My Source"
+    // ...
 
-        finish()
-        exitProcess(0)
+    deeplink {
+        host("example.com")
+        path("/manga/..*")
+        path("/chapter/..*")
     }
 }
 ```
 
-Now all you need to do is adapt the search function (`fetchSearchManga`) in your extension so that, given a URL, it returns a single manga that matches that URL. For example:
+| DSL call | Description |
+|---|---|
+| `host("example.com")` | A hostname to match. Call multiple times to register multiple hosts. If omitted, the host is derived from `baseUrl` automatically. |
+| `path("/manga/..*")` | A path pattern in Android [`pathPattern`](https://developer.android.com/guide/topics/manifest/data-element#path) syntax. Call multiple times to match multiple paths. At least one `path()` call is required — a `deeplink {}` block with no paths produces no intent filter. |
+
+Multiple `deeplink {}` blocks create independent intent filters, which is useful when different hosts or path groups need to be handled separately:
 
 ```kotlin
-if (query.startsWith("https://")) {
-    val url = query.toHttpUrlOrNull()
-    if (url != null && url.host == baseUrl.toHttpUrl().host) {
-        val typeIndex = url.pathSegments.indexOfFirst { it == "detail" || it == "view" }
-        if (typeIndex != -1 && typeIndex + 1 < url.pathSize) {
-            val id = url.pathSegments[typeIndex + 1]
-            return GET("$apiUrl/Book?select=id,judul,cover&type=not.ilike.*novel*&id=eq.$id", apiHeaders)
-        }
-    }
+deeplink {
+    host("example.com")
+    path("/manga/..*")
+}
+
+deeplink {
+    host("cdn.example.com")
+    path("/images/..*")
 }
 ```
 
-To test if the URL intent filter is working as expected, you can try opening the website in a browser
-and navigating to the endpoint that was added as a filter or clicking a hyperlink. Alternatively,
-you can use the `adb` command below.
+No `AndroidManifest.xml` or `UrlActivity.kt` is needed — they are generated and provided automatically by the build system.
+
+If the extension uses a theme (via `theme = "<theme_name>"`), deeplinks defined in the theme's `build.gradle.kts` are automatically merged in, so individual extensions using that theme do not need to repeat shared URL patterns.
+
+Once deeplinks are declared, implement URL handling inside `fetchSearchManga`. When a deeplink is triggered, the app fires a search with the full URL as the query:
+
+```kotlin
+override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    if (query.startsWith("https://")) {
+        val url = query.toHttpUrlOrNull()
+        if (url != null && url.host == baseUrl.toHttpUrl().host) {
+            val typeIndex = url.pathSegments.indexOfFirst { it == "detail" || it == "view" }
+            if (typeIndex != -1 && typeIndex + 1 < url.pathSize) {
+                val id = url.pathSegments[typeIndex + 1]
+                return GET("$apiUrl/Book?select=id,judul,cover&type=not.ilike.*novel*&id=eq.$id", apiHeaders)
+            }
+        }
+    }
+    // normal search flow...
+}
+```
+
+> [!NOTE]
+> Avoid checking for hardcoded host strings (e.g. `url.host == "site.com"`). Prefer comparing against the source's `baseUrl` dynamically so mirror support is not broken.
+
+To test if the URL intent filter is working as expected, you can use the `adb` command below:
 
 ```bash
 adb shell am start -d "<your-link>" -a android.intent.action.VIEW
 ```
-
-You can find a complete example of how URLs work in the [Riztranslation extension](https://github.com/keiyoushi/extensions-source/tree/main/src/id/riztranslation).
 
 #### Update strategy
 
@@ -1077,12 +1030,33 @@ plugins {
     alias(kei.plugins.multisrc)
 }
 
-baseVersionCode = 1
+keiyoushi {
+    baseVersionCode = 1
+    libVersion = "1.4"
+}
 ```
+
+If the CMS generates URLs with a consistent structure shared by all sites built on it, you can declare deeplinks here too. Every extension using this theme will automatically inherit them:
+
+```kotlin
+keiyoushi {
+    baseVersionCode = 1
+    libVersion = "1.4"
+
+    deeplink {
+        path("/manga/..*")
+        path("/chapter/..*")
+    }
+}
+```
+
+When no `host()` is specified in a theme `deeplink {}` block, the host is resolved at build time from each individual extension's `baseUrl`, so the same path patterns apply to every site without hardcoding hostnames in the theme.
 
 | Field             | Description                                                                                                                                                                   |
 |-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `baseVersionCode` | The base version code for the theme. This must be a positive integer and **incremented** whenever a change is made to the theme's implementation that affects the extensions. |
+| `libVersion`      | The extension library version. Always set to `"1.4"`.                                                                                                                         |
+| `deeplink {}`     | Declares URL deeplink patterns inherited by all extensions using this theme. See [URL intent filter](#url-intent-filter).                                                      |
 
 #### Theme main class
 
@@ -1119,7 +1093,7 @@ keiyoushi {
     theme = "<theme_name>"
     versionCode = 1
     contentWarning = ContentWarning.NSFW // Options: ContentWarning.SAFE, ContentWarning.MIXED, ContentWarning.NSFW
-    libVersion = 1.4
+    libVersion = "1.4"
 }
 ```
 

@@ -8,4 +8,11 @@ keiyoushi {
     versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    deeplink {
+        host("scantrad-union.com")
+        path("/manga/..*")
+        path("/projets/..*")
+        path("/read/..*")
+    }
 }

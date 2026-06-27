@@ -96,7 +96,7 @@ legacy_json_index = []
 for entry in legacy_index:
     legacy_entry = entry.copy()
     cw = legacy_entry.get("contentWarning", 0)
-    legacy_entry["nsfw"] = 1 if cw > 0 else 0
+    legacy_entry["nsfw"] = 1 if cw > 1 else 0
     legacy_entry.pop("libVersion", None)
     legacy_entry.pop("contentWarning", None)
     legacy_json_index.append(legacy_entry)

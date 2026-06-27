@@ -9,4 +9,9 @@ keiyoushi {
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     baseUrl = "https://dreamteams.space"
+
+    deeplink {
+        host("dreamteams.space")
+        path("/comic/..*")
+    }
 }

@@ -8,6 +8,14 @@ keiyoushi {
     versionCode = 55
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    deeplink {
+        host("webtoons.com")
+        host("www.webtoons.com")
+        host("m.webtoons.com")
+        path("/.*/.*/.*/..*")
+        path("/.*/.*/.*/.*/..*")
+    }
 }
 
 dependencies {
