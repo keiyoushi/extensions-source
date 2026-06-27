@@ -186,7 +186,7 @@ class Doujindesu :
     )
 
     // Detail Parse
-    override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.getSlug()}"
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.getSlug()}/"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.getSlug()
