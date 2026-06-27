@@ -28,7 +28,7 @@ class LunarAnime(override val lang: String, private val internalLang: String = l
 
     override val supportsLatest = true
 
-    private val signer = LunarSigner(baseUrl, API_URL)
+    private val signer = LunarWebViewSigner(baseUrl, API_URL)
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(signer.dpopInterceptor())
