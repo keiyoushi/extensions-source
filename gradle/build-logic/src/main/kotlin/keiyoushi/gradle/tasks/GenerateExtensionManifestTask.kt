@@ -34,6 +34,9 @@ abstract class GenerateExtensionManifestTask : DefaultTask() {
     @TaskAction
     fun generate() {
         val filterList = filters.get()
+        val name = extensionName.get().escapeXml()
+        val cls = className.get()
+        val lib = extensionLib.get()
         val cw = contentWarning.get()
         val nsfw = if (cw == ContentWarning.SAFE) "0" else "1"
         val cwValue = when (cw) {
@@ -78,12 +81,12 @@ abstract class GenerateExtensionManifestTask : DefaultTask() {
             |    <application
             |        android:allowBackup="false"
             |        android:icon="@mipmap/ic_launcher"
-            |        android:label="Tachiyomi: ${extensionName.get()}">
-            |        <meta-data android:name="tachiyomix.name" android:value="${extensionName.get()}" />
-            |        <meta-data android:name="tachiyomi.extension.class" android:value=".${className.get()}" />
+            |        android:label="Tachiyomi: $name">
+            |        <meta-data android:name="tachiyomix.name" android:value="$name" />
+            |        <meta-data android:name="tachiyomi.extension.class" android:value=".$cls" />
             |        <meta-data android:name="tachiyomi.extension.nsfw" android:value="$nsfw" />
             |        <meta-data android:name="tachiyomix.contentWarning" android:value="$cwValue" />
-            |        <meta-data android:name="tachiyomix.extensionLib" android:value="${extensionLib.get()}" />$activitySection
+            |        <meta-data android:name="tachiyomix.extensionLib" android:value="$lib" />$activitySection
             |    </application>
             |</manifest>
             |
@@ -91,3 +94,5 @@ abstract class GenerateExtensionManifestTask : DefaultTask() {
         )
     }
 }
+
+private fun String.escapeXml() = replace("&", "&amp;").replace("<", "&lt;").replace("\"", "&quot;")
