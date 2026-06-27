@@ -1,0 +1,10 @@
+apply plugin: 'kei.plugins.extension'
+
+keiyoushi {
+    name = 'XYZ Comics'
+    className = '.XyzComics'
+    versionCode = 3
+    baseUrl = 'https://xyzcomics.com'
+    contentWarning = 'NSFW'
+    libVersion = '1.4'
+}
