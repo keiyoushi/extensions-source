@@ -5,7 +5,7 @@ plugins {
 keiyoushi {
     name = "ReadComicOnline"
     className = "Readcomiconline"
-    versionCode = 43
+    versionCode = 44
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 

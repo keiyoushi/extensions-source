@@ -105,94 +105,94 @@ navigate and build. This will also reduce disk usage and network traffic.
 
 1. Do a partial clone.
 
-    ```bash
-    git clone --filter=blob:none --sparse <fork-repo-url>
-    cd extensions-source/
-    ```
+   ```bash
+   git clone --filter=blob:none --sparse <fork-repo-url>
+   cd extensions-source/
+   ```
 
 2. Configure sparse checkout.
 
-    There are two modes of pattern matching. The default is cone mode.
-    Cone mode enables significantly faster pattern matching for big monorepos
-    and the sparse index feature to make Git commands more responsive.
-    In this mode, you can only filter by file path, which is less flexible
-    and might require more work when the project structure changes.
+   There are two modes of pattern matching. The default is cone mode.
+   Cone mode enables significantly faster pattern matching for big monorepos
+   and the sparse index feature to make Git commands more responsive.
+   In this mode, you can only filter by file path, which is less flexible
+   and might require more work when the project structure changes.
 
-    You can skip this code block to use legacy mode if you want easier filters.
-    It won't be much slower as the repo doesn't have that many files.
+   You can skip this code block to use legacy mode if you want easier filters.
+   It won't be much slower as the repo doesn't have that many files.
 
-    To enable cone mode together with sparse index, follow these steps:
+   To enable cone mode together with sparse index, follow these steps:
 
-    ```bash
-    git sparse-checkout set --cone --sparse-index
-    # add project folders
-    git sparse-checkout add common core gradle lib lib-multisrc utils
-    # add a single source
-    git sparse-checkout add src/<lang>/<source>
-    ```
+   ```bash
+   git sparse-checkout set --cone --sparse-index
+   # add project folders
+   git sparse-checkout add common core gradle lib lib-multisrc utils
+   # add a single source
+   git sparse-checkout add src/<lang>/<source>
+   ```
 
-    To remove a source, open `.git/info/sparse-checkout` and delete the exact
-    lines you typed when adding it. Don't touch the other auto-generated lines
-    unless you fully understand how cone mode works, or you might break it.
+   To remove a source, open `.git/info/sparse-checkout` and delete the exact
+   lines you typed when adding it. Don't touch the other auto-generated lines
+   unless you fully understand how cone mode works, or you might break it.
 
-    To use the legacy non-cone mode, follow these steps:
+   To use the legacy non-cone mode, follow these steps:
 
-    ```bash
-    # enable sparse checkout
-    git sparse-checkout set --no-cone
-    # edit sparse checkout filter
-    vim .git/info/sparse-checkout
-    # alternatively, if you have VS Code installed
-    code .git/info/sparse-checkout
-    ```
+   ```bash
+   # enable sparse checkout
+   git sparse-checkout set --no-cone
+   # edit sparse checkout filter
+   vim .git/info/sparse-checkout
+   # alternatively, if you have VS Code installed
+   code .git/info/sparse-checkout
+   ```
 
-    Here's an example:
+   Here's an example:
 
-    ```bash
-    /*
-    !/src/*
-    !/multisrc-lib/*
-    # allow a single source
-    /src/<lang>/<source>
-    # allow a multisrc theme
-    /lib-multisrc/<source>
-    # or type the source name directly
-    <source>
-    ```
+   ```bash
+   /*
+   !/src/*
+   !/multisrc-lib/*
+   # allow a single source
+   /src/<lang>/<source>
+   # allow a multisrc theme
+   /lib-multisrc/<source>
+   # or type the source name directly
+   <source>
+   ```
 
-    Explanation: the rules are like `gitignore`. We first exclude all sources
-    while retaining project folders, then add the needed sources back manually.
+   Explanation: the rules are like `gitignore`. We first exclude all sources
+   while retaining project folders, then add the needed sources back manually.
 
 3. Configure remotes.
 
-    ```bash
-    # add upstream
-    git remote add upstream <keiyoushi-repo-url>
-    # optionally disable push to upstream
-    git remote set-url --push upstream no_pushing
-    # optionally fetch main only (ignore all other branches)
-    git config remote.upstream.fetch "+refs/heads/main:refs/remotes/upstream/main"
-    # update remotes
-    git remote update
-    # track main of upstream instead of fork
-    git branch main -u upstream/main
-    ```
+   ```bash
+   # add upstream
+   git remote add upstream <keiyoushi-repo-url>
+   # optionally disable push to upstream
+   git remote set-url --push upstream no_pushing
+   # optionally fetch main only (ignore all other branches)
+   git config remote.upstream.fetch "+refs/heads/main:refs/remotes/upstream/main"
+   # update remotes
+   git remote update
+   # track main of upstream instead of fork
+   git branch main -u upstream/main
+   ```
 
 4. Useful configurations. (optional)
 
-    ```bash
-    # prune obsolete remote branches on fetch
-    git config remote.origin.prune true
-    # fast-forward only when pulling main branch
-    git config pull.ff only
-    # Add an alias to sync main branch without fetching useless blobs.
-    # If you run `git pull` to fast-forward in a blobless clone like this,
-    # all blobs (files) in the new commits are still fetched regardless of
-    # sparse rules, which makes the local repo accumulate unused files.
-    # Use `git sync-main` to avoid this. Be careful if you have changes
-    # on main branch, which is bad practice.
-    git config alias.sync-main '!git switch main && git fetch upstream && git reset --keep FETCH_HEAD'
-    ```
+   ```bash
+   # prune obsolete remote branches on fetch
+   git config remote.origin.prune true
+   # fast-forward only when pulling main branch
+   git config pull.ff only
+   # Add an alias to sync main branch without fetching useless blobs.
+   # If you run `git pull` to fast-forward in a blobless clone like this,
+   # all blobs (files) in the new commits are still fetched regardless of
+   # sparse rules, which makes the local repo accumulate unused files.
+   # Use `git sync-main` to avoid this. Be careful if you have changes
+   # on main branch, which is bad practice.
+   git config alias.sync-main '!git switch main && git fetch upstream && git reset --keep FETCH_HEAD'
+   ```
 
 5. Later, if you change the sparse checkout filter, run `git sparse-checkout reapply`.
 
@@ -202,14 +202,15 @@ Read more on
 [sparse checkout](https://github.blog/2020-01-17-bring-your-monorepo-down-to-size-with-sparse-checkout/),
 [sparse index](https://github.blog/2021-11-10-make-your-monorepo-feel-small-with-gits-sparse-index/),
 and [negative refspecs](https://github.blog/2020-10-19-git-2-29-released/#user-content-negative-refspecs).
+
 </details>
 
 ## Getting help
 
 - Join [the Discord server](https://discord.gg/3FbCpdKbdY) for online help and to ask questions while
-developing your extension. When doing so, please ask them in the `#programming` channel.
+  developing your extension. When doing so, please ask them in the `#programming` channel.
 - There are some features and tricks that are not explored in this document. Refer to existing
-extension code for examples.
+  extension code for examples.
 
 ## Writing an extension
 
@@ -292,9 +293,9 @@ keiyoushi {
 ```
 
 | Field            | Description                                                                                                                                                                                                          |
-|------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`           | The name of the extension. Should be romanized if site name is not in English.                                                                                                                                       |
-| `className`      | Points to the class that implements `Source`. The relative path starting with a dot is inferred automatically. This is used to find and instantiate the source(s).                                                  |
+| `className`      | Points to the class that implements `Source`. The relative path starting with a dot is inferred automatically. This is used to find and instantiate the source(s).                                                   |
 | `versionCode`    | The extension version code. This must be a positive integer and incremented with any change to the code. Do not bump for changes that do not affect users, such as changing a private function to a public function. |
 | `contentWarning` | Content safety classification. Must be set explicitly to one of `ContentWarning.SAFE`, `ContentWarning.MIXED`, or `ContentWarning.NSFW`.                                                                             |
 | `libVersion`     | The extension library version. Always set to `"1.4"`.                                                                                                                                                                |
@@ -321,16 +322,16 @@ use case. Each lib is self-documented via KDoc comments and/or a README in its o
 
 #### Available libs
 
-| Module | Description |
-|---|---|
-| [`lib-cookieinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cookieinterceptor) | Injects cookies into OkHttp requests for a given domain |
-| [`lib-cryptoaes`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cryptoaes) | AES-CBC decryption compatible with CryptoJS; JSFuck deobfuscation |
-| [`lib-dataimage`](https://github.com/keiyoushi/extensions-source/tree/main/lib/dataimage) | Decodes base64 `data:image` strings into mock URLs that OkHttp can handle |
-| [`lib-randomua`](https://github.com/keiyoushi/extensions-source/tree/main/lib/randomua) | Fetches and rotates real-world User-Agent strings (requires overriding `getMangaUrl()`) |
-| [`lib-synchrony`](https://github.com/keiyoushi/extensions-source/tree/main/lib/synchrony) | JavaScript deobfuscation via the Synchrony engine (QuickJS sandbox) |
-| [`lib-textinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/textinterceptor) | Renders plain text or HTML as a PNG image page |
-| [`lib-unpacker`](https://github.com/keiyoushi/extensions-source/tree/main/lib/unpacker) | Unpacks Dean Edwards-packed JavaScript; substring extraction helpers |
-| [`lib-zipinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/zipinterceptor) | Decodes, stitches, and processes multi-page ZIP/AVIF/SVG image archives |
+| Module                                                                                                    | Description                                                                             |
+| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| [`lib-cookieinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cookieinterceptor) | Injects cookies into OkHttp requests for a given domain                                 |
+| [`lib-cryptoaes`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cryptoaes)                 | AES-CBC decryption compatible with CryptoJS; JSFuck deobfuscation                       |
+| [`lib-dataimage`](https://github.com/keiyoushi/extensions-source/tree/main/lib/dataimage)                 | Decodes base64 `data:image` strings into mock URLs that OkHttp can handle               |
+| [`lib-randomua`](https://github.com/keiyoushi/extensions-source/tree/main/lib/randomua)                   | Fetches and rotates real-world User-Agent strings (requires overriding `getMangaUrl()`) |
+| [`lib-synchrony`](https://github.com/keiyoushi/extensions-source/tree/main/lib/synchrony)                 | JavaScript deobfuscation via the Synchrony engine (QuickJS sandbox)                     |
+| [`lib-textinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/textinterceptor)     | Renders plain text or HTML as a PNG image page                                          |
+| [`lib-unpacker`](https://github.com/keiyoushi/extensions-source/tree/main/lib/unpacker)                   | Unpacks Dean Edwards-packed JavaScript; substring extraction helpers                    |
+| [`lib-zipinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/zipinterceptor)       | Decodes, stitches, and processes multi-page ZIP/AVIF/SVG image archives                 |
 
 > [!IMPORTANT]
 > If your module uses `:lib:randomua`, the Spotless check requires your extension to override the `getMangaUrl()` method in your main class, or the build will fail.
@@ -495,7 +496,7 @@ val dto = base64String.decodeProtoBase64<MyProtoDto>()
 
 // Creating a RequestBody for a POST request (defaults to application/protobuf):
 val requestBody = myRequestDto.toRequestBodyProto()
-````
+```
 
 If you only need to work with raw bytes, you can also use `.decodeProto()` and `.encodeProto()` directly on a `ByteArray`.
 
@@ -645,7 +646,7 @@ The class which is referenced and defined by `extClass` in `build.gradle`. This 
 either `SourceFactory` or `HttpSource`.
 
 | Class              | Description                                                                                                                      |
-|--------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
 | `SourceFactory`    | Used to expose multiple `Source`s. Use this in case of a source that supports multiple languages or mirrors of the same website. |
 | `HttpSource`       | For online source, where requests are made using HTTP.                                                                           |
 | `ParsedHttpSource` | Deprecated, use `HttpSource` instead.                                                                                            |
@@ -653,7 +654,7 @@ either `SourceFactory` or `HttpSource`.
 #### Main class key variables
 
 | Field     | Description                                                                                                                                                     |
-|-----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`    | Name displayed in the "Sources" tab in the app.                                                                                                                 |
 | `baseUrl` | Base URL of the source without any trailing slashes.                                                                                                            |
 | `lang`    | An ISO 639-1 compliant language code (two letters in lower case in most cases, but can also include the country/dialect part by using a simple dash character). |
@@ -667,11 +668,11 @@ either `SourceFactory` or `HttpSource`.
 
 - **Generating Page lists:** The app ignores the `index` passed to the `Page` object, but you must ensure the list itself is sorted correctly according to the source. You can use Kotlin's `mapIndexed` to easily instantiate `Page` objects, or rely on the index provided by the source API if available:
 
-    ```kotlin
-    return document.select(".pages img").mapIndexed { index, img ->
-        Page(index, imageUrl = img.attr("abs:src"))
-    }
-    ```
+  ```kotlin
+  return document.select(".pages img").mapIndexed { index, img ->
+      Page(index, imageUrl = img.attr("abs:src"))
+  }
+  ```
 
 - **Memory-efficient Image Interceptors:** When implementing interceptors for descrambling, stitching, or decrypting images, avoid loading the entire image into a `ByteArray`, as this can cause `OutOfMemoryError` on low-end devices. Prefer stream-based processing instead:
 
@@ -699,6 +700,7 @@ either `SourceFactory` or `HttpSource`.
   // Prefer:
   return GET("$baseUrl/manga", headers)
   ```
+
 - **GraphQL Queries:** If you are sending GraphQL requests, use Kotlin's raw multi-dollar string interpolation (`$$"""..."""`) for your queries. This prevents having to escape every JSON variable `$` symbol manually. For building the request and parsing the response, prefer the `graphQLPost` and `parseGraphQLAs` helpers in `keiyoushi.utils`.
 - **Empty checks on `.text()`:** Because Jsoup's `.text()` automatically trims whitespace, you can use `.isNotEmpty()` instead of `.isNotBlank()` when checking for empty strings. The same applies to `.ownText()`. This also means you should not use `.trim()` with these functions.
 - **Use `network.client` for Cloudflare:** When overriding the client for sources, simply use `override val client = network.client.newBuilder()...`.
@@ -715,12 +717,12 @@ either `SourceFactory` or `HttpSource`.
 a.k.a. the Browse source entry point in the app (invoked by tapping on the source name).
 
 - The app calls `fetchPopularManga` which should return a `MangasPage` containing the first batch of
-found `SManga` entries.
+  found `SManga` entries.
   - This method supports pagination. When user scrolls the manga list and more results must be fetched,
     the app calls it again with increasing `page` values (starting with `page=1`). This continues while
     `MangasPage.hasNextPage` is passed as `true` and `MangasPage.mangas` is not empty.
 - To show the list properly, the app needs `url`, `title` and `thumbnail_url`. You **must** set them
-here. The rest of the fields could be filled later (refer to Manga Details below).
+  here. The rest of the fields could be filled later (refer to Manga Details below).
 
 #### Latest Manga
 
@@ -733,7 +735,7 @@ the source name).
 #### Manga Search
 
 - When the user searches inside the app, `fetchSearchManga` will be called and the rest of the flow
-is similar to what happens with `fetchPopularManga`.
+  is similar to what happens with `fetchPopularManga`.
   - If search functionality is not available, return `Observable.just(MangasPage(emptyList(), false))`
 - `getFilterList` will be called to get all filters and filter types.
 
@@ -746,7 +748,7 @@ depending on the `Filter` used). You can check the [filter types available in Fi
 and in the table below.
 
 | Filter             | State type  | Description                                                                                                                                                              |
-|--------------------|-------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `Filter.Header`    | None        | A simple header. Useful for separating sections in the list or showing any note or warning to the user.                                                                  |
 | `Filter.Separator` | None        | A line separator. Useful for visual distinction between sections.                                                                                                        |
 | `Filter.Select<V>` | `Int`       | A select control, similar to HTML's `<select>`. Only one item can be selected, and the state is the index of the selected one.                                           |
@@ -772,32 +774,32 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
 #### Manga Details
 
 - When user taps on a manga, `getMangaDetails` and `getChapterList` will be called and the results
-will be cached.
+  will be cached.
   - A `SManga` entry is identified by it's `url`.
 - `getMangaDetails` is called to update a manga's details from when it was initialized earlier.
   - `SManga.initialized` tells the app if it should call `getMangaDetails`. If you are overriding
-  `getMangaDetails`, make sure to pass it as `true`.
+    `getMangaDetails`, make sure to pass it as `true`.
   - `SManga.genre` is a string containing list of all genres separated with `", "`.
   - `SManga.status` is an "enum" value. Refer to [the values in the `SManga` companion object](https://github.com/tachiyomiorg/extensions-lib/blob/8240b5cfecbd281bc737ac159ea7d4e5825ed3df/library/src/main/java/eu/kanade/tachiyomi/source/model/SManga.kt#L26).
   - During a backup, only `url` and `title` are stored. To restore the rest of the manga data, the
-  app calls `getMangaDetails`, so all fields should be (re)filled in if possible.
+    app calls `getMangaDetails`, so all fields should be (re)filled in if possible.
   - If a `SManga` is cached, `getMangaDetails` will be only called when the user does a manual
-  update (Swipe-to-Refresh).
+    update (Swipe-to-Refresh).
 - `getChapterList` is called to display the chapter list.
   - **The list should be sorted descending by the source order**.
 - `getMangaUrl` is called when the user taps "Open in WebView".
   - If the source uses an API to fetch the data, consider overriding this method to return the manga
-  absolute URL in the website instead.
+    absolute URL in the website instead.
   - It defaults to the URL provided to the request in `mangaDetailsRequest`.
 
 #### Chapter
 
 - `SChapter.date_upload` is the [UNIX Epoch time](https://en.wikipedia.org/wiki/Unix_time)
-**expressed in milliseconds**.
+  **expressed in milliseconds**.
   - If you don't pass `SChapter.date_upload` and leave it zero, the app will use the default date
-  instead, but it's recommended to always fill it if it's available.
+    instead, but it's recommended to always fill it if it's available.
   - To get the time in milliseconds from a date string, you can use a `SimpleDateFormat` like in
-  the example below.
+    the example below.
 
     ```kotlin
     import keiyoushi.utils.tryParse
@@ -810,24 +812,26 @@ will be cached.
     ```
 
     Make sure you make the `SimpleDateFormat` a class constant or variable so it doesn't get
-  recreated for every chapter. If you need to parse or format dates in manga description, create
-  another instance since `SimpleDateFormat` is not thread-safe.
+    recreated for every chapter. If you need to parse or format dates in manga description, create
+    another instance since `SimpleDateFormat` is not thread-safe.
+
   - If the parsing has any problems, make sure to return `0L` so the app will use the default date
-  instead.
+    instead.
   - The app will overwrite dates of existing old chapters **UNLESS** `0L` is returned.
   - If the source only provides the manga's updated date, assign it to the latest chapter only.
+
 - `getChapterUrl` is called when the user taps "Open in WebView" in the reader.
   - If the source uses an API to fetch the data, consider overriding this method to return the
-  chapter absolute URL in the website instead.
+    chapter absolute URL in the website instead.
   - It defaults to the URL provided to the request in `pageListRequest`.
 
 #### Chapter Pages
 
 - When user opens a chapter, `getPageList` will be called and it will return a list of `Page`s.
 - While a chapter is open in the reader or is being downloaded, `fetchImageUrl` will be called to get
-the URL for each page of the manga if `Page.imageUrl` is empty.
+  the URL for each page of the manga if `Page.imageUrl` is empty.
 - If the source provides all the `Page.imageUrl`s directly, you can fill them and leave `Page.url`
-empty, so the app will skip the `fetchImageUrl` step and directly call `fetchImage`.
+  empty, so the app will skip the `fetchImageUrl` step and directly call `fetchImage`.
 - The `Page.url` and `Page.imageUrl` attributes **should be set as absolute URLs**.
 - The list of `Page`s should be returned already sorted, the `index` field is ignored.
 - If you need to pass additional data to the image fetcher, it is recommended to pass it as a URL fragment (e.g. `url + "#data"`). OkHttp does not send fragments to the server, so there is no need to strip it out afterwards.
@@ -872,7 +876,7 @@ empty, so the app will skip the `fetchImageUrl` step and directly call `fetchIma
 
 #### Configurable Sources and Preferences
 
-- **Mirror selection preferences:** When implementing a mirror selector, save the *index* of the mirror instead of the URL string. This allows code updates to change the list of mirrors, and users will automatically reflect those changes.
+- **Mirror selection preferences:** When implementing a mirror selector, save the _index_ of the mirror instead of the URL string. This allows code updates to change the list of mirrors, and users will automatically reflect those changes.
 - **Base URL getter:** When `baseUrl` is configurable via preferences, use a custom getter (e.g., `override val baseUrl: String get() = ...`) instead of `by lazy`. Using `by lazy` requires the user to restart the app for the domain change to take effect.
 - **Preference migration for base URLs:** To handle default URL changes in updates, use the `getPreferences` inline migration block to update the stored preference if the hardcoded default URL changes.
 - **Coerce mirror index:** When reading the mirror index from preferences, use `.coerceAtMost(mirrorUrls.size - 1)` to prevent `ArrayIndexOutOfBoundsException` if mirrors are removed in a code update.
@@ -896,10 +900,10 @@ keiyoushi {
 }
 ```
 
-| DSL call | Description |
-|---|---|
-| `host("example.com")` | A hostname to match. Call multiple times to register multiple hosts. If omitted, the host is derived from `baseUrl` automatically. |
-| `path("/manga/..*")` | A path pattern in Android [`pathPattern`](https://developer.android.com/guide/topics/manifest/data-element#path) syntax. Call multiple times to match multiple paths. At least one `path()` call is required — a `deeplink {}` block with no paths produces no intent filter. |
+| DSL call              | Description                                                                                                                                                                                                                                                                   |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `host("example.com")` | A hostname to match. Call multiple times to register multiple hosts. If omitted, the host is derived from `baseUrl` automatically.                                                                                                                                            |
+| `path("/manga/..*")`  | A path pattern in Android [`pathPattern`](https://developer.android.com/guide/topics/manifest/data-element#path) syntax. Call multiple times to match multiple paths. At least one `path()` call is required — a `deeplink {}` block with no paths produces no intent filter. |
 
 Multiple `deeplink {}` blocks create independent intent filters, which is useful when different hosts or path groups need to be handled separately:
 
@@ -929,8 +933,15 @@ override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Ob
             val typeIndex = url.pathSegments.indexOfFirst { it == "detail" || it == "view" }
             if (typeIndex != -1 && typeIndex + 1 < url.pathSize) {
                 val id = url.pathSegments[typeIndex + 1]
-                return GET("$apiUrl/Book?select=id,judul,cover&type=not.ilike.*novel*&id=eq.$id", apiHeaders)
+                val manga = SManga.create().apply {
+                    this@apply.url = "/Book?select=id,judul,cover&type=not.ilike.*novel*&id=eq.$id"
+                    initialized = true
+                }
+                return fetchMangaDetails(manga)
+                    .map { MangasPage(listOf(it), false) }
             }
+
+            throw Exception("Unsupported url")
         }
     }
     // normal search flow...
@@ -954,10 +965,10 @@ and prevents unnecessary load on the source servers. To change the update strate
 use the `update_strategy` field. You can find below a description of the current possible values.
 
 - `UpdateStrategy.ALWAYS_UPDATE`: Titles marked as always update will be included in the library
-update if they aren't excluded by additional restrictions.
+  update if they aren't excluded by additional restrictions.
 - `UpdateStrategy.ONLY_FETCH_ONCE`: Titles marked as only fetch once will be automatically skipped
-during library updates. Useful for cases where the series is previously known to be finished and have
-only a single chapter, for example.
+  during library updates. Useful for cases where the series is previously known to be finished and have
+  only a single chapter, for example.
 
 If not set, it defaults to `ALWAYS_UPDATE`.
 
@@ -1053,10 +1064,10 @@ keiyoushi {
 When no `host()` is specified in a theme `deeplink {}` block, the host is resolved at build time from each individual extension's `baseUrl`, so the same path patterns apply to every site without hardcoding hostnames in the theme.
 
 | Field             | Description                                                                                                                                                                   |
-|-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `baseVersionCode` | The base version code for the theme. This must be a positive integer and **incremented** whenever a change is made to the theme's implementation that affects the extensions. |
 | `libVersion`      | The extension library version. Always set to `"1.4"`.                                                                                                                         |
-| `deeplink {}`     | Declares URL deeplink patterns inherited by all extensions using this theme. See [URL intent filter](#url-intent-filter).                                                      |
+| `deeplink {}`     | Declares URL deeplink patterns inherited by all extensions using this theme. See [URL intent filter](#url-intent-filter).                                                     |
 
 #### Theme main class
 
@@ -1115,7 +1126,7 @@ Copy the following into `Launch Flags` for the Debug build of Mihon:
 -W -S -n app.mihon.dev/eu.kanade.tachiyomi.ui.main.MainActivity -a eu.kanade.tachiyomi.SHOW_CATALOGUES
 ```
 
-For other builds, replace  `app.mihon.dev` with the corresponding package IDs:
+For other builds, replace `app.mihon.dev` with the corresponding package IDs:
 
 - Release build: `app.mihon`
 - Preview build: `app.mihon.debug`
@@ -1140,7 +1151,7 @@ Follow the steps above for building and running locally if you haven't already. 
 
 You can leverage the Android Debugger to add breakpoints and step through your extension while debugging.
 
-You *cannot* simply use Android Studio's `Debug 'module.name'` -> this will most likely result in an
+You _cannot_ simply use Android Studio's `Debug 'module.name'` -> this will most likely result in an
 error while launching.
 
 Instead, once you've built and installed your extension on the target device, use
