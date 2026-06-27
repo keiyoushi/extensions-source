@@ -245,4 +245,4 @@ class MangaLivre :
         private val ANCHORED_REGEX = Regex("\"x-toonlivre-client\"\\s*,\\s*\"([\\w.-]+)\"")
         private val SHAPE_REGEX = Regex("\"(web-[\\w.-]+)\"")
     }
-    }
+}
