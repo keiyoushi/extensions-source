@@ -71,7 +71,7 @@ class Comix :
             if (response.code != 404) return@addInterceptor response
 
             val url = request.url.toString()
-            val fallbacks = listOf("/si/", "/i/", "/sii/", "/ii/")
+            val fallbacks = listOf("/i5/", "/si/", "/i/", "/sii/", "/ii/")
                 .map { url.replaceFirst(SCRAMBLE_PATH_FALLBACK_REGEX, it) }
                 .filter { it != url }
 
@@ -1093,7 +1093,7 @@ class Comix :
         private const val SCRIPT_RETRY_INTERVAL_MS = 100L
         private const val WEBVIEW_WIDTH = 1080
         private const val WEBVIEW_HEIGHT = 1920
-        private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/s?i+/")
+        private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/(?:i5|s?i+)/")
         private val CHAPTER_NUM_REGEX = Regex("""Ch\.([\d.]+)""")
         private val GROUP_ID_REGEX = Regex("""/groups/(\d+)""")
         private val CHAPTER_ID_REGEX = Regex("""/(\d+)-""")

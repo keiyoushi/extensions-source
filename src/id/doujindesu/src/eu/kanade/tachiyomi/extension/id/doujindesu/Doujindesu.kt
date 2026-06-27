@@ -18,12 +18,15 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.parser.Parser
 import java.io.IOException
 import java.util.LinkedHashMap
 
-class DoujinDesu :
+class Doujindesu :
     HttpSource(),
     ConfigurableSource {
+
+    override val id = 7704282043609669342L
 
     override val name = "Doujindesu"
 
@@ -43,6 +46,17 @@ class DoujinDesu :
 
     override val client = super.client.newBuilder()
         .addInterceptor(decryptor.xorInterceptor())
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val url = request.url.toString()
+            val headers = request.headers.newBuilder()
+
+            if (imageDomains.any { url.contains(it) }) {
+                headers.removeAll("x-app-secret")
+            }
+
+            chain.proceed(request.newBuilder().headers(headers.build()).build())
+        }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -174,7 +188,10 @@ class DoujinDesu :
     // Detail Parse
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.getSlug()}"
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("$apiUrl/manga/${manga.getSlug()}", headers)
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val slug = manga.getSlug()
+        return GET("$apiUrl/manga/$slug", headers)
+    }
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaItem>().toSManga()
 
@@ -188,19 +205,29 @@ class DoujinDesu :
     // More parser stuff
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/chapters/${chapter.getIdOrError()}", headers)
-
-    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageList>().pages.mapIndexed { i, imgUrl ->
-        Page(i, imageUrl = imgUrl)
+    override fun pageListRequest(chapter: SChapter): Request {
+        val id = chapter.url.split("/").last { it.isNotBlank() }
+        return GET("$apiUrl/chapters/$id", headers)
     }
 
-    fun SManga.getSlug() = url.removePrefix("/manga/").removeSuffix("/")
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageList>().pages.mapIndexed { i, imgUrl ->
+        Page(i, imageUrl = Parser.unescapeEntities(imgUrl, false))
+    }
 
-    fun SChapter.getIdOrError(): String = if (!url.startsWith('/')) url else throw IOException("Segarkan untuk memuat ulang bab.")
+    fun SManga.getSlug(): String {
+        val path = if (url.startsWith("http")) {
+            url.toHttpUrl().encodedPath
+        } else {
+            url
+        }
+        return path.split("/").last { it.isNotBlank() }
+    }
 
     companion object {
         private const val APP_SECRET = "dfdf72051dbfdc7d76889ebd31324e74"
         private const val LIMIT = 24
+
+        private val imageDomains = listOf("desu.photos", "cdn-static.desu.xxx", "desu.pics", "uploads", "upload")
 
         private const val PREF_BASE_URL = "defaultBaseUrl"
         private const val PREF_CUSTOM_BASE_URL = "customBaseUrl"
