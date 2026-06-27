@@ -8,4 +8,9 @@ keiyoushi {
     versionCode = 44
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    deeplink {
+        host("hattorimanga.net")
+        path("/manga/..*")
+    }
 }

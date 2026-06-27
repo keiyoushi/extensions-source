@@ -8,4 +8,9 @@ keiyoushi {
     versionCode = 32
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    deeplink {
+        host("lxmanga.space")
+        path("/truyen/..*")
+    }
 }

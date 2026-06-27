@@ -1,6 +1,8 @@
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.gradle.tasks.PackageAndroidArtifact
+import keiyoushi.gradle.extensions.DeeplinkFilter
+import keiyoushi.gradle.extensions.DeeplinkSpec
 import keiyoushi.gradle.extensions.KeiyoushiExtension
 import keiyoushi.gradle.extensions.KeiyoushiMultisrcExtension
 import keiyoushi.gradle.extensions.VALID_LIB_VERSIONS
@@ -10,6 +12,7 @@ import keiyoushi.gradle.extensions.implementation
 import keiyoushi.gradle.extensions.kei
 import keiyoushi.gradle.extensions.libs
 import keiyoushi.gradle.extensions.plugins
+import keiyoushi.gradle.tasks.GenerateExtensionManifestTask
 import keiyoushi.gradle.tasks.GenerateKeepRulesTask
 import keiyoushi.gradle.utils.assertWithoutFlag
 import org.gradle.api.Plugin
@@ -131,15 +134,23 @@ class PluginExtension : Plugin<Project> {
             }
         }
 
-        val sourceHostProvider = keiyoushi.baseUrl.map { baseUrl ->
-            if (baseUrl.isEmpty()) {
-                ""
-            } else {
-                val split = baseUrl.split("://")
-                assertWithoutFlag(split.size == 2) { "'baseUrl' must be in the format of 'https://example.com'" }
-                split[1].split("/")[0]
-            }
-        }.orElse("")
+        val deeplinksProvider = provider {
+            val defaultHost = keiyoushi.baseUrl.orNull
+                ?.split("://")?.getOrNull(1)
+                ?.split("/")?.first()
+                ?.takeIf { it.isNotEmpty() }
+            val localSpecs = keiyoushi.deeplinks.getOrElse(emptyList())
+            val themeSpecs = keiyoushi.theme.orNull?.let { themeName ->
+                project(":lib-multisrc:$themeName")
+                    .extensions.findByType(KeiyoushiMultisrcExtension::class.java)
+                    ?.deeplinks?.getOrElse(emptyList())
+            }.orEmpty()
+            specsToFilters(localSpecs + themeSpecs, defaultHost)
+        }
+
+        val manifestTask = tasks.register<GenerateExtensionManifestTask>("generateExtensionManifest") {
+            this.filters.set(deeplinksProvider)
+        }
 
         androidComponents {
             onVariants { variant ->
@@ -156,6 +167,7 @@ class PluginExtension : Plugin<Project> {
                 }
 
                 variant.sources.manifests.addStaticManifestFile("AndroidManifest.xml")
+                variant.sources.manifests.addGeneratedManifestFile(manifestTask) { it.outputFile }
 
                 variant.outputs.forEach { output ->
                     output.versionCode.set(versionCodeProvider)
@@ -168,8 +180,6 @@ class PluginExtension : Plugin<Project> {
                 variant.manifestPlaceholders.put("nsfw", nsfwProvider)
                 variant.manifestPlaceholders.put("tachiyomix.contentWarning", contentWarningProvider)
                 variant.manifestPlaceholders.put("tachiyomix.extensionLib", keiyoushi.libVersion.map { it.toString() })
-                variant.manifestPlaceholders.put("SOURCEHOST", sourceHostProvider)
-                variant.manifestPlaceholders.put("SOURCESCHEME", "https")
             }
         }
 
@@ -200,6 +210,20 @@ class PluginExtension : Plugin<Project> {
         }
     }
 }
+
+private fun specsToFilters(specs: List<DeeplinkSpec>, defaultHost: String?): List<DeeplinkFilter> =
+    specs.mapNotNull { spec ->
+        val hosts = spec.hosts.getOrElse(emptyList()).ifEmpty { listOfNotNull(defaultHost) }
+        val paths = spec.pathPatterns.getOrElse(emptyList())
+        if (paths.isNotEmpty()) {
+            check(hosts.isNotEmpty()) {
+                "deeplink has path patterns but no host could be resolved — set baseUrl or specify host() explicitly"
+            }
+            DeeplinkFilter(hosts, paths)
+        } else {
+            null
+        }
+    }
 
 private fun Project.android(block: ApplicationExtension.() -> Unit) {
     extensions.configure(block)

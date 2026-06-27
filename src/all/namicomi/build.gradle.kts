@@ -8,6 +8,11 @@ keiyoushi {
     versionCode = 6
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    deeplink {
+        host("namicomi.com")
+        path("/.*/title/..*")
+    }
 }
 
 dependencies {

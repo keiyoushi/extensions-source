@@ -8,4 +8,9 @@ keiyoushi {
     versionCode = 18
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    deeplink {
+        host("hentainexus.com")
+        path("/view/..*")
+    }
 }
