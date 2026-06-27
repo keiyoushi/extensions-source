@@ -189,17 +189,17 @@ class MangaLivre :
     private var cachedClientValue: String? = null
 
     private fun cloudflareInterceptor(chain: Interceptor.Chain): Response {
-    val request = chain.request()
-    if (request.url.host != baseUrlHost) {
-        return chain.proceed(request)
-    }
-    val response = chain.proceed(request)
-    if (response.code != 403 && response.code != 503) {
-        return response
-    }
-    response.close()
-    CloudflareResolver.resolve(baseUrl, baseUrl, headers["User-Agent"])
-    return chain.proceed(request.newBuilder().build())
+        val request = chain.request()
+        if (request.url.host != baseUrlHost) {
+            return chain.proceed(request)
+        }
+        val response = chain.proceed(request)
+        if (response.code != 403 && response.code != 503) {
+            return response
+        }
+        response.close()
+        CloudflareResolver.resolve(baseUrl, baseUrl, headers["User-Agent"])
+        return chain.proceed(request.newBuilder().build())
     }
 
     private fun clientHeaderInterceptor(chain: Interceptor.Chain): Response {
