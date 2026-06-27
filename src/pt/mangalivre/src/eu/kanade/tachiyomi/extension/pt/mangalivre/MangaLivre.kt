@@ -44,7 +44,7 @@ class MangaLivre :
         .build()
 
     private val scrapeClient: OkHttpClient by lazy {
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .followRedirects(false)
             .build()
     }
@@ -253,11 +253,11 @@ class MangaLivre :
 
     companion object {
         private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
-        private const val CLIENT_HEADER = "x-toonlivre-client"
-        private const val DEFAULT_CLIENT = "web-x"
+        private const val CLIENT_HEADER = "X-Tly-Sec"
+        private const val DEFAULT_CLIENT = "web-z99"
         private const val MAX_PEEK = 1024L
         private val ASSET_REGEX = Regex("/assets/index-[\\w-]+\\.js")
-        private val ANCHORED_REGEX = Regex("\"x-toonlivre-client\"\\s*,\\s*\"([\\w.-]+)\"")
+        private val ANCHORED_REGEX = Regex("\"X-Tly-Sec\"\\s*,\\s*\"([\\w.-]+)\"")
         private val SHAPE_REGEX = Regex("\"(web-[\\w.-]+)\"")
     }
 }
