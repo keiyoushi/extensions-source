@@ -98,8 +98,6 @@ class PluginExtension : Plugin<Project> {
             }
         }
 
-        val extClassProvider = keiyoushi.className.map { if (it.startsWith(".")) it else ".$it" }
-
         val themeExtension = keiyoushi.theme.map { themeName ->
             project(":lib-multisrc:$themeName").extensions.findByType(KeiyoushiMultisrcExtension::class.java)
                 ?: throw AssertionError("Theme project :lib-multisrc:$themeName must apply kei.plugins.multisrc")
@@ -121,19 +119,9 @@ class PluginExtension : Plugin<Project> {
             versionCodeProvider.map { "$libVersion.$it" }
         }
 
-        val appNameProvider = keiyoushi.name.map { name ->
-            assertWithoutFlag(name.all { it.code < 0x180 }) { "Extension name should be romanized" }
-            "Tachiyomi: $name"
-        }
-
-        val nsfwProvider = keiyoushi.contentWarning.map { if (it == ContentWarning.SAFE) "0" else "1" }
-
-        val contentWarningProvider = keiyoushi.contentWarning.map {
-            when (it) {
-                ContentWarning.SAFE -> "0"
-                ContentWarning.MIXED -> "1"
-                ContentWarning.NSFW -> "2"
-            }
+        val classNameProvider = keiyoushi.className.map { name ->
+            assertWithoutFlag(!name.startsWith(".")) { "className must not start with '.'" }
+            name
         }
 
         val themeDeeplinks = themeExtension
@@ -152,6 +140,10 @@ class PluginExtension : Plugin<Project> {
 
         val manifestTask = tasks.register<GenerateExtensionManifestTask>("generateExtensionManifest") {
             this.filters.set(deeplinksProvider)
+            this.extensionName.set(keiyoushi.name)
+            this.className.set(classNameProvider)
+            this.contentWarning.set(keiyoushi.contentWarning)
+            this.extensionLib.set(keiyoushi.libVersion)
         }
 
         androidComponents {
@@ -163,7 +155,7 @@ class PluginExtension : Plugin<Project> {
                 if (keepRules != null) {
                     val task = tasks.register<GenerateKeepRulesTask>("generate${variantName}KeepRules") {
                         this.applicationId.set(variant.applicationId)
-                        this.extClass.set(extClassProvider)
+                        this.className.set(classNameProvider)
                     }
                     keepRules.addGeneratedSourceDirectory(task) { it.outputDir }
                 }
@@ -176,12 +168,6 @@ class PluginExtension : Plugin<Project> {
                     output.versionName.set(versionNameProvider)
                 }
 
-                variant.manifestPlaceholders.put("appName", appNameProvider)
-                variant.manifestPlaceholders.put("tachiyomix.name", keiyoushi.name)
-                variant.manifestPlaceholders.put("extClass", extClassProvider)
-                variant.manifestPlaceholders.put("nsfw", nsfwProvider)
-                variant.manifestPlaceholders.put("tachiyomix.contentWarning", contentWarningProvider)
-                variant.manifestPlaceholders.put("tachiyomix.extensionLib", keiyoushi.libVersion)
             }
         }
 
