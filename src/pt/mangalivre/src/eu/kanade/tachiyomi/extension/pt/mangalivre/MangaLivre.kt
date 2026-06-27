@@ -38,6 +38,7 @@ class MangaLivre :
     override val versionId: Int = 2
 
     override val client: OkHttpClient = network.client.newBuilder()
+        .addInterceptor(::cloudflareInterceptor)
         .addInterceptor(::clientHeaderInterceptor)
         .rateLimit(2, 1.seconds) { it.host == baseUrlHost }
         .build()
@@ -186,6 +187,19 @@ class MangaLivre :
 
     @Volatile
     private var cachedClientValue: String? = null
+
+    private fun cloudflareInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        if (request.url.host != baseUrlHost) {
+            return chain.proceed(request)
+        }
+        val response = chain.proceed(request)
+        if (response.code == 403 || response.code == 503) {
+            response.close()
+            CloudflareResolver.resolve(baseUrl, baseUrl, headers["User-Agent"])
+        }
+        return chain.proceed(request)
+    }
 
     private fun clientHeaderInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
