@@ -44,7 +44,7 @@ class MangaLivre :
         .build()
 
     private val scrapeClient: OkHttpClient by lazy {
-        network.client.newBuilder()
+        network.cloudflareClient.newBuilder()
             .followRedirects(false)
             .build()
     }
