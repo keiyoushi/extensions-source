@@ -174,9 +174,18 @@ class Doujindesu :
     )
 
     // Detail Parse
-    override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.getSlug()}"
+    override fun getMangaUrl(manga: SManga): String = if (manga.url.startsWith("/manga/")) {
+        "$baseUrl${manga.url}"
+    } else {
+        "$baseUrl/manga/${manga.getSlug()}"
+    }
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("$apiUrl/manga/${manga.getSlug()}", headers)
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        if (!manga.url.startsWith("/manga/")) {
+            throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
+        }
+        return GET("$apiUrl${manga.url}", headers)
+    }
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaItem>().toSManga()
 
@@ -190,19 +199,25 @@ class Doujindesu :
     // More parser stuff
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/chapters/${chapter.getIdOrError()}", headers)
+    override fun pageListRequest(chapter: SChapter): Request {
+        if (chapter.url.contains("/") || chapter.url.startsWith("http")) {
+            throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
+        }
+        return GET("$apiUrl/chapters/${chapter.url}", headers)
+    }
 
     override fun pageListParse(response: Response): List<Page> = response.parseAs<PageList>().pages.mapIndexed { i, imgUrl ->
         Page(i, imageUrl = imgUrl)
     }
 
-    fun SManga.getSlug(): String = if (url.startsWith("http")) {
-        url.toHttpUrl().pathSegments.last { it.isNotBlank() }
-    } else {
-        url.removePrefix("/manga/").removeSuffix("/")
+    fun SManga.getSlug(): String {
+        val path = if (url.startsWith("http")) {
+            url.toHttpUrl().encodedPath
+        } else {
+            url
+        }
+        return path.split("/").last { it.isNotBlank() }
     }
-
-    fun SChapter.getIdOrError(): String = if (!url.startsWith('/')) url else throw IOException("Segarkan untuk memuat ulang bab.")
 
     companion object {
         private const val APP_SECRET = "dfdf72051dbfdc7d76889ebd31324e74"
