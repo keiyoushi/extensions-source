@@ -176,12 +176,7 @@ class Doujindesu :
     // Detail Parse
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.getSlug()}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        if (!manga.url.startsWith("/manga/") || manga.url.endsWith("/")) {
-            throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
-        }
-        return GET("$apiUrl${manga.url}", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/manga/${manga.getSlug()}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaItem>().toSManga()
 
@@ -195,12 +190,7 @@ class Doujindesu :
     // More parser stuff
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        if (chapter.url.contains("/") || chapter.url.startsWith("http")) {
-            throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
-        }
-        return GET("$apiUrl/chapters/${chapter.url}", headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/chapters/${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> = response.parseAs<PageList>().pages.mapIndexed { i, imgUrl ->
         Page(i, imageUrl = imgUrl)
