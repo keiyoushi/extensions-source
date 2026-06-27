@@ -12,3 +12,4 @@ gen
 generated-src/
 .kotlin
 *.jks
+/src/all/deviantartapi/

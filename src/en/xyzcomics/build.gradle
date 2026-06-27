@@ -3,7 +3,7 @@ apply plugin: 'kei.plugins.extension'
 keiyoushi {
     name = 'XYZ Comics'
     className = '.XyzComics'
-    versionCode = 3
+    versionCode = 4
     baseUrl = 'https://xyzcomics.com'
     contentWarning = 'NSFW'
     libVersion = '1.4'
