@@ -196,7 +196,7 @@ class MangaLivre :
         val response = chain.proceed(
             request.newBuilder().header(CLIENT_HEADER, currentClientValue()).build(),
         )
-        if (response.code != 403 || !response.isOfficialAppError()) {
+        if (response.code != 403) {
             return response
         }
 
@@ -236,12 +236,6 @@ class MangaLivre :
             .singleOrNull()
     }
 
-    private fun Response.isOfficialAppError(): Boolean = try {
-        peekBody(MAX_PEEK).string().contains("aplicativo oficial", ignoreCase = true)
-    } catch (_: Exception) {
-        false
-    }
-
     companion object {
         private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
         private const val CLIENT_HEADER = "x-toonlivre-client"
@@ -249,6 +243,6 @@ class MangaLivre :
         private const val MAX_PEEK = 1024L
         private val ASSET_REGEX = Regex("/assets/index-[\\w-]+\\.js")
         private val ANCHORED_REGEX = Regex("\"x-toonlivre-client\"\\s*,\\s*\"([\\w.-]+)\"")
-        private val SHAPE_REGEX = Regex("\"(web-[a-z0-9]+)\"")
+        private val SHAPE_REGEX = Regex("\"(web-[\\w.-]+)\"")
     }
-}
+    }
