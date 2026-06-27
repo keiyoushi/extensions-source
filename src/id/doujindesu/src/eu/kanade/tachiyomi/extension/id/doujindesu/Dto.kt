@@ -48,7 +48,7 @@ class MangaItem(
 
 ) {
     fun toSManga(): SManga = SManga.create().apply {
-        url = slug
+        url = "/manga/$slug/"
         title = this@MangaItem.title
         thumbnail_url = coverUrl
         author = this@MangaItem.author
