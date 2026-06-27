@@ -174,14 +174,10 @@ class Doujindesu :
     )
 
     // Detail Parse
-    override fun getMangaUrl(manga: SManga): String = if (manga.url.startsWith("/manga/")) {
-        "$baseUrl${manga.url}"
-    } else {
-        "$baseUrl/manga/${manga.getSlug()}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.getSlug()}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        if (!manga.url.startsWith("/manga/")) {
+        if (!manga.url.startsWith("/manga/") || manga.url.endsWith("/")) {
             throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
         }
         return GET("$apiUrl${manga.url}", headers)
