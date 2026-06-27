@@ -259,6 +259,7 @@ class Mangadotnet :
                 addQueryParameter("search", query)
             }
             addQueryParameter("page", page.toString())
+            addQueryParameter("perPage", "56")
 
             filters.firstInstanceOrNull<SortFilter>()?.also { filter ->
                 if (filter.sort == "" && query.isBlank()) {
@@ -299,6 +300,15 @@ class Mangadotnet :
                 }
             }
 
+            filters.firstInstanceOrNull<TagFilter>()?.also { filter ->
+                filter.included.forEach { tag ->
+                    addQueryParameter("tag", tag)
+                }
+                filter.excluded.forEach { tag ->
+                    addQueryParameter("tag", "-$tag")
+                }
+            }
+
             filters.firstInstanceOrNull<AuthorFilter>()?.state?.takeIf { it.isNotBlank() }?.also {
                 addQueryParameter("author", it.trim())
             }
@@ -325,6 +335,7 @@ class Mangadotnet :
 
         val isAdult = adultModePref().let { it == "1" || it == "both" }
         val genreList = getGenreList(isAdult)
+        val tagList = getTagList()
 
         if (genreList != null) {
             filters.add(4, GenreFilter(genreList, excludedGenresPref()))
@@ -333,12 +344,21 @@ class Mangadotnet :
             filters.add(5, Filter.Header("Press 'reset' to load genres"))
         }
 
+        val tagIndex = if (genreList != null) 5 else 6
+        if (tagList != null) {
+            filters.add(tagIndex, TagFilter(tagList))
+        } else {
+            filters.add(tagIndex, Filter.Separator())
+            filters.add(tagIndex + 1, Filter.Header("Press 'reset' to load tags"))
+        }
+
         return FilterList(filters)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.decodeRscAs<Data<MangaList>>().data
         updateGenres(data.allGenres, adultModePref() != "none")
+        updateTags(data.allTags)
 
         val hideAdultCovers = adultModePref() == "none"
 
@@ -628,6 +648,42 @@ class Mangadotnet :
                         otherFile.writeText(json)
                     }
                 }
+            }
+        } finally {
+            genresLock.unlock()
+        }
+    }
+
+    // ============================ Tag Cache ==============================
+    private val tagCacheFile: File by lazy {
+        applicationContext.cacheDir.resolve("source_$id/tags.json")
+    }
+
+    private fun getTagList(): List<String>? = genresLock.withLock {
+        runCatching { tagCacheFile.readText().parseAs<List<String>>() }.getOrNull()
+    }?.sortedBy { it.lowercase(Locale.ROOT) }
+
+    private fun extractTags(categories: List<TagCategory>?): List<String> {
+        if (categories.isNullOrEmpty()) return emptyList()
+        return categories.flatMap { it.tags.map { tag -> tag.name.trim() } }
+            .filter { it.isNotEmpty() }
+            .distinct()
+    }
+
+    private fun updateTags(newTags: List<TagCategory>?) {
+        val tags = extractTags(newTags)
+        if (tags.isEmpty()) return
+        if (!genresLock.tryLock()) return
+        try {
+            val currentTags = runCatching {
+                if (tagCacheFile.exists()) tagCacheFile.readText().parseAs<List<String>>() else null
+            }.getOrNull()
+
+            val combined = if (currentTags == null) tags else (currentTags + tags).distinct()
+
+            if (combined.size != (currentTags?.size ?: 0)) {
+                tagCacheFile.parentFile?.mkdirs()
+                tagCacheFile.writeText(combined.toJsonString())
             }
         } finally {
             genresLock.unlock()
