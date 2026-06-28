@@ -20,6 +20,7 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
 class MangaLivre :
@@ -112,7 +113,7 @@ class MangaLivre :
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val dto = response.parseAs<WrapperDto>()
+        val dto = response.parseJson<WrapperDto>()
         val mangas = dto.mangas.map { it.toSManga(useAlternativeTitle) }
         return MangasPage(mangas, dto.hasNextPage)
     }
@@ -123,13 +124,13 @@ class MangaLivre :
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/manga-by-slug/${manga.url}", headers)
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().toSManga(useAlternativeTitle)
+    override fun mangaDetailsParse(response: Response): SManga = response.parseJson<MangaDto>().toSManga(useAlternativeTitle)
 
     // ============================== Chapters =======================================
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
-    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<MangaDto>().toSChapterList()
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseJson<MangaDto>().toSChapterList()
 
     // ============================== Pages =======================================
 
@@ -138,7 +139,7 @@ class MangaLivre :
         return GET("$apiUrl/mangas/${dto.mangaId}/chapters/${dto.chapterId}", headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageDto>().toPageList()
+    override fun pageListParse(response: Response): List<Page> = response.parseJson<PageDto>().toPageList()
 
     override fun imageUrlParse(response: Response): String = ""
 
@@ -184,8 +185,21 @@ class MangaLivre :
 
     // ============================== Helper =======================================
 
+    /**
+     * Lê o corpo como JSON. Se vier HTML (página de despedida / redirecionamento do
+     * Cloudflare) ou vazio, falha com mensagem clara em vez de estourar no parser.
+     */
+    private inline fun <reified T> Response.parseJson(): T {
+        val peek = peekBody(MAX_PEEK).string().trimStart()
+        if (peek.isEmpty() || peek.startsWith("<")) {
+            close()
+            throw IOException(NON_JSON_MESSAGE)
+        }
+        return parseAs<T>()
+    }
+
     @Volatile
-    private var cachedClientValue: String? = null
+    private var cachedToken: ClientToken? = null
 
     private fun clientHeaderInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -193,47 +207,58 @@ class MangaLivre :
             return chain.proceed(request)
         }
 
+        val token = currentToken()
         val response = chain.proceed(
-            request.newBuilder().header(CLIENT_HEADER, currentClientValue()).build(),
+            request.newBuilder().header(token.header, token.value).build(),
         )
         if (response.code != 403 || !response.isOfficialAppError()) {
             return response
         }
 
         response.close()
+        val refreshed = refreshToken()
         return chain.proceed(
-            request.newBuilder().header(CLIENT_HEADER, refreshClientValue()).build(),
+            request.newBuilder().header(refreshed.header, refreshed.value).build(),
         )
     }
 
-    private fun currentClientValue(): String = cachedClientValue ?: synchronized(this) {
-        cachedClientValue ?: scrapeClientValue().also { cachedClientValue = it }
+    private fun currentToken(): ClientToken = cachedToken ?: synchronized(this) {
+        cachedToken ?: scrapeToken().also { cachedToken = it }
     }
 
-    private fun refreshClientValue(): String = synchronized(this) {
-        scrapeClientValue().also { cachedClientValue = it }
+    private fun refreshToken(): ClientToken = synchronized(this) {
+        scrapeToken().also { cachedToken = it }
     }
 
-    private fun scrapeClientValue(): String {
+    private fun scrapeToken(): ClientToken {
         return try {
             val html = scrapeClient.newCall(GET("$baseUrl/index.html", headers)).execute()
                 .use { if (it.isSuccessful) it.body?.string().orEmpty() else "" }
-            val assetPath = ASSET_REGEX.find(html)?.value ?: return DEFAULT_CLIENT
+            val assetPath = ASSET_REGEX.find(html)?.value ?: return DEFAULT_TOKEN
             val js = scrapeClient.newCall(GET("$baseUrl$assetPath", headers)).execute()
                 .use { if (it.isSuccessful) it.body?.string() else null }
-                ?: return DEFAULT_CLIENT
-            extractClientValue(js) ?: DEFAULT_CLIENT
+                ?: return DEFAULT_TOKEN
+            extractToken(js) ?: DEFAULT_TOKEN
         } catch (_: Exception) {
-            DEFAULT_CLIENT
+            DEFAULT_TOKEN
         }
     }
 
-    private fun extractClientValue(js: String): String? {
-        ANCHORED_REGEX.find(js)?.let { return it.groupValues[1] }
-        return SHAPE_REGEX.findAll(js)
+    /**
+     * O nome do header e o valor já rotacionaram (x-toonlivre-client -> x-tly-sec,
+     * web-x -> web-z99), então tentamos descobrir o par "x-...":"web-..." direto do
+     * bundle; se não der, mantemos o nome conhecido e procuramos só o valor.
+     */
+    private fun extractToken(js: String): ClientToken? {
+        PAIR_REGEX.find(js)?.let {
+            return ClientToken(it.groupValues[1], it.groupValues[2])
+        }
+        val value = VALUE_REGEX.findAll(js)
             .map { it.groupValues[1] }
             .toSet()
             .singleOrNull()
+            ?: return null
+        return ClientToken(DEFAULT_TOKEN.header, value)
     }
 
     private fun Response.isOfficialAppError(): Boolean = try {
@@ -242,13 +267,16 @@ class MangaLivre :
         false
     }
 
+    private data class ClientToken(val header: String, val value: String)
+
     companion object {
         private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
-        private const val CLIENT_HEADER = "x-toonlivre-client"
-        private const val DEFAULT_CLIENT = "web-x"
         private const val MAX_PEEK = 1024L
+        private const val NON_JSON_MESSAGE =
+            "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
+        private val DEFAULT_TOKEN = ClientToken("x-tly-sec", "web-z99")
         private val ASSET_REGEX = Regex("/assets/index-[\\w-]+\\.js")
-        private val ANCHORED_REGEX = Regex("\"x-toonlivre-client\"\\s*,\\s*\"([\\w.-]+)\"")
-        private val SHAPE_REGEX = Regex("\"(web-[a-z0-9]+)\"")
+        private val PAIR_REGEX = Regex("\"(x-t[a-z0-9-]+)\"\\s*[,:]\\s*\"(web-[a-z0-9]+)\"")
+        private val VALUE_REGEX = Regex("\"(web-[a-z0-9]+)\"")
     }
 }
