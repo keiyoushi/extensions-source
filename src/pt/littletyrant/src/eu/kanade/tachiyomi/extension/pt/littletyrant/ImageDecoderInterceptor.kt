@@ -58,19 +58,3 @@ class ImageDecoderInterceptor : Interceptor {
         return BitmapFactory.decodeByteArray(v, 0, v.size)
     }
 }
-
-class AddCookieHeaderInterceptor(private val baseHost: String) : Interceptor {
-    override fun intercept(chain: Interceptor.Chain): Response {
-        if (chain.request().url.host == baseHost) {
-            val originalCookies = chain.request().header("Cookie") ?: ""
-            if (originalCookies.isNotEmpty() && !originalCookies.contains("isAdult=1")) {
-                return chain.proceed(
-                    chain.request().newBuilder()
-                        .header("Cookie", "$originalCookies; isAdult=1")
-                        .build(),
-                )
-            }
-        }
-        return chain.proceed(chain.request())
-    }
-}
