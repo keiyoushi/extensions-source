@@ -196,7 +196,7 @@ class PluginExtension : Plugin<Project> {
             addProvider("implementation", keiyoushi.theme.map { project(":lib-multisrc:$it") })
             implementation(project(":core"))
             compileOnly(libs.bundles.common)
-            ksp(project(":codegen"))
+            ksp(project(":compiler"))
         }
 
         afterEvaluate {
@@ -242,7 +242,6 @@ class PluginExtension : Plugin<Project> {
 @Serializable
 private data class ResolvedSourceData(val name: String, val lang: String, val id: Long, val baseUrl: BaseUrlSpecData, val skipCodeGen: Boolean = false)
 
-// Flat discriminated form — avoids cross-module polymorphic serialization issues.
 @Serializable
 private data class BaseUrlSpecData(
     val type: String,

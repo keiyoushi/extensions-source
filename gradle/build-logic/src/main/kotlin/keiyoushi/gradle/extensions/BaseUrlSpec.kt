@@ -1,5 +1,6 @@
 package keiyoushi.gradle.extensions
 
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import java.io.Serializable
 
@@ -23,22 +24,18 @@ sealed interface BaseUrlSpec : Serializable {
 }
 
 abstract class BaseUrlDsl {
-    abstract val withCustomUrl: Property<Boolean>
-
-    private val mirrorsInternal = mutableListOf<String>()
-
-    fun mirror(url: String) {
-        mirrorsInternal.add(url)
-    }
+    abstract val withCustom: Property<Boolean>
+    abstract val mirrors: ListProperty<String>
 
     internal fun build(baseUrl: String): BaseUrlSpec {
-        val custom = withCustomUrl.getOrElse(false)
-        check(!(custom && mirrorsInternal.isNotEmpty())) {
-            "Cannot use both mirror() and withCustomUrl = true in source { baseUrl(...) { ... } }"
+        val custom = withCustom.getOrElse(false)
+        val mirrorList = mirrors.getOrElse(emptyList())
+        check(!(custom && mirrorList.isNotEmpty())) {
+            "Cannot use both mirrors and withCustom = true in source { baseUrl(...) { ... } }"
         }
         return when {
             custom -> BaseUrlSpec.Custom(baseUrl)
-            mirrorsInternal.isNotEmpty() -> BaseUrlSpec.Mirrors(listOf(baseUrl) + mirrorsInternal)
+            mirrorList.isNotEmpty() -> BaseUrlSpec.Mirrors(listOf(baseUrl) + mirrorList)
             else -> BaseUrlSpec.Static(baseUrl)
         }
     }
