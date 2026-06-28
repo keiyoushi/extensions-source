@@ -18,7 +18,7 @@
     },
     {
       "matchManagers": ["gradle"],
-      "enabled": false
+      "enabled": true
     },
     {
       "matchPackageNames": [
