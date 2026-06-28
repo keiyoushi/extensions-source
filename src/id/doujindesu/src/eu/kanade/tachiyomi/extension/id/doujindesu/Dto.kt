@@ -59,9 +59,9 @@ class MangaItem(
         thumbnail_url = coverUrl
         author = this@MangaItem.author
 
-        status = when (this@MangaItem.status.lowercase()) {
-            "ongoing", "publishing" -> SManga.ONGOING
-            "completed", "finished" -> SManga.COMPLETED
+        status = when {
+            this@MangaItem.status.lowercase() in listOf("ongoing", "publishing") -> SManga.ONGOING
+            isCompleted() -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
 
