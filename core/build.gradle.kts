@@ -21,6 +21,9 @@ android {
 }
 
 dependencies {
+    implementation(project(":lib-multisrc:madara"))
+    implementation(project(":core"))
+
     compileOnly(libs.bundles.common)
 
     testImplementation(libs.bundles.common)
