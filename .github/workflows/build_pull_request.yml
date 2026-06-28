@@ -55,7 +55,7 @@ jobs:
       - name: Set up Java
         uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
         with:
-          java-version: 11
+          java-version: 17
           distribution: temurin
 
       - name: Set up Gradle
@@ -92,7 +92,7 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
         with:
-          java-version: 11
+          java-version: 17
           distribution: temurin
 
       - name: Run inspector
