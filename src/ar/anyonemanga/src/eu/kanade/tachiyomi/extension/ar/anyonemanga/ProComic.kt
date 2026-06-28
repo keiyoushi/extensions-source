@@ -1,13 +1,13 @@
-package eu.kanade.tachiyomi.extension.ar.anyonemanga
+package eu.kanade.tachiyomi.extension.ar.procomic
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class AnyoneManga :
+class ProComic :
     Madara(
-        "Anyone Manga",
-        "https://anyonemanga.com",
+        "Pro Comic",
+        "https://procomic.pro/",
         "ar",
         dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.ROOT),
     ) {
