@@ -245,9 +245,9 @@ class MangaLivre :
     }
 
     /**
-     * O nome do header e o valor já rotacionaram (x-toonlivre-client -> x-tly-sec,
-     * web-x -> web-z99), então tentamos descobrir o par "x-...":"web-..." direto do
-     * bundle; se não der, mantemos o nome conhecido e procuramos só o valor.
+     * O nome do header rotaciona com frequência (x-toonlivre-client -> x-tly-sec ->
+     * x-app-key), o valor é sempre "web-...". Descobrimos o par "x-...":"web-..." direto
+     * do bundle para sobreviver às próximas rotações; se não der, usamos o último conhecido.
      */
     private fun extractToken(js: String): ClientToken? {
         PAIR_REGEX.find(js)?.let {
@@ -274,9 +274,9 @@ class MangaLivre :
         private const val MAX_PEEK = 1024L
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
-        private val DEFAULT_TOKEN = ClientToken("x-tly-sec", "web-z99")
+        private val DEFAULT_TOKEN = ClientToken("x-app-key", "web-z99")
         private val ASSET_REGEX = Regex("/assets/index-[\\w-]+\\.js")
-        private val PAIR_REGEX = Regex("\"(x-t[a-z0-9-]+)\"\\s*[,:]\\s*\"(web-[a-z0-9]+)\"")
+        private val PAIR_REGEX = Regex("\"(x-[a-z0-9-]{2,})\"\\s*[,:]\\s*\"(web-[a-z0-9]+)\"")
         private val VALUE_REGEX = Regex("\"(web-[a-z0-9]+)\"")
     }
 }
