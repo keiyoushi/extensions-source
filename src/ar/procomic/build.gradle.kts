@@ -5,7 +5,7 @@ plugins {
 keiyoushi {
     name = "Procomic"
     className = "Procomic"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
