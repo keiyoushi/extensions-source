@@ -295,14 +295,132 @@ keiyoushi {
 | Field            | Description                                                                                                                                                                                                          |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`           | The name of the extension. Should be romanized if site name is not in English.                                                                                                                                       |
-| `className`      | Points to the class that implements `Source`. The relative path starting with a dot is inferred automatically. This is used to find and instantiate the source(s).                                                   |
+| `className`      | Points to the class that implements `Source`. Not required when using `source {}` blocks — it is set to `ExtensionGenerated` automatically in that case.                                                             |
 | `versionCode`    | The extension version code. This must be a positive integer and incremented with any change to the code. Do not bump for changes that do not affect users, such as changing a private function to a public function. |
 | `contentWarning` | Content safety classification. Must be set explicitly to one of `ContentWarning.SAFE`, `ContentWarning.MIXED`, or `ContentWarning.NSFW`.                                                                             |
 | `libVersion`     | The extension library version. Always set to `"1.4"`.                                                                                                                                                                |
+| `baseUrl`        | The source's base URL (e.g. `"https://example.com"`). Used to automatically derive the deeplink `host` when no explicit `host()` call is present in a `deeplink {}` block. Not needed when using `source {}` blocks. |
+| `source {}`      | Declares one source (or multiple, for multi-language or multi-mirror extensions) using KSP code generation. See [Source declaration](#source-declaration).                                                           |
 | `deeplink {}`    | Declares a URL deeplink intent filter. See [URL intent filter](#url-intent-filter).                                                                                                                                  |
 
 The extension's version name is generated automatically by concatenating `libVersion` and the calculated version code.
 With the example used above, the version would be `1.4.1`.
+
+### Source declaration
+
+The preferred way to register sources is through `source {}` blocks in `build.gradle.kts`, combined with the `@Source` annotation on your source class. The build system uses KSP to generate a subclass (`ExtensionGenerated`) that injects `name`, `lang`, `id`, and `baseUrl` automatically — you no longer declare them manually in Kotlin.
+
+#### Annotate your source class
+
+Add `@Source` to your main class and remove any manual declarations of `name`, `lang`, `id`, and `baseUrl`:
+
+```kotlin
+import keiyoushi.annotation.Source
+
+@Source
+class MySource : HttpSource() {
+    // name, lang, id, and baseUrl are injected automatically — do not declare them here.
+    // All other overrides go here as normal.
+}
+```
+
+#### Declare sources in build.gradle.kts
+
+Add one or more `source {}` blocks inside `keiyoushi {}`:
+
+```kotlin
+keiyoushi {
+    name = "My Source"
+    versionCode = 1
+    contentWarning = ContentWarning.SAFE
+    libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://example.com"
+    }
+}
+```
+
+| Field        | Description                                                                                                                                                                        |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`       | The source name as shown in the app. Optional — defaults to the top-level extension `name`.                                                                                        |
+| `lang`       | ISO 639-1 language code. Required.                                                                                                                                                 |
+| `baseUrl`    | The source's base URL. See [baseUrl modes](#baseurl-modes) below.                                                                                                                  |
+| `id`         | Explicit source ID. Optional — auto-computed from `name + lang + versionId` if omitted. Set this explicitly when renaming a source to preserve users' libraries.                  |
+| `versionId`  | Integer used as a seed for auto-computing `id`. Defaults to `1`. Only bump this if the source's URL structure fundamentally changes and old entries can no longer be redirected.   |
+| `skipCodeGen`| If `true`, skips property injection and generates only a passthrough subclass. Use only for sources that must declare all properties manually for structural reasons.               |
+
+#### baseUrl modes
+
+The `baseUrl` field inside `source {}` supports three modes:
+
+**Static** (single URL, no preferences UI):
+```kotlin
+source {
+    lang = "en"
+    baseUrl = "https://example.com"
+}
+```
+
+**Mirrors** (user picks a mirror from a list — preference UI is generated automatically):
+```kotlin
+source {
+    lang = "en"
+    baseUrl("https://example.com") {
+        mirrors.add("https://mirror1.com")
+        mirrors.add("https://mirror2.com")
+    }
+}
+```
+
+The extension automatically implements `ConfigurableSource` and adds a "Preferred mirror" `ListPreference` to the settings screen. You do not need to write any `SharedPreferences` code or add `setupPreferenceScreen`. If your class already implements `ConfigurableSource`, `super.setupPreferenceScreen(screen)` is called so your own preferences are preserved.
+
+**Custom URL** (user can enter any URL — preference UI with validation is generated automatically):
+```kotlin
+source {
+    lang = "en"
+    baseUrl("https://example.com") {
+        withCustom.set(true)
+    }
+}
+```
+
+Like `mirrors`, the extension automatically implements `ConfigurableSource` and adds a validated "Custom base URL" `EditTextPreference`. The default URL is restored automatically if the hardcoded default changes in a future update.
+
+> [!IMPORTANT]
+> When using `mirrors` or `withCustom`, **do not** implement mirror/URL selection manually in your class using `SharedPreferences` or a `ListPreference` — the generated code handles it. Doing both will create duplicate preferences.
+
+#### Multiple sources from one class
+
+To expose multiple sources (previously done with `SourceFactory`), add multiple `source {}` blocks. Each block generates an anonymous inner class that subclasses your `@Source` class:
+
+```kotlin
+keiyoushi {
+    name = "Example"
+    versionCode = 1
+    contentWarning = ContentWarning.SAFE
+    libVersion = "1.4"
+
+    source {
+        name = "Example EN"
+        lang = "en"
+        baseUrl = "https://en.example.com"
+    }
+
+    source {
+        name = "Example JP"
+        lang = "ja"
+        baseUrl = "https://jp.example.com"
+    }
+}
+```
+
+The generated `ExtensionGenerated` class implements `SourceFactory` automatically. You do not need to implement `SourceFactory` yourself.
+
+#### Legacy approach (className)
+
+If you are not using `source {}` blocks, you must still set `className` and declare `name`, `lang`, `id`, and `baseUrl` manually in your Kotlin class, as described under [Extension main class](#extension-main-class). Both approaches are supported, but the `source {}` approach is preferred for new extensions.
 
 ### Core dependencies
 
@@ -327,7 +445,14 @@ use case. Each lib is self-documented via KDoc comments and/or a README in its o
 | [`lib-cookieinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cookieinterceptor) | Injects cookies into OkHttp requests for a given domain                                 |
 | [`lib-cryptoaes`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cryptoaes)                 | AES-CBC decryption compatible with CryptoJS; JSFuck deobfuscation                       |
 | [`lib-dataimage`](https://github.com/keiyoushi/extensions-source/tree/main/lib/dataimage)                 | Decodes base64 `data:image` strings into mock URLs that OkHttp can handle               |
+| [`lib-e4p`](https://github.com/keiyoushi/extensions-source/tree/main/lib/e4p)                             | Decodes and decrypts E4P-format manga page archives (TIFF/XEBP)                         |
+| [`lib-i18n`](https://github.com/keiyoushi/extensions-source/tree/main/lib/i18n)                           | Internationalization helper (`Intl`) for multi-language UI strings in extensions        |
+| [`lib-lzstring`](https://github.com/keiyoushi/extensions-source/tree/main/lib/lzstring)                   | LZ-String decompression and compression                                                 |
+| [`lib-publus`](https://github.com/keiyoushi/extensions-source/tree/main/lib/publus)                       | Handles Publus DRM-protected reader decryption, unscrambling, and page loading          |
 | [`lib-randomua`](https://github.com/keiyoushi/extensions-source/tree/main/lib/randomua)                   | Fetches and rotates real-world User-Agent strings (requires overriding `getMangaUrl()`) |
+| [`lib-secretstream`](https://github.com/keiyoushi/extensions-source/tree/main/lib/secretstream)           | ChaCha20/Poly1305/X25519 cryptography for secret-stream encrypted sources               |
+| [`lib-seedrandom`](https://github.com/keiyoushi/extensions-source/tree/main/lib/seedrandom)               | Seeded deterministic pseudo-random number generation (ARC4-based)                       |
+| [`lib-speedbinb`](https://github.com/keiyoushi/extensions-source/tree/main/lib/speedbinb)                 | Processes, decrypts, and descrambles SpeedBinb reader payloads                          |
 | [`lib-synchrony`](https://github.com/keiyoushi/extensions-source/tree/main/lib/synchrony)                 | JavaScript deobfuscation via the Synchrony engine (QuickJS sandbox)                     |
 | [`lib-textinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/textinterceptor)     | Renders plain text or HTML as a PNG image page                                          |
 | [`lib-unpacker`](https://github.com/keiyoushi/extensions-source/tree/main/lib/unpacker)                   | Unpacks Dean Edwards-packed JavaScript; substring extraction helpers                    |
@@ -622,6 +747,96 @@ val request = graphQLPost(
 val data = response.parseGraphQLAs<MyResponseDto>()
 ```
 
+##### GraphQL GET requests - `graphQLGet`
+
+For sources that send GraphQL over HTTP GET instead of POST, use `graphQLGet` with the same signature as `graphQLPost`:
+
+```kotlin
+import keiyoushi.utils.graphQLGet
+
+val request = graphQLGet(
+    url = "$baseUrl/graphql",
+    headers = headers,
+    query = $$"""query SearchManga($page: Int!) { ... }""",
+    variables = variables
+)
+```
+
+For sources that use [Automatic Persisted Queries (APQ)](https://www.apollographql.com/docs/kotlin/advanced/persisted-queries/), pass the result of `persistedQueryExtension(sha256Hash)` as the `extensions` parameter and omit `query`. This works for both `graphQLPost` and `graphQLGet`.
+
+```kotlin
+import keiyoushi.utils.persistedQueryExtension
+
+val request = graphQLPost(
+    url = "$baseUrl/graphql",
+    headers = headers,
+    operationName = "SearchManga",
+    variables = variables,
+    extensions = persistedQueryExtension("abc123sha256...")
+)
+```
+
+To automatically throw `GraphQLException` for every request on a client rather than parsing per-response, add `GraphQLErrorInterceptor` to the `OkHttpClient`:
+
+```kotlin
+import keiyoushi.utils.GraphQLErrorInterceptor
+
+override val client = network.client.newBuilder()
+    .addInterceptor(GraphQLErrorInterceptor())
+    .build()
+```
+
+##### JsonElement accessor helpers
+
+`keiyoushi.utils` provides concise read-only accessors for traversing raw `JsonElement` trees. Import individually as needed:
+
+```kotlin
+import keiyoushi.utils.array
+import keiyoushi.utils.boolean
+import keiyoushi.utils.get
+import keiyoushi.utils.int
+import keiyoushi.utils.long
+import keiyoushi.utils.obj
+import keiyoushi.utils.string
+
+val root: JsonElement = response.parseAs()
+val title = root["data"]["title"].string
+val count = root["data"]["count"].int
+val items = root["data"]["items"].array
+val nested = root["data"]["meta"].obj
+```
+
+`element[key]` returns `JsonElement?` (null-safe). The terminal accessors (`.string`, `.int`, `.long`, `.boolean`) throw if the element is null. `JsonObject` also has `getStringOrNull`, `getIntOrNull`, `getLongOrNull`, and `getBooleanOrNull` variants for optional fields.
+
+Prefer these over writing `element.jsonObject["key"]?.jsonPrimitive?.content` manually.
+
+##### ZIP streaming - `readZipDirectory` / `readZipEntry`
+
+For sources that serve manga pages as remote ZIP archives, the `keiyoushi.zip` package lets you read the central directory and individual entries using HTTP Range requests — no need to download the entire file. Import from `keiyoushi.zip`:
+
+```kotlin
+import keiyoushi.zip.readZipDirectory
+import keiyoushi.zip.readZipEntry
+import keiyoushi.zip.range
+
+// 1. Fetch the ZIP central directory (two Range requests at most).
+val directory = readZipDirectory(totalFileSizeInBytes) { byteRange ->
+    client.newCall(
+        GET(zipUrl, headers.newBuilder().range(byteRange).build())
+    ).execute().body.source().buffer()
+}
+
+// 2. Find an entry by name and read its decompressed bytes.
+val entry = directory.entries.first { it.name == "001.jpg" }
+val imageBytes = readZipEntry(entry) { byteRange ->
+    client.newCall(
+        GET(zipUrl, headers.newBuilder().range(byteRange).build())
+    ).execute().body.source().buffer()
+}.buffer().readByteArray()
+```
+
+`readZipDirectory` resolves every entry's offset to an absolute file position and handles ZIP64 archives. `readZipEntry` fetches only the bytes for that one entry. Use this instead of downloading the full ZIP into a `ZipInputStream`, which forces the entire archive into memory.
+
 #### Additional dependencies
 
 If you find yourself needing additional functionality, you can add more dependencies to your `build.gradle`
@@ -642,8 +857,11 @@ the main app has at the expense of app size.
 
 ### Extension main class
 
-The class which is referenced and defined by `extClass` in `build.gradle`. This class should implement
+The class which is referenced and defined by `className` in `build.gradle.kts`. This class should implement
 either `SourceFactory` or `HttpSource`.
+
+> [!NOTE]
+> If you use `source {}` blocks in `build.gradle.kts` (see [Source declaration](#source-declaration)), you do not need to set `className` — it is set to `ExtensionGenerated` automatically.
 
 | Class              | Description                                                                                                                      |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
@@ -876,6 +1094,9 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
 
 #### Configurable Sources and Preferences
 
+> [!TIP]
+> If you are using `source {}` blocks in `build.gradle.kts`, mirror and custom-URL preferences are generated automatically — see [baseUrl modes](#baseurl-modes). The notes below apply only to the legacy `className` approach where you implement preferences manually.
+
 - **Mirror selection preferences:** When implementing a mirror selector, save the _index_ of the mirror instead of the URL string. This allows code updates to change the list of mirrors, and users will automatically reflect those changes.
 - **Base URL getter:** When `baseUrl` is configurable via preferences, use a custom getter (e.g., `override val baseUrl: String get() = ...`) instead of `by lazy`. Using `by lazy` requires the user to restart the app for the domain change to take effect.
 - **Preference migration for base URLs:** To handle default URL changes in updates, use the `getPreferences` inline migration block to update the stored preference if the hardcoded default URL changes.
@@ -979,11 +1200,23 @@ these changes in the extension, you need to explicitly set the `id` to the same 
 it will get changed by the new `name` value and users will be forced to migrate back to the source.
 
 To get the current `id` value before the name change, you can search the source name in the [repository JSON file](https://github.com/keiyoushi/extensions/blob/repo/index.json)
-by looking at the `sources` attribute of the extension. When you have the `id` copied, you can
-override it in the source:
+by looking at the `sources` attribute of the extension.
+
+**If you are using `source {}` blocks**, set `id` directly in the block:
 
 ```kotlin
-override val id: Long = <the-id>
+source {
+    name = "New Name"  // or lang = "xx" if lang is what changed
+    lang = "en"
+    baseUrl = "https://example.com"
+    id = <the-old-id>L
+}
+```
+
+**If you are using the legacy `className` approach**, override `id` in the source class:
+
+```kotlin
+override val id: Long = <the-old-id>
 ```
 
 Then the class name and the `name` attribute value can be changed. Also don't forget to update the
