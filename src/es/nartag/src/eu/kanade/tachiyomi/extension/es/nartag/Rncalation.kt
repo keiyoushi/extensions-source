@@ -94,7 +94,7 @@ class Rncalation : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst(".hero-title")?.text() ?: ""
+            title = document.selectFirst(".hero-title")?.text()!!
             thumbnail_url = document.selectFirst(".comic-sidebar-cover img")?.attr("abs:src")
             description = document.selectFirst(".hero-description")?.text() ?: ""
 

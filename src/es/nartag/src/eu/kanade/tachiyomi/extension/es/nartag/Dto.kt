@@ -18,22 +18,12 @@ class ChapterList(
 class Chapter(
     val number: Float,
     val label: String,
-    val access: String,
-    val coinCost: Int,
-    val earlyLevels: List<String> = emptyList(),
     val relDate: String,
 ) {
     fun toSChapter(slug: String): SChapter = SChapter.create().apply {
         url = "/comics/$slug/cap/$number"
         name = label
         date_upload = parseDate(relDate) ?: 0L
-        scanlator = when (access) {
-            "readable" -> null
-            "scheduled" -> "Neuvo"
-            "early" -> "Sub"
-            "combo", "coin" -> "$coinCost 🪙"
-            else -> if (earlyLevels.isNotEmpty()) "Sub" else "$coinCost 🪙"
-        }
     }
 }
 
