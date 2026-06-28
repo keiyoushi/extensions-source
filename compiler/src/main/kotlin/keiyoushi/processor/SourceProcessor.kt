@@ -47,6 +47,9 @@ private val preferenceScreen = ClassName("androidx.preference", "PreferenceScree
 private val mirrorPrefsClass = ClassName("keiyoushi.source", "MirrorPreferences")
 private val customUrlPrefsClass = ClassName("keiyoushi.source", "CustomUrlPreferences")
 private val getPreferencesFn = MemberName("keiyoushi.utils", "getPreferences")
+private val httpSourceClass = ClassName("eu.kanade.tachiyomi.source.online", "HttpSource")
+private val headersClass = ClassName("okhttp3", "Headers")
+private val lazyClass = ClassName("kotlin", "Lazy").parameterizedBy(headersClass)
 
 class SourceProcessor(
     private val codeGenerator: CodeGenerator,
@@ -116,6 +119,7 @@ class SourceProcessor(
         TypeSpec.classBuilder("ExtensionGenerated")
             .addModifiers(KModifier.INTERNAL)
             .superclass(annotatedClass)
+            .addHeadersDelegateReset()
             .build()
 
     private fun buildSingleSourceClass(
@@ -234,6 +238,37 @@ class SourceProcessor(
                 if (!isConfigurable) addSuperinterface(configurable)
             }
         }
+        addHeadersDelegateReset()
+    }
+
+    private fun TypeSpec.Builder.addHeadersDelegateReset(): TypeSpec.Builder = apply {
+        val lazyImpl = TypeSpec.anonymousClassBuilder()
+            .addSuperinterface(lazyClass)
+            .addProperty(
+                PropertySpec.builder("value", headersClass, KModifier.OVERRIDE)
+                    .getter(FunSpec.getterBuilder().addStatement("return headersBuilder().build()").build())
+                    .build(),
+            )
+            .addFunction(
+                FunSpec.builder("isInitialized")
+                    .addModifiers(KModifier.OVERRIDE)
+                    .returns(Boolean::class)
+                    .addStatement("return true")
+                    .build(),
+            )
+            .build()
+
+        addInitializerBlock(
+            CodeBlock.builder()
+                .addStatement(
+                    "val f = %T::class.java.getDeclaredField(%S)",
+                    httpSourceClass,
+                    "headers\$delegate",
+                )
+                .addStatement("f.isAccessible = true")
+                .addStatement("f.set(this, %L)", lazyImpl)
+                .build(),
+        )
     }
 
     private fun TypeSpec.Builder.addPreferenceScreen(
