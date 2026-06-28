@@ -66,7 +66,7 @@ class PluginExtension : Plugin<Project> {
             }
 
             lint {
-                checkReleaseBuilds = false
+                checkReleaseBuilds = true
             }
 
             signingConfigs {
@@ -88,12 +88,12 @@ class PluginExtension : Plugin<Project> {
                     isMinifyEnabled = true
                     proguardFiles(rootProject.file("common/proguard-rules.pro"))
                     @Suppress("UnstableApiUsage")
-                    vcsInfo.include = false
+                    vcsInfo.include = true
                 }
             }
 
             dependenciesInfo {
-                includeInApk = false
+                includeInApk = true
             }
 
             buildFeatures {
