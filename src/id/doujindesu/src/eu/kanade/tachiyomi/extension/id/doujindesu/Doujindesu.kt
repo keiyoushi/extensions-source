@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
@@ -27,22 +28,20 @@ class Doujindesu :
     ConfigurableSource {
 
     override val id = 7704282043609669342L
-
     override val name = "Doujindesu"
-
-    private val defaultBaseUrl = "https://doujin.desu.xxx"
-
-    override val baseUrl by lazy { getDefaultBaseUrl() }
-
-    private val apiUrl: String
-        get() = "$baseUrl/api"
-
     override val lang = "id"
     override val supportsLatest = true
 
-    private val preferences by getPreferencesLazy()
+    private val defaultBaseUrl = "https://doujin.desu.xxx"
+    override val baseUrl: String get() = getDefaultBaseUrl()
+    private val apiUrl: String get() = "$baseUrl/api"
 
+    private val preferences by getPreferencesLazy()
     val decryptor = Decryptor(apiUrl)
+
+    private val slugCache = object : LinkedHashMap<String, String>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 30
+    }
 
     override val client = super.client.newBuilder()
         .addInterceptor(decryptor.xorInterceptor())
@@ -63,6 +62,14 @@ class Doujindesu :
         .add("x-app-secret", APP_SECRET)
         .add("Referer", "$baseUrl/")
 
+    override fun popularMangaRequest(page: Int): Request = searchRequest(page, "rating")
+
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+
+    override fun latestUpdatesRequest(page: Int): Request = searchRequest(page)
+
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
+
     private fun searchRequest(page: Int, sort: String = "latest_chapter"): Request {
         val offset = (page - 1) * LIMIT
         val url = "$apiUrl/manga".toHttpUrl().newBuilder()
@@ -74,21 +81,11 @@ class Doujindesu :
         return GET(url, headers)
     }
 
-    override fun popularMangaRequest(page: Int): Request = searchRequest(page, "rating")
-    override fun latestUpdatesRequest(page: Int): Request = searchRequest(page)
-
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
-
-    private val slugCache = object : LinkedHashMap<String, String>() {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 30
-    }
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         // priority when query exists: usual filter > type filter, otherwise opposite
         val hasQuery = query.isNotBlank()
-        val agsFilter = filters.filterIsInstance<AuthorGroupSeriesFilter>().firstOrNull()
-        val agsValueFilter = filters.filterIsInstance<AuthorGroupSeriesValueFilter>().firstOrNull()
+        val agsFilter = filters.firstInstanceOrNull<AuthorGroupSeriesFilter>()
+        val agsValueFilter = filters.firstInstanceOrNull<AuthorGroupSeriesValueFilter>()
         val agsValue = agsValueFilter?.state?.trim()
 
         if (!hasQuery && agsFilter != null && agsFilter.state in agsFilter.values.indices) {
@@ -174,6 +171,36 @@ class Doujindesu :
         return MangasPage(mangas.map { it.toSManga() }, hasNextPage)
     }
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.getSlug()}"
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val slug = manga.getSlug()
+        return GET("$apiUrl/manga/$slug", headers)
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaItem>().toSManga()
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader/${chapter.url}"
+
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val mangaItem = response.parseAs<MangaItem>()
+        val chapters = mangaItem.chapters
+
+        return chapters.mapIndexed { index, chapter ->
+            chapter.toSChapter(isLast = mangaItem.isCompleted() && index == 0)
+        }
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/chapters/${chapter.url}", headers)
+
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageList>().pages.mapIndexed { i, imgUrl ->
+        Page(i, imageUrl = Parser.unescapeEntities(imgUrl, false))
+    }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
     override fun getFilterList() = FilterList(
         Filter.Header("Filter Tipe Diabaikan Saat Menggunakan Pencarian"),
         AuthorGroupSeriesFilter(authorGroupSeriesOptions),
@@ -185,42 +212,9 @@ class Doujindesu :
         GenreList(getGenreList()),
     )
 
-    // Detail Parse
-    override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.getSlug()}"
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.getSlug()
-        return GET("$apiUrl/manga/$slug", headers)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaItem>().toSManga()
-
-    // Chapter Stuff
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader/${chapter.url}"
-
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<MangaItem>().chapters.map { it.toSChapter() }
-
-    // More parser stuff
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        val id = chapter.url.split("/").last { it.isNotBlank() }
-        return GET("$apiUrl/chapters/$id", headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageList>().pages.mapIndexed { i, imgUrl ->
-        Page(i, imageUrl = Parser.unescapeEntities(imgUrl, false))
-    }
-
     fun SManga.getSlug(): String {
-        val path = if (url.startsWith("http")) {
-            url.toHttpUrl().encodedPath
-        } else {
-            url
-        }
-        return path.split("/").last { it.isNotBlank() }
+        val fullUrl = if (url.startsWith("http")) url else "$baseUrl/${url.removePrefix("/")}"
+        return fullUrl.toHttpUrl().pathSegments.last { it.isNotBlank() }
     }
 
     companion object {
@@ -235,6 +229,20 @@ class Doujindesu :
         private const val PREF_BASE_URL_SUMMARY = "Mengganti domain default dengan domain yang berbeda"
         private const val RESTART_MSG = "Mulai ulang aplikasi untuk menerapkan pengaturan baru"
     }
+
+    init {
+        preferences.getString(PREF_BASE_URL, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != defaultBaseUrl) {
+                preferences
+                    .edit()
+                    .putString(PREF_CUSTOM_BASE_URL, defaultBaseUrl)
+                    .putString(PREF_BASE_URL, defaultBaseUrl)
+                    .apply()
+            }
+        }
+    }
+
+    private fun getDefaultBaseUrl(): String = preferences.getString(PREF_CUSTOM_BASE_URL, defaultBaseUrl)!!
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val baseUrlPref =
@@ -252,19 +260,5 @@ class Doujindesu :
                 }
             }
         screen.addPreference(baseUrlPref)
-    }
-
-    private fun getDefaultBaseUrl(): String = preferences.getString(PREF_CUSTOM_BASE_URL, defaultBaseUrl)!!
-
-    init {
-        preferences.getString(PREF_BASE_URL, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != defaultBaseUrl) {
-                preferences
-                    .edit()
-                    .putString(PREF_CUSTOM_BASE_URL, defaultBaseUrl)
-                    .putString(PREF_BASE_URL, defaultBaseUrl)
-                    .apply()
-            }
-        }
     }
 }
