@@ -164,7 +164,7 @@ class Manga(
         private val listRegex = Regex("\n\n(-|•|\\d+\\.)")
     }
 
-    fun toSManga(baseUrl: String) = SManga.create().apply {
+    fun toSManga(baseUrl: String, showTags: Boolean = true) = SManga.create().apply {
         url = id.toString()
         title = this@Manga.title
         thumbnail_url = photo?.let {
@@ -189,10 +189,12 @@ class Manga(
                 "CN" -> add("Manhua")
             }
             this@Manga.genres.forEach { add(it.trim()) }
-            this@Manga.tags.flatMap { it.tags }
-                .map { it.name.trim() }
-                .sortedBy { it.lowercase() }
-                .forEach { add(it) }
+            if (showTags) {
+                this@Manga.tags.flatMap { it.tags }
+                    .map { it.name.trim() }
+                    .sortedBy { it.lowercase() }
+                    .forEach { add(it) }
+            }
         }.joinToString()
         status = when {
             "One Shot" in this@Manga.genres -> SManga.COMPLETED

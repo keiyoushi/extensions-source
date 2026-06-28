@@ -394,7 +394,7 @@ class Mangadotnet :
 
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.decodeRscAs<Data<MangaData>>().data
-        return data.mangaData.manga.toSManga(baseUrl)
+        return data.mangaData.manga.toSManga(baseUrl, showTagsPref())
     }
 
     override val disableRelatedMangasBySearch = true
@@ -624,6 +624,8 @@ class Mangadotnet :
     private fun browseStatusPref(): String? = preferences.getString(BROWSE_STATUS_PREF, "")
         ?.takeIf { it != "" }
 
+    private fun showTagsPref() = preferences.getBoolean(SHOW_TAGS_PREF, true)
+
     // =========================== Genre Cache =============================
     private val genreCacheNormalFile: File by lazy {
         applicationContext.cacheDir.resolve("source_$id/genres_normal.json")
@@ -770,6 +772,14 @@ class Mangadotnet :
         }
         screen.addPreference(browseStatusPref)
 
+        val showTagsPref = SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_TAGS_PREF
+            title = "Show tags in details"
+            summary = "Show tags after genres in the manga details view."
+            setDefaultValue(true)
+        }
+        screen.addPreference(showTagsPref)
+
         val chapterModePref = ListPreference(screen.context).apply {
             key = CHAPTER_MODE
             title = "Chapter List Mode"
@@ -896,3 +906,4 @@ private const val BROWSE_STATUS_PREF = "pref_browse_status"
 private const val DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
 private const val PREFERRED_SCANLATORS = "pref_preferred_scanlators"
 private const val EXCLUDE_DEMOGRAPHIC_PREF = "pref_exclude_demographic"
+private const val SHOW_TAGS_PREF = "pref_show_tags"
