@@ -3,9 +3,9 @@ plugins {
 }
 
 keiyoushi {
-    name = "DoujinDesu"
-    className = "DoujinDesu"
-    versionCode = 15
+    name = "Doujindesu"
+    className = "Doujindesu"
+    versionCode = 17
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 }

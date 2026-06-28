@@ -13,7 +13,7 @@ abstract class GenerateKeepRulesTask : DefaultTask() {
     abstract val applicationId: Property<String>
 
     @get:Input
-    abstract val extClass: Property<String>
+    abstract val className: Property<String>
 
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
@@ -22,7 +22,7 @@ abstract class GenerateKeepRulesTask : DefaultTask() {
     fun action() {
         outputDir.get().file("extClass.keep").asFile.apply {
             parentFile.mkdirs()
-            writeText("-keep class ${applicationId.get()}${extClass.get()} { <init>(); }\n")
+            writeText("-keep class ${applicationId.get()}.${className.get()} { <init>(); }\n")
         }
     }
 }

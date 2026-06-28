@@ -516,6 +516,6 @@ class Readcomiconline :
         private val MIRROR_NAMES = arrayOf("readcomiconline.li", "rcostation.xyz")
         private val MIRROR_URLS = arrayOf("https://readcomiconline.li", "https://rcostation.xyz")
         private const val IMAGE_REMOTE_CONFIG_DEFAULT =
-            "https://raw.githubusercontent.com/keiyoushi/extensions-source/refs/heads/main/src/en/readcomiconline/config.json"
+            "https://raw.githubusercontent.com/keiyoushi/rco-script/refs/heads/main/decrypt.json"
     }
 }

@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.pt.littletyrant
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -11,12 +10,18 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
+import okhttp3.Headers
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
@@ -30,10 +35,14 @@ class LittleTyrant :
     ) {
 
     override val client: OkHttpClient = network.client.newBuilder()
+        .addNetworkInterceptor(ImageDecoderInterceptor())
         .rateLimit(3, 1.seconds)
         .build()
 
-    private val decoder by lazy { Decoder() }
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .set("Sec-Fetch-Mode", "cors")
+        .set("Sec-Fetch-Dest", "empty")
+        .set("Sec-Fetch-Site", "same-origin")
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
@@ -96,18 +105,37 @@ class LittleTyrant :
 
     // =============================== Pages =================================
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
-        .asObservableSuccess()
-        .map { response ->
-            val doc = response.asJsoup()
-            launchIO { countViews(doc) }
+    private fun pageTokenRequest(pageBaseUrl1: HttpUrl): Request {
+        val pageHeaders = headers.newBuilder()
+            .set("X-Reader-Sec", "tiraninha-web")
+            .build()
+        return GET("$pageBaseUrl1/gatekeeper.php?t=${System.currentTimeMillis()}", pageHeaders)
+    }
 
-            decoder.extractPaths(doc).mapIndexed { idx, url ->
-                Page(idx, imageUrl = url)
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val script = document.selectFirst("script:containsData(_proxyUrls)")?.data()
+            ?: return emptyList()
+
+        val pages = PAGES_REGEX.find(script)?.groupValues?.last() ?: return emptyList()
+        val tokenBaseUrl = BASE_URL_PAGE_REGEX.find(script)?.groupValues?.last()?.toHttpUrlOrNull() ?: return emptyList()
+
+        val token = client
+            .newCall(pageTokenRequest(tokenBaseUrl))
+            .execute()
+            .body.string()
+
+        return pages
+            .parseAs<List<String>>()
+            .mapIndexed { index, pathSegment ->
+                val decodePath = URLDecoder.decode(pathSegment, StandardCharsets.UTF_8.name())
+                val imageUrl = "$baseUrl$decodePath".toHttpUrl().newBuilder()
+                    .addQueryParameter("t_force", System.currentTimeMillis().toString())
+                    .fragment(token)
+                    .build().toString()
+                Page(index, imageUrl = imageUrl)
             }
-        }
-
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+    }
 
     // =============================== Images =================================
 
@@ -115,6 +143,7 @@ class LittleTyrant :
         val imageHeaders = headers.newBuilder()
             .set("Accept", "image/webp,image/*,*/*")
             .set("Referer", "$baseUrl/")
+            .set("X-Reader-Sec", "tiraninha-web")
             .build()
         return GET(page.imageUrl!!, imageHeaders)
     }
@@ -122,5 +151,7 @@ class LittleTyrant :
     companion object {
         private val CHAPTER_NUMBER_REGEX = """\d+(?:\.\d+)?""".toRegex()
         private val COMMA_REGEX = """,\s*""".toRegex()
+        private val PAGES_REGEX = """_proxyUrls\s+=\s+(\[[^]]+])""".toRegex(RegexOption.IGNORE_CASE)
+        private val BASE_URL_PAGE_REGEX = """_themePath\s+=\s+"([^"]+)""".toRegex(RegexOption.IGNORE_CASE)
     }
 }

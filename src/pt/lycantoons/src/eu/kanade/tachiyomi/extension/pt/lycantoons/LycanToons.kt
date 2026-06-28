@@ -28,12 +28,12 @@ class LycanToons : HttpSource() {
 
     override val client = network.client.newBuilder()
         .addInterceptor(WebViewInterceptor(baseUrl, headers["User-Agent"]))
-        .rateLimit(5)
+        .rateLimit(2)
         .build()
 
     private val rscHeaders by lazy {
         headers.newBuilder()
-            .add("next-router-state-tree", "%5B%22%22%2C%7B%7D%5D")
+            .add("next-router-state-tree", "%5B%22%22%2C%7B%22children%22%3A%5B%22__PAGE__%22%2C%7B%7D%2Cnull%2Cnull%5D%7D%2Cnull%2Cnull%2Ctrue%5D")
             .add("next-url", "/")
             .add("RSC", "1")
             .build()
@@ -94,30 +94,15 @@ class LycanToons : HttpSource() {
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
         val slug = manga.slug()
-        val chapters = mutableListOf<ChapterDto>()
-        var skip = 0
-        var hasNext = true
 
-        while (hasNext) {
-            val batch = client.newCall(chapterPageRequest(slug, skip)).execute()
-                .parseAs<ChapterResponse>()
-                .chapters
+        val response = client.newCall(chapterPageRequest(slug)).execute()
 
-            chapters.addAll(batch)
-
-            if (batch.size < CHAPTER_LIMIT) {
-                hasNext = false
-            } else {
-                skip += CHAPTER_LIMIT
-            }
-        }
-
-        chapters
+        response.extractNextJs<ChapterResponse>()?.capitulos!!
             .map { it.toSChapter(slug) }
             .sortedByDescending { it.chapter_number }
     }
 
-    private fun chapterPageRequest(slug: String, skip: Int): Request = GET("$baseUrl/api/series/$slug/chapters?skip=$skip", headers)
+    private fun chapterPageRequest(slug: String): Request = GET("$baseUrl/series/$slug/1", rscHeaders)
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 

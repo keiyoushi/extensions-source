@@ -19,6 +19,7 @@ import kotlinx.serialization.json.put
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
@@ -45,43 +46,18 @@ class KuroMangas :
 
     private val cdnUrl = "https://cdn.kuromangas.com"
 
-    private var kuroXsrfToken: String? = null
-
-    private var isAuthorized: Boolean? = null
-
     private val decryptor = KuroMangasDecryptor(baseUrl, network.client)
 
     override val client by lazy {
-        val cdnHost = cdnUrl.toHttpUrl().host
 
         network.client.newBuilder()
             .apply {
+                addInterceptor { chain ->
+                    checkLogin() ?: throw IOException(LOGIN_REQUIRED_MESSAGE)
+                    return@addInterceptor chain.proceed(chain.request())
+                }
 
                 addInterceptor(decryptor.vSecureInterceptor())
-
-                addInterceptor { chain ->
-                    isAuthorized ?: checkLogin()?.also { isAuthorized = it }
-                        ?: throw IOException(LOGIN_REQUIRED_MESSAGE)
-
-                    val request = chain.request()
-                    if (request.url.host == cdnHost) {
-                        return@addInterceptor chain.proceed(request)
-                    }
-                    val newRequest = request.newBuilder().apply {
-                        val xsrfToken = kuroXsrfToken
-                            ?: getCookie("kuro_csrf").also { kuroXsrfToken = it }
-                        if (xsrfToken != null) header("X-Csrf-Token", xsrfToken)
-                    }.build()
-
-                    val resp = chain.proceed(newRequest)
-                    if (resp.code == 401 || resp.code == 403) {
-                        isAuthorized = null
-                        kuroXsrfToken = null
-                        resp.close()
-                        throw IOException("Cookies expired, open webview and retry.")
-                    }
-                    resp
-                }
             }
             .rateLimit(2)
             .build()
@@ -233,13 +209,8 @@ class KuroMangas :
 
     // ============================= Auth ===================================
 
-    private fun getCookie(cookie: String): String? {
-        val cookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
-        return cookies.firstOrNull { it.name == cookie }?.value?.takeUnless { it.isEmpty() }
-    }
-
     private fun checkLogin(): Boolean? {
-        getCookie("kuro_session")?.also { return true }
+        client.getCookie(baseUrl, "kuro_session")?.also { return true }
 
         val email = preferences.getString(PREF_EMAIL, "") ?: ""
         val password = preferences.getString(PREF_PASSWORD, "") ?: ""
@@ -248,7 +219,7 @@ class KuroMangas :
         }
         login(email, password)
 
-        return getCookie("kuro_session").let { true }
+        return client.getCookie(baseUrl, "kuro_session").let { true }
     }
 
     // Implicit set-cookie: kuro_session + kuro_csrf
@@ -302,3 +273,7 @@ class KuroMangas :
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 }
+
+fun OkHttpClient.getCookies(baseUrl: String) = cookieJar.loadForRequest(baseUrl.toHttpUrl())
+
+fun OkHttpClient.getCookie(baseUrl: String, cookie: String): String? = getCookies(baseUrl).firstOrNull { it.name == cookie }?.value?.takeUnless { it.isEmpty() }

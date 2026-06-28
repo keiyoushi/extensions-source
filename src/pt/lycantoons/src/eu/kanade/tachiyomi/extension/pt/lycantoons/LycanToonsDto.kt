@@ -69,7 +69,7 @@ class SearchResponse(
 
 @Serializable
 class ChapterResponse(
-    val chapters: List<ChapterDto>,
+    val capitulos: List<ChapterDto>,
 )
 
 @Serializable

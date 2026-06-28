@@ -39,12 +39,12 @@ class Decryptor(val apiUrl: String) {
             a = toSigned32(a.toLong())
         }
         var l = if (a != 0) abs(a).toLong() else 123456789L
-        val out = StringBuilder()
-        repeat(32) {
-            l = (l * 1664525L + 1013904223L) % 4294967296L
-            out.append((33 + (l % 93)).toInt().toChar())
+        return buildString {
+            repeat(32) {
+                l = (l * 1664525L + 1013904223L) % 4294967296L
+                append((33 + (l % 93)).toInt().toChar())
+            }
         }
-        return out.toString()
     }
 
     fun lU(): List<String> {
@@ -55,16 +55,16 @@ class Decryptor(val apiUrl: String) {
 
     fun yre(encryptedHex: String, key: String): String {
         val bytes = encryptedHex.chunked(2).mapNotNull { it.toIntOrNull(16) }
-        val result = StringBuilder()
         var d = 42
         val keyLen = key.length
-        for ((idx, byteVal) in bytes.withIndex()) {
-            val keyChar = key[idx % keyLen].code
-            val k = byteVal xor keyChar xor (idx * 13) xor d
-            result.append((k and 0xFF).toChar())
-            d = (d + byteVal) % 256
+        return buildString {
+            for ((idx, byteVal) in bytes.withIndex()) {
+                val keyChar = key[idx % keyLen].code
+                val k = byteVal xor keyChar xor (idx * 13) xor d
+                append((k and 0xFF).toChar())
+                d = (d + byteVal) % 256
+            }
         }
-        return result.toString()
     }
 
     fun decrypt(encryptedHex: String): String? {

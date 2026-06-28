@@ -36,7 +36,6 @@ val orderBy = arrayOf(
     Order("Terlama", "oldest"),
     Order("Populer", "rating"),
     Order("A-Z", "title_asc"),
-
 )
 
 val statusList = arrayOf(

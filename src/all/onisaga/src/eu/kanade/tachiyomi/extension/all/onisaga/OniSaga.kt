@@ -205,7 +205,7 @@ class OniSaga(
         val showNsfw = preferences.getBoolean(PREF_NSFW_KEY, false)
 
         doc.select("div.relative.group").forEach { card ->
-            val nsfwSpan = card.selectFirst("span:containsOwn(18+ NSFW)")
+            val nsfwSpan = card.selectFirst("span:containsOwn(18+)")
             if (nsfwSpan != null && !showNsfw) return@forEach
             nsfwSpan?.closest("div.absolute.inset-0.z-20")?.remove()
 
@@ -326,7 +326,7 @@ class OniSaga(
     override fun mangaDetailsParse(response: Response): SManga {
         val doc = response.asJsoup()
 
-        val nsfwSpan = doc.selectFirst("span:containsOwn(18+ NSFW)")
+        val nsfwSpan = doc.selectFirst("span:containsOwn(18+)")
         nsfwSpan?.closest("div.absolute.inset-0.z-20")?.remove()
 
         val badgeRow = doc.selectFirst("div.flex.items-center.gap-2.justify-center.mb-2")
@@ -467,7 +467,7 @@ class OniSaga(
             val link = if (element.tagName() == "a") element else element.selectFirst("a[href*='/manga/']")
             if (link == null) return@mapNotNull null
 
-            val nsfwSpan = element.selectFirst("span:containsOwn(18+ NSFW)")
+            val nsfwSpan = element.selectFirst("span:containsOwn(18+)")
             if (nsfwSpan != null && !showNsfw) return@mapNotNull null
             nsfwSpan?.closest("div.absolute.inset-0.z-20")?.remove()
 
@@ -496,7 +496,7 @@ class OniSaga(
         return Observable.fromCallable {
             val doc = client.newCall(mangaDetailsRequest(manga)).execute().use { it.asJsoup() }
 
-            val nsfwSpan = doc.selectFirst("span:containsOwn(18+ NSFW)")
+            val nsfwSpan = doc.selectFirst("span:containsOwn(18+)")
             nsfwSpan?.closest("div.absolute.inset-0.z-20")?.remove()
 
             val state = doc.extractLivewireState("manga.chapter-list")
