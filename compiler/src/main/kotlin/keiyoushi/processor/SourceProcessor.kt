@@ -6,6 +6,8 @@ import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
+import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
+import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.squareup.kotlinpoet.ClassName
@@ -246,5 +248,10 @@ class SourceProcessor(
                 .apply { if (callSuper) addStatement("super.setupPreferenceScreen(screen)") }
                 .build(),
         )
+    }
+
+    class Provider : SymbolProcessorProvider {
+        override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor =
+            SourceProcessor(environment.codeGenerator, environment.options, environment.logger)
     }
 }
