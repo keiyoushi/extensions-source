@@ -31,3 +31,11 @@ fun DependencyHandlerScope.implementation(dependencyNotation: Project) {
 fun DependencyHandlerScope.implementation(dependencyNotation: ProjectDependency) {
     add("implementation", dependencyNotation)
 }
+
+fun DependencyHandlerScope.compileOnly(dependencyNotation: ProjectDependency) {
+    add("compileOnly", dependencyNotation)
+}
+
+fun DependencyHandlerScope.ksp(dependencyNotation: ProjectDependency) {
+    add("ksp", dependencyNotation)
+}

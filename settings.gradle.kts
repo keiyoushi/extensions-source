@@ -40,6 +40,7 @@ loadAllIndividualExtensions()
  * ===================================== COMMON CONFIGURATION ======================================
  */
 include(":core")
+include(":codegen")
 
 // Load all modules under /lib
 File(rootDir, "lib").eachDir { include("lib:${it.name}") }
