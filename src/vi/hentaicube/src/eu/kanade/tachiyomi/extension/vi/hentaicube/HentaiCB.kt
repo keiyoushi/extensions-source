@@ -19,7 +19,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -121,31 +120,6 @@ class HentaiCB :
                         initialized = true
                     }
 
-                    MangasPage(listOf(manga), false)
-                }
-        }
-
-        // Handle deeplink URLs
-        val deepLinkUrl = query.toHttpUrlOrNull()
-        if (deepLinkUrl != null && query.startsWith("https://")) {
-            val segments = deepLinkUrl.encodedPath.trimEnd('/').split('/').filter { it.isNotEmpty() }
-            val mangaPath = if (segments.size >= 3) {
-                "/${segments[0]}/${segments[1]}/"
-            } else {
-                val path = deepLinkUrl.encodedPath
-                if (path.endsWith("/")) path else "$path/"
-            }
-
-            val mangaUrl = baseUrl.toHttpUrl().newBuilder()
-                .addEncodedPathSegments(mangaPath)
-                .build()
-
-            return client.newCall(GET(mangaUrl, headers))
-                .asObservableSuccess().map { response ->
-                    val manga = mangaDetailsParse(response).apply {
-                        setUrlWithoutDomain(mangaUrl.toString())
-                        initialized = true
-                    }
                     MangasPage(listOf(manga), false)
                 }
         }
