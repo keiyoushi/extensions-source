@@ -768,14 +768,14 @@ class Mangadotnet :
             entries = arrayOf("Any Status", "Ongoing", "Completed", "Hiatus")
             entryValues = arrayOf("", "Ongoing", "Completed", "Hiatus")
             setDefaultValue("")
-            summary = "Applies to Popular & Latest"
+            summary = "Applies to Popular & Latest."
         }
         screen.addPreference(browseStatusPref)
 
         val showTagsPref = SwitchPreferenceCompat(screen.context).apply {
             key = SHOW_TAGS_PREF
-            title = "Show tags in details"
-            summary = "Show tags after genres in the manga details view."
+            title = "Show Tags In Details"
+            summary = "Show tags after genres in manga details."
             setDefaultValue(true)
         }
         screen.addPreference(showTagsPref)
