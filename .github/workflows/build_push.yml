@@ -1,4 +1,4 @@
-name: IC
+name: CI
 
 on:
   push:
