@@ -6,6 +6,7 @@ import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
+import org.jsoup.parser.Parser
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -50,13 +51,14 @@ class MangaItem(
     @SerialName("term_list") private val termList: String? = null,
     @SerialName("cover_url") private val coverUrl: String,
 ) {
-    fun isCompleted(): Boolean = status.equals("completed", true) || status.equals("finished", true)
+    fun isCompleted(): Boolean = status.lowercase() in listOf("completed", "finished")
 
     fun toSManga(): SManga = SManga.create().apply {
         url = "/manga/$slug/"
         title = this@MangaItem.title
         thumbnail_url = coverUrl
         author = this@MangaItem.author
+
         status = when (this@MangaItem.status.lowercase()) {
             "ongoing", "publishing" -> SManga.ONGOING
             "completed", "finished" -> SManga.COMPLETED
@@ -72,23 +74,41 @@ class MangaItem(
         }
 
         description = buildString {
-            this@MangaItem.description?.cleanHtml()?.let {
-                append(it.cleanHtml()) // clean raw escape then remove tags
-                append("\n\n")
+            append("**Tipe:** ${this@MangaItem.type.replaceFirstChar { it.uppercase() }}\n")
+
+            termMap["group"]?.let { append("**Group:** ${it.joinToString()}\n") }
+            termMap["character"]?.let { append("**Karakter:** ${it.joinToString()}\n") }
+            termMap["series"]?.let { append("**Seri:** ${it.joinToString()}\n") }
+
+            this@MangaItem.description?.takeIf { it.isNotBlank() }?.let { desc ->
+                val unescapedDesc = Parser.unescapeEntities(desc, false)
+                val document = Jsoup.parseBodyFragment(unescapedDesc)
+
+                val paragraphs = document.select("p")
+                val targetNode = paragraphs.firstOrNull {
+                    it.text().lowercase().removeSuffix(":").trim() != "sinopsis"
+                } ?: paragraphs.firstOrNull() ?: document.body()
+
+                targetNode.select("b, strong").forEach {
+                    it.prepend("**")
+                    it.append("**")
+                }
+                targetNode.select("br").prepend("\\n")
+
+                val cleanDesc = targetNode.text().replace("\\n", "\n")
+                if (cleanDesc.isNotBlank()) append("\n\n$cleanDesc")
             }
-            append("Tipe: ${this@MangaItem.type.replaceFirstChar { it.uppercase() }}\n")
-            termMap["group"]?.let { append("Group: ${it.joinToString()}\n") }
-            termMap["character"]?.let { append("Karakter: ${it.joinToString()}\n") }
-            termMap["series"]?.let { append("Seri: ${it.joinToString()}\n") }
-            this@MangaItem.altTitles?.takeIf { it.isNotBlank() }?.let {
-                append("Judul Alternatif: $it\n")
+
+            this@MangaItem.altTitles?.takeIf { it.isNotBlank() }?.let { alt ->
+                val formattedAlts = alt.split("|", ",")
+                    .filter { it.isNotBlank() }
+                    .joinToString { it.trim() }
+                append("\n\n**Judul Alternatif:**\n$formattedAlts")
             }
         }.trim()
 
         genre = termMap["genre"]?.joinToString()
     }
-
-    private fun String.cleanHtml(): String = Jsoup.parseBodyFragment(this).text()
 }
 
 @Serializable
