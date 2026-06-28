@@ -119,7 +119,6 @@ class SourceProcessor(
         TypeSpec.classBuilder("ExtensionGenerated")
             .addModifiers(KModifier.INTERNAL)
             .superclass(annotatedClass)
-            .addHeadersDelegateReset()
             .build()
 
     private fun buildSingleSourceClass(
