@@ -230,7 +230,7 @@ class MangaTek :
     companion object {
         val PAGE_REGEX = Regex(""".*?\.(webp|png|jpg|jpeg)(?:\?v=\d+)?#\[.*?]""", RegexOption.IGNORE_CASE)
         private const val FONT_SIZE_PREF = "fontSizePref"
-        private const val DEFAULT_FONT_SIZE = "28"
+        private const val DEFAULT_FONT_SIZE = "32"
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale("ar"))
     }
 }
