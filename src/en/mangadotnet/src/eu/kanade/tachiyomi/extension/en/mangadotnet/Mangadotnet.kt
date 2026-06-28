@@ -300,7 +300,7 @@ class Mangadotnet :
                 }
             }
 
-            filters.firstInstanceOrNull<TagFilter>()?.also { filter ->
+            filters.filterIsInstance<TagFilter>().forEach { filter ->
                 filter.included.forEach { tag ->
                     addQueryParameter("tag", tag)
                 }
@@ -346,7 +346,29 @@ class Mangadotnet :
 
         val tagIndex = if (genreList != null) 5 else 6
         if (tagList != null) {
-            filters.add(tagIndex, TagFilter(tagList))
+            var currentTagIndex = tagIndex
+
+            val otherTags = tagList.filter { it.first().lowercaseChar() !in 'a'..'z' }
+            if (otherTags.isNotEmpty()) {
+                filters.add(currentTagIndex++, TagFilter("Tags (0-9 / Misc)", otherTags))
+            }
+
+            val chunks = listOf(
+                "Tags (A-C)" to 'a'..'c',
+                "Tags (D-H)" to 'd'..'h',
+                "Tags (I-L)" to 'i'..'l',
+                "Tags (M-O)" to 'm'..'o',
+                "Tags (P-S)" to 'p'..'s',
+                "Tags (T-V)" to 't'..'v',
+                "Tags (W-Z)" to 'w'..'z',
+            )
+
+            chunks.forEach { (name, range) ->
+                val chunkTags = tagList.filter { it.first().lowercaseChar() in range }
+                if (chunkTags.isNotEmpty()) {
+                    filters.add(currentTagIndex++, TagFilter(name, chunkTags))
+                }
+            }
         } else {
             filters.add(tagIndex, Filter.Separator())
             filters.add(tagIndex + 1, Filter.Header("Press 'reset' to load tags"))
@@ -665,8 +687,9 @@ class Mangadotnet :
 
     private fun extractTags(categories: List<TagCategory>?): List<String> {
         if (categories.isNullOrEmpty()) return emptyList()
-        return categories.flatMap { it.tags.map { tag -> tag.name.trim() } }
-            .filter { it.isNotEmpty() }
+        return categories.flatMap { category ->
+            category.tags.map { it.name.trim() }
+        }.filter { it.isNotEmpty() }
             .distinct()
     }
 
@@ -681,7 +704,7 @@ class Mangadotnet :
 
             val combined = if (currentTags == null) tags else (currentTags + tags).distinct()
 
-            if (combined.size != (currentTags?.size ?: 0)) {
+            if (combined.size != (currentTags?.size ?: 0) || combined.any { it !in (currentTags ?: emptyList()) }) {
                 tagCacheFile.parentFile?.mkdirs()
                 tagCacheFile.writeText(combined.toJsonString())
             }
