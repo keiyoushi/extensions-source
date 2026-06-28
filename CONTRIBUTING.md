@@ -126,7 +126,7 @@ navigate and build. This will also reduce disk usage and network traffic.
    ```bash
    git sparse-checkout set --cone --sparse-index
    # add project folders
-   git sparse-checkout add common core gradle lib lib-multisrc utils
+   git sparse-checkout add common compiler core gradle lib lib-multisrc utils
    # add a single source
    git sparse-checkout add src/<lang>/<source>
    ```
