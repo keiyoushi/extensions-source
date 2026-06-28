@@ -231,8 +231,7 @@ class MangaLivre :
         return chain.proceed(request.withClientHeader(token))
     }
 
-    private fun Request.withClientHeader(token: ClientToken): Request =
-        newBuilder().header(token.header, token.value).build()
+    private fun Request.withClientHeader(token: ClientToken): Request = newBuilder().header(token.header, token.value).build()
 
     private fun currentToken(): ClientToken = cachedToken ?: synchronized(this) {
         cachedToken ?: candidates().first().also { cachedToken = it }
@@ -250,21 +249,19 @@ class MangaLivre :
      * Em vez de fixar um nome, varremos os bundles em /assets e coletamos todos os pares
      * "x-...":"valor", priorizando os "web-..."; o interceptor testa cada um quando toma 403.
      */
-    private fun scrapeCandidates(): List<ClientToken> {
-        return try {
-            val html = scrapeClient.newCall(GET("$baseUrl/", headers)).execute()
-                .use { if (it.isSuccessful) it.body?.string().orEmpty() else "" }
-            val assets = ASSET_REGEX.findAll(html).map { it.value }.distinct().toList()
-            val js = buildString {
-                assets.take(MAX_ASSETS).forEach { path ->
-                    scrapeClient.newCall(GET("$baseUrl$path", headers)).execute()
-                        .use { if (it.isSuccessful) append(it.body?.string().orEmpty()) }
-                }
+    private fun scrapeCandidates(): List<ClientToken> = try {
+        val html = scrapeClient.newCall(GET("$baseUrl/", headers)).execute()
+            .use { if (it.isSuccessful) it.body?.string().orEmpty() else "" }
+        val assets = ASSET_REGEX.findAll(html).map { it.value }.distinct().toList()
+        val js = buildString {
+            assets.take(MAX_ASSETS).forEach { path ->
+                scrapeClient.newCall(GET("$baseUrl$path", headers)).execute()
+                    .use { if (it.isSuccessful) append(it.body?.string().orEmpty()) }
             }
-            extractCandidates(js)
-        } catch (_: Exception) {
-            listOf(DEFAULT_TOKEN)
         }
+        extractCandidates(js)
+    } catch (_: Exception) {
+        listOf(DEFAULT_TOKEN)
     }
 
     private fun extractCandidates(js: String): List<ClientToken> {
