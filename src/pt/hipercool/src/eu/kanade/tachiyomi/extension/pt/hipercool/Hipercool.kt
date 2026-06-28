@@ -23,6 +23,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
 class Hipercool : HttpSource() {
@@ -119,6 +120,8 @@ class Hipercool : HttpSource() {
         val slug = manga.url
             .substringAfterLast("$MANGA_SUBSTRING/")
             .substringBefore("#")
+            .takeIf(String::isNotBlank)
+            ?: throw IOException("Migre para própria extensão")
 
         val input = buildJsonObject {
             putJsonObject("0") {
@@ -151,7 +154,8 @@ class Hipercool : HttpSource() {
     // ============================ Chapters ==================================
 
     override fun chapterListRequest(manga: SManga): Request {
-        val mangaId = manga.url.substringAfterLast("#").toLong()
+        val mangaId = manga.url.substringAfterLast("#").toLongOrNull()
+            ?: throw IOException("Migre para própria extensão")
         val input = buildJsonObject {
             putJsonObject("0") {
                 putJsonObject("json") {
@@ -201,7 +205,12 @@ class Hipercool : HttpSource() {
     // ============================ Pages =====================================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val slug = chapter.url.substringAfterLast("$MANGA_SUBSTRING/").substringBefore("#")
+        val slug = chapter.url
+            .substringAfterLast("$MANGA_SUBSTRING/")
+            .substringBefore("#")
+            .takeIf(String::isNotBlank)
+            ?: throw IOException("Migre para própria extensão")
+
         val input = buildJsonObject {
             putJsonObject("0") {
                 put("json", null)
