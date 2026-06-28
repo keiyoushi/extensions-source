@@ -169,6 +169,7 @@ class JeazScans : HttpSource() {
 
         val htmlPages = imageElements.mapIndexed { index, element ->
             val imageUrl = when {
+                element.hasAttr("data-verify") -> decodeVerifyToUrl(element.attr("data-verify"))
                 element.hasAttr("data-sec-src") -> element.attr("abs:data-sec-src")
                 element.hasAttr("data-src") -> element.attr("abs:data-src")
                 else -> element.attr("abs:src")
