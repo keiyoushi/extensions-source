@@ -1,4 +1,6 @@
 plugins {
+    id("com.android.library")
+    // إضافات أخرى
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.serialization)
 
