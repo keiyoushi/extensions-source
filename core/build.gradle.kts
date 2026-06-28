@@ -10,7 +10,7 @@ android {
     namespace = "keiyoushi.core"
 
     buildFeatures {
-        resValues = false
+        resValues = true
     }
 
     testOptions {
