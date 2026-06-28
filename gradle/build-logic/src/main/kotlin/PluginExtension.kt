@@ -1,20 +1,26 @@
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.gradle.tasks.PackageAndroidArtifact
+import com.google.devtools.ksp.gradle.KspExtension
 import keiyoushi.gradle.extensions.DeeplinkFilter
 import keiyoushi.gradle.extensions.DeeplinkSpec
 import keiyoushi.gradle.extensions.KeiyoushiExtension
 import keiyoushi.gradle.extensions.KeiyoushiMultisrcExtension
+import keiyoushi.gradle.extensions.BaseUrlSpec
 import keiyoushi.gradle.extensions.VALID_LIB_VERSIONS
 import keiyoushi.gradle.extensions.alias
 import keiyoushi.gradle.extensions.compileOnly
 import keiyoushi.gradle.extensions.implementation
+import keiyoushi.gradle.extensions.ksp
 import keiyoushi.gradle.extensions.kei
 import keiyoushi.gradle.extensions.libs
 import keiyoushi.gradle.extensions.plugins
 import keiyoushi.gradle.tasks.GenerateExtensionManifestTask
 import keiyoushi.gradle.tasks.GenerateKeepRulesTask
 import keiyoushi.gradle.utils.assertWithoutFlag
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.plugins.BasePluginExtension
@@ -29,6 +35,7 @@ class PluginExtension : Plugin<Project> {
         plugins {
             alias(libs.plugins.android.application)
             alias(libs.plugins.kotlin.serialization)
+            alias(libs.plugins.ksp)
 
             alias(kei.plugins.android.base)
             alias(kei.plugins.spotless)
@@ -119,23 +126,33 @@ class PluginExtension : Plugin<Project> {
             versionCodeProvider.map { "$libVersion.$it" }
         }
 
-        val classNameProvider = keiyoushi.className.map { name ->
-            assertWithoutFlag(!name.startsWith(".")) { "className must not start with '.'" }
-            name
+        val classNameProvider = keiyoushi.sources.flatMap { sources ->
+            if (sources.isNotEmpty()) {
+                providers.provider { "ExtensionGenerated" }
+            } else {
+                keiyoushi.className.map { name ->
+                    assertWithoutFlag(!name.startsWith(".")) { "className must not start with '.'" }
+                    name
+                }
+            }
         }
 
         val themeDeeplinks = themeExtension
             .flatMap { it.deeplinks }
             .orElse(emptyList())
 
+        val defaultHostsProvider = keiyoushi.sources.flatMap { sources ->
+            if (sources.isNotEmpty()) {
+                providers.provider { sources.flatMap { it.resolvedBaseUrl.get().allUrls() }.mapNotNull(::extractHost) }
+            } else {
+                keiyoushi.baseUrl.map { listOfNotNull(extractHost(it)) }
+            }
+        }.orElse(emptyList())
+
         val deeplinksProvider = keiyoushi.deeplinks
             .zip(themeDeeplinks) { local, theme -> local + theme }
-            .zip(keiyoushi.baseUrl.orElse("")) { specs, baseUrl ->
-                val defaultHost = baseUrl.takeIf { it.isNotEmpty() }
-                    ?.split("://")?.getOrNull(1)
-                    ?.split("/")?.first()
-                    ?.takeIf { it.isNotEmpty() }
-                specsToFilters(specs, defaultHost)
+            .zip(defaultHostsProvider) { specs, defaultHosts ->
+                specsToFilters(specs, defaultHosts)
             }
 
         val manifestTask = tasks.register<GenerateExtensionManifestTask>("generateExtensionManifest") {
@@ -179,9 +196,39 @@ class PluginExtension : Plugin<Project> {
             addProvider("implementation", keiyoushi.theme.map { project(":lib-multisrc:$it") })
             implementation(project(":core"))
             compileOnly(libs.bundles.common)
+            ksp(project(":compiler"))
         }
 
         afterEvaluate {
+            val specs = keiyoushi.sources.get()
+            if (specs.isNotEmpty()) {
+                val extName = keiyoushi.name.get()
+                val resolvedSources = specs.map { spec ->
+                    val name = spec.name.orElse(extName).get()
+                    val lang = spec.lang.get()
+                    val baseUrlSpec = spec.resolvedBaseUrl.get()
+                    val skipCodeGen = spec.skipCodeGen.getOrElse(false)
+
+                    if (skipCodeGen && specs.size > 1) {
+                        error("skipCodeGen cannot be used with multiple source {} blocks")
+                    }
+                    if (skipCodeGen && baseUrlSpec !is BaseUrlSpec.Static) {
+                        error("skipCodeGen cannot be used with mirror or custom baseUrl — those require property injection")
+                    }
+
+                    val baseUrl = baseUrlSpec.toData()
+                    val id = spec.id.orElse(
+                        providers.provider {
+                            computeSourceId(name, lang, spec.versionId.orElse(1).get())
+                        },
+                    ).get()
+                    ResolvedSourceData(name, lang, id, baseUrl, skipCodeGen)
+                }
+                extensions.configure<KspExtension> {
+                    arg("kei_sources", Json.encodeToString<List<ResolvedSourceData>>(resolvedSources))
+                }
+            }
+
             tasks.withType<PackageAndroidArtifact>().configureEach {
                 createdBy.set("")
                 doFirst {
@@ -192,13 +239,38 @@ class PluginExtension : Plugin<Project> {
     }
 }
 
-private fun specsToFilters(specs: List<DeeplinkSpec>, defaultHost: String?): List<DeeplinkFilter> =
+@Serializable
+private data class ResolvedSourceData(val name: String, val lang: String, val id: Long, val baseUrl: BaseUrlSpecData, val skipCodeGen: Boolean = false)
+
+@Serializable
+private data class BaseUrlSpecData(
+    val type: String,
+    val urls: List<String>,
+)
+
+private fun BaseUrlSpec.toData(): BaseUrlSpecData = when (this) {
+    is BaseUrlSpec.Static -> BaseUrlSpecData("static", listOf(url))
+    is BaseUrlSpec.Mirrors -> BaseUrlSpecData("mirrors", mirrors)
+    is BaseUrlSpec.Custom -> BaseUrlSpecData("custom", listOf(defaultUrl))
+}
+
+private fun computeSourceId(name: String, lang: String, versionId: Int = 1): Long {
+    val key = "${name.lowercase()}/$lang/$versionId"
+    val bytes = java.security.MessageDigest.getInstance("MD5").digest(key.toByteArray())
+    return (0..7).map { bytes[it].toLong() and 0xff }
+        .reduce { acc, l -> (acc shl 8) or l } and Long.MAX_VALUE
+}
+
+private fun extractHost(url: String): String? =
+    url.split("://").getOrNull(1)?.split("/")?.first()?.takeIf { it.isNotEmpty() }
+
+private fun specsToFilters(specs: List<DeeplinkSpec>, defaultHosts: List<String>): List<DeeplinkFilter> =
     specs.mapNotNull { spec ->
-        val hosts = spec.hosts.getOrElse(emptyList()).ifEmpty { listOfNotNull(defaultHost) }
+        val hosts = spec.hosts.getOrElse(emptyList()).ifEmpty { defaultHosts }
         val paths = spec.pathPatterns.getOrElse(emptyList())
         if (paths.isNotEmpty()) {
             check(hosts.isNotEmpty()) {
-                "deeplink has path patterns but no host could be resolved — set baseUrl or specify host() explicitly"
+                "deeplink has path patterns but no host could be resolved — set a source baseUrl or specify host() explicitly"
             }
             DeeplinkFilter(hosts, paths)
         } else {

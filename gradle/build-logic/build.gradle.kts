@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.samWithReceiver)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.spotless)
     `java-gradle-plugin`
 }
@@ -27,6 +28,8 @@ dependencies {
     compileOnly(gradleKotlinDsl())
     compileOnly(libs.android.gradle)
     compileOnly(libs.kotlin.gradle)
+    implementation(libs.ksp.gradle)
+    implementation(libs.kotlin.json)
     implementation(libs.spotless.gradle)
     implementation(libs.tapmoc.gradle)
 
