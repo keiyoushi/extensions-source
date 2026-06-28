@@ -4,43 +4,44 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
-import okhttp3.FormBody
+import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl.Builder
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
-import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 class CosmicScansID :
-    MangaThemesia(
-        "CosmicScans.id",
-        "https://lc2.cosmicscans.to",
-        "id",
-        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("id")),
-    ),
+    HttpSource(),
     ConfigurableSource {
 
-    private val defaultBaseUrl: String = super.baseUrl
+    override val name = "CosmicScans.id"
+
+    private val defaultBaseUrl = "https://01.cosmicscans.to"
+
+    override val lang = "id"
+
+    override val supportsLatest = true
+
+    override val id = 6559481336553833282
+
+    private val apiUrl = "https://cdncid.csmcscns.id/v1/manga"
 
     private val preferences = getPreferences {
         getString(DEFAULT_BASE_URL_PREF, defaultBaseUrl).let { domain ->
@@ -53,25 +54,7 @@ class CosmicScansID :
         }
     }
 
-    override fun headersBuilder() = super.headersBuilder()
-        .setRandomUserAgent()
-
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
-
     private val isCi = System.getenv("CI") == "true"
-
-    override val baseUrl: String get() = when {
-        isCi -> defaultBaseUrl
-        else -> preferences.prefBaseUrl
-    }
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(20, 4.seconds)
-        .build()
-
-    override val hasProjectPage = true
-
-    override val projectPageString = "/projects"
 
     private var cachedBaseUrl: String? = null
     private var SharedPreferences.prefBaseUrl: String
@@ -86,162 +69,143 @@ class CosmicScansID :
             edit().putString(BASE_URL_PREF, value).apply()
         }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isBlank()) {
-            return super.searchMangaRequest(page, query, filters)
-        }
-
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("page/$page/")
-            .addQueryParameter("s", query)
-
-        return GET(url.build(), headers)
+    override val baseUrl: String get() = when {
+        isCi -> defaultBaseUrl
+        else -> preferences.prefBaseUrl
     }
 
-    override val seriesThumbnailSelector = "${super.seriesThumbnailSelector}, .bigcover img, .poster img, .manga-thumb img"
+    private val cursorCache = mutableMapOf<String, String>()
 
-    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
-        if (!thumbnail_url.isValidThumbnail()) {
-            thumbnail_url = document.findCover()
-        }
+    private val lastPage = mutableMapOf<String, Int>()
+
+    override val client: OkHttpClient = network.client.newBuilder()
+        .rateLimit(2, 1.seconds)
+        .build()
+
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Origin", baseUrl)
+        .set("Referer", "$baseUrl/")
+        .setRandomUserAgent()
+
+    // Popular
+    override fun popularMangaRequest(page: Int): Request {
+        val key = "popular"
+        lastPage[key] = page
+        val url = "$apiUrl/filter".toHttpUrl().newBuilder()
+            .addQueryParameter("limit", PAGE_SIZE.toString())
+            .addQueryParameter("order_by", "popular")
+            .addCursor(key, page)
+            .build()
+        return GET(url, headers)
     }
 
-    override fun chapterListSelector() = listOf(
-        "div.bxcl li:has(a[href])",
-        "div.cl li:has(a[href])",
-        "#chapterlist li:has(a[href])",
-        "div.eplister li:has(a[href])",
-        "ul li:has(div.chbox):has(div.eph-num):has(a[href])",
-    ).joinToString()
+    override fun popularMangaParse(response: Response): MangasPage = parseMangaPage(response, "popular")
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
-        .asObservableSuccess()
-        .flatMap { response ->
-            val document = response.asJsoup()
-            countViews(document)
-
-            val normalChapters = parseNormalChapters(document)
-
-            fetchAjaxChapters(document, normalChapters)
-        }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        countViews(document)
-
-        return mergeChapters(
-            normalChapters = parseNormalChapters(document),
-            ajaxChapters = emptyList(),
-        )
+    // Latest
+    override fun latestUpdatesRequest(page: Int): Request {
+        val key = "update"
+        lastPage[key] = page
+        val url = "$apiUrl/filter".toHttpUrl().newBuilder()
+            .addQueryParameter("limit", PAGE_SIZE.toString())
+            .addQueryParameter("order_by", "update")
+            .addCursor(key, page)
+            .build()
+        return GET(url, headers)
     }
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        val urlElement = element.selectFirst("a[href]")!!
-        val chapterUrl = urlElement.absUrl("href").ifBlank { urlElement.attr("href") }
-        val chapterText = element.text()
+    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaPage(response, "update")
 
-        setUrlWithoutDomain(chapterUrl.normalizeChapterUrl())
-        chapter_number = chapterNumberFrom(chapterUrl, chapterText)
-        name = chapterNameFrom(chapterUrl, chapterText)
-        date_upload = element.selectFirst(".chapterdate, .epl-date, time")
-            ?.let { dateElement ->
-                dateElement.attr("datetime").ifBlank { dateElement.text() }.parseCosmicChapterDate()
+    // Search
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        if (query.isBlank() && !filters.hasActiveFilters() && page > 1) {
+            return Observable.just(MangasPage(emptyList(), false))
+        }
+        return super.fetchSearchManga(page, query, filters)
+            .map { mangasPage ->
+                val clientFilters = filters.buildClientFilters()
+                if (clientFilters.isEmpty()) {
+                    mangasPage
+                } else {
+                    val filtered = mangasPage.mangas.filter { manga ->
+                        clientFilters.all { predicate -> predicate(manga) }
+                    }
+                    MangasPage(filtered, mangasPage.hasNextPage)
+                }
             }
-            .takeIf { it != 0L }
-            ?: chapterText.parseCosmicChapterDate()
+    }
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val endpoint = when {
+            query.isNotBlank() -> "search"
+            filters.firstInstanceOrNull<ProjectFilter>()?.state == 1 -> "latestProject"
+            else -> "filter"
+        }
+        val key = searchKey(query, filters, endpoint)
+        lastPage[key] = page
+        val url = "$apiUrl/$endpoint".toHttpUrl().newBuilder()
+            .addQueryParameter("limit", PAGE_SIZE.toString())
+            .apply {
+                if (query.isNotBlank()) addQueryParameter("q", query)
+                if (endpoint == "filter") addOrderFilter(filters)
+                if (endpoint != "search") addCursor(key, page)
+            }
+            .build()
+        return GET(url, headers)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val query = response.request.url.queryParameter("q").orEmpty()
+        val path = response.request.url.encodedPath.substringAfterLast('/')
+        val key = when (path) {
+            "filter", "latestProject" -> searchKeyFromUrl(response, path)
+            else -> searchKey(query, FilterList(), "search")
+        }
+        return parseMangaPage(response, key)
+    }
+
+    // Details
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url.substringAfterLast('/')}"
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val slug = manga.url.substringAfterLast('/')
+        return GET("$apiUrl/mangaDetail/$slug", headers)
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDetailResponse>().data.toSMangaDetails()
+
+    // Chapters
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<MangaDetailResponse>().data.chapters.orEmpty()
+        .filter { it.slug?.isNotBlank() == true && it.redirectLink.isNullOrBlank() }
+        .map { it.toSChapter() }
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url.substringAfterLast('/')}"
+
+    // Pages
+    override fun pageListRequest(chapter: SChapter): Request {
+        val slug = chapter.url.substringAfterLast('/')
+        return GET("$apiUrl/readingPage/$slug", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val chapterUrl = document.location()
-
-        val scriptPages = parseReaderScriptImages(document, chapterUrl)
-        if (scriptPages.isNotEmpty()) {
-            return scriptPages
-        }
-
-        return document.select("div#readerarea img, .reading-content img, img.ts-main-image")
-            .mapNotNull { img ->
-                img.attr("abs:data-src")
-                    .ifBlank { img.attr("abs:data-lazy-src") }
-                    .ifBlank { img.attr("abs:data-cfsrc") }
-                    .ifBlank { img.attr("abs:src") }
-                    .takeIf { it.isValidPageImage() }
-            }
-            .distinct()
-            .mapIndexed { index, imageUrl ->
-                Page(index, chapterUrl, imageUrl)
-            }
+        val data = response.parseAs<ReadingPageResponse>().data
+        if (!data.redirectLink.isNullOrBlank()) return emptyList()
+        return data.toPageList()
     }
 
-    private fun parseNormalChapters(document: Document): List<SChapter> = document.select(chapterListSelector()).map(::chapterFromElement)
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private fun fetchAjaxChapters(document: Document, normalChapters: List<SChapter>): Observable<List<SChapter>> {
-        val request = ajaxChaptersRequest(document)
-            ?: return Observable.just(mergeChapters(normalChapters, emptyList()))
+    // Filters
+    override fun getFilterList() = getCosmicScansIDFilterList()
 
-        return client.newCall(request)
-            .asObservableSuccess()
-            .map { response ->
-                mergeChapters(
-                    normalChapters = normalChapters,
-                    ajaxChapters = parseAjaxChapters(response.body.string()),
-                )
-            }
-            .onErrorReturn {
-                mergeChapters(normalChapters, emptyList())
-            }
-    }
-
-    private fun ajaxChaptersRequest(document: Document): Request? {
-        val mangaId = document.extractMangaId() ?: return null
-        val formBody = FormBody.Builder()
-            .add("action", "get_chapters")
-            .add("id", mangaId)
-            .build()
-
-        val ajaxHeaders = headersBuilder()
-            .set("X-Requested-With", "XMLHttpRequest")
-            .set("Referer", document.location())
-            .build()
-
-        return POST(document.extractAjaxUrl(), ajaxHeaders, formBody)
-    }
-
-    private fun parseAjaxChapters(response: String): List<SChapter> {
-        val document = Jsoup.parseBodyFragment(response, baseUrl)
-
-        return document.select("option[value]:not([value=''])").map { option ->
-            SChapter.create().apply {
-                val chapterUrl = option.absUrl("value").ifBlank { option.attr("value") }
-                val chapterText = option.text()
-
-                setUrlWithoutDomain(chapterUrl.normalizeChapterUrl())
-                chapter_number = chapterNumberFrom(chapterUrl, chapterText)
-                name = chapterNameFrom(chapterUrl, chapterText)
-            }
-        }
-    }
-
-    private fun Document.extractAjaxUrl(): String = AJAX_URL_REGEX.find(toString())
-        ?.groupValues
-        ?.get(1)
-        ?.replace("\\/", "/")
-        ?: "$baseUrl/wp-admin/admin-ajax.php"
-
-    private fun Document.extractMangaId(): String? {
-        val html = toString()
-
-        MANGA_ID_REGEXES.forEach { regex ->
-            regex.find(html)?.groupValues?.get(1)?.let { return it }
-        }
-
-        return null
-    }
-
+    // Preferences
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         screen.addRandomUAPreference()
-
         EditTextPreference(screen.context).apply {
             key = BASE_URL_PREF
             title = "Edit source URL"
@@ -256,7 +220,97 @@ class CosmicScansID :
         }.also { screen.addPreference(it) }
     }
 
+    // Utilities
+    private fun parseMangaPage(response: Response, key: String): MangasPage {
+        val result = response.parseAs<MangaListResponse>()
+        val page = lastPage[key] ?: 1
+        if (!result.cursor?.nextCursor.isNullOrBlank()) {
+            cursorCache["$key:${page + 1}"] = result.cursor.nextCursor.orEmpty()
+        }
+        return MangasPage(result.data.map { it.toSManga() }, result.cursor?.hasNext == true)
+    }
+
+    private fun Builder.addCursor(key: String, page: Int): Builder = apply {
+        if (page > 1) {
+            cursorCache["$key:$page"]?.takeIf { it.isNotBlank() }
+                ?.let { addQueryParameter("after", it) }
+        }
+    }
+
+    private fun Builder.addOrderFilter(filters: FilterList): Builder = apply {
+        filters.firstInstanceOrNull<OrderFilter>()?.value
+            ?.takeIf { it.isNotBlank() }
+            ?.let { addQueryParameter("order_by", it) }
+    }
+
+    private fun FilterList.buildClientFilters(): List<(SManga) -> Boolean> {
+        val predicates = mutableListOf<(SManga) -> Boolean>()
+
+        firstInstanceOrNull<StatusFilter>()?.value?.takeIf { it.isNotBlank() }?.let { status ->
+            predicates += { manga ->
+                manga.status == when (status.lowercase(Locale.ROOT)) {
+                    "ongoing" -> SManga.ONGOING
+                    "completed", "complete" -> SManga.COMPLETED
+                    "hiatus" -> SManga.ON_HIATUS
+                    else -> SManga.UNKNOWN
+                }
+            }
+        }
+
+        firstInstanceOrNull<TypeFilter>()?.value?.takeIf { it.isNotBlank() }?.let { type ->
+            predicates += { manga ->
+                manga.description?.contains("Type: $type", ignoreCase = true) == true
+            }
+        }
+
+        val selectedGenres = firstInstanceOrNull<GenreFilter>()?.state
+            ?.filter { it.state }
+            ?.map { it.genre }
+            ?: emptyList()
+        if (selectedGenres.isNotEmpty()) {
+            predicates += { manga ->
+                val mangaGenres = manga.genre.orEmpty()
+                selectedGenres.all { selected ->
+                    mangaGenres.contains(selected, ignoreCase = true)
+                }
+            }
+        }
+
+        return predicates
+    }
+
+    private fun FilterList.hasActiveFilters(): Boolean = firstInstanceOrNull<OrderFilter>()?.state != 0 ||
+        firstInstanceOrNull<StatusFilter>()?.state != 0 ||
+        firstInstanceOrNull<TypeFilter>()?.state != 0 ||
+        firstInstanceOrNull<ProjectFilter>()?.state == 1 ||
+        firstInstanceOrNull<GenreFilter>()?.state.orEmpty().any { it.state }
+
+    private fun searchKey(query: String, filters: FilterList, endpoint: String): String = listOf(
+        endpoint,
+        query,
+        filters.firstInstanceOrNull<OrderFilter>()?.value.orEmpty(),
+        filters.firstInstanceOrNull<StatusFilter>()?.value.orEmpty(),
+        filters.firstInstanceOrNull<TypeFilter>()?.value.orEmpty(),
+        filters.firstInstanceOrNull<ProjectFilter>()?.state?.toString().orEmpty(),
+        filters.firstInstanceOrNull<GenreFilter>()?.state.orEmpty()
+            .filter { it.state }.joinToString(",") { it.genre },
+    ).joinToString(":")
+
+    private fun searchKeyFromUrl(response: Response, endpoint: String): String {
+        val url = response.request.url
+        return listOf(
+            endpoint,
+            "",
+            url.queryParameter("order_by").orEmpty(),
+            "",
+            "",
+            if (endpoint == "latestProject") "1" else "0",
+            "",
+        ).joinToString(":")
+    }
+
     companion object {
+        private const val PAGE_SIZE = 24
         private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
     }
