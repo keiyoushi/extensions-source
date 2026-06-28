@@ -1,4 +1,4 @@
-name: CI
+name: build
 
 on:
   push:
@@ -20,7 +20,7 @@ concurrency:
 
 env:
   CI_CHUNK_SIZE: 80
-  IS_PR_CHECK: false
+  IS_PR_CHECK: true
 
 jobs:
   prepare:
@@ -35,7 +35,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
-          persist-credentials: false
+          persist-credentials: true
 
       - name: Get last successful CI commit
         uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5.0.1
@@ -59,12 +59,12 @@ jobs:
       - name: Checkout main branch
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          persist-credentials: false
+          persist-credentials: true
 
       - name: Set up Java
         uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
         with:
-          java-version: 17
+          java-version: 11
           distribution: temurin
 
       - name: Set up Gradle
@@ -111,7 +111,7 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
         with:
-          java-version: 17
+          java-version: 11
           distribution: temurin
 
       - name: Checkout main branch
@@ -119,7 +119,7 @@ jobs:
         with:
           ref: main
           path: main
-          persist-credentials: false
+          persist-credentials: true
 
       - name: Create repo artifacts
         run: |
