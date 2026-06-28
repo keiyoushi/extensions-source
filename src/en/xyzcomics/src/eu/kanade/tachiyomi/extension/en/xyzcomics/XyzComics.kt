@@ -9,10 +9,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.tryParse
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -24,7 +26,9 @@ class XyzComics : HttpSource() {
 
     override val lang = "en"
 
-    override val supportsLatest = true
+    override val supportsLatest = false
+
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
 
     companion object {
         private const val ARTIST_TAG_FILTER_NAME = "Artist or Tag"
@@ -39,22 +43,12 @@ class XyzComics : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage = parseMangaList(response)
 
     // ──────────────────────────────────────────────
-    //  Latest Updates — same listing (sorted by date)
-    // ──────────────────────────────────────────────
-
-    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaList(response)
-
-    // ──────────────────────────────────────────────
     //  Search — supports Artist/Tag filter
     // ──────────────────────────────────────────────
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        // Find the Artist/Tag filter by name (not by index — fragile)
-        val artistTag = filters
-            .filterIsInstance<Filter.Text>()
-            .firstOrNull { it.name == ARTIST_TAG_FILTER_NAME }
+        val artistTag = filters.firstInstance<Filter.Text>()
+            .takeIf { it.name == ARTIST_TAG_FILTER_NAME }
             ?.state
             ?.trim()
 
@@ -63,7 +57,6 @@ class XyzComics : HttpSource() {
                 .replace(Regex("[^a-z0-9\\s-]"), "")
                 .replace(Regex("\\s+"), "-")
                 .trim('-')
-            // Page 1 has no /page/1/ suffix on this site
             val url = if (page == 1) {
                 "$baseUrl/tag/$slug/"
             } else {
@@ -71,7 +64,6 @@ class XyzComics : HttpSource() {
             }
             GET(url, headers)
         } else {
-            // Fallback: WordPress keyword search
             GET("$baseUrl/page/$page/?s=$query", headers)
         }
     }
@@ -79,7 +71,7 @@ class XyzComics : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage = parseMangaList(response)
 
     // ──────────────────────────────────────────────
-    //  Shared list parser (Popular, Latest, Search, Tag pages)
+    //  Shared list parser (Popular, Search, Tag pages)
     // ──────────────────────────────────────────────
 
     private fun parseMangaList(response: Response): MangasPage {
@@ -89,7 +81,6 @@ class XyzComics : HttpSource() {
             popularMangaFromElement(element)
         }
 
-        // Support both main listing pagination (.pagenav) and tag page pagination (.page-numbers)
         val hasNextPage = document.selectFirst(
             "a.nextp, .pagenav a.next, a.page-numbers.next, a[rel=next]",
         ) != null
@@ -100,16 +91,12 @@ class XyzComics : HttpSource() {
     private fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
 
-        // Thumbnail link → comic URL
-        val thumbLink = element.selectFirst("figure.post-image a")
-        val url = thumbLink?.attr("href") ?: ""
-        manga.setUrlWithoutDomain(url)
+        val thumbLink = element.selectFirst("figure.post-image a")!!
+        manga.setUrlWithoutDomain(thumbLink.attr("href"))
 
-        // Title from h2.post-title a
-        val titleEl = element.selectFirst("h2.post-title a")
-        manga.title = titleEl?.text()?.trim() ?: "Unknown"
+        val titleEl = element.selectFirst("h2.post-title a")!!
+        manga.title = titleEl.text().trim()
 
-        // Thumbnail image
         val img = element.selectFirst("figure.post-image img.wp-post-image")
         manga.thumbnail_url = when {
             img != null -> {
@@ -132,34 +119,12 @@ class XyzComics : HttpSource() {
         val manga = SManga.create()
         manga.initialized = true
 
-        // Title
-        manga.title = document.selectFirst("h1.post-title a, h1.post-title")?.text()?.trim()
-            ?: document.selectFirst("title")?.text()?.trim()
-            ?: "Unknown"
+        manga.title = document.selectFirst("h1.post-title a, h1.post-title")!!.text().trim()
+        manga.thumbnail_url = document.selectFirst(".pswp-gallery .pswp-gallery__item a[href]")?.attr("abs:href") ?: ""
 
-        // Cover — first gallery image or featured image
-        val cover = document.selectFirst(
-            ".pswp-gallery .pswp-gallery__item a[href], " +
-                "figure.post-image img.wp-post-image, " +
-                "img.wp-post-image",
-        )
-        manga.thumbnail_url = when {
-            cover != null -> {
-                val href = cover.attr("abs:href")
-                if (href.isNotBlank()) {
-                    href
-                } else {
-                    cover.attr("src")
-                }
-            }
-            else -> ""
-        }
-
-        // Tags / Genres
         val tags = document.select("a.post-tag-button")
         manga.genre = tags.joinToString(", ") { it.text().trim() }.ifEmpty { null }
 
-        // Status — unknown for this site
         manga.status = SManga.UNKNOWN
 
         return manga
@@ -169,20 +134,20 @@ class XyzComics : HttpSource() {
     //  Chapter List — single chapter per comic
     // ──────────────────────────────────────────────
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val mangaUrl = response.request.url.toString()
-
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val document = client.newCall(GET(baseUrl + manga.url, headers)).execute().asJsoup()
         val chapter = SChapter.create().apply {
             name = "Chapter 1"
             chapter_number = 1f
-            setUrlWithoutDomain(mangaUrl.substringAfter(baseUrl).ifEmpty { "/" })
-            date_upload = parseDate(document)
-            scanlator = ""
+            setUrlWithoutDomain(manga.url)
+            date_upload = document.selectFirst("time[datetime]")?.attr("datetime")
+                ?.let { dateFormat.tryParse(it) }
+                ?: 0L
         }
-
-        return listOf(chapter)
+        return Observable.just(listOf(chapter))
     }
+
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     // ──────────────────────────────────────────────
     //  Page List — extract from PhotoSwipe gallery
@@ -190,46 +155,8 @@ class XyzComics : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val pages = mutableListOf<Page>()
-
-        // Primary: PhotoSwipe gallery with full-size images
-        val galleryItems = document.select(".pswp-gallery .pswp-gallery__item a[href]")
-        for ((index, link) in galleryItems.withIndex()) {
-            val imgUrl = link.attr("abs:href")
-            if (imgUrl.isNotBlank()) {
-                pages.add(Page(index, "", imgUrl))
-            }
-        }
-
-        // Fallback: direct image links in entry-content
-        if (pages.isEmpty()) {
-            val directLinks = document.select(
-                ".entry-content a[href*=\\/uploads\\/], " +
-                    ".post-content a[href*=\\/uploads\\/]",
-            )
-            for ((index, link) in directLinks.withIndex()) {
-                val href = link.attr("abs:href")
-                if (href.isNotBlank() && !href.contains("svg") && !href.endsWith(".svg")) {
-                    pages.add(Page(index, "", href))
-                }
-            }
-        }
-
-        // Last fallback: img tags with uploads in src
-        if (pages.isEmpty()) {
-            val images = document.select(
-                ".entry-content img[src*=\\/uploads\\/], " +
-                    ".post-content img[src*=\\/uploads\\/]",
-            )
-            for ((index, img) in images.withIndex()) {
-                val imgUrl = img.attr("data-src").ifEmpty { img.attr("src") }
-                if (imgUrl.isNotBlank() && !imgUrl.contains("svg")) {
-                    pages.add(Page(index, "", imgUrl))
-                }
-            }
-        }
-
-        return pages
+        return document.select(".pswp-gallery .pswp-gallery__item a[href]")
+            .mapIndexed { index, link -> Page(index, "", link.attr("abs:href")) }
     }
 
     override fun imageUrlParse(response: Response): String = ""
@@ -243,22 +170,4 @@ class XyzComics : HttpSource() {
         Filter.Separator(),
         object : Filter.Text(ARTIST_TAG_FILTER_NAME, "") {},
     )
-
-    // ──────────────────────────────────────────────
-    //  Helpers
-    // ──────────────────────────────────────────────
-
-    private fun parseDate(document: Document): Long {
-        val dateText = document.selectFirst("time[datetime]")?.attr("datetime")
-            ?: document.selectFirst(".post-date time[datetime]")?.attr("datetime")
-            ?: return 0
-
-        return try {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).parse(dateText)?.time
-                ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(dateText)?.time
-                ?: 0
-        } catch (_: Exception) {
-            0
-        }
-    }
 }
