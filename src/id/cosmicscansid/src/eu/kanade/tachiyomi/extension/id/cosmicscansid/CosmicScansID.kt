@@ -122,9 +122,7 @@ class CosmicScansID :
 
             val normalChapters = parseNormalChapters(document)
 
-            document.takeIf { it.extractMangaId() != null }
-                ?.let { fetchAjaxChapters(it, normalChapters) }
-                ?: fetchAjaxChaptersFromLatestChapter(normalChapters)
+            fetchAjaxChapters(document, normalChapters)
         }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -177,25 +175,6 @@ class CosmicScansID :
     }
 
     private fun parseNormalChapters(document: Document): List<SChapter> = document.select(chapterListSelector()).map(::chapterFromElement)
-
-    private fun fetchAjaxChaptersFromLatestChapter(normalChapters: List<SChapter>): Observable<List<SChapter>> {
-        val latestChapter = normalChapters.firstOrNull()
-            ?: return Observable.just(mergeChapters(normalChapters, emptyList()))
-
-        return client.newCall(GET("$baseUrl${latestChapter.url}", headers))
-            .asObservableSuccess()
-            .flatMap { response ->
-                val document = response.asJsoup()
-                if (document.extractMangaId() == null) {
-                    Observable.just(mergeChapters(normalChapters, emptyList()))
-                } else {
-                    fetchAjaxChapters(document, normalChapters)
-                }
-            }
-            .onErrorReturn {
-                mergeChapters(normalChapters, emptyList())
-            }
-    }
 
     private fun fetchAjaxChapters(document: Document, normalChapters: List<SChapter>): Observable<List<SChapter>> {
         val request = ajaxChaptersRequest(document)
