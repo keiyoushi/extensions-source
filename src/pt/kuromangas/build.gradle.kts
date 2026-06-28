@@ -5,12 +5,7 @@ plugins {
 keiyoushi {
     name = "KuroMangas"
     className = "KuroMangas"
-    versionCode = 8
+    versionCode = 9
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
-}
-
-dependencies {
-
-    implementation(project(":lib:cookieinterceptor"))
 }
