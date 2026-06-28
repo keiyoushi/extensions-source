@@ -235,15 +235,13 @@ class Comicaso :
         val source = url.pathSegments.getOrNull(0) ?: "all"
         val manga = url.pathSegments.getOrNull(1) ?: ""
         val slug = url.pathSegments.getOrNull(2) ?: ""
-        val token = url.queryParameter("token")
+        val token = url.queryParameter("token")!!
 
         val apiUri = "$baseUrl/api/chapter.php".toHttpUrl().newBuilder().apply {
             addQueryParameter("source", source)
             addQueryParameter("manga", manga)
             addQueryParameter("chapter", slug)
-            if (token != null) {
-                addQueryParameter("token", token)
-            }
+            addQueryParameter("token", token)
         }.build()
 
         return GET(apiUri, headers)

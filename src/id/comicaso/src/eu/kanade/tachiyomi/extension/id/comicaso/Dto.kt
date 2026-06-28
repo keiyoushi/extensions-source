@@ -75,11 +75,11 @@ class MangaDetailDto(
 class ChapterDto(
     private val slug: String,
     private val title: String,
+    @SerialName("chapter_token") private val chapterToken: String,
     private val date: Long? = null,
-    @SerialName("chapter_token") private val chapterToken: String? = null,
 ) {
     fun toSChapter(source: String, mangaSlug: String) = SChapter.create().apply {
-        url = "$source/$mangaSlug/$slug" + (if (chapterToken != null) "?token=$chapterToken" else "")
+        url = "$source/$mangaSlug/$slug?token=$chapterToken"
         name = title
         date_upload = date?.let { it * 1000L } ?: 0L
     }
