@@ -1,4 +1,4 @@
-name: build
+name: ic
 
 on:
   push:
