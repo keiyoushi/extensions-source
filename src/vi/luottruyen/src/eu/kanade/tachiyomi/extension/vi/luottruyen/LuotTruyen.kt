@@ -31,7 +31,7 @@ class LuotTruyen :
 
     override val lang = "vi"
 
-    private val defaultBaseUrl = "https://luottruyen9.com"
+    private val defaultBaseUrl = "https://luottruyen10.com"
 
     override val baseUrl get() = getPrefBaseUrl()
 
