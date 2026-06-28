@@ -77,7 +77,7 @@ class IkigaiMangas :
         }
     }
 
-    private val imageCdnUrl: String = "https://image.ikigaimangas.cloud"
+    private val imageCdnUrl: String = "https://image2.ikigaimangas.cloud"
 
     override val lang: String = "es"
 
