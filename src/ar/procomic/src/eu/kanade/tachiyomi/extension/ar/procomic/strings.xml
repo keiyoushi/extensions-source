@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Procomic</string>
+    <string name="settings_url">تغيير رابط الموقع</string>
+    <string name="settings_hide_paid">إخفاء الفصول المدفوعة</string>
+    <string name="settings_safe_browsing">التصفح الآمن</string>
+</resources>
