@@ -186,7 +186,8 @@ class SourceProcessor(
             "static" -> {
                 addProperty(
                     PropertySpec.builder("baseUrl", String::class.asClassName(), KModifier.OVERRIDE)
-                        .initializer("%S", urlSpec.defaultUrl).build(),
+                        .getter(FunSpec.getterBuilder().addStatement("return %S", urlSpec.defaultUrl).build())
+                        .build(),
                 )
             }
             "mirrors" -> {
