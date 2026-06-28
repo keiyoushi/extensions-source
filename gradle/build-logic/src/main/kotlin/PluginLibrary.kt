@@ -35,7 +35,7 @@ class PluginLibrary : Plugin<Project> {
                 }
             }
 
-            androidResources.enable = false
+            androidResources.enable = true
         }
 
         dependencies {
