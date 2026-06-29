@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -21,17 +22,16 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class DocTruyen3Q :
-    WPComics(
-        "DocTruyen3Q",
-        "https://doctruyen3qhub2.com",
-        "vi",
-        dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
-        },
-        gmtOffset = null,
-    ),
+@Source
+abstract class DocTruyen3Q :
+    WPComics(),
     ConfigurableSource {
+
+    override val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
+    }
+
+    override val gmtOffset = null
 
     override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("div.page-chapter[id] img").mapIndexed { index, element ->
         val rawUrl = element.attr("abs:src").ifEmpty { element.attr("abs:data-src") }
