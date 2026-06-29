@@ -6,8 +6,8 @@ class Azora :
     Iken(
         "Azora",
         "ar",
-        "https://azoramoon.com",
-        "https://api.azoramoon.com",
+        "https://azorafly.com",
+        "https://api.azorafly.com",
     ) {
 
     override val versionId = 2
