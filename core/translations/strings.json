@@ -8,5 +8,10 @@
     "mirrorTitle": "الخادم البديل المفضل",
     "customUrlTitle": "عنوان أساسي مخصص",
     "customUrlDialogMessage": "اترك الحقل فارغًا لاستخدام العنوان الافتراضي"
+  },
+  "es": {
+    "mirrorTitle": "Dominio preferido",
+    "customUrlTitle": "URL base personalizada",
+    "customUrlDialogMessage": "Dejar en blanco para usar la predeterminada"
   }
 }
