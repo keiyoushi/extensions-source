@@ -27,6 +27,12 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 @Serializable
+data class PartialLocaleStrings(
+    val mirrorTitle: String? = null,
+    val customUrlTitle: String? = null,
+    val customUrlDialogMessage: String? = null,
+)
+
 data class LocaleStrings(
     val mirrorTitle: String,
     val customUrlTitle: String,
@@ -62,20 +68,25 @@ class SourceProcessor(
     private val logger: KSPLogger,
 ) : SymbolProcessor {
 
-    private val translations: Map<String, LocaleStrings> by lazy {
+    private val translations: Map<String, PartialLocaleStrings> by lazy {
         val path = options["kei_translations"] ?: return@lazy emptyMap()
         runCatching {
-            Json.decodeFromString<Map<String, LocaleStrings>>(File(path).readText())
+            Json.decodeFromString<Map<String, PartialLocaleStrings>>(File(path).readText())
         }.getOrElse {
             logger.warn("kei_translations: ${it.message}")
             emptyMap()
         }
     }
 
-    private fun stringsForLang(lang: String): LocaleStrings =
-        translations[lang]
-            ?: translations[lang.substringBefore("-")]
-            ?: translations.getValue("en")
+    private fun stringsForLang(lang: String): LocaleStrings {
+        val en = translations.getValue("en")
+        val locale = translations[lang] ?: translations[lang.substringBefore("-")]
+        return LocaleStrings(
+            mirrorTitle = locale?.mirrorTitle ?: en.mirrorTitle!!,
+            customUrlTitle = locale?.customUrlTitle ?: en.customUrlTitle!!,
+            customUrlDialogMessage = locale?.customUrlDialogMessage ?: en.customUrlDialogMessage!!,
+        )
+    }
 
     private var invoked = false
 
@@ -229,7 +240,7 @@ class SourceProcessor(
                         .addModifiers(KModifier.PRIVATE)
                         .delegate(
                             CodeBlock.of(
-                                "lazy { %T(%M(id), arrayOf(%L), %S) }",
+                                "lazy { %T(%M(id), arrayOf(%L), title = %S) }",
                                 mirrorPrefsClass, getPreferencesFn, mirrorsArg, strings.mirrorTitle,
                             ),
                         ).build(),
@@ -249,7 +260,7 @@ class SourceProcessor(
                         .addModifiers(KModifier.PRIVATE)
                         .delegate(
                             CodeBlock.of(
-                                "lazy { %T(%M(id), %S, %S, %S) }",
+                                "lazy { %T(%M(id), %S, title = %S, dialogMessage = %S) }",
                                 customUrlPrefsClass, getPreferencesFn, urlSpec.defaultUrl,
                                 strings.customUrlTitle, strings.customUrlDialogMessage,
                             ),
