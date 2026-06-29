@@ -201,6 +201,9 @@ class MangaLivre :
     @Volatile
     private var cachedToken: ClientToken? = null
 
+    @Volatile
+    private var cachedCandidates: List<ClientToken>? = null
+
     private fun clientHeaderInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         if (request.url.host != baseUrlHost) {
@@ -208,57 +211,67 @@ class MangaLivre :
         }
 
         val token = currentToken()
-        val response = chain.proceed(
-            request.newBuilder().header(token.header, token.value).build(),
-        )
+        val response = chain.proceed(request.withClientHeader(token))
         if (response.code != 403 || !response.isOfficialAppError()) {
             return response
         }
 
+        // O header de cliente rotacionou. Redescobre os candidatos no bundle e testa
+        // cada um até a API parar de recusar, memorizando o que funcionar.
         response.close()
-        val refreshed = refreshToken()
-        return chain.proceed(
-            request.newBuilder().header(refreshed.header, refreshed.value).build(),
-        )
+        for (candidate in refreshCandidates()) {
+            if (candidate == token) continue
+            val retry = chain.proceed(request.withClientHeader(candidate))
+            if (retry.code != 403 || !retry.isOfficialAppError()) {
+                cachedToken = candidate
+                return retry
+            }
+            retry.close()
+        }
+        return chain.proceed(request.withClientHeader(token))
     }
+
+    private fun Request.withClientHeader(token: ClientToken): Request = newBuilder().header(token.header, token.value).build()
 
     private fun currentToken(): ClientToken = cachedToken ?: synchronized(this) {
-        cachedToken ?: scrapeToken().also { cachedToken = it }
+        cachedToken ?: candidates().first().also { cachedToken = it }
     }
 
-    private fun refreshToken(): ClientToken = synchronized(this) {
-        scrapeToken().also { cachedToken = it }
-    }
+    private fun candidates(): List<ClientToken> = cachedCandidates ?: refreshCandidates()
 
-    private fun scrapeToken(): ClientToken {
-        return try {
-            val html = scrapeClient.newCall(GET("$baseUrl/index.html", headers)).execute()
-                .use { if (it.isSuccessful) it.body?.string().orEmpty() else "" }
-            val assetPath = ASSET_REGEX.find(html)?.value ?: return DEFAULT_TOKEN
-            val js = scrapeClient.newCall(GET("$baseUrl$assetPath", headers)).execute()
-                .use { if (it.isSuccessful) it.body?.string() else null }
-                ?: return DEFAULT_TOKEN
-            extractToken(js) ?: DEFAULT_TOKEN
-        } catch (_: Exception) {
-            DEFAULT_TOKEN
-        }
+    private fun refreshCandidates(): List<ClientToken> = synchronized(this) {
+        scrapeCandidates().also { cachedCandidates = it }
     }
 
     /**
-     * O nome do header e o valor já rotacionaram (x-toonlivre-client -> x-tly-sec,
-     * web-x -> web-z99), então tentamos descobrir o par "x-...":"web-..." direto do
-     * bundle; se não der, mantemos o nome conhecido e procuramos só o valor.
+     * O front-end manda um header de cliente cujo NOME rotaciona toda hora
+     * (x-toonlivre-client -> x-tly-sec -> x-app-key) e cujo valor costuma ser "web-...".
+     * Em vez de fixar um nome, varremos os bundles em /assets e coletamos todos os pares
+     * "x-...":"valor", priorizando os "web-..."; o interceptor testa cada um quando toma 403.
      */
-    private fun extractToken(js: String): ClientToken? {
-        PAIR_REGEX.find(js)?.let {
-            return ClientToken(it.groupValues[1], it.groupValues[2])
+    private fun scrapeCandidates(): List<ClientToken> = try {
+        val html = scrapeClient.newCall(GET("$baseUrl/", headers)).execute()
+            .use { if (it.isSuccessful) it.body?.string().orEmpty() else "" }
+        val assets = ASSET_REGEX.findAll(html).map { it.value }.distinct().toList()
+        val js = buildString {
+            assets.take(MAX_ASSETS).forEach { path ->
+                scrapeClient.newCall(GET("$baseUrl$path", headers)).execute()
+                    .use { if (it.isSuccessful) append(it.body?.string().orEmpty()) }
+            }
         }
-        val value = VALUE_REGEX.findAll(js)
-            .map { it.groupValues[1] }
-            .toSet()
-            .singleOrNull()
-            ?: return null
-        return ClientToken(DEFAULT_TOKEN.header, value)
+        extractCandidates(js)
+    } catch (_: Exception) {
+        listOf(DEFAULT_TOKEN)
+    }
+
+    private fun extractCandidates(js: String): List<ClientToken> {
+        val pairs = PAIR_REGEX.findAll(js)
+            .map { ClientToken(it.groupValues[1], it.groupValues[2]) }
+            .distinct()
+            .toList()
+        val ranked = pairs.sortedByDescending { it.value.startsWith("web-") }
+            .take(MAX_CANDIDATES)
+        return (ranked + DEFAULT_TOKEN).distinct()
     }
 
     private fun Response.isOfficialAppError(): Boolean = try {
@@ -272,11 +285,12 @@ class MangaLivre :
     companion object {
         private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
         private const val MAX_PEEK = 1024L
+        private const val MAX_ASSETS = 8
+        private const val MAX_CANDIDATES = 8
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
-        private val DEFAULT_TOKEN = ClientToken("x-tly-sec", "web-z99")
-        private val ASSET_REGEX = Regex("/assets/index-[\\w-]+\\.js")
-        private val PAIR_REGEX = Regex("\"(x-t[a-z0-9-]+)\"\\s*[,:]\\s*\"(web-[a-z0-9]+)\"")
-        private val VALUE_REGEX = Regex("\"(web-[a-z0-9]+)\"")
+        private val DEFAULT_TOKEN = ClientToken("x-app-key", "web-z99")
+        private val ASSET_REGEX = Regex("/assets/[\\w-]+\\.js")
+        private val PAIR_REGEX = Regex("\"(x-[a-z0-9-]{2,})\"\\s*[,:]\\s*\"([a-z][a-z0-9-]{1,40})\"")
     }
 }
