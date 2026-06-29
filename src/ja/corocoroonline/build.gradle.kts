@@ -4,13 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Corocoro Online"
-    versionCode = 10
+    versionCode = 11
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
     source {
         lang = "ja"
         baseUrl = "https://www.corocoro.jp"
-        versionId = 2
+        versionId = 3
     }
 }
