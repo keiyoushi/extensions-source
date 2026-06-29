@@ -169,7 +169,7 @@ abstract class ExHentaiNetBR : HttpSource() {
     }
 }
 
-abstract class AlphabetFilter(
+class AlphabetFilter(
     displayName: String,
     private val vals: List<String>,
     state: Int = 0,
