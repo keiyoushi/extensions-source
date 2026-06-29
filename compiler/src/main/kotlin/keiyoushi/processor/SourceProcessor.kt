@@ -100,9 +100,11 @@ class SourceProcessor(
         val annotatedClass = annotated.toClassName()
         val isConfigurable = annotated.getAllSuperTypes()
             .any { it.declaration.qualifiedName?.asString() == "eu.kanade.tachiyomi.source.ConfigurableSource" }
+        val isHttpSource = annotated.getAllSuperTypes()
+            .any { it.declaration.qualifiedName?.asString() == "eu.kanade.tachiyomi.source.online.HttpSource" }
 
         val generatedClass = when {
-            sources.size == 1 && sources.single().skipCodeGen -> buildPassthroughClass(annotatedClass)
+            sources.size == 1 && sources.single().skipCodeGen -> buildPassthroughClass(annotatedClass, isHttpSource)
             sources.size == 1 -> buildSingleSourceClass(annotatedClass, sources.single(), isConfigurable)
             else -> buildSourceFactoryClass(annotatedClass, sources, isConfigurable)
         }
@@ -115,10 +117,11 @@ class SourceProcessor(
         return emptyList()
     }
 
-    private fun buildPassthroughClass(annotatedClass: ClassName): TypeSpec =
+    private fun buildPassthroughClass(annotatedClass: ClassName, isHttpSource: Boolean): TypeSpec =
         TypeSpec.classBuilder("ExtensionGenerated")
             .addModifiers(KModifier.INTERNAL)
             .superclass(annotatedClass)
+            .apply { if (isHttpSource) addHeadersDelegateReset() }
             .build()
 
     private fun buildSingleSourceClass(
