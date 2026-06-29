@@ -9,14 +9,11 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
-import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
+import rx.Observable
 import kotlin.time.Duration.Companion.seconds
 
 class Rncalation : HttpSource() {
@@ -35,8 +32,6 @@ class Rncalation : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-
-    private val dateFormat = SimpleDateFormat("M/d/yyyy", Locale.ROOT)
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/library?sort=views&page=$page", headers)
 
@@ -99,14 +94,11 @@ class Rncalation : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst(".comic-hero-wrap h1")!!.text()
-            thumbnail_url = document.selectFirst(".comic-hero-wrap img")?.attr("abs:src")
-            description = document.select(".comic-hero-wrap p.leading-relaxed").text()
+            title = document.selectFirst(".hero-title")?.text()!!
+            thumbnail_url = document.selectFirst(".comic-sidebar-cover img")?.attr("abs:src")
+            description = document.selectFirst(".hero-description")?.text() ?: ""
 
-            author = document.select(".comic-hero-wrap span:contains(Autor)").text().substringAfter("Autor:").ifEmpty { null }
-            artist = document.select(".comic-hero-wrap span:contains(Arte)").text().substringAfter("Arte:").ifEmpty { author }
-
-            val badges = document.select(".comic-hero-wrap span.comic-badge").map { it.text().lowercase(Locale.ROOT) }
+            val badges = document.select(".hero-badge").map { it.text().lowercase() }
             status = when {
                 badges.any { it.contains("emisión") || it.contains("curso") || it.contains("ongoing") } -> SManga.ONGOING
                 badges.any { it.contains("completado") || it.contains("completed") } -> SManga.COMPLETED
@@ -115,45 +107,35 @@ class Rncalation : HttpSource() {
                 else -> SManga.UNKNOWN
             }
 
-            genre = document.select(".comic-hero-wrap a[href*=genre]").joinToString { it.text() }
-        }
-    }
+            genre = document.select(".hero-badge--neutral").joinToString(", ") { it.text() }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val chapters = mutableListOf<SChapter>()
-
-        document.select("#chapter-list a[data-chapter-id]").forEach { element ->
-            chapters.add(chapterFromElement(element))
-        }
-
-        document.selectFirst("template#chapters-extra")?.let { template ->
-            val extraHtml = template.html()
-            val extraDoc = Jsoup.parseBodyFragment(extraHtml, document.baseUri())
-            extraDoc.select("a[data-chapter-id]").forEach { element ->
-                chapters.add(chapterFromElement(element))
+            val groupName = document.selectFirst(".hero-group-name")?.text()
+            if (!groupName.isNullOrEmpty()) {
+                author = groupName
+                artist = groupName
             }
         }
-
-        return chapters
     }
 
-    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        setUrlWithoutDomain(element.absUrl("href"))
-        name = element.selectFirst("span.flex-1")!!.text()
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+        val slug = manga.url.substringAfterLast('/').trim('/')
 
-        val dateText = element.selectFirst("span:matches(\\d{1,2}/\\d{1,2}/\\d{4})")?.text()
-        date_upload = dateFormat.tryParse(dateText)
+        val chapterList = mutableListOf<Chapter>()
+        var currPage = 1
 
-        scanlator = element.select("span").firstOrNull {
-            val text = it.text().lowercase()
-            text.isNotEmpty() &&
-                !it.hasClass("flex-1") &&
-                !text.contains("/") &&
-                text != "gratis" &&
-                text != "nuevo"
-        }?.text()
+        while (true) {
+            val response = client.newCall(chapterRequest(slug, currPage)).execute()
+            val chunk = response.parseAs<ChapterList>()
+            chapterList.addAll(chunk.chapters)
+            if (currPage >= chunk.pages) break
+            currPage += 1
+        }
+
+        chapterList.map { it.toSChapter(slug) }
     }
+
+    private fun chapterRequest(slug: String, page: Int): Request = GET("$baseUrl/api/chapters/list?slug=$slug&page=$page", headers)
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
