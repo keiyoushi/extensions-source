@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.toJsonRequestBody
@@ -31,11 +32,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class CManhua : HttpSource() {
+@Source
+abstract class CManhua : HttpSource() {
 
-    override val name = "CManhua"
-    override val baseUrl = "https://cmanhua.com"
-    override val lang = "en"
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()

@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -23,13 +24,8 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
 
-class AnimeSama : HttpSource() {
-
-    override val name = "AnimeSama"
-
-    override val baseUrl = "https://anime-sama.to"
-
-    override val lang = "fr"
+@Source
+abstract class AnimeSama : HttpSource() {
 
     override val supportsLatest = true
 

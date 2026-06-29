@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
@@ -24,18 +25,10 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 
-class YomuComics : HttpSource() {
-
-    override val name = "Yomu Comics"
-
-    override val baseUrl = "https://yomu.com.br"
-
-    override val lang = "pt-BR"
+@Source
+abstract class YomuComics : HttpSource() {
 
     override val supportsLatest = true
-
-    // SSSScanlator
-    override val id = 1497838059713668619
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(5)

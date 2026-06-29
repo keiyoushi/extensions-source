@@ -22,6 +22,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -31,15 +32,10 @@ import okhttp3.Response
 import rx.Observable
 import java.io.IOException
 
-class Mangamo :
+@Source
+abstract class Mangamo :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "Mangamo"
-
-    override val lang = "en"
-
-    override val baseUrl = "https://www.mangamo.com"
 
     override val supportsLatest = true
 

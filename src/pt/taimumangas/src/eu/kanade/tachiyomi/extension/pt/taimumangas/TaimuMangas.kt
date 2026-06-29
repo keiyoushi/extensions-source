@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -15,13 +16,8 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class TaimuMangas : HttpSource() {
-
-    override val name = "Taimu Mangas"
-
-    override val baseUrl = "https://beta.taimumangas.com"
-
-    override val lang = "pt-BR"
+@Source
+abstract class TaimuMangas : HttpSource() {
 
     override val supportsLatest = true
 

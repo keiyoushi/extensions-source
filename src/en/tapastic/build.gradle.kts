@@ -4,10 +4,15 @@ plugins {
 
 keiyoushi {
     name = "Tapas"
-    className = "Tapastic"
     versionCode = 24
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://tapas.io"
+        versionId = 2
+    }
 }
 
 dependencies {

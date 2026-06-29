@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,12 +19,10 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaDE : HttpSource() {
+@Source
+abstract class MangaDE : HttpSource() {
 
-    override val name = "MangaDE"
-    override val baseUrl = "https://mangade.io"
     private val apiUrl = "https://api.mangade.io/api"
-    override val lang = "en"
     override val supportsLatest = true
 
     private var genresList: List<Pair<String, String>> = emptyList()

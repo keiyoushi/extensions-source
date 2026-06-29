@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.rateLimit
@@ -21,19 +22,12 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import kotlin.math.min
 
-class TempleScan :
+@Source
+abstract class TempleScan :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Temple Scan"
-
-    override val lang = "en"
-
-    override val baseUrl = "https://templetoons.com"
-
     override val supportsLatest = true
-
-    override val versionId = 3
 
     override fun headersBuilder() = super.headersBuilder()
         .set("referer", "$baseUrl/")

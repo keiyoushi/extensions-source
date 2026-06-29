@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -21,18 +22,10 @@ import okhttp3.Response
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.seconds
 
-class NexusToons :
+@Source
+abstract class NexusToons :
     HttpSource(),
     ConfigurableSource {
-
-    // SpectralScan (pt-BR) -> Nexus Toons (pt-BR)
-    override val id = 5304928452449566995L
-
-    override val lang = "pt-BR"
-
-    override val name = "Nexus Toons"
-
-    override val baseUrl = "https://nx-toons.xyz"
 
     override val supportsLatest = true
 

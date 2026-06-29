@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.jsonInstance
@@ -41,15 +42,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class Taiyo : HttpSource() {
+@Source
+abstract class Taiyo : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
     private val imgcdnHost by lazy { IMG_CDN.toHttpUrl().host }
-
-    override val name = "Taiyō"
-
-    override val baseUrl = "https://taiyo.moe"
-
-    override val lang = "pt-BR"
 
     override val supportsLatest = false
 

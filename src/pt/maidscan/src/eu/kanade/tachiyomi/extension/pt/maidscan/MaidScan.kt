@@ -1,14 +1,13 @@
 package eu.kanade.tachiyomi.extension.pt.maidscan
 
 import eu.kanade.tachiyomi.multisrc.greenshit.GreenShit
+import keiyoushi.annotation.Source
 
-class MaidScan : GreenShit() {
+@Source
+abstract class MaidScan : GreenShit() {
     override val apiUrl = "https://api.verdinha.wtf"
     override val cdnUrl = "https://cdn.verdinha.wtf"
-    override val baseUrl = "https://empreguetes.wtf"
     override val cdnApiUrl = "https://api.verdinha.wtf/cdn"
-    override val lang = "pt-BR"
-    override val name = "Maid Scan"
     override val scanId = "3"
 
     override val defaultGenreId = "4"

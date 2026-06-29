@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
@@ -18,13 +19,8 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.lang.IllegalArgumentException
 
-class Twicomi : HttpSource() {
-
-    override val name = "Twicomi"
-
-    override val lang = "all"
-
-    override val baseUrl = "https://twicomi.com"
+@Source
+abstract class Twicomi : HttpSource() {
 
     private val apiUrl = "https://api.twicomi.com/api/v2"
 

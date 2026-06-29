@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -19,10 +20,8 @@ import okio.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaParkPublisher : HttpSource() {
-    override val name = "Manga-Park"
-    override val baseUrl = "https://manga-park.com"
-    override val lang = "ja"
+@Source
+abstract class MangaParkPublisher : HttpSource() {
     override val supportsLatest = true
 
     private val dateFormat = SimpleDateFormat("yyyy/M/d", Locale.ROOT)

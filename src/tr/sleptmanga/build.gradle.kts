@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Slept Manga"
-    className = "SleptManga"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://sleptmanga.com.tr"
+    }
 }

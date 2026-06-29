@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "AHottie"
-    className = "AHottie"
     versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "all"
+        baseUrl = "https://ahottie.top"
+    }
 
     deeplink {
         host("ahottie.top")

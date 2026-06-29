@@ -12,23 +12,19 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class KillSixBillionDemons :
+@Source
+abstract class KillSixBillionDemons :
     HttpSource(),
     ConfigurableSource {
 
     private val preferences: SharedPreferences by getPreferencesLazy()
-
-    override val name = "KillSixBillionDemons"
-
-    override val baseUrl = "https://killsixbilliondemons.com"
-
-    override val lang = "en"
 
     override val supportsLatest: Boolean = false
 

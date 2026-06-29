@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -19,13 +20,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class KingComiX : HttpSource() {
-
-    override val name = "KingComiX"
-
-    override val baseUrl = "https://kingcomix.com"
-
-    override val lang = "en"
+@Source
+abstract class KingComiX : HttpSource() {
 
     override val supportsLatest = true
 

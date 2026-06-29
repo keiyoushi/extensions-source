@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "CManhua"
-    className = "CManhua"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://cmanhua.com"
+    }
 }

@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -20,13 +21,8 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MgreadIo : HttpSource() {
-
-    override val name = "Mgread.io"
-
-    override val baseUrl = "https://mgread.io"
-
-    override val lang = "en"
+@Source
+abstract class MgreadIo : HttpSource() {
 
     override val supportsLatest = true
 

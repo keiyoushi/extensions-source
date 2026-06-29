@@ -4,8 +4,13 @@ plugins {
 
 keiyoushi {
     name = "MangaInUa"
-    className = "Mangainua"
     versionCode = 12
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        name = "MANGA/in/UA"
+        lang = "uk"
+        baseUrl = "https://manga.in.ua"
+    }
 }

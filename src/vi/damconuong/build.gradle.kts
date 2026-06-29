@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "DamCoNuong"
-    className = "DamCoNuong"
     versionCode = 7
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "vi"
+        baseUrl = "https://damconuong.shop"
+    }
 }

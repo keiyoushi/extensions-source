@@ -11,19 +11,18 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class RevivalScans :
+@Source
+abstract class RevivalScans :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Revival Scans"
-    override val baseUrl = "https://www.revivalscans.com"
-    override val lang = "en"
     override val supportsLatest = false
 
     private val preferences by getPreferencesLazy()

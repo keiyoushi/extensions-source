@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonObject
@@ -20,10 +21,8 @@ import okhttp3.Response
 import rx.Observable
 import java.util.Locale
 
-class Wurmz : HttpSource() {
-    override val name = "Wurmz"
-    override val baseUrl = "https://wurmz.net"
-    override val lang = "id"
+@Source
+abstract class Wurmz : HttpSource() {
     override val supportsLatest = false
 
     override fun headersBuilder() = super.headersBuilder()

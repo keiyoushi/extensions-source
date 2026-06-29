@@ -4,9 +4,12 @@ plugins {
 
 keiyoushi {
     name = "MangaTime"
-    className = "MangaTime"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
-    baseUrl = "https://mangatime.org"
+
+    source {
+        lang = "ar"
+        baseUrl = "https://mangatime.org"
+    }
 }

@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
@@ -22,11 +23,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class Kumaraw : HttpSource() {
+@Source
+abstract class Kumaraw : HttpSource() {
 
-    override val name = "Kumaraw"
-    override val baseUrl = "https://kumaraw.com"
-    override val lang = "ja"
     override val supportsLatest = true
 
     private val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {

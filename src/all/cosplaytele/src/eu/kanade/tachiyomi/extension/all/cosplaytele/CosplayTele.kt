@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -27,13 +28,8 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class CosplayTele : HttpSource() {
-
-    override val name = "CosplayTele"
-
-    override val baseUrl = "https://cosplaytele.com"
-
-    override val lang = "all"
+@Source
+abstract class CosplayTele : HttpSource() {
 
     override val supportsLatest = true
 

@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -24,10 +25,8 @@ import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class HeyToon : HttpSource() {
-    override val name = "HeyToon"
-    override val baseUrl = "https://heytoon.net"
-    override val lang = "en"
+@Source
+abstract class HeyToon : HttpSource() {
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()

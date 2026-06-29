@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -17,13 +18,8 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class HentaiHere : HttpSource() {
-
-    override val name = "HentaiHere"
-
-    override val baseUrl = "https://hentaihere.com"
-
-    override val lang = "en"
+@Source
+abstract class HentaiHere : HttpSource() {
 
     override val supportsLatest = true
 

@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.FormBody
@@ -19,13 +20,8 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.util.Calendar
 
-class MangaBTT : HttpSource() {
-
-    override val name = "MangaBTT"
-
-    override val baseUrl = "https://manhwabtt.cc"
-
-    override val lang = "en"
+@Source
+abstract class MangaBTT : HttpSource() {
 
     override val supportsLatest = true
 

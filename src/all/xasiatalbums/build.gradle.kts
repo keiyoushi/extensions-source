@@ -4,8 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Xasiat Albums"
-    className = "XAsiatAlbums"
     versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        name = "XAsiat Albums"
+        lang = "all"
+        baseUrl = "https://www.xasiat.com"
+    }
 }

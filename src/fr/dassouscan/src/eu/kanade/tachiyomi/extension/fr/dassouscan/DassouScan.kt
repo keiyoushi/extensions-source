@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -15,13 +16,10 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DassouScan : HttpSource() {
+@Source
+abstract class DassouScan : HttpSource() {
 
-    override val name = "Dassou Scan"
-    override val baseUrl = "https://dassouscan.com"
-    override val lang = "fr"
     override val supportsLatest = true
-    override val versionId = 2
 
     private val dateFormat = SimpleDateFormat("d MMMM yyyy 'à' HH:mm", Locale.FRENCH)
 

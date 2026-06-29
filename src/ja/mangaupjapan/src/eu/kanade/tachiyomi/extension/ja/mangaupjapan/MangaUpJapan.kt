@@ -9,16 +9,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class MangaUpJapan : HttpSource() {
-    override val name = "Manga UP! (Japan)"
-    override val baseUrl = "https://www.manga-up.com"
-    override val lang = "ja"
+@Source
+abstract class MangaUpJapan : HttpSource() {
     override val supportsLatest = true
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/rankings/1", headers)

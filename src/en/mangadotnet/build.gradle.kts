@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Mangadotnet"
-    className = "Mangadotnet"
     versionCode = 13
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://mangadot.net"
+    }
 
     deeplink {
         host("mangadot.net")

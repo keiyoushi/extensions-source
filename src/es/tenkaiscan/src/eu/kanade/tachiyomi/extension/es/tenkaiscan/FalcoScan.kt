@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
@@ -19,21 +20,11 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class FalcoScan : HttpSource() {
+@Source
+abstract class FalcoScan : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
-    // Site change theme from Madara to custom theme
-    override val versionId = 3
-
-    override val name = "Falco Scan"
-
-    override val baseUrl = "https://falcoscan.net"
-
-    override val lang = "es"
-
     override val supportsLatest = true
-
-    override val id = 5992780069311625546
 
     private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
 

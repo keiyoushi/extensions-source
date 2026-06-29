@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -17,10 +18,8 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class YagamiProject : HttpSource() {
-    override val name = "YagamiProject"
-    override val baseUrl = "https://read.yagami.me"
-    override val lang = "ru"
+@Source
+abstract class YagamiProject : HttpSource() {
     override val supportsLatest = true
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

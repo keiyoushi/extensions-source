@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "LeerCapitulo"
-    className = "LeerCapitulo"
     versionCode = 17
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "es"
+        baseUrl = "https://www.leercapitulo.co"
+    }
 }
 
 dependencies {

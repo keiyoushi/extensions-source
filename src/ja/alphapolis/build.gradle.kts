@@ -4,8 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Alphapolis"
-    className = "Alphapolis"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://www.alphapolis.co.jp"
+        versionId = 2
+    }
 }

@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -17,12 +18,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class YomuMangas : HttpSource() {
+@Source
+abstract class YomuMangas : HttpSource() {
 
-    override val name = "Yomu Mangás"
-    override val baseUrl = "https://yomumangas.com"
     private val apiUrl = "https://api.yomumangas.com"
-    override val lang = "pt-BR"
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()

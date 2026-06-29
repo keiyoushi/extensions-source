@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -15,12 +16,10 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class GreedScans : HttpSource() {
+@Source
+abstract class GreedScans : HttpSource() {
 
-    override val name = "Greed Scans"
-    override val baseUrl = "https://gojoscans.com"
     private val apiUrl = "https://api.gojoscans.com/api"
-    override val lang = "en"
     override val supportsLatest = true
 
     // ==================== POPULAR ====================

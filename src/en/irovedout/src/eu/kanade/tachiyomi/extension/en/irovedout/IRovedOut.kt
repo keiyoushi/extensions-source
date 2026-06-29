@@ -8,17 +8,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class IRovedOut : HttpSource() {
+@Source
+abstract class IRovedOut : HttpSource() {
 
-    override val name = "I Roved Out"
-    override val baseUrl = "https://www.irovedout.com"
-    override val lang = "en"
     override val supportsLatest = false
     private val archiveUrl = "$baseUrl/archive"
     private val thumbnailUrl = "https://i.ibb.co/2g7Htwq/irovedout.png"

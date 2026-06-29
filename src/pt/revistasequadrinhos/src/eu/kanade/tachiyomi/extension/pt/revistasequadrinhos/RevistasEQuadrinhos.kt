@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -18,11 +19,9 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class RevistasEQuadrinhos : HttpSource() {
+@Source
+abstract class RevistasEQuadrinhos : HttpSource() {
 
-    override val name = "Revistas e Quadrinhos"
-    override val baseUrl = "https://revistasequadrinhos.com"
-    override val lang = "pt"
     override val supportsLatest = true
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ROOT)

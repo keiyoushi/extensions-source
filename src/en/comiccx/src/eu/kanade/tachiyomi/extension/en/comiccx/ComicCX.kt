@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.dataimage.DataImageInterceptor
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -20,11 +21,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Suppress("unused")
-class ComicCX : HttpSource() {
+@Source
+abstract class ComicCX : HttpSource() {
 
-    override val name = "Comic CX"
-    override val baseUrl = "https://comic.cx"
-    override val lang = "en"
     override val supportsLatest = true
 
     private val apiUrl = "$baseUrl/api"

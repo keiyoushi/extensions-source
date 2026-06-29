@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "I Roved Out"
-    className = "IRovedOut"
     versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://www.irovedout.com"
+    }
 }

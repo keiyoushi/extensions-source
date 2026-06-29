@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.network.rateLimit
 import kotlinx.serialization.json.Json
@@ -27,14 +28,11 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.getValue
 
-class LuraToon :
+@Source
+abstract class LuraToon :
     HttpSource(),
     ConfigurableSource {
-    override val baseUrl = "https://luratoons.net"
-    override val name = "Lura Toon"
-    override val lang = "pt-BR"
     override val supportsLatest = true
-    override val versionId = 2
 
     private val json: Json by injectLazy()
 

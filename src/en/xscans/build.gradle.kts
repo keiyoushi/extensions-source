@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Xscans"
-    className = "Xscans"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://xscans.site"
+    }
 }

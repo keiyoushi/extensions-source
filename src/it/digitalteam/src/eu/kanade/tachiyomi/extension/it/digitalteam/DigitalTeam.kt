@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonArray
@@ -22,13 +23,8 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DigitalTeam : HttpSource() {
-
-    override val name = "DigitalTeam"
-
-    override val baseUrl = "https://dgtread.com"
-
-    override val lang = "it"
+@Source
+abstract class DigitalTeam : HttpSource() {
 
     override val supportsLatest = false
 

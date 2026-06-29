@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Twatt"
-    className = "Twatt"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "fr"
+        baseUrl = "https://twatt.fr"
+    }
 }
 
 dependencies {

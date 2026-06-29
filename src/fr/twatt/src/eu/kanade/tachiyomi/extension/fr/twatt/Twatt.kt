@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.dataimage.DataImageInterceptor
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -18,13 +19,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class Twatt : HttpSource() {
-
-    override val name = "Twatt"
-
-    override val baseUrl = "https://twatt.fr"
-
-    override val lang = "fr"
+@Source
+abstract class Twatt : HttpSource() {
 
     override val supportsLatest = false
 

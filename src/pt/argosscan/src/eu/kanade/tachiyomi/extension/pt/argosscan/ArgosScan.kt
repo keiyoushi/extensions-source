@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -19,14 +20,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class ArgosScan : HttpSource() {
+@Source
+abstract class ArgosScan : HttpSource() {
 
-    override val name = "Argos Scan"
-
-    override val baseUrl = "https://argoscomics.online"
     private val apiUrl = "https://api.argoscomics.online"
-
-    override val lang = "pt-BR"
 
     override val supportsLatest = true
 

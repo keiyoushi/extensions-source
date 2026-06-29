@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
@@ -27,12 +28,10 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-class KiraKira :
+@Source
+abstract class KiraKira :
     HttpSource(),
     ConfigurableSource {
-    override val name = "KiraKira"
-    override val lang = "vi"
-    override val baseUrl = "https://truyenkira.com"
     override val supportsLatest = true
 
     private val apiUrl = "https://api.${baseUrl.toHttpUrl().host}"

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
@@ -14,13 +15,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class LeslieAndVictims : HttpSource() {
-
-    override val name = "Leslie&Victims"
-
-    override val baseUrl = "https://leslie-victims.pages.dev"
-
-    override val lang = "en"
+@Source
+abstract class LeslieAndVictims : HttpSource() {
 
     override val supportsLatest = false
 

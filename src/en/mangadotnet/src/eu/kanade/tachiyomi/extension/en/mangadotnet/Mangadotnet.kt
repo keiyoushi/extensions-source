@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
@@ -51,12 +52,10 @@ import java.util.TimeZone
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
-class Mangadotnet :
+@Source
+abstract class Mangadotnet :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Mangadotnet"
-    override val lang = "en"
-    override val baseUrl = "https://mangadot.net"
     override val supportsLatest = true
 
     override val client = network.client.newBuilder().build()

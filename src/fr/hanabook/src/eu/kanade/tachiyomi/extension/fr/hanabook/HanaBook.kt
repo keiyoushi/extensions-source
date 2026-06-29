@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -23,13 +24,11 @@ import okhttp3.Request
 import okhttp3.Response
 import kotlin.random.Random
 
-class HanaBook :
+@Source
+abstract class HanaBook :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Hana Book"
-    override val baseUrl = "https://www.hana-book.fr"
-    override val lang = "fr"
     override val supportsLatest = true
 
     private val apiUrl = "https://api.hana-book.fr/api-ebook/v14"

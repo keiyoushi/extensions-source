@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
@@ -22,10 +23,8 @@ import java.util.Locale
 import kotlin.io.encoding.Base64
 import kotlin.time.Duration.Companion.seconds
 
-class WaveTeamy : HttpSource() {
-    override val name = "WaveTeamy"
-    override val baseUrl = "https://waveteamy.com"
-    override val lang = "ar"
+@Source
+abstract class WaveTeamy : HttpSource() {
 
     private val cloudUrl = "https://wcloud.site"
 

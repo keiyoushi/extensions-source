@@ -8,17 +8,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class Supermega : HttpSource() {
-
-    override val name = "SUPER MEGA"
-
-    override val baseUrl = "https://www.supermegacomics.com"
-
-    override val lang = "en"
+@Source
+abstract class Supermega : HttpSource() {
 
     override val supportsLatest = false
 

@@ -9,18 +9,15 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class HentaiArchive : HttpSource() {
-    override val name = "HentaiArchive"
-
-    override val baseUrl = "https://www.hentai-archive.com"
-
-    override val lang = "it"
+@Source
+abstract class HentaiArchive : HttpSource() {
 
     private val cdnHeaders = super.headersBuilder()
         .add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")

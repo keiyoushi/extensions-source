@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Request
@@ -18,13 +19,8 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class InManga : HttpSource() {
-
-    override val name = "InManga"
-
-    override val baseUrl = "https://inmanga.com"
-
-    override val lang = "es"
+@Source
+abstract class InManga : HttpSource() {
 
     override val supportsLatest = true
 

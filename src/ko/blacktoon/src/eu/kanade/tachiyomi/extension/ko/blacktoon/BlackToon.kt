@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -19,14 +20,10 @@ import uy.kohesive.injekt.injectLazy
 import kotlin.math.min
 import kotlin.random.Random
 
-class BlackToon : HttpSource() {
-
-    override val name = "블랙툰"
-
-    override val lang = "ko"
+@Source
+abstract class BlackToon : HttpSource() {
 
     private var currentBaseUrlHost = ""
-    override val baseUrl = "https://blacktoon.me"
 
     private val cdnUrl = "https://blacktoonimg.com/"
 

@@ -4,8 +4,13 @@ plugins {
 
 keiyoushi {
     name = "HonkaiImpact3"
-    className = "Honkaiimpact"
     versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        name = "Honkai Impact 3rd"
+        lang = "en"
+        baseUrl = "https://manga.honkaiimpact3.com"
+    }
 }

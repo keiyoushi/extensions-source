@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -21,13 +22,8 @@ import java.util.Calendar
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class FuryoSquad : HttpSource() {
-
-    override val name = "FuryoSquad"
-
-    override val baseUrl = "https://www.furyosociety.com"
-
-    override val lang = "fr"
+@Source
+abstract class FuryoSquad : HttpSource() {
 
     override val supportsLatest = true
 

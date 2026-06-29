@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -29,11 +30,9 @@ import java.nio.charset.StandardCharsets
 import java.util.Calendar
 import java.util.Locale
 
-class MangaTR : HttpSource() {
+@Source
+abstract class MangaTR : HttpSource() {
 
-    override val name = "Manga-TR"
-    override val baseUrl = "https://manga-tr.com"
-    override val lang = "tr"
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()
