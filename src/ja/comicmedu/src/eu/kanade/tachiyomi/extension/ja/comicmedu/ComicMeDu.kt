@@ -9,7 +9,7 @@ class ComicMeDu :
         "G-Comi",
         "https://g-comi.jp",
         "ja",
-        "https://g-comi.jp/api/",
+        "https://g-comi.jp/api",
     ) {
     override val id = 7310112963091407823
 
