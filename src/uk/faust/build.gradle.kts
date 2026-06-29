@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Faust"
-    className = "Faust"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "uk"
+        baseUrl = "https://faust-web.com"
+    }
 }

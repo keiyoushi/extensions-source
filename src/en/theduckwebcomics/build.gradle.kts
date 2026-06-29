@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "The Duck Webcomics"
-    className = "TheDuckWebcomics"
     versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://www.theduckwebcomics.com"
+    }
 }

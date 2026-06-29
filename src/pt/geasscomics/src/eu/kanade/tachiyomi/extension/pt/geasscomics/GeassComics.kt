@@ -17,6 +17,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -38,21 +39,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class GeassComics :
+@Source
+abstract class GeassComics :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Geass Comics"
-
-    override val baseUrl = "https://geasscomics.xyz"
-
     private val apiUrl = "https://api.skkyscan.fun"
 
-    override val lang = "pt-BR"
-
     override val supportsLatest = true
-
-    override val versionId: Int = 2
 
     private val preferences by getPreferencesLazy()
 

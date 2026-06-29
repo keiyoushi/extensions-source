@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -17,10 +18,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class SenManga : HttpSource() {
-    override val name = "Sen Manga"
-    override val baseUrl = "https://raw.senmanga.com"
-    override val lang = "ja"
+@Source
+abstract class SenManga : HttpSource() {
     override val supportsLatest = true
 
     private val apiUrl = "$baseUrl/api"

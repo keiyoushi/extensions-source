@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -16,11 +17,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 
-class SleptManga : HttpSource() {
+@Source
+abstract class SleptManga : HttpSource() {
 
-    override val name = "Slept Manga"
-    override val baseUrl = "https://sleptmanga.com.tr"
-    override val lang = "tr"
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()

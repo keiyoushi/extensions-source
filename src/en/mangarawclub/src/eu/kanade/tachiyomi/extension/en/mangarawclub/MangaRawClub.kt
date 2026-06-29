@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -27,14 +28,11 @@ import kotlin.time.Duration.Companion.seconds
 private val DATE_FORMATTER = SimpleDateFormat("MMMM dd, yyyy, h:mm a", Locale.ENGLISH)
 private val DATE_FORMATTER_2 = SimpleDateFormat("MMMM dd, yyyy, h a", Locale.ENGLISH)
 
-class MangaRawClub :
+@Source
+abstract class MangaRawClub :
     HttpSource(),
     ConfigurableSource {
 
-    override val id = 734865402529567092
-    override val name = "MangaGeko"
-    override val baseUrl = "https://www.mgeko.cc"
-    override val lang = "en"
     override val supportsLatest = true
     override val client: OkHttpClient = network.client.newBuilder()
         .connectTimeout(10.seconds)

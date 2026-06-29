@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Dark Science"
-    className = "DarkScience"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://dresdencodak.com"
+    }
 }

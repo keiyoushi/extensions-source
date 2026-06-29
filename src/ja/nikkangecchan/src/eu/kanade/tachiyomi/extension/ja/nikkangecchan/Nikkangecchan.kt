@@ -8,18 +8,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class Nikkangecchan : HttpSource() {
-
-    override val name = "Nikkangecchan"
-
-    override val baseUrl = "https://nikkangecchan.jp"
-
-    override val lang = "ja"
+@Source
+abstract class Nikkangecchan : HttpSource() {
 
     override val supportsLatest = false
 

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.graphQLPost
 import keiyoushi.utils.parseGraphQLAs
@@ -17,18 +18,10 @@ import okhttp3.Request
 import okhttp3.Response
 import kotlin.time.Duration.Companion.seconds
 
-class VoyceMe : HttpSource() {
+@Source
+abstract class VoyceMe : HttpSource() {
     private val graphqlurlHost by lazy { GRAPHQL_URL.toHttpUrl().host }
     private val staticurlHost by lazy { STATIC_URL.toHttpUrl().host }
-
-    // Renamed from "Voyce.Me" to "VoyceMe" as the site uses.
-    override val id = 4815322300278778429
-
-    override val name = "VoyceMe"
-
-    override val baseUrl = "https://www.voyce.me"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 

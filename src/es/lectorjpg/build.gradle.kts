@@ -4,8 +4,13 @@ plugins {
 
 keiyoushi {
     name = "LectorJPG"
-    className = "LectorJpg"
     versionCode = 50
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "es"
+        baseUrl = "https://visorjpg.lat"
+        versionId = 3
+    }
 }

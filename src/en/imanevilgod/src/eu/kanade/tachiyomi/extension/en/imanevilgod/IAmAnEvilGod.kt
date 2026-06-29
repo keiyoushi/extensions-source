@@ -8,15 +8,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import org.jsoup.Jsoup
 import rx.Observable
 
-class IAmAnEvilGod : HttpSource() {
+@Source
+abstract class IAmAnEvilGod : HttpSource() {
 
-    override val name = "I'm An Evil God"
-    override val baseUrl = "https://imanevilgod.com"
-    override val lang = "en"
     override val supportsLatest = false
 
     // --- Catalogue (single entry) ---

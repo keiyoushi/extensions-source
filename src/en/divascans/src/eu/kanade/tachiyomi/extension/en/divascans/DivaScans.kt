@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -26,14 +27,12 @@ import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DivaScans :
+@Source
+abstract class DivaScans :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Diva Scans"
     override val id: Long = 5481739102875145368L
-    override val baseUrl = "https://divascans.org"
-    override val lang = "en"
     override val supportsLatest = true
     private val preferences by getPreferencesLazy()
 

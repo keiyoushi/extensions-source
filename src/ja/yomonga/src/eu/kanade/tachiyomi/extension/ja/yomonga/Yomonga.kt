@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.SpeedBinbReader
 import keiyoushi.utils.firstInstance
@@ -17,10 +18,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class Yomonga : HttpSource() {
-    override val name = "Yomonga"
-    override val baseUrl = "https://www.yomonga.com"
-    override val lang = "ja"
+@Source
+abstract class Yomonga : HttpSource() {
     override val supportsLatest = false
 
     private val reader by lazy { SpeedBinbReader(client, headers, jsonInstance, true) }

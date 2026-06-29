@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -24,10 +25,8 @@ import java.util.Locale
 import kotlin.collections.joinToString
 import kotlin.getValue
 
-class MangaDraft : HttpSource() {
-    override val name = "MangaDraft"
-    override val baseUrl = "https://mangadraft.com"
-    override val lang = "all"
+@Source
+abstract class MangaDraft : HttpSource() {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 

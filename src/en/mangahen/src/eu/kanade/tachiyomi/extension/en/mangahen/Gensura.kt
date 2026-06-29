@@ -9,26 +9,19 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SManga.Companion.COMPLETED
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class Gensura : HttpSource() {
-
-    override val name = "Gensura"
-
-    override val baseUrl = "https://gensura.net"
+@Source
+abstract class Gensura : HttpSource() {
 
     private val advSearchURL = "$baseUrl/advanced-search"
 
-    override val lang = "en"
-
     override val supportsLatest = true
-
-    // MangaHen -> Gensura
-    override val id = 6602595408477221375
 
     private var tagsList: List<String> = listOf()
 

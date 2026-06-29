@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
@@ -26,11 +27,9 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ManhwaZone : HttpSource() {
+@Source
+abstract class ManhwaZone : HttpSource() {
 
-    override val name = "ManhwaZone"
-    override val baseUrl = "https://manhwazone.com"
-    override val lang = "en"
     override val supportsLatest = true
 
     private val dateFormat by lazy {

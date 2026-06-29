@@ -4,8 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Picacomic"
-    className = "Picacomic"
     versionCode = 8
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        name = "哔咔漫画"
+        lang = "zh"
+        baseUrl = "https://picaapi.picacomic.com"
+    }
 }

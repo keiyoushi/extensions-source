@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Mangalay"
-    className = "Mangalay"
     versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "id"
+        baseUrl = "http://mangalay.blogspot.com"
+    }
 }

@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -45,17 +46,12 @@ import org.jsoup.nodes.Document
 import java.util.Collections
 import kotlin.time.Duration.Companion.seconds
 
-class AsuraScans :
+@Source
+abstract class AsuraScans :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Asura Scans"
-
-    override val baseUrl = "https://asurascans.com"
-
     private val apiUrl = "https://api.asurascans.com/api"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 

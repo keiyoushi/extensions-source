@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Platinum Lily Scan"
-    className = "PlatinumLilyScan"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "es"
+        baseUrl = "https://platinumlilyscan.com"
+    }
 }

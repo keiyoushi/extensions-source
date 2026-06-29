@@ -3,11 +3,11 @@ plugins {
 }
 
 keiyoushi {
-    name = "Comic MeDu"
+    name = "G-Comi"
     className = "ComicMeDu"
-    versionCode = 0
-    contentWarning = ContentWarning.SAFE
+    versionCode = 1
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "comiciviewer"
-    baseUrl = "https://comic-medu.com"
+    baseUrl = "https://g-comi.jp"
 }

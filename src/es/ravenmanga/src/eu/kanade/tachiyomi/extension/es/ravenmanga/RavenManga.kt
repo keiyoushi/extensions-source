@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
@@ -21,14 +22,9 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import java.util.Calendar
 
-class RavenManga : HttpSource() {
+@Source
+abstract class RavenManga : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val name = "RavenManga"
-
-    override val baseUrl = "https://raventard.xyz"
-
-    override val lang = "es"
 
     override val supportsLatest = true
 

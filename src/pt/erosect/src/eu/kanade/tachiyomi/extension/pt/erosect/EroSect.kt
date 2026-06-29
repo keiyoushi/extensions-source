@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonObject
@@ -19,17 +20,12 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class EroSect :
+@Source
+abstract class EroSect :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "EroSect"
-
-    override val baseUrl = "https://erosect.xyz"
-
     private val apiUrl = "$baseUrl/api"
-
-    override val lang = "pt-BR"
 
     override val supportsLatest = true
 

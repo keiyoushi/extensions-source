@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -16,12 +17,9 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Alucardscans : HttpSource() {
-    override val name = "Alucard Scans"
-    override val baseUrl = "https://alucardscans.com"
-    override val lang = "tr"
+@Source
+abstract class Alucardscans : HttpSource() {
     override val supportsLatest = true
-    override val versionId = 2
 
     private val alucardApi = "api/series?sort=views&order=desc&calculateTotalViews=true&page=SAYFA&limit=24"
     private val latestApi = "api/chapters/latest?page=SAYFA&limit=10"

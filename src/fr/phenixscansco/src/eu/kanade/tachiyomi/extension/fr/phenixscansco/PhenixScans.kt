@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.float
@@ -16,11 +17,9 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class PhenixScans : HttpSource() {
-    override val baseUrl = "https://phenix-scans.co"
+@Source
+abstract class PhenixScans : HttpSource() {
     private val apiBaseUrl = "https://api.phenix-scans.co/api"
-    override val lang = "fr"
-    override val name = "Phenix Scans (unoriginal)"
     override val supportsLatest = true
 
     private val simpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.FRENCH)

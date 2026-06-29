@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -28,15 +29,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class KuroMangas :
+@Source
+abstract class KuroMangas :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "KuroMangas"
-
-    override val baseUrl = "https://kuromangas.com"
-
-    override val lang = "pt-BR"
 
     override val supportsLatest = true
 

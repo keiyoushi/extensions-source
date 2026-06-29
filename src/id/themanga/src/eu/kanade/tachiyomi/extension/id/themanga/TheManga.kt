@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -19,11 +20,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 // Madara to HttpSource
-class TheManga : HttpSource() {
+@Source
+abstract class TheManga : HttpSource() {
 
-    override val name = "TheManga"
-    override val baseUrl = "https://themanga.site"
-    override val lang = "id"
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()

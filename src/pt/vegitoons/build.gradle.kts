@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Vegitoons"
-    className = "Vegitoons"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "greenshit"
-    baseUrl = "https://vegitoons.black"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://vegitoons.black"
+    }
 }

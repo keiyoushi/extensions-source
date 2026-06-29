@@ -9,16 +9,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class MyHentaiComics : HttpSource() {
+@Source
+abstract class MyHentaiComics : HttpSource() {
 
-    override val name = "MyHentaiComics"
-    override val baseUrl = "https://myhentaicomics.com"
-    override val lang = "en"
     override val supportsLatest = true
 
     // =============================== Popular ================================

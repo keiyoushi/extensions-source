@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.Request
 import okhttp3.Response
@@ -15,13 +16,8 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Randowiz : HttpSource() {
-
-    override val name = "Randowiz"
-
-    override val baseUrl = "https://randowis.com"
-
-    override val lang = "en"
+@Source
+abstract class Randowiz : HttpSource() {
 
     override val supportsLatest = false
 

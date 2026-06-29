@@ -8,18 +8,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.util.Calendar
 
-class YaoiHot : HttpSource() {
-
-    override val name = "YaoiHot"
-
-    override val baseUrl = "https://yaoihot.com"
-
-    override val lang = "en"
+@Source
+abstract class YaoiHot : HttpSource() {
 
     override val supportsLatest = true
 

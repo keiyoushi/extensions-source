@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.synchrony.Deobfuscator
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
@@ -21,16 +22,11 @@ import org.jsoup.nodes.Element
 import java.nio.charset.Charset
 import kotlin.time.Duration.Companion.seconds
 
-class LeerCapitulo : HttpSource() {
+@Source
+abstract class LeerCapitulo : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
-    override val name = "LeerCapitulo"
-
-    override val lang = "es"
-
     override val supportsLatest = true
-
-    override val baseUrl = "https://www.leercapitulo.co"
 
     override val client = network.client.newBuilder()
         .rateLimit(1, 3.seconds) { it.host == baseUrlHost }

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -16,13 +17,8 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class HeavenManga : HttpSource() {
-
-    override val name = "HeavenManga"
-
-    override val baseUrl = "https://heavenmanga.com"
-
-    override val lang = "es"
+@Source
+abstract class HeavenManga : HttpSource() {
 
     override val supportsLatest = true
 

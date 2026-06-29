@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Komik Next G Online"
-    className = "KomikNextGOnline"
     versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "id"
+        baseUrl = "https://komiknextgonline.com"
+    }
 }

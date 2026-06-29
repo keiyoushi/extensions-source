@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -18,17 +19,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class Atsumaru :
+@Source
+abstract class Atsumaru :
     HttpSource(),
     ConfigurableSource {
-
-    override val versionId = 2
-
-    override val name = "Atsumaru"
-
-    override val baseUrl = "https://atsu.moe"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 

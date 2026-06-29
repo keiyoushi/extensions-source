@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -28,13 +29,11 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
 
-class ScansFR :
+@Source
+abstract class ScansFR :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "ScansFR"
-    override val baseUrl = "https://scansfr.com"
-    override val lang = "fr"
     override val supportsLatest = true
 
     private val apiUrl = "https://api.scansfr.com"

@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
@@ -23,15 +24,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class BiliManga :
+@Source
+abstract class BiliManga :
     HttpSource(),
     ConfigurableSource {
-    override val id = 7289707411592168382
-    override val baseUrl = "https://www.bilimanga.net"
-
-    override val lang = "zh"
-
-    override val name = "嗶哩漫畫"
 
     override val supportsLatest = true
 

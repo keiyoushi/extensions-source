@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -22,17 +23,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class WebdexScans :
+@Source
+abstract class WebdexScans :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Webdex Scans"
-    override val baseUrl = "https://webdexscans.com"
-    override val lang = "en"
     override val supportsLatest = true
 
     // Hardcode versionId to force users to migrate their old Madara entries.
-    override val versionId = 2
 
     private val preferences by getPreferencesLazy()
 

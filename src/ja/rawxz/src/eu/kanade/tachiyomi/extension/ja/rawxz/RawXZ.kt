@@ -8,18 +8,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.util.Calendar
 
-class RawXZ : HttpSource() {
-    override val name = "RawZO"
-    override val baseUrl = "https://rawzo.net"
-    override val lang = "ja"
+@Source
+abstract class RawXZ : HttpSource() {
     override val supportsLatest = true
-
-    override val id = 7950551186567193810L
 
     // Popular Manga
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga/page/$page/?orderby=views", headers)

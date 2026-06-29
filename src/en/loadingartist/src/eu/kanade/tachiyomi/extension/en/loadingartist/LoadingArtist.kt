@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -20,12 +21,8 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class LoadingArtist : HttpSource() {
-    override val name = "Loading Artist"
-
-    override val baseUrl = "https://loadingartist.com"
-
-    override val lang = "en"
+@Source
+abstract class LoadingArtist : HttpSource() {
 
     override val supportsLatest = false
 

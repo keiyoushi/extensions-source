@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "AComics"
-    className = "AComics"
     versionCode = 8
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "ru"
+        baseUrl = "https://acomics.ru"
+    }
 }

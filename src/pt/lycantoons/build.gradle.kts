@@ -4,9 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Lycan Toons"
-    className = "LycanToons"
     versionCode = 6
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
-    baseUrl = "https://lycantoons.com"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://lycantoons.com"
+    }
 }

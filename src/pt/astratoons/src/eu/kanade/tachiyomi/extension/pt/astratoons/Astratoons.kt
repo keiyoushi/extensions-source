@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -17,20 +18,15 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 
-class Astratoons : HttpSource() {
-
-    override val name = "Astratoons"
-
-    override val baseUrl = "https://new.astratoons.com"
-
-    override val lang = "pt-BR"
+@Source
+abstract class Astratoons : HttpSource() {
 
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(2)
         .build()
-    override val versionId: Int = 2
+
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 

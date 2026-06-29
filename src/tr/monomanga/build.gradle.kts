@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Mono Manga"
-    className = "MonoManga"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://monomanga.com.tr"
+    }
 }

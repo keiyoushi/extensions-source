@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferences
 import okhttp3.Request
 import okhttp3.Response
@@ -19,11 +20,9 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
 
-class TCBScans : HttpSource() {
+@Source
+abstract class TCBScans : HttpSource() {
 
-    override val name = "TCB Scans"
-    override val baseUrl = "https://tcbonepiecechapters.com"
-    override val lang = "en"
     override val supportsLatest = false
 
     override val client = network.client.newBuilder().addNetworkInterceptor { chain ->

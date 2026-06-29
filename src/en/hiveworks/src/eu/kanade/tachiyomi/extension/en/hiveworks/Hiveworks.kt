@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.Call
 import okhttp3.OkHttpClient
@@ -27,13 +28,11 @@ import kotlin.time.Duration.Companion.minutes
  * Code that used to handle Saturday Morning Breakfast Comics has been split to its
  * own separate extension at eu.kanade.tachiyomi.extension.en.saturdaymorningbreakfastcomics
  */
-class Hiveworks : HttpSource() {
+@Source
+abstract class Hiveworks : HttpSource() {
 
     // Info
 
-    override val name = "Hiveworks Comics"
-    override val baseUrl = "https://hiveworkscomics.com"
-    override val lang = "en"
     override val supportsLatest = true
 
     // Client

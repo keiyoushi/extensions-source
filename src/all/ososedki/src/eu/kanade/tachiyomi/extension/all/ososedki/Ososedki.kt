@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -23,10 +24,8 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Ososedki : HttpSource() {
-    override val name = "OSOSEDKI"
-    override val baseUrl = "https://ososedki.com"
-    override val lang = "all"
+@Source
+abstract class Ososedki : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()

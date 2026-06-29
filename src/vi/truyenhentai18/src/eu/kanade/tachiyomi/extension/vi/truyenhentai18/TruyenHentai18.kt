@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -15,13 +16,8 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.util.Calendar
 
-class TruyenHentai18 : HttpSource() {
-
-    override val name = "Truyện Hentai 18+"
-
-    override val baseUrl = "https://truyenhentai18.net"
-
-    override val lang = "vi"
+@Source
+abstract class TruyenHentai18 : HttpSource() {
 
     override val supportsLatest = true
 

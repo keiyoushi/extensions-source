@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
@@ -14,11 +15,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class NixManga : HttpSource() {
+@Source
+abstract class NixManga : HttpSource() {
 
-    override val name = "NixManga"
-    override val baseUrl = "https://nixmanga.com"
-    override val lang = "en"
     override val supportsLatest = true
 
     private val apiUrl = "https://api.nixmanga.com"

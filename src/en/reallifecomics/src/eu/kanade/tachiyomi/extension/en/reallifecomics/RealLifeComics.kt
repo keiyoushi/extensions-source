@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.Request
 import okhttp3.Response
@@ -16,13 +17,8 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class RealLifeComics : HttpSource() {
-
-    override val name = "Real Life Comics"
-
-    override val baseUrl = "https://reallifecomics.com"
-
-    override val lang = "en"
+@Source
+abstract class RealLifeComics : HttpSource() {
 
     override val supportsLatest = false
 

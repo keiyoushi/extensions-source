@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -21,13 +22,8 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Calendar
 
-class NineHentai : HttpSource() {
-
-    override val baseUrl = "https://9hentai.so"
-
-    override val name = "NineHentai"
-
-    override val lang = "en"
+@Source
+abstract class NineHentai : HttpSource() {
 
     override val supportsLatest = true
 

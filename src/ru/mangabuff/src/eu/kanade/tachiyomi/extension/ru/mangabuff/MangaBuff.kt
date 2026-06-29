@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -35,12 +36,10 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaBuff :
+@Source
+abstract class MangaBuff :
     HttpSource(),
     ConfigurableSource {
-    override val baseUrl = "https://mangabuff.ru"
-    override val lang = "ru"
-    override val name = "MangaBuff"
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()

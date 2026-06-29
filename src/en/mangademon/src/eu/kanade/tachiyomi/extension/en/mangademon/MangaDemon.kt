@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -20,14 +21,10 @@ import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaDemon : HttpSource() {
+@Source
+abstract class MangaDemon : HttpSource() {
 
-    override val versionId = 2
-
-    override val lang = "en"
     override val supportsLatest = true
-    override val name = "Manga Demon"
-    override val baseUrl = "https://demonicscans.org"
 
     override val client = network.client.newBuilder()
         .rateLimit(6) { it.toString().contains("images/thumbnails") }

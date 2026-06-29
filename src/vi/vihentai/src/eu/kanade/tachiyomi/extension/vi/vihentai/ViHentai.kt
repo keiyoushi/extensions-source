@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -29,13 +30,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class ViHentai : HttpSource() {
-
-    override val name = "ViHentai"
-
-    override val baseUrl = "https://vi-hentai.moe"
-
-    override val lang = "vi"
+@Source
+abstract class ViHentai : HttpSource() {
 
     override val supportsLatest = true
 

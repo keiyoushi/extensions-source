@@ -4,11 +4,14 @@ plugins {
 
 keiyoushi {
     name = "ComicK Fanmade"
-    className = "ComicKFan"
     versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
-    baseUrl = "https://comickfan.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://comickfan.com"
+    }
 
     deeplink {
         host("comickfan.com")

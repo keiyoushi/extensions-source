@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Revistas e Quadrinhos"
-    className = "RevistasEQuadrinhos"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "pt"
+        baseUrl = "https://revistasequadrinhos.com"
+    }
 }

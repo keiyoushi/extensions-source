@@ -4,11 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Kumaraw"
-    className = "Kumaraw"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
-    baseUrl = "https://kumaraw.com"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://kumaraw.com"
+    }
 
     deeplink {
         host("kumaraw.com")

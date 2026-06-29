@@ -131,23 +131,82 @@ class LunarWebViewSigner(
 
                     req.onsuccess = function(e) {
                         db = e.target.result;
-                        const tx = db.transaction("store", "readonly");
-                        const store = tx.objectStore("store");
-                        const get = store.get("device-key-secure");
+                        try {
+                            const storeNames = Array.from(db.objectStoreNames);
+                            let found = false;
+                            let checked = 0;
 
-                        get.onsuccess = function() {
-                            db.close();
-                            resolve(get.result);
-                        };
+                            for (const storeName of storeNames) {
+                                const tx = db.transaction(storeName, "readonly");
+                                const store = tx.objectStore(storeName);
 
-                        get.onerror = function() {
+                                function fallbackScan() {
+                                    const getAllReq = store.getAll();
+                                    getAllReq.onsuccess = function() {
+                                        const items = getAllReq.result || [];
+                                        for (const item of items) {
+                                            if (item && item.privateKey && item.publicJwk) {
+                                                found = true;
+                                                db.close();
+                                                resolve(item);
+                                                return;
+                                            }
+                                        }
+                                        checked++;
+                                        if (checked === storeNames.length && !found) {
+                                            db.close();
+                                            reject();
+                                        }
+                                    };
+                                    getAllReq.onerror = function() {
+                                        checked++;
+                                        if (checked === storeNames.length && !found) {
+                                            db.close();
+                                            reject();
+                                        }
+                                    };
+                                }
+
+                                const metaReq = store.get("sw-cache-meta");
+                                metaReq.onsuccess = function() {
+                                    const meta = metaReq.result;
+                                    let activeId = null;
+                                    if (meta && typeof meta === 'object' && Array.isArray(meta.ids) &&
+                                        typeof meta.sel === 'number' && meta.sel >= 0 && meta.sel < meta.ids.length) {
+                                        activeId = meta.ids[meta.sel];
+                                    }
+                                    if (activeId) {
+                                        const keyReq = store.get(activeId);
+                                        keyReq.onsuccess = function() {
+                                            const keyData = keyReq.result;
+                                            if (keyData && keyData.privateKey && keyData.publicJwk) {
+                                                found = true;
+                                                db.close();
+                                                resolve(keyData);
+                                                return;
+                                            }
+                                            fallbackScan();
+                                        };
+                                        keyReq.onerror = fallbackScan;
+                                    } else {
+                                        fallbackScan();
+                                    }
+                                };
+                                metaReq.onerror = fallbackScan;
+                            }
+
+                            if (storeNames.length === 0) {
+                                db.close();
+                                reject();
+                            }
+                        } catch (err) {
                             db.close();
-                            reject(get.error);
-                        };
+                            reject();
+                        }
                     };
 
                     req.onerror = function() {
-                        reject(req.error);
+                        reject();
                     };
                 });
             }

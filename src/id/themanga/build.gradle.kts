@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "TheManga"
-    className = "TheManga"
     versionCode = 49
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "id"
+        baseUrl = "https://themanga.site"
+    }
 }

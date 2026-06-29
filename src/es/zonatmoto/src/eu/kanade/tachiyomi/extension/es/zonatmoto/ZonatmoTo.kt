@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -18,13 +19,8 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ZonatmoTo : HttpSource() {
-
-    override val name = "Zonatmo.to (unoriginal)"
-
-    override val baseUrl = "https://zonatmo.to"
-
-    override val lang = "es"
+@Source
+abstract class ZonatmoTo : HttpSource() {
 
     override val supportsLatest = false
 

@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,14 +23,11 @@ import okhttp3.Request
 import okhttp3.Response
 import java.net.URLDecoder
 
-class Cartoon18 :
+@Source
+abstract class Cartoon18 :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Cartoon18"
-    override val lang = "zh"
     override val supportsLatest = true
-
-    override val baseUrl = "https://www.cartoon18.com"
 
     private val baseUrlWithLang get() = if (useTrad) baseUrl else "$baseUrl/zh-hans"
 

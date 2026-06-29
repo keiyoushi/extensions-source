@@ -29,6 +29,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.e4p.E4PInterceptor
 import keiyoushi.lib.e4p.E4PManifestReader
 import keiyoushi.utils.getPreferencesLazy
@@ -39,19 +40,13 @@ import okhttp3.Response
 import rx.Observable
 import java.io.IOException
 
-class BookWalker :
+@Source
+abstract class BookWalker :
     HttpSource(),
     ConfigurableSource,
     BookWalkerPreferences {
 
-    override val name = "BookWalker"
-
     // ID from before the BookWalker migration.
-    override val id = 2744810059574599668
-
-    override val baseUrl = "https://bookwalker.com"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 

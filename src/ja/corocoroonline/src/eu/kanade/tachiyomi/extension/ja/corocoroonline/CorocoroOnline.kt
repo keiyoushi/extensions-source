@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.extension.ja.corocoroonline
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,168 +11,124 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
-import keiyoushi.utils.parseAs
-import kotlinx.serialization.decodeFromByteArray
-import kotlinx.serialization.encodeToByteArray
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.protobuf.ProtoBuf
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAsProto
+import keiyoushi.utils.toRequestBodyProto
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
-import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.util.Calendar
 import java.util.TimeZone
 
-class CorocoroOnline : HttpSource() {
-    override val name = "Corocoro Online"
-    override val baseUrl = "https://www.corocoro.jp"
-    override val lang = "ja"
+@Source
+abstract class CorocoroOnline :
+    HttpSource(),
+    ConfigurableSource {
     override val supportsLatest = true
-    override val versionId = 2
 
     private val apiUrl = "$baseUrl/api/csr"
+    private val preferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
         .build()
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ranking", super.headersBuilder().add("rsc", "1").build())
+    override fun popularMangaRequest(page: Int): Request = rankingRequest()
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val category = response.request.url.fragment ?: "総合"
-        val body = response.body.string()
-        val rankingLine = body.lines().firstOrNull { it.contains("\"rankingList\"") }
-        val jsonStart = rankingLine?.indexOf('[').takeIf { it != -1 }
-            ?: return MangasPage(emptyList(), false)
-        val jsonArray = rankingLine?.substring(jsonStart)?.parseAs<JsonArray>()
-        val container = jsonArray?.last().toString().parseAs<RscRankingContainer>()
-
-        val mangas = container.rankingList.firstOrNull { it.rankingTypeName == category }
-            ?.titles?.map { it.toSManga() }
-            ?: emptyList()
-
+        val mangas = response.parseAsProto<PopularResponse>().rankingLists.firstOrNull()?.toSMangaList().orEmpty()
         return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val day = getLatestDay()
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("rq", "title/list/update_day")
-            .addQueryParameter("day", day)
-            .build()
-        return GET(url, headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = updateDayRequest(getLatestDay())
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val titleListView = response.parseAsProto<TitleListView>()
-        val mangas = titleListView.list?.titles.orEmpty().map { it.toSManga() }
+        val titles = response.parseAsProto<TitleListView>().list?.titles.orEmpty()
+        val mangas = titles.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotEmpty()) {
+        if (query.isNotBlank()) {
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("keyword", query)
                 .build()
             return GET(url, headers)
         }
 
-        val filter = filters.firstInstance<SelectFilter>()
-        return when (val selection = filter.toUriPart()) {
-            "mon", "tue", "wed", "thu", "fri", "sat", "sun" -> {
-                val url = apiUrl.toHttpUrl().newBuilder()
-                    .addQueryParameter("rq", "title/list/update_day")
-                    .addQueryParameter("day", selection)
-                    .build()
-                GET(url, headers)
-            }
-
-            "completed" -> GET("$baseUrl/rensai/completed", headers)
-
-            "one-shot" -> GET("$baseUrl/rensai/one-shot", headers)
-
-            else -> {
-                GET("$baseUrl/ranking#$selection", super.headersBuilder().add("rsc", "1").build())
-            }
+        return when (val category = filters.firstInstance<CategoryFilter>().value) {
+            in WEEKDAYS -> updateDayRequest(category)
+            "completed", "one-shot" -> GET("$baseUrl/rensai/$category", headers)
+            else -> rankingRequest(category)
         }
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val requestUrl = response.request.url
-
+        val url = response.request.url
         return when {
-            requestUrl.pathSegments.contains("search") ||
-                requestUrl.pathSegments.contains("completed") ||
-                requestUrl.pathSegments.contains("one-shot") -> {
-                val document = response.asJsoup()
-                val mangas = document.select("div.grid > a[href^='/title/']").map {
-                    SManga.create().apply {
-                        setUrlWithoutDomain(it.absUrl("href"))
-                        title = it.selectFirst("p.text-black")?.text() ?: it.selectFirst("p")!!.text()
-                        thumbnail_url = it.selectFirst("img")?.absUrl("src")
-                    }
-                }
-                MangasPage(mangas, false)
-            }
-
-            requestUrl.pathSegments.contains("ranking") -> popularMangaParse(response)
-
-            requestUrl.pathSegments.contains("api") -> latestUpdatesParse(response)
-
-            else -> MangasPage(emptyList(), false)
+            url.pathSegments.any { it in HTML_PATHS } -> seriesListParse(response)
+            url.queryParameter("day") != null -> latestUpdatesParse(response)
+            else -> rankingParse(response)
         }
     }
 
+    private fun seriesListParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("div.grid > a[href^='/title/']").map {
+            SManga.create().apply {
+                setUrlWithoutDomain(it.absUrl("href").toHttpUrl().pathSegments.last())
+                title = it.selectFirst("p.text-black")?.text() ?: it.selectFirst("p")!!.text()
+                thumbnail_url = it.selectFirst("img")?.absUrl("src")
+            }
+        }
+        return MangasPage(mangas, false)
+    }
+
+    private fun rankingParse(response: Response): MangasPage {
+        val (id, type) = response.request.url.fragment!!.split(":")
+        val mangas = response.parseAsProto<PopularResponse>().rankingLists.firstOrNull { it.tag.id == id && it.tag.type == type }?.toSMangaList().orEmpty()
+        return MangasPage(mangas, false)
+    }
+
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val titleId = manga.url.substringAfterLast("/")
         val url = apiUrl.toHttpUrl().newBuilder()
             .addQueryParameter("rq", "title/detail")
-            .addQueryParameter("title_id", titleId)
+            .addQueryParameter("title_id", manga.url)
             .build()
         return GET(url, headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val detailView = response.parseAsProto<TitleDetailView>()
-        return detailView.toSManga()
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAsProto<TitleDetailView>().toSManga()
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/title/${manga.url}"
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val detailView = response.parseAsProto<TitleDetailView>()
-        val chapters = detailView.chapters.map { it.toSChapter() }
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        val chapters = response.parseAsProto<TitleDetailView>().chapters
+            .filter { !hideLocked || !it.isLocked }
+            .map { it.toSChapter() }
+
         val first = chapters.first()
         val last = chapters.last()
 
         val isAscending = when {
-            first.date_upload < last.date_upload -> true
-
-            first.date_upload > last.date_upload -> false
-
+            first.date_upload != last.date_upload -> first.date_upload < last.date_upload
             first.chapter_number > -1 && last.chapter_number > -1 -> first.chapter_number < last.chapter_number
-
-            else -> {
-                val firstId = first.url.substringAfterLast("/").toLong()
-                val lastId = last.url.substringAfterLast("/").toLong()
-                firstId < lastId
-            }
+            else -> first.url.toLong() < last.url.toLong()
         }
         return if (isAscending) chapters.reversed() else chapters
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url}"
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val id = chapter.url.substringAfterLast("/")
         val url = apiUrl.toHttpUrl().newBuilder()
             .addQueryParameter("rq", "chapter/viewer")
-            .addQueryParameter("chapter_id", id)
+            .addQueryParameter("chapter_id", chapter.url)
             .build()
 
         return Request.Builder()
@@ -183,28 +141,49 @@ class CorocoroOnline : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val result = try {
             response.parseAsProto<ViewerView>()
-        } catch (e: Exception) {
-            throw Exception("Log in via WebView and purchase this chapter")
+        } catch (_: Exception) {
+            throw Exception("Log in via WebView and purchase this chapter to read.")
         }
-        val key = result.aesKey
-        val iv = result.aesIv
 
         return result.pages.mapIndexed { i, img ->
-            val imageUrls = img.url.toHttpUrl().newBuilder()
-                .fragment("key=$key#iv=$iv")
+            val imageUrl = img.url.toHttpUrl().newBuilder()
+                .fragment("keys=${result.aesKey}:${result.aesIv}")
                 .build()
                 .toString()
-            Page(i, imageUrl = imageUrls)
+            Page(i, imageUrl = imageUrl)
         }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // Helpers
-    private inline fun <reified T> Response.parseAsProto(): T = ProtoBuf.decodeFromByteArray(body.bytes())
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_PREF_KEY
+            title = "Hide Paid Chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
 
-    private inline fun <reified T : Any> T.toRequestBodyProto(): RequestBody = ProtoBuf.encodeToByteArray(this)
-        .toRequestBody("application/protobuf".toMediaType())
+    // Filter
+    override fun getFilterList() = FilterList(
+        CategoryFilter(),
+    )
+
+    private fun rankingRequest(category: String? = null): Request {
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("rq", "title/list/ranking")
+            .apply { category?.let { fragment(it) } }
+            .build()
+        return GET(url, headers)
+    }
+
+    private fun updateDayRequest(day: String): Request {
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("rq", "title/list/update_day")
+            .addQueryParameter("day", day)
+            .build()
+        return GET(url, headers)
+    }
 
     private fun getLatestDay(): String {
         val calendar = Calendar.getInstance(TimeZone.getTimeZone("Asia/Tokyo"))
@@ -212,39 +191,9 @@ class CorocoroOnline : HttpSource() {
         return days[calendar.get(Calendar.DAY_OF_WEEK) - 1]
     }
 
-    // Filter
-    override fun getFilterList() = FilterList(
-        SelectFilter(
-            "Category",
-            arrayOf(
-                Pair("月", "mon"),
-                Pair("火", "tue"),
-                Pair("水", "wed"),
-                Pair("木", "thu"),
-                Pair("金", "fri"),
-                Pair("土", "sat"),
-                Pair("日", "sun"),
-                Pair("完結", "completed"),
-                Pair("無料", "one-shot"),
-                Pair("(ランキング) 急上昇", "急上昇"),
-                Pair("(ランキング) 総合", "総合"),
-                Pair("(ランキング) 完結", "完結"),
-                Pair("(ランキング) ギャグ・コメディ", "ギャグ・コメディ"),
-                Pair("(ランキング) バトル", "バトル"),
-                Pair("(ランキング) ホビー", "ホビー"),
-                Pair("(ランキング) 異世界・ファンタジー", "異世界・ファンタジー"),
-                Pair("(ランキング) デュエル・マスターズ", "デュエル・マスターズ"),
-                Pair("(ランキング) ヒューマンドラマ", "ヒューマンドラマ"),
-                Pair("(ランキング) ゲーム", "ゲーム"),
-                Pair("(ランキング) アニメ化", "アニメ化"),
-                Pair("(ランキング) ベイブレード", "ベイブレード"),
-                Pair("(ランキング) スポーツ", "スポーツ"),
-                Pair("(ランキング) ポケモン", "ポケモン"),
-            ),
-        ),
-    )
-
-    private open class SelectFilter(displayName: String, private val options: Array<Pair<String, String>>) : Filter.Select<String>(displayName, options.map { it.first }.toTypedArray()) {
-        fun toUriPart() = options[state].second
+    companion object {
+        private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+        private val WEEKDAYS = setOf("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+        private val HTML_PATHS = setOf("search", "completed", "one-shot")
     }
 }

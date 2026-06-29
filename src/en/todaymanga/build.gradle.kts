@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "TodayManga"
-    className = "TodayManga"
     versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://todaymanga.com"
+    }
 }

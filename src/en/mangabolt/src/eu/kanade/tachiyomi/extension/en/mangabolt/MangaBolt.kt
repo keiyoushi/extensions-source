@@ -9,18 +9,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class MangaBolt : HttpSource() {
-
-    override val name = "MangaBolt"
-
-    override val baseUrl = "https://mangabolt.com"
-
-    override val lang = "en"
+@Source
+abstract class MangaBolt : HttpSource() {
 
     override val supportsLatest = true
 

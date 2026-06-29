@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonObject
@@ -15,11 +16,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class Sacachispa : HttpSource() {
+@Source
+abstract class Sacachispa : HttpSource() {
 
-    override val name = "SACACHISPA"
-    override val baseUrl = "https://sacachispa.site"
-    override val lang = "en"
     override val supportsLatest = false
 
     override fun headersBuilder() = super.headersBuilder()

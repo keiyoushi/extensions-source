@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -19,13 +20,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class MangaXiaoSi : HttpSource() {
-
-    override val name = "Manga Xiao Si"
-
-    override val baseUrl = "https://www.jjmhw2.top"
-
-    override val lang = "zh"
+@Source
+abstract class MangaXiaoSi : HttpSource() {
 
     override val supportsLatest = true
 

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
 import keiyoushi.utils.parseAs
@@ -19,10 +20,8 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ComicNettai : HttpSource() {
-    override val name = "Comic Nettai"
-    override val baseUrl = "https://www.comicnettai.com"
-    override val lang = "ja"
+@Source
+abstract class ComicNettai : HttpSource() {
     override val supportsLatest = false
 
     private val dateFormat = SimpleDateFormat("yyyy.MM.dd", Locale.ROOT)

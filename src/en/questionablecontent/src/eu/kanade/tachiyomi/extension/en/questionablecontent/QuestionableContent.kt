@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import keiyoushi.utils.getPreferencesLazy
@@ -20,13 +21,11 @@ import okhttp3.Response
 import rx.Observable
 import java.util.Date
 
-class QuestionableContent :
+@Source
+abstract class QuestionableContent :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Questionable Content"
-    override val baseUrl = "https://www.questionablecontent.net"
-    override val lang = "en"
     override val supportsLatest = false
 
     override val client: OkHttpClient = network.client.newBuilder()

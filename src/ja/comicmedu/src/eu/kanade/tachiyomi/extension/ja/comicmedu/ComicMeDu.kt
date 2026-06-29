@@ -1,17 +1,17 @@
 package eu.kanade.tachiyomi.extension.ja.comicmedu
 
-import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewer
+import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewerAlt
+import eu.kanade.tachiyomi.network.GET
+import okhttp3.Request
 
 class ComicMeDu :
-    ComiciViewer(
-        "Comic MeDu",
-        "https://comic-medu.com",
+    ComiciViewerAlt(
+        "G-Comi",
+        "https://g-comi.jp",
         "ja",
+        "https://g-comi.jp/api",
     ) {
-    override fun getFilterOptions(): List<Pair<String, String>> = listOf(
-        Pair("ランキング", "/ranking/manga"),
-        Pair("読み切り", "/category/manga?type=読み切り"),
-        Pair("完結", "/category/manga?type=完結"),
-        Pair("連載", "/category/manga?type=連載中"),
-    )
+    override val id = 7310112963091407823
+
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/category/manga/$page", headers)
 }

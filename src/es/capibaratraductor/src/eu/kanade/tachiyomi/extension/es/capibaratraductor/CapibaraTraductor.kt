@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
@@ -20,15 +21,10 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 
-class CapibaraTraductor : HttpSource() {
-
-    override val name = "CapibaraTraductor"
-
-    override val baseUrl = "https://capibaratraductor.com"
+@Source
+abstract class CapibaraTraductor : HttpSource() {
 
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val lang = "es"
 
     override val supportsLatest = true
 

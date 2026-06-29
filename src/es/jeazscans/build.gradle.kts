@@ -4,8 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Jeaz Scans"
-    className = "JeazScans"
     versionCode = 68
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "es"
+        baseUrl = "https://lectorhub.j5z.xyz"
+        versionId = 2
+    }
 }

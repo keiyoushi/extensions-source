@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Manga Xiao Si"
-    className = "MangaXiaoSi"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "zh"
+        baseUrl = "https://www.jjmhw2.top"
+    }
 }
