@@ -13,5 +13,10 @@
     "mirrorTitle": "Dominio preferido",
     "customUrlTitle": "URL base personalizada",
     "customUrlDialogMessage": "Dejar en blanco para usar la predeterminada"
+  },
+  "vi": {
+    "mirrorTitle": "Chọn tên miền",
+    "customUrlTitle": "Tên miền tự chọn",
+    "customUrlDialogMessage": "Bỏ trống để sử dụng giá trị mặc định"
   }
 }
