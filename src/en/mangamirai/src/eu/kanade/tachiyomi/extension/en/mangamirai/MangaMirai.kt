@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -21,12 +22,10 @@ import okhttp3.Response
 import rx.Observable
 import java.io.IOException
 
-class MangaMirai :
+@Source
+abstract class MangaMirai :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Manga Mirai"
-    override val baseUrl = "https://mangamirai.com"
-    override val lang = "en"
     override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()

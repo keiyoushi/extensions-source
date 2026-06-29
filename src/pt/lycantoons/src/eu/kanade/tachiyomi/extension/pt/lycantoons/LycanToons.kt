@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
@@ -16,13 +17,8 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class LycanToons : HttpSource() {
-
-    override val name = "Lycan Toons"
-
-    override val baseUrl = "https://lycantoons.com"
-
-    override val lang = "pt-BR"
+@Source
+abstract class LycanToons : HttpSource() {
 
     override val supportsLatest = true
 

@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.utils.parseAs
 import okhttp3.Cookie
@@ -21,13 +22,9 @@ import rx.Observable
 import java.security.MessageDigest
 import java.util.Calendar
 
-class Comico : HttpSource() {
-    override val name = "コミコ"
-    override val baseUrl = "https://www.comico.jp"
-    override val lang = "ja"
+@Source
+abstract class Comico : HttpSource() {
     private val apiUrl = "https://api.comico.jp"
-
-    override val id = 4991718230921189832
 
     override val supportsLatest = true
 

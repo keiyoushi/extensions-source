@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Photos18"
-    className = "Photos18"
     versionCode = 6
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "all"
+        baseUrl = "https://www.photos18.com"
+    }
 }

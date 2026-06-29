@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
@@ -22,13 +23,8 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class Yupmanga : HttpSource() {
-
-    override val name = "Yupmanga"
-
-    override val baseUrl = "https://www.yupmanga.com"
-
-    override val lang = "es"
+@Source
+abstract class Yupmanga : HttpSource() {
 
     override val supportsLatest = true
 

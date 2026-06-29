@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Comic CX"
-    className = "ComicCX"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://comic.cx"
+    }
 }
 
 dependencies {

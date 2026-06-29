@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.decodeHex
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -22,17 +23,12 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.experimental.xor
 
-class KadoComi : HttpSource() {
-
-    override val name = "カドコミ" // KadoComi, formerly Comic Walker
-
-    override val baseUrl = "https://comic-walker.com"
+@Source
+abstract class KadoComi : HttpSource() {
 
     private val apiUrl = "https://comic-walker.com/api"
 
     private val cdnUrl = "https://cdn.comic-walker.com"
-
-    override val lang = "ja"
 
     override val supportsLatest = true
 

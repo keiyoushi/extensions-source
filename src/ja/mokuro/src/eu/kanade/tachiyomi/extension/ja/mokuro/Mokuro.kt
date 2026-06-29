@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -21,13 +22,11 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class Mokuro :
+@Source
+abstract class Mokuro :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Mokuro"
-    override val baseUrl = "https://mokuro.moe"
-    override val lang = "ja"
     override val supportsLatest = false
 
     private val apiBaseUrl = "$baseUrl/catalog/api"

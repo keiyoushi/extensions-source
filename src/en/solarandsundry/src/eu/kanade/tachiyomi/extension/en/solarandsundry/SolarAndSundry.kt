@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -20,13 +21,8 @@ private const val ACCEPT_IMAGE = "image/avif,image/webp,image/*,*/*"
 
 private const val ARCHIVE_URL = "https://sas.ewanb.me"
 
-class SolarAndSundry : HttpSource() {
-
-    override val name = "Solar and Sundry"
-
-    override val baseUrl = "https://sas-api.fly.dev"
-
-    override val lang = "en"
+@Source
+abstract class SolarAndSundry : HttpSource() {
 
     override val supportsLatest = false
 

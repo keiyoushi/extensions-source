@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -27,14 +28,11 @@ import okhttp3.Response
 import rx.Observable
 import java.net.URLDecoder
 
-class Alphapolis :
+@Source
+abstract class Alphapolis :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Alphapolis"
-    override val baseUrl = "https://www.alphapolis.co.jp"
-    override val lang = "ja"
     override val supportsLatest = true
-    override val versionId = 2
 
     private var xsrfToken: String? = null
     private val preferences: SharedPreferences by getPreferencesLazy()

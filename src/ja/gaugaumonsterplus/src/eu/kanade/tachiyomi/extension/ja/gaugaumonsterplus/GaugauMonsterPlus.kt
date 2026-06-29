@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.SpeedBinbReader
 import keiyoushi.utils.firstInstance
@@ -17,13 +18,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class GaugauMonsterPlus : HttpSource() {
-
-    override val name = "がうがうモンスター＋"
-
-    override val baseUrl = "https://gaugau.futabanet.jp"
-
-    override val lang = "ja"
+@Source
+abstract class GaugauMonsterPlus : HttpSource() {
 
     override val supportsLatest = false
 

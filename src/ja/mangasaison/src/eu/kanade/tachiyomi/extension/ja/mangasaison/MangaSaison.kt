@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.GraphQLErrorInterceptor
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLPost
@@ -26,12 +27,10 @@ import okio.buffer
 import java.io.IOException
 import java.net.URLEncoder
 
-class MangaSaison :
+@Source
+abstract class MangaSaison :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Manga Saison"
-    override val lang = "ja"
-    override val baseUrl = "https://mechacomi.jp"
     override val supportsLatest = true
 
     private val pageLimit = 30

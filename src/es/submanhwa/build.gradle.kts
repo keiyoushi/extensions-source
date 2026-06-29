@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Submanhwa"
-    className = "Submanhwa"
     versionCode = 8
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "es"
+        baseUrl = "https://submanhwa.com"
+    }
 }

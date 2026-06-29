@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
@@ -17,13 +18,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class OrtegaScans :
+@Source
+abstract class OrtegaScans :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Ortega Scans"
-    override val lang = "fr"
-
-    override val baseUrl = "https://ortegascans.fr"
 
     override val supportsLatest = true
 

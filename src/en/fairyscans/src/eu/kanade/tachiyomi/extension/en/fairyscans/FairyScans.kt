@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -22,15 +23,10 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import java.util.Calendar
 
-class FairyScans :
+@Source
+abstract class FairyScans :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "Fairy Scans"
-
-    override val baseUrl = "https://fairyscans.com"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 

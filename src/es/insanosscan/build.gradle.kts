@@ -4,10 +4,15 @@ plugins {
 
 keiyoushi {
     name = "InsanosScan"
-    className = "InsanosScan"
     versionCode = 31
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "es"
+        baseUrl = "https://insanoslibrary.com"
+        versionId = 2
+    }
 
     deeplink {
         host("insanoslibrary.com")

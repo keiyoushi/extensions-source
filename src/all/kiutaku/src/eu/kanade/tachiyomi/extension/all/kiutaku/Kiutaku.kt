@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -17,16 +18,9 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class Kiutaku : HttpSource() {
+@Source
+abstract class Kiutaku : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val name = "Kiutaku"
-
-    override val baseUrl = "https://kiutaku.com"
-
-    override val lang = "all"
-
-    override val id = 3040035304874076216
 
     override val supportsLatest = true
 

@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Leslie&Victims"
-    className = "LeslieAndVictims"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://leslie-victims.pages.dev"
+    }
 }

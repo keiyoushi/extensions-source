@@ -21,6 +21,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -35,20 +36,13 @@ import uy.kohesive.injekt.api.get
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class AllManga :
+@Source
+abstract class AllManga :
     HttpSource(),
     ConfigurableSource {
     private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
 
-    override val name = "AllManga"
-
-    override val baseUrl = "https://allmanga.to"
-
     private val apiUrl = "https://api.allanime.day/api"
-
-    override val lang = "en"
-
-    override val id = 4709139914729853090
 
     override val supportsLatest = true
 

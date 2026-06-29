@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -28,15 +29,10 @@ import java.util.Calendar
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
-class HolyScans :
+@Source
+abstract class HolyScans :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "Holy Scans"
-
-    override val baseUrl = "https://holyscans.com.tr"
-
-    override val lang = "tr"
 
     override val supportsLatest = false
 

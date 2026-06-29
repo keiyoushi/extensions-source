@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -16,13 +17,8 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaHoNa : HttpSource() {
-
-    override val name = "MangaHoNa"
-
-    override val baseUrl = "https://mangahona.pl"
-
-    override val lang = "pl"
+@Source
+abstract class MangaHoNa : HttpSource() {
 
     override val supportsLatest = false
 

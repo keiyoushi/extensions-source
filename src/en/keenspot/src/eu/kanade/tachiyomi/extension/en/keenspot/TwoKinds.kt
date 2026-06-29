@@ -9,22 +9,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import kotlin.math.min
 
-class TwoKinds : HttpSource() {
-
-    override val name = "Keenspot TwoKinds"
-
-    override val baseUrl = "https://twokinds.keenspot.com"
-
-    override val lang = "en"
+@Source
+abstract class TwoKinds : HttpSource() {
 
     override val supportsLatest: Boolean = false
-
-    override val id: Long = 3133607736276627986
 
     // the one and only manga entry
     fun mangaSinglePages(): SManga = SManga.create().apply {

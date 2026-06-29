@@ -8,19 +8,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import okhttp3.Request
 import okhttp3.Response
 
-class Dilar : HttpSource() {
-    override val name = "Dilar"
-    override val baseUrl = "https://dilar.tube"
-    override val lang = "ar"
+@Source
+abstract class Dilar : HttpSource() {
     override val supportsLatest = false
-
-    // Moved from Gmanga
-    override val versionId = 2
 
     // Popular
 

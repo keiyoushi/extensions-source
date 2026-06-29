@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Patch Friday"
-    className = "PatchFriday"
     versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://patchfriday.com"
+    }
 }

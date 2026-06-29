@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Hana Book"
-    className = "HanaBook"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "fr"
+        baseUrl = "https://www.hana-book.fr"
+    }
 }

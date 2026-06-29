@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Ono"
-    className = "Ono"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "fr"
+        baseUrl = "https://www.ono.live"
+    }
 }

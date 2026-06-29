@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -23,15 +24,12 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 
-class ManhwaXXL :
+@Source
+abstract class ManhwaXXL :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Manhwa XXL"
-    override val lang = "en"
-    override val baseUrl = "https://hentaitnt.net"
     override val supportsLatest = true
-    override val versionId = 2
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 

@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.getPreferencesLazy
@@ -28,15 +29,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class RFDragonScan :
+@Source
+abstract class RFDragonScan :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "RF Dragon Scan"
-
-    override val baseUrl = "https://rfdragonscan.net"
-
-    override val lang = "pt-BR"
 
     override val supportsLatest = false
 

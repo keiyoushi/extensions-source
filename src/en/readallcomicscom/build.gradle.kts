@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "ReadAllComics"
-    className = "ReadAllComics"
     versionCode = 8
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://readallcomics.com"
+    }
 }

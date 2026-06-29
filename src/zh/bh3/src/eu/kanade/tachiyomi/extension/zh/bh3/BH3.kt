@@ -8,18 +8,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import kotlin.time.Duration.Companion.minutes
 
-class BH3 : HttpSource() {
-
-    override val name = "《崩坏3》IP站"
-
-    override val baseUrl = "https://comic.bh3.com"
-
-    override val lang = "zh"
+@Source
+abstract class BH3 : HttpSource() {
 
     override val supportsLatest = false
 

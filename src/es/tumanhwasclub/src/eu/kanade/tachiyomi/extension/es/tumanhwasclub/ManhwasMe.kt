@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -16,17 +17,8 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class ManhwasMe : HttpSource() {
-
-    override val name = "ManhwasMe"
-
-    // Preserves the original TuManhwas.Club source ID so existing users
-    // don't lose their library when the class/name changed.
-    override val id = 8004442288770923365L
-
-    override val baseUrl = "https://manhwas.me"
-
-    override val lang = "es"
+@Source
+abstract class ManhwasMe : HttpSource() {
 
     override val supportsLatest = true
 

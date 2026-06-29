@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -28,15 +29,10 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class RinkoComics :
+@Source
+abstract class RinkoComics :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "Rinko Comics"
-
-    override val baseUrl = "https://rinkocomics.com"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 

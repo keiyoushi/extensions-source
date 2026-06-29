@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -27,13 +28,11 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
 
-class RokuHentai :
+@Source
+abstract class RokuHentai :
     HttpSource(),
     ConfigurableSource {
 
-    override val baseUrl = "https://rokuhentai.com"
-    override val lang = "all"
-    override val name = "Roku Hentai"
     override val supportsLatest = false
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -17,7 +18,8 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class AralosBD : HttpSource() {
+@Source
+abstract class AralosBD : HttpSource() {
 
     companion object {
         val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.FRANCE)
@@ -37,9 +39,6 @@ class AralosBD : HttpSource() {
         .replace(ICON_REGEX, "")
         .trim()
 
-    override val name = "AralosBD"
-    override val baseUrl = "https://aralosbd.fr"
-    override val lang = "fr"
     override val supportsLatest = true
 
     private val json: Json by injectLazy()

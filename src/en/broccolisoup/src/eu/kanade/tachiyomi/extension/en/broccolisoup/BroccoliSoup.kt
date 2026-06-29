@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import okhttp3.OkHttpClient
@@ -14,13 +15,8 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class BroccoliSoup : HttpSource() {
-
-    override val name = "Broccoli Soup"
-
-    override val baseUrl = "https://politeandgood.com"
-
-    override val lang = "en"
+@Source
+abstract class BroccoliSoup : HttpSource() {
 
     override val supportsLatest = false
 

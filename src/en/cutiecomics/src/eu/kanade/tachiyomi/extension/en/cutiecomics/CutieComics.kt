@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -18,14 +19,9 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class CutieComics : HttpSource() {
+@Source
+abstract class CutieComics : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val name = "Cutie Comics"
-
-    override val baseUrl = "https://cutiecomics.com"
-
-    override val lang = "en"
 
     override val supportsLatest = false
 

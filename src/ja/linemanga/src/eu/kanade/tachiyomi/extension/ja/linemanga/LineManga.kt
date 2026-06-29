@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -22,12 +23,10 @@ import java.io.IOException
 import java.util.Calendar
 import java.util.TimeZone
 
-class LineManga :
+@Source
+abstract class LineManga :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Line Manga"
-    override val baseUrl = "https://manga.line.me"
-    override val lang = "ja"
     override val supportsLatest = true
 
     private val apiUrl = "$baseUrl/api"

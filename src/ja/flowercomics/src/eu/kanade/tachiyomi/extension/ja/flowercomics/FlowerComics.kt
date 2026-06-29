@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
@@ -21,12 +22,10 @@ import okhttp3.Response
 import java.util.Calendar
 import java.util.TimeZone
 
-class FlowerComics :
+@Source
+abstract class FlowerComics :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Flower Comics"
-    override val baseUrl = "https://flowercomics.jp"
-    override val lang = "ja"
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()

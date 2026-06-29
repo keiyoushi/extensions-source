@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJsRsc
 import okhttp3.Headers
 import okhttp3.Request
@@ -16,11 +17,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class ManhuaRush : HttpSource() {
+@Source
+abstract class ManhuaRush : HttpSource() {
 
-    override val name = "Manhua Rush"
-    override val baseUrl = "https://manhuarush.vercel.app"
-    override val lang = "en"
     override val supportsLatest = false
 
     private val rscHeaders: Headers by lazy {

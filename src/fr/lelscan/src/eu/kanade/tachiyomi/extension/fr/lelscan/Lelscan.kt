@@ -8,14 +8,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import okhttp3.Response
 
-class Lelscan : HttpSource() {
+@Source
+abstract class Lelscan : HttpSource() {
 
-    override val name = "Lelscan"
-    override val baseUrl = "https://lelscans.net"
-    override val lang = "fr"
     override val supportsLatest = true
 
     // A stable reader page guaranteed to carry the navigation dropdowns and latest section.

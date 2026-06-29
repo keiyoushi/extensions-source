@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
@@ -31,10 +32,8 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class Softkomik : HttpSource() {
-    override val name = "Softkomik"
-    override val baseUrl = "https://softkomik.co"
-    override val lang = "id"
+@Source
+abstract class Softkomik : HttpSource() {
     override val supportsLatest = true
 
     // session cache by URL/page route.

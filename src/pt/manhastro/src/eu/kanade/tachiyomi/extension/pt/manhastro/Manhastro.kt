@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -28,17 +29,12 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-class Manhastro :
+@Source
+abstract class Manhastro :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Manhastro"
-
-    override val baseUrl = "https://manhastro.net"
-
     private val apiUrl = "https://api2.manhastro.net"
-
-    override val lang = "pt-BR"
 
     override val supportsLatest = true
 

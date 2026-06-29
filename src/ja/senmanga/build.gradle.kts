@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Sen Manga"
-    className = "SenManga"
     versionCode = 8
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://raw.senmanga.com"
+    }
 }

@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -22,17 +23,10 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class JeazScans : HttpSource() {
-
-    override val name = "Jeaz Scans"
-
-    override val baseUrl = "https://lectorhub.j5z.xyz"
-
-    override val lang = "es"
+@Source
+abstract class JeazScans : HttpSource() {
 
     override val supportsLatest = true
-
-    override val versionId = 2
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(2)

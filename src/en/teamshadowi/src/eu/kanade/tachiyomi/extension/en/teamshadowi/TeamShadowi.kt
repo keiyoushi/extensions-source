@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -17,13 +18,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class TeamShadowi : HttpSource() {
-
-    override val name = "Team Shadowi"
-
-    override val baseUrl = "https://www.team-shadowi.com"
-
-    override val lang = "en"
+@Source
+abstract class TeamShadowi : HttpSource() {
 
     override val supportsLatest = true
 

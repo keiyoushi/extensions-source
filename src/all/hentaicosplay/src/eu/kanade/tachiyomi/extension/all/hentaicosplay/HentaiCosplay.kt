@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -20,13 +21,8 @@ import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class HentaiCosplay : HttpSource() {
-
-    override val name = "Hentai Cosplay"
-
-    override val baseUrl = "https://hentai-cosplay-xxx.com"
-
-    override val lang = "all"
+@Source
+abstract class HentaiCosplay : HttpSource() {
 
     override val supportsLatest = true
 

@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferences
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -33,13 +34,11 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.floor
 
-class Picacomic :
+@Source
+abstract class Picacomic :
     HttpSource(),
     ConfigurableSource {
-    override val lang = "zh"
     override val supportsLatest = true
-    override val name = "哔咔漫画"
-    override val baseUrl = "https://picaapi.picacomic.com"
     private val leeway: Long = 10
 
     private val preferences: SharedPreferences = getPreferences()

@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Ninekon"
-    className = "Ninekon"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://app.ninekon.com"
+    }
 }

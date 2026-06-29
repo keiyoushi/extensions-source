@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -20,12 +21,10 @@ import okhttp3.Request
 import okhttp3.Response
 import kotlin.time.Duration.Companion.seconds
 
-class ShadowManga : HttpSource() {
+@Source
+abstract class ShadowManga : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
-    override val name = "Shadow Manga"
-    override val baseUrl = "https://shademanga.com"
-    override val lang = "es"
     override val supportsLatest = true
 
     private val scope = CoroutineScope(Dispatchers.IO)

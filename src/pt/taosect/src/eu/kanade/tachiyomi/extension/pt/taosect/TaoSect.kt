@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -25,13 +26,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class TaoSect : HttpSource() {
-
-    override val name = "Tao Sect"
-
-    override val baseUrl = "https://taosect.com"
-
-    override val lang = "pt-BR"
+@Source
+abstract class TaoSect : HttpSource() {
 
     override val supportsLatest = true
 

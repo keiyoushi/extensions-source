@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -16,11 +17,9 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class Pramramadhan : HttpSource() {
+@Source
+abstract class Pramramadhan : HttpSource() {
 
-    override val name = "Pramramadhan"
-    override val baseUrl = "https://01.pramramadhan.my.id"
-    override val lang = "id"
     override val supportsLatest = true
 
     private val simpleDateFormat = SimpleDateFormat("d MMMM yyyy", Locale("id"))

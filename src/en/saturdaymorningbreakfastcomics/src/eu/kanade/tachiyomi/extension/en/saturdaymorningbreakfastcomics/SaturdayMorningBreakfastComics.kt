@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import keiyoushi.utils.tryParse
@@ -24,13 +25,8 @@ import java.util.Locale
 /**
  * Split from Hiveworks extension
  */
-class SaturdayMorningBreakfastComics : HttpSource() {
-
-    override val name = "Saturday Morning Breakfast Comics"
-
-    override val baseUrl = "https://smbc-comics.com"
-
-    override val lang = "en"
+@Source
+abstract class SaturdayMorningBreakfastComics : HttpSource() {
 
     override val supportsLatest = false
     override val client: OkHttpClient = network.client.newBuilder()

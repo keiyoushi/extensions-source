@@ -10,21 +10,17 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
 import rx.Observable
 
-class Vgperson : HttpSource() {
-
-    override val name = "vgperson"
-
-    override val lang = "en"
+@Source
+abstract class Vgperson : HttpSource() {
 
     override val supportsLatest = false
-
-    override val baseUrl = "https://vgperson.com/other/mangaviewer.php"
 
     private val userAgent =
         "Mozilla/5.0 (Android ${VERSION.RELEASE}; Mobile) Tachiyomi/${AppInfo.getVersionName()}"

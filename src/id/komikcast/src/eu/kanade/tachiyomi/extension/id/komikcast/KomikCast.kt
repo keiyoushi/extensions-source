@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
@@ -15,13 +16,10 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 
-class KomikCast : HttpSource() {
+@Source
+abstract class KomikCast : HttpSource() {
 
-    override val id = 972717448578983812
-    override val name = "Komik Cast"
-    override val baseUrl = "https://v3.komikcast.fit"
     private val apiUrl = "https://be.komikcast.cc"
-    override val lang = "id"
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()

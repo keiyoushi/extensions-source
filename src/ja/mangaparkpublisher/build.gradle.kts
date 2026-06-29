@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Manga-Park"
-    className = "MangaParkPublisher"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://manga-park.com"
+    }
 }
