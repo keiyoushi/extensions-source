@@ -4,9 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Azuretoons"
-    className = "Azuretoons"
     versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
-    baseUrl = "https://azuretoons.com"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://azuretoons.com"
+    }
 }

@@ -13,12 +13,11 @@ import okhttp3.Response
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class Aurora : HttpSource() {
+@Source
+abstract class Aurora : HttpSource() {
 
-    override val name = "Aurora"
-    override val baseUrl = "https://comicaurora.com"
-    override val lang = "en"
     override val supportsLatest = false
     private val authorName = "OSP-Red"
     private val auroraGenre = "fantasy"

@@ -13,14 +13,10 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import keiyoushi.annotation.Source
 
-class AComics : HttpSource() {
-
-    override val name = "AComics"
-
-    override val baseUrl = "https://acomics.ru"
-
-    override val lang = "ru"
+@Source
+abstract class AComics : HttpSource() {
 
     override val client = network.client.newBuilder()
         .addNetworkInterceptor { chain ->

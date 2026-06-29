@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Questionable Content"
-    className = "QuestionableContent"
     versionCode = 10
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://www.questionablecontent.net"
+    }
 }
 
 dependencies {

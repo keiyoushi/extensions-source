@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import okhttp3.Request
@@ -18,13 +19,8 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class HentaiKun : HttpSource() {
-
-    override val name = "HentaiKun"
-
-    override val baseUrl = "https://hentaikun.com"
-
-    override val lang = "en"
+@Source
+abstract class HentaiKun : HttpSource() {
 
     override val supportsLatest = true
 

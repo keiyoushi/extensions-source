@@ -11,11 +11,10 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
+import keiyoushi.annotation.Source
 
-class Mangalay : HttpSource() {
-    override val name = "Mangalay"
-    override val baseUrl = "http://mangalay.blogspot.com"
-    override val lang = "id"
+@Source
+abstract class Mangalay : HttpSource() {
     override val supportsLatest = false
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/2013/04/daftar-baca-komik_20.html", headers)

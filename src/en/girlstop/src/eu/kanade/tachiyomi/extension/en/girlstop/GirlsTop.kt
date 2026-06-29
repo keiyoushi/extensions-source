@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
@@ -20,13 +21,8 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class GirlsTop : HttpSource() {
-
-    override val name = "GirlsTop"
-
-    override val baseUrl = "https://en.girlstop.info"
-
-    override val lang = "en"
+@Source
+abstract class GirlsTop : HttpSource() {
 
     override val supportsLatest = true
 

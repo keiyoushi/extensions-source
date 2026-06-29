@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -24,13 +25,11 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import kotlin.jvm.Synchronized
 
-class Azuretoons :
+@Source
+abstract class Azuretoons :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Azuretoons"
-    override val baseUrl = "https://azuretoons.com"
-    override val lang = "pt-BR"
     override val supportsLatest = true
 
     private val apiUrl = "https://azuretoons.com/api"

@@ -12,12 +12,11 @@ import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class ChaosTrad : HttpSource() {
+@Source
+abstract class ChaosTrad : HttpSource() {
 
-    override val name = "ChaosTrad"
-    override val baseUrl = "https://chaostrad.fr"
-    override val lang = "fr"
     override val supportsLatest = false
 
     private val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.FRENCH)

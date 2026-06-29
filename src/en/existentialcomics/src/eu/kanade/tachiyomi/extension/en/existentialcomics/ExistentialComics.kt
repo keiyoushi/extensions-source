@@ -10,14 +10,10 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class ExistentialComics : HttpSource() {
-
-    override val name = "Existential Comics"
-
-    override val baseUrl = "https://existentialcomics.com"
-
-    override val lang = "en"
+@Source
+abstract class ExistentialComics : HttpSource() {
 
     override val supportsLatest = false
 

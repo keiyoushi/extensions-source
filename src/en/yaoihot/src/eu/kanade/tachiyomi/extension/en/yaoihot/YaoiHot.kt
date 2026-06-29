@@ -12,14 +12,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.util.Calendar
+import keiyoushi.annotation.Source
 
-class YaoiHot : HttpSource() {
-
-    override val name = "YaoiHot"
-
-    override val baseUrl = "https://yaoihot.com"
-
-    override val lang = "en"
+@Source
+abstract class YaoiHot : HttpSource() {
 
     override val supportsLatest = true
 

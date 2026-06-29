@@ -14,11 +14,10 @@ import org.jsoup.nodes.Document
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class DarkScience : HttpSource() {
-    override val name = "Dark Science"
-    override val baseUrl = "https://dresdencodak.com"
-    override val lang = "en"
+@Source
+abstract class DarkScience : HttpSource() {
     override val supportsLatest = false
 
     private fun initTheManga(manga: SManga): SManga = manga.apply {

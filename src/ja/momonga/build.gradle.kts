@@ -4,8 +4,13 @@ plugins {
 
 keiyoushi {
     name = "MomonGA"
-    className = "MomonGA"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        name = "momon:GA"
+        lang = "ja"
+        baseUrl = "https://momon-ga.com"
+    }
 }

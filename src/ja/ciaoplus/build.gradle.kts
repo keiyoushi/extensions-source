@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Ciao Plus"
-    className = "CiaoPlus"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://ciao.shogakukan.co.jp"
+    }
 }

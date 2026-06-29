@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.rateLimit
@@ -23,15 +24,10 @@ import okhttp3.Response
 import rx.Observable
 import java.io.IOException
 
-class Comicaso :
+@Source
+abstract class Comicaso :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "Comicaso"
-
-    override val baseUrl = "https://v3.comicaso.pro"
-
-    override val lang = "id"
 
     override val supportsLatest = true
 

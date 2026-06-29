@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
@@ -21,13 +22,8 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ExHentaiNetBR : HttpSource() {
-
-    override val name = "ExHentai.net.br"
-
-    override val baseUrl = "https://exhentai.net.br"
-
-    override val lang = "pt-BR"
+@Source
+abstract class ExHentaiNetBR : HttpSource() {
 
     override val supportsLatest = false
 
@@ -173,7 +169,7 @@ class ExHentaiNetBR : HttpSource() {
     }
 }
 
-class AlphabetFilter(
+abstract class AlphabetFilter(
     displayName: String,
     private val vals: List<String>,
     state: Int = 0,

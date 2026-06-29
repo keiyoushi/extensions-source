@@ -13,11 +13,10 @@ import kotlinx.serialization.json.Json
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import keiyoushi.annotation.Source
 
-class TerraHistoricus : HttpSource() {
-    override val name = "泰拉记事社"
-    override val lang = "zh"
-    override val baseUrl = "https://comic.hypergryph.com"
+@Source
+abstract class TerraHistoricus : HttpSource() {
     override val supportsLatest = true
 
     private val json: Json by injectLazy()

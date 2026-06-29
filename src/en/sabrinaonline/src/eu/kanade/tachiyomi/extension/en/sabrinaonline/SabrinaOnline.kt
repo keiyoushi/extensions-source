@@ -12,12 +12,11 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class SabrinaOnline : HttpSource() {
+@Source
+abstract class SabrinaOnline : HttpSource() {
 
-    override val name = "Sabrina Online"
-    override val baseUrl = "https://www.sabrina-online.com"
-    override val lang = "en"
     override val supportsLatest: Boolean = false
 
     fun manga(): SManga = SManga.create().apply {

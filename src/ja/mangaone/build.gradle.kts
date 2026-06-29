@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Manga One"
-    className = "MangaOne"
     versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://manga-one.com"
+    }
 }

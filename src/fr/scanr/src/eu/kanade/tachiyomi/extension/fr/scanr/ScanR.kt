@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -15,12 +16,10 @@ import okhttp3.Response
 import rx.Observable
 import java.net.URI
 
-class ScanR : HttpSource() {
+@Source
+abstract class ScanR : HttpSource() {
 
-    override val name = "ScanR"
-    override val baseUrl = "https://teamscanr.fr"
     val cdnUrl = "https://cdn.teamscanr.fr"
-    override val lang = "fr"
     override val supportsLatest = false
     private val seriesDataCache = mutableMapOf<String, Serie>()
 

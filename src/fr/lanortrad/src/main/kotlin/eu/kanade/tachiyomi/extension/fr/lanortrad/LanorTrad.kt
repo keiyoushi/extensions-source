@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -16,11 +17,9 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import rx.Observable
 
-class LanorTrad : HttpSource() {
+@Source
+abstract class LanorTrad : HttpSource() {
 
-    override val name = "LanorTrad"
-    override val baseUrl = "https://lanortrad.com"
-    override val lang = "fr"
     override val supportsLatest = false
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/js/utile/mangaData.js", headers)

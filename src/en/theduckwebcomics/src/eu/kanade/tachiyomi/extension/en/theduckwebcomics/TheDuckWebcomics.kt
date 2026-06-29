@@ -12,13 +12,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class TheDuckWebcomics : HttpSource() {
-    override val name = "The Duck Webcomics"
-
-    override val baseUrl = "https://www.theduckwebcomics.com"
-
-    override val lang = "en"
+@Source
+abstract class TheDuckWebcomics : HttpSource() {
 
     override val supportsLatest = true
 

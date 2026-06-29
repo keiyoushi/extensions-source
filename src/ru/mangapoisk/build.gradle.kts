@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "MangaPoisk"
-    className = "MangaPoisk"
     versionCode = 15
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "ru"
+        baseUrl = "https://mangapsk.ru"
+    }
 }

@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Xiutaku"
-    className = "Xiutaku"
     versionCode = 4
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "all"
+        baseUrl = "https://xiutaku.com"
+    }
 
     deeplink {
         host("xiutaku.com")

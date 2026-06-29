@@ -18,15 +18,12 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import kotlin.math.min
 import kotlin.random.Random
+import keiyoushi.annotation.Source
 
-class BlackToon : HttpSource() {
-
-    override val name = "블랙툰"
-
-    override val lang = "ko"
+@Source
+abstract class BlackToon : HttpSource() {
 
     private var currentBaseUrlHost = ""
-    override val baseUrl = "https://blacktoon.me"
 
     private val cdnUrl = "https://blacktoonimg.com/"
 

@@ -4,8 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Falco Scan"
-    className = "FalcoScan"
     versionCode = 39
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "es"
+        baseUrl = "https://falcoscan.net"
+        versionId = 3
+        id = 5992780069311625546L
+    }
 }

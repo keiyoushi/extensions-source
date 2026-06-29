@@ -8,17 +8,16 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class PlatinumLilyScan : HttpSource() {
+@Source
+abstract class PlatinumLilyScan : HttpSource() {
 
-    override val name = "Platinum Lily Scan"
-    override val baseUrl = "https://platinumlilyscan.com"
-    override val lang = "es"
     override val supportsLatest = true
 
     // ============================== Popular ===============================

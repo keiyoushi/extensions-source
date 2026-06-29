@@ -13,14 +13,10 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import kotlin.math.min
+import keiyoushi.annotation.Source
 
-class TwoKinds : HttpSource() {
-
-    override val name = "Keenspot TwoKinds"
-
-    override val baseUrl = "https://twokinds.keenspot.com"
-
-    override val lang = "en"
+@Source
+abstract class TwoKinds : HttpSource() {
 
     override val supportsLatest: Boolean = false
 

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
@@ -15,14 +16,10 @@ import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
-class Alandal : HttpSource() {
+@Source
+abstract class Alandal : HttpSource() {
 
-    override val name = "Alandal"
-
-    override val baseUrl = "https://alandal.com"
     private val apiUrl = "https://qq.alandal.com/api"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 

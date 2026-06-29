@@ -11,13 +11,10 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class ThePropertyOfHate : HttpSource() {
-    override val name = "The Property of Hate"
-
-    override val baseUrl = "https://jolleycomics.com"
-
-    override val lang = "en"
+@Source
+abstract class ThePropertyOfHate : HttpSource() {
 
     override val supportsLatest = false
 

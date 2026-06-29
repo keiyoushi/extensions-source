@@ -14,11 +14,10 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class EveriaClubCom : HttpSource() {
-    override val baseUrl = "https://www.everiaclub.com"
-    override val lang = "all"
-    override val name = "EveriaClub (unoriginal)"
+@Source
+abstract class EveriaClubCom : HttpSource() {
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()

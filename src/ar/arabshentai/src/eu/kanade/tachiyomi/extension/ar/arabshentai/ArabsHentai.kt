@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.CoroutineScope
@@ -21,10 +22,8 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ArabsHentai : HttpSource() {
-    override val name = "هنتاي العرب"
-    override val baseUrl = "https://arabshentai.com"
-    override val lang = "ar"
+@Source
+abstract class ArabsHentai : HttpSource() {
     private val dateFormat = SimpleDateFormat("d MMM، yyy", Locale("ar"))
     override val supportsLatest = true
     override val client = network.client.newBuilder()

@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Buon Dua"
-    className = "BuonDua"
     versionCode = 10
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "all"
+        baseUrl = "https://buondua.com"
+    }
 }
 
 dependencies {

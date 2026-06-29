@@ -13,11 +13,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
+import keiyoushi.annotation.Source
 
-class AnimeGDRClub : HttpSource() {
-    override val name = "Anime GDR Club"
-    override val baseUrl = "http://www.agcscanlation.it/"
-    override val lang = "it"
+@Source
+abstract class AnimeGDRClub : HttpSource() {
     override val supportsLatest = true
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/serie.php", headers)

@@ -12,14 +12,10 @@ import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class Nikkangecchan : HttpSource() {
-
-    override val name = "Nikkangecchan"
-
-    override val baseUrl = "https://nikkangecchan.jp"
-
-    override val lang = "ja"
+@Source
+abstract class Nikkangecchan : HttpSource() {
 
     override val supportsLatest = false
 

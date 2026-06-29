@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "ScansGG"
-    className = "ScansGG"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://scans.gg"
+    }
 }

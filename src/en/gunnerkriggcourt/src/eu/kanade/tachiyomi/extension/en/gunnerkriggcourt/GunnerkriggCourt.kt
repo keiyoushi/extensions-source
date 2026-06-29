@@ -10,11 +10,10 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class GunnerkriggCourt : HttpSource() {
-    override val name = "Gunnerkrigg Court"
-    override val baseUrl = "https://www.gunnerkrigg.com"
-    override val lang = "en"
+@Source
+abstract class GunnerkriggCourt : HttpSource() {
     override val supportsLatest = false
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {

@@ -15,18 +15,14 @@ import okhttp3.Response
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
 private const val ACCEPT_IMAGE = "image/avif,image/webp,image/*,*/*"
 
 private const val ARCHIVE_URL = "https://sas.ewanb.me"
 
-class SolarAndSundry : HttpSource() {
-
-    override val name = "Solar and Sundry"
-
-    override val baseUrl = "https://sas-api.fly.dev"
-
-    override val lang = "en"
+@Source
+abstract class SolarAndSundry : HttpSource() {
 
     override val supportsLatest = false
 

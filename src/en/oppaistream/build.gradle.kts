@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Oppai Stream"
-    className = "OppaiStream"
     versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://read.oppai.stream"
+    }
 
     deeplink {
         host("read.oppai.stream")

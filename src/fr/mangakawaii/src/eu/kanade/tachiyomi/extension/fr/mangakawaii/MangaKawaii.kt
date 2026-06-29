@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -22,14 +23,12 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaKawaii :
+@Source
+abstract class MangaKawaii :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Mangakawaii"
-    override val baseUrl = "https://www.mangakawaii.io"
     private val cdnUrl = "https://cdn2.mangakawaii.io"
-    override val lang = "fr"
     override val supportsLatest = true
 
     private val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.US)

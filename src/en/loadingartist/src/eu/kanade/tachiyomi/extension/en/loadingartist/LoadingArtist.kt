@@ -19,13 +19,10 @@ import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class LoadingArtist : HttpSource() {
-    override val name = "Loading Artist"
-
-    override val baseUrl = "https://loadingartist.com"
-
-    override val lang = "en"
+@Source
+abstract class LoadingArtist : HttpSource() {
 
     override val supportsLatest = false
 

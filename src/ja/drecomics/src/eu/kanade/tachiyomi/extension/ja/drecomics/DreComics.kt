@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
@@ -22,15 +23,12 @@ import okhttp3.Response
 import rx.Observable
 import java.io.IOException
 
-class DreComics :
+@Source
+abstract class DreComics :
     HttpSource(),
     ConfigurableSource {
-    override val name = "DreComi+"
     private val domain = "drecomi-plus.jp"
-    override val baseUrl = "https://drecomi-plus.jp"
-    override val lang = "ja"
     override val supportsLatest = true
-    override val versionId = 2
 
     private val apiUrl = "https://api.$domain/api/v1/app"
     private val authUrl = "$baseUrl/api/auth"

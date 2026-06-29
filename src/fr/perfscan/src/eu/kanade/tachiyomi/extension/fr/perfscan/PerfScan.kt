@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -17,13 +18,10 @@ import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class PerfScan : HttpSource() {
-    override val name = "Perf Scan"
-    override val baseUrl = "https://perf-scan.xyz"
+@Source
+abstract class PerfScan : HttpSource() {
     private val apiUrl = "https://api.perf-scan.xyz"
-    override val lang = "fr"
     override val supportsLatest = true
-    override val versionId = 2
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
     private val chapterNumberFormat = DecimalFormat("#.##")

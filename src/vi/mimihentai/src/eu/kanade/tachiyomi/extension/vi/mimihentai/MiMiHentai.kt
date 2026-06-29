@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -27,14 +28,9 @@ import java.io.IOException
 import java.util.Calendar
 import kotlin.time.Duration.Companion.minutes
 
-class MiMiHentai : HttpSource() {
+@Source
+abstract class MiMiHentai : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val name = "MiMiHentai"
-
-    override val baseUrl = "https://mimihentai.net"
-
-    override val lang = "vi"
 
     override val supportsLatest = true
 

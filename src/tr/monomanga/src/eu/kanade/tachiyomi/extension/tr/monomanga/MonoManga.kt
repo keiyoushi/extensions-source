@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
@@ -18,13 +19,8 @@ import okhttp3.Request
 import okhttp3.Response
 import java.util.Locale
 
-class MonoManga : HttpSource() {
-
-    override val name = "Mono Manga"
-
-    override val baseUrl = "https://monomanga.com.tr"
-
-    override val lang = "tr"
+@Source
+abstract class MonoManga : HttpSource() {
 
     override val supportsLatest = true
 

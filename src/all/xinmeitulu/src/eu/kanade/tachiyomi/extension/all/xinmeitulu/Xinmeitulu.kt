@@ -15,11 +15,10 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class Xinmeitulu : HttpSource() {
-    override val baseUrl = "https://www.xinmeitulu.com"
-    override val lang = "all"
-    override val name = "Xinmeitulu"
+@Source
+abstract class Xinmeitulu : HttpSource() {
     override val supportsLatest = false
 
     override val client = network.client.newBuilder().addInterceptor(::contentTypeIntercept).build()

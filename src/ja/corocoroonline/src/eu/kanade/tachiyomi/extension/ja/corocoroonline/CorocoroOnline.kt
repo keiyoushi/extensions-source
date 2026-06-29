@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromByteArray
@@ -24,12 +25,9 @@ import okhttp3.Response
 import java.util.Calendar
 import java.util.TimeZone
 
-class CorocoroOnline : HttpSource() {
-    override val name = "Corocoro Online"
-    override val baseUrl = "https://www.corocoro.jp"
-    override val lang = "ja"
+@Source
+abstract class CorocoroOnline : HttpSource() {
     override val supportsLatest = true
-    override val versionId = 2
 
     private val apiUrl = "$baseUrl/api/csr"
 

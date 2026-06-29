@@ -16,14 +16,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
+import keiyoushi.annotation.Source
 
-class Rawdevartart : HttpSource() {
-
-    override val name = "Rawdevart.art"
-
-    override val lang = "ja"
-
-    override val baseUrl = "https://rawdevart.art"
+@Source
+abstract class Rawdevartart : HttpSource() {
 
     override val supportsLatest = true
 

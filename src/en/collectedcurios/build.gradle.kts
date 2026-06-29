@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Collected Curios"
-    className = "Collectedcurios"
     versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://www.collectedcurios.com"
+    }
 }

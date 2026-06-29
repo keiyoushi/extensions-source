@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import keiyoushi.utils.getPreferencesLazy
@@ -24,15 +25,10 @@ import okhttp3.Response
 import okio.IOException
 import rx.Observable
 
-class Tapastic :
+@Source
+abstract class Tapastic :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "Tapas"
-
-    override val lang = "en"
-
-    override val baseUrl = "https://tapas.io"
 
     private val apiUrl = "https://story-api.${baseUrl.substringAfterLast("/")}"
 

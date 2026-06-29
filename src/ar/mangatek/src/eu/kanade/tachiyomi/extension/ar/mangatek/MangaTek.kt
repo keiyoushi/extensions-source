@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -29,15 +30,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @RequiresApi(Build.VERSION_CODES.O)
-class MangaTek :
+@Source
+abstract class MangaTek :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "MangaTek"
-
-    override val baseUrl = "https://mangatek.com"
-
-    override val lang = "ar"
 
     private var fontSize: Int
         get() = preferences.getString(FONT_SIZE_PREF, DEFAULT_FONT_SIZE)!!.toInt()

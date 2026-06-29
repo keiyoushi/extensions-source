@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "ManhwaZone"
-    className = "ManhwaZone"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://manhwazone.com"
+    }
 
     deeplink {
         host("manhwazone.com")

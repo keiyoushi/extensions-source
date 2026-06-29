@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.encodeToString
@@ -29,11 +30,9 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Nekopost : HttpSource() {
+@Source
+abstract class Nekopost : HttpSource() {
 
-    override val baseUrl = "https://www.nekopost.net"
-    override val lang = "th"
-    override val name = "Nekopost"
     override val supportsLatest = true
 
     private val projectDataEndpoint = "$baseUrl/api/project/detail2"

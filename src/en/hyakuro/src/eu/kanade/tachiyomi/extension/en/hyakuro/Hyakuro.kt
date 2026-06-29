@@ -8,15 +8,14 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class Hyakuro : HttpSource() {
-    override val name = "Hyakuro Translations"
-    override val baseUrl = "https://hyakuro.net"
-    override val lang = "en"
+@Source
+abstract class Hyakuro : HttpSource() {
     override val supportsLatest = true
 
     private val apiUrl = "$baseUrl/backend/api"

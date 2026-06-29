@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -18,14 +19,9 @@ import okhttp3.Response
 
 const val LATEST_LIMIT = 20
 
-class Doujinio : HttpSource() {
+@Source
+abstract class Doujinio : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val name = "Doujin.io - J18"
-
-    override val baseUrl = "https://doujin.io"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 

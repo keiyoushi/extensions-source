@@ -16,14 +16,10 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.Normalizer
+import keiyoushi.annotation.Source
 
-class ZettaHQ : HttpSource() {
-
-    override val name = "ZettaHQ"
-
-    override val baseUrl = "https://zettahq.com"
-
-    override val lang = "pt-BR"
+@Source
+abstract class ZettaHQ : HttpSource() {
 
     override val supportsLatest = false
 

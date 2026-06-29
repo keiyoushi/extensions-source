@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.extractNextJsRsc
@@ -24,21 +25,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class AstralManga : HttpSource() {
-
-    override val name = "AstralManga"
-
-    override val baseUrl = "https://astral-manga.fr"
-
-    override val lang = "fr"
+@Source
+abstract class AstralManga : HttpSource() {
 
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(8, 1.seconds)
         .build()
-
-    override val versionId = 2
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")

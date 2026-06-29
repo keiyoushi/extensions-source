@@ -12,14 +12,10 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class PatchFriday : HttpSource() {
-
-    override val name = "Patch Friday"
-
-    override val baseUrl = "https://patchfriday.com"
-
-    override val lang = "en"
+@Source
+abstract class PatchFriday : HttpSource() {
 
     override val supportsLatest = false
 

@@ -11,14 +11,10 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class ElanSchool : HttpSource() {
-
-    override val name = "Elan School"
-
-    override val lang = "en"
-
-    override val baseUrl = "https://elan.school"
+@Source
+abstract class ElanSchool : HttpSource() {
 
     override val supportsLatest = false
 

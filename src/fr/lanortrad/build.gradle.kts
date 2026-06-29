@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "LanorTrad"
-    className = "LanorTrad"
     versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "fr"
+        baseUrl = "https://lanortrad.com"
+    }
 }

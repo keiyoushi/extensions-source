@@ -18,12 +18,11 @@ import okhttp3.Request
 import okhttp3.Response
 import java.lang.StringBuilder
 import java.security.KeyPair
+import keiyoushi.annotation.Source
 
-class MangaToshokanZ : HttpSource() {
-    override val lang = "ja"
+@Source
+abstract class MangaToshokanZ : HttpSource() {
     override val supportsLatest = true
-    override val name = "マンガ図書館Z"
-    override val baseUrl = "https://www.mangaz.com"
 
     override val client = network.client.newBuilder()
         .addNetworkInterceptor(::r18Interceptor)

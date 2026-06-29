@@ -4,14 +4,10 @@ import eu.kanade.tachiyomi.multisrc.mangotheme.MangoTheme
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
+import keiyoushi.annotation.Source
 
-class ImperioDaBritannia : MangoTheme() {
-
-    override val name = "Sagrado Imp\u00e9rio da Britannia"
-
-    override val baseUrl = "https://imperiodabritannia.net"
-
-    override val lang = "pt-BR"
+@Source
+abstract class ImperioDaBritannia : MangoTheme() {
 
     override val cdnUrl = "https://cdn.imperiodabritannia.net"
 

@@ -21,14 +21,10 @@ import okhttp3.Response
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class Explosm : HttpSource() {
-
-    override val name = "Cyanide & Happiness"
-
-    override val baseUrl = "https://explosm.net"
-
-    override val lang = "en"
+@Source
+abstract class Explosm : HttpSource() {
 
     override val supportsLatest = false
 

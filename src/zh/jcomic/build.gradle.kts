@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "JComic"
-    className = "JComic"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "zh"
+        baseUrl = "https://jcomic.net"
+    }
 }

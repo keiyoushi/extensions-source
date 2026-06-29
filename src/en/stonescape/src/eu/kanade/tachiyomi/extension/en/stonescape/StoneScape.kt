@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -14,13 +15,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 
-class StoneScape : HttpSource() {
+@Source
+abstract class StoneScape : HttpSource() {
 
-    override val name = "StoneScape"
-    override val baseUrl = "https://stonescape.xyz"
-    override val lang = "en"
     override val supportsLatest = true
-    override val versionId = 2
 
     private val apiUrl = "$baseUrl/api"
 

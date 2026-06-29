@@ -11,13 +11,10 @@ import okhttp3.Response
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class DarkLegacyComics : HttpSource() {
-    override val lang = "en"
-
-    override val name = "Dark Legacy Comics"
-
-    override val baseUrl = "https://www.darklegacycomics.com"
+@Source
+abstract class DarkLegacyComics : HttpSource() {
 
     override val supportsLatest = false
 

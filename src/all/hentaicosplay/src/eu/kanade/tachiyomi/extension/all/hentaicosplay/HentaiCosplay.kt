@@ -19,14 +19,10 @@ import rx.schedulers.Schedulers
 import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class HentaiCosplay : HttpSource() {
-
-    override val name = "Hentai Cosplay"
-
-    override val baseUrl = "https://hentai-cosplay-xxx.com"
-
-    override val lang = "all"
+@Source
+abstract class HentaiCosplay : HttpSource() {
 
     override val supportsLatest = true
 

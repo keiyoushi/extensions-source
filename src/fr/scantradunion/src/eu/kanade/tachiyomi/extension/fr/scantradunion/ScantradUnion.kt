@@ -17,14 +17,10 @@ import org.jsoup.nodes.Document
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class ScantradUnion : HttpSource() {
-
-    override val name = "Scantrad Union"
-
-    override val baseUrl = "https://scantrad-union.com"
-
-    override val lang = "fr"
+@Source
+abstract class ScantradUnion : HttpSource() {
 
     override val supportsLatest = true
 

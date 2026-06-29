@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -26,13 +27,8 @@ import java.text.Normalizer
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class HQNow : HttpSource() {
-
-    override val name = "HQ Now!"
-
-    override val baseUrl = "https://www.hq-now.com"
-
-    override val lang = "pt-BR"
+@Source
+abstract class HQNow : HttpSource() {
 
     override val supportsLatest = true
 

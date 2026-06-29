@@ -14,21 +14,16 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class Gensura : HttpSource() {
-
-    override val name = "Gensura"
-
-    override val baseUrl = "https://gensura.net"
+@Source
+abstract class Gensura : HttpSource() {
 
     private val advSearchURL = "$baseUrl/advanced-search"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 
     // MangaHen -> Gensura
-    override val id = 6602595408477221375
 
     private var tagsList: List<String> = listOf()
 

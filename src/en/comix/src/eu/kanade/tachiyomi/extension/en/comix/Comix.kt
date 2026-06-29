@@ -27,6 +27,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
@@ -48,14 +49,12 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
-class Comix :
+@Source
+abstract class Comix :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Comix"
-    override val baseUrl = "https://comix.to"
     private val apiUrl = "https://comix.to/api/v1"
-    override val lang = "en"
     override val supportsLatest = true
     override val supportsRelatedMangas = false
     override val disableRelatedMangasBySearch = true

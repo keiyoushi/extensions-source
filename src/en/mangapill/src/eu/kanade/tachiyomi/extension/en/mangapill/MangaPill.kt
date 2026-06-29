@@ -14,12 +14,11 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class MangaPill : HttpSource() {
+@Source
+abstract class MangaPill : HttpSource() {
 
-    override val name = "MangaPill"
-    override val baseUrl = "https://mangapill.com"
-    override val lang = "en"
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")

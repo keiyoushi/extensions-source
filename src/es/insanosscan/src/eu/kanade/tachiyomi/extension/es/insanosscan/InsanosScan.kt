@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -28,15 +29,12 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class InsanosScan :
+@Source
+abstract class InsanosScan :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "InsanosScan"
-    override val baseUrl = "https://insanoslibrary.com"
-    override val lang = "es"
     override val supportsLatest = true
-    override val versionId = 2
 
     private val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale("es"))
 

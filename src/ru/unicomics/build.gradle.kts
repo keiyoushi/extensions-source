@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "UniComics"
-    className = "UniComics"
     versionCode = 10
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "ru"
+        baseUrl = "https://unicomics.ru"
+    }
 
     deeplink {
         host("unicomics.ru")

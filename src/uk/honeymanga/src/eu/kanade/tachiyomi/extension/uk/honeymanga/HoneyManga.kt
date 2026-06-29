@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -22,14 +23,12 @@ import okhttp3.Response
 import kotlin.collections.emptySet
 import kotlin.collections.ifEmpty
 
-class HoneyManga :
+@Source
+abstract class HoneyManga :
     HttpSource(),
     ConfigurableSource {
     private val apiurlHost by lazy { API_URL.toHttpUrl().host }
 
-    override val name = "HoneyManga"
-    override val baseUrl = "https://honey-manga.com.ua"
-    override val lang = "uk"
     override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()

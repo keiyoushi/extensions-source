@@ -16,8 +16,10 @@ import org.jsoup.parser.Parser
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class AralosBD : HttpSource() {
+@Source
+abstract class AralosBD : HttpSource() {
 
     companion object {
         val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.FRANCE)
@@ -37,9 +39,6 @@ class AralosBD : HttpSource() {
         .replace(ICON_REGEX, "")
         .trim()
 
-    override val name = "AralosBD"
-    override val baseUrl = "https://aralosbd.fr"
-    override val lang = "fr"
     override val supportsLatest = true
 
     private val json: Json by injectLazy()

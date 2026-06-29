@@ -15,16 +15,12 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class Vgperson : HttpSource() {
-
-    override val name = "vgperson"
-
-    override val lang = "en"
+@Source
+abstract class Vgperson : HttpSource() {
 
     override val supportsLatest = false
-
-    override val baseUrl = "https://vgperson.com/other/mangaviewer.php"
 
     private val userAgent =
         "Mozilla/5.0 (Android ${VERSION.RELEASE}; Mobile) Tachiyomi/${AppInfo.getVersionName()}"

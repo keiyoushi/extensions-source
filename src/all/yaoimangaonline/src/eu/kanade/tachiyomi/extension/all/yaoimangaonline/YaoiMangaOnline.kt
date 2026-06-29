@@ -10,13 +10,10 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
+import keiyoushi.annotation.Source
 
-class YaoiMangaOnline : HttpSource() {
-    override val lang = "all"
-
-    override val name = "Yaoi Manga Online"
-
-    override val baseUrl = "https://yaoimangaonline.com"
+@Source
+abstract class YaoiMangaOnline : HttpSource() {
 
     override val supportsLatest = false
 

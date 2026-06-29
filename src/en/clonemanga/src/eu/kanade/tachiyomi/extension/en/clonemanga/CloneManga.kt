@@ -11,12 +11,11 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class CloneManga : HttpSource() {
+@Source
+abstract class CloneManga : HttpSource() {
 
-    override val name = "Clone Manga"
-    override val baseUrl = "https://manga.clone-army.org"
-    override val lang = "en"
     override val supportsLatest = false
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/viewer_landing.php", headers)

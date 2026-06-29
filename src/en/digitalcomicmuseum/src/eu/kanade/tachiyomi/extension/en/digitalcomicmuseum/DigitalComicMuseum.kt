@@ -17,11 +17,10 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
+import keiyoushi.annotation.Source
 
-class DigitalComicMuseum : HttpSource() {
-    override val baseUrl = "https://digitalcomicmuseum.com"
-    override val lang = "en"
-    override val name = "Digital Comic Museum"
+@Source
+abstract class DigitalComicMuseum : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()

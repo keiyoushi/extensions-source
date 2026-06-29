@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -19,11 +20,9 @@ import java.util.Locale
 
 private val MULTI_SPACE_REGEX = "\\s{6,}".toRegex()
 
-class OhJoySexToy : HttpSource() {
+@Source
+abstract class OhJoySexToy : HttpSource() {
 
-    override val name = "Oh Joy Sex Toy"
-    override val baseUrl = "https://www.ohjoysextoy.com"
-    override val lang = "en"
     override val supportsLatest = true
 
     private val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.ENGLISH)

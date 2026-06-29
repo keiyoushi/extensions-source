@@ -10,14 +10,10 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class Collectedcurios : HttpSource() {
-
-    override val name = "Collected Curios"
-
-    override val baseUrl = "https://www.collectedcurios.com"
-
-    override val lang = "en"
+@Source
+abstract class Collectedcurios : HttpSource() {
 
     override val supportsLatest = false
 

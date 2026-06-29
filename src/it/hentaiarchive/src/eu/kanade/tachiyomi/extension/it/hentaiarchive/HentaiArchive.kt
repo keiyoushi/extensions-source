@@ -14,13 +14,10 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class HentaiArchive : HttpSource() {
-    override val name = "HentaiArchive"
-
-    override val baseUrl = "https://www.hentai-archive.com"
-
-    override val lang = "it"
+@Source
+abstract class HentaiArchive : HttpSource() {
 
     private val cdnHeaders = super.headersBuilder()
         .add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")

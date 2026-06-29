@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
@@ -20,20 +21,13 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
-class InfinityScans : HttpSource() {
-
-    override val name = "InfinityScans"
-
-    override val baseUrl = "https://infinityscans.org"
-
-    override val versionId = 2
+@Source
+abstract class InfinityScans : HttpSource() {
 
     private val cdnHost = "cv.infinityscans.org"
     private val pageCdnHost = "ch.infinityscans.org"
 
     private val slugHash = "cf675243bcc3"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 

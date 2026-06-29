@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
@@ -39,16 +40,11 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.minutes
 
-class YuriGarden :
+@Source
+abstract class YuriGarden :
     HttpSource(),
     ConfigurableSource {
     private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
-
-    override val name = "YuriGarden"
-
-    override val lang = "vi"
-
-    override val baseUrl = "https://yurigarden.moe"
 
     override val supportsLatest = true
 

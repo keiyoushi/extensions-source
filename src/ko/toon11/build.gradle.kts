@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "11toon"
-    className = "Toon11"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "ko"
+        baseUrl = "https://www.11toon.com"
+    }
 }

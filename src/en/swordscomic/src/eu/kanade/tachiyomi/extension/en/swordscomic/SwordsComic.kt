@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import okhttp3.OkHttpClient
@@ -16,13 +17,8 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class SwordsComic : HttpSource() {
-
-    override val name = "Swords Comic"
-
-    override val baseUrl = "https://swordscomic.com"
-
-    override val lang = "en"
+@Source
+abstract class SwordsComic : HttpSource() {
 
     override val supportsLatest = false
 

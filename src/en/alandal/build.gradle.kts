@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Alandal"
-    className = "Alandal"
     versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://alandal.com"
+    }
 }

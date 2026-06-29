@@ -11,14 +11,10 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class Supermega : HttpSource() {
-
-    override val name = "SUPER MEGA"
-
-    override val baseUrl = "https://www.supermegacomics.com"
-
-    override val lang = "en"
+@Source
+abstract class Supermega : HttpSource() {
 
     override val supportsLatest = false
 

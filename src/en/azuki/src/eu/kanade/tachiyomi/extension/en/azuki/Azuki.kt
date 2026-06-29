@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -26,14 +27,11 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class Azuki :
+@Source
+abstract class Azuki :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Omoi"
-    override val baseUrl = "https://www.omoi.com"
-    override val lang = "en"
     override val supportsLatest = true
-    override val versionId = 2
 
     private val apiUrl = "https://production.api.azuki.co"
     private val organizationKey = "199e5a19-a236-49f5-81f4-43d4a541748a"
