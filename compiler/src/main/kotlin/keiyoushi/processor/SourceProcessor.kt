@@ -176,15 +176,18 @@ class SourceProcessor(
     private fun TypeSpec.Builder.applySourceMembers(source: SourceDef, isConfigurable: Boolean): TypeSpec.Builder = apply {
         addProperty(
             PropertySpec.builder("name", String::class.asClassName(), KModifier.OVERRIDE)
-                .initializer("%S", source.name).build(),
+                .getter(FunSpec.getterBuilder().addStatement("return %S", source.name).build())
+                .build(),
         )
         addProperty(
             PropertySpec.builder("lang", String::class.asClassName(), KModifier.OVERRIDE)
-                .initializer("%S", source.lang).build(),
+                .getter(FunSpec.getterBuilder().addStatement("return %S", source.lang).build())
+                .build(),
         )
         addProperty(
             PropertySpec.builder("id", Long::class.asClassName(), KModifier.OVERRIDE)
-                .initializer("%LL", source.id).build(),
+                .getter(FunSpec.getterBuilder().addStatement("return %LL", source.id).build())
+                .build(),
         )
 
         val urlSpec = source.baseUrl
@@ -192,7 +195,8 @@ class SourceProcessor(
             "static" -> {
                 addProperty(
                     PropertySpec.builder("baseUrl", String::class.asClassName(), KModifier.OVERRIDE)
-                        .initializer("%S", urlSpec.defaultUrl).build(),
+                        .getter(FunSpec.getterBuilder().addStatement("return %S", urlSpec.defaultUrl).build())
+                        .build(),
                 )
             }
             "mirrors" -> {
