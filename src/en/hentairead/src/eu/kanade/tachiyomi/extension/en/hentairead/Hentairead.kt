@@ -18,10 +18,11 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US)) {
-
-    override val versionId: Int = 2
+@Source
+abstract class Hentairead : Madara() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US)
 
     private val cdnHeaders = super.headersBuilder()
         .add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")

@@ -9,13 +9,10 @@ import okhttp3.CacheControl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import keiyoushi.annotation.Source
 
-class IsekaiScanTop :
-    Madara(
-        "IsekaiScan.top (unoriginal)",
-        "https://isekaiscan.top",
-        "en",
-    ) {
+@Source
+abstract class IsekaiScanTop : Madara() {
 
     override fun popularMangaRequest(page: Int): Request = GET(
         url = "$baseUrl/popular-manga?page=$page",

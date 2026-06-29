@@ -5,19 +5,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class GhosToon :
-    Madara(
-        "GhosToon",
-        "https://ghostoon.com",
-        "tr",
-        dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
-    ) {
+@Source
+abstract class GhosToon : Madara() {
+    override val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr"))
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 
     // Ghost Hentai -> GhosToon
-    override val id = 8123244641427878412
 
     override val fetchGenres = false
     override var genresList = listOf(

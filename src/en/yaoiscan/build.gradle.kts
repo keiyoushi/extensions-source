@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "YaoiScan"
-    className = "YaoiScan"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://yaoiscan.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://yaoiscan.com"
+    }
 }

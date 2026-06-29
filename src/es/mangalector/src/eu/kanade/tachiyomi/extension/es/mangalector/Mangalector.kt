@@ -13,13 +13,10 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class Mangalector :
-    Madara(
-        "MangaLector",
-        "https://mangalector.com",
-        "es",
-    ) {
+@Source
+abstract class Mangalector : Madara() {
 
     override val supportsLatest = true
 

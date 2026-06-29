@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Grabber Zone"
-    className = "GrabberZone"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://grabber.zone"
+
+    source {
+        lang = "all"
+        baseUrl = "https://grabber.zone"
+    }
 }

@@ -4,8 +4,10 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import keiyoushi.annotation.Source
 
-class ZinChanMangaCom : Madara("ZinChanManga.com", "https://zinchangmanga.net", "en") {
+@Source
+abstract class ZinChanMangaCom : Madara() {
     override val useNewChapterEndpoint = true
 
     override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {

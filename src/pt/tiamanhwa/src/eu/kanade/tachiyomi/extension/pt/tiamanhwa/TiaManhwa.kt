@@ -12,14 +12,11 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class TiaManhwa :
-    Madara(
-        "Tia Manhwa",
-        "https://tiamanhwa.com",
-        "pt-BR",
-        SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-    ) {
+@Source
+abstract class TiaManhwa : Madara() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
 
     override val mangaSubString = "manhwa"
 

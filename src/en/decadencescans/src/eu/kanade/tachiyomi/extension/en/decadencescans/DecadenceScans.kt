@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.decadencescans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class DecadenceScans : Madara("Decadence Scans", "https://reader.decadencescans.com", "en") {
+@Source
+abstract class DecadenceScans : Madara() {
     override val useNewChapterEndpoint: Boolean = true
 }

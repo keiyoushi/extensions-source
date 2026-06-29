@@ -8,14 +8,11 @@ import okhttp3.Request
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class TopManhuaFan :
-    Madara(
-        "TopManhua.fan",
-        "https://www.topmanhua.fan",
-        "en",
-        dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale("en")),
-    ) {
+@Source
+abstract class TopManhuaFan : Madara() {
+    override val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale("en"))
     override val mangaSubString = "manhua"
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = false

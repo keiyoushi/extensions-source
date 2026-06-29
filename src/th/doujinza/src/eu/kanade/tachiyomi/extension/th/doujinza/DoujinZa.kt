@@ -3,14 +3,11 @@ package eu.kanade.tachiyomi.extension.th.doujinza
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class DoujinZa :
-    Madara(
-        "DoujinZa",
-        "https://doujinza.com",
-        "th",
-        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")),
-    ) {
+@Source
+abstract class DoujinZa : Madara() {
+    override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th"))
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = false
 

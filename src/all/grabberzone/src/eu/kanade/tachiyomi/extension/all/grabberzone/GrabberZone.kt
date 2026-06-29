@@ -5,14 +5,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class GrabberZone :
-    Madara(
-        "Grabber Zone",
-        "https://grabber.zone",
-        "all",
-        SimpleDateFormat("dd.MM.yyyy", Locale.ENGLISH),
-    ) {
+@Source
+abstract class GrabberZone : Madara() {
+    override val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.ENGLISH)
     override val mangaSubString = "comics"
 
     override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {

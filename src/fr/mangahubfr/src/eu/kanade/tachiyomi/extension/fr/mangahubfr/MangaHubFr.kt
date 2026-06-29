@@ -5,8 +5,11 @@ import eu.kanade.tachiyomi.source.model.Page
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class MangaHubFr : Madara("MangaHub.fr", "https://mangahub.fr", "fr", dateFormat = SimpleDateFormat("d MMMM yyyy", Locale.FRENCH)) {
+@Source
+abstract class MangaHubFr : Madara() {
+    override val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale.FRENCH)
     // Only display chapters which don't have Premium
     override fun chapterListSelector() = "li.wp-manga-chapter:not(.vip-permission)"
 

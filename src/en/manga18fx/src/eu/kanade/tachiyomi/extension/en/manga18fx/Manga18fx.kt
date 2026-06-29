@@ -16,16 +16,12 @@ import org.jsoup.nodes.Element
 import org.jsoup.select.Evaluator
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
 // The site isn't actually based on Madara but reproduces it very well
-class Manga18fx :
-    Madara(
-        "Manga18fx",
-        "https://manga18fx.com",
-        "en",
-        SimpleDateFormat("dd MMM yy", Locale.ENGLISH),
-    ) {
-    override val id = 3157287889751723714
+@Source
+abstract class Manga18fx : Madara() {
+    override val dateFormat = SimpleDateFormat("dd MMM yy", Locale.ENGLISH)
 
     override val fetchGenres = false
     override val sendViewCount = false

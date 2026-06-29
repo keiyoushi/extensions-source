@@ -7,8 +7,11 @@ import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class Doodmanga : Madara("Doodmanga", "https://www.doodmanga.com", "th", SimpleDateFormat("dd MMMMM yyyy", Locale("th"))) {
+@Source
+abstract class Doodmanga : Madara() {
+    override val dateFormat = SimpleDateFormat("dd MMMMM yyyy", Locale("th"))
     override val filterNonMangaItems = false
 
     override val client: OkHttpClient = super.client.newBuilder()

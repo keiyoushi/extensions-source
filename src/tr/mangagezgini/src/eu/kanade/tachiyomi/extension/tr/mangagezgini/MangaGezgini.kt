@@ -8,14 +8,11 @@ import okhttp3.Request
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class MangaGezgini :
-    Madara(
-        "MangaGezgini",
-        "https://mangagezgini.online",
-        "tr",
-        SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-    ) {
+@Source
+abstract class MangaGezgini : Madara() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
     override val chapterUrlSelector = "> a"
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never

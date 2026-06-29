@@ -1,11 +1,13 @@
 package eu.kanade.tachiyomi.extension.en.cocomic
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import kotlin.time.Duration.Companion.seconds
 
-class Cocomic : Madara("Cocomic", "https://cocomic.co", "en") {
+@Source
+abstract class Cocomic : Madara() {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 2.seconds)

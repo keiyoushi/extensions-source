@@ -10,8 +10,10 @@ import okhttp3.FormBody
 import okhttp3.Request
 import org.jsoup.nodes.Element
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class MangaGG : Madara("MangaGG", "https://mangagg.com", "en") {
+@Source
+abstract class MangaGG : Madara() {
 
     // ============================== Popular ==============================
     override fun popularMangaRequest(page: Int): Request = mangaggLoadMoreRequest(page, true)

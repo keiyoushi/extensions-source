@@ -6,14 +6,11 @@ import okhttp3.Response
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class TonizuToon :
-    Madara(
-        "TonizuToon",
-        "https://tonizu.top",
-        "tr",
-        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-    ) {
+@Source
+abstract class TonizuToon : Madara() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
     override val useNewChapterEndpoint = true
 
     override val mangaDetailsSelectorTitle = "#manga-title"

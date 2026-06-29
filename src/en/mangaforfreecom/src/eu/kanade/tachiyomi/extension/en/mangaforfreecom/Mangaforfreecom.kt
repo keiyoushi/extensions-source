@@ -9,8 +9,10 @@ import java.security.cert.X509Certificate
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
+import keiyoushi.annotation.Source
 
-class Mangaforfreecom : Madara("Mangaforfree.com", "https://mangaforfree.com", "en") {
+@Source
+abstract class Mangaforfreecom : Madara() {
     override val client = getUnsafeOkHttpClient()
 
     private fun getUnsafeOkHttpClient(): OkHttpClient {

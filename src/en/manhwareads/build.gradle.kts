@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Manhwa Reads"
-    className = "ManhwaReads"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://manhwareads.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://manhwareads.com"
+    }
 }

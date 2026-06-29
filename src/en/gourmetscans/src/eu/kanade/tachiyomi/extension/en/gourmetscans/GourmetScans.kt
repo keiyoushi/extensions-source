@@ -9,13 +9,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import keiyoushi.annotation.Source
 
-class GourmetScans :
-    Madara(
-        "Gourmet Scans",
-        "https://gourmetsupremacy.com",
-        "en",
-    ) {
+@Source
+abstract class GourmetScans : Madara() {
     override val mangaSubString = "project"
 
     override val useNewChapterEndpoint = false

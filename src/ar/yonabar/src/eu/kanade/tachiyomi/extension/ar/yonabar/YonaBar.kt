@@ -5,13 +5,10 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import keiyoushi.annotation.Source
 
-class YonaBar :
-    Madara(
-        "Yona Bar",
-        "https://yonaber.com",
-        "ar",
-    ) {
+@Source
+abstract class YonaBar : Madara() {
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val mangaSubString = "yaoi"

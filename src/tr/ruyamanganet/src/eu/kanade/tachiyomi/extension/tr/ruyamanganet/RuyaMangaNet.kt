@@ -3,14 +3,11 @@ package eu.kanade.tachiyomi.extension.tr.ruyamanganet
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class RuyaMangaNet :
-    Madara(
-        "Rüya Manga.net",
-        "https://ruyamanga.net",
-        "tr",
-        dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
-    ) {
+@Source
+abstract class RuyaMangaNet : Madara() {
+    override val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr"))
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = false
 

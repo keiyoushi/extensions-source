@@ -5,8 +5,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
 import org.jsoup.nodes.Element
+import keiyoushi.annotation.Source
 
-class AllPornComic : Madara("AllPornComic", "https://allporncomic.com", "en") {
+@Source
+abstract class AllPornComic : Madara() {
     override val mangaSubString = "porncomic"
 
     // Related Manga

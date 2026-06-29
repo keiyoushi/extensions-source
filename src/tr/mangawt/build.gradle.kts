@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "MangaWT"
-    className = "MangaWT"
     versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://mangawt.com"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://mangawt.com"
+    }
 }

@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "LinkManga"
-    className = "LinkManga"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://linkmanga.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://linkmanga.com"
+    }
 }

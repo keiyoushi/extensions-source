@@ -5,14 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class ManhwaDashRaw :
-    Madara(
-        "Manhwa-raw",
-        "https://manhwa-raw.com",
-        "all",
-        dateFormat = SimpleDateFormat("dd/MM/yyy", Locale.ROOT),
-    ) {
+@Source
+abstract class ManhwaDashRaw : Madara() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyy", Locale.ROOT)
     override val useNewChapterEndpoint = true
 
     override val mangaDetailsSelectorStatus = "div.post-content_item:contains(Status) > div.summary-content"

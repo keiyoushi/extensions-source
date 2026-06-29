@@ -9,14 +9,11 @@ import okhttp3.Request
 import java.security.SecureRandom
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class MadaraDex :
-    Madara(
-        "MadaraDex",
-        "https://madaradex.org",
-        "en",
-        dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US),
-    ) {
+@Source
+abstract class MadaraDex : Madara() {
+    override val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
     override fun headersBuilder() = super.headersBuilder()
         .set("sec-fetch-site", "same-site")
 

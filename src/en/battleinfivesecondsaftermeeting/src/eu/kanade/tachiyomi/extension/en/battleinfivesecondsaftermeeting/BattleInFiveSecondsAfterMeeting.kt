@@ -8,13 +8,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
 import rx.Observable
+import keiyoushi.annotation.Source
 
-class BattleInFiveSecondsAfterMeeting :
-    Madara(
-        "Battle In 5 Seconds After Meeting",
-        "https://www.deatte5.com",
-        "en",
-    ) {
+@Source
+abstract class BattleInFiveSecondsAfterMeeting : Madara() {
     override val supportsLatest = false
     override val fetchGenres = false
 

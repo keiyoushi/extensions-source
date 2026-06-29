@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import keiyoushi.lib.unpacker.Unpacker
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -19,13 +20,9 @@ import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ManhuaBug :
-    Madara(
-        "ManhuaBug",
-        "https://www.manhuabug.com",
-        "th",
-        dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("en")),
-    ) {
+@Source
+abstract class ManhuaBug : Madara() {
+    override val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("en"))
     override val supportsLatest = false
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never

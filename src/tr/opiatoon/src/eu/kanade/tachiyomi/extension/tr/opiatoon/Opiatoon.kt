@@ -7,14 +7,11 @@ import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class Opiatoon :
-    Madara(
-        "Opiatoon",
-        "https://opiatoon.shop",
-        "tr",
-        dateFormat = SimpleDateFormat("d MMMM", Locale("tr")),
-    ) {
+@Source
+abstract class Opiatoon : Madara() {
+    override val dateFormat = SimpleDateFormat("d MMMM", Locale("tr"))
     override val chapterUrlSelector = "li > a"
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always

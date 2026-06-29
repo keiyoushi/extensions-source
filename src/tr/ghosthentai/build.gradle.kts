@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "GhosToon"
-    className = "GhosToon"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://ghostoon.com"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://ghostoon.com"
+        id = 8123244641427878412L
+    }
 }

@@ -13,20 +13,15 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.minutes
+import keiyoushi.annotation.Source
 
-class Kaguya :
-    Madara(
-        "Kaguya",
-        "https://v1.kaguya.pro",
-        "id",
-        dateFormat = SimpleDateFormat("d MMMM", Locale("en")),
-    ) {
+@Source
+abstract class Kaguya : Madara() {
+    override val dateFormat = SimpleDateFormat("d MMMM", Locale("en"))
 
     override val client: OkHttpClient = super.client.newBuilder()
         .readTimeout(1.minutes)
         .build()
-
-    override val id = 1557304490417397104
 
     override val mangaSubString = "all-series"
 

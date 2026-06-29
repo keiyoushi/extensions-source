@@ -6,8 +6,10 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import okhttp3.Request
 import org.jsoup.nodes.Element
+import keiyoushi.annotation.Source
 
-class Zazamanga : Madara("Zazamanga", "https://www.zazamanga.com", "en") {
+@Source
+abstract class Zazamanga : Madara() {
     override fun chapterListSelector() = "div.wp-manga-chapter"
     override fun searchMangaSelector() = "div.page-item-detail:not(.manga)"
     override val searchMangaUrlSelector = "p.widget-title a"

@@ -3,14 +3,11 @@ package eu.kanade.tachiyomi.extension.es.hadesnofansub
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class HadesNoFansub :
-    Madara(
-        "Hades no Fansub",
-        "https://lectorhades.latamtoon.com",
-        "es",
-        dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale("es")),
-    ) {
+@Source
+abstract class HadesNoFansub : Madara() {
+    override val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale("es"))
     override val useNewChapterEndpoint = true
 
     override val mangaSubString = "tmo"

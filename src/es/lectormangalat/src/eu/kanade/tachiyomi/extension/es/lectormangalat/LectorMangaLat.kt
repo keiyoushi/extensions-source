@@ -4,6 +4,7 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.rateLimit
@@ -12,31 +13,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class LectorMangaLat :
-    Madara(
-        "LectorManga.lat",
-        "https://lectormangass.com",
-        "es",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
-    ),
-    ConfigurableSource {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(2, 1.seconds)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .setRandomUserAgent()
-
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
-
-    override val mangaSubString = "biblioteca"
-
-    override val useNewChapterEndpoint = true
-
-    override val pageListParseSelector = "div.reading-content div.page-break > img"
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addRandomUAPreference()
-    }
+@Source
+abstract class LectorMangaLat : Madara() {
+    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
 }

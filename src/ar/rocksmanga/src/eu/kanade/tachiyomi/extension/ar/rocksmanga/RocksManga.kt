@@ -12,14 +12,11 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class RocksManga :
-    Madara(
-        "Rocks Manga",
-        "https://rocksmanga.com",
-        "ar",
-        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("ar")),
-    ) {
+@Source
+abstract class RocksManga : Madara() {
+    override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("ar"))
 
     override fun popularMangaSelector() = ".unit .inner"
     override val popularMangaUrlSelector = ".info a"

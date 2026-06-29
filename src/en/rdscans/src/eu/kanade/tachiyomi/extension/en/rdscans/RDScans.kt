@@ -5,13 +5,10 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import keiyoushi.annotation.Source
 
-class RDScans :
-    Madara(
-        "RD Scans",
-        "https://rdscans.com",
-        "en",
-    ) {
+@Source
+abstract class RDScans : Madara() {
     override val mangaSubString = "new"
     override val mangaEntrySelector = ""
     override val useNewChapterEndpoint = true

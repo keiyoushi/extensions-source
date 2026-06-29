@@ -4,14 +4,11 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import keiyoushi.annotation.Source
 
-class MangasOriginesFr :
-    Madara(
-        "Mangas-Origines.fr",
-        "https://mangas-origines.fr",
-        "fr",
-        dateFormat,
-    ) {
+@Source
+abstract class MangasOriginesFr : Madara() {
+    override val dateFormat = dateFormat
     override val mangaSubString = "catalogues"
     override val useNewChapterEndpoint = true
     override val useLoadMoreRequest = LoadMoreStrategy.Never

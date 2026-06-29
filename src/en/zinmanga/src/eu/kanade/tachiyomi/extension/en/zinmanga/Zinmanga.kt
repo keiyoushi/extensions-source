@@ -7,8 +7,10 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
 import okhttp3.Response
 import org.jsoup.nodes.Element
+import keiyoushi.annotation.Source
 
-class Zinmanga : Madara("Zinmanga", "https://mangazin.org", "en") {
+@Source
+abstract class Zinmanga : Madara() {
 
     // The website does not flag the content consistently.
     override val filterNonMangaItems = false

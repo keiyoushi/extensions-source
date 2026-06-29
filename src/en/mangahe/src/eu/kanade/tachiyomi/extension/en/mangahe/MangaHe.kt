@@ -3,8 +3,10 @@ package eu.kanade.tachiyomi.extension.en.mangahe
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
 import okhttp3.Response
+import keiyoushi.annotation.Source
 
-class MangaHe : Madara("MangaHe", "https://mangahe.com", "en") {
+@Source
+abstract class MangaHe : Madara() {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = false
 

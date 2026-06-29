@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.yaoiscan
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class YaoiScan : Madara("YaoiScan", "https://yaoiscan.com", "en")
+@Source
+abstract class YaoiScan : Madara()

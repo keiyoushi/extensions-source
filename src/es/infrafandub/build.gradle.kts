@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "InfraFandub"
-    className = "InfraFandub"
     versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://infrafandub.com"
+
+    source {
+        lang = "es"
+        baseUrl = "https://infrafandub.com"
+    }
 }

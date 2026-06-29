@@ -3,11 +3,9 @@ package eu.kanade.tachiyomi.extension.ar.detectiveconanar
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class DetectiveConanAr :
-    Madara(
-        "شبكة كونان العربية",
-        "https://manga.detectiveconanar.com",
-        "ar",
-        SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
-    )
+@Source
+abstract class DetectiveConanAr : Madara() {
+    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar"))
+}

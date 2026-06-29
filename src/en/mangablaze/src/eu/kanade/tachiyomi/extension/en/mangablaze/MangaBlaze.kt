@@ -11,13 +11,10 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import keiyoushi.annotation.Source
 
-class MangaBlaze :
-    Madara(
-        "MangaBlaze",
-        "https://mangablaze.com",
-        "en",
-    ) {
+@Source
+abstract class MangaBlaze : Madara() {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 

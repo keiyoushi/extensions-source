@@ -7,8 +7,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
+import keiyoushi.annotation.Source
 
-class KissmangaIn : Madara("Kissmanga.in", "https://kissmanga.in", "en") {
+@Source
+abstract class KissmangaIn : Madara() {
     override val mangaSubString = "kissmanga"
 
     override val useNewChapterEndpoint = true
