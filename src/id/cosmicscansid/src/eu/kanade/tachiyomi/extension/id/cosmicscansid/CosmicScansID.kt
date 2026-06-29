@@ -39,6 +39,12 @@ abstract class CosmicScansID : HttpSource() {
         .set("Origin", baseUrl)
         .set("Referer", "$baseUrl/")
 
+    // URL compat: handle old "/manga/slug" and new "/series/slug"
+    private fun SManga.slug(): String = url
+        .removePrefix("/manga/")
+        .removePrefix("/series/")
+        .trimEnd('/')
+
     // Popular
     override fun popularMangaRequest(page: Int): Request {
         val key = "popular"
@@ -120,10 +126,10 @@ abstract class CosmicScansID : HttpSource() {
     }
 
     // Details
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url.substringAfterLast('/')}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.slug()}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.substringAfterLast('/')
+        val slug = manga.slug()
         return GET("$apiUrl/mangaDetail/$slug", headers)
     }
 

@@ -11,6 +11,6 @@ keiyoushi {
     source {
         lang = "id"
         baseUrl = "https://01.cosmicscans.to"
-        versionId = 1
+        id = 6559481336553833282L
     }
 }
