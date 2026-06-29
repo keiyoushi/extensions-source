@@ -4,7 +4,6 @@ plugins {
 
 keiyoushi {
     name = "Corocoro Online"
-    className = "CorocoroOnline"
     versionCode = 11
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
