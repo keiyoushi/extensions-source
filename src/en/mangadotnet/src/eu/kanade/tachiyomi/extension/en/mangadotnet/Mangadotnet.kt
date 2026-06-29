@@ -259,6 +259,7 @@ class Mangadotnet :
                 addQueryParameter("search", query)
             }
             addQueryParameter("page", page.toString())
+            addQueryParameter("perPage", "56")
 
             filters.firstInstanceOrNull<SortFilter>()?.also { filter ->
                 if (filter.sort == "" && query.isBlank()) {
@@ -299,6 +300,15 @@ class Mangadotnet :
                 }
             }
 
+            filters.filterIsInstance<TagFilter>().forEach { filter ->
+                filter.included.forEach { tag ->
+                    addQueryParameter("tag", tag)
+                }
+                filter.excluded.forEach { tag ->
+                    addQueryParameter("tag", "-$tag")
+                }
+            }
+
             filters.firstInstanceOrNull<AuthorFilter>()?.state?.takeIf { it.isNotBlank() }?.also {
                 addQueryParameter("author", it.trim())
             }
@@ -325,6 +335,7 @@ class Mangadotnet :
 
         val isAdult = adultModePref().let { it == "1" || it == "both" }
         val genreList = getGenreList(isAdult)
+        val tagList = getTagList()
 
         if (genreList != null) {
             filters.add(4, GenreFilter(genreList, excludedGenresPref()))
@@ -333,12 +344,43 @@ class Mangadotnet :
             filters.add(5, Filter.Header("Press 'reset' to load genres"))
         }
 
+        val tagIndex = if (genreList != null) 5 else 6
+        if (tagList != null) {
+            var currentTagIndex = tagIndex
+
+            val otherTags = tagList.filter { it.first().lowercaseChar() !in 'a'..'z' }
+            if (otherTags.isNotEmpty()) {
+                filters.add(currentTagIndex++, TagFilter("Tags (0-9 / Misc)", otherTags))
+            }
+
+            val chunks = listOf(
+                "Tags (A-C)" to 'a'..'c',
+                "Tags (D-H)" to 'd'..'h',
+                "Tags (I-L)" to 'i'..'l',
+                "Tags (M-O)" to 'm'..'o',
+                "Tags (P-S)" to 'p'..'s',
+                "Tags (T-V)" to 't'..'v',
+                "Tags (W-Z)" to 'w'..'z',
+            )
+
+            chunks.forEach { (name, range) ->
+                val chunkTags = tagList.filter { it.first().lowercaseChar() in range }
+                if (chunkTags.isNotEmpty()) {
+                    filters.add(currentTagIndex++, TagFilter(name, chunkTags))
+                }
+            }
+        } else {
+            filters.add(tagIndex, Filter.Separator())
+            filters.add(tagIndex + 1, Filter.Header("Press 'reset' to load tags"))
+        }
+
         return FilterList(filters)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.decodeRscAs<Data<MangaList>>().data
         updateGenres(data.allGenres, adultModePref() != "none")
+        updateTags(data.allTags)
 
         val hideAdultCovers = adultModePref() == "none"
 
@@ -352,7 +394,7 @@ class Mangadotnet :
 
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.decodeRscAs<Data<MangaData>>().data
-        return data.mangaData.manga.toSManga(baseUrl)
+        return data.mangaData.manga.toSManga(baseUrl, showTagsPref())
     }
 
     override val disableRelatedMangasBySearch = true
@@ -582,6 +624,8 @@ class Mangadotnet :
     private fun browseStatusPref(): String? = preferences.getString(BROWSE_STATUS_PREF, "")
         ?.takeIf { it != "" }
 
+    private fun showTagsPref() = preferences.getBoolean(SHOW_TAGS_PREF, true)
+
     // =========================== Genre Cache =============================
     private val genreCacheNormalFile: File by lazy {
         applicationContext.cacheDir.resolve("source_$id/genres_normal.json")
@@ -628,6 +672,43 @@ class Mangadotnet :
                         otherFile.writeText(json)
                     }
                 }
+            }
+        } finally {
+            genresLock.unlock()
+        }
+    }
+
+    // ============================ Tag Cache ==============================
+    private val tagCacheFile: File by lazy {
+        applicationContext.cacheDir.resolve("source_$id/tags.json")
+    }
+
+    private fun getTagList(): List<String>? = genresLock.withLock {
+        runCatching { tagCacheFile.readText().parseAs<List<String>>() }.getOrNull()
+    }?.sortedBy { it.lowercase(Locale.ROOT) }
+
+    private fun extractTags(categories: List<TagCategory>?): List<String> {
+        if (categories.isNullOrEmpty()) return emptyList()
+        return categories.flatMap { category ->
+            category.tags.map { it.name.trim() }
+        }.filter { it.isNotEmpty() }
+            .distinct()
+    }
+
+    private fun updateTags(newTags: List<TagCategory>?) {
+        val tags = extractTags(newTags)
+        if (tags.isEmpty()) return
+        if (!genresLock.tryLock()) return
+        try {
+            val currentTags = runCatching {
+                if (tagCacheFile.exists()) tagCacheFile.readText().parseAs<List<String>>() else null
+            }.getOrNull()
+
+            val combined = if (currentTags == null) tags else (currentTags + tags).distinct()
+
+            if (combined.size != (currentTags?.size ?: 0) || combined.any { it !in (currentTags ?: emptyList()) }) {
+                tagCacheFile.parentFile?.mkdirs()
+                tagCacheFile.writeText(combined.toJsonString())
             }
         } finally {
             genresLock.unlock()
@@ -687,9 +768,17 @@ class Mangadotnet :
             entries = arrayOf("Any Status", "Ongoing", "Completed", "Hiatus")
             entryValues = arrayOf("", "Ongoing", "Completed", "Hiatus")
             setDefaultValue("")
-            summary = "Applies to Popular & Latest"
+            summary = "Applies to Popular & Latest."
         }
         screen.addPreference(browseStatusPref)
+
+        val showTagsPref = SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_TAGS_PREF
+            title = "Show Tags In Details"
+            summary = "Show tags after genres in manga details."
+            setDefaultValue(true)
+        }
+        screen.addPreference(showTagsPref)
 
         val chapterModePref = ListPreference(screen.context).apply {
             key = CHAPTER_MODE
@@ -817,3 +906,4 @@ private const val BROWSE_STATUS_PREF = "pref_browse_status"
 private const val DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
 private const val PREFERRED_SCANLATORS = "pref_preferred_scanlators"
 private const val EXCLUDE_DEMOGRAPHIC_PREF = "pref_exclude_demographic"
+private const val SHOW_TAGS_PREF = "pref_show_tags"
