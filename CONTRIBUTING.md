@@ -26,7 +26,7 @@ or fix it directly by submitting a Pull Request.
       - [Declare sources in build.gradle.kts](#declare-sources-in-buildgradlekts)
       - [baseUrl modes](#baseurl-modes)
       - [Multiple sources from one class](#multiple-sources-from-one-class)
-      - [Legacy approach (className)](#legacy-approach-classname)
+      - [Legacy approach (className) (Deprecated/Discouraged)](#legacy-approach-classname)
     - [Core dependencies](#core-dependencies)
       - [Extension API](#extension-api)
       - [lib tools](#lib-tools)
@@ -129,10 +129,7 @@ navigate and build. This will also reduce disk usage and network traffic.
    In this mode, you can only filter by file path, which is less flexible
    and might require more work when the project structure changes.
 
-   You can skip this code block to use legacy mode if you want easier filters.
-   It won't be much slower as the repo doesn't have that many files.
-
-   To enable cone mode together with sparse index, follow these steps:
+   Cone mode is the recommended standard for pattern matching and responsiveness. Using non-cone mode is deprecated and discouraged.
 
    ```bash
    git sparse-checkout set --cone --sparse-index
@@ -146,7 +143,9 @@ navigate and build. This will also reduce disk usage and network traffic.
    lines you typed when adding it. Don't touch the other auto-generated lines
    unless you fully understand how cone mode works, or you might break it.
 
-   To use the legacy non-cone mode, follow these steps:
+   ### Non-cone mode (Deprecated/Discouraged)
+
+      Using non-cone mode is deprecated and not recommended. If you still need it, follow these steps:
 
    ```bash
    # enable sparse checkout
@@ -296,9 +295,8 @@ plugins {
 
 keiyoushi {
     name = "<My source name>"
-    className = "<MySourceName>"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW // Options: ContentWarning.SAFE, ContentWarning.MIXED, ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
     source {
@@ -308,7 +306,7 @@ keiyoushi {
 }
 ```
 
-If you are not using `source {}` blocks (legacy approach), set `className` explicitly instead:
+Use `source {}` blocks. The legacy `className` approach is discouraged and will be removed in the future.
 
 ```kotlin
 plugins {
@@ -319,7 +317,7 @@ keiyoushi {
     name = "<My source name>"
     className = "<MySourceName>"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 }
 ```
@@ -451,7 +449,7 @@ keiyoushi {
 
 The generated `ExtensionGenerated` class implements `SourceFactory` automatically. You do not need to implement `SourceFactory` yourself.
 
-#### Legacy approach (className)
+#### Legacy approach (className) (Deprecated/Discouraged)
 
 If you are not using `source {}` blocks, you must still set `className` and declare `name`, `lang`, `id`, and `baseUrl` manually in your Kotlin class, as described under [Extension main class](#extension-main-class). Both approaches are supported, but the `source {}` approach is preferred for new extensions.
 
@@ -1246,7 +1244,7 @@ source {
 }
 ```
 
-**If you are using the legacy `className` approach**, override `id` in the source class:
+**If you are using the legacy `className` approach (discouraged)**, override `id` in the source class:
 
 ```kotlin
 override val id: Long = <the-old-id>
