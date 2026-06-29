@@ -1,0 +1,12 @@
+package eu.kanade.tachiyomi.extension.tr.eldermanga
+
+import eu.kanade.tachiyomi.multisrc.uzaymanga.UzayManga
+
+class ElderManga :
+    UzayManga(
+        "Elder Manga",
+        "https://eldermanga.com",
+        lang = "tr",
+        versionId = 2,
+        cdnUrl = "https://cdn-el.efsaneler2.can.re",
+    )

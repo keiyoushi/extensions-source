@@ -1,0 +1,8 @@
+package eu.kanade.tachiyomi.extension.th.nekopost.model
+
+import kotlinx.serialization.Serializable
+
+@Serializable
+class RawProjectSearchSummaryList(
+    val listProject: List<RawProjectSearchSummary>? = null,
+)
