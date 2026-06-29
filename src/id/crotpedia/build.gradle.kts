@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "CrotPedia"
-    className = "CrotPedia"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "zmanga"
-    baseUrl = "https://crotpedia.net"
+
+    source {
+        lang = "id"
+        baseUrl = "https://crotpedia.net"
+    }
 }
