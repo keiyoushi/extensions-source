@@ -3,5 +3,10 @@
     "mirrorTitle": "Preferred Mirror",
     "customUrlTitle": "Custom Base URL",
     "customUrlDialogMessage": "Leave blank to use default"
+  },
+  "ar": {
+    "mirrorTitle": "الخادم البديل المفضل",
+    "customUrlTitle": "عنوان أساسي مخصص",
+    "customUrlDialogMessage": "اترك الحقل فارغًا لاستخدام العنوان الافتراضي"
   }
 }
