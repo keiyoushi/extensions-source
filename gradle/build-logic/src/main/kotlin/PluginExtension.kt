@@ -226,6 +226,7 @@ class PluginExtension : Plugin<Project> {
                 }
                 extensions.configure<KspExtension> {
                     arg("kei_sources", Json.encodeToString<List<ResolvedSourceData>>(resolvedSources))
+                    arg("kei_translations", project(":core").projectDir.resolve("translations/strings.json").absolutePath)
                 }
             }
 

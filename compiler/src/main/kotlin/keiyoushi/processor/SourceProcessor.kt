@@ -22,8 +22,16 @@ import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asClassName
 import com.squareup.kotlinpoet.ksp.toClassName
 import com.squareup.kotlinpoet.ksp.writeTo
+import java.io.File
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+
+@Serializable
+data class LocaleStrings(
+    val mirrorTitle: String,
+    val customUrlTitle: String,
+    val customUrlDialogMessage: String,
+)
 
 @Serializable
 data class BaseUrlSpecData(
@@ -53,6 +61,21 @@ class SourceProcessor(
     private val options: Map<String, String>,
     private val logger: KSPLogger,
 ) : SymbolProcessor {
+
+    private val translations: Map<String, LocaleStrings> by lazy {
+        val path = options["kei_translations"] ?: return@lazy emptyMap()
+        runCatching {
+            Json.decodeFromString<Map<String, LocaleStrings>>(File(path).readText())
+        }.getOrElse {
+            logger.warn("kei_translations: ${it.message}")
+            emptyMap()
+        }
+    }
+
+    private fun stringsForLang(lang: String): LocaleStrings =
+        translations[lang]
+            ?: translations[lang.substringBefore("-")]
+            ?: translations.getValue("en")
 
     private var invoked = false
 
@@ -194,6 +217,7 @@ class SourceProcessor(
                 )
             }
             "mirrors" -> {
+                val strings = stringsForLang(source.lang)
                 val mirrorsArg = CodeBlock.builder().apply {
                     urlSpec.urls.forEachIndexed { i, url ->
                         if (i > 0) add(", ")
@@ -205,8 +229,8 @@ class SourceProcessor(
                         .addModifiers(KModifier.PRIVATE)
                         .delegate(
                             CodeBlock.of(
-                                "lazy { %T(%M(id), arrayOf(%L)) }",
-                                mirrorPrefsClass, getPreferencesFn, mirrorsArg,
+                                "lazy { %T(%M(id), arrayOf(%L), %S) }",
+                                mirrorPrefsClass, getPreferencesFn, mirrorsArg, strings.mirrorTitle,
                             ),
                         ).build(),
                 )
@@ -219,13 +243,15 @@ class SourceProcessor(
                 if (!isConfigurable) addSuperinterface(configurable)
             }
             "custom" -> {
+                val strings = stringsForLang(source.lang)
                 addProperty(
                     PropertySpec.builder("customUrlPrefs", customUrlPrefsClass)
                         .addModifiers(KModifier.PRIVATE)
                         .delegate(
                             CodeBlock.of(
-                                "lazy { %T(%M(id), %S) }",
+                                "lazy { %T(%M(id), %S, %S, %S) }",
                                 customUrlPrefsClass, getPreferencesFn, urlSpec.defaultUrl,
+                                strings.customUrlTitle, strings.customUrlDialogMessage,
                             ),
                         ).build(),
                 )
