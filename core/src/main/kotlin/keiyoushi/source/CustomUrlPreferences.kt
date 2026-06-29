@@ -65,7 +65,7 @@ class CustomUrlPreferences(
                 val isValid = text.isBlank() || httpUrl != null
                 if (isValid) {
                     val sanitizedValue = if (text.isBlank()) {
-                        ""
+                        defaultUrl
                     } else {
                         val scheme = httpUrl!!.scheme
                         val host = httpUrl.host
@@ -75,12 +75,12 @@ class CustomUrlPreferences(
                         "$scheme://$host$portStr"
                     }
 
-                    preferences.edit()
-                        .putString(prefBaseKey, sanitizedValue.ifBlank { defaultUrl })
-                        .apply()
-
                     (preference as EditTextPreference).text = sanitizedValue
-                    summary = sanitizedValue.ifBlank { defaultUrl }
+                    summary = sanitizedValue
+
+                    preferences.edit()
+                        .putString(prefBaseKey, sanitizedValue)
+                        .apply()
                 }
                 false
             }
