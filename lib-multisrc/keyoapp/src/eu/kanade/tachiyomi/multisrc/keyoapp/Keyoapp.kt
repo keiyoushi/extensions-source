@@ -28,11 +28,8 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-abstract class Keyoapp(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String,
-) : HttpSource(),
+abstract class Keyoapp :
+    HttpSource(),
     ConfigurableSource {
 
     protected val preferences: SharedPreferences by getPreferencesLazy()
