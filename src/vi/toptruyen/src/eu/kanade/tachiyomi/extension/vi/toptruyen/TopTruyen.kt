@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.toptruyen
 
 import android.content.SharedPreferences
-import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.network.GET
@@ -99,7 +98,7 @@ abstract class TopTruyen :
             val response = chain.proceed(originalRequest)
             if (!hasCheckedRedirect && preferences.getBoolean(AUTO_CHANGE_DOMAIN_PREF, false)) {
                 hasCheckedRedirect = true
-                val originalHost = super.baseUrl.toHttpUrl().host
+                val originalHost = baseUrl.toHttpUrl().host
                 val newHost = response.request.url.host
                 if (newHost != originalHost) {
                     val newBaseUrl = "${response.request.url.scheme}://$newHost"
@@ -113,35 +112,7 @@ abstract class TopTruyen :
         .rateLimit(5)
         .build()
 
-    init {
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != super.baseUrl) {
-                preferences.edit()
-                    .putString(BASE_URL_PREF, super.baseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
-                    .apply()
-            }
-        }
-    }
-
-    override val baseUrl by lazy { getPrefBaseUrl() }
-
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val defaultUrl = super.baseUrl
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            setDefaultValue(defaultUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $defaultUrl"
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
-                true
-            }
-        }
-        screen.addPreference(baseUrlPref)
-
         val autoDomainPref = androidx.preference.SwitchPreferenceCompat(screen.context).apply {
             key = AUTO_CHANGE_DOMAIN_PREF
             title = AUTO_CHANGE_DOMAIN_TITLE
@@ -151,15 +122,8 @@ abstract class TopTruyen :
         screen.addPreference(autoDomainPref)
     }
 
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
-
     companion object {
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng thay đổi."
-        private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
         private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_SUMMARY =
-            "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
         private const val AUTO_CHANGE_DOMAIN_PREF = "autoChangeDomain"
         private const val AUTO_CHANGE_DOMAIN_TITLE = "Tự động cập nhật domain"
         private const val AUTO_CHANGE_DOMAIN_SUMMARY =
