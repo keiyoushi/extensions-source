@@ -11,6 +11,6 @@ keiyoushi {
     source {
         lang = "pt-BR"
         baseUrl = "https://geasscomics.xyz"
-        id = 7839519253265657488L
+        versionId = 2
     }
 }

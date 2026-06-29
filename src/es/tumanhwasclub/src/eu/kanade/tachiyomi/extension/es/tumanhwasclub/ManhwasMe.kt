@@ -20,9 +20,6 @@ import java.util.Locale
 @Source
 abstract class ManhwasMe : HttpSource() {
 
-    // Preserves the original TuManhwas.Club source ID so existing users
-    // don't lose their library when the class/name changed.
-
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()

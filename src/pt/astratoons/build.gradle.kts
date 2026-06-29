@@ -11,6 +11,6 @@ keiyoushi {
     source {
         lang = "pt-BR"
         baseUrl = "https://new.astratoons.com"
-        id = 551908063793499841L
+        versionId = 2
     }
 }

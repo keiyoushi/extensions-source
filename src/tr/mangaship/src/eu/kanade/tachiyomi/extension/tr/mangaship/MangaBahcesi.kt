@@ -24,8 +24,6 @@ import java.util.Calendar
 @Source
 abstract class MangaBahcesi : HttpSource() {
 
-    override val id: Long = 7110025728969951060
-
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()

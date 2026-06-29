@@ -24,8 +24,6 @@ import java.util.Locale
 abstract class FalcoScan : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
-    // Site change theme from Madara to custom theme
-
     override val supportsLatest = true
 
     private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es"))

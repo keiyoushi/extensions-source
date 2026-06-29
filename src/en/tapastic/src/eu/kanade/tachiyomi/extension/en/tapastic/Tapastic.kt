@@ -34,8 +34,6 @@ abstract class Tapastic :
 
     override val supportsLatest = true
 
-    override val versionId: Int = 2
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client: OkHttpClient = network.client.newBuilder()

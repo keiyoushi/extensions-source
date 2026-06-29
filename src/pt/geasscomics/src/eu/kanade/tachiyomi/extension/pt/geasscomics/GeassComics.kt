@@ -48,8 +48,6 @@ abstract class GeassComics :
 
     override val supportsLatest = true
 
-    override val versionId: Int = 2
-
     private val preferences by getPreferencesLazy()
 
     override val client: OkHttpClient by lazy {

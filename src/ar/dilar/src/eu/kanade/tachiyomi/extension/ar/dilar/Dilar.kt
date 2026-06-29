@@ -18,8 +18,6 @@ import okhttp3.Response
 abstract class Dilar : HttpSource() {
     override val supportsLatest = false
 
-    // Moved from Gmanga
-
     // Popular
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/series?page=$page", headers)

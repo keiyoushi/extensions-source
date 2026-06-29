@@ -11,7 +11,7 @@ keiyoushi {
     source {
         lang = "en"
         baseUrl = "https://tapas.io"
-        id = 5554748812413853237L
+        versionId = 2
     }
 }
 

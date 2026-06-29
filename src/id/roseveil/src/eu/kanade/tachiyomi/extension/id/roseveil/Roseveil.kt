@@ -23,8 +23,6 @@ import java.util.Locale
 @Source
 abstract class Roseveil : HttpSource() {
 
-    // URL path change (/manga/ -> /comic/)
-
     private val apiUrl = "https://api.roseveil.org/api"
 
     override val supportsLatest = true

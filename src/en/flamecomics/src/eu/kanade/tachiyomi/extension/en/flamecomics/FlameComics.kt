@@ -32,7 +32,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class FlameComics : HttpSource() {
     override val supportsLatest = true
-    override val versionId: Int = 2
     private val cdn = "https://cdn.flamecomics.xyz"
 
     private val json: Json by injectLazy()

@@ -23,8 +23,6 @@ abstract class VoyceMe : HttpSource() {
     private val graphqlurlHost by lazy { GRAPHQL_URL.toHttpUrl().host }
     private val staticurlHost by lazy { STATIC_URL.toHttpUrl().host }
 
-    // Renamed from "Voyce.Me" to "VoyceMe" as the site uses.
-
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()

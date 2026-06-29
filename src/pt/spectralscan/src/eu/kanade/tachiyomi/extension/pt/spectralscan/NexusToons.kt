@@ -27,8 +27,6 @@ abstract class NexusToons :
     HttpSource(),
     ConfigurableSource {
 
-    // SpectralScan (pt-BR) -> Nexus Toons (pt-BR)
-
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()

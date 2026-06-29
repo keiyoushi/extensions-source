@@ -37,9 +37,6 @@ abstract class MangaK :
 
     private val apiUrl = "https://api.mangak.io"
 
-    // migration from MangaBuddy.
-    override val id: Long = 5020395055978987501L
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()

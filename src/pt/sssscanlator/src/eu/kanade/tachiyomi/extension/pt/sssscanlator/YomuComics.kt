@@ -30,8 +30,6 @@ abstract class YomuComics : HttpSource() {
 
     override val supportsLatest = true
 
-    // SSSScanlator
-
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(5)
         .build()

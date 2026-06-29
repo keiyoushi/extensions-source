@@ -23,8 +23,6 @@ abstract class Gensura : HttpSource() {
 
     override val supportsLatest = true
 
-    // MangaHen -> Gensura
-
     private var tagsList: List<String> = listOf()
 
     // Popular

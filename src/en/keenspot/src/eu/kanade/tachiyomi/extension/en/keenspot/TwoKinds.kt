@@ -20,8 +20,6 @@ abstract class TwoKinds : HttpSource() {
 
     override val supportsLatest: Boolean = false
 
-    override val id: Long = 3133607736276627986
-
     // the one and only manga entry
     fun mangaSinglePages(): SManga = SManga.create().apply {
         title = "TwoKinds (1 page per chapter)"

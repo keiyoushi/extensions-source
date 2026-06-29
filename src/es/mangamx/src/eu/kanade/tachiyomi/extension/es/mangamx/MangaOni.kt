@@ -28,8 +28,6 @@ abstract class MangaOni :
     HttpSource(),
     ConfigurableSource {
 
-    override val id: Long = 2202687009511923782
-
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()

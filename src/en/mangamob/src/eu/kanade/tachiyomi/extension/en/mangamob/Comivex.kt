@@ -25,7 +25,6 @@ abstract class Comivex :
     HttpSource(),
     ConfigurableSource {
 
-    override val id: Long = 954997815643613941
     override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()

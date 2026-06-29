@@ -20,8 +20,6 @@ import java.util.Locale
 
 @Source
 abstract class Shinigami : HttpSource() {
-    // moved from Reaper Scans (id) to Shinigami (id)
-
     private val apiUrl = "https://api.shngm.io"
 
     private val cdnUrl = "https://storage.shngm.id"

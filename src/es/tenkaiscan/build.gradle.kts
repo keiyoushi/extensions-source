@@ -11,7 +11,6 @@ keiyoushi {
     source {
         lang = "es"
         baseUrl = "https://falcoscan.net"
-        versionId = 3
         id = 5992780069311625546L
     }
 }
