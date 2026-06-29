@@ -155,12 +155,12 @@ abstract class AnimeGDRClub : HttpSource() {
 
         if (nomemanga != null && numcap != null && maxpag != null && maxpag > 0) {
             return (1..maxpag).map { page ->
-                Page(page - 1, imageUrl = "$baseUrl$nomemanga/cap.$numcap/$page.jpg")
+                Page(page - 1, imageUrl = "$baseUrl/$nomemanga/cap.$numcap/$page.jpg")
             }
         }
 
         return document.select("img.corrente").mapIndexed { i, it ->
-            Page(i, imageUrl = baseUrl + it.attr("src"))
+            Page(i, imageUrl = it.absUrl("src"))
         }
     }
 
@@ -168,7 +168,7 @@ abstract class AnimeGDRClub : HttpSource() {
 
     override fun imageRequest(page: Page): Request {
         val imgHeader = Headers.Builder().apply {
-            add("Referer", baseUrl)
+            add("Referer", "$baseUrl/")
         }.build()
         return GET(page.imageUrl!!, imgHeader)
     }

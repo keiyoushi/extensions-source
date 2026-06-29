@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -23,9 +22,7 @@ import keiyoushi.annotation.Source
 abstract class DigitalComicMuseum : HttpSource() {
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(::errorIntercept)
-        .build()
+    override val client: OkHttpClient = network.client
 
     // Latest
 
@@ -135,16 +132,5 @@ abstract class DigitalComicMuseum : HttpSource() {
     override fun imageUrlParse(response: Response): String {
         val document = response.asJsoup()
         return document.selectFirst("body > a:nth-of-type(2) > img")?.attr("abs:src") ?: ""
-    }
-
-    // Interceptor
-
-    private fun errorIntercept(chain: Interceptor.Chain): Response {
-        val response = chain.proceed(chain.request())
-        if (response.code == 403) {
-            response.close()
-            return client.newCall(response.request).execute()
-        }
-        return response
     }
 }

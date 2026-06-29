@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "Digital Comic Museum"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
