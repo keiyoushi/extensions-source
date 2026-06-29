@@ -106,7 +106,7 @@ class PluginExtension : Plugin<Project> {
         }
 
         val themeExtension = keiyoushi.theme.map { themeName ->
-            project(":lib-multisrc:$themeName").extensions.findByType(KeiyoushiMultisrcExtension::class.java)
+            evaluationDependsOn(":lib-multisrc:$themeName").extensions.findByType(KeiyoushiMultisrcExtension::class.java)
                 ?: throw AssertionError("Theme project :lib-multisrc:$themeName must apply kei.plugins.multisrc")
         }
 
