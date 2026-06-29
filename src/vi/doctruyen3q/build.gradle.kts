@@ -11,6 +11,8 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl = "https://doctruyen3qhub2.com"
+        baseUrl("https://doctruyen3qhub2.com") {
+            withCustom = true
+        }
     }
 }
