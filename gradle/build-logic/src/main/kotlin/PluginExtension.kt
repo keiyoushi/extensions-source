@@ -224,9 +224,13 @@ class PluginExtension : Plugin<Project> {
                     ).get()
                     ResolvedSourceData(name, lang, id, baseUrl, skipCodeGen)
                 }
+                val translationsFile = project(":core").projectDir.resolve("translations/strings.json")
                 extensions.configure<KspExtension> {
                     arg("kei_sources", Json.encodeToString<List<ResolvedSourceData>>(resolvedSources))
-                    arg("kei_translations", project(":core").projectDir.resolve("translations/strings.json").absolutePath)
+                    arg("kei_translations", translationsFile.absolutePath)
+                }
+                tasks.matching { it.name.startsWith("ksp") }.configureEach {
+                    inputs.file(translationsFile)
                 }
             }
 
