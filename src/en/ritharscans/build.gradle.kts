@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "RitharScans"
-    className = "RitharScans"
     versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "keyoapp"
-    baseUrl = "https://ritharscans.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://ritharscans.com"
+    }
 }

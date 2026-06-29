@@ -1,10 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.grimscans
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
+import keiyoushi.annotation.Source
 
-class GrimScans :
-    Keyoapp(
-        "Grim Scans",
-        "https://grimscans.com",
-        "en",
-    )
+@Source
+abstract class GrimScans : Keyoapp()

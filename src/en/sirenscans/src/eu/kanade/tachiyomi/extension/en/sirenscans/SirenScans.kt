@@ -1,10 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.sirenscans
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
+import keiyoushi.annotation.Source
 
-class SirenScans :
-    Keyoapp(
-        "Siren Scans",
-        "https://sirenscans.com",
-        "en",
-    )
+@Source
+abstract class SirenScans : Keyoapp()
