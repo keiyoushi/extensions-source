@@ -7,9 +7,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import rx.Observable
-import keiyoushi.annotation.Source
 
 @Source
 abstract class GWTB : HttpSource() {

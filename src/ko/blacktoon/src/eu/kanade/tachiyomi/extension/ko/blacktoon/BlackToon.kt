@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -18,7 +19,6 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import kotlin.math.min
 import kotlin.random.Random
-import keiyoushi.annotation.Source
 
 @Source
 abstract class BlackToon : HttpSource() {
