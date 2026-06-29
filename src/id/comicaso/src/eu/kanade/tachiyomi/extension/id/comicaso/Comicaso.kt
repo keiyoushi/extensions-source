@@ -37,6 +37,7 @@ class Comicaso :
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::authInterceptor)
+        .addInterceptor(::cdnInterceptor)
         .rateLimit(4)
         .build()
 
@@ -53,6 +54,7 @@ class Comicaso :
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
         .set("User-Agent", DEFAULT_USER_AGENT)
+        .set("X-Comicaso-Platform", "web")
         .setRandomUserAgent(
             filterInclude = listOf("Chrome", "Safari"),
         )
@@ -71,6 +73,34 @@ class Comicaso :
             }
         }
         return response
+    }
+
+    private fun cdnInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+
+        if (response.isSuccessful || response.code == 403 || response.code == 401) {
+            return response
+        }
+
+        val host = request.url.host
+        val prefix = HOST_TO_PREFIX[host] ?: return response
+
+        response.close()
+
+        for (domain in CDN_DOMAINS) {
+            val newUrl = request.url.newBuilder()
+                .host("$prefix.$domain")
+                .build()
+            val newRequest = request.newBuilder().url(newUrl).build()
+            val newResponse = chain.proceed(newRequest)
+            if (newResponse.isSuccessful) {
+                return newResponse
+            }
+            newResponse.close()
+        }
+
+        return chain.proceed(request)
     }
 
     // ============================== Popular ==============================
@@ -201,11 +231,20 @@ class Comicaso :
     // =============================== Pages ===============================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val segments = chapter.urlSegments()
-        val source = segments.getOrNull(0) ?: "all"
-        val manga = segments.getOrNull(1) ?: ""
-        val slug = segments.getOrNull(2) ?: ""
-        return GET("$baseUrl/api/chapter.php?source=$source&manga=$manga&chapter=$slug", headers)
+        val url = "$baseUrl/${chapter.url}".toHttpUrl()
+        val source = url.pathSegments.getOrNull(0) ?: "all"
+        val manga = url.pathSegments.getOrNull(1) ?: ""
+        val slug = url.pathSegments.getOrNull(2) ?: ""
+        val token = url.queryParameter("token")!!
+
+        val apiUri = "$baseUrl/api/chapter.php".toHttpUrl().newBuilder().apply {
+            addQueryParameter("source", source)
+            addQueryParameter("manga", manga)
+            addQueryParameter("chapter", slug)
+            addQueryParameter("token", token)
+        }.build()
+
+        return GET(apiUri, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -243,5 +282,13 @@ class Comicaso :
         private val chapterNumberFallbackRegex = Regex("""\d+(?:\.\d+)?""")
         private const val DEFAULT_USER_AGENT =
             "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36"
+
+        private val CDN_DOMAINS = listOf("basrat.online", "gurihnyoh.site", "jeletot.fun")
+        private val HOST_TO_PREFIX = mapOf(
+            "ap.imgmanga.com" to "tilu",
+            "ap2.imgmanga.com" to "opat",
+            "cdn.imgmacha.com" to "hiji",
+            "cdn2.imgmacha.com" to "dua",
+        )
     }
 }

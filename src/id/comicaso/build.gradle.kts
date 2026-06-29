@@ -5,8 +5,8 @@ plugins {
 keiyoushi {
     name = "Comicaso"
     className = "Comicaso"
-    versionCode = 2
-    contentWarning = ContentWarning.NSFW
+    versionCode = 3
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     deeplink {
