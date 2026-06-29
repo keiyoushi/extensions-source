@@ -13,8 +13,6 @@ abstract class GhosToon : Madara() {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 
-    // Ghost Hentai -> GhosToon
-
     override val fetchGenres = false
     override var genresList = listOf(
         Genre("3D", "3d"),

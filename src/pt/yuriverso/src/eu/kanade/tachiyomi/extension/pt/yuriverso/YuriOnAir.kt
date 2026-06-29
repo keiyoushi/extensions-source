@@ -12,8 +12,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class YuriOnAir : Madara() {
     override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
 
-    // Yuri Verso -> Yuri on Air
-
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 2.seconds)
         .build()

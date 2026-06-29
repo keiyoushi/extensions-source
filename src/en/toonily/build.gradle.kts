@@ -11,7 +11,7 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl = "https://$DOMAIN"
+        baseUrl = "https://toonily.com"
     }
 }
 

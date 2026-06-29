@@ -17,7 +17,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class Firescans : Madara() {
 
-    override val id: Long = 5761461704760730187
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(20, 5.seconds)
         .build()

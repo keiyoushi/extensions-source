@@ -14,6 +14,25 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class LectorMangaLat : Madara() {
+abstract class LectorMangaLat : Madara(), ConfigurableSource {
     override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
+
+    override val client: OkHttpClient = super.client.newBuilder()
+        .rateLimit(2, 1.seconds)
+        .build()
+
+    override fun headersBuilder() = super.headersBuilder()
+        .setRandomUserAgent()
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+
+    override val mangaSubString = "biblioteca"
+
+    override val useNewChapterEndpoint = true
+
+    override val pageListParseSelector = "div.reading-content div.page-break > img"
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        screen.addRandomUAPreference()
+    }
 }

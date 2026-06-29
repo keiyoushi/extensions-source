@@ -12,13 +12,11 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-private const val DOMAIN = "toonily.com"
-
 @Source
 abstract class Toonily : Madara() {
     override val dateFormat = SimpleDateFormat("MMM d, yy", Locale.US)
     override val client = super.client.newBuilder()
-        .addNetworkInterceptor(CookieInterceptor(DOMAIN, "toonily-mature" to "1"))
+        .addNetworkInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, "toonily-mature" to "1"))
         .addInterceptor(::hdCoverInterceptor)
         .build()
 

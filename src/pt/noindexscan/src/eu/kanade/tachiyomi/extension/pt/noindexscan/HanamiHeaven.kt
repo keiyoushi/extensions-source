@@ -24,7 +24,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class HanamiHeaven : Madara() {
     override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
-    // NoIndexScan (pt-BR) -> HanamiHeaven (pt-BR)
 
     private fun OkHttpClient.Builder.ignoreAllSSLErrors(): OkHttpClient.Builder {
         val naiveTrustManager =

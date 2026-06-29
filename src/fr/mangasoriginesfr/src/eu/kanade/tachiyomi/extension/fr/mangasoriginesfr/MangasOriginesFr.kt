@@ -8,15 +8,13 @@ import keiyoushi.annotation.Source
 
 @Source
 abstract class MangasOriginesFr : Madara() {
-    override val dateFormat = dateFormat
+    override val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("fr")).apply {
+        timeZone = TimeZone.getTimeZone("Europe/Paris")
+    }
     override val mangaSubString = "catalogues"
     override val useNewChapterEndpoint = true
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override val mangaDetailsSelectorAuthor = "div.author-content > a"
     override val mangaDetailsSelectorDescription = "div.summary__content > p"
-}
-
-private val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("fr")).apply {
-    timeZone = TimeZone.getTimeZone("Europe/Paris")
 }

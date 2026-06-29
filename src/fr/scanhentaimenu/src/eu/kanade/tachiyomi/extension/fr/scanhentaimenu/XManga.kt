@@ -8,7 +8,6 @@ import keiyoushi.annotation.Source
 @Source
 abstract class XManga : Madara() {
     override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.FRENCH)
-    // Scan Hentai Menu -> X-Manga
 
     override val useNewChapterEndpoint = true
 
