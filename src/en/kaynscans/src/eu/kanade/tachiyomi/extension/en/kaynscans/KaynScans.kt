@@ -8,7 +8,7 @@ import okhttp3.Request
 import okhttp3.Response
 
 @Source
-class KaynScans : Iken() {
+abstract class KaynScans : Iken() {
     override val sortPagesByFilename = true
 
     // Migrate from Keyoapp to Iken by checking non slug-only urls

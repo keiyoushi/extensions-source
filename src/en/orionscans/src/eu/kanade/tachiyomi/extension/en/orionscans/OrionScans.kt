@@ -4,4 +4,4 @@ import eu.kanade.tachiyomi.multisrc.iken.Iken
 import keiyoushi.annotation.Source
 
 @Source
-class OrionScans : Iken()
+abstract class OrionScans : Iken()

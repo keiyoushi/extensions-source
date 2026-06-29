@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.iken.Iken
 import keiyoushi.annotation.Source
 
 @Source
-class HiveScans : Iken() {
+abstract class HiveScans : Iken() {
     override val client =
         super.client
             .newBuilder()

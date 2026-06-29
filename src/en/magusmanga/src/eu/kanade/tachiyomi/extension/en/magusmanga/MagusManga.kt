@@ -6,7 +6,7 @@ import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
-class MagusManga : Iken() {
+abstract class MagusManga : Iken() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val client =

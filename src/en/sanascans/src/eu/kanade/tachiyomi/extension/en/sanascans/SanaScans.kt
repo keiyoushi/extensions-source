@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.iken.Iken
 import keiyoushi.annotation.Source
 
 @Source
-class SanaScans : Iken() {
+abstract class SanaScans : Iken() {
     override val perPage = 30
     override val sortPagesByFilename = true
 }

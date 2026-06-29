@@ -10,7 +10,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 
 @Source
-class KenScans : Iken() {
+abstract class KenScans : Iken() {
     override fun chapterListRequest(manga: SManga): Request {
         // Migration from old web theme to the new one(Keyoapp -> Iken)
         if (manga.url.startsWith("/series/")) {
