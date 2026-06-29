@@ -11,6 +11,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 class CustomUrlPreferences(
     private val preferences: SharedPreferences,
     private val defaultUrl: String,
+    private val title: String,
+    private val dialogMessage: String,
 ) {
     private val prefBaseKey = "overrideBaseUrl"
     private val prefDefaultKey = "${prefBaseKey}_default"
@@ -31,16 +33,12 @@ class CustomUrlPreferences(
     fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
             key = prefBaseKey
-            title = "Custom base URL"
-            dialogTitle = "Custom base URL"
-            dialogMessage = "Leave blank to use default"
+            title = this@CustomUrlPreferences.title
+            dialogTitle = this@CustomUrlPreferences.title
+            dialogMessage = this@CustomUrlPreferences.dialogMessage
 
             val currentValue = preferences.getString(prefBaseKey, null)
-            summary = if (currentValue.isNullOrBlank() || currentValue == defaultUrl) {
-                "Using default: $defaultUrl"
-            } else {
-                currentValue
-            }
+            summary = currentValue?.takeIf { it.isNotBlank() } ?: defaultUrl
             setDefaultValue(defaultUrl)
 
             setOnBindEditTextListener { editText ->
@@ -52,10 +50,6 @@ class CustomUrlPreferences(
                         override fun afterTextChanged(editable: Editable?) {
                             val text = editable?.toString() ?: ""
                             val isValid = text.isBlank() || text.toHttpUrlOrNull() != null
-
-                            editText.error = if (isValid) null else "Invalid URL"
-
-                            // Disable the "OK" button if invalid
                             editText.rootView.findViewById<Button>(android.R.id.button1)?.isEnabled = isValid
                         }
 
@@ -71,7 +65,7 @@ class CustomUrlPreferences(
                 val isValid = text.isBlank() || httpUrl != null
                 if (isValid) {
                     val sanitizedValue = if (text.isBlank()) {
-                        ""
+                        defaultUrl
                     } else {
                         val scheme = httpUrl!!.scheme
                         val host = httpUrl.host
@@ -81,12 +75,12 @@ class CustomUrlPreferences(
                         "$scheme://$host$portStr"
                     }
 
-                    preferences.edit()
-                        .putString(prefBaseKey, sanitizedValue.ifBlank { defaultUrl })
-                        .apply()
-
                     (preference as EditTextPreference).text = sanitizedValue
-                    summary = sanitizedValue.ifBlank { "Using default: $defaultUrl" }
+                    summary = sanitizedValue
+
+                    preferences.edit()
+                        .putString(prefBaseKey, sanitizedValue)
+                        .apply()
                 }
                 false
             }
