@@ -42,7 +42,7 @@ class Hipercool : HttpSource() {
     override val id: Long = 2379514871370953957
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3,1.seconds)
+        .rateLimit(3, 1.seconds)
         .build()
 
     // ============================ Popular ====================================
