@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -19,17 +20,10 @@ import rx.Observable
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class CosmicScansID : HttpSource() {
-
-    override val name = "CosmicScans.id"
-
-    override val baseUrl = "https://01.cosmicscans.to"
-
-    override val lang = "id"
+@Source
+abstract class CosmicScansID : HttpSource() {
 
     override val supportsLatest = true
-
-    override val id = 6559481336553833282
 
     private val apiUrl = "https://cdncid.csmcscns.id/v1/manga"
 
@@ -38,7 +32,7 @@ class CosmicScansID : HttpSource() {
     private val lastPage = mutableMapOf<String, Int>()
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(2, 1.seconds)
+        .rateLimit(3, 1.seconds)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

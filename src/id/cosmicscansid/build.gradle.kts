@@ -3,9 +3,14 @@ plugins {
 }
 
 keiyoushi {
-    name = "CosmicScans.id"
-    className = "CosmicScansID"
+    name = "CosmicScansID"
     versionCode = 55
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
+
+    source {
+        lang = "id"
+        baseUrl = "https://01.cosmicscans.to"
+        versionId = 1
+    }
 }
