@@ -5,7 +5,7 @@ plugins {
 keiyoushi {
     name = "Lunar Manga"
     className = "LunarAnimeFactory"
-    versionCode = 10
+    versionCode = 11
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 }
