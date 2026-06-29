@@ -9,8 +9,3 @@ keiyoushi {
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 }
-
-dependencies {
-
-    implementation(project(":lib:randomua"))
-}

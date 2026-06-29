@@ -1,22 +1,14 @@
 package eu.kanade.tachiyomi.extension.id.cosmicscansid
 
-import android.content.SharedPreferences
-import android.widget.Toast
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.lib.randomua.addRandomUAPreference
-import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Builder
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -27,13 +19,11 @@ import rx.Observable
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class CosmicScansID :
-    HttpSource(),
-    ConfigurableSource {
+class CosmicScansID : HttpSource() {
 
     override val name = "CosmicScans.id"
 
-    private val defaultBaseUrl = "https://01.cosmicscans.to"
+    override val baseUrl = "https://01.cosmicscans.to"
 
     override val lang = "id"
 
@@ -42,37 +32,6 @@ class CosmicScansID :
     override val id = 6559481336553833282
 
     private val apiUrl = "https://cdncid.csmcscns.id/v1/manga"
-
-    private val preferences = getPreferences {
-        getString(DEFAULT_BASE_URL_PREF, defaultBaseUrl).let { domain ->
-            if (domain != defaultBaseUrl) {
-                edit()
-                    .putString(BASE_URL_PREF, defaultBaseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
-                    .apply()
-            }
-        }
-    }
-
-    private val isCi = System.getenv("CI") == "true"
-
-    private var cachedBaseUrl: String? = null
-    private var SharedPreferences.prefBaseUrl: String
-        get() {
-            if (cachedBaseUrl == null) {
-                cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
-            }
-            return cachedBaseUrl!!
-        }
-        set(value) {
-            cachedBaseUrl = value
-            edit().putString(BASE_URL_PREF, value).apply()
-        }
-
-    override val baseUrl: String get() = when {
-        isCi -> defaultBaseUrl
-        else -> preferences.prefBaseUrl
-    }
 
     private val cursorCache = mutableMapOf<String, String>()
 
@@ -85,7 +44,6 @@ class CosmicScansID :
     override fun headersBuilder() = super.headersBuilder()
         .set("Origin", baseUrl)
         .set("Referer", "$baseUrl/")
-        .setRandomUserAgent()
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
@@ -203,23 +161,6 @@ class CosmicScansID :
     // Filters
     override fun getFilterList() = getCosmicScansIDFilterList()
 
-    // Preferences
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addRandomUAPreference()
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = "Edit source URL"
-            summary = "For temporary use, if the extension is updated the change will be lost."
-            dialogTitle = title
-            dialogMessage = "Default URL:\n$defaultBaseUrl"
-            setDefaultValue(defaultBaseUrl)
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Restart the application to apply the changes", Toast.LENGTH_LONG).show()
-                true
-            }
-        }.also { screen.addPreference(it) }
-    }
-
     // Utilities
     private fun parseMangaPage(response: Response, key: String): MangasPage {
         val result = response.parseAs<MangaListResponse>()
@@ -311,7 +252,5 @@ class CosmicScansID :
 
     companion object {
         private const val PAGE_SIZE = 24
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
     }
 }
