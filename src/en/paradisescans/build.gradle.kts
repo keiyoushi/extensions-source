@@ -12,6 +12,6 @@ keiyoushi {
     source {
         lang = "en"
         baseUrl = "https://paradisescans.com"
-	id = 5928300995303689257L
+	    id = 5928300995303689257L
     }
 }
