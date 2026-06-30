@@ -106,7 +106,7 @@ abstract class HentaiCB : Madara() {
         return super.fetchSearchManga(page, queryFixed, filters)
     }
 
-    private val oldMangaUrlRegex = Regex("^$baseUrl/\\w+/")
+    private val oldMangaUrlRegex by lazy { Regex("^$baseUrl/\\w+/") }
 
     // Change old entries from mangaSubString
     override fun getMangaUrl(manga: SManga): String = super.getMangaUrl(manga)
