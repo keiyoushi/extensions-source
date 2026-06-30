@@ -2,15 +2,12 @@ package eu.kanade.tachiyomi.extension.ja.mangamura
 
 import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl
 import okhttp3.Request
 
-class MangaMura :
-    MangaReader(
-        "Manga Mura",
-        "https://mangamura.me",
-        "ja",
-    ) {
+@Source
+abstract class MangaMura : MangaReader() {
     override val chapterIdSelect = "ja-chaps"
 
     override fun addPage(page: Int, builder: HttpUrl.Builder) {
