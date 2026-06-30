@@ -1,12 +1,9 @@
 package eu.kanade.tachiyomi.extension.tr.afroditscans
 
 import eu.kanade.tachiyomi.multisrc.uzaymanga.UzayManga
+import keiyoushi.annotation.Source
 
-class AfroditScans :
-    UzayManga(
-        "Afrodit Scans",
-        "https://afroditscans.com",
-        lang = "tr",
-        versionId = 2,
-        cdnUrl = "https://cdn-a.efsaneler2.can.re",
-    )
+@Source
+abstract class AfroditScans : UzayManga() {
+    override val cdnUrl = "https://cdn-a.efsaneler2.can.re"
+}

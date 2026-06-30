@@ -4,9 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Eski Mangalar"
-    className = "EskiMangalar"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "uzaymanga"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://eskimangalar.com"
+    }
 }
