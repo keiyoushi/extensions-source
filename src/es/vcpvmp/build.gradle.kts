@@ -4,9 +4,13 @@ plugins {
 
 keiyoushi {
     name = "VCPVMP"
-    className = "VCPVMPFactory"
     versionCode = 9
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "vercomics"
+
+    source {
+        lang = "es"
+        baseUrl = "https://vercomicsporno.com"
+    }
 }

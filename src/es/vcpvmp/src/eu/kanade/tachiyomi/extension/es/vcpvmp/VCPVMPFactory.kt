@@ -3,15 +3,17 @@ package eu.kanade.tachiyomi.extension.es.vcpvmp
 import eu.kanade.tachiyomi.multisrc.vercomics.VerComics
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
+import keiyoushi.annotation.Source
 
-class VCPVMPFactory : SourceFactory {
+@Source
+abstract class VCPVMPFactory : SourceFactory {
     override fun createSources(): List<Source> = listOf(
         VCP(),
         VMP(),
     )
 }
 
-class VCP : VerComics("VCP", "https://vercomicsporno.com", "es") {
+class VCP : VerComics() {
 
     override val urlSuffix = "comics-porno"
     override val genreSuffix = "etiquetas"
@@ -41,7 +43,7 @@ class VCP : VerComics("VCP", "https://vercomicsporno.com", "es") {
         )
 }
 
-class VMP : VerComics("VMP", "https://vermangasporno.com", "es") {
+class VMP : VerComics() {
 
     override val urlSuffix = "xxx"
     override val genreSuffix = "tag"
