@@ -21,11 +21,7 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-abstract class ZeistManga(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class ZeistManga : HttpSource() {
 
     override val supportsLatest = true
 
