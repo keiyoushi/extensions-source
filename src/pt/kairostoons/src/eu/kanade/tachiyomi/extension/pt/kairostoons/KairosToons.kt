@@ -1,9 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.kairostoons
 
 import eu.kanade.tachiyomi.multisrc.stalkercms.StalkerCms
+import keiyoushi.annotation.Source
 
-class KairosToons :
-    StalkerCms(
-        "Kairos Toons",
-        "https://kairostoons.net",
-    )
+@Source
+abstract class KairosToons : StalkerCms()

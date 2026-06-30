@@ -1,10 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.necroscans
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
+import keiyoushi.annotation.Source
 
-class NecroScans :
-    Keyoapp(
-        "Necro Scans",
-        "https://necroscans.com",
-        "en",
-    )
+@Source
+abstract class NecroScans : Keyoapp()

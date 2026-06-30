@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.fleurblanche
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -9,13 +10,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class FleurBlanche :
-    Madara(
-        "Fleur Blanche",
-        "https://fbsquadx.com",
-        "pt-BR",
-        SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-    ) {
+@Source
+abstract class FleurBlanche : Madara() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
 
     override val client = super.client.newBuilder()
         .addInterceptor(::authWarningIntercept)

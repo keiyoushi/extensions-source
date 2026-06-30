@@ -1,16 +1,13 @@
 package eu.kanade.tachiyomi.extension.id.lumoskomik
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class LumosKomik :
-    Madara(
-        "LumosKomik",
-        "https://02.lumosgg.com",
-        "id",
-        dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale("en")),
-    ) {
+@Source
+abstract class LumosKomik : Madara() {
+    override val dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale("en"))
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = true
 

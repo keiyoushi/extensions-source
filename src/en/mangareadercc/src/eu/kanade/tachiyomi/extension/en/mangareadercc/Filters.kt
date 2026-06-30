@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.paprika
+package eu.kanade.tachiyomi.extension.en.mangareadercc
 
 import eu.kanade.tachiyomi.source.model.Filter
 

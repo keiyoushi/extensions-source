@@ -1,17 +1,14 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivreto
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaLivreTo :
-    Madara(
-        "Manga Livre.to",
-        "https://mangalivre.to",
-        "pt-BR",
-        SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("pt")),
-    ) {
+@Source
+abstract class MangaLivreTo : Madara() {
+    override val dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("pt"))
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()

@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "ManhwaOnline"
-    className = "ManhwaOnline"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://manhwa-online.com"
+
+    source {
+        lang = "es"
+        baseUrl = "https://manhwa-online.com"
+    }
 }

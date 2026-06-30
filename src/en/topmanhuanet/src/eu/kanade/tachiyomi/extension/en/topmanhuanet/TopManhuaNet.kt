@@ -1,13 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.topmanhuanet
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class TopManhuaNet :
-    Madara(
-        "TopManhua.net",
-        "https://topmanhua.net",
-        "en",
-    ) {
+@Source
+abstract class TopManhuaNet : Madara() {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 }

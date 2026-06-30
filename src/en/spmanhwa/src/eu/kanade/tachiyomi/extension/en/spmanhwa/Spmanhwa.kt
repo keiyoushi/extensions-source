@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.spmanhwa
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class Spmanhwa : Madara("Spmanhwa", "https://spmanhwa.online", "en")
+@Source
+abstract class Spmanhwa : Madara()

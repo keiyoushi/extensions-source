@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.hotcabaretscan
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -10,13 +11,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class HotCabaretScan :
-    Madara(
-        "Hot Cabaret Scan",
-        "https://hotcabaretscan.com",
-        "pt-BR",
-        SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
-    ) {
+@Source
+abstract class HotCabaretScan : Madara() {
+    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR"))
 
     override val client: OkHttpClient = super.client.newBuilder()
         .addInterceptor(::checkPasswordProtectedIntercept)

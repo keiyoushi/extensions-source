@@ -1,11 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.nyxscans
 
 import eu.kanade.tachiyomi.multisrc.iken.Iken
+import keiyoushi.annotation.Source
 
-class NyxScans :
-    Iken(
-        "Nyx Scans",
-        "en",
-        "https://nyxscans.com",
-        "https://api.nyxscans.com",
-    )
+@Source
+abstract class NyxScans : Iken()

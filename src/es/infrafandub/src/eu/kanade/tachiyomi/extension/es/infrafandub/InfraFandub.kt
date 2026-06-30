@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.es.infrafandub
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Element
@@ -9,13 +10,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class InfraFandub :
-    Madara(
-        "InfraFandub",
-        "https://infrafandub.com",
-        "es",
-        SimpleDateFormat("dd/MM/yyyy", Locale("es")),
-    ) {
+@Source
+abstract class InfraFandub : Madara() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(2, 1.seconds)
         .build()

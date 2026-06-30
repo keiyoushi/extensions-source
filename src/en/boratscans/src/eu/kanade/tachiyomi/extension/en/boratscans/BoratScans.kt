@@ -1,13 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.boratscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class BoratScans :
-    Madara(
-        "Borat Scans",
-        "https://boratscans.com",
-        "en",
-    ) {
+@Source
+abstract class BoratScans : Madara() {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 }

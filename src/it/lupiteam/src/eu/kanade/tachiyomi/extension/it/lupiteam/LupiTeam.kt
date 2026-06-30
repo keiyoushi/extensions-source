@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.it.lupiteam
 
 import eu.kanade.tachiyomi.multisrc.pizzareader.PizzaReader
+import keiyoushi.annotation.Source
 
-class LupiTeam : PizzaReader("LupiTeam", "https://lupiteam.net", "it") {
-    override val versionId = 2
-}
+@Source
+abstract class LupiTeam : PizzaReader()

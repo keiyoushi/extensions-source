@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.FormBody
 import okhttp3.Interceptor
@@ -20,15 +21,9 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 import kotlin.time.Duration.Companion.seconds
 
-class HanamiHeaven :
-    Madara(
-        "Hanami Heaven",
-        "https://hanamiheaven.org",
-        "pt-BR",
-        SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-    ) {
-    // NoIndexScan (pt-BR) -> HanamiHeaven (pt-BR)
-    override val id = 987786689720213769L
+@Source
+abstract class HanamiHeaven : Madara() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
 
     private fun OkHttpClient.Builder.ignoreAllSSLErrors(): OkHttpClient.Builder {
         val naiveTrustManager =

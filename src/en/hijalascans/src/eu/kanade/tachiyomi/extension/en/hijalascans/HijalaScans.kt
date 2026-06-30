@@ -1,11 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.hijalascans
 
 import eu.kanade.tachiyomi.multisrc.iken.Iken
+import keiyoushi.annotation.Source
 
-class HijalaScans :
-    Iken(
-        "Hijala Scans",
-        "en",
-        "https://en-hijala.com",
-        "https://api.en-hijala.com",
-    )
+@Source
+abstract class HijalaScans : Iken()

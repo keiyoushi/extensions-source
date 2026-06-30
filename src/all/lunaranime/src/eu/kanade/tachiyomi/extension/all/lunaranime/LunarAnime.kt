@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
@@ -18,13 +19,16 @@ import okhttp3.Response
 import rx.Observable
 import java.security.MessageDigest
 
-class LunarAnime(override val lang: String, private val internalLang: String = lang) : HttpSource() {
+@Source
+abstract class LunarAnime : HttpSource() {
+
+    private val internalLang: String = when (lang) {
+        "pt-BR" -> "pt-br"
+        else -> lang
+    }
+
     private val apiurlHost by lazy { API_URL.toHttpUrl().host }
     private val cdnurlHost by lazy { CDN_URL.toHttpUrl().host }
-
-    override val name = "Lunar Manga"
-
-    override val baseUrl = "https://lunaranime.ru"
 
     override val supportsLatest = true
 

@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.templescanesp
 
 import android.content.SharedPreferences
-import android.widget.Toast
-import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.madara.Madara
@@ -13,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import kotlinx.serialization.json.jsonArray
@@ -26,21 +25,17 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class TempleScanEsp :
-    Madara(
-        "Temple Scan",
-        "https://aedexnox.akan01.com",
-        "es",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
-    ),
+@Source
+abstract class TempleScanEsp :
+    Madara(),
     ConfigurableSource {
-    private val fetchedDomainUrlHost by lazy { fetchedDomainUrl.toHttpUrl().host }
+    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
 
-    override val baseUrl get() = preferences.prefBaseUrl
+    private val fetchedDomainUrlHost by lazy { fetchedDomainUrl.toHttpUrl().host }
 
     private val fetchedDomainUrl: String by lazy {
         if (!preferences.fetchDomainPref()) {
-            return@lazy preferences.prefBaseUrl
+            return@lazy baseUrl
         }
 
         try {
@@ -65,7 +60,7 @@ class TempleScanEsp :
                 val detected = value.trimEnd('/')
                 val newDomain = if (detected.startsWith("http")) detected else "https://$detected"
 
-                preferences.prefBaseUrl = newDomain
+                preferences.edit().putString(BASE_URL_PREF, newDomain).apply()
 
                 newDomain
             }
@@ -74,13 +69,11 @@ class TempleScanEsp :
                 return@lazy fetchedDomain
             }
 
-            return@lazy preferences.prefBaseUrl
+            return@lazy baseUrl
         } catch (_: Exception) {
-            return@lazy preferences.prefBaseUrl
+            return@lazy baseUrl
         }
     }
-
-    override val versionId = 4
 
     override val mangaSubString = "serie"
 
@@ -92,16 +85,7 @@ class TempleScanEsp :
             .build()
     }
 
-    private val preferences = getPreferences {
-        this.getString(DEFAULT_BASE_URL_PREF, null).let { domain ->
-            if (domain != super.baseUrl) {
-                this.edit()
-                    .putString(BASE_URL_PREF, super.baseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
-                    .apply()
-            }
-        }
-    }
+    private val preferences = getPreferences()
 
     override fun popularMangaSelector() = "div.latest-poster"
 
@@ -156,19 +140,6 @@ class TempleScanEsp :
     private fun Element.imageFromStyle(): String = this.attr("style").substringAfter("url(").substringBefore(")")
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = "Editar URL de la fuente"
-            summary = "Para uso temporal, si la extensión se actualiza se perderá el cambio."
-            dialogTitle = "Editar URL de la fuente"
-            dialogMessage = "URL por defecto:\n${super.baseUrl}"
-            setDefaultValue(super.baseUrl)
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Reinicie la aplicación para aplicar los cambios", Toast.LENGTH_LONG).show()
-                true
-            }
-        }.also { screen.addPreference(it) }
-
         SwitchPreferenceCompat(screen.context).apply {
             key = FETCH_DOMAIN_PREF
             title = "Buscar dominio automáticamente"
@@ -179,22 +150,8 @@ class TempleScanEsp :
 
     private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, true)
 
-    private var cachedBaseUrl: String? = null
-    private var SharedPreferences.prefBaseUrl: String
-        get() {
-            if (cachedBaseUrl == null) {
-                cachedBaseUrl = getString(BASE_URL_PREF, super.baseUrl)!!
-            }
-            return cachedBaseUrl!!
-        }
-        set(value) {
-            cachedBaseUrl = value
-            edit().putString(BASE_URL_PREF, value).apply()
-        }
-
     companion object {
         private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val FETCH_DOMAIN_PREF = "fetchDomain"
 
         // Obtained from an API call on https://templescanesp.net

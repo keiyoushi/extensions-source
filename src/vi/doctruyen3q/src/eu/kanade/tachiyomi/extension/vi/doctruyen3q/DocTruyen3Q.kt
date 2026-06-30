@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.doctruyen3q
 
 import android.content.SharedPreferences
-import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.network.GET
@@ -11,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -21,17 +21,16 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class DocTruyen3Q :
-    WPComics(
-        "DocTruyen3Q",
-        "https://doctruyen3qhub2.com",
-        "vi",
-        dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
-        },
-        gmtOffset = null,
-    ),
+@Source
+abstract class DocTruyen3Q :
+    WPComics(),
     ConfigurableSource {
+
+    override val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
+    }
+
+    override val gmtOffset = null
 
     override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("div.page-chapter[id] img").mapIndexed { index, element ->
         val rawUrl = element.attr("abs:src").ifEmpty { element.attr("abs:data-src") }
@@ -98,7 +97,7 @@ class DocTruyen3Q :
             val response = chain.proceed(originalRequest)
             if (!hasCheckedRedirect && preferences.getBoolean(AUTO_CHANGE_DOMAIN_PREF, false)) {
                 hasCheckedRedirect = true
-                val originalHost = super.baseUrl.toHttpUrl().host
+                val originalHost = baseUrl.toHttpUrl().host
                 val newHost = response.request.url.host
                 if (newHost != originalHost) {
                     val newBaseUrl = "${response.request.url.scheme}://$newHost"
@@ -112,35 +111,7 @@ class DocTruyen3Q :
         .rateLimit(5)
         .build()
 
-    init {
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != super.baseUrl) {
-                preferences.edit()
-                    .putString(BASE_URL_PREF, super.baseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
-                    .apply()
-            }
-        }
-    }
-
-    override val baseUrl by lazy { getPrefBaseUrl() }
-
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val defaultUrl = super.baseUrl
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            setDefaultValue(defaultUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $defaultUrl"
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
-                true
-            }
-        }
-        screen.addPreference(baseUrlPref)
-
         val autoDomainPref = androidx.preference.SwitchPreferenceCompat(screen.context).apply {
             key = AUTO_CHANGE_DOMAIN_PREF
             title = AUTO_CHANGE_DOMAIN_TITLE
@@ -150,15 +121,8 @@ class DocTruyen3Q :
         screen.addPreference(autoDomainPref)
     }
 
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
-
     companion object {
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng thay đổi."
-        private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
         private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_SUMMARY =
-            "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
         private const val AUTO_CHANGE_DOMAIN_PREF = "autoChangeDomain"
         private const val AUTO_CHANGE_DOMAIN_TITLE = "Tự động cập nhật domain"
         private const val AUTO_CHANGE_DOMAIN_SUMMARY =

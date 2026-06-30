@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.manhuaus
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class ManhuaUS : Madara("ManhuaUS", "https://manhuaus.com", "en") {
+@Source
+abstract class ManhuaUS : Madara() {
 
     override val useNewChapterEndpoint: Boolean = true
 

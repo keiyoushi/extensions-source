@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "RD Scans"
-    className = "RDScans"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://rdscans.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://rdscans.com"
+    }
 }

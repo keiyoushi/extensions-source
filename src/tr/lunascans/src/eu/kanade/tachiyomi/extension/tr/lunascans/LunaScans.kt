@@ -2,17 +2,14 @@ package eu.kanade.tachiyomi.extension.tr.lunascans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class LunaScans :
-    Madara(
-        "Luna Scans",
-        "https://tuhafscans.com",
-        "tr",
-        dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
-    ) {
+@Source
+abstract class LunaScans : Madara() {
+    override val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr"))
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = false
 

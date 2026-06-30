@@ -2,10 +2,12 @@ package eu.kanade.tachiyomi.extension.en.zinchanmangacom
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class ZinChanMangaCom : Madara("ZinChanManga.com", "https://zinchangmanga.net", "en") {
+@Source
+abstract class ZinChanMangaCom : Madara() {
     override val useNewChapterEndpoint = true
 
     override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {

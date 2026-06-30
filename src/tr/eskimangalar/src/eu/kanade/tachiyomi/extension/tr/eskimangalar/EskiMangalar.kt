@@ -1,12 +1,9 @@
 package eu.kanade.tachiyomi.extension.tr.eskimangalar
 
 import eu.kanade.tachiyomi.multisrc.uzaymanga.UzayManga
+import keiyoushi.annotation.Source
 
-class EskiMangalar :
-    UzayManga(
-        name = "Eski Mangalar",
-        baseUrl = "https://eskimangalar.com",
-        lang = "tr",
-        versionId = 1,
-        cdnUrl = "https://cdn-es.efsaneler2.can.re",
-    )
+@Source
+abstract class EskiMangalar : UzayManga() {
+    override val cdnUrl = "https://cdn-es.efsaneler2.can.re"
+}
