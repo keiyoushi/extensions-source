@@ -20,11 +20,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-abstract class Paprika(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class Paprika : HttpSource() {
 
     override val supportsLatest = true
 

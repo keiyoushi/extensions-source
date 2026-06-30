@@ -11,11 +11,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-abstract class PaprikaAlt(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : Paprika(name, baseUrl, lang) {
+abstract class PaprikaAlt : Paprika() {
     override fun popularMangaSelector() = "div.anipost"
 
     override fun popularMangaFromElement(element: Element): SManga? {
