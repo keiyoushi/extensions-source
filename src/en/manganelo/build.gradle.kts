@@ -4,10 +4,21 @@ plugins {
 
 keiyoushi {
     name = "Manganato"
-    className = "Manganato"
     versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangabox"
-    baseUrl = "https://www.natomanga.com"
+
+    source {
+        lang = "en"
+        baseUrl("https://www.natomanga.com") {
+            mirrors = listOf(
+                "https://www.natomanga.com",
+                "https://www.nelomanga.com",
+                "https://www.nelomanga.net",
+                "https://www.manganato.gg",
+            )
+        }
+        id = 1024627298672457456L
+    }
 }

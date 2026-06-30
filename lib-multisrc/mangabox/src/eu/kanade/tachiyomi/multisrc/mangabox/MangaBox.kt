@@ -6,7 +6,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import androidx.preference.CheckBoxPreference
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangabox.imagesize.ImageSize
 import eu.kanade.tachiyomi.multisrc.mangabox.imagesize.WebpSizeGetter
@@ -44,7 +43,8 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.CountDownLatch
 
-abstract class MangaBox : HttpSource(),
+abstract class MangaBox :
+    HttpSource(),
     ConfigurableSource {
 
     protected open val dateFormat: SimpleDateFormat = SimpleDateFormat(

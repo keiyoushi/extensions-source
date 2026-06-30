@@ -2,16 +2,11 @@ package eu.kanade.tachiyomi.extension.en.mangabat
 
 import eu.kanade.tachiyomi.multisrc.mangabox.MangaBox
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import okhttp3.Request
 
-class Mangabat :
-    MangaBox(
-        "Mangabat",
-        arrayOf(
-            "www.mangabats.com",
-        ),
-        "en",
-    ) {
+@Source
+abstract class Mangabat : MangaBox() {
     override fun mangaDetailsRequest(manga: SManga): Request {
         if (manga.url.contains("mangabat.com/")) {
             throw Exception(MIGRATE_MESSAGE)
