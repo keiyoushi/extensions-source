@@ -55,7 +55,7 @@ abstract class Bakamh : Madara() {
                 val value = attr.value.lowercase()
                 value.startsWith(mangaUrl) &&
                     value != mangaUrl && // Not current URL
-                    !value.startsWith("$mangaUrl#comment") // // Not comment
+                    !value.startsWith("$mangaUrl#comment") // Not comment
             }
             ?.let { attr ->
                 SChapter.create().apply {

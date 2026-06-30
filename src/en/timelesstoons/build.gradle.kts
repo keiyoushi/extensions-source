@@ -4,13 +4,13 @@ plugins {
 
 keiyoushi {
     name = "TimelessToons"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "keyoapp"
 
     source {
         lang = "en"
-        baseUrl = "https://timelesstoons.org/"
+        baseUrl = "https://timelesstoons.org"
     }
 }
