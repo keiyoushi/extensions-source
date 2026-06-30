@@ -182,13 +182,14 @@ abstract class HentaiCB : Madara() {
 
         val referer = chapterUrl
 
-        // Step 1: Get nonce + session from challenge endpoint
+        // Step 1: Get token + session from challenge endpoint
         val challengeUrl = baseUrl.toHttpUrl().newBuilder()
             .addPathSegments("wp-json/manga-reader/v1/challenge")
             .build()
 
         val challengeRequest = Request.Builder()
             .url(challengeUrl)
+            .header("Accept", "application/json")
             .header("Referer", referer)
             .header("Cookie", cookies)
             .build()
@@ -196,42 +197,39 @@ abstract class HentaiCB : Madara() {
         val challengeResponse = client.newCall(challengeRequest).execute()
         val challengeJson = JSONObject(challengeResponse.body?.string().orEmpty())
         challengeResponse.close()
-        val nonce = challengeJson.getString("nonce")
+        val token = challengeJson.getString("token")
         val session = challengeJson.getString("session")
 
-        // Step 2: Paginate images
+        // Step 2: Paginate images using token-based pagination
         val allImages = mutableListOf<String>()
-        var offset = 0
-        var totalCount = Int.MAX_VALUE
+        var currentToken: String? = token
 
-        while (offset < totalCount) {
-            val imagesUrl = baseUrl.toHttpUrl().newBuilder()
-                .addPathSegments("wp-json/manga-reader/v1/images")
-                .addQueryParameter("offset", offset.toString())
+        while (currentToken != null) {
+            val pagesUrl = baseUrl.toHttpUrl().newBuilder()
+                .addPathSegments("wp-json/manga-reader/v1/pages")
+                .addQueryParameter("token", currentToken)
                 .build()
 
-            val imagesRequest = Request.Builder()
-                .url(imagesUrl)
+            val pagesRequest = Request.Builder()
+                .url(pagesUrl)
+                .header("Accept", "application/json")
                 .header("Referer", referer)
                 .header("Cookie", cookies)
-                .header("x-masr-nonce", nonce)
-                .header("x-masr-session", session)
+                .header("X-MASR-Session", session)
                 .build()
 
-            val imagesResponse = client.newCall(imagesRequest).execute()
-            val imagesJson = JSONObject(imagesResponse.body?.string().orEmpty())
-            imagesResponse.close()
+            val pagesResponse = client.newCall(pagesRequest).execute()
+            val pagesJson = JSONObject(pagesResponse.body?.string().orEmpty())
+            pagesResponse.close()
 
-            totalCount = imagesJson.optInt("count", 0)
-            val imagesArray = imagesJson.optJSONArray("images") ?: break
-            if (imagesArray.length() == 0) break
+            val items = pagesJson.optJSONArray("items") ?: break
+            if (items.length() == 0) break
 
-            for (i in 0 until imagesArray.length()) {
-                allImages.add(imagesArray.getString(i))
+            for (i in 0 until items.length()) {
+                allImages.add(items.getString(i))
             }
 
-            offset = imagesJson.optInt("next", -1)
-            if (offset <= 0 || offset >= totalCount) break
+            currentToken = if (pagesJson.optBoolean("done", true)) null else pagesJson.optString("next_token", null)
         }
 
         return allImages.mapIndexed { i, imageUrl ->
