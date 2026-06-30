@@ -13,7 +13,6 @@ keiyoushi {
         lang = "en"
         baseUrl("https://www.mangakakalot.gg") {
             mirrors = listOf(
-                "https://www.mangakakalot.gg",
                 "https://www.mangakakalove.com",
             )
         }

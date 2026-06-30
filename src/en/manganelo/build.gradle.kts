@@ -13,7 +13,6 @@ keiyoushi {
         lang = "en"
         baseUrl("https://www.natomanga.com") {
             mirrors = listOf(
-                "https://www.natomanga.com",
                 "https://www.nelomanga.com",
                 "https://www.nelomanga.net",
                 "https://www.manganato.gg",
