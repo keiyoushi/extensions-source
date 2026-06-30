@@ -1,12 +1,7 @@
 package eu.kanade.tachiyomi.extension.ru.nudemoon
 
-import android.content.SharedPreferences
 import android.webkit.CookieManager
-import android.widget.Toast
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,10 +9,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.getPreferences
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -26,39 +23,21 @@ import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Nudemoon :
-    HttpSource(),
-    ConfigurableSource {
-    override val name = "Nude-Moon"
-    override val lang = "ru"
+@Source
+abstract class Nudemoon : HttpSource() {
     override val supportsLatest = true
-    private val preferences: SharedPreferences = getPreferences()
-    override val baseUrl by lazy { getPrefBaseUrl() }
-
     private val dateParseRu = SimpleDateFormat("d MMMM yyyy", Locale("ru"))
+    private val domain get() = baseUrl.toHttpUrl().host
     private val cookieManager by lazy { CookieManager.getInstance() }
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("Referer", "$baseUrl/")
 
-    init {
-        cookieManager.setCookie(baseUrl, "nm_mobile=1; Domain=" + baseUrl.split("//")[1])
+    override val client by lazy {
+        network.client.newBuilder()
+            .addNetworkInterceptor(CookieInterceptor(domain, listOf("NMfYa" to "1", "nm_mobile" to "1", "Domain" to domain)))
+            .build()
     }
-
-    private val cookiesHeader by lazy {
-        mapOf("NMfYa" to "1", "nm_mobile" to "1").entries.joinToString(separator = "; ", postfix = ";") { (k, v) ->
-            "${URLEncoder.encode(k, "UTF-8")}=${URLEncoder.encode(v, "UTF-8")}"
-        }
-    }
-
-    override val client = network.client.newBuilder()
-        .addNetworkInterceptor { chain ->
-            val newReq = chain.request().newBuilder()
-                .addHeader("Cookie", cookiesHeader)
-                .addHeader("Referer", baseUrl)
-                .build()
-            chain.proceed(newReq)
-        }.build()
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/all_manga?views&rowstart=${30 * (page - 1)}", headers)
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/all_manga?date&rowstart=${30 * (page - 1)}", headers)
@@ -194,38 +173,4 @@ class Nudemoon :
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = DOMAIN_PREF
-            title = DOMAIN_TITLE
-            setDefaultValue(DOMAIN_DEFAULT)
-            dialogTitle = DOMAIN_TITLE
-            dialogMessage = "Default URL:\n\t$DOMAIN_DEFAULT"
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Для смены домена необходимо перезапустить приложение с полной остановкой.", Toast.LENGTH_LONG).show()
-                true
-            }
-        }.let(screen::addPreference)
-    }
-
-    private fun getPrefBaseUrl(): String = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
-
-    init {
-        preferences.getString(DEFAULT_DOMAIN_PREF, null).let { defaultBaseUrl ->
-            if (defaultBaseUrl != DOMAIN_DEFAULT) {
-                preferences.edit()
-                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
-                    .putString(DEFAULT_DOMAIN_PREF, DOMAIN_DEFAULT)
-                    .apply()
-            }
-        }
-    }
-
-    companion object {
-        private const val DOMAIN_PREF = "Домен"
-        private const val DEFAULT_DOMAIN_PREF = "pref_default_domain"
-        private const val DOMAIN_TITLE = "Домен"
-        private const val DOMAIN_DEFAULT = "https://nude-moon.org"
-    }
 }
