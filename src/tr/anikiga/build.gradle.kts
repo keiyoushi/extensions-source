@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Anikiga"
-    className = "Anikiga"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://anikiga.com"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://anikiga.com"
+    }
 }

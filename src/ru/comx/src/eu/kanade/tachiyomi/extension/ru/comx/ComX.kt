@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -38,37 +39,12 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class ComX :
+@Source
+abstract class ComX :
     HttpSource(),
     ConfigurableSource {
 
-    override val id = 1114173092141608635
-
-    override val name = "Com-X"
-
     private val preferences: SharedPreferences = getPreferences()
-
-    init {
-        preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)?.let { domain ->
-            if (!domain.matches(URL_REGEX)) {
-                preferences.edit()
-                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
-                    .apply()
-            }
-        }
-        preferences.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->
-            if (prefDefaultDomain != DOMAIN_DEFAULT) {
-                preferences.edit()
-                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
-                    .putString(DEFAULT_DOMAIN_PREF, DOMAIN_DEFAULT)
-                    .apply()
-            }
-        }
-    }
-
-    override val baseUrl = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
-
-    override val lang = "ru"
 
     override val supportsLatest = true
 
@@ -500,23 +476,6 @@ class ComX :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
-            key = DOMAIN_PREF
-            title = "Домен"
-            summary = "$baseUrl\n\nПо умолчанию: $DOMAIN_DEFAULT"
-            setDefaultValue(DOMAIN_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
-                if (!newValue.toString().matches(URL_REGEX)) {
-                    val warning = "Домен должен содаржать https:// или http://"
-                    Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
-                    return@setOnPreferenceChangeListener false
-                }
-                val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
-                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
-                true
-            }
-        }.let(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
             key = FORCE_IMG_DOMAIN_PREF
             title = "Домен картинок"
             summary = "Если изображения не грузяться очистите «Кэш приложения» и всевозможные данные в настройках приложения  (Настройки -> Дополнительно) \nи перезапустите приложение с полной остановкой" +
@@ -534,14 +493,7 @@ class ComX :
 
     companion object {
         private val dateFormat by lazy { SimpleDateFormat("dd.MM.yyyy", Locale.US) }
-
-        private const val DOMAIN_DEFAULT = "https://ru.com-x.life"
-
-        private const val DEFAULT_DOMAIN_PREF = "DEFAULT_DOMAIN_PREF"
-        private const val DOMAIN_PREF = "DOMAIN_PREF"
         private const val FORCE_IMG_DOMAIN_PREF = "FORCE_IMG_DOMAIN_PREF"
-
-        private val URL_REGEX = Regex("^https?://.+")
         private val IMG_DOMAIN_REGEX = "\"host\":\"(.+?)\"".toRegex()
         private val TOKEN_REGEX = """token:\s*"([^"]+)"""".toRegex()
     }

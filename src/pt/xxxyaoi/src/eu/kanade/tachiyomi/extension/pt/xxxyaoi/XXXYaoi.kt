@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -13,13 +14,9 @@ import java.util.Locale
 import kotlin.collections.plusAssign
 import kotlin.time.Duration.Companion.seconds
 
-class XXXYaoi :
-    Madara(
-        "XXX Yaoi",
-        "https://3xyaoi.com",
-        "pt-BR",
-        SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-    ) {
+@Source
+abstract class XXXYaoi : Madara() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")

@@ -19,11 +19,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-abstract class MultiChan(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String,
-) : HttpSource() {
+abstract class MultiChan : HttpSource() {
 
     override val supportsLatest = true
 

@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Coven Scan"
-    className = "CovenScan"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://covendasbruxonas.com"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://covendasbruxonas.com"
+    }
 }

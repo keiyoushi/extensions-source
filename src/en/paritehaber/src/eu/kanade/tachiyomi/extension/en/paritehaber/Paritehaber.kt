@@ -3,15 +3,12 @@ package eu.kanade.tachiyomi.extension.en.paritehaber
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import org.jsoup.nodes.Element
 
-class Paritehaber :
-    Madara(
-        "Paritehaber",
-        "https://www.paritehaber.com",
-        "en",
-    ) {
+@Source
+abstract class Paritehaber : Madara() {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = false
 

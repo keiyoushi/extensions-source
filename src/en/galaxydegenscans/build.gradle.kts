@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "GalaxyDegenScans"
-    className = "GalaxyDegenScans"
     versionCode = 4
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://gdscans.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://gdscans.com"
+    }
 }

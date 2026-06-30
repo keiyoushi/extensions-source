@@ -1,31 +1,36 @@
 package eu.kanade.tachiyomi.extension.fr.lesporoiniens
 
-import eu.kanade.tachiyomi.multisrc.scanr.ConfigResponse
-import eu.kanade.tachiyomi.multisrc.scanr.PageData
-import eu.kanade.tachiyomi.multisrc.scanr.ScanR
-import eu.kanade.tachiyomi.multisrc.scanr.SeriesData
-import eu.kanade.tachiyomi.multisrc.scanr.toSManga
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.Jsoup
 
-class LesPoroiniens :
-    ScanR(
-        name = "Les Poroiniens",
-        baseUrl = "https://lesporoiniens.org",
-        lang = "fr",
-    ) {
+@Source
+abstract class LesPoroiniens : HttpSource() {
+
+    private val useHighLowQualityCover: Boolean = false
+
+    private val slugSeparator: String = "-"
+
+    companion object {
+        private const val SERIES_DATA_SELECTOR = "#series-data-placeholder"
+    }
+
+    override val supportsLatest = false
 
     override val client: OkHttpClient = super.client.newBuilder()
         .addInterceptor { chain ->
@@ -43,6 +48,26 @@ class LesPoroiniens :
             response
         }
         .build()
+
+    // Popular
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/data/config.json", headers)
+
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+
+    // Latest
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    // Search
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = if (query.isNotBlank()) {
+            "$baseUrl/data/config.json#$query"
+        } else {
+            "$baseUrl/data/config.json"
+        }
+        return GET(url, headers)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val config = response.parseAs<ConfigResponse>()
@@ -72,9 +97,56 @@ class LesPoroiniens :
         return MangasPage(mangaList, false)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = super.mangaDetailsParse(transformSeriesDataResponse(response))
+    // Details
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = transformSeriesDataResponse(response).asJsoup()
+        val jsonData = document.selectFirst(SERIES_DATA_SELECTOR)!!.html()
 
-    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(transformSeriesDataResponse(response))
+        val seriesData = jsonData.parseAs<SeriesData>()
+        return seriesData.toDetailedSManga(useHighLowQualityCover, slugSeparator)
+    }
+
+    // Chapters
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = transformSeriesDataResponse(response).asJsoup()
+        val jsonData = document.selectFirst(SERIES_DATA_SELECTOR)!!.html()
+
+        val seriesData = jsonData.parseAs<SeriesData>()
+        return buildChapterList(seriesData)
+    }
+
+    private fun buildChapterList(seriesData: SeriesData): List<SChapter> {
+        val chapters = seriesData.chapters ?: return emptyList()
+        val chapterList = mutableListOf<SChapter>()
+        val multipleChapters = chapters.size > 1
+
+        for ((chapterNumber, chapterData) in chapters) {
+            if (chapterData.licencied) continue
+
+            val title = chapterData.title ?: ""
+            val volumeNumber = chapterData.volume ?: ""
+
+            val baseName = if (multipleChapters) {
+                buildString {
+                    if (volumeNumber.isNotBlank()) append("Vol. $volumeNumber ")
+                    append("Ch. $chapterNumber")
+                    if (title.isNotBlank()) append(" – $title")
+                }
+            } else {
+                if (title.isNotBlank()) "One Shot – $title" else "One Shot"
+            }
+
+            val chapter = SChapter.create().apply {
+                name = baseName
+                url = "/${toSlug(seriesData.title)}/$chapterNumber"
+                chapter_number = chapterNumber.toFloatOrNull() ?: -1f
+                date_upload = chapterData.lastUpdated * 1000L
+            }
+            chapterList.add(chapter)
+        }
+
+        return chapterList.sortedByDescending { it.chapter_number }
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
@@ -149,4 +221,7 @@ class LesPoroiniens :
 
         return jsonString
     }
+
+    // Images
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

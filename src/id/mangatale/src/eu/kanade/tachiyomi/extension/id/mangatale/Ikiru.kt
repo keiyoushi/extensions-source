@@ -1,18 +1,13 @@
 package eu.kanade.tachiyomi.extension.id.mangatale
 
 import eu.kanade.tachiyomi.multisrc.natsuid.NatsuId
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import kotlin.time.Duration.Companion.seconds
 
-class Ikiru :
-    NatsuId(
-        "Ikiru",
-        "id",
-        "https://06.ikiru.wtf",
-    ) {
-    // Formerly "MangaTale"
-    override val id = 1532456597012176985
+@Source
+abstract class Ikiru : NatsuId() {
 
     override fun OkHttpClient.Builder.customizeClient() = rateLimit(12, 3.seconds).build().newBuilder()
 

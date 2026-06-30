@@ -8,18 +8,15 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
 
-class Mangalector :
-    Madara(
-        "MangaLector",
-        "https://mangalector.com",
-        "es",
-    ) {
+@Source
+abstract class Mangalector : Madara() {
 
     override val supportsLatest = true
 

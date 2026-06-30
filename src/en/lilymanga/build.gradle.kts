@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Lily Manga"
-    className = "LilyManga"
     versionCode = 7
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://lilymanga.net"
+
+    source {
+        lang = "en"
+        baseUrl = "https://lilymanga.net"
+    }
 }

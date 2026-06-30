@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.linkmanga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class LinkManga : Madara("LinkManga", "https://linkmanga.com", "en")
+@Source
+abstract class LinkManga : Madara()

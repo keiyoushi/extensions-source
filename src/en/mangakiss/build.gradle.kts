@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Manga Kiss"
-    className = "MangaKiss"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://mangakiss.org"
+
+    source {
+        lang = "en"
+        baseUrl = "https://mangakiss.org"
+    }
 }
