@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.ru.desu
 
-import android.content.SharedPreferences
 import android.widget.Toast
-import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -14,8 +12,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
@@ -33,38 +32,14 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
-import kotlin.text.matches
 
-class Desu :
+@Source
+abstract class Desu :
     HttpSource(),
     ConfigurableSource {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
-    override val name = "Desu"
-
-    override val id: Long = 6684416167758830305
-
-    private val preferences: SharedPreferences = getPreferences {
-        this.getString(DOMAIN_PREF, DOMAIN_DEFAULT)?.let { domain ->
-            if (!domain.matches(URL_REGEX)) {
-                this.edit()
-                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
-                    .apply()
-            }
-        }
-        this.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->
-            if (prefDefaultDomain != DOMAIN_DEFAULT) {
-                this.edit()
-                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
-                    .putString(DEFAULT_DOMAIN_PREF, DOMAIN_DEFAULT)
-                    .apply()
-            }
-        }
-    }
-
-    override val baseUrl = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
-
-    override val lang = "ru"
+    private val preferences by getPreferencesLazy()
 
     override val supportsLatest = true
 
@@ -383,37 +358,11 @@ class Desu :
                 true
             }
         }.let(screen::addPreference)
-        EditTextPreference(screen.context).apply {
-            key = DOMAIN_PREF
-            title = DOMAIN_TITLE
-            summary = baseUrl + "\n\nПо умолчанию: $DOMAIN_DEFAULT"
-            setDefaultValue(DOMAIN_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
-                if (!newValue.toString().matches(URL_REGEX)) {
-                    val warning = "Домен должен содаржать https:// или http://"
-                    Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
-                    return@setOnPreferenceChangeListener false
-                }
-                val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
-                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
-                true
-            }
-        }.let(screen::addPreference)
     }
 
     companion object {
         const val PREFIX_SLUG_SEARCH = "slug:"
-
         private const val LANGUAGE_PREF = "DesuTitleLanguage"
-
         private const val API_URL = "/manga/api"
-
-        private const val DOMAIN_TITLE = "Домен"
-        private const val DEFAULT_DOMAIN_PREF = "default_domain"
-        private const val DOMAIN_PREF = "DOMAIN_PREF"
-
-        private val URL_REGEX = Regex("^https?://.+")
-
-        private const val DOMAIN_DEFAULT = "https://desu.uno"
     }
 }
