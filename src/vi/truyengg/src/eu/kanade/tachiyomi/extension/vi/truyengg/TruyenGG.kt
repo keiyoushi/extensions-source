@@ -14,7 +14,6 @@ import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -28,11 +27,9 @@ abstract class TruyenGG : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient by lazy {
-        network.client.newBuilder()
-            .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrlOrNull()?.host }
-            .build()
-    }
+    override val client: OkHttpClient = network.client.newBuilder()
+        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", "$baseUrl/")
 
