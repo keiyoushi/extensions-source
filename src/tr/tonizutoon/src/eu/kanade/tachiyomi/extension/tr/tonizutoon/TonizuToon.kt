@@ -1,12 +1,12 @@
 package eu.kanade.tachiyomi.extension.tr.tonizutoon
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import okhttp3.Interceptor
 import okhttp3.Response
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
-import keiyoushi.annotation.Source
 
 @Source
 abstract class TonizuToon : Madara() {

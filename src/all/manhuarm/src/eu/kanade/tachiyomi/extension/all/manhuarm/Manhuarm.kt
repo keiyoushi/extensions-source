@@ -48,7 +48,9 @@ import kotlin.time.Duration.Companion.seconds
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Source
-abstract class Manhuarm : Madara(), ConfigurableSource {
+abstract class Manhuarm :
+    Madara(),
+    ConfigurableSource {
 
     private val language: Language by lazy {
         when (lang) {

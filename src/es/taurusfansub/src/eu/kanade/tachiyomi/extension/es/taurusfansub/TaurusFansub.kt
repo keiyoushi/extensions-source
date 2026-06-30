@@ -16,9 +16,11 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class TaurusFansub : Madara(), ConfigurableSource {
+abstract class TaurusFansub :
+    Madara(),
+    ConfigurableSource {
     override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
-    
+
     override val client = super.client.newBuilder()
         .rateLimit(2, 1.seconds)
         .build()

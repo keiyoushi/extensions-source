@@ -3,13 +3,13 @@ package eu.kanade.tachiyomi.extension.en.mangaforfreecom
 import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
-import keiyoushi.annotation.Source
 
 @Source
 abstract class Mangaforfreecom : Madara() {

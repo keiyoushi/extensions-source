@@ -2,9 +2,9 @@ package eu.kanade.tachiyomi.extension.en.mangahentai
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
+import keiyoushi.annotation.Source
 import okhttp3.FormBody
 import okhttp3.Request
-import keiyoushi.annotation.Source
 
 @Source
 abstract class MangaHentai : Madara() {

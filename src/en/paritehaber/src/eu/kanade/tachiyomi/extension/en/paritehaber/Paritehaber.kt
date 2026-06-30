@@ -3,9 +3,9 @@ package eu.kanade.tachiyomi.extension.en.paritehaber
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import org.jsoup.nodes.Element
-import keiyoushi.annotation.Source
 
 @Source
 abstract class Paritehaber : Madara() {

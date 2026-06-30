@@ -2,10 +2,10 @@ package eu.kanade.tachiyomi.extension.all.manhwadashraw
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.MangasPage
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
-import keiyoushi.annotation.Source
 
 @Source
 abstract class ManhwaDashRaw : Madara() {

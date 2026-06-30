@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.extension.fr.mangasoriginesfr
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import keiyoushi.annotation.Source
 
 @Source
 abstract class MangasOriginesFr : Madara() {

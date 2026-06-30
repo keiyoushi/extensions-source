@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.manhwa68
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import java.text.SimpleDateFormat
 import java.util.Locale
-import keiyoushi.annotation.Source
 
 @Source
 abstract class Manhwa68 : Madara() {

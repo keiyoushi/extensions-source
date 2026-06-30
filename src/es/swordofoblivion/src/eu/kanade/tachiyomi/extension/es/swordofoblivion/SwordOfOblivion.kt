@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.extension.es.swordofoblivion
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import java.text.SimpleDateFormat
 import java.util.Locale
-import keiyoushi.annotation.Source
 
 @Source
 abstract class SwordOfOblivion : Madara() {

@@ -22,7 +22,8 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 @Source
-abstract class Utoon : Madara(),
+abstract class Utoon :
+    Madara(),
     ConfigurableSource {
 
     private val preferences: SharedPreferences by getPreferencesLazy()

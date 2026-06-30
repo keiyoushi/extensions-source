@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.madaradex
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import okhttp3.Cookie
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -9,7 +10,6 @@ import okhttp3.Request
 import java.security.SecureRandom
 import java.text.SimpleDateFormat
 import java.util.Locale
-import keiyoushi.annotation.Source
 
 @Source
 abstract class MadaraDex : Madara() {

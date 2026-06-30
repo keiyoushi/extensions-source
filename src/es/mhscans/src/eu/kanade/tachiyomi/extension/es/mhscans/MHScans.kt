@@ -20,7 +20,9 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class MHScans : Madara(), ConfigurableSource {
+abstract class MHScans :
+    Madara(),
+    ConfigurableSource {
     override val dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es"))
 
     override val mangaSubString = "series"

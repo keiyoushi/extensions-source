@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.extension.en.hentai4free
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.FilterList
-import okhttp3.Request
 import keiyoushi.annotation.Source
+import okhttp3.Request
 
 @Source
 abstract class Hentai4Free : Madara() {

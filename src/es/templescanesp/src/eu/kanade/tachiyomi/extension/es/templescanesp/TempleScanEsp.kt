@@ -26,7 +26,9 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class TempleScanEsp : Madara(), ConfigurableSource {
+abstract class TempleScanEsp :
+    Madara(),
+    ConfigurableSource {
     override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
 
     private val fetchedDomainUrlHost by lazy { fetchedDomainUrl.toHttpUrl().host }

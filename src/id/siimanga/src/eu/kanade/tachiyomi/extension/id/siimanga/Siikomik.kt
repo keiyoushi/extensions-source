@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.extension.id.siimanga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SChapter
-import org.jsoup.nodes.Element
 import keiyoushi.annotation.Source
+import org.jsoup.nodes.Element
 
 @Source
 abstract class Siikomik : Madara() {

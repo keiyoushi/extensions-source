@@ -2,10 +2,10 @@ package eu.kanade.tachiyomi.extension.fr.hentaiorigines
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import keiyoushi.annotation.Source
 
 private val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale.FRENCH).apply {
     timeZone = TimeZone.getTimeZone("Europe/Paris")

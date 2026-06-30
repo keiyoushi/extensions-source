@@ -3,11 +3,11 @@ package eu.kanade.tachiyomi.extension.th.doodmanga
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
-import keiyoushi.annotation.Source
 
 @Source
 abstract class Doodmanga : Madara() {

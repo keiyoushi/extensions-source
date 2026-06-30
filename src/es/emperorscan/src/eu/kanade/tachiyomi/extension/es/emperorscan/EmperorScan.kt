@@ -13,7 +13,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Source
-abstract class EmperorScan : Madara(), ConfigurableSource {
+abstract class EmperorScan :
+    Madara(),
+    ConfigurableSource {
     override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
 
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }

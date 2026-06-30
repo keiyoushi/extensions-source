@@ -21,7 +21,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Source
-abstract class Hiperdex : Madara(), ConfigurableSource {
+abstract class Hiperdex :
+    Madara(),
+    ConfigurableSource {
     override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US)
 
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div.summary-content"

@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.ar.mangaxcore
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import kotlin.time.Duration.Companion.minutes
 import keiyoushi.annotation.Source
+import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class MangaxCore : Madara() {

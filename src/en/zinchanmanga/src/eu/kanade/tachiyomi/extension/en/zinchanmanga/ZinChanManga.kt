@@ -2,9 +2,9 @@ package eu.kanade.tachiyomi.extension.en.zinchanmanga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import keiyoushi.annotation.Source
 
 @Source
 abstract class ZinChanManga : Madara() {

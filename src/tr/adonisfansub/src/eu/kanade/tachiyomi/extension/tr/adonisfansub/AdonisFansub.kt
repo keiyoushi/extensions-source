@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.extension.tr.adonisfansub
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import okhttp3.Request
 import keiyoushi.annotation.Source
+import okhttp3.Request
 
 @Source
 abstract class AdonisFansub : Madara() {

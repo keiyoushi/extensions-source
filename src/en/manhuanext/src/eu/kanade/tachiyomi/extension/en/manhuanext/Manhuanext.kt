@@ -8,7 +8,8 @@ import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 
 @Source
-abstract class Manhuanext : Madara(),
+abstract class Manhuanext :
+    Madara(),
     ConfigurableSource {
     override val useNewChapterEndpoint = true
     private val preferences by getPreferencesLazy()

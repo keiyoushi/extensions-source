@@ -14,7 +14,9 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class LectorMangaLat : Madara(), ConfigurableSource {
+abstract class LectorMangaLat :
+    Madara(),
+    ConfigurableSource {
     override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
 
     override val client: OkHttpClient = super.client.newBuilder()

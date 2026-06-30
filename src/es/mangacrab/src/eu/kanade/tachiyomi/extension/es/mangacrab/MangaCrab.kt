@@ -28,7 +28,9 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class MangaCrab : Madara(), ConfigurableSource {
+abstract class MangaCrab :
+    Madara(),
+    ConfigurableSource {
     override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
 
     override val client = super.client.newBuilder()

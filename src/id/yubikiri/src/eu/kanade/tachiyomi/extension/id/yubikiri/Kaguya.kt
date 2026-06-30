@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -13,7 +14,6 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.minutes
-import keiyoushi.annotation.Source
 
 @Source
 abstract class Kaguya : Madara() {

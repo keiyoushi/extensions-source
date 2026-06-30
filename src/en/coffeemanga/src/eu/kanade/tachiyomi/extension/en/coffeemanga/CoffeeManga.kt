@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.coffeemanga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import org.jsoup.nodes.Element
 import keiyoushi.annotation.Source
+import org.jsoup.nodes.Element
 
 @Source
 abstract class CoffeeManga : Madara() {

@@ -13,10 +13,12 @@ keiyoushi {
         name = "مانجا ليك"
         lang = "ar"
         baseUrl("https://lekmanga.net") {
-            mirrors += "https://lekmanga.online"
-            mirrors += "https://like-manga.net"
-            mirrors += "https://lekmanga.site"
-            mirrors += "https://manga-leko.site"
+            mirrors = listOf(
+                "https://lekmanga.online",
+                "https://like-manga.net",
+                "https://lekmanga.site",
+                "https://manga-leko.site",
+            )
         }
     }
 }

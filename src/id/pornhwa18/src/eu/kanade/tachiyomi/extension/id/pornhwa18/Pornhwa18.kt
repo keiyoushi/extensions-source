@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.extension.id.pornhwa18
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import okhttp3.Request
 import keiyoushi.annotation.Source
+import okhttp3.Request
 
 @Source
 abstract class Pornhwa18 : Madara() {

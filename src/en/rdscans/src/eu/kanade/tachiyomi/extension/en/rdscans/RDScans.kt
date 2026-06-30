@@ -3,9 +3,9 @@ package eu.kanade.tachiyomi.extension.en.rdscans
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import keiyoushi.annotation.Source
 
 @Source
 abstract class RDScans : Madara() {

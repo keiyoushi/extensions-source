@@ -3,11 +3,11 @@ package eu.kanade.tachiyomi.extension.tr.mangatilkisi
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.annotation.Source
 import okhttp3.FormBody
 import okhttp3.Request
 import java.text.SimpleDateFormat
 import java.util.Locale
-import keiyoushi.annotation.Source
 
 @Source
 abstract class MangaTilkisi : Madara() {

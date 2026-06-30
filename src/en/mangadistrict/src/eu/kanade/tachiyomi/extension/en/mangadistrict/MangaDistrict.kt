@@ -33,7 +33,8 @@ import java.util.Locale
 import java.util.TimeZone
 
 @Source
-abstract class MangaDistrict : Madara(),
+abstract class MangaDistrict :
+    Madara(),
     ConfigurableSource {
 
     override val mangaSubString = "series"

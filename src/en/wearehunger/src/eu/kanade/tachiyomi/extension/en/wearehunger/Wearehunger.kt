@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.wearehunger
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
-import keiyoushi.annotation.Source
 
 @Source
 abstract class Wearehunger : Madara() {
