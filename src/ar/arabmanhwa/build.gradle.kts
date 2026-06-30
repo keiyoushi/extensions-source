@@ -5,7 +5,7 @@ plugins {
 keiyoushi {
     name = "ArabManhwa"
     className = "ArabManhwa"
-    versionCode = 1
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
