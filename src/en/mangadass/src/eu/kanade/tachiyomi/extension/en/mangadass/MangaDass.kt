@@ -5,19 +5,16 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaDass :
-    Madara(
-        "Manga Dass",
-        "https://mangadass.com",
-        "en",
-        SimpleDateFormat("dd MMM yyyy", Locale.US),
-    ) {
+@Source
+abstract class MangaDass : Madara() {
+    override val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.US)
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()

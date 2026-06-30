@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Turkce Manga Oku TR"
-    className = "TurkceMangaOkuTr"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://turkcemangaoku.com.tr"
+
+    source {
+        name = "Türkçe Manga Oku TR"
+        lang = "tr"
+        baseUrl = "https://turkcemangaoku.com.tr"
+    }
 }

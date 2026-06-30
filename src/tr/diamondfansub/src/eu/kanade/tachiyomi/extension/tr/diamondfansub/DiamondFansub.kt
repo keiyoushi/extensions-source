@@ -1,16 +1,13 @@
 package eu.kanade.tachiyomi.extension.tr.diamondfansub
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DiamondFansub :
-    Madara(
-        "DiamondFansub",
-        "https://diamondfansub.com",
-        "tr",
-        SimpleDateFormat("d MMMM", Locale("tr", "TR")),
-    ) {
+@Source
+abstract class DiamondFansub : Madara() {
+    override val dateFormat = SimpleDateFormat("d MMMM", Locale("tr", "TR"))
     override val mangaSubString = "seri"
     override val useNewChapterEndpoint = true
     override val mangaDetailsSelectorAuthor = ".manga-authors"

@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Ragnarok Scanlation"
-    className = "RagnarokScanlation"
     versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://ragnarokscanlation.org"
+
+    source {
+        lang = "es"
+        baseUrl = "https://ragnarokscanlation.org"
+        versionId = 2
+    }
 }

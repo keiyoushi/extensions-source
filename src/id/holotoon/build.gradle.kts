@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Holotoon"
-    className = "Holotoon"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://01.holotoon.site"
+
+    source {
+        lang = "id"
+        baseUrl = "https://01.holotoon.site"
+    }
 }

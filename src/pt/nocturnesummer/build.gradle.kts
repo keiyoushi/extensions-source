@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Nocturne Summer"
-    className = "NocturneSummer"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://nocfsb.com"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://nocfsb.com"
+    }
 }

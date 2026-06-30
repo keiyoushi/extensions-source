@@ -15,7 +15,7 @@ class CustomUrlPreferences(
     private val dialogMessage: String,
 ) {
     private val prefBaseKey = "overrideBaseUrl"
-    private val prefDefaultKey = "${prefBaseKey}_default"
+    private val prefDefaultKey = "defaultBaseUrl"
 
     init {
         val storedDefault = preferences.getString(prefDefaultKey, null)

@@ -2,11 +2,14 @@ package eu.kanade.tachiyomi.extension.en.webtoonxyz
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class WebtoonXYZ : Madara("WebtoonXYZ", "https://www.webtoon.xyz", "en", SimpleDateFormat("dd MMMM yyyy", Locale.US)) {
+@Source
+abstract class WebtoonXYZ : Madara() {
+    override val dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale.US)
     override val mangaSubString = "read"
     override val sendViewCount = false
 

@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Whale Manga"
-    className = "WhaleManga"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://whalemanga.com"
+
+    source {
+        name = "WhaleManga"
+        lang = "en"
+        baseUrl = "https://whalemanga.com"
+    }
 }

@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Harmony-Scan"
-    className = "HarmonyScan"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://harmony-scan.fr"
+
+    source {
+        lang = "fr"
+        baseUrl = "https://harmony-scan.fr"
+        id = 3121632933690925888L
+    }
 }

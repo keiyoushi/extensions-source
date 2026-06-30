@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -12,14 +13,9 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class RagnarokScanlation :
-    Madara(
-        "Ragnarok Scanlation",
-        "https://ragnarokscanlation.org",
-        "es",
-        SimpleDateFormat("MMMM d, yyyy", Locale("en")),
-    ) {
-    override val versionId = 2
+@Source
+abstract class RagnarokScanlation : Madara() {
+    override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("en"))
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = true

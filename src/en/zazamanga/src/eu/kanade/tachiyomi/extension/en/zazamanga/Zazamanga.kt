@@ -4,10 +4,12 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import org.jsoup.nodes.Element
 
-class Zazamanga : Madara("Zazamanga", "https://www.zazamanga.com", "en") {
+@Source
+abstract class Zazamanga : Madara() {
     override fun chapterListSelector() = "div.wp-manga-chapter"
     override fun searchMangaSelector() = "div.page-item-detail:not(.manga)"
     override val searchMangaUrlSelector = "p.widget-title a"

@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Monopoly Scan"
-    className = "MonopolyScan"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://monopolymanhua.com"
+
+    source {
+        lang = "es"
+        baseUrl = "https://monopolymanhua.com"
+    }
 }

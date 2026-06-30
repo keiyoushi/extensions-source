@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.octopusmanga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class OctopusManga : Madara("OctopusManga", "https://octopusmanga.com", "en") {
+@Source
+abstract class OctopusManga : Madara() {
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = true
 }
