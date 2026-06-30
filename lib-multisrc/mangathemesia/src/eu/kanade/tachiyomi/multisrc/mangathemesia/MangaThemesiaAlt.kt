@@ -19,7 +19,8 @@ import okhttp3.Response
 import java.lang.ref.SoftReference
 abstract class MangaThemesiaAlt(
     private val randomUrlPrefKey: String = "pref_auto_random_url",
-) : MangaThemesia(), ConfigurableSource {
+) : MangaThemesia(),
+    ConfigurableSource {
 
     protected open val listUrl get() = "$mangaUrlDirectory/list-mode/"
     protected open val listSelector = "div#content div.soralist ul li a.series"
