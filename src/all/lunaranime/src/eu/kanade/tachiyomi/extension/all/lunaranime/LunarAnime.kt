@@ -22,7 +22,10 @@ import java.security.MessageDigest
 @Source
 abstract class LunarAnime : HttpSource() {
 
-    private val internalLang: String = lang.lowercase()
+    private val internalLang: String = when (lang) {
+        "pt-BR" -> "pt-br"
+        else -> lang
+    }
 
     private val apiurlHost by lazy { API_URL.toHttpUrl().host }
     private val cdnurlHost by lazy { CDN_URL.toHttpUrl().host }
