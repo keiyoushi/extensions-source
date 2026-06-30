@@ -1,10 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.roumanwu
 
-import android.content.SharedPreferences
-import androidx.preference.ListPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,7 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -23,19 +19,10 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Roumanwu :
-    HttpSource(),
-    ConfigurableSource {
-    override val name = "肉漫屋"
-    override val lang = "zh"
+@Source
+abstract class Roumanwu : HttpSource() {
+
     override val supportsLatest = true
-
-    private val preferences: SharedPreferences by getPreferencesLazy()
-
-    override val baseUrl: String
-        get() = MIRRORS[
-            preferences.getString(MIRROR_PREF, MIRROR_DEFAULT)!!.toInt().coerceAtMost(MIRRORS.size - 1),
-        ]
 
     override val client = network.client.newBuilder().addInterceptor(ScrambledImageInterceptor()).build()
 
@@ -83,10 +70,8 @@ class Roumanwu :
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val entries = parseEntries(document)
-        val thisPage = response.request.url.queryParameter("page")!!
-        val nextPage = document.selectFirst("div.justify-end > a:contains(下一頁)")!!
-            .absUrl("href").toHttpUrl().queryParameter("page")!!
-        return MangasPage(entries, thisPage != nextPage)
+        val hasNextPage = document.selectFirst("div.justify-end > a:contains(下一頁)") != null
+        return MangasPage(entries, hasNextPage)
     }
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
@@ -178,27 +163,7 @@ class Roumanwu :
         }
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val mirrorPref = ListPreference(screen.context).apply {
-            key = MIRROR_PREF
-            title = "使用鏡像網址"
-            entries = MIRRORS_DESC
-            entryValues = Array(MIRRORS.size, Int::toString)
-            summary = "使用鏡像網址。重啟軟體生效。"
-
-            setDefaultValue(MIRROR_DEFAULT)
-        }
-        screen.addPreference(mirrorPref)
-    }
-
     companion object {
-        private const val MIRROR_PREF = "MIRROR"
-
-        // 地址: https://rou.pub/dizhi or https://rdz3.xyz/dizhi
-        private val MIRRORS get() = arrayOf("https://rouman5.com", "https://roum27.xyz")
-        private val MIRRORS_DESC get() = arrayOf("主站", "鏡像")
-        private const val MIRROR_DEFAULT = 1.toString() // use mirror
-
         private val DATE_FORMAT = SimpleDateFormat("M/d/yyyy", Locale.ROOT)
         private val IMAGE_URL_REGEX = Regex(""""imageUrl":"([^"]+)""")
     }
