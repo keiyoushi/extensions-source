@@ -41,6 +41,7 @@ abstract class Bakamh : Madara() {
     }
 
     private fun parseChapter(element: Element, mangaUrl: String): SChapter? {
+        // Current URL attribute
         if (element.hasAttr("storage-chapter-url")) {
             return SChapter.create().apply {
                 url = element.absUrl("storage-chapter-url")
@@ -48,12 +49,13 @@ abstract class Bakamh : Madara() {
             }
         }
 
+        // Compatibility operation for modified versions
         return element.attributes()
             .firstOrNull { attr ->
                 val value = attr.value.lowercase()
                 value.startsWith(mangaUrl) &&
-                    value != mangaUrl &&
-                    !value.startsWith("$mangaUrl#comment")
+                    value != mangaUrl && // Not current URL
+                    !value.startsWith("$mangaUrl#comment") // // Not comment
             }
             ?.let { attr ->
                 SChapter.create().apply {

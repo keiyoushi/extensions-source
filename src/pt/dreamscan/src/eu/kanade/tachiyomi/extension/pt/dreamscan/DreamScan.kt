@@ -8,7 +8,5 @@ import java.util.Locale
 @Source
 abstract class DreamScan : Madara() {
     override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("pt", "BR"))
-    override val id: Long = 2058412298484770949
-
     override val useNewChapterEndpoint = true
 }
