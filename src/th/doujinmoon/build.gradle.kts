@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Doujin Moon"
-    className = "DoujinMoon"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://doujinmoon.com"
+
+    source {
+        lang = "th"
+        baseUrl = "https://doujinmoon.com"
+    }
 }

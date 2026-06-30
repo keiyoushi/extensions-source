@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -17,14 +18,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class StarlightScan :
-    MangaThemesia(
-        "Starlight Scan",
-        "https://starligthscan.com",
-        "pt-BR",
-        mangaUrlDirectory = "/mangas",
-        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-    ) {
+@Source
+abstract class StarlightScan : MangaThemesia() {
+    override val mangaUrlDirectory = "/mangas"
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 2.seconds)

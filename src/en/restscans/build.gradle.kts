@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Rest Scans"
-    className = "RestScans"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://restscans.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://restscans.com"
+    }
 }

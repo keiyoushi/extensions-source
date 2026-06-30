@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Arcura Fansub"
-    className = "ArcuraFansub"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://arcurafansub.com"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://arcurafansub.com"
+    }
 }

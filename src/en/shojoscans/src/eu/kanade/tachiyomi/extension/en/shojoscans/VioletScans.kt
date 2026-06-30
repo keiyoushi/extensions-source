@@ -1,15 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.shojoscans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class VioletScans :
-    MangaThemesia(
-        "Violet Scans",
-        "https://violetscans.org",
-        "en",
-        mangaUrlDirectory = "/comics",
-    ) {
-    override val id = 9079184529211162476
+@Source
+abstract class VioletScans : MangaThemesia() {
+    override val mangaUrlDirectory = "/comics"
 
     override fun chapterListSelector(): String = "#chapterlist li:not(:has(svg))"
 }

@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Sky Manga"
-    className = "SkyManga"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://skymanga.work"
+
+    source {
+        lang = "en"
+        baseUrl = "https://skymanga.work"
+    }
 }

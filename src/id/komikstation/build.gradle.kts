@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Komik Station"
-    className = "KomikStation"
     versionCode = 7
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://komikstation.org"
+
+    source {
+        lang = "id"
+        baseUrl = "https://komikstation.org"
+        id = 6148605743576635261L
+    }
 }

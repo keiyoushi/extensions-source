@@ -4,12 +4,15 @@ plugins {
 
 keiyoushi {
     name = "MangaKimi"
-    className = "MangaKimi"
     versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://www.mangakimi.com"
+
+    source {
+        lang = "th"
+        baseUrl = "https://www.mangakimi.com"
+    }
 }
 
 dependencies {

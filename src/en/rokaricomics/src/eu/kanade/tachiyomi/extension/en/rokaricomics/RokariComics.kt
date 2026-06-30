@@ -7,16 +7,13 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class RokariComics :
-    MangaThemesia(
-        "RokariComics",
-        "https://rokaricomics.com",
-        "en",
-    ) {
+@Source
+abstract class RokariComics : MangaThemesia() {
     // Popular - Use homepage "Popular Today" section (first page only, no pagination)
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 

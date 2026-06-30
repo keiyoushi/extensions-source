@@ -1,11 +1,9 @@
 package eu.kanade.tachiyomi.extension.ar.goonscans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class GoonScans :
-    MangaThemesia(
-        "Goon Scans",
-        "https://goonscans.org",
-        "ar",
-        mangaUrlDirectory = "/title",
-    )
+@Source
+abstract class GoonScans : MangaThemesia() {
+    override val mangaUrlDirectory = "/title"
+}

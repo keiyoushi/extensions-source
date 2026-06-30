@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Omicaso"
-    className = "Omicaso"
     versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://omicaso.org"
+
+    source {
+        lang = "id"
+        baseUrl = "https://omicaso.org"
+    }
 }

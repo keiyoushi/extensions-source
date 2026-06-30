@@ -9,19 +9,17 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Luvyaa :
-    MangaThemesia(
-        "Luvyaa",
-        "https://v4.luvyaa.co",
-        "id",
-        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US),
-    ),
+@Source
+abstract class Luvyaa :
+    MangaThemesia(),
     ConfigurableSource {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US)
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 

@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "HentaiDex"
-    className = "HentaiDex"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://dexhentai.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://dexhentai.com"
+    }
 }

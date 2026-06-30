@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Lagoon Scans"
-    className = "LagoonScans"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://lagoonscans.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://lagoonscans.com"
+    }
 }

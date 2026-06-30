@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.es.skymangas
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.nodes.Document
@@ -10,13 +11,9 @@ import java.lang.IllegalArgumentException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class SkyMangas :
-    MangaThemesia(
-        "SkyMangas",
-        "https://skymangas.com",
-        "es",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
-    ) {
+@Source
+abstract class SkyMangas : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
     override fun pageListParse(document: Document): List<Page> {
         val script = document.selectFirst("div.readercontent > div.wrapper > script")
             ?: return super.pageListParse(document)

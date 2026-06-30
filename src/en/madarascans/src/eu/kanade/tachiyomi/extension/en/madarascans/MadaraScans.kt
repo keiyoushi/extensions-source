@@ -8,21 +8,19 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.getValue
 
-class MadaraScans :
-    MangaThemesia(
-        "Madara Scans",
-        "https://madarascans.com",
-        "en",
-        mangaUrlDirectory = "/series",
-        dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.US),
-    ),
+@Source
+abstract class MadaraScans :
+    MangaThemesia(),
     ConfigurableSource {
+    override val mangaUrlDirectory = "/series"
+    override val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.US)
 
     private val preferences by getPreferencesLazy()
     private val paidChapterHelper = MangaThemesiaPaidChapterHelper(lockedChapterSelector = ".locked")

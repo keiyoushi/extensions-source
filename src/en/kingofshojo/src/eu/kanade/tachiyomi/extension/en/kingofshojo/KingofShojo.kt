@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.kingofshojo
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class KingofShojo : MangaThemesia("King of Shojo", "https://kingofshojo.com", "en")
+@Source
+abstract class KingofShojo : MangaThemesia()

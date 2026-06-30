@@ -4,10 +4,15 @@ plugins {
 
 keiyoushi {
     name = "Drake Scans"
-    className = "DrakeScans"
     versionCode = 16
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://drakecomic.org"
+
+    source {
+        lang = "en"
+        baseUrl = "https://drakecomic.org"
+        // madara -> mangathemesia
+        versionId = 2
+    }
 }

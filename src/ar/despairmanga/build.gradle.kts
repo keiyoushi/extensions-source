@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Despair Manga"
-    className = "DespairManga"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://despair-manga.net"
+
+    source {
+        lang = "ar"
+        baseUrl = "https://despair-manga.net"
+    }
 }
