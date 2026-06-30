@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "YKMH"
-    className = "YKMH"
     versionCode = 18
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "sinmh"
-    baseUrl = "https://www.ykmh.net"
+
+    source {
+        lang = "zh"
+        baseUrl = "https://www.ykmh.net"
+        id = 1637952806167036168L
+    }
 }
