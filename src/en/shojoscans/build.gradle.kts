@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Violet Scans"
-    className = "VioletScans"
     versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://violetscans.org"
+
+    source {
+        lang = "en"
+        baseUrl = "https://violetscans.org"
+        id = 9079184529211162476L
+    }
 }

@@ -2,17 +2,17 @@ import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.gradle.tasks.PackageAndroidArtifact
 import com.google.devtools.ksp.gradle.KspExtension
+import keiyoushi.gradle.extensions.BaseUrlSpec
 import keiyoushi.gradle.extensions.DeeplinkFilter
 import keiyoushi.gradle.extensions.DeeplinkSpec
 import keiyoushi.gradle.extensions.KeiyoushiExtension
 import keiyoushi.gradle.extensions.KeiyoushiMultisrcExtension
-import keiyoushi.gradle.extensions.BaseUrlSpec
 import keiyoushi.gradle.extensions.VALID_LIB_VERSIONS
 import keiyoushi.gradle.extensions.alias
 import keiyoushi.gradle.extensions.compileOnly
 import keiyoushi.gradle.extensions.implementation
-import keiyoushi.gradle.extensions.ksp
 import keiyoushi.gradle.extensions.kei
+import keiyoushi.gradle.extensions.ksp
 import keiyoushi.gradle.extensions.libs
 import keiyoushi.gradle.extensions.plugins
 import keiyoushi.gradle.tasks.GenerateExtensionManifestTask
@@ -184,7 +184,6 @@ class PluginExtension : Plugin<Project> {
                     output.versionCode.set(versionCodeProvider)
                     output.versionName.set(versionNameProvider)
                 }
-
             }
         }
 
@@ -266,22 +265,20 @@ private fun computeSourceId(name: String, lang: String, versionId: Int = 1): Lon
         .reduce { acc, l -> (acc shl 8) or l } and Long.MAX_VALUE
 }
 
-private fun extractHost(url: String): String? =
-    url.split("://").getOrNull(1)?.split("/")?.first()?.takeIf { it.isNotEmpty() }
+private fun extractHost(url: String): String? = url.split("://").getOrNull(1)?.split("/")?.first()?.takeIf { it.isNotEmpty() }
 
-private fun specsToFilters(specs: List<DeeplinkSpec>, defaultHosts: List<String>): List<DeeplinkFilter> =
-    specs.mapNotNull { spec ->
-        val hosts = spec.hosts.getOrElse(emptyList()).ifEmpty { defaultHosts }
-        val paths = spec.pathPatterns.getOrElse(emptyList())
-        if (paths.isNotEmpty()) {
-            check(hosts.isNotEmpty()) {
-                "deeplink has path patterns but no host could be resolved — set a source baseUrl or specify host() explicitly"
-            }
-            DeeplinkFilter(hosts, paths)
-        } else {
-            null
+private fun specsToFilters(specs: List<DeeplinkSpec>, defaultHosts: List<String>): List<DeeplinkFilter> = specs.mapNotNull { spec ->
+    val hosts = spec.hosts.getOrElse(emptyList()).ifEmpty { defaultHosts }
+    val paths = spec.pathPatterns.getOrElse(emptyList())
+    if (paths.isNotEmpty()) {
+        check(hosts.isNotEmpty()) {
+            "deeplink has path patterns but no host could be resolved — set a source baseUrl or specify host() explicitly"
         }
+        DeeplinkFilter(hosts, paths)
+    } else {
+        null
     }
+}
 
 private fun Project.android(block: ApplicationExtension.() -> Unit) {
     extensions.configure(block)

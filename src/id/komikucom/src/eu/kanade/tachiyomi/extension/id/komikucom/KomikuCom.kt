@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.id.komikucom
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class KomikuCom : MangaThemesia("Komiku.com", "https://01.komiku.asia", "id", dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")))
+@Source
+abstract class KomikuCom : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id"))
+}

@@ -3,14 +3,11 @@ package eu.kanade.tachiyomi.extension.ar.despairmanga
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import okhttp3.Request
 
-class DespairManga :
-    MangaThemesia(
-        "Despair Manga",
-        "https://despair-manga.net",
-        "ar",
-    ) {
+@Source
+abstract class DespairManga : MangaThemesia() {
 
     override fun imageRequest(page: Page): Request {
         page.imageUrl = page.imageUrl!!.let {

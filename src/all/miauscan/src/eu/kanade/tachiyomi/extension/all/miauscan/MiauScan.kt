@@ -1,32 +1,21 @@
 package eu.kanade.tachiyomi.extension.all.miauscan
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MiauScanFactory : SourceFactory {
-    override fun createSources() = listOf(
-        MiauScan("es"),
-        MiauScan("pt-BR"),
-    )
-}
-
-open class MiauScan(lang: String) :
-    MangaThemesia(
-        name = "Miau Scan",
-        baseUrl = "https://leemiau.com",
-        lang = lang,
-        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-    ) {
+@Source
+abstract class MiauScan : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
 
     private val portugueseMode =
         if (lang == "pt-BR") Filter.TriState.STATE_INCLUDE else Filter.TriState.STATE_EXCLUDE

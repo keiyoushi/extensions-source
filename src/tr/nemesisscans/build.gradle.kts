@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Nemesis scans"
-    className = "Nemesisscans"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://nemesisscans.com"
+
+    source {
+        name = "Nemesisscans"
+        lang = "tr"
+        baseUrl = "https://nemesisscans.com"
+    }
 }

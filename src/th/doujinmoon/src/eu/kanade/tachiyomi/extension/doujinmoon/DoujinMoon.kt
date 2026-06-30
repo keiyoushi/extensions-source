@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.th.doujinmoon
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class DoujinMoon : MangaThemesia("Doujin Moon", "https://doujinmoon.com", "th")
+@Source
+abstract class DoujinMoon : MangaThemesia()

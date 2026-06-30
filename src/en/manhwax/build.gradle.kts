@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Manhwax"
-    className = "Manhwax"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://manhwax.top"
+
+    source {
+        lang = "en"
+        baseUrl = "https://manhwax.top"
+    }
 }

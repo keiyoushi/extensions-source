@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Manhwa Indo"
-    className = "ManhwaIndo"
     versionCode = 11
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://www.manhwaindo.my"
+
+    source {
+        lang = "id"
+        baseUrl = "https://www.manhwaindo.my"
+    }
 }

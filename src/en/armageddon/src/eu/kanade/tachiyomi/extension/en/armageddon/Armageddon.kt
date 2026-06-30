@@ -1,13 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.armageddon
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class Armageddon :
-    MangaThemesia(
-        name = "Armageddon",
-        baseUrl = "https://www.silentquill.net",
-        lang = "en",
-    ) {
+@Source
+abstract class Armageddon : MangaThemesia() {
     override val seriesTitleSelector = "h1.kdt8-left-title"
 
     override val seriesThumbnailSelector = ".kdt8-cover img"

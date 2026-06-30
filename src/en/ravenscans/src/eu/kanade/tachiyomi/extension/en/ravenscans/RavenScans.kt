@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.ravenscans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class RavenScans : MangaThemesia("Raven Scans", "https://ravenscans.org", "en")
+@Source
+abstract class RavenScans : MangaThemesia()
