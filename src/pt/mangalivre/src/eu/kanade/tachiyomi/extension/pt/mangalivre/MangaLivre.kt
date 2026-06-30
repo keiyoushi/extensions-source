@@ -244,10 +244,10 @@ class MangaLivre :
     }
 
     /**
-     * O front-end manda um header de cliente cujo NOME rotaciona toda hora
-     * (x-toonlivre-client -> x-tly-sec -> x-app-key) e cujo valor costuma ser "web-...".
-     * Em vez de fixar um nome, varremos os bundles em /assets e coletamos todos os pares
-     * "x-...":"valor", priorizando os "web-..."; o interceptor testa cada um quando toma 403.
+     * O front-end fixa o header de cliente via `Headers.set("nome", "valor")` no bundle,
+     * e nome/valor rotacionam toda hora (x-toonlivre-client/web-x -> app-token/tok-z99).
+     * Em vez de fixar isso, coletamos os pares de `.set(...)` dos /assets (ignorando headers
+     * padrão) e o interceptor testa cada candidato quando a API recusa com 403.
      */
     private fun scrapeCandidates(): List<ClientToken> = try {
         val html = scrapeClient.newCall(GET("$baseUrl/", headers)).execute()
@@ -265,11 +265,12 @@ class MangaLivre :
     }
 
     private fun extractCandidates(js: String): List<ClientToken> {
-        val pairs = PAIR_REGEX.findAll(js)
+        val pairs = SET_REGEX.findAll(js)
             .map { ClientToken(it.groupValues[1], it.groupValues[2]) }
+            .filterNot { it.header.lowercase() in STANDARD_HEADERS }
             .distinct()
             .toList()
-        val ranked = pairs.sortedByDescending { it.value.startsWith("web-") }
+        val ranked = pairs.sortedByDescending { it.value.length + if ('-' in it.value) 100 else 0 }
             .take(MAX_CANDIDATES)
         return (ranked + DEFAULT_TOKEN).distinct()
     }
@@ -289,8 +290,9 @@ class MangaLivre :
         private const val MAX_CANDIDATES = 8
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
-        private val DEFAULT_TOKEN = ClientToken("x-app-key", "web-z99")
+        private val DEFAULT_TOKEN = ClientToken("app-token", "tok-z99")
         private val ASSET_REGEX = Regex("/assets/[\\w-]+\\.js")
-        private val PAIR_REGEX = Regex("\"(x-[a-z0-9-]{2,})\"\\s*[,:]\\s*\"([a-z][a-z0-9-]{1,40})\"")
+        private val SET_REGEX = Regex("\\.set\\(\\s*\"([A-Za-z][\\w.-]{1,40})\"\\s*,\\s*\"([^\"]{1,60})\"\\s*\\)")
+        private val STANDARD_HEADERS = setOf("content-type", "accept", "authorization", "x-csrf-token")
     }
 }
