@@ -10,7 +10,14 @@ keiyoushi {
     theme = "vercomics"
 
     source {
+        name = "VCP"
         lang = "es"
         baseUrl = "https://vercomicsporno.com"
+    }
+
+    source {
+        name = "VMP"
+        lang = "es"
+        baseUrl = "https://vermangasporno.com"
     }
 }
