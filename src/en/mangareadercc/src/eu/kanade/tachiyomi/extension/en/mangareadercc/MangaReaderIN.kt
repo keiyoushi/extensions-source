@@ -5,13 +5,14 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 
-class MangaReaderIN : PaprikaAlt("MangaReader.in", "https://mangareader.in", "en") {
-    override val id = 7388100486112484697
+@Source
+abstract class MangaReaderIN : PaprikaAlt() {
 
     override val client = super.client.newBuilder()
         .addInterceptor(::chapterListInterceptor)
