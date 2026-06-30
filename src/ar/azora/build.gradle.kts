@@ -5,9 +5,9 @@ plugins {
 keiyoushi {
     name = "Azora"
     className = "Azora"
-    versionCode = 44
+    versionCode = 45
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "iken"
-    baseUrl = "https://azoramoon.com"
+    baseUrl = "https://azorafly.com"
 }
