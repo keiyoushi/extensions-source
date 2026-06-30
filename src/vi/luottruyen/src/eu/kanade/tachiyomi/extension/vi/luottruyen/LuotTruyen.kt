@@ -1,11 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.luottruyen
 
-import android.content.SharedPreferences
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,8 +9,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.getPreferences
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -23,32 +19,10 @@ import org.jsoup.nodes.Element
 import java.util.Calendar
 import java.util.TimeZone
 
-class LuotTruyen :
-    HttpSource(),
-    ConfigurableSource {
-
-    override val name = "LuotTruyen"
-
-    override val lang = "vi"
-
-    private val defaultBaseUrl = "https://luottruyen10.com"
-
-    override val baseUrl get() = getPrefBaseUrl()
+@Source
+abstract class LuotTruyen : HttpSource() {
 
     override val supportsLatest = true
-
-    private val preferences: SharedPreferences = getPreferences()
-
-    init {
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != defaultBaseUrl) {
-                preferences.edit()
-                    .putString(BASE_URL_PREF, defaultBaseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
-                    .apply()
-            }
-        }
-    }
 
     // Strip "wv" from User-Agent so Google login works in this source.
     // Google deny login when User-Agent contains the WebView token.
@@ -246,28 +220,9 @@ class LuotTruyen :
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // ============================== Settings ==============================
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            setDefaultValue(defaultBaseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $defaultBaseUrl"
-        }.let(screen::addPreference)
-    }
-
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
-
     companion object {
         private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
         private val RELATIVE_DATE_NUMBER_REGEX = Regex("\\d+")
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
-        private const val BASE_URL_PREF_SUMMARY = "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
         private const val LOGIN_WEBVIEW_MESSAGE = "Vui lòng đăng nhập bằng Webview để xem chương này"
     }
 

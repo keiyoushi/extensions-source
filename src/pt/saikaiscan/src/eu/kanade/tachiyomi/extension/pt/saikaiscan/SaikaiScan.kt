@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -19,19 +20,14 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import kotlin.time.Duration.Companion.seconds
 
-class SaikaiScan : HttpSource() {
+@Source
+abstract class SaikaiScan : HttpSource() {
     private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
     private val storageUrlHost by lazy { storageUrl.toHttpUrl().host }
-
-    override val name = SOURCE_NAME
-
-    override val baseUrl = "https://housesaikai.net"
 
     private val apiUrl = "https://api.${baseUrl.substringAfterLast("/")}"
 
     private val storageUrl = "https://s3-beta.${baseUrl.substringAfterLast("/")}"
-
-    override val lang = "pt-BR"
 
     override val supportsLatest = true
 
@@ -293,7 +289,6 @@ class SaikaiScan : HttpSource() {
     }
 
     companion object {
-        const val SOURCE_NAME = "Saikai Scan"
         private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         private const val ACCEPT_JSON = "application/json, text/plain, */*"
         private const val COMIC_FORMAT_ID = "2"

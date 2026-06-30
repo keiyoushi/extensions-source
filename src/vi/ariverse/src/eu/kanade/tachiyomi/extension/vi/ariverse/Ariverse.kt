@@ -10,7 +10,6 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.preference.CheckBoxPreference
-import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -20,6 +19,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -37,17 +37,10 @@ import java.util.TimeZone
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class Ariverse :
+@Source
+abstract class Ariverse :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "Ariverse"
-
-    override val lang = "vi"
-
-    private val defaultBaseUrl = "https://arigl.xyz"
-
-    override val baseUrl get() = getPrefBaseUrl()
 
     private val apiUrl get() = baseUrl.replace("https://", "https://be.") + "/api/v1"
 
@@ -55,18 +48,7 @@ class Ariverse :
 
     override val supportsLatest = true
 
-    override val id: Long = 4480433466073326866
-
-    private val preferences: SharedPreferences = getPreferences {
-        getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != defaultBaseUrl) {
-                edit()
-                    .putString(BASE_URL_PREF, defaultBaseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
-                    .apply()
-            }
-        }
-    }
+    private val preferences: SharedPreferences = getPreferences()
 
     private var cachedAuthToken: String? = null
 
@@ -387,15 +369,6 @@ class Ariverse :
     // ============================== Settings ==============================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            setDefaultValue(defaultBaseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $defaultBaseUrl"
-        }.let(screen::addPreference)
-
         CheckBoxPreference(screen.context).apply {
             key = "pref_r18"
             title = "Hiển thị nội dung 18+"
@@ -403,8 +376,6 @@ class Ariverse :
             setDefaultValue(false)
         }.let(screen::addPreference)
     }
-
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
 
     companion object {
         private val BR_TAG_REGEX = Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE)
@@ -419,10 +390,6 @@ class Ariverse :
 
         private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
 
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
-        private const val BASE_URL_PREF_SUMMARY = "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
         private const val LOGIN_WEBVIEW_MESSAGE = "Vui lòng đăng nhập vào tài khoản phù hợp qua Webview để đọc chương này"
     }
 }
