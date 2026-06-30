@@ -27,11 +27,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-abstract class Senkuro(
-    override val name: String,
-    private val _baseUrl: String,
-    final override val lang: String,
-) : HttpSource(),
+abstract class Senkuro :
+    HttpSource(),
     ConfigurableSource {
 
     override val supportsLatest = false
@@ -44,11 +41,14 @@ abstract class Senkuro(
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val baseUrl: String
-        get() = if (apiUrl.contains("api.senkuro.me")) "https://senkuro.me" else _baseUrl
-
     private val apiUrl: String
         get() = preferences.getString(API_DOMAIN_PREF, API_DOMAIN_DEFAULT)!! + "/graphql"
+
+    private val siteUrl = if (apiUrl.contains("senkuro.me")) {
+        "https://senkuro.me"
+    } else {
+        baseUrl
+    }
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
@@ -207,7 +207,7 @@ abstract class Senkuro(
 
     override fun getMangaUrl(manga: SManga): String {
         val slug = manga.url.split(",,").getOrNull(1) ?: return ""
-        return "$baseUrl/manga/$slug"
+        return "$siteUrl/manga/$slug"
     }
 
     // ============================= Chapters ==============================
@@ -262,7 +262,7 @@ abstract class Senkuro(
         val parts = chapter.url.split(",,")
         val mangaSlug = parts.getOrNull(1) ?: return ""
         val chapterSlug = parts.getOrNull(3) ?: return ""
-        return "$baseUrl/manga/$mangaSlug/chapters/$chapterSlug"
+        return "$siteUrl/manga/$mangaSlug/chapters/$chapterSlug"
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -411,7 +411,7 @@ abstract class Senkuro(
 
     companion object {
         private const val API_DOMAIN_PREF = "MangaApiDomain"
-        private const val API_DOMAIN_TITLE = "Домен"
+        private const val API_DOMAIN_TITLE = "Домен API"
         private const val API_DOMAIN_DEFAULT = "https://api.senkuro.com"
         private const val OFFSET_COUNT = 10
     }
