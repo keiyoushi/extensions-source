@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -18,10 +19,8 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.Calendar
 
-class LoppyToon : HttpSource() {
-    override val name = "LoppyToon"
-    override val lang = "vi"
-    override val baseUrl = "https://loppytoon.com"
+@Source
+abstract class LoppyToon : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()

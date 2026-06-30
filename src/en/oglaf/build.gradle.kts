@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Oglaf"
-    className = "Oglaf"
     versionCode = 4
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://www.oglaf.com"
+    }
 }

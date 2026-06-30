@@ -4,8 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Tr Manga"
-    className = "TrManga"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        name = "TrManga"
+        lang = "tr"
+        baseUrl = "https://trmanga.com"
+    }
 }

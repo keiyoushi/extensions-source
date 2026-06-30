@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl
@@ -23,12 +24,9 @@ import java.util.concurrent.TimeUnit
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-class WestManga : HttpSource() {
-    override val name = "West Manga"
-    override val baseUrl = "https://v1.westmanga.cc"
+@Source
+abstract class WestManga : HttpSource() {
     private val apiUrl = "https://data.mantweh.online"
-    override val lang = "id"
-    override val id = 8883916630998758688
     override val supportsLatest = true
 
     private var genres: List<Pair<String, String>> = emptyList()

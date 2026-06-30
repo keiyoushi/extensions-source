@@ -4,8 +4,13 @@ plugins {
 
 keiyoushi {
     name = "MangaGeko"
-    className = "MangaRawClub"
     versionCode = 32
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://www.mgeko.cc"
+        id = 734865402529567092L
+    }
 }

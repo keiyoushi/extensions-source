@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -18,10 +19,8 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class FoamGirl : HttpSource() {
-    override val baseUrl = "https://foamgirl.net"
-    override val lang = "all"
-    override val name = "FoamGirl"
+@Source
+abstract class FoamGirl : HttpSource() {
     override val supportsLatest = false
 
     override fun headersBuilder() = super.headersBuilder()

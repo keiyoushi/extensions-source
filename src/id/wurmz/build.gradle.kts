@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Wurmz"
-    className = "Wurmz"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "id"
+        baseUrl = "https://wurmz.net"
+    }
 
     deeplink {
         host("wurmz.net")

@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import keiyoushi.utils.getPreferencesLazy
@@ -28,12 +29,10 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ClownCorps :
+@Source
+abstract class ClownCorps :
     HttpSource(),
     ConfigurableSource {
-    override val baseUrl = "https://clowncorps.net"
-    override val lang = "en"
-    override val name = "Clown Corps"
     override val supportsLatest = false
 
     override val client = network.client.newBuilder()

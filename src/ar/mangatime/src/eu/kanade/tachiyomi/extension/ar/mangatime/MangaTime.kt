@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.Call
 import okhttp3.Callback
@@ -23,12 +24,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class MangaTime : HttpSource() {
-    override val baseUrl = "https://mangatime.org"
-
-    override val name = "MangaTime"
-
-    override val lang = "ar"
+@Source
+abstract class MangaTime : HttpSource() {
 
     override val supportsLatest = true
 

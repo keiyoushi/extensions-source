@@ -2,8 +2,10 @@ package eu.kanade.tachiyomi.extension.en.aquamanga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
+import org.jsoup.nodes.Element
 
 class AquaManga : Madara("Aqua Manga", "https://aquareader.org", "en") {
 
@@ -32,6 +34,13 @@ class AquaManga : Madara("Aqua Manga", "https://aquareader.org", "en") {
     override val mangaDetailsSelectorArtist = ".aqua-series-info__creator-value a"
 
     override fun chapterListSelector() = ".aqua-ch-item"
-    override val chapterUrlSelector = "a"
     override val chapterUrlSuffix = ""
+
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        url = element.attr("abs:href")
+        name = element.selectFirst(".aqua-ch-item__name")?.text()!!
+        element.selectFirst(".aqua-ch-item__time")?.text()?.let {
+            date_upload = parseChapterDate(it)
+        }
+    }
 }

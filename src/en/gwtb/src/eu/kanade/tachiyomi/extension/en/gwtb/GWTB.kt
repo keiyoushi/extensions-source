@@ -7,15 +7,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import rx.Observable
 
-class GWTB : HttpSource() {
-    override val lang = "en"
-
-    override val name = "Gone with the Blastwave"
-
-    override val baseUrl = "https://www.blastwave-comic.com"
+@Source
+abstract class GWTB : HttpSource() {
 
     override val supportsLatest = false
 

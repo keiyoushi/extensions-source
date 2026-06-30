@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "MiMiHentai"
-    className = "MiMiHentai"
     versionCode = 6
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "vi"
+        baseUrl = "https://mimihentai.net"
+    }
 }

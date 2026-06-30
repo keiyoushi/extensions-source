@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -14,10 +15,8 @@ import okhttp3.Response
 import rx.Observable
 import java.net.URLEncoder
 
-class HComic : HttpSource() {
-    override val baseUrl = "https://h-comic.com"
-    override val lang = "zh"
-    override val name = "H-Comic"
+@Source
+abstract class HComic : HttpSource() {
     override val supportsLatest = true
 
     private val imgUrl = "https://h-comic.link/api"

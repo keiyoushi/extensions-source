@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Manga Saison"
-    className = "MangaSaison"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://mechacomi.jp"
+    }
 }

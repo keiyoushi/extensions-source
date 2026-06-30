@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -19,10 +20,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class TuSachXinhXinh : HttpSource() {
-    override val name = "TuSachXinhXinh"
-    override val lang = "vi"
-    override val baseUrl = "https://tusachxinhxinh12.online"
+@Source
+abstract class TuSachXinhXinh : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()

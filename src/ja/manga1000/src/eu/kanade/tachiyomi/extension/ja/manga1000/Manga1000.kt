@@ -9,18 +9,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class Manga1000 : HttpSource() {
-
-    override val name = "Manga1000"
-    override val baseUrl = "https://hachiraw.win"
-    override val lang = "ja"
-
-    override val versionId = 2
+@Source
+abstract class Manga1000 : HttpSource() {
 
     override val supportsLatest = false
 

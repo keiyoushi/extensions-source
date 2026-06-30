@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.runBlocking
@@ -29,15 +30,10 @@ import java.util.Calendar
 import java.util.Locale
 import kotlin.getValue
 
-class RaijinScans :
+@Source
+abstract class RaijinScans :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "Raijin Scans"
-
-    override val baseUrl = "https://raijin-scans.fr"
-
-    override val lang = "fr"
 
     override val supportsLatest = true
 

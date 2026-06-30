@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -15,17 +16,10 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import java.util.Calendar
 
-class YaoiToon : HttpSource() {
-
-    override val name = "YaoiToon"
-
-    override val baseUrl = "https://yaoitoon.net"
-
-    override val lang = "en"
+@Source
+abstract class YaoiToon : HttpSource() {
 
     override val supportsLatest = true
-
-    override val versionId = 2
 
     private val ajaxHeaders by lazy {
         headers.newBuilder()

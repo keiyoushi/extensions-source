@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Duskoryvile"
-    className = "Duskoryvile"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "ar"
+        baseUrl = "https://duskoryvile.com"
+    }
 }

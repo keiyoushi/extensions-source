@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Oh Joy Sex Toy"
-    className = "OhJoySexToy"
     versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://www.ohjoysextoy.com"
+    }
 }

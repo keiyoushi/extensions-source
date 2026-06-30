@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -23,15 +24,8 @@ import java.util.TimeZone
 import kotlin.math.min
 import kotlin.time.Duration.Companion.seconds
 
-class KoinoboriScan : HttpSource() {
-
-    override val versionId = 3
-
-    override val name = "Koinobori Scan"
-
-    override val lang = "es"
-
-    override val baseUrl = "https://visorkoi.com"
+@Source
+abstract class KoinoboriScan : HttpSource() {
 
     private val apiBaseUrl = "https://api.visorkoi.com"
 

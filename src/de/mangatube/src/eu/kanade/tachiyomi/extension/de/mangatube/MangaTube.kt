@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -15,13 +16,8 @@ import okhttp3.Request
 import okhttp3.Response
 import kotlin.time.Duration.Companion.minutes
 
-class MangaTube : HttpSource() {
-
-    override val name = "Manga Tube"
-
-    override val baseUrl = "https://manga-tube.me"
-
-    override val lang = "de"
+@Source
+abstract class MangaTube : HttpSource() {
 
     override val supportsLatest = true
 

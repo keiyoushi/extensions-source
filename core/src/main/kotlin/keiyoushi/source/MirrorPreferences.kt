@@ -8,6 +8,7 @@ import java.net.URI
 class MirrorPreferences(
     private val preferences: SharedPreferences,
     private val mirrors: Array<String>,
+    private val title: String,
 ) {
     private val prefKey = "preferred_mirror"
     private val entries = mirrors.map { url ->
@@ -24,7 +25,7 @@ class MirrorPreferences(
     fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
             key = prefKey
-            title = "Preferred mirror"
+            title = this@MirrorPreferences.title
             entries = this@MirrorPreferences.entries.toTypedArray()
             entryValues = Array(mirrors.size) { it.toString() }
             summary = "%s"

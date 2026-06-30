@@ -9,17 +9,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.util.Locale
 
-class MangaPill : HttpSource() {
+@Source
+abstract class MangaPill : HttpSource() {
 
-    override val name = "MangaPill"
-    override val baseUrl = "https://mangapill.com"
-    override val lang = "en"
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")

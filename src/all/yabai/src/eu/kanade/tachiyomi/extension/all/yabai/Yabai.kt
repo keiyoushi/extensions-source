@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -19,12 +20,8 @@ import okhttp3.Response
 import java.io.IOException
 import java.net.URLDecoder
 
-class Yabai : HttpSource() {
-    override val name = "Yabai"
-
-    override val baseUrl = "https://yabai.si"
-
-    override val lang = "all"
+@Source
+abstract class Yabai : HttpSource() {
 
     override val supportsLatest = false
 

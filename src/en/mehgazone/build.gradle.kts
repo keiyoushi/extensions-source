@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Mehgazone"
-    className = "Mehgazone"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://mehgazone.com"
+    }
 }
 
 dependencies {

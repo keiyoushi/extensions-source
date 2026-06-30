@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Manhwa18"
-    className = "Manhwa18"
     versionCode = 13
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://manhwa18.com"
+    }
 }

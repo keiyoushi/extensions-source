@@ -4,10 +4,15 @@ plugins {
 
 keiyoushi {
     name = "Comico"
-    className = "Comico"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        name = "コミコ"
+        lang = "ja"
+        baseUrl = "https://www.comico.jp"
+    }
 }
 
 dependencies {

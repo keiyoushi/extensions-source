@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
@@ -26,14 +27,10 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaKatana :
+@Source
+abstract class MangaKatana :
     HttpSource(),
     ConfigurableSource {
-    override val name = "MangaKatana"
-
-    override val baseUrl = "https://mangakatana.com"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 

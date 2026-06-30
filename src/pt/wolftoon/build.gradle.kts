@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Wolftoon"
-    className = "Wolftoon"
     versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://wolftoon.lovable.app"
+    }
 }
 
 dependencies {

@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -32,14 +33,12 @@ import kotlin.collections.joinToString
 import kotlin.collections.orEmpty
 import kotlin.text.ifEmpty
 
-class Faust :
+@Source
+abstract class Faust :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Faust"
-    override val baseUrl = "https://faust-web.com"
     private val apiUrl = "https://faust-web.com/api"
-    override val lang = "uk"
     override val supportsLatest = true
     private var genresFetched: Boolean = false
     private var tagsFetched: Boolean = false

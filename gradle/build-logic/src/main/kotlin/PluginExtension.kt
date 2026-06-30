@@ -106,7 +106,7 @@ class PluginExtension : Plugin<Project> {
         }
 
         val themeExtension = keiyoushi.theme.map { themeName ->
-            project(":lib-multisrc:$themeName").extensions.findByType(KeiyoushiMultisrcExtension::class.java)
+            evaluationDependsOn(":lib-multisrc:$themeName").extensions.findByType(KeiyoushiMultisrcExtension::class.java)
                 ?: throw AssertionError("Theme project :lib-multisrc:$themeName must apply kei.plugins.multisrc")
         }
 
@@ -224,8 +224,13 @@ class PluginExtension : Plugin<Project> {
                     ).get()
                     ResolvedSourceData(name, lang, id, baseUrl, skipCodeGen)
                 }
+                val translationsFile = project(":core").projectDir.resolve("translations/strings.json")
                 extensions.configure<KspExtension> {
                     arg("kei_sources", Json.encodeToString<List<ResolvedSourceData>>(resolvedSources))
+                    arg("kei_translations", translationsFile.absolutePath)
+                }
+                tasks.matching { it.name.startsWith("ksp") }.configureEach {
+                    inputs.file(translationsFile)
                 }
             }
 

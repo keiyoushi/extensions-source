@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CoroutineScope
@@ -26,12 +27,10 @@ import okhttp3.Response
 import java.util.Calendar
 import java.util.TimeZone
 
-class MangaOne :
+@Source
+abstract class MangaOne :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Manga One"
-    override val baseUrl = "https://manga-one.com"
-    override val lang = "ja"
     override val supportsLatest = true
 
     private val apiUrl = "$baseUrl/api/client"

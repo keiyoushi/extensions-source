@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -17,19 +18,11 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Shinigami : HttpSource() {
-    // moved from Reaper Scans (id) to Shinigami (id)
-    override val id = 3411809758861089969
-
-    override val name = "Shinigami"
-
-    override val baseUrl = "https://g.shinigami.asia"
-
+@Source
+abstract class Shinigami : HttpSource() {
     private val apiUrl = "https://api.shngm.io"
 
     private val cdnUrl = "https://storage.shngm.id"
-
-    override val lang = "id"
 
     override val supportsLatest = true
 

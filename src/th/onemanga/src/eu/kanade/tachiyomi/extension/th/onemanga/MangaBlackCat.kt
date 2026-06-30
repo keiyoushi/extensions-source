@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
@@ -24,11 +25,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class MangaBlackCat : HttpSource() {
+@Source
+abstract class MangaBlackCat : HttpSource() {
 
-    override val name = "MangaBlackCat"
-    override val baseUrl = "https://mangablackcat.com"
-    override val lang = "th"
     override val supportsLatest = true
 
     // migration from OneManga

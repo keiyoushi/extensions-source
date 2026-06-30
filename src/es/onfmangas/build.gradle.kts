@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "ONF MANGAS"
-    className = "OnfMangas"
     versionCode = 6
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "es"
+        baseUrl = "https://onfmangas.com"
+    }
 }

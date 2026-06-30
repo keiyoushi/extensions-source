@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "SUPER MEGA"
-    className = "Supermega"
     versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://www.supermegacomics.com"
+    }
 }

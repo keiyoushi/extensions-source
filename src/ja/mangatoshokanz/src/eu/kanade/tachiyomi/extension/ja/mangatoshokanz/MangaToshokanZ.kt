@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -19,11 +20,9 @@ import okhttp3.Response
 import java.lang.StringBuilder
 import java.security.KeyPair
 
-class MangaToshokanZ : HttpSource() {
-    override val lang = "ja"
+@Source
+abstract class MangaToshokanZ : HttpSource() {
     override val supportsLatest = true
-    override val name = "マンガ図書館Z"
-    override val baseUrl = "https://www.mangaz.com"
 
     override val client = network.client.newBuilder()
         .addNetworkInterceptor(::r18Interceptor)

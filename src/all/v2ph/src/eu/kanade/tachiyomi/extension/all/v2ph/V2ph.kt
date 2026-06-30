@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
@@ -23,13 +24,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class V2ph : HttpSource() {
-
-    override val name = "V2PH"
-
-    override val baseUrl = "https://www.v2ph.com"
-
-    override val lang = "all"
+@Source
+abstract class V2ph : HttpSource() {
 
     override val supportsLatest = true
 

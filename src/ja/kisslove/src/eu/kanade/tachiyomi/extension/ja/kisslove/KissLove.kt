@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
@@ -22,10 +23,8 @@ import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.*
 
-class KissLove : HttpSource() {
-    override val name = "KissLove"
-    override val baseUrl = "https://klz9.com"
-    override val lang = "ja"
+@Source
+abstract class KissLove : HttpSource() {
     override val supportsLatest = true
 
     private val intl = Intl(

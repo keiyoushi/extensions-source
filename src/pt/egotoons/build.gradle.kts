@@ -4,9 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Ego Toons"
-    className = "EgoToons"
     versionCode = 8
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
-    baseUrl = "https://www.egotoons.com"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://www.egotoons.com"
+        versionId = 3
+    }
 }

@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Goraku Web"
-    className = "GorakuWeb"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://gorakuweb.com"
+    }
 }

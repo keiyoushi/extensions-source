@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -22,11 +23,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class OnfMangas : HttpSource() {
+@Source
+abstract class OnfMangas : HttpSource() {
 
-    override val name = "ONF MANGAS"
-    override val baseUrl = "https://onfmangas.com"
-    override val lang = "es"
     override val supportsLatest = true
 
     override val client = super.client.newBuilder()

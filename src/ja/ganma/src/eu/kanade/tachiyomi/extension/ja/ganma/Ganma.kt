@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLPost
@@ -21,12 +22,10 @@ import okhttp3.Response
 import java.util.Calendar
 import java.util.TimeZone
 
-class Ganma :
+@Source
+abstract class Ganma :
     HttpSource(),
     ConfigurableSource {
-    override val name = "GANMA!"
-    override val lang = "ja"
-    override val baseUrl = "https://ganma.jp"
     override val supportsLatest = true
 
     private val apiUrl = "$baseUrl/api/graphql"

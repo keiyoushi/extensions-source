@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -19,11 +20,9 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
 
-class XAsiatAlbums : HttpSource() {
+@Source
+abstract class XAsiatAlbums : HttpSource() {
 
-    override val baseUrl = "https://www.xasiat.com"
-    override val lang = "all"
-    override val name = "XAsiat Albums"
     override val supportsLatest = true
 
     // Mutable map seeded from initialCategories; new tags discovered while

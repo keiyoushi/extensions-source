@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "HentaiKisu"
-    className = "HentaiKisu"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://hentaikisu.com"
+    }
 }

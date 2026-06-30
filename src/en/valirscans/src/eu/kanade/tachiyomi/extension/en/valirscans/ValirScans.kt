@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -27,17 +28,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class ValirScans :
+@Source
+abstract class ValirScans :
     HttpSource(),
     ConfigurableSource {
-
-    override val versionId = 3
-
-    override val name = "Valir Scans"
-
-    override val baseUrl = "https://valirscans.org"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 

@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Team Shadowi"
-    className = "TeamShadowi"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://www.team-shadowi.com"
+    }
 }

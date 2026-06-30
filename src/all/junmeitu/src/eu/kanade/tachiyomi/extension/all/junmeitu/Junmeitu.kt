@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -18,13 +19,9 @@ import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Junmeitu : HttpSource() {
-    override val lang = "all"
-    override val name = "Junmeitu"
+@Source
+abstract class Junmeitu : HttpSource() {
     override val supportsLatest = true
-    override val id = 4721197766605490540
-
-    override val baseUrl = "https://meijuntu.com"
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
 

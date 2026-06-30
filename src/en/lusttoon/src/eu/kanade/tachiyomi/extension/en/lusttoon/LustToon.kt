@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -25,15 +26,10 @@ private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.RO
     timeZone = TimeZone.getTimeZone("UTC")
 }
 
-class LustToon : HttpSource() {
-
-    override val name = "LustToon"
-
-    override val baseUrl = "https://lustoon.com"
+@Source
+abstract class LustToon : HttpSource() {
 
     private val apiUrl = "https://back.lustoon.com"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 

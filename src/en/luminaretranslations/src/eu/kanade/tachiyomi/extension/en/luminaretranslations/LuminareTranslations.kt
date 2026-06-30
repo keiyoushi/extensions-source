@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
@@ -17,10 +18,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class LuminareTranslations : HttpSource() {
-    override val name = "Luminare Translations"
-    override val baseUrl = "https://luminaretranslations.com"
-    override val lang = "en"
+@Source
+abstract class LuminareTranslations : HttpSource() {
     override val supportsLatest = true
 
     private val apiUrl = "$baseUrl/wp-json/yarnovel/v1"

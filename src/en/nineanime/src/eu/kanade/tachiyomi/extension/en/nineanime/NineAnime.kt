@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -18,13 +19,8 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class NineAnime : HttpSource() {
-
-    override val name = "NineAnime"
-
-    override val baseUrl = "https://www.nineanime.com"
-
-    override val lang = "en"
+@Source
+abstract class NineAnime : HttpSource() {
 
     override val supportsLatest = true
 

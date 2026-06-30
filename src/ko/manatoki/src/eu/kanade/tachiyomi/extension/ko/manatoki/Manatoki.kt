@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.OkHttpClient
@@ -18,13 +19,10 @@ import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Manatoki : HttpSource() {
+@Source
+abstract class Manatoki : HttpSource() {
 
-    override val name = "Manatoki"
-    override val baseUrl = "https://manatoki552.net"
-    override val lang = "ko"
     override val supportsLatest = true
-    override val versionId = 2
 
     // Slow down requests to 2 per second to prevent 403s on image loading
     override val client: OkHttpClient = network.client.newBuilder()

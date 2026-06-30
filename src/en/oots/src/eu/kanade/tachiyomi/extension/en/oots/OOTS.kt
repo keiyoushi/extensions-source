@@ -7,17 +7,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class OOTS : HttpSource() {
-    override val name = "The Order Of The Stick (OOTS)"
-
-    override val baseUrl = "https://www.giantitp.com"
-
-    override val lang = "en"
+@Source
+abstract class OOTS : HttpSource() {
 
     override val supportsLatest = false
 

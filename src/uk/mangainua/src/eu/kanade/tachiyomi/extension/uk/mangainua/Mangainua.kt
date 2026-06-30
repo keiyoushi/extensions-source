@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
@@ -28,13 +29,11 @@ import java.util.Locale
 import kotlin.getValue
 import kotlin.time.Duration.Companion.seconds
 
-class Mangainua :
+@Source
+abstract class Mangainua :
     HttpSource(),
     ConfigurableSource {
     // Info
-    override val name = "MANGA/in/UA"
-    override val baseUrl = "https://manga.in.ua"
-    override val lang = "uk"
     override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()

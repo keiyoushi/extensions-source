@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -24,13 +25,8 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Calendar
 
-class NetTruyenS : HttpSource() {
-
-    override val name = "NetTruyenS (unoriginal)"
-
-    override val lang = "vi"
-
-    override val baseUrl = "https://nettruyen10s.com"
+@Source
+abstract class NetTruyenS : HttpSource() {
 
     override val supportsLatest = true
 

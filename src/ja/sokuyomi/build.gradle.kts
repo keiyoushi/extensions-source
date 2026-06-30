@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Sokuyomi"
-    className = "Sokuyomi"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://sokuyomi.jp"
+    }
 }

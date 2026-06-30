@@ -5,7 +5,45 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
 
-// Proto
+@Serializable
+class PopularResponse(
+    @ProtoNumber(2) val rankingLists: List<RankingLists>,
+)
+
+@Serializable
+class RankingLists(
+    @ProtoNumber(1) val tag: Tag,
+    @ProtoNumber(2) private val titles: Titles?, // ranking filters
+    @ProtoNumber(3) private val chapters: Chapters?, // ranking by likes
+) {
+    fun toSMangaList(): List<SManga> = when {
+        titles != null -> titles.titles.map { it.toSManga() }
+        chapters != null -> chapters.chaptersLikesRanking.map { it.title.toSManga() }.distinctBy { it.url }
+        else -> emptyList()
+    }
+}
+
+@Serializable
+class Tag(
+    @ProtoNumber(1) val id: String,
+    @ProtoNumber(2) val type: String,
+)
+
+@Serializable
+class Chapters(
+    @ProtoNumber(1) val chaptersLikesRanking: List<ChaptersLikesRanking>,
+)
+
+@Serializable
+class ChaptersLikesRanking(
+    @ProtoNumber(2) val title: CsrTitle,
+)
+
+@Serializable
+class Titles(
+    @ProtoNumber(1) val titles: List<CsrTitle>,
+)
+
 // Latest / Entries
 @Serializable
 class TitleListView(
@@ -24,7 +62,7 @@ class CsrTitle(
     @ProtoNumber(5) private val thumbnail: CsrImage?,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
-        url = "/title/$id"
+        url = id.toString()
         title = name
         thumbnail_url = thumbnail?.url
     }
@@ -51,9 +89,12 @@ class CsrChapter(
     @ProtoNumber(5) private val points: CsrPoints?,
     @ProtoNumber(9) private val startEpoch: Long,
 ) {
+    val isLocked: Boolean
+        get() = points?.point != null
+
     fun toSChapter(): SChapter = SChapter.create().apply {
-        url = "/chapter/$id"
-        val prefix = if (points?.point != null) "🔒 " else ""
+        url = id.toString()
+        val prefix = if (isLocked) "🔒 " else ""
         name = "$prefix${this@CsrChapter.name}"
         date_upload = startEpoch * 1000L
 
@@ -99,34 +140,4 @@ class CsrImage(
 @Serializable
 class ViewerImage(
     @ProtoNumber(1) val url: String,
-)
-
-// Json
-@Serializable
-class RscRankingContainer(
-    val rankingList: List<RscRankingCategory>,
-)
-
-@Serializable
-class RscRankingCategory(
-    val rankingTypeName: String,
-    val titles: List<RscRankingTitle>,
-)
-
-@Serializable
-class RscRankingTitle(
-    private val id: Int,
-    private val name: String,
-    private val thumbnail: RscRankingThumbnail,
-) {
-    fun toSManga() = SManga.create().apply {
-        url = "/title/$id"
-        title = name
-        thumbnail_url = thumbnail.src
-    }
-}
-
-@Serializable
-class RscRankingThumbnail(
-    val src: String,
 )

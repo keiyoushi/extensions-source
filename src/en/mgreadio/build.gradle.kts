@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Mgread.io"
-    className = "MgreadIo"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://mgread.io"
+    }
 }

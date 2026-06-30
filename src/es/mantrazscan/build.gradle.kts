@@ -4,8 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Manhwa Scan"
-    className = "ManhwaScan"
     versionCode = 56
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "es"
+        baseUrl = "https://manhwascanx.lat"
+        id = 7172992930543738693L
+    }
 }

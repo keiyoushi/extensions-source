@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
@@ -24,10 +25,8 @@ import java.util.GregorianCalendar
 import java.util.Locale
 import java.util.TimeZone
 
-class CiaoPlus : HttpSource() {
-    override val name = "Ciao Plus"
-    override val baseUrl = "https://ciao.shogakukan.co.jp"
-    override val lang = "ja"
+@Source
+abstract class CiaoPlus : HttpSource() {
     override val supportsLatest = true
 
     private val apiUrl = "https://api.ciao.shogakukan.co.jp"
