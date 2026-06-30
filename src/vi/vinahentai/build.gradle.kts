@@ -12,7 +12,7 @@ keiyoushi {
     source {
         lang = "vi"
         baseUrl("https://vinahentai.cloud") {
-            withCustom.set(true)
+            withCustom = true
         }
     }
 }

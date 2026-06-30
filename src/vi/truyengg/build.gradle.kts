@@ -12,7 +12,7 @@ keiyoushi {
     source {
         lang = "vi"
         baseUrl("https://foxtruyen2.com") {
-            withCustom.set(true)
+            withCustom = true
         }
         id = 1458993267006200127
     }

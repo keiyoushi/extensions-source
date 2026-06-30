@@ -12,7 +12,7 @@ keiyoushi {
     source {
         lang = "vi"
         baseUrl("https://tranh18.cc") {
-            withCustom.set(true)
+            withCustom = true
         }
     }
 }

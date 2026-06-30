@@ -12,7 +12,7 @@ keiyoushi {
     source {
         lang = "vi"
         baseUrl("https://goctruyentranhvui30.com") {
-            withCustom.set(true)
+            withCustom = true
         }
     }
 
