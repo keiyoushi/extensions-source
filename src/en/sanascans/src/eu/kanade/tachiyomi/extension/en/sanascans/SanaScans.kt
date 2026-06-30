@@ -1,14 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.sanascans
 
 import eu.kanade.tachiyomi.multisrc.iken.Iken
+import keiyoushi.annotation.Source
 
-class SanaScans :
-    Iken(
-        "Sana Scans",
-        "en",
-        "https://sanascans.com",
-        "https://api.sanascans.com",
-    ) {
+@Source
+abstract class SanaScans : Iken() {
     override val perPage = 30
     override val sortPagesByFilename = true
 }

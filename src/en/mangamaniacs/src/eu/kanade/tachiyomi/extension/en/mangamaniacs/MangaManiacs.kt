@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.mangamaniacs
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class MangaManiacs : Madara("MangaManiacs", "https://mangamaniacs.org", "en")
+@Source
+abstract class MangaManiacs : Madara()

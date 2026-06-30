@@ -1,14 +1,7 @@
 package eu.kanade.tachiyomi.extension.ar.azora
 
 import eu.kanade.tachiyomi.multisrc.iken.Iken
+import keiyoushi.annotation.Source
 
-class Azora :
-    Iken(
-        "Azora",
-        "ar",
-        "https://azoramoon.com",
-        "https://api.azoramoon.com",
-    ) {
-
-    override val versionId = 2
-}
+@Source
+abstract class Azora : Iken()

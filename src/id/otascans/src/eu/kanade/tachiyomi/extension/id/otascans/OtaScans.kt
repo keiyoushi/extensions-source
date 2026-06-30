@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.Request
 import okhttp3.Response
@@ -12,13 +13,9 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class OtaScans :
-    Madara(
-        "Ota Scans",
-        "https://yurilabs.my.id",
-        "id",
-        SimpleDateFormat("d MMMM yyyy", Locale.ENGLISH),
-    ) {
+@Source
+abstract class OtaScans : Madara() {
+    override val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale.ENGLISH)
 
     override val client = super.client.newBuilder()
         .rateLimit(2)

@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.ryumanga
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
+import keiyoushi.annotation.Source
 
-class Ryumanga : Keyoapp("Ryumanga", "https://ryumanga.org", "en")
+@Source
+abstract class Ryumanga : Keyoapp()

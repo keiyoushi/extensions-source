@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.doctruyen5s
 
 import eu.kanade.tachiyomi.multisrc.liliana.Liliana
+import keiyoushi.annotation.Source
 
-class DocTruyen5s : Liliana("DocTruyen5s", "https://manga.io.vn", "vi")
+@Source
+abstract class DocTruyen5s : Liliana()

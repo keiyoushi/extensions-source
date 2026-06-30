@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.tritiniascans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class TritiniaScans : Madara("TritiniaScans", "https://tritinia.org", "en")
+@Source
+abstract class TritiniaScans : Madara()

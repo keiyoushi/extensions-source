@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.novel24h
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class Novel24h : Madara("24HNovel", "https://24hnovel.com", "en") {
+@Source
+abstract class Novel24h : Madara() {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 }

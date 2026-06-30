@@ -2,14 +2,11 @@ package eu.kanade.tachiyomi.extension.en.lunatoons
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
 
-class LunaToons :
-    Keyoapp(
-        "Luna Toons",
-        "https://lunatoons.org",
-        "en",
-    ) {
+@Source
+abstract class LunaToons : Keyoapp() {
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
         document.select("div:has(h1) a[href*='?genre=']")
             .joinToString { it.attr("title") }

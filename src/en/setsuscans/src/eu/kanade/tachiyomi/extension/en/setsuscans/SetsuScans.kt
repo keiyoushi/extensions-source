@@ -1,16 +1,13 @@
 package eu.kanade.tachiyomi.extension.en.setsuscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.Interceptor
 import okhttp3.Response
 
-class SetsuScans :
-    Madara(
-        "Setsu Scans",
-        "https://setsuscans.com",
-        "en",
-    ) {
+@Source
+abstract class SetsuScans : Madara() {
     override val client = super.client.newBuilder()
         .addNetworkInterceptor { chain ->
             val request = chain.request()

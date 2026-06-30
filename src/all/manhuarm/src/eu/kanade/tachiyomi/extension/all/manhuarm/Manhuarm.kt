@@ -23,6 +23,7 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.lib.i18n.Intl.Companion.createDefaultMessageFileName
 import keiyoushi.network.rateLimit
@@ -46,14 +47,19 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 @RequiresApi(Build.VERSION_CODES.O)
-class Manhuarm(
-    private val language: Language,
-) : Madara(
-    "Manhuarm",
-    "https://manhuarmtl.com",
-    language.lang,
-),
+@Source
+abstract class Manhuarm :
+    Madara(),
     ConfigurableSource {
+
+    private val language: Language by lazy {
+        when (lang) {
+            "ar" -> Language(lang, disableFontSettings = true)
+            "fr", "id" -> Language(lang, supportNativeTranslation = true)
+            "pt-BR" -> Language(lang, "pt", supportNativeTranslation = true)
+            else -> Language(lang)
+        }
+    }
 
     override val useNewChapterEndpoint: Boolean = true
 

@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.extension.id.pixhentai
 
 import eu.kanade.tachiyomi.multisrc.oceanwp.OceanWP
+import keiyoushi.annotation.Source
 
-class PixHentai : OceanWP("Pix Hentai", "https://pixhentai.com", "id") {
+@Source
+abstract class PixHentai : OceanWP() {
     override val hasTagFilter = false
 }

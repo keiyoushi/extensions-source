@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.ar.manhatic
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class Manhatic : Madara("Manhatic", "https://manhatic.com", "ar")
+@Source
+abstract class Manhatic : Madara()

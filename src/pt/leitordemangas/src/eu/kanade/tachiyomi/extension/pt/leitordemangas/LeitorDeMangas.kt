@@ -2,18 +2,15 @@ package eu.kanade.tachiyomi.extension.pt.leitordemangas
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class LeitorDeMangas :
-    Madara(
-        "Leitor de Mangas",
-        "https://leitordemangas.com",
-        "pt-BR",
-        dateFormat = SimpleDateFormat("d 'de' MMMM 'de' yyyy", Locale("pt", "BR")),
-    ) {
+@Source
+abstract class LeitorDeMangas : Madara() {
+    override val dateFormat = SimpleDateFormat("d 'de' MMMM 'de' yyyy", Locale("pt", "BR"))
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 

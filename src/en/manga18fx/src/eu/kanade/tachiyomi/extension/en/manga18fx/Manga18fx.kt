@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -18,14 +19,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 // The site isn't actually based on Madara but reproduces it very well
-class Manga18fx :
-    Madara(
-        "Manga18fx",
-        "https://manga18fx.com",
-        "en",
-        SimpleDateFormat("dd MMM yy", Locale.ENGLISH),
-    ) {
-    override val id = 3157287889751723714
+@Source
+abstract class Manga18fx : Madara() {
+    override val dateFormat = SimpleDateFormat("dd MMM yy", Locale.ENGLISH)
 
     override val fetchGenres = false
     override val sendViewCount = false

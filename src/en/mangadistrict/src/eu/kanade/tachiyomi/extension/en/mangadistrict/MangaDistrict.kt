@@ -20,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.encodeToString
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -31,12 +32,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class MangaDistrict :
-    Madara(
-        "Manga District",
-        "https://mangadistrict.com",
-        "en",
-    ),
+@Source
+abstract class MangaDistrict :
+    Madara(),
     ConfigurableSource {
 
     override val mangaSubString = "series"

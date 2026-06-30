@@ -4,12 +4,15 @@ plugins {
 
 keiyoushi {
     name = "ManhuaBug"
-    className = "ManhuaBug"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://www.manhuabug.com"
+
+    source {
+        lang = "th"
+        baseUrl = "https://www.manhuabug.com"
+    }
 }
 
 dependencies {

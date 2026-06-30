@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.mahouirexnohentaikarte
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class Mahouirexnohentaikarte : Madara("Mahouirexnohentaikarte", "https://mahouirexnohentaikarte.com", "en")
+@Source
+abstract class Mahouirexnohentaikarte : Madara()

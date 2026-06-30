@@ -1,13 +1,15 @@
 package eu.kanade.tachiyomi.extension.en.rosesquadscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.Interceptor
 import okhttp3.Response
 import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
-class RoseSquadScans : Madara("Rose Squad Scans", "https://rosesquadscans.aishiteru.org", "en") {
+@Source
+abstract class RoseSquadScans : Madara() {
 
     override val client = super.client.newBuilder()
         .addInterceptor(::authWarningIntercept)

@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import okhttp3.FormBody
@@ -18,14 +19,12 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class MHScans :
-    Madara(
-        "MHScans",
-        "https://mhscans.com",
-        "es",
-        dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")),
-    ),
+@Source
+abstract class MHScans :
+    Madara(),
     ConfigurableSource {
+    override val dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es"))
+
     override val mangaSubString = "series"
 
     override val client: OkHttpClient = super.client.newBuilder()

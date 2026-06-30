@@ -1,8 +1,7 @@
 package eu.kanade.tachiyomi.extension.fr.bananascan
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class HarmonyScan : Madara("Harmony-Scan", "https://harmony-scan.fr", "fr") {
-    // formally Banana-Scan
-    override val id = 3121632933690925888
-}
+@Source
+abstract class HarmonyScan : Madara()

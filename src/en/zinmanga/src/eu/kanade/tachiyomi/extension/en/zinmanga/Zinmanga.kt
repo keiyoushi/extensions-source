@@ -4,11 +4,13 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.FormBody
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
-class Zinmanga : Madara("Zinmanga", "https://mangazin.org", "en") {
+@Source
+abstract class Zinmanga : Madara() {
 
     // The website does not flag the content consistently.
     override val filterNonMangaItems = false

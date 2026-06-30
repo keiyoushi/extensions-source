@@ -18,12 +18,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-abstract class ZManga(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US),
-) : HttpSource() {
+abstract class ZManga : HttpSource() {
+
+    protected open val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
 
     override val supportsLatest = true
 

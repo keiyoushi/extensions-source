@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Adonis Fansub"
-    className = "AdonisFansub"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://manga.adonisfansub.com"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://manga.adonisfansub.com"
+    }
 }

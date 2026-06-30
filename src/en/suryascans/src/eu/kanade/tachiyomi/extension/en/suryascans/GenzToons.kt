@@ -2,15 +2,12 @@ package eu.kanade.tachiyomi.extension.en.suryascans
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import kotlin.time.Duration.Companion.seconds
 
-class GenzToons :
-    Keyoapp(
-        "Genz Toons",
-        "https://genztoons.org",
-        "en",
-    ) {
+@Source
+abstract class GenzToons : Keyoapp() {
 
     override val client = super.client.newBuilder()
         .connectTimeout(90.seconds)

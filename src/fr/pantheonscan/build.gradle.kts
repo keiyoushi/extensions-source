@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Pantheon Scan"
-    className = "PantheonScan"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://pantheon-scan.com"
+
+    source {
+        lang = "fr"
+        baseUrl = "https://pantheon-scan.com"
+    }
 }

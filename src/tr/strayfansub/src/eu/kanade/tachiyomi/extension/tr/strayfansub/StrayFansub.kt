@@ -2,19 +2,16 @@ package eu.kanade.tachiyomi.extension.tr.strayfansub
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class StrayFansub :
-    Madara(
-        "Stray Fansub",
-        "https://strayfansub.net",
-        "tr",
-        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
-    ) {
+@Source
+abstract class StrayFansub : Madara() {
+    override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr"))
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never

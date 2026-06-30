@@ -1,12 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.apcomics
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class Apcomics :
-    Madara(
-        "AP Comics",
-        "https://apcomics.org",
-        "en",
-    ) {
+@Source
+abstract class Apcomics : Madara() {
     override val useNewChapterEndpoint: Boolean = true
 }

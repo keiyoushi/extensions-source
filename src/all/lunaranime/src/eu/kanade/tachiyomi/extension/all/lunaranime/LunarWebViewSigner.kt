@@ -7,6 +7,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import keiyoushi.utils.applicationContext
 import okhttp3.Interceptor
+import okhttp3.Response
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -41,21 +42,38 @@ class LunarWebViewSigner(
             return cachedWv!!
         }
 
+    private var needsCaptcha = false
+
     fun dpopInterceptor() = Interceptor { chain ->
-        var req = chain.request()
-        val url = req.url.toString()
+        fun proceed(url: String): Response {
+            var req = chain.request()
 
-        if (!url.contains(apiUrl)) return@Interceptor chain.proceed(req)
+            if (needsCaptcha) {
+                val dpop = signUrlWv(req.method, url.substringBefore('?')).orEmpty()
+                if (dpop.isNotEmpty()) {
+                    req = req.newBuilder().addHeader("dpop", dpop).build()
+                }
+            }
+            return chain.proceed(req)
+        }
 
-        val dpop = signUrlWv(req.method, url.substringBefore('?')) ?: ""
-        if (dpop.isNotEmpty()) req = req.newBuilder().addHeader("dpop", dpop).build()
+        val url = chain.request().url.toString()
 
-        val resp = chain.proceed(req)
+        if (!url.contains(apiUrl)) return@Interceptor chain.proceed(chain.request())
 
-        if (resp.code == 403 && resp.peekBody(1024).string().contains("validate", ignoreCase = true)) {
-            handler.post { destroyWv?.run() }
+        val resp = proceed(url)
+
+        if (
+            resp.code == 403 &&
+            resp.peekBody(1024).string().contains("validate", ignoreCase = true)
+        ) {
             resp.close()
 
+            if (!needsCaptcha) {
+                needsCaptcha = true
+                handler.post { destroyWv?.run() }
+                return@Interceptor proceed(url)
+            }
             throw IOException("Solve captcha in webview and retry")
         }
         resp
