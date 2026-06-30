@@ -12,5 +12,6 @@ keiyoushi {
     source {
         lang = "ar"
         baseUrl = "https://lavascans.com"
+        id = 3209001028102012989L
     }
 }
