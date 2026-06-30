@@ -16,11 +16,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 
-abstract class VerComics(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class VerComics : HttpSource() {
 
     override val supportsLatest: Boolean = false
 
