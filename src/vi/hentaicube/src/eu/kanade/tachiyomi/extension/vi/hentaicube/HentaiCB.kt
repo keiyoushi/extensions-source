@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.hentaicube
 
+import android.content.SharedPreferences
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -11,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -27,8 +29,40 @@ abstract class HentaiCB : Madara() {
     override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("vi"))
 
     override val client: OkHttpClient = network.client.newBuilder()
+        .followRedirects(false)
+        .addInterceptor { chain ->
+            val maxRedirects = 5
+            var request = chain.request()
+            var response = chain.proceed(request)
+            var redirectCount = 0
+
+            while (response.isRedirect && redirectCount < maxRedirects) {
+                val newUrl = response.header("Location") ?: break
+                val newUrlHttp = newUrl.toHttpUrl()
+                val redirectedDomain = newUrlHttp.run { "$scheme://$host" }
+                if (redirectedDomain != baseUrl) {
+                    synchronized(prefsLock) {
+                        preferences.edit().putString(BASE_URL_PREF, redirectedDomain).commit()
+                    }
+                }
+                response.close()
+                request = request.newBuilder()
+                    .url(newUrlHttp)
+                    .build()
+                response = chain.proceed(request)
+                redirectCount++
+            }
+            if (redirectCount >= maxRedirects) {
+                response.close()
+                throw java.io.IOException("Too many redirects: $maxRedirects")
+            }
+            response
+        }
         .rateLimit(3)
         .build()
+
+    private val preferences: SharedPreferences = getPreferences()
+    private val prefsLock = Any()
 
     override val filterNonMangaItems = false
 
@@ -206,4 +240,8 @@ abstract class HentaiCB : Madara() {
     }
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+
+    companion object {
+        private const val BASE_URL_PREF = "overrideBaseUrl"
+    }
 }
