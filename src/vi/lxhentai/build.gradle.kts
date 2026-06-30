@@ -9,6 +9,14 @@ keiyoushi {
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
+    source {
+        id = 6495630445796108150L
+        lang = "vi"
+        baseUrl("https://lxmanga.space") {
+            withCustom.set(true)
+        }
+    }
+
     deeplink {
         host("lxmanga.space")
         path("/truyen/..*")
