@@ -139,7 +139,7 @@ abstract class MangaDemon : HttpSource() {
     }
 
     private fun parseStatus(status: String?) = when {
-        status == null -> SManga.UNKNOWN
+        status == null || status.contains("Updating", ignoreCase = true) -> SManga.UNKNOWN
         status.contains("Ongoing", ignoreCase = true) -> SManga.ONGOING
         status.contains("Completed", ignoreCase = true) -> SManga.COMPLETED
         else -> SManga.UNKNOWN
