@@ -1,11 +1,7 @@
 package eu.kanade.tachiyomi.extension.zh.dumanwu
 
 import eu.kanade.tachiyomi.multisrc.mmlook.MMLook
+import keiyoushi.annotation.Source
 
-class Dumanwu :
-    MMLook(
-        "读漫屋",
-        "https://m.dumanwu1.com",
-        "https://www.dumanwu1.com",
-        useLegacyMangaUrl = false,
-    )
+@Source
+abstract class Dumanwu : MMLook()
