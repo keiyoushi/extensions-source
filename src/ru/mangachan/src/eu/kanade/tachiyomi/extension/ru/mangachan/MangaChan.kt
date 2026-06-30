@@ -3,13 +3,13 @@ package eu.kanade.tachiyomi.extension.ru.mangachan
 import eu.kanade.tachiyomi.multisrc.multichan.MultiChan
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
-class MangaChan : MultiChan("MangaChan", "https://im.manga-chan.me", "ru") {
-
-    override val id: Long = 7
+@Source
+abstract class MangaChan : MultiChan() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val pageNum = page.coerceAtLeast(1)

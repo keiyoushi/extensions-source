@@ -1,19 +1,15 @@
 package eu.kanade.tachiyomi.extension.ru.henchan
 
-import android.content.SharedPreferences
-import android.widget.Toast
-import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.multichan.MultiChan
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -26,16 +22,8 @@ import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class HenChan :
-    MultiChan("HenChan", "https://xxl.hentaichan.live", "ru"),
-    ConfigurableSource {
-
-    override val id = 5504588601186153612
-
-    private val preferences: SharedPreferences by getPreferencesLazy()
-
-    override val baseUrl: String
-        get() = preferences.getString(DOMAIN_TITLE, DOMAIN_DEFAULT)!!
+@Source
+abstract class HenChan : MultiChan() {
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga/newest?offset=${20 * (page - 1)}", headers)
 
@@ -235,27 +223,7 @@ class HenChan :
         GenreList(getGenreList()),
     )
 
-    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = DOMAIN_TITLE
-            this.title = DOMAIN_TITLE
-            summary = baseUrl
-            this.setDefaultValue(DOMAIN_DEFAULT)
-            dialogTitle = DOMAIN_TITLE
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(
-                    screen.context,
-                    "Для смены домена необходимо перезапустить приложение с полной остановкой.",
-                    Toast.LENGTH_LONG,
-                ).show()
-                true
-            }
-        }.let(screen::addPreference)
-    }
-
     companion object {
-        private const val DOMAIN_TITLE = "Домен"
-        private const val DOMAIN_DEFAULT = "https://xxl.hentaichan.live"
         private val manganewThumbsRegex = "(?<=/)manganew_thumbs\\w*?(?=/)".toRegex(RegexOption.IGNORE_CASE)
         private val chapterNumberRegex = "(глава\\s|часть\\s)([0-9]+\\.?[0-9]*)".toRegex(RegexOption.IGNORE_CASE)
         private val exhentaiDateFormat by lazy {
