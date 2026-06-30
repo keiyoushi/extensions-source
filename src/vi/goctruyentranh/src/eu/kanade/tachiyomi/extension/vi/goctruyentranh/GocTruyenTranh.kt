@@ -28,7 +28,7 @@ abstract class GocTruyenTranh : HttpSource() {
 
     override val supportsLatest = true
 
-    private val searchUrl by lazy { "$baseUrl/baseapi/comics/filterComic" }
+    private val searchUrl get() = "$baseUrl/baseapi/comics/filterComic"
 
     private val dateFormat = SimpleDateFormat("dd-MM-yyyy HH:mm:ss", Locale.US)
 

@@ -25,12 +25,10 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class TruyenQQ : HttpSource() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
+        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", "$baseUrl/")
