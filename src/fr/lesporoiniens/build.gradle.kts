@@ -7,7 +7,6 @@ keiyoushi {
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
-    theme = "scanr"
 
     source {
         lang = "fr"
