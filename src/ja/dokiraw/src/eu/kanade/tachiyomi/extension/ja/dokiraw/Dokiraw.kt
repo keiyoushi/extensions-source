@@ -17,7 +17,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.Calendar
 
-class Dokiraw : Liliana("Dokiraw", "https://dokiraw.cloud", "ja") {
+class Dokiraw : Liliana("Dokiraw", "https://dokiraw.win", "ja") {
 
     override val supportsLatest = false
 
