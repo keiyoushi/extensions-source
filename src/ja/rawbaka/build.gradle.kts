@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "RawBaka"
-    className = "RawBaka"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://rawbaka.com"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://rawbaka.com"
+    }
 }

@@ -26,11 +26,7 @@ import java.util.Locale
 @Serializable
 private data class AjaxResponse(val data: String? = null)
 
-abstract class ScanReader(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class ScanReader : HttpSource() {
 
     override val supportsLatest = true
 

@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Gremory Mangas"
-    className = "GremoryMangas"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://gremoryhistorias.org"
+
+    source {
+        lang = "es"
+        baseUrl = "https://gremoryhistorias.org"
+    }
 }

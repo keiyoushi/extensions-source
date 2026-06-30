@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.FormBody
@@ -14,13 +15,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class BegaTranslation :
-    Madara(
-        "Bega Translation",
-        "https://begatranslation.com",
-        "es",
-        SimpleDateFormat("dd MMMM, yyyy", Locale("es")),
-    ) {
+@Source
+abstract class BegaTranslation : Madara() {
+    override val dateFormat = SimpleDateFormat("dd MMMM, yyyy", Locale("es"))
     override val useNewChapterEndpoint = true
     override val mangaSubString = "series"
 

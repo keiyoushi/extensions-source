@@ -1,37 +1,15 @@
 package eu.kanade.tachiyomi.extension.es.nartag
 
-import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-
-@Serializable
-class ChapterList(
-    val chapters: List<Chapter>,
-    val page: Int,
-    val pages: Int,
-)
-
-@Serializable
-class Chapter(
-    val number: Float,
-    val label: String,
-    val relDate: String,
-) {
-    fun toSChapter(slug: String): SChapter = SChapter.create().apply {
-        url = "/comics/$slug/cap/$number"
-        name = label
-        date_upload = parseDate(relDate) ?: 0L
-    }
-}
 
 private val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
 
 private val nonDigit = Regex("\\D+")
 
-private fun parseDate(dateStr: String): Long? {
+fun parseDate(dateStr: String): Long? {
     val cleaned = dateStr.lowercase()
         .replace('í', 'i').replace('á', 'a')
         .replace('é', 'e').replace('ó', 'o')

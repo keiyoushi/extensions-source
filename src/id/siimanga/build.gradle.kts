@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Siikomik"
-    className = "Siikomik"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://siikomik.net"
+
+    source {
+        lang = "id"
+        baseUrl = "https://siikomik.net"
+        versionId = 3
+    }
 }

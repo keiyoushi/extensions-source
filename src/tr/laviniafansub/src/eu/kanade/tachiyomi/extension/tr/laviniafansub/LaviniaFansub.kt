@@ -2,17 +2,14 @@ package eu.kanade.tachiyomi.extension.tr.laviniafansub
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class LaviniaFansub :
-    Madara(
-        "Lavinia Fansub",
-        "https://laviniafansub.shop",
-        "tr",
-        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-    ) {
+@Source
+abstract class LaviniaFansub : Madara() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
     override val useNewChapterEndpoint = true

@@ -4,10 +4,15 @@ plugins {
 
 keiyoushi {
     name = "Usagi"
-    className = "Usagi"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "grouple"
-    baseUrl = "https://web.usagi.one"
+
+    source {
+        baseUrl("https://web.usagi.one") {
+            withCustom = true
+        }
+        lang = "ru"
+    }
 }

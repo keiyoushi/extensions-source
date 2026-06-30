@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -14,19 +15,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.minutes
 
-class Kaguya :
-    Madara(
-        "Kaguya",
-        "https://v1.kaguya.pro",
-        "id",
-        dateFormat = SimpleDateFormat("d MMMM", Locale("en")),
-    ) {
+@Source
+abstract class Kaguya : Madara() {
+    override val dateFormat = SimpleDateFormat("d MMMM", Locale("en"))
 
     override val client: OkHttpClient = super.client.newBuilder()
         .readTimeout(1.minutes)
         .build()
-
-    override val id = 1557304490417397104
 
     override val mangaSubString = "all-series"
 

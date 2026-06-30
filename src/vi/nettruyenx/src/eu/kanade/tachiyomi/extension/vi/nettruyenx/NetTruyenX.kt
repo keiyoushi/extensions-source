@@ -3,18 +3,18 @@ package eu.kanade.tachiyomi.extension.vi.nettruyenx
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class NetTruyenX :
-    WPComics(
-        "NetTruyenX (unoriginal)",
-        "https://nettruyenx.net",
-        "vi",
-        dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
-        gmtOffset = null,
-    ) {
+@Source
+abstract class NetTruyenX : WPComics() {
+
+    override val dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault())
+
+    override val gmtOffset = null
+
     override val popularPath = "truyen-tranh-hot"
 
     // Details

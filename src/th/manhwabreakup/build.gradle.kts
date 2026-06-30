@@ -4,12 +4,15 @@ plugins {
 
 keiyoushi {
     name = "ManhwaBreakup"
-    className = "ManhwaBreakup"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://www.manhwabreakup.com"
+
+    source {
+        lang = "th"
+        baseUrl = "https://www.manhwabreakup.com"
+    }
 }
 
 dependencies {

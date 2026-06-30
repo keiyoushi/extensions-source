@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.kewnscans
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
+import keiyoushi.annotation.Source
 
-class KewnScans : Keyoapp("Kewn Scans", "https://kewnscans.org", "en")
+@Source
+abstract class KewnScans : Keyoapp()

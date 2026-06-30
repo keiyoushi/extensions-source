@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Hanami Heaven"
-    className = "HanamiHeaven"
     versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://hanamiheaven.org"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://hanamiheaven.org"
+        id = 987786689720213769L
+    }
 }

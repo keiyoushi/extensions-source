@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.manhwajoy
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class Manhwajoy : Madara("Manhwajoy", "https://manhwajoy.com", "en") {
+@Source
+abstract class Manhwajoy : Madara() {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 }

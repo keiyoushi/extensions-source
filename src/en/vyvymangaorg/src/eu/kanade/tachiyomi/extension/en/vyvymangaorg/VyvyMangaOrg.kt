@@ -1,12 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.vyvymangaorg
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class VyvyMangaOrg :
-    Madara(
-        name = "VyvyManga.org",
-        baseUrl = "https://vyvymanga.org",
-        lang = "en",
-    ) {
+@Source
+abstract class VyvyMangaOrg : Madara() {
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 }

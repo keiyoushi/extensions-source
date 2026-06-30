@@ -2,10 +2,9 @@ package eu.kanade.tachiyomi.extension.all.manhwa18cc
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.Source
-import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -13,40 +12,26 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Manhwa18CcFactory : SourceFactory {
-    override fun createSources(): List<Source> = listOf(
-        Manhwa18CcEN(),
-        Manhwa18CcKO(),
-        Manhwa18CcALL(),
-    )
-}
-
-class Manhwa18CcALL : Manhwa18Cc("Manhwa18.cc", "https://manhwa18.cc", "all")
-
-class Manhwa18CcEN : Manhwa18Cc("Manhwa18.cc", "https://manhwa18.cc", "en") {
-    override fun popularMangaSelector() = "div.manga-item:not(:has(h3 a[title$='Raw']))"
-}
-
-class Manhwa18CcKO : Manhwa18Cc("Manhwa18.cc", "https://manhwa18.cc", "ko") {
-    override fun popularMangaSelector() = "div.manga-item:has(h3 a[title$='Raw'])"
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/raw/$page", headers)
-}
-
-abstract class Manhwa18Cc(
-    override val name: String,
-    override val baseUrl: String,
-    lang: String,
-) : Madara(name, baseUrl, lang, SimpleDateFormat("dd MMM yyyy", Locale.US)) {
+@Source
+abstract class Manhwa18Cc : Madara() {
+    override val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.US)
 
     override val fetchGenres = false
 
-    override fun popularMangaSelector() = "div.manga-item"
+    override fun popularMangaSelector() = when (lang) {
+        "en" -> "div.manga-item:not(:has(h3 a[title$='Raw']))"
+        "ko" -> "div.manga-item:has(h3 a[title$='Raw'])"
+        else -> "div.manga-item"
+    }
 
     override val popularMangaUrlSelector = "div.manga-item div.data a"
 
     override fun popularMangaNextPageSelector() = "ul.pagination li.next a"
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/webtoons/$page?orderby=trending", headers)
+    override fun popularMangaRequest(page: Int): Request = when (lang) {
+        "ko" -> GET("$baseUrl/raw/$page", headers)
+        else -> GET("$baseUrl/webtoons/$page?orderby=trending", headers)
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/webtoons/$page", headers)
 
@@ -57,7 +42,7 @@ abstract class Manhwa18Cc(
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (!query.isBlank()) {
+        if (query.isNotBlank()) {
             val url = baseUrl.toHttpUrl().newBuilder()
                 .addPathSegment("search")
                 .addQueryParameter("q", query)

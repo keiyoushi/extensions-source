@@ -24,12 +24,10 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-abstract class Liliana(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String,
-    private val usesPostSearch: Boolean = false,
-) : HttpSource() {
+abstract class Liliana : HttpSource() {
+
+    protected open val usesPostSearch: Boolean = false
+
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()

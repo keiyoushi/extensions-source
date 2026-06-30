@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Mangas Brasuka"
-    className = "MangasBrasuka"
     versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://mangasbrasuka.com.br"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://mangasbrasuka.com.br"
+    }
 }

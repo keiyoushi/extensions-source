@@ -6,8 +6,10 @@ import eu.kanade.tachiyomi.multisrc.pam.SortFilter
 import eu.kanade.tachiyomi.multisrc.pam.TriStateGroupFilter
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 
-class SoftEpsilonScan : Pam("Soft Epsilon Scan", "https://epsilonsoft.to", "fr") {
+@Source
+abstract class SoftEpsilonScan : Pam() {
 
     override val prefPremiumTitle = "Masquer les chapitres Premium"
 

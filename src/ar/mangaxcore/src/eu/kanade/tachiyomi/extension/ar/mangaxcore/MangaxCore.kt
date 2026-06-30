@@ -1,14 +1,11 @@
 package eu.kanade.tachiyomi.extension.ar.mangaxcore
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import kotlin.time.Duration.Companion.minutes
 
-class MangaxCore :
-    Madara(
-        "Mangax Core",
-        "https://mangaxcore.xyz",
-        "ar",
-    ) {
+@Source
+abstract class MangaxCore : Madara() {
     override val client = super.client.newBuilder()
         .connectTimeout(1.minutes)
         .readTimeout(1.minutes)

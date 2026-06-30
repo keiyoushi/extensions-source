@@ -31,11 +31,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.regex.Pattern
 
-abstract class GroupLe(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String,
-) : HttpSource(),
+abstract class GroupLe :
+    HttpSource(),
     ConfigurableSource {
     private val dateFormat = SimpleDateFormat("dd.MM.yy", Locale.ROOT)
 

@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.hentaisco
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class HentaiSco : Madara("HentaiSco", "https://hentaisco.cc", "en") {
+@Source
+abstract class HentaiSco : Madara() {
     override val mangaSubString = "hentai"
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = false

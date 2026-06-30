@@ -4,11 +4,13 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
-class KissmangaIn : Madara("Kissmanga.in", "https://kissmanga.in", "en") {
+@Source
+abstract class KissmangaIn : Madara() {
     override val mangaSubString = "kissmanga"
 
     override val useNewChapterEndpoint = true

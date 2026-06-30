@@ -4,12 +4,17 @@ plugins {
 
 keiyoushi {
     name = "Manhuarm"
-    className = "Factory"
     versionCode = 25
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://manhuarmtl.com"
+
+    listOf("ar", "en", "es", "fr", "id", "it", "pt-BR").forEach {
+        source {
+            lang = it
+            baseUrl = "https://manhuarmtl.com"
+        }
+    }
 }
 
 dependencies {

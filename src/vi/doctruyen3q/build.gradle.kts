@@ -4,10 +4,15 @@ plugins {
 
 keiyoushi {
     name = "DocTruyen3Q"
-    className = "DocTruyen3Q"
     versionCode = 27
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "wpcomics"
-    baseUrl = "https://doctruyen3qhub2.com"
+
+    source {
+        lang = "vi"
+        baseUrl("https://doctruyen3qhub2.com") {
+            withCustom = true
+        }
+    }
 }
