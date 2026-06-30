@@ -12,15 +12,22 @@ import eu.kanade.tachiyomi.multisrc.mangataro.YearFilter
 import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 
-class MangaTaroFactory : SourceFactory {
+@Source
+abstract class MangaTaroFactory : SourceFactory {
     override fun createSources() = listOf(
         MangaTaroSource("en"),
         MangaTaroGroupSource("pt-BR", groups = listOf(9)),
     )
 }
 
-class MangaTaroSource(lang: String) : MangaTaro("MangaTaro", "https://mangataro.org", lang) {
+class MangaTaroSource(override val lang: String) : MangaTaro() {
+
+    override val name = "MangaTaro"
+
+    override val baseUrl = "https://mangataro.org"
+
     override fun getFilterList() = FilterList(
         SearchWithFilters(),
         Filter.Header("If unchecked, all filters will be ignored with search query"),
@@ -35,7 +42,11 @@ class MangaTaroSource(lang: String) : MangaTaro("MangaTaro", "https://mangataro.
     )
 }
 
-class MangaTaroGroupSource(lang: String, groups: List<Long>) : MangaTaroGroup("MangaTaro", "https://mangataro.org", lang, groups)
+class MangaTaroGroupSource(override val lang: String, override val groups: List<Long>) : MangaTaroGroup() {
+    override val name = "MangaTaro"
+
+    override val baseUrl = "https://mangataro.org"
+}
 
 private val mangaTaroTags = listOf(
     "4-Koma" to 2094,

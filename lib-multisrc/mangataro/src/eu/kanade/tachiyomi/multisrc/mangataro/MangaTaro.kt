@@ -19,7 +19,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import okhttp3.Callback
@@ -398,14 +398,15 @@ abstract class MangaTaro : HttpSource() {
 }
 
 // Map groups by language
-abstract class MangaTaroGroup : MangaTaro(),
+abstract class MangaTaroGroup :
+    MangaTaro(),
     ConfigurableSource {
 
     abstract val groups: List<Long>
 
     override val supportsLatest: Boolean = false
 
-    private val preferences: SharedPreferences = getPreferences()
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val libraryCached: MutableList<SManga> = mutableListOf()
 

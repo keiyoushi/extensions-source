@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "MangaTaro"
-    className = "MangaTaroFactory"
     versionCode = 10
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangataro"
-    baseUrl = "https://mangataro.org"
+
+    source {
+        lang = "all"
+        baseUrl = "https://mangataro.org"
+        skipCodeGen = true
+    }
 }
