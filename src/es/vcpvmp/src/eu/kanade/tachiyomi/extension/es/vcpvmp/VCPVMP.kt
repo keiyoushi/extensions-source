@@ -1,22 +1,24 @@
 package eu.kanade.tachiyomi.extension.es.vcpvmp
 
 import eu.kanade.tachiyomi.multisrc.vercomics.VerComics
-import eu.kanade.tachiyomi.source.Source
-import eu.kanade.tachiyomi.source.SourceFactory
+import keiyoushi.annotation.Source
 
-class VCPVMPFactory : SourceFactory {
-    override fun createSources(): List<Source> = listOf(
-        VCP(),
-        VMP(),
-    )
-}
+@Source
+abstract class VCPVMP : VerComics() {
+    override val urlSuffix = when (name) {
+        "VCP" -> "comics-porno"
+        "VMP" -> "xxx"
+        else -> super.urlSuffix
+    }
 
-class VCP : VerComics("VCP", "https://vercomicsporno.com", "es") {
+    override val genreSuffix = when (name) {
+        "VCP" -> "etiquetas"
+        "VMP" -> "tag"
+        else -> super.genreSuffix
+    }
 
-    override val urlSuffix = "comics-porno"
-    override val genreSuffix = "etiquetas"
-    override var genres =
-        arrayOf(
+    override var genres = when (name) {
+        "VCP" -> arrayOf(
             Pair("Ver todos", ""),
             Pair("Anal", "anal"),
             Pair("Big Ass", "big-ass"),
@@ -39,15 +41,7 @@ class VCP : VerComics("VCP", "https://vercomicsporno.com", "es") {
             Pair("Sole Male", "sole-male"),
             Pair("Tetonas", "tetonas"),
         )
-}
-
-class VMP : VerComics("VMP", "https://vermangasporno.com", "es") {
-
-    override val urlSuffix = "xxx"
-    override val genreSuffix = "tag"
-
-    override var genres =
-        arrayOf(
+        "VMP" -> arrayOf(
             Pair("Ver todos", ""),
             Pair("Ahegao", "ahegao"),
             Pair("Anal", "anal"),
@@ -70,4 +64,6 @@ class VMP : VerComics("VMP", "https://vermangasporno.com", "es") {
             Pair("Student", "student"),
             Pair("Unusual Pupils", "unusual-pupils"),
         )
+        else -> super.genres
+    }
 }
