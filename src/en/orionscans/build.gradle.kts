@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Orion Scans"
-    className = "OrionScans"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "iken"
-    baseUrl = "https://orion-scans.com"
+
+    source {
+        baseUrl = "https://orion-scans.com"
+        lang = "en"
+    }
 }

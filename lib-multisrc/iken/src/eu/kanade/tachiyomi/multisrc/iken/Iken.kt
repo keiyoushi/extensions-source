@@ -30,13 +30,12 @@ import okhttp3.Response
 import rx.Observable
 import java.util.concurrent.ConcurrentHashMap
 
-abstract class Iken(
-    override val name: String,
-    override val lang: String,
-    override val baseUrl: String,
-    val apiUrl: String = baseUrl,
-) : HttpSource(),
+abstract class Iken :
+    HttpSource(),
     ConfigurableSource {
+
+    protected open val apiUrl: String
+        get() = baseUrl.replace("https://", "https://api.")
 
     override val supportsLatest = true
 
