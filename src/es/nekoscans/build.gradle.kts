@@ -4,10 +4,15 @@ plugins {
 
 keiyoushi {
     name = "NekoScans"
-    className = "NekoScans"
     versionCode = 8
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://nekoproject.org"
+
+    source {
+        lang = "es"
+        baseUrl = "https://nekoproject.org"
+        // Theme changed from ZeistManga to MangaThemesia
+        versionId = 3
+    }
 }

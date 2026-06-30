@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
@@ -19,14 +20,11 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaStop :
-    MangaThemesia(
-        "Manga Stop",
-        "https://mangastop.net",
-        "pt-BR",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
-    ),
+@Source
+abstract class MangaStop :
+    MangaThemesia(),
     ConfigurableSource {
+    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR"))
 
     override val client = network.client.newBuilder()
         .addInterceptor { chain ->

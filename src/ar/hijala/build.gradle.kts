@@ -4,10 +4,15 @@ plugins {
 
 keiyoushi {
     name = "Hijala"
-    className = "Hijala"
     versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://hijala.com"
+
+    source {
+        lang = "ar"
+        baseUrl = "https://hijala.com"
+        // Site moved from ZeistManga to MangaThemesia again
+        versionId = 2
+    }
 }

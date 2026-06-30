@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "ReaperTrans"
-    className = "ReaperTrans"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://reapertrans.com"
+
+    source {
+        lang = "th"
+        baseUrl = "https://reapertrans.com"
+    }
 }

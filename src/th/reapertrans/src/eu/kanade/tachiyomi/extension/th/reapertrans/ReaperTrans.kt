@@ -1,10 +1,7 @@
 package eu.kanade.tachiyomi.extension.th.reapertrans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class ReaperTrans :
-    MangaThemesia(
-        "ReaperTrans",
-        "https://reapertrans.com",
-        "th",
-    )
+@Source
+abstract class ReaperTrans : MangaThemesia()

@@ -3,16 +3,13 @@ package eu.kanade.tachiyomi.extension.id.komikindo
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.nodes.Document
 
-class Komikindo :
-    MangaThemesia(
-        "Komikindo",
-        "https://komikindo.bid",
-        "id",
-    ) {
+@Source
+abstract class Komikindo : MangaThemesia() {
     // Some covers fail to load with no Accept header + no resize parameter.
     // Hence the workarounds:
 

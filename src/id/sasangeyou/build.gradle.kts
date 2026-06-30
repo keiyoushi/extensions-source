@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Sasangeyou"
-    className = "Sasangeyou"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://sasangeyou.net"
+
+    source {
+        lang = "id"
+        baseUrl = "https://sasangeyou.net"
+    }
 }

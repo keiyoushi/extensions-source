@@ -4,12 +4,17 @@ plugins {
 
 keiyoushi {
     name = "Celestial Moon"
-    className = "CelestialMoon"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://celestialmoonscan.es"
+
+    source {
+        lang = "es"
+        baseUrl = "https://celestialmoonscan.es"
+        // ZeistManga -> MangaThemesia
+        versionId = 2
+    }
 }
 
 dependencies {

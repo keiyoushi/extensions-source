@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Thunder Scans"
-    className = "ThunderScansFactory"
-    versionCode = 13
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://en-thunderscans.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://en-thunderscans.com"
+    }
 }

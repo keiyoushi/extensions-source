@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.rateLimit
@@ -21,15 +22,12 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class SushiScan :
-    MangaThemesia(
-        "Sushi-Scan",
-        "https://sushiscan.net",
-        "fr",
-        mangaUrlDirectory = "/catalogue",
-        dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale.FRENCH),
-    ),
+@Source
+abstract class SushiScan :
+    MangaThemesia(),
     ConfigurableSource {
+    override val mangaUrlDirectory = "/catalogue"
+    override val dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale.FRENCH)
 
     private val preferences = getPreferences()
 

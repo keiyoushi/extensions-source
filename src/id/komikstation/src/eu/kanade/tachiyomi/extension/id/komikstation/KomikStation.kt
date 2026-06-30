@@ -1,13 +1,12 @@
 package eu.kanade.tachiyomi.extension.id.komikstation
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 
-class KomikStation : MangaThemesia("Komik Station", "https://komikstation.org", "id") {
-    // Formerly "Komik Station (WP Manga Stream)"
-    override val id = 6148605743576635261
-
+@Source
+abstract class KomikStation : MangaThemesia() {
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(4)
         .build()

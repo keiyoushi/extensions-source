@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Tanuki-Manga"
-    className = "TanukiManga"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://www.tanuki-manga.net"
+
+    source {
+        lang = "th"
+        baseUrl = "https://www.tanuki-manga.net"
+    }
 }

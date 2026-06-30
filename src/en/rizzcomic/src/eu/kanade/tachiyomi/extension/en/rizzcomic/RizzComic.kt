@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -22,14 +23,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class RizzComic :
-    MangaThemesiaAlt(
-        "Rizz Comic",
-        "https://rizzfables.com",
-        "en",
-        mangaUrlDirectory = "/series",
-        dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH),
-    ) {
+@Source
+abstract class RizzComic : MangaThemesiaAlt() {
+    override val mangaUrlDirectory = "/series"
+    override val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH)
 
     override val client = super.client.newBuilder()
         .addInterceptor { chain ->
@@ -53,8 +50,6 @@ class RizzComic :
             .set("X-API-Request", "1")
             .build()
     }
-
-    override val versionId = 4
 
     override val slugRegex = Regex("""^(r\d+-)""")
 

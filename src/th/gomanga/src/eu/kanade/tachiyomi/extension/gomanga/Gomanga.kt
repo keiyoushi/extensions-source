@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.th.gomanga
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class Gomanga : MangaThemesia("Go Manga", "https://www.go-manga.com", "th")
+@Source
+abstract class Gomanga : MangaThemesia()

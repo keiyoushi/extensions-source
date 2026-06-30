@@ -4,13 +4,13 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
-class Ngomik : MangaThemesia("Ngomik (unoriginal)", "https://02.ngomik.cc", "id", "/manga") {
-
-    override val id = 5360960267485387879
+@Source
+abstract class Ngomik : MangaThemesia() {
 
     private val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.163 Safari/537.36"
 

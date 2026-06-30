@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.pt.pointzerotoons
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
@@ -11,13 +12,9 @@ import java.lang.IllegalArgumentException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class PointZeroToons :
-    MangaThemesia(
-        "Point Zero Toons",
-        "https://kitsuneyako.com",
-        "pt-BR",
-        dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.ROOT),
-    ) {
+@Source
+abstract class PointZeroToons : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.ROOT)
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()

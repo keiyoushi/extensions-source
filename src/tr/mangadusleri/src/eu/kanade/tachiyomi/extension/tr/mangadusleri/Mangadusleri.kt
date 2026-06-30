@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.tr.mangadusleri
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class Mangadusleri : MangaThemesia("Mangadusleri", "https://mangadusleri.lol", "tr")
+@Source
+abstract class Mangadusleri : MangaThemesia()

@@ -1,13 +1,11 @@
 package eu.kanade.tachiyomi.extension.id.otsugami
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Otsugami :
-    MangaThemesia(
-        "Otsugami ID",
-        "https://otsugami.id",
-        "id",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
-    )
+@Source
+abstract class Otsugami : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
+}

@@ -3,19 +3,16 @@ package eu.kanade.tachiyomi.extension.id.komikhwa
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Komikhwa :
-    MangaThemesia(
-        "Komikhwa",
-        "https://komikhwa.com",
-        "id",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
-    ) {
+@Source
+abstract class Komikhwa : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id"))
     override fun pageListParse(document: Document): List<Page> {
         val script = document.selectFirst("script[src^=data:text/javascript;base64,dHNfcmVhZGVyLnJ1bih7]")
             ?: return super.pageListParse(document)

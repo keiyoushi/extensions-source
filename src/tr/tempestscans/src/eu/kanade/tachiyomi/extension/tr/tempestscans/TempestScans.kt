@@ -1,10 +1,7 @@
 package eu.kanade.tachiyomi.extension.tr.tempestscans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class TempestScans :
-    MangaThemesia(
-        "Tempest Scans",
-        "https://tempestmangas.com",
-        "tr",
-    )
+@Source
+abstract class TempestScans : MangaThemesia()
