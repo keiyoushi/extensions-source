@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -23,20 +24,14 @@ import okhttp3.Response
 import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
-class MangaLivre :
+@Source
+abstract class MangaLivre :
     HttpSource(),
     ConfigurableSource {
+
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
-    override val name: String = "Manga Livre"
-
-    override val baseUrl: String = "https://toonlivre.net"
-
-    override val lang: String = "pt-BR"
-
     override val supportsLatest: Boolean = true
-
-    override val versionId: Int = 2
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::clientHeaderInterceptor)
@@ -251,12 +246,12 @@ class MangaLivre :
      */
     private fun scrapeCandidates(): List<ClientToken> = try {
         val html = scrapeClient.newCall(GET("$baseUrl/", headers)).execute()
-            .use { if (it.isSuccessful) it.body?.string().orEmpty() else "" }
+            .use { if (it.isSuccessful) it.body.string() else "" }
         val assets = ASSET_REGEX.findAll(html).map { it.value }.distinct().toList()
         val js = buildString {
             assets.take(MAX_ASSETS).forEach { path ->
                 scrapeClient.newCall(GET("$baseUrl$path", headers)).execute()
-                    .use { if (it.isSuccessful) append(it.body?.string().orEmpty()) }
+                    .use { if (it.isSuccessful) append(it.body.string()) }
             }
         }
         extractCandidates(js)
