@@ -12,7 +12,7 @@ keiyoushi {
     source {
         lang = "vi"
         baseUrl("https://goctruyentranh.com") {
-            withCustom.set(true)
+            withCustom = true
         }
     }
 }
