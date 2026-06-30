@@ -1,9 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.risentoons
 
 import eu.kanade.tachiyomi.multisrc.stalkercms.StalkerCms
+import keiyoushi.annotation.Source
 
-class Risentoons :
-    StalkerCms(
-        "Risentoons",
-        "https://risentoons.xyz",
-    )
+@Source
+abstract class Risentoons : StalkerCms()
