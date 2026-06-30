@@ -2,9 +2,11 @@ package eu.kanade.tachiyomi.extension.all.hniscantrad
 
 import eu.kanade.tachiyomi.multisrc.pizzareader.PizzaReader
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import kotlinx.serialization.json.Json
 
-class HNIScantrad : PizzaReader("HNI-Scantrad", "https://hni-scantrad.net", "all") {
+@Source
+abstract class HNIScantrad : PizzaReader() {
     override val json = Json {
         ignoreUnknownKeys = true
         coerceInputValues = true
