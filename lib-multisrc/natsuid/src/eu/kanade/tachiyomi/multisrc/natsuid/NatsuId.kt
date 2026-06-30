@@ -39,12 +39,9 @@ import java.util.Locale
 import kotlin.random.Random
 
 // https://themesinfo.com/natsu_id-theme-wordpress-c8x1c Wordpress Theme Author "Dzul Qurnain"
-abstract class NatsuId(
-    override val name: String,
-    override val lang: String,
-    override val baseUrl: String,
-    val dateFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US),
-) : HttpSource() {
+abstract class NatsuId : HttpSource() {
+
+    protected open val dateFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
 
     override val supportsLatest: Boolean = true
 

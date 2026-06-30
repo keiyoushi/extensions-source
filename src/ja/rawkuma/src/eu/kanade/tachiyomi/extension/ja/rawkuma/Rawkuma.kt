@@ -1,12 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.rawkuma
 
 import eu.kanade.tachiyomi.multisrc.natsuid.NatsuId
+import keiyoushi.annotation.Source
 
-class Rawkuma :
-    NatsuId(
-        "Rawkuma",
-        "ja",
-        "https://rawkuma.net",
-    ) {
-    override val versionId = 2
-}
+@Source
+abstract class Rawkuma : NatsuId()
