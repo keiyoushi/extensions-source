@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.toJsonRequestBody
@@ -17,17 +18,10 @@ import okhttp3.Request
 import okhttp3.Response
 import kotlin.time.Duration.Companion.seconds
 
-class ArgosComics : HttpSource() {
-
-    override val name: String = "Argos Comics"
-
-    override val baseUrl: String = "https://aniargos.com"
-
-    override val lang: String = "pt-BR"
+@Source
+abstract class ArgosComics : HttpSource() {
 
     override val supportsLatest: Boolean = true
-
-    override val versionId: Int = 2
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3, 2.seconds)

@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.Cookie
@@ -26,15 +27,10 @@ import java.util.Calendar
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class MangaFox : HttpSource() {
-
-    override val name: String = "MangaFox"
-
-    override val baseUrl: String = "https://fanfox.net"
+@Source
+abstract class MangaFox : HttpSource() {
 
     private val mobileUrl: String = "https://m.fanfox.net"
-
-    override val lang: String = "en"
 
     override val supportsLatest: Boolean = true
 

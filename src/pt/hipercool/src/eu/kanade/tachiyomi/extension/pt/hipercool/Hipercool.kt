@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.get
 import keiyoushi.utils.parseAs
@@ -26,20 +27,13 @@ import okhttp3.Response
 import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
-class Hipercool : HttpSource() {
-
-    override val name: String = "Hipercool"
-
-    override val baseUrl: String = "https://lerhentais.com"
-
-    override val lang: String = "pt-BR"
+@Source
+abstract class Hipercool : HttpSource() {
 
     override val supportsLatest: Boolean = true
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("Referer", "$baseUrl/")
-
-    override val id: Long = 2379514871370953957
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3, 1.seconds)

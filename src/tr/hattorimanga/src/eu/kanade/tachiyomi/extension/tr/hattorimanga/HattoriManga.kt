@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -26,16 +27,10 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class HattoriManga : HttpSource() {
-    override val name: String = "Hattori Manga"
-
-    override val baseUrl: String = "https://hattorimanga.net"
-
-    override val lang: String = "tr"
+@Source
+abstract class HattoriManga : HttpSource() {
 
     override val supportsLatest: Boolean = true
-
-    override val versionId: Int = 2
 
     private val json: Json by injectLazy()
 
