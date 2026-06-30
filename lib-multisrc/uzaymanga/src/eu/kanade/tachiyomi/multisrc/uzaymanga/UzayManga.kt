@@ -17,13 +17,9 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-abstract class UzayManga(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-    override val versionId: Int,
-    private val cdnUrl: String? = null,
-) : HttpSource() {
+abstract class UzayManga : HttpSource() {
+
+    protected open val cdnUrl: String? = null
 
     override val supportsLatest = true
 
