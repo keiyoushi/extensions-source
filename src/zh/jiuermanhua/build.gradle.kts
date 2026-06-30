@@ -10,7 +10,7 @@ keiyoushi {
     theme = "sinmh"
 
     source {
-	    name = "92漫画"
+        name = "92漫画"
         lang = "zh"
         baseUrl = "http://www.92mh.com"
     }
