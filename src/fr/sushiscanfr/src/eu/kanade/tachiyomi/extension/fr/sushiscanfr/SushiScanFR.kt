@@ -2,10 +2,10 @@ package eu.kanade.tachiyomi.extension.fr.sushiscanfr
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
-import keiyoushi.annotation.Source
 
 @Source
 abstract class SushiScanFR : MangaThemesia() {

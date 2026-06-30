@@ -4,11 +4,11 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import java.text.SimpleDateFormat
 import java.util.Locale
-import keiyoushi.annotation.Source
 
 @Source
 abstract class ManhuascanUs : MangaThemesia() {

@@ -16,7 +16,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Source
-abstract class Luvyaa : MangaThemesia(),
+abstract class Luvyaa :
+    MangaThemesia(),
     ConfigurableSource {
     override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US)
 

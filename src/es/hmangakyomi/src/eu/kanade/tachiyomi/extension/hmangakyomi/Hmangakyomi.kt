@@ -3,12 +3,12 @@ package eu.kanade.tachiyomi.extension.es.hmangakyomi
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import keiyoushi.annotation.Source
 
 @Source
 abstract class Hmangakyomi : MangaThemesia() {

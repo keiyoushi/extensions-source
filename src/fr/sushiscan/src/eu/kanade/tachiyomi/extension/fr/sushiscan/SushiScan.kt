@@ -23,7 +23,8 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class SushiScan : MangaThemesia(),
+abstract class SushiScan :
+    MangaThemesia(),
     ConfigurableSource {
     override val mangaUrlDirectory = "/catalogue"
     override val dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale.FRENCH)

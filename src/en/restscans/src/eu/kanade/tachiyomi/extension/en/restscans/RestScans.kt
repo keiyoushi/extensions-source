@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.restscans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import org.jsoup.nodes.Document
 import keiyoushi.annotation.Source
+import org.jsoup.nodes.Document
 
 @Source
 abstract class RestScans : MangaThemesia() {

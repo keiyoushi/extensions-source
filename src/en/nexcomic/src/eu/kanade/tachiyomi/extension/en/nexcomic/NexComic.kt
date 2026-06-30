@@ -9,7 +9,8 @@ import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferences
 
 @Source
-abstract class NexComic : MangaThemesia(),
+abstract class NexComic :
+    MangaThemesia(),
     ConfigurableSource {
 
     private val preferences: SharedPreferences = getPreferences()

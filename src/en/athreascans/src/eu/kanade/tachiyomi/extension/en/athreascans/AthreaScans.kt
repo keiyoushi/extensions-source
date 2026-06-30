@@ -13,7 +13,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 
 @Source
-abstract class AthreaScans : MangaThemesia(),
+abstract class AthreaScans :
+    MangaThemesia(),
     ConfigurableSource {
 
     override val client: OkHttpClient = super.client.newBuilder()

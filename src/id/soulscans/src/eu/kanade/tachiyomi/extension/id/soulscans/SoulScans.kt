@@ -2,9 +2,9 @@ package eu.kanade.tachiyomi.extension.id.soulscans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
 import java.util.Locale
-import keiyoushi.annotation.Source
 
 @Source
 abstract class SoulScans : MangaThemesia() {

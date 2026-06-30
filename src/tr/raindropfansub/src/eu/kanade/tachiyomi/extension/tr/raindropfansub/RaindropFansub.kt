@@ -2,11 +2,11 @@ package eu.kanade.tachiyomi.extension.tr.raindropfansub
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
-import keiyoushi.annotation.Source
 
 @Source
 abstract class RaindropFansub : MangaThemesia() {

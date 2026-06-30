@@ -21,7 +21,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Source
-abstract class MangaStop : MangaThemesia(),
+abstract class MangaStop :
+    MangaThemesia(),
     ConfigurableSource {
     override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR"))
 

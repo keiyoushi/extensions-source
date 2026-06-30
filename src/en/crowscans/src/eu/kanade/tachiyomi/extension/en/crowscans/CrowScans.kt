@@ -3,8 +3,8 @@ package eu.kanade.tachiyomi.extension.en.crowscans
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SManga
-import org.jsoup.nodes.Document
 import keiyoushi.annotation.Source
+import org.jsoup.nodes.Document
 
 @Source
 abstract class CrowScans : MangaThemesia() {

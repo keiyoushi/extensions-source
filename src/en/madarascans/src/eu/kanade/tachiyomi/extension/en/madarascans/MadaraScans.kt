@@ -16,7 +16,8 @@ import java.util.Locale
 import kotlin.getValue
 
 @Source
-abstract class MadaraScans : MangaThemesia(),
+abstract class MadaraScans :
+    MangaThemesia(),
     ConfigurableSource {
     override val mangaUrlDirectory = "/series"
     override val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.US)

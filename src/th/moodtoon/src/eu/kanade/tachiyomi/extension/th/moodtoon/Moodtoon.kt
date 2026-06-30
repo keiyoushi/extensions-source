@@ -2,11 +2,11 @@ package eu.kanade.tachiyomi.extension.th.moodtoon
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import keiyoushi.annotation.Source
 
 @Source
 abstract class Moodtoon : MangaThemesia() {

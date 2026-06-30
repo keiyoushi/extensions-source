@@ -4,6 +4,7 @@ import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import okhttp3.Cookie
@@ -11,7 +12,6 @@ import okhttp3.Interceptor
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import java.io.IOException
-import keiyoushi.annotation.Source
 
 @Source
 abstract class Mangasusu : MangaThemesia() {

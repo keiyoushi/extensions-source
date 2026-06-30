@@ -4,5 +4,4 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import keiyoushi.annotation.Source
 
 @Source
-abstract class Rackus : MangaThemesia() {
-}
+abstract class Rackus : MangaThemesia()

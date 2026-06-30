@@ -3,13 +3,13 @@ package eu.kanade.tachiyomi.extension.id.komiktap
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Cookie
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import java.io.IOException
-import keiyoushi.annotation.Source
 
 @Source
 abstract class Komiktap : MangaThemesia() {

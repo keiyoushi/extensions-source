@@ -3,8 +3,8 @@ package eu.kanade.tachiyomi.extension.ar.despairmanga
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
-import okhttp3.Request
 import keiyoushi.annotation.Source
+import okhttp3.Request
 
 @Source
 abstract class DespairManga : MangaThemesia() {

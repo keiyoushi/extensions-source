@@ -14,7 +14,8 @@ import kotlin.getValue
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class DrakeScans : MangaThemesia(),
+abstract class DrakeScans :
+    MangaThemesia(),
     ConfigurableSource {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 

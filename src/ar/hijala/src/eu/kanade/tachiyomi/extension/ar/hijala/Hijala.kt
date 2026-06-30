@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -20,13 +21,11 @@ import okio.Buffer
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
-import keiyoushi.annotation.Source
 
 @Source
 abstract class Hijala : MangaThemesia() {
     override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar"))
 
-    
     override val client = network.client.newBuilder()
         .addInterceptor(::scrambledImageInterceptor)
         .build()

@@ -3,11 +3,11 @@ package eu.kanade.tachiyomi.extension.id.kuromanga
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import keiyoushi.annotation.Source
 
 @Source
 abstract class KuroManga : MangaThemesia() {
