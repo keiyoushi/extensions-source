@@ -14,13 +14,11 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import kotlin.collections.iterator
 
-abstract class ScanR(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String,
-    private val useHighLowQualityCover: Boolean = false,
-    private val slugSeparator: String = "-",
-) : HttpSource() {
+abstract class ScanR : HttpSource() {
+
+    protected open val useHighLowQualityCover: Boolean = false
+
+    protected open val slugSeparator: String = "-"
 
     companion object {
         private const val SERIES_DATA_SELECTOR = "#series-data-placeholder"
