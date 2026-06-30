@@ -4,10 +4,16 @@ plugins {
 
 keiyoushi {
     name = "AllHentai"
-    className = "AllHentai"
     versionCode = 25
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "grouple"
-    baseUrl = "https://20.allhen.online"
+
+    source {
+        baseUrl("https://20.allhen.online") {
+            withCustom = true
+        }
+        lang = "ru"
+        id = 1809051393403180443L
+    }
 }

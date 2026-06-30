@@ -1,18 +1,11 @@
 package eu.kanade.tachiyomi.extension.ru.selfmanga
 
-import android.widget.Toast
-import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.grouple.GroupLe
 import eu.kanade.tachiyomi.source.model.FilterList
-import keiyoushi.utils.getPreferences
+import keiyoushi.annotation.Source
 
-class SelfManga : GroupLe("SelfManga", "https://1.selfmanga.live", "ru") {
-
-    override val id: Long = 5227602742162454547
-
-    private val preferences = getPreferences()
-
-    override val baseUrl by lazy { getPrefBaseUrl() }
+@Source
+abstract class SelfManga : GroupLe() {
 
     override fun getFilterList() = FilterList(
         OrderBy(),
@@ -87,38 +80,4 @@ class SelfManga : GroupLe("SelfManga", "https://1.selfmanga.live", "ru") {
         Genre("эротика", "el_6012"),
         Genre("этти", "el_4982"),
     )
-
-    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        super.setupPreferenceScreen(screen)
-        EditTextPreference(screen.context).apply {
-            key = DOMAIN_PREF
-            title = DOMAIN_TITLE
-            setDefaultValue(super.baseUrl)
-            dialogTitle = DOMAIN_TITLE
-            dialogMessage = "Default URL:\n\t${super.baseUrl}"
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Для смены домена необходимо перезапустить приложение с полной остановкой.", Toast.LENGTH_LONG).show()
-                true
-            }
-        }.let(screen::addPreference)
-    }
-
-    private fun getPrefBaseUrl(): String = preferences.getString(DOMAIN_PREF, super.baseUrl)!!
-
-    init {
-        preferences.getString(DEFAULT_DOMAIN_PREF, null).let { defaultBaseUrl ->
-            if (defaultBaseUrl != super.baseUrl) {
-                preferences.edit()
-                    .putString(DOMAIN_PREF, super.baseUrl)
-                    .putString(DEFAULT_DOMAIN_PREF, super.baseUrl)
-                    .apply()
-            }
-        }
-    }
-
-    companion object {
-        private const val DOMAIN_PREF = "Домен"
-        private const val DEFAULT_DOMAIN_PREF = "pref_default_domain"
-        private const val DOMAIN_TITLE = "Домен"
-    }
 }
