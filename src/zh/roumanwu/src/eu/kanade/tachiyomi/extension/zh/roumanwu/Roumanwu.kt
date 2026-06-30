@@ -13,16 +13,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.ParsePosition
 import java.text.SimpleDateFormat
 import java.util.Locale
-import kotlin.math.max
 
 class Roumanwu :
     HttpSource(),
@@ -31,11 +30,12 @@ class Roumanwu :
     override val lang = "zh"
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences = getPreferences()
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val baseUrl = MIRRORS[
-        max(MIRRORS.size - 1, preferences.getString(MIRROR_PREF, MIRROR_DEFAULT)!!.toInt()),
-    ]
+    override val baseUrl: String
+        get() = MIRRORS[
+            preferences.getString(MIRROR_PREF, MIRROR_DEFAULT)!!.toInt().coerceAtMost(MIRRORS.size - 1),
+        ]
 
     override val client = network.client.newBuilder().addInterceptor(ScrambledImageInterceptor()).build()
 
@@ -136,11 +136,12 @@ class Roumanwu :
             }
         }.asReversed()
         if (chapters.isNotEmpty()) {
-            val dateFormat = SimpleDateFormat("M/d/yyyy", Locale.US)
             for (text in parseInfobox(document).asReversed()) {
-                val date = dateFormat.parse(text, ParsePosition(0)) ?: continue
-                chapters[0].date_upload = date.time
-                break
+                val date = DATE_FORMAT.tryParse(text)
+                if (date != 0L) {
+                    chapters[0].date_upload = date
+                    break
+                }
             }
         }
         return chapters
@@ -153,8 +154,7 @@ class Roumanwu :
 
     override fun pageListParse(response: Response): List<Page> {
         val html = response.body.string()
-        val regex = Regex(""""imageUrl":"([^"]+)""")
-        return regex.findAll(html).mapIndexedTo(ArrayList()) { index, match ->
+        return IMAGE_URL_REGEX.findAll(html).mapIndexedTo(ArrayList()) { index, match ->
             Page(index, imageUrl = match.groupValues[1])
         }
     }
@@ -194,9 +194,12 @@ class Roumanwu :
     companion object {
         private const val MIRROR_PREF = "MIRROR"
 
-        // 地址: https://rou.pub/dizhi or https://rdz1.xyz/dizhi
-        private val MIRRORS get() = arrayOf("https://rouman5.com", "https://roum22.xyz")
+        // 地址: https://rou.pub/dizhi or https://rdz3.xyz/dizhi
+        private val MIRRORS get() = arrayOf("https://rouman5.com", "https://roum27.xyz")
         private val MIRRORS_DESC get() = arrayOf("主站", "鏡像")
         private const val MIRROR_DEFAULT = 1.toString() // use mirror
+
+        private val DATE_FORMAT = SimpleDateFormat("M/d/yyyy", Locale.ROOT)
+        private val IMAGE_URL_REGEX = Regex(""""imageUrl":"([^"]+)""")
     }
 }
