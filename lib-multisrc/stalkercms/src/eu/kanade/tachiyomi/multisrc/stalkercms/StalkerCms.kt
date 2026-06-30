@@ -21,11 +21,7 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-abstract class StalkerCms(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String = "pt-BR",
-) : HttpSource() {
+abstract class StalkerCms : HttpSource() {
 
     override val supportsLatest = true
 
