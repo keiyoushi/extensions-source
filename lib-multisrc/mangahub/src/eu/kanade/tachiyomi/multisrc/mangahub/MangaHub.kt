@@ -39,7 +39,8 @@ import java.util.concurrent.locks.ReentrantLock
 import java.util.zip.GZIPInputStream
 import kotlin.random.Random
 
-abstract class MangaHub : HttpSource(),
+abstract class MangaHub :
+    HttpSource(),
     ConfigurableSource {
 
     abstract val mangaSource: String
