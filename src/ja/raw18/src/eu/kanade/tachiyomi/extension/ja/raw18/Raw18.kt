@@ -22,7 +22,6 @@ abstract class Raw18 : WPComics() {
     override val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.JAPANESE)
 
     override val gmtOffset = null
-
     override val searchPath = "search/manga"
 
     override val genresUrlDelimiter = "="
