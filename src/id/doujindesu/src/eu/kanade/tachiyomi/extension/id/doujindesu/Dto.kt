@@ -10,7 +10,6 @@ import org.jsoup.parser.Parser
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import kotlin.text.get
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
     timeZone = TimeZone.getTimeZone("UTC")
@@ -103,35 +102,41 @@ class MangaItem(
                     val document = Jsoup.parseBodyFragment(Parser.unescapeEntities(desc, false))
                     val root = document.selectFirst(".rich-text-content") ?: document.body()
 
+                    val html = root.outerHtml()
+                        .replace(textRegex, "%%BR%%")
+
+                    val text = Jsoup.parse(html).text()
+
                     val lines = mutableListOf<String>()
-                    var stop = false
 
-                    loop@ for (element in root.children()) {
-                        val text = Jsoup.parse(
-                            element.html().replace(textRegex, "%%BR%%"),
-                        ).text()
+                    for (line in text.split("%%BR%%")) {
+                        var cleanLine = line
+                            .replace(whitespaceRegex, " ")
+                            .trim()
 
-                        for (line in text.split("%%BR%%")) {
-                            val cleanLine = line
-                                .replace(whitespaceRegex, " ")
-                                .trim()
+                        if (cleanLine.isBlank()) continue
 
-                            if (cleanLine.isBlank()) continue
+                        val lower = cleanLine.lowercase()
 
-                            val lower = cleanLine.lowercase()
+                        val downloadIndex = listOf(
+                            lower.indexOf("download batch"),
+                            lower.indexOf("download volume"),
+                        ).filter { it >= 0 }
+                            .minOrNull()
 
-                            if (
-                                lower.startsWith("download batch") ||
-                                lower.startsWith("download volume")
-                            ) {
-                                stop = true
-                                break
-                            }
-
-                            lines += cleanLine.replaceFirst(synopsisRegex, "")
+                        if (downloadIndex != null) {
+                            cleanLine = cleanLine.substring(0, downloadIndex).trim()
                         }
 
-                        if (stop) break@loop
+                        if (cleanLine.isNotBlank()) {
+                            lines += cleanLine
+                                .replaceFirst(synopsisRegex, "")
+                                .trim()
+                        }
+
+                        if (downloadIndex != null) {
+                            break
+                        }
                     }
 
                     lines
@@ -183,10 +188,10 @@ class MangaItem(
     }
 }
 
-val synopsisRegex = Regex("(?i)^\\s*(sinopsis|synopsis):\\s*")
+val synopsisRegex = Regex("""(?i)^\s*(?:sinopsis|synopsis)\s*:?\s*""")
 val whitespaceRegex = Regex("\\s+")
 val textRegex = Regex("(?i)<br\\s*/?>")
-val chapterRegex = Regex("""^\d+(?:-\d+)?\.\s*.*$""")
+val chapterRegex = Regex("""^\d+(?:-\d+)?\.\s*.+$""")
 
 private fun String.toTitleCase(): String = lowercase()
     .split(whitespaceRegex)
