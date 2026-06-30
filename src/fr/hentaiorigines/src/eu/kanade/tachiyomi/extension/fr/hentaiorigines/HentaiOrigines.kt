@@ -7,13 +7,11 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-private val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale.FRENCH).apply {
-    timeZone = TimeZone.getTimeZone("Europe/Paris")
-}
-
 @Source
 abstract class HentaiOrigines : Madara() {
-    override val dateFormat = dateFormat
+    override val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale.FRENCH).apply {
+        timeZone = TimeZone.getTimeZone("Europe/Paris")
+    }
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
