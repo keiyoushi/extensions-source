@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.readbokunoheroacademiamyheroacademiamanga
 
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
+import keiyoushi.annotation.Source
 
-class ReadBokuNoHeroAcademiaMyHeroAcademiaManga : MangaCatalog("Read Boku no Hero Academia My Hero Academia Manga", "https://ww10.readmha.com", "en") {
+@Source
+abstract class ReadBokuNoHeroAcademiaMyHeroAcademiaManga : MangaCatalog() {
     override val sourceList = listOf(
         Pair("Boku no Hero Academia", "$baseUrl/manga/boku-no-hero-academia/"),
         Pair("Vigilante", "$baseUrl/manga/vigilante-boku-no-hero-academia-illegals/"),

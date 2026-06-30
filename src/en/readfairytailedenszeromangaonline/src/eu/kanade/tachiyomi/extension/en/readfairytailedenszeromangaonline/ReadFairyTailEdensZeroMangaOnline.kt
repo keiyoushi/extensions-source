@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.readfairytailedenszeromangaonline
 
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
+import keiyoushi.annotation.Source
 
-class ReadFairyTailEdensZeroMangaOnline : MangaCatalog("Read Fairy Tail & Edens Zero Manga Online", "https://ww8.readfairytail.com", "en") {
+@Source
+abstract class ReadFairyTailEdensZeroMangaOnline : MangaCatalog() {
     override val sourceList = listOf(
         Pair("Eden's Zero", "$baseUrl/manga/edens-zero/"),
         Pair("Fairy Tail", "$baseUrl/manga/fairy-tail/"),

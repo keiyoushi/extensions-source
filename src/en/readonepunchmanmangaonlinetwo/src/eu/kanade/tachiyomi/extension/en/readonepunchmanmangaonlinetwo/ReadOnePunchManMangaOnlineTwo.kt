@@ -4,13 +4,15 @@ import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ReadOnePunchManMangaOnlineTwo : MangaCatalog("Read One-Punch Man Manga Online", "https://ww6.readopm.com", "en") {
+@Source
+abstract class ReadOnePunchManMangaOnlineTwo : MangaCatalog() {
     override val sourceList = listOf(
         Pair("One Punch Man", "$baseUrl/manga/one-punch-man/"),
         Pair("Official", "$baseUrl/manga/one-punch-man-official/"),
