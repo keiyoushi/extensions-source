@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
@@ -15,14 +16,13 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class NetTruyenCO :
-    WPComics(
-        "NetTruyenCO (unoriginal)",
-        "https://nettruyenar.com",
-        "vi",
-        dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
-        gmtOffset = null,
-    ) {
+@Source
+abstract class NetTruyenCO : WPComics() {
+
+    override val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+
+    override val gmtOffset = null
+
     override val popularPath = "truyen-tranh-hot"
 
     // Override chapters
