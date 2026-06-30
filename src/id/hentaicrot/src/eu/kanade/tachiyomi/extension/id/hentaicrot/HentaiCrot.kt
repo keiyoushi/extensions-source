@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.id.hentaicrot
 
 import eu.kanade.tachiyomi.multisrc.oceanwp.OceanWP
+import keiyoushi.annotation.Source
 
-class HentaiCrot : OceanWP("Hentai Crot", "https://hentaicrot.com", "id")
+@Source
+abstract class HentaiCrot : OceanWP()
