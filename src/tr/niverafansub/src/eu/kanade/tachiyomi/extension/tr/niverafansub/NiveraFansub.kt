@@ -9,7 +9,7 @@ import java.util.Locale
 class NiveraFansub :
     Madara(
         "Nivera Fansub",
-        "https://niverafansub.lol",
+        "https://niverafansub.one",
         "tr",
         dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
     ) {
