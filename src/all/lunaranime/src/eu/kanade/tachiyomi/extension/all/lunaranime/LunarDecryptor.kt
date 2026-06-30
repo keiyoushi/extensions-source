@@ -26,6 +26,10 @@ class LunarDecryptor(
         val rctx1 = generateRctxFrom(seedObjs[1])
 
         val token = generateToken(rctx0, rctx1, slug, chapterNum)
+
+        // Submit the token first, fake images are returned otherwise
+        val response = client.newCall(GET("$apiUrl/api/user/server-region?v=$token")).execute().close()
+
         val sessionDataB64 = fetchSessionData(token, lang)
 
         val finalJson = decryptSessionImages(sessionDataB64, rctx0)

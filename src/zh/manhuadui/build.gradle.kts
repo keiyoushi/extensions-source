@@ -10,6 +10,7 @@ keiyoushi {
     theme = "sinmh"
 
     source {
+        name = "优酷漫画"
         lang = "zh"
         baseUrl = "https://www.ykmh.net"
         id = 1637952806167036168L

@@ -61,15 +61,19 @@ abstract class GenerateExtensionManifestTask : DefaultTask() {
             }
         }
 
-        val activitySection = if (filterList.isEmpty()) "" else buildString {
-            appendLine()
-            appendLine("        <activity")
-            appendLine("            android:name=\"keiyoushi.source.UrlActivity\"")
-            appendLine("            android:excludeFromRecents=\"true\"")
-            appendLine("            android:exported=\"true\"")
-            appendLine("            android:theme=\"@android:style/Theme.NoDisplay\">")
-            appendLine(intentFilters)
-            append("        </activity>")
+        val activitySection = if (filterList.isEmpty()) {
+            ""
+        } else {
+            buildString {
+                appendLine()
+                appendLine("        <activity")
+                appendLine("            android:name=\"keiyoushi.source.UrlActivity\"")
+                appendLine("            android:excludeFromRecents=\"true\"")
+                appendLine("            android:exported=\"true\"")
+                appendLine("            android:theme=\"@android:style/Theme.NoDisplay\">")
+                appendLine(intentFilters)
+                append("        </activity>")
+            }
         }
 
         out.writeText(
