@@ -9,8 +9,10 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import java.io.IOException
+import keiyoushi.annotation.Source
 
-class Komiktap : MangaThemesia("Komiktap", "https://komiktap.info", "id") {
+@Source
+abstract class Komiktap : MangaThemesia() {
 
     override val client = super.client.newBuilder()
         .addInterceptor(::sucuriInterceptor)

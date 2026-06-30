@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.tr.moondaisyscans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -10,13 +11,8 @@ private val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")).apply {
     timeZone = TimeZone.getTimeZone("Europe/Istanbul")
 }
 
-class MoonDaisyScans :
-    MangaThemesia(
-        "Moon Daisy Scans",
-        "https://moondaisyscans.pro",
-        "tr",
-        dateFormat = dateFormat,
-    ) {
+@Source
+abstract class MoonDaisyScans : MangaThemesia() {
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()

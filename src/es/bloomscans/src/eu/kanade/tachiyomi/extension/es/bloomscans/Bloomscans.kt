@@ -9,15 +9,12 @@ import okhttp3.Request
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class Bloomscans :
-    MangaThemesia(
-        "Bloom Scans",
-        "https://bloomscans.com",
-        "es",
-        mangaUrlDirectory = "/series",
-        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("es")),
-    ) {
+@Source
+abstract class Bloomscans : MangaThemesia() {
+    override val mangaUrlDirectory = "/series"
+    override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("es"))
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty() && filters.isEmpty()) {

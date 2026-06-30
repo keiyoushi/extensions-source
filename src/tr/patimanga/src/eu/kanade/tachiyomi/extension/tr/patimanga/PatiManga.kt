@@ -3,11 +3,9 @@ package eu.kanade.tachiyomi.extension.tr.patimanga
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class PatiManga :
-    MangaThemesia(
-        "Pati Manga",
-        "https://www.patimanga.com",
-        "tr",
-        dateFormat = SimpleDateFormat("MMMM d, yyy", Locale("tr")),
-    )
+@Source
+abstract class PatiManga : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("MMMM d, yyy", Locale("tr"))
+}

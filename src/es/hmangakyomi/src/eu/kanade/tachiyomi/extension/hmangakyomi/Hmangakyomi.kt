@@ -8,13 +8,10 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import keiyoushi.annotation.Source
 
-class Hmangakyomi :
-    MangaThemesia(
-        "Hmangakyomi",
-        "https://hmangakyomi.online",
-        "es",
-    ) {
+@Source
+abstract class Hmangakyomi : MangaThemesia() {
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::thumbnailInterceptor)
         .build()

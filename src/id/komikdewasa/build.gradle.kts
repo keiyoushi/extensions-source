@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Komik Dewasa"
-    className = "KomikDewasa"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://komikdewasa.mom"
+
+    source {
+        name = "Komik Dewasak"
+        lang = "id"
+        baseUrl = "https://komikdewasa.mom"
+    }
 }

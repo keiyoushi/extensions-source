@@ -3,11 +3,9 @@ package eu.kanade.tachiyomi.extension.ar.areascans
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class AreaScans :
-    MangaThemesia(
-        "Area Scans",
-        "https://ar.areascans.org",
-        "ar",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
-    )
+@Source
+abstract class AreaScans : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar"))
+}

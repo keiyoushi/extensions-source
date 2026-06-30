@@ -1,10 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.rizzcomicunoriginal
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class RizzComicUnoriginal :
-    MangaThemesia(
-        "Rizz Comic (unoriginal)",
-        "https://rizzcomic.com",
-        "en",
-    )
+@Source
+abstract class RizzComicUnoriginal : MangaThemesia()

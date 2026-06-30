@@ -3,12 +3,10 @@ package eu.kanade.tachiyomi.extension.tr.arcurafansub
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class ArcuraFansub :
-    MangaThemesia(
-        "Arcura Fansub",
-        "https://arcurafansub.com",
-        "tr",
-        "/seri",
-        SimpleDateFormat("MMMM d, yyy", Locale("tr")),
-    )
+@Source
+abstract class ArcuraFansub : MangaThemesia() {
+    override val mangaUrlDirectory = "/seri"
+    override val dateFormat = SimpleDateFormat("MMMM d, yyy", Locale("tr"))
+}

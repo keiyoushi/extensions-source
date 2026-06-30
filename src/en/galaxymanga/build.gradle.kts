@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Galaxy Manga"
-    className = "GalaxyManga"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://galaxymanga.io"
+
+    source {
+        lang = "en"
+        baseUrl = "https://galaxymanga.io"
+    }
 }

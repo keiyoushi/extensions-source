@@ -3,11 +3,9 @@ package eu.kanade.tachiyomi.extension.es.novamanhwa
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class NovaManhwa :
-    MangaThemesia(
-        "Nova Manhwas",
-        "https://novamanhwa.cc",
-        "es",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
-    )
+@Source
+abstract class NovaManhwa : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
+}

@@ -7,14 +7,10 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import keiyoushi.annotation.Source
 
-class KuroManga :
-    MangaThemesia(
-        "Kuro Manga",
-        "https://kuromanga.me",
-        "id",
-        dateFormat = KMdateFormat,
-    ) {
+@Source
+abstract class KuroManga : MangaThemesia() {
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 

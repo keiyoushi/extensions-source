@@ -3,12 +3,10 @@ package eu.kanade.tachiyomi.extension.tr.shijiescans
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class ShijieScans :
-    MangaThemesia(
-        "Shijie Scans",
-        "https://shijiescans.com",
-        "tr",
-        "/seri",
-        SimpleDateFormat("MMM d, yyy", Locale("tr")),
-    )
+@Source
+abstract class ShijieScans : MangaThemesia() {
+    override val mangaUrlDirectory = "/seri"
+    override val dateFormat = SimpleDateFormat("MMM d, yyy", Locale("tr"))
+}

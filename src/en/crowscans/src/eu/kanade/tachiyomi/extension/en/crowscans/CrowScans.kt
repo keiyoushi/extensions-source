@@ -4,8 +4,10 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Document
+import keiyoushi.annotation.Source
 
-class CrowScans : MangaThemesia("Crow Scans", "https://crowscans.xyz", "en") {
+@Source
+abstract class CrowScans : MangaThemesia() {
 
     // The site exposes only status, type, order, and genre filters — author and year
     // are stripped because they always return empty results.

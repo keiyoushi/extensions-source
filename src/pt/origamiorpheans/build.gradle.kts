@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Origami Orpheans"
-    className = "OrigamiOrpheans"
     versionCode = 11
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://origami-orpheans.com"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://origami-orpheans.com"
+        versionId = 2
+    }
 }

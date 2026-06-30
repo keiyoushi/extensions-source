@@ -5,15 +5,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class EvaScans :
-    MangaThemesia(
-        "Eva Scans",
-        "https://evascans.org",
-        "en",
-        "/series",
-        SimpleDateFormat("yyyy/MM/dd", Locale.ROOT),
-    ) {
+@Source
+abstract class EvaScans : MangaThemesia() {
+    override val mangaUrlDirectory = "/series"
+    override val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.ROOT)
     // Fix search/listing - site uses custom card layout (div elements, not article)
     override fun searchMangaSelector() = "div.manga-card-v, .listupd .bs .bsx"
 

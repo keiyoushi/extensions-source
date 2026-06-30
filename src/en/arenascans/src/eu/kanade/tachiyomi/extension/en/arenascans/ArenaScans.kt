@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.arenascans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class ArenaScans : MangaThemesia("Arena Scans", "https://arenascan.com", "en")
+@Source
+abstract class ArenaScans : MangaThemesia()

@@ -6,16 +6,13 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import keiyoushi.annotation.Source
 
-class Manga168 :
-    MangaThemesia(
-        "Manga168",
-        "https://manga1688.com",
-        "th",
-        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")).apply {
-            timeZone = TimeZone.getTimeZone("Asia/Bangkok")
-        },
-    ) {
+@Source
+abstract class Manga168 : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Bangkok")
+    }
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
         // Add 'color' badge as a genre
         if (document.selectFirst(".thumb .colored") != null) {

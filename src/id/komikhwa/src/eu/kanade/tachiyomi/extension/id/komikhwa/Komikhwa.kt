@@ -8,14 +8,11 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class Komikhwa :
-    MangaThemesia(
-        "Komikhwa",
-        "https://komikhwa.com",
-        "id",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
-    ) {
+@Source
+abstract class Komikhwa : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id"))
     override fun pageListParse(document: Document): List<Page> {
         val script = document.selectFirst("script[src^=data:text/javascript;base64,dHNfcmVhZGVyLnJ1bih7]")
             ?: return super.pageListParse(document)

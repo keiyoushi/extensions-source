@@ -20,18 +20,13 @@ import okio.Buffer
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class Hijala :
-    MangaThemesia(
-        "Hijala",
-        "https://hijala.com",
-        "ar",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
-    ) {
+@Source
+abstract class Hijala : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar"))
 
-    // Site moved from ZeistManga to MangaThemesia again
-    override val versionId get() = 2
-
+    
     override val client = network.client.newBuilder()
         .addInterceptor(::scrambledImageInterceptor)
         .build()

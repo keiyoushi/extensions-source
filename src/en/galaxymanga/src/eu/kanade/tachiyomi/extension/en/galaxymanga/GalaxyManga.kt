@@ -1,10 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.galaxymanga
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class GalaxyManga :
-    MangaThemesia(
-        "Galaxy Manga",
-        "https://galaxymanga.io",
-        "en",
-    )
+@Source
+abstract class GalaxyManga : MangaThemesia()

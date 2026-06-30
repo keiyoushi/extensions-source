@@ -8,15 +8,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class ManhuascanUs :
-    MangaThemesia(
-        "Manhuascan.us",
-        "https://manhuascan.us",
-        "en",
-        mangaUrlDirectory = "/manga-list",
-        dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT),
-    ) {
+@Source
+abstract class ManhuascanUs : MangaThemesia() {
+    override val mangaUrlDirectory = "/manga-list"
+    override val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT)
     override val seriesAuthorSelector = ".tsinfo .imptdt:contains(Author) a"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {

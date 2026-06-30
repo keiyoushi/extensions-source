@@ -6,14 +6,11 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
+import keiyoushi.annotation.Source
 
-class RaindropFansub :
-    MangaThemesia(
-        "Raindrop Fansub",
-        "https://www.raindropteamfan.com",
-        "tr",
-        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
-    ) {
+@Source
+abstract class RaindropFansub : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr"))
     override val seriesTypeSelector = ".tsinfo .imptdt:contains(Tür) a"
 
     override fun chapterListParse(response: Response): List<SChapter> {
