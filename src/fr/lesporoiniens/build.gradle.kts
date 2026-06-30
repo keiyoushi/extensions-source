@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Les Poroiniens"
-    className = "LesPoroiniens"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "scanr"
-    baseUrl = "https://lesporoiniens.org"
+
+    source {
+        lang = "fr"
+        baseUrl = "https://lesporoiniens.org"
+    }
 }

@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonArray
@@ -20,12 +21,8 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.Jsoup
 
-class LesPoroiniens :
-    ScanR(
-        name = "Les Poroiniens",
-        baseUrl = "https://lesporoiniens.org",
-        lang = "fr",
-    ) {
+@Source
+abstract class LesPoroiniens : ScanR() {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .addInterceptor { chain ->
