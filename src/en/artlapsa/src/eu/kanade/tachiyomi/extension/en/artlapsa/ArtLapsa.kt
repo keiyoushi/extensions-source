@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
@@ -16,7 +17,8 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
+@Source
+abstract class ArtLapsa : Keyoapp() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangas = super.popularMangaParse(response).mangas.distinctBy { it.url }
