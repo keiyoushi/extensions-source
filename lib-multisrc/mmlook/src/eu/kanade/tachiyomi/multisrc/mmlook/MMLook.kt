@@ -20,13 +20,12 @@ import okhttp3.Response
 // const val APP_CUSTOMIZATION_URL = "APP_CUSTOMIZATION_URL"
 
 /** 漫漫看 */
-open class MMLook(
-    override val name: String,
-    override val baseUrl: String,
-    private val desktopUrl: String,
-    private val useLegacyMangaUrl: Boolean,
-) : HttpSource() {
-    override val lang: String get() = "zh"
+abstract class MMLook : HttpSource() {
+
+    protected open val desktopUrl = baseUrl.replace("https://m.", "https://www.")
+
+    protected open val useLegacyMangaUrl: Boolean = false
+
     override val supportsLatest: Boolean get() = true
 
     override val client = network.client.newBuilder()
