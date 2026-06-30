@@ -3,18 +3,15 @@ package eu.kanade.tachiyomi.extension.tr.kuroimanga
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class KuroiManga :
-    Madara(
-        "Kuroi Manga",
-        "https://www.kuroimanga.mom",
-        "tr",
-        dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
-    ) {
+@Source
+abstract class KuroiManga : Madara() {
+    override val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr"))
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 

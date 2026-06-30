@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.kazokuden
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class KazokuDen : Madara("Kazoku Den", "https://www.kazokuden.com", "es")
+@Source
+abstract class KazokuDen : Madara()

@@ -17,12 +17,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-abstract class SpicyTheme(
-    override val name: String,
-    override val baseUrl: String,
-    protected val apiBaseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class SpicyTheme : HttpSource() {
+
+    protected open val apiBaseUrl: String
+        get() = baseUrl.replace("https://", "https://api.")
 
     override val supportsLatest = true
 

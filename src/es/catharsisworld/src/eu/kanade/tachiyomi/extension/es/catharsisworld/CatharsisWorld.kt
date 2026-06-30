@@ -1,34 +1,21 @@
 package eu.kanade.tachiyomi.extension.es.catharsisworld
 
-import android.content.SharedPreferences
-import android.widget.Toast
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class CatharsisWorld :
-    Madara(
-        "Catharsis World",
-        "https://catharsisworld.dig-it.info",
-        "es",
-        SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
-    ),
-    ConfigurableSource {
+@Source
+abstract class CatharsisWorld : Madara() {
+    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
+
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val baseUrl get() = preferences.prefBaseUrl
-
-    override val versionId = 2
 
     override val mangaSubString = "serie"
 
@@ -38,17 +25,6 @@ class CatharsisWorld :
         super.client.newBuilder()
             .rateLimit(3, 1.seconds) { it.host == baseUrlHost }
             .build()
-    }
-
-    private val preferences = getPreferences {
-        this.getString(DEFAULT_BASE_URL_PREF, null).let { domain ->
-            if (domain != super.baseUrl) {
-                this.edit()
-                    .putString(BASE_URL_PREF, super.baseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
-                    .apply()
-            }
-        }
     }
 
     override fun popularMangaSelector() = "div.latest-poster"
@@ -84,43 +60,4 @@ class CatharsisWorld :
     override val chapterProtectorDataPrefix = "_data='"
 
     private fun Element.imageFromStyle(): String = this.attr("style").substringAfter("url(").substringBefore(")")
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = "Editar URL de la fuente"
-            summary = "Para uso temporal, si la extensión se actualiza se perderá el cambio."
-            dialogTitle = "Editar URL de la fuente"
-            dialogMessage = "URL por defecto:\n${super.baseUrl}"
-            setDefaultValue(super.baseUrl)
-            setOnPreferenceChangeListener { _, newVal ->
-                val url = newVal as String
-                try {
-                    val httpurl = url.toHttpUrl()
-                    preferences.prefBaseUrl = "https://${httpurl.host}"
-                } catch (_: Throwable) {
-                    Toast.makeText(screen.context, "Invalid Url", Toast.LENGTH_LONG).show()
-                }
-                false
-            }
-        }.also { screen.addPreference(it) }
-    }
-
-    private var cachedBaseUrl: String? = null
-    private var SharedPreferences.prefBaseUrl: String
-        get() {
-            if (cachedBaseUrl == null) {
-                cachedBaseUrl = getString(BASE_URL_PREF, super.baseUrl)!!
-            }
-            return cachedBaseUrl!!
-        }
-        set(value) {
-            cachedBaseUrl = value
-            edit().putString(BASE_URL_PREF, value).apply()
-        }
-
-    companion object {
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-    }
 }

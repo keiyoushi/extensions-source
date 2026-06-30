@@ -4,14 +4,12 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 
-class Manhuanext :
-    Madara(
-        "Manhuanext",
-        "https://manhuanext.com",
-        "en",
-    ),
+@Source
+abstract class Manhuanext :
+    Madara(),
     ConfigurableSource {
     override val useNewChapterEndpoint = true
     private val preferences by getPreferencesLazy()

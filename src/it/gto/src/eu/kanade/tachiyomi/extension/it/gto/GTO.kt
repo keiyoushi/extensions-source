@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.it.gto
 
 import eu.kanade.tachiyomi.multisrc.pizzareader.PizzaReader
+import keiyoushi.annotation.Source
 
-class GTO : PizzaReader("GTO The Great Site", "https://reader.gtothegreatsite.net", "it") {
-    override val versionId = 2
-}
+@Source
+abstract class GTO : PizzaReader()

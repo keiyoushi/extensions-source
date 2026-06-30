@@ -1,10 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.kaizenscan
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
+import keiyoushi.annotation.Source
 
-class KaizenScan :
-    Keyoapp(
-        "Kaizen Scan",
-        "https://kaizenscan.com",
-        "en",
-    )
+@Source
+abstract class KaizenScan : Keyoapp()

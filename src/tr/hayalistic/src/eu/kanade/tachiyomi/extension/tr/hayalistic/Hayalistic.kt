@@ -1,13 +1,11 @@
 package eu.kanade.tachiyomi.extension.tr.hayalistic
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Hayalistic :
-    Madara(
-        "Hayalistic",
-        "https://hayalistic.blog",
-        "tr",
-        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ENGLISH),
-    )
+@Source
+abstract class Hayalistic : Madara() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ENGLISH)
+}

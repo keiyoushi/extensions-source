@@ -27,6 +27,9 @@ class WebViewInterceptor(val baseUrl: String, private val userAgent: String?) : 
 
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private var destroyWv: Runnable? = null
+    private var latch: CountDownLatch? = null
+    private var result: FetchResult? = null
+    private var errorMessage: Throwable? = null
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val req = chain.request()
@@ -52,6 +55,7 @@ class WebViewInterceptor(val baseUrl: String, private val userAgent: String?) : 
         }
     }
 
+    private val bridgeName = "Lycan_Bridge"
     private var cachedWv: WebView? = null
     private var accessTime = 0L
 
@@ -66,6 +70,23 @@ class WebViewInterceptor(val baseUrl: String, private val userAgent: String?) : 
                         domStorageEnabled = true
                         userAgentString = userAgent
                     }
+
+                    addJavascriptInterface(
+                        object {
+                            @JavascriptInterface
+                            fun passResult(data: String, contentType: String?) {
+                                result = FetchResult(true, data, contentType)
+                                latch?.countDown()
+                            }
+
+                            @JavascriptInterface
+                            fun passError(error: String) {
+                                result = FetchResult(false, error)
+                                latch?.countDown()
+                            }
+                        },
+                        bridgeName,
+                    )
                 }
             }
 
@@ -88,31 +109,11 @@ class WebViewInterceptor(val baseUrl: String, private val userAgent: String?) : 
         requestBody: String?,
         isImage: Boolean,
     ): FetchResult {
-        val bridgeName = "Lycan_${System.currentTimeMillis()}"
-        val latch = CountDownLatch(1)
-        var result: FetchResult? = null
-        var errorMessage: Throwable? = null
+        latch = CountDownLatch(1)
 
         mainHandler.post {
             try {
                 val webView = globalWebView
-
-                webView.addJavascriptInterface(
-                    object {
-                        @JavascriptInterface
-                        fun passResult(data: String, contentType: String?) {
-                            result = FetchResult(true, data, contentType)
-                            latch.countDown()
-                        }
-
-                        @JavascriptInterface
-                        fun passError(error: String) {
-                            result = FetchResult(false, error)
-                            latch.countDown()
-                        }
-                    },
-                    bridgeName,
-                )
 
                 webView.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, pageUrl: String?) {
@@ -182,11 +183,11 @@ class WebViewInterceptor(val baseUrl: String, private val userAgent: String?) : 
                 webView.loadDataWithBaseURL(baseUrl, pageHtml, "text/html", "utf-8", null)
             } catch (e: Throwable) {
                 errorMessage = e
-                latch.countDown()
+                latch?.countDown()
             }
         }
 
-        latch.await(if (isImage) 10 else 5, TimeUnit.SECONDS)
+        latch?.await(if (isImage) 10 else 5, TimeUnit.SECONDS)
 
         return result ?: FetchResult(false, (errorMessage ?: "Timed out").toString())
     }

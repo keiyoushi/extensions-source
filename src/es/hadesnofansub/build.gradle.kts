@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Hades no Fansub"
-    className = "HadesNoFansub"
     versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://lectorhades.latamtoon.com"
+
+    source {
+        lang = "es"
+        baseUrl = "https://lectorhades.latamtoon.com"
+    }
 }

@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Manga 18x"
-    className = "Manga18x"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://manga18x.net"
+
+    source {
+        lang = "en"
+        baseUrl = "https://manga18x.net"
+    }
 }

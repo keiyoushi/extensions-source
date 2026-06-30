@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Sana Scans"
-    className = "SanaScans"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "iken"
-    baseUrl = "https://sanascans.com"
+
+    source {
+        baseUrl = "https://sanascans.com"
+        lang = "en"
+    }
 }

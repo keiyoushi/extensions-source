@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Nyra Scans"
-    className = "NyraScans"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "keyoapp"
-    baseUrl = "https://nyrascans.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://nyrascans.com"
+    }
 }

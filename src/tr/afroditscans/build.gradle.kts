@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Afrodit Scans"
-    className = "AfroditScans"
     versionCode = 31
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "uzaymanga"
-    baseUrl = "https://afroditscans.com"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://afroditscans.com"
+        versionId = 2
+    }
 }

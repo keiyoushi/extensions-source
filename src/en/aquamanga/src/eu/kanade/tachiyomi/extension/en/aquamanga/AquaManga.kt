@@ -4,10 +4,12 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
-class AquaManga : Madara("Aqua Manga", "https://aquareader.org", "en") {
+@Source
+abstract class AquaManga : Madara() {
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 

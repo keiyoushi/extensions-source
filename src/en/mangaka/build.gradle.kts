@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "MangaKa"
-    className = "MangaKa"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://mangaka.cc"
+
+    source {
+        lang = "en"
+        baseUrl = "https://mangaka.cc"
+    }
 }

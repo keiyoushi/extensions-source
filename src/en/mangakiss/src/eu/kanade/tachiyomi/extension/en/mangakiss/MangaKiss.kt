@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.mangakiss
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class MangaKiss : Madara("Manga Kiss", "https://mangakiss.org", "en")
+@Source
+abstract class MangaKiss : Madara()

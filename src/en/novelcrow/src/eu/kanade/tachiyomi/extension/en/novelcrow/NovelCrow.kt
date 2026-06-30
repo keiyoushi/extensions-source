@@ -2,10 +2,12 @@ package eu.kanade.tachiyomi.extension.en.novelcrow
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import org.jsoup.nodes.Element
 
-class NovelCrow : Madara("NovelCrow", "https://novelcrow.com", "en") {
+@Source
+abstract class NovelCrow : Madara() {
 
     override val useNewChapterEndpoint = true
 

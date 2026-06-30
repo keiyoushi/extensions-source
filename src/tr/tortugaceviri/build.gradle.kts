@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Tortuga Ceviri"
-    className = "TortugaCeviri"
     versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://tortugaceviri.com"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://tortugaceviri.com"
+        versionId = 2
+    }
 }

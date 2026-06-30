@@ -43,11 +43,8 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.time.Duration.Companion.seconds
 
-abstract class Pam(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource(),
+abstract class Pam :
+    HttpSource(),
     ConfigurableSource {
 
     protected val baseHttpUrl = baseUrl.toHttpUrl()

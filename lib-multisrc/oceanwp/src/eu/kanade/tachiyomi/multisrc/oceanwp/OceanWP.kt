@@ -17,11 +17,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 
-abstract class OceanWP(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class OceanWP : HttpSource() {
 
     override val supportsLatest = false
 

@@ -4,18 +4,15 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DomalFansub :
-    Madara(
-        "Domal Fansub",
-        "https://dom4lfansub.online",
-        "tr",
-        dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
-    ) {
+@Source
+abstract class DomalFansub : Madara() {
+    override val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr"))
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Durum) + div.summary-content"
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never

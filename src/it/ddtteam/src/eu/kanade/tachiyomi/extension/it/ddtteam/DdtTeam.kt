@@ -1,15 +1,12 @@
 package eu.kanade.tachiyomi.extension.it.ddtteam
 
 import eu.kanade.tachiyomi.multisrc.pizzareader.PizzaReader
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import kotlinx.serialization.json.Json
 
-class DdtTeam :
-    PizzaReader(
-        "DDT Team",
-        "https://ddt.hastateam.com",
-        "it",
-    ) {
+@Source
+abstract class DdtTeam : PizzaReader() {
     override val client = super.client.newBuilder()
         .addInterceptor { chain ->
             val url = chain.request().url.newBuilder()

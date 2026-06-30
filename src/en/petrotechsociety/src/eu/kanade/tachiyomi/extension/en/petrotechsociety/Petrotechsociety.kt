@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.petrotechsociety
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class Petrotechsociety : Madara("Petrotechsociety", "https://www.petrotechsociety.org", "en")
+@Source
+abstract class Petrotechsociety : Madara()

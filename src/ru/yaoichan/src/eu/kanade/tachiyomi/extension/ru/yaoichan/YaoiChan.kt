@@ -3,13 +3,13 @@ package eu.kanade.tachiyomi.extension.ru.yaoichan
 import eu.kanade.tachiyomi.multisrc.multichan.MultiChan
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
-class YaoiChan : MultiChan("YaoiChan", "https://yaoi-chan.me", "ru") {
-
-    override val id: Long = 2466512768990363955
+@Source
+abstract class YaoiChan : MultiChan() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val pageNum = page.coerceAtLeast(1)

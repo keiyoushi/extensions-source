@@ -4,9 +4,13 @@ plugins {
 
 keiyoushi {
     name = "ChoChoX"
-    className = "Chochox"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "vercomics"
+
+    source {
+        lang = "es"
+        baseUrl = "https://chochox.com"
+    }
 }

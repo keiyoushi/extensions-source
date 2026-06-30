@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
@@ -26,13 +27,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class LittleTyrant :
-    Madara(
-        "Little Tyrant",
-        "https://tiraninha.world",
-        "pt-BR",
-        dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("pt", "BR")),
-    ) {
+@Source
+abstract class LittleTyrant : Madara() {
+    override val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("pt", "BR"))
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addNetworkInterceptor(ImageDecoderInterceptor())

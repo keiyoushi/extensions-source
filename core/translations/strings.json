@@ -14,6 +14,11 @@
     "customUrlTitle": "URL base personalizada",
     "customUrlDialogMessage": "Dejar en blanco para usar la predeterminada"
   },
+  "ru": {
+    "mirrorTitle": "Домен",
+    "customUrlTitle": "Домен",
+    "customUrlDialogMessage": "Оставьте пустым, чтобы использовать домен по умолчанию"
+  },
   "vi": {
     "mirrorTitle": "Chọn tên miền",
     "customUrlTitle": "Tên miền tự chọn",

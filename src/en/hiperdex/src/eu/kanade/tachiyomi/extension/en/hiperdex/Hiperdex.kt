@@ -10,6 +10,7 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.rateLimit
@@ -19,20 +20,15 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Hiperdex :
-    Madara(
-        "Hiperdex",
-        "https://hiperdex.com",
-        "en",
-        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US),
-    ),
+@Source
+abstract class Hiperdex :
+    Madara(),
     ConfigurableSource {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US)
 
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div.summary-content"
 
     private val preferences = getPreferences()
-
-    override val baseUrl by lazy { getPrefBaseUrl() }
 
     override val client = super.client.newBuilder()
         .addNetworkInterceptor(ClearanceInterceptor())
@@ -47,19 +43,6 @@ class Hiperdex :
     override val pageListParseSelector = "div.page-break:not([style*='display:none'])"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default URL:\n\t${super.baseUrl}"
-            setDefaultValue(super.baseUrl)
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
-                true
-            }
-        }.also { screen.addPreference(it) }
-
         CheckBoxPreference(screen.context).apply {
             key = "${REMOVE_TITLE_VERSION_PREF}_$lang"
             title = "Remove version information from entry titles"
@@ -153,27 +136,10 @@ class Hiperdex :
         return tempTitle.trim()
     }
 
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
     private fun isRemoveTitleVersion(): Boolean = preferences.getBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", false)
     private fun customRemoveTitle(): String = preferences.getString("${REMOVE_TITLE_CUSTOM_PREF}_$lang", "")!!
 
-    init {
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { defaultBaseUrl ->
-            if (defaultBaseUrl != super.baseUrl) {
-                preferences.edit()
-                    .putString(BASE_URL_PREF, super.baseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
-                    .apply()
-            }
-        }
-    }
-
     companion object {
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_TITLE = "Edit source URL (requires restart)"
-        private const val BASE_URL_PREF_SUMMARY = "The default settings will be applied when the extension is next updated"
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-        private const val RESTART_APP_MESSAGE = "Restart app to apply new setting."
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
         private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
 

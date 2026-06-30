@@ -5,12 +5,15 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class TopManhua : Madara("Top Manhua", "https://mangatop.org", "en", SimpleDateFormat("MM/dd/yy", Locale.US)) {
+@Source
+abstract class TopManhua : Madara() {
+    override val dateFormat = SimpleDateFormat("MM/dd/yy", Locale.US)
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()
