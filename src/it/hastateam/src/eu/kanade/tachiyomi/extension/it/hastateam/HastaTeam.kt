@@ -1,15 +1,12 @@
 package eu.kanade.tachiyomi.extension.it.hastateam
 
 import eu.kanade.tachiyomi.multisrc.pizzareader.PizzaReader
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import kotlinx.serialization.json.Json
 
-class HastaTeam :
-    PizzaReader(
-        "Hasta Team",
-        "https://reader.hastateam.com",
-        "it",
-    ) {
+@Source
+abstract class HastaTeam : PizzaReader() {
     override val client = super.client.newBuilder()
         .addInterceptor { chain ->
             val url = chain.request().url.newBuilder()

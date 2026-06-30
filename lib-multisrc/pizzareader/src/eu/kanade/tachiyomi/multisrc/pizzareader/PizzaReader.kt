@@ -19,13 +19,11 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-abstract class PizzaReader(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-    private val apiPath: String = "/api",
-    private val dateParser: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.ITALY),
-) : HttpSource() {
+abstract class PizzaReader : HttpSource() {
+
+    protected open val apiPath: String = "/api"
+
+    protected open val dateParser: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.ITALY)
 
     override val supportsLatest = true
 
