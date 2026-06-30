@@ -2,10 +2,6 @@ plugins {
     alias(kei.plugins.extension)
 }
 
-dependencies {
-    implementation(project(":lib:cookieinterceptor"))
-}
-
 keiyoushi {
     name = "Nude-Moon"
     versionCode = 29
@@ -18,4 +14,8 @@ keiyoushi {
         }
         lang = "ru"
     }
+}
+
+dependencies {
+    implementation(project(":lib:cookieinterceptor"))
 }
