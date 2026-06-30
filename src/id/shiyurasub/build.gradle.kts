@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "ShiyuraSub"
-    className = "ShiyuraSub"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "zeistmanga"
-    baseUrl = "https://shiyurasub.blogspot.com"
+
+    source {
+        lang = "id"
+        baseUrl = "https://shiyurasub.blogspot.com"
+    }
 }

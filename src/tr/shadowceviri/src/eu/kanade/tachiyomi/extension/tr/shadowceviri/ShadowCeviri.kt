@@ -4,9 +4,11 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Response
 
-class ShadowCeviri : ZeistManga("Shadow Çeviri", "https://shadowceviri.blogspot.com", "tr") {
+@Source
+abstract class ShadowCeviri : ZeistManga() {
 
     // ============================== Popular ===============================
     override fun popularMangaParse(response: Response): MangasPage {

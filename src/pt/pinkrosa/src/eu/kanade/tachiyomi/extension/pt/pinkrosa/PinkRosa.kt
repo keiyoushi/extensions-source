@@ -4,17 +4,14 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Document
 
-class PinkRosa :
-    ZeistManga(
-        "Pink Rosa",
-        "https://scanpinkrosa.blogspot.com",
-        "pt-BR",
-    ) {
+@Source
+abstract class PinkRosa : ZeistManga() {
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()

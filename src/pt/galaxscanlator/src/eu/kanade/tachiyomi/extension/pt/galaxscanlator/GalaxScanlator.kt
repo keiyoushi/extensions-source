@@ -1,15 +1,12 @@
 package eu.kanade.tachiyomi.extension.pt.galaxscanlator
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import kotlin.time.Duration.Companion.seconds
 
-class GalaxScanlator :
-    ZeistManga(
-        "GALAX Scans",
-        "https://galaxscanlator.blogspot.com",
-        "pt-BR",
-    ) {
+@Source
+abstract class GalaxScanlator : ZeistManga() {
     override val client = super.client.newBuilder()
         .rateLimit(5, 2.seconds)
         .build()

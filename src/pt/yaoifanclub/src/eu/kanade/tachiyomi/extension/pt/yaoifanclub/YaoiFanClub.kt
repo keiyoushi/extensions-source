@@ -4,13 +4,10 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.Genre
 import eu.kanade.tachiyomi.multisrc.zeistmanga.Status
 import eu.kanade.tachiyomi.multisrc.zeistmanga.Type
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
+import keiyoushi.annotation.Source
 
-class YaoiFanClub :
-    ZeistManga(
-        "Yaoi Fan Club",
-        "https://www.yaoifanclub.com",
-        "pt-BR",
-    ) {
+@Source
+abstract class YaoiFanClub : ZeistManga() {
 
     override val popularMangaSelector = "#PopularPosts3 article"
     override val popularMangaSelectorTitle = ".post-title a"

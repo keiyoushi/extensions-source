@@ -1,9 +1,11 @@
 package eu.kanade.tachiyomi.extension.ar.comicverse
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
 
-class ComicVerse : ZeistManga("Comic Verse", "https://arcomixverse.blogspot.com", "ar") {
+@Source
+abstract class ComicVerse : ZeistManga() {
 
     override fun getChapterFeedUrl(doc: Document): String {
         val widget = doc.selectFirst("div.manga-widget[data-label]")
