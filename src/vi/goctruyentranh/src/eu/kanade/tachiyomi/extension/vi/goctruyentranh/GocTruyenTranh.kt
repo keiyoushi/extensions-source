@@ -213,5 +213,4 @@ abstract class GocTruyenTranh : HttpSource() {
         SortByList(),
         CountryList(),
     )
-
 }
