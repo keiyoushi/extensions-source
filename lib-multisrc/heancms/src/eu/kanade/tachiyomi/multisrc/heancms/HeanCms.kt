@@ -29,7 +29,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.concurrent.thread
 
-abstract class HeanCms : HttpSource(),
+abstract class HeanCms :
+    HttpSource(),
     ConfigurableSource {
 
     protected open val apiUrl: String
