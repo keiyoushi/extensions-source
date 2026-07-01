@@ -31,7 +31,8 @@ import java.util.TimeZone
 import kotlin.math.min
 import kotlin.time.Duration.Companion.minutes
 
-abstract class Kemono : HttpSource(),
+abstract class Kemono :
+    HttpSource(),
     ConfigurableSource {
     override val supportsLatest = true
 
