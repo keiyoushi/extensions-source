@@ -17,11 +17,7 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
 /** MangAdventure base source. */
-abstract class MangAdventure(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String = "en",
-) : HttpSource() {
+abstract class MangAdventure : HttpSource() {
     /** The site's manga categories. */
     protected open val categories = DEFAULT_CATEGORIES
 
