@@ -16,11 +16,11 @@ object Preferences {
     private const val PS_KEY_DOMAIN_DEFAULT = "$PS_KEY_DOMAIN::DEFAULT"
     private const val PS_KEY_DOMAIN_OVERRIDE = "$PS_KEY_DOMAIN::OVERRIDE"
     private const val PS_KEY_LANGUAGE = "$PS_KEY_ROOT::LANGUAGE"
+    private const val PS_KEY_IMAGE_QUALITY = "$PS_KEY_ROOT::IMAGE_QUALITY"
 
     private const val DEFAULT_DOMAIN = "https://xchina.co"
 
     internal fun SharedPreferences.preferenceMigration() {
-        // refresh when DEFAULT_DOMAIN update
         val defaultDomain = getString(PS_KEY_DOMAIN_DEFAULT, DEFAULT_DOMAIN)!!
         if (DEFAULT_DOMAIN != defaultDomain) {
             edit()
@@ -38,7 +38,6 @@ object Preferences {
             httpUrl.host.split('.').size > 2 || subdomain == null -> httpUrl.host
             else -> "$subdomain.${httpUrl.host}"
         }
-
         return httpUrl.newBuilder()
             .scheme("https")
             .host(newHost)
@@ -52,6 +51,7 @@ object Preferences {
     internal fun buildPreferences(context: Context, intl: Intl): List<Preference> = listOf(
         buildDomainPreference(context, intl),
         buildLanguagePreference(context, intl),
+        buildImageQualityPreference(context, intl),
     )
 
     internal fun buildDomainPreference(context: Context, intl: Intl): Preference {
@@ -61,25 +61,15 @@ object Preferences {
             summary = intl["config.domain.summary"]
             dialogTitle = intl["config.domain.dialog.title"]
             dialogMessage = "${intl["config.domain.dialog.message"]} $DEFAULT_DOMAIN"
-
             setDefaultValue(DEFAULT_DOMAIN)
             setOnPreferenceChangeListener { _, newValue ->
                 try {
                     (newValue as String).toHttpUrl()
                 } catch (_: IllegalArgumentException) {
-                    Toast.makeText(
-                        context,
-                        intl["config.domain.toast.changed-failed"],
-                        Toast.LENGTH_LONG,
-                    ).show()
+                    Toast.makeText(context, intl["config.domain.toast.changed-failed"], Toast.LENGTH_LONG).show()
                     return@setOnPreferenceChangeListener false
                 }
-
-                Toast.makeText(
-                    context,
-                    intl["config.domain.toast.changed-success"],
-                    Toast.LENGTH_LONG,
-                ).show()
+                Toast.makeText(context, intl["config.domain.toast.changed-success"], Toast.LENGTH_LONG).show()
                 true
             }
         }
@@ -93,12 +83,17 @@ object Preferences {
         entryValues = LanguageUtils.getSupportedLanguageKeys()
         setDefaultValue("")
         setOnPreferenceChangeListener { _, _ ->
-            Toast.makeText(
-                context,
-                intl["config.language.changed-success"],
-                Toast.LENGTH_LONG,
-            ).show()
+            Toast.makeText(context, intl["config.language.changed-success"], Toast.LENGTH_LONG).show()
             true
         }
+    }
+
+    internal fun buildImageQualityPreference(context: Context, intl: Intl): Preference = ListPreference(context).apply {
+        key = PS_KEY_IMAGE_QUALITY
+        title = intl["config.image_quality.title"]
+        summary = intl["config.image_quality.summary"]
+        entries = arrayOf("原图(JPG)", "高清(WebP)")
+        entryValues = arrayOf("original", "webp_hd")
+        setDefaultValue("original")
     }
 }
