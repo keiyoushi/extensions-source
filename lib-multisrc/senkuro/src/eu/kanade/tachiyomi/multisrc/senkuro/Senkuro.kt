@@ -1,11 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.senkuro
 
-import android.content.SharedPreferences
-import android.widget.Toast
-import androidx.preference.ListPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLPost
 import keiyoushi.utils.parseGraphQLAs
 import keiyoushi.utils.tryParse
@@ -27,9 +21,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-abstract class Senkuro :
-    HttpSource(),
-    ConfigurableSource {
+abstract class Senkuro : HttpSource() {
 
     override val supportsLatest = false
 
@@ -39,16 +31,8 @@ abstract class Senkuro :
         .add("App-Id", if (name == "Senkuro") "4026531840100" else "5033164800100")
         .add("App-Version", "060626")
 
-    private val preferences: SharedPreferences by getPreferencesLazy()
-
     private val apiUrl: String
-        get() = preferences.getString(API_DOMAIN_PREF, API_DOMAIN_DEFAULT)!! + "/graphql"
-
-    private val siteUrl = if (apiUrl.contains("senkuro.me")) {
-        "https://senkuro.me"
-    } else {
-        baseUrl
-    }
+        get() = baseUrl.replace("https://", "https://api.") + "/graphql"
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
@@ -207,7 +191,7 @@ abstract class Senkuro :
 
     override fun getMangaUrl(manga: SManga): String {
         val slug = manga.url.split(",,").getOrNull(1) ?: return ""
-        return "$siteUrl/manga/$slug"
+        return "$baseUrl/manga/$slug"
     }
 
     // ============================= Chapters ==============================
@@ -262,7 +246,7 @@ abstract class Senkuro :
         val parts = chapter.url.split(",,")
         val mangaSlug = parts.getOrNull(1) ?: return ""
         val chapterSlug = parts.getOrNull(3) ?: return ""
-        return "$siteUrl/manga/$mangaSlug/chapters/$chapterSlug"
+        return "$baseUrl/manga/$mangaSlug/chapters/$chapterSlug"
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -394,25 +378,7 @@ abstract class Senkuro :
     )
 
     // ============================= Utilities =============================
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = API_DOMAIN_PREF
-            title = API_DOMAIN_TITLE
-            entries = arrayOf("Публичный (senkuro.com)", "Россия (senkuro.me)")
-            entryValues = arrayOf(API_DOMAIN_DEFAULT, "https://api.senkuro.me")
-            summary = "%s"
-            setDefaultValue(API_DOMAIN_DEFAULT)
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Для смены домена необходимо перезапустить приложение с полной остановкой.", Toast.LENGTH_LONG).show()
-                true
-            }
-        }.let(screen::addPreference)
-    }
-
     companion object {
-        private const val API_DOMAIN_PREF = "MangaApiDomain"
-        private const val API_DOMAIN_TITLE = "Домен API"
-        private const val API_DOMAIN_DEFAULT = "https://api.senkuro.com"
         private const val OFFSET_COUNT = 10
     }
 }

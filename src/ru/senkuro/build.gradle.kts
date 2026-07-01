@@ -10,7 +10,11 @@ keiyoushi {
     theme = "senkuro"
 
     source {
-        baseUrl = "https://senkuro.com"
+        baseUrl("https://senkuro.me") {
+            mirrors = listOf(
+                "https://senkuro.com",
+            )
+        }
         lang = "ru"
     }
 }
