@@ -16,7 +16,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-abstract class EZManhwa : HttpSource(),
+abstract class EZManhwa :
+    HttpSource(),
     ConfigurableSource {
 
     abstract val apiUrl: String
