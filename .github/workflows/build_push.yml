@@ -12,7 +12,9 @@ on:
       - '.github/workflows/build_push.yml'
   workflow_dispatch:
 
-permissions: {}
+permissions:
+  contents: read
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}
@@ -83,11 +85,10 @@ jobs:
           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          ./gradlew $MODULES
+          ./gradlew :src:ko:ntk:assembleRelease
 
       - name: Upload APKs (${{ matrix.chunk.number }})
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: "github.repository == 'keiyoushi/extensions-source'"
         with:
           name: "individual-apks-${{ matrix.chunk.number }}"
           path: "**/*.apk"
@@ -99,7 +100,6 @@ jobs:
   publish:
     name: Publish extension repo
     needs: [prepare, build]
-    if: "github.repository == 'keiyoushi/extensions-source'"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -124,7 +124,8 @@ jobs:
       - name: Create repo artifacts
         run: |
           cd main
-          python ./.github/scripts/move-built-apks.py
+          mkdir -p repo/apk
+          find ~/apk-artifacts -name "*.apk" -exec cp {} repo/apk/ \;
           INSPECTOR_LINK="$(curl -s "https://api.github.com/repos/keiyoushi/extensions-inspector/releases/latest" | jq -r '.assets[0].browser_download_url')"
           curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
           java -jar ./Inspector.jar "repo/apk" "output.json" "tmp"
@@ -133,9 +134,9 @@ jobs:
       - name: Checkout repo branch
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          repository: keiyoushi/extensions
+          repository: rustedimac/NTK-Mihon-Extension
           token: ${{ secrets.BOT_PAT }}
-          ref: repo
+          ref: main
           path: repo
           persist-credentials: true
 
