@@ -3,14 +3,11 @@ package eu.kanade.tachiyomi.extension.pt.temakimangas
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Response
 
-class TemakiMangas :
-    ZeistManga(
-        "Temaki mangás",
-        "https://temakimangas.blogspot.com",
-        "pt-BR",
-    ) {
+@Source
+abstract class TemakiMangas : ZeistManga() {
     override val popularMangaSelector = "#PopularPosts2 article"
     override val popularMangaSelectorTitle = "h3"
     override val popularMangaSelectorUrl = "h3 a"

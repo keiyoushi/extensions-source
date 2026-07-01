@@ -31,11 +31,8 @@ import java.util.TimeZone
 import kotlin.math.min
 import kotlin.time.Duration.Companion.minutes
 
-open class Kemono(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String = "all",
-) : HttpSource(),
+abstract class Kemono :
+    HttpSource(),
     ConfigurableSource {
     override val supportsLatest = true
 

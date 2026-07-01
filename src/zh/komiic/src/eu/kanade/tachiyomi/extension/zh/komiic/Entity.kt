@@ -2,8 +2,15 @@ package eu.kanade.tachiyomi.extension.zh.komiic
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import kotlin.time.Instant
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
+
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply {
+    timeZone = TimeZone.getTimeZone("UTC")
+}
 
 @Serializable
 class DataDto(
@@ -68,7 +75,7 @@ class ChapterDto(
             else -> this@ChapterDto.serial
         }
         scanlator = "${this@ChapterDto.size}P"
-        date_upload = Instant.parse(this@ChapterDto.dateCreated).toEpochMilliseconds()
+        date_upload = dateFormat.tryParse(this@ChapterDto.dateCreated)
         chapter_number = this@ChapterDto.serial.toFloatOrNull() ?: -1f
     }
 }

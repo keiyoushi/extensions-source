@@ -8,18 +8,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.net.URLEncoder
 import kotlin.time.Duration.Companion.minutes
 
-class MikuDoujin : HttpSource() {
-
-    override val baseUrl: String = "https://miku-doujin.com"
-
-    override val lang: String = "th"
-    override val name: String = "MikuDoujin"
+@Source
+abstract class MikuDoujin : HttpSource() {
 
     override val supportsLatest: Boolean = true
 

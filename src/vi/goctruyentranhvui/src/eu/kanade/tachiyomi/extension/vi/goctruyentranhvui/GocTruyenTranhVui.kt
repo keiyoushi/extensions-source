@@ -21,6 +21,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -36,31 +37,16 @@ import uy.kohesive.injekt.api.get
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class GocTruyenTranhVui :
+@Source
+abstract class GocTruyenTranhVui :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Goc Truyen Tranh Vui"
-
-    override val lang = "vi"
-
-    private val defaultBaseUrl = "https://goctruyentranhvui30.com"
-
-    override val baseUrl get() = getPrefBaseUrl()
 
     private val apiUrl get() = "$baseUrl/api/v2"
 
     override val supportsLatest: Boolean = true
 
-    private val preferences: SharedPreferences = getPreferences {
-        getString(PREF_DEFAULT_BASE_URL, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != defaultBaseUrl) {
-                edit()
-                    .putString(PREF_BASE_URL, defaultBaseUrl)
-                    .putString(PREF_DEFAULT_BASE_URL, defaultBaseUrl)
-                    .apply()
-            }
-        }
-    }
+    private val preferences: SharedPreferences = getPreferences()
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
@@ -124,8 +110,7 @@ class GocTruyenTranhVui :
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
             val baseHost = baseUrl.toHttpUrl().host
-            val defaultHost = defaultBaseUrl.toHttpUrl().host
-            if (url.host != baseHost && url.host != defaultHost) {
+            if (url.host != baseHost) {
                 throw Exception("Tên miền không được hỗ trợ")
             }
 
@@ -330,27 +315,6 @@ class GocTruyenTranhVui :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
-            key = PREF_CUSTOM_DOMAIN
-            title = "Tùy chỉnh tên miền"
-            summary = "Nhập tên miền đầy đủ (ví dụ: $defaultBaseUrl)"
-            setDefaultValue(defaultBaseUrl)
-            dialogTitle = "Ghi đè URL cơ sở"
-            dialogMessage = "Default: $defaultBaseUrl"
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val inputUrl = newValue as String
-                    if (inputUrl.isNotBlank()) {
-                        inputUrl.toHttpUrl()
-                    }
-                    Toast.makeText(screen.context, "Tên miền đã được thay đổi", Toast.LENGTH_LONG).show()
-                    true
-                } catch (e: Exception) {
-                    Toast.makeText(screen.context, "Lỗi sai định dạng URL: ${e.message}", Toast.LENGTH_LONG).show()
-                    false
-                }
-            }
-        }.let(screen::addPreference)
-        EditTextPreference(screen.context).apply {
             key = CUSTOM_TOKEN
             title = "Authorization Token"
             summary = "Enter token manually"
@@ -362,12 +326,9 @@ class GocTruyenTranhVui :
             }
         }.also(screen::addPreference)
     }
-    private fun getPrefBaseUrl(): String = preferences.getString(PREF_CUSTOM_DOMAIN, defaultBaseUrl)!!
+
     companion object {
         private const val CUSTOM_TOKEN = "custom_token"
-        private const val PREF_DEFAULT_BASE_URL = "pref_default_base_url"
-        private const val PREF_BASE_URL = "pref_base_url"
-        private const val PREF_CUSTOM_DOMAIN = "pref_custom_domain"
         private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng token mới nhập."
         private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
         private val COMIC_ID_REGEX = Regex("""id:\s*"([^"]+)"""")

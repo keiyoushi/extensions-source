@@ -6,9 +6,11 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Response
 
-class MikoRoku : ZeistManga("MikoRoku", "https://www.mikoroku.com", "id") {
+@Source
+abstract class MikoRoku : ZeistManga() {
 
     override fun popularMangaRequest(page: Int) = latestUpdatesRequest(page)
     override fun popularMangaParse(response: Response) = searchMangaParse(response)

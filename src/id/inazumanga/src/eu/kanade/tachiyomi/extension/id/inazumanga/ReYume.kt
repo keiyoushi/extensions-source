@@ -3,9 +3,11 @@ package eu.kanade.tachiyomi.extension.id.inazumanga
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Response
 
-class ReYume : ZeistManga("ReYume", "https://www.re-yume.my.id", "id") {
+@Source
+abstract class ReYume : ZeistManga() {
 
     override val popularMangaSelector = ".pop-card"
     override val popularMangaSelectorTitle = "h4 a"

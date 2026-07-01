@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.lib.synchrony.Deobfuscator
 import keiyoushi.network.rateLimit
@@ -26,14 +27,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class MangasIn :
-    MMRCMS(
-        "Mangas.in",
-        "https://m440.in",
-        "es",
-        supportsAdvancedSearch = false,
-        dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
-    ) {
+@Source
+abstract class MangasIn : MMRCMS() {
+
+    override val supportsAdvancedSearch = false
+
+    override val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val client = super.client.newBuilder()

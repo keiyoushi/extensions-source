@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -20,27 +21,14 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class NineGrid :
+@Source
+abstract class NineGrid :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "NineGrid"
-    override val lang = "ru"
     override val supportsLatest = true
 
-    private val preferences = getPreferences {
-        getString(PREF_DEFAULT_BASE_URL, null).let { defaultBaseUrl ->
-            if (defaultBaseUrl != DEFAULT_BASE_URL) {
-                edit()
-                    .putString(PREF_BASE_URL, DEFAULT_BASE_URL)
-                    .putString(PREF_DEFAULT_BASE_URL, DEFAULT_BASE_URL)
-                    .apply()
-            }
-        }
-    }
-
-    override val baseUrl: String
-        get() = preferences.getString(PREF_BASE_URL, DEFAULT_BASE_URL)!!.trimEnd('/')
+    private val preferences = getPreferences()
 
     private val apiKey: String
         get() = preferences.getString(PREF_API_KEY, "") ?: ""
@@ -187,13 +175,6 @@ class NineGrid :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
-            key = PREF_BASE_URL
-            title = "URL сервера"
-            summary = "По умолчанию: $DEFAULT_BASE_URL"
-            setDefaultValue(DEFAULT_BASE_URL)
-        }.let(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
             key = PREF_API_KEY
             title = "API-ключ"
             summary = "Для трекинга прогресса"
@@ -202,11 +183,7 @@ class NineGrid :
     }
 
     companion object {
-        private const val DEFAULT_BASE_URL = "https://9grid.cc"
-        private const val PREF_BASE_URL = "pref_base_url"
-        private const val PREF_DEFAULT_BASE_URL = "pref_default_base_url"
         private const val PREF_API_KEY = "pref_api_key"
-        const val SEARCH_PREFIX = "id:"
 
         private val ANNUAL_REGEX = Regex("^annual\\s*", RegexOption.IGNORE_CASE)
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)

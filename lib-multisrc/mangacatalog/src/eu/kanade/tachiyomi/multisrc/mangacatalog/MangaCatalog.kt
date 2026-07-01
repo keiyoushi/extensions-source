@@ -16,11 +16,7 @@ import rx.Observable
 // Based On the original manga maniac source
 // MangaCatalog is a network of sites for single franshise sites
 
-abstract class MangaCatalog(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class MangaCatalog : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")

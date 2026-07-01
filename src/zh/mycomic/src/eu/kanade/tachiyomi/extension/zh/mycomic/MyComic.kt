@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -23,12 +24,10 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MyComic :
+@Source
+abstract class MyComic :
     HttpSource(),
     ConfigurableSource {
-    override val baseUrl = "https://mycomic.com"
-    override val lang: String = "zh"
-    override val name: String = "MyComic"
     override val supportsLatest: Boolean = true
 
     // Added Accept and Accept-Language to mimic browser and bypass Cloudflare bot detection

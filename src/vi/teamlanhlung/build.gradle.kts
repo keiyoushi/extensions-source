@@ -4,8 +4,15 @@ plugins {
 
 keiyoushi {
     name = "Team Lanh Lung"
-    className = "TeamLanhLung"
     versionCode = 33
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        name = "Team Lạnh Lùng"
+        lang = "vi"
+        baseUrl("https://icecoldcore.com") {
+            withCustom = true
+        }
+    }
 }

@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Read One Piece Manga Online"
-    className = "ReadOnePieceMangaOnline"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangacatalog"
-    baseUrl = "https://ww12.readonepiece.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://ww12.readonepiece.com"
+    }
 }

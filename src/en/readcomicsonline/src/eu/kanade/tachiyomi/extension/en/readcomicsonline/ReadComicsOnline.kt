@@ -5,23 +5,25 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ReadComicsOnline :
-    MMRCMS(
-        "Read Comics Online",
-        "https://readcomicsonline.ru",
-        "en",
-        itemPath = "comic",
-        chapterString = "",
-        fetchFilterOptions = false,
-        detailsTitleSelector = "h1.text-2xl",
-        dateFormat = SimpleDateFormat("d MMM yyyy", Locale.US),
-    ) {
+@Source
+abstract class ReadComicsOnline : MMRCMS() {
+
+    override val itemPath = "comic"
+
+    override val chapterString = ""
+
+    override val fetchFilterOptions = false
+
+    override val detailsTitleSelector = "h1.text-2xl"
+
+    override val dateFormat = SimpleDateFormat("d MMM yyyy", Locale.US)
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/comic-list?sort=views&page=$page")
 

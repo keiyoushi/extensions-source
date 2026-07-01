@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Read Solo Leveling Manga Manhwa Online"
-    className = "ReadSoloLevelingMangaManhwaOnline"
     versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangacatalog"
-    baseUrl = "https://ww3.readsololeveling.org"
+
+    source {
+        lang = "en"
+        baseUrl = "https://ww3.readsololeveling.org"
+    }
 }

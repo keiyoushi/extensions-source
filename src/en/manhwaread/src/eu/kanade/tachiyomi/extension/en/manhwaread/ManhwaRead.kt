@@ -1,11 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.manhwaread
 
-import android.content.SharedPreferences
 import android.util.Base64
-import androidx.preference.ListPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,7 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -24,29 +20,14 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
-import kotlin.getValue
+@Source
+abstract class ManhwaRead : HttpSource() {
 
-class ManhwaRead :
-    HttpSource(),
-    ConfigurableSource {
-
-    override val name = "ManhwaRead"
-
-    private val mirrors = arrayOf("https://manhwaread.com", "https://manhwaread.org")
-
-    override val baseUrl: String
-        get() = when {
-            System.getenv("CI") == "true" -> mirrors.joinToString("#, ")
-            else -> mirrors[preferences.getString(MIRROR_PREF_KEY, "0")!!.toInt().coerceIn(mirrors.indices)]
-        }
-
-    override val lang = "en"
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    private val preferences: SharedPreferences by getPreferencesLazy()
     private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
 
     // Popular
@@ -275,19 +256,7 @@ class ManhwaRead :
         }
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = MIRROR_PREF_KEY
-            title = "Mirror URL"
-            entries = mirrors
-            entryValues = Array(mirrors.size, Int::toString)
-            setDefaultValue("0")
-            summary = "%s"
-        }.also(screen::addPreference)
-    }
-
     companion object {
-        const val MIRROR_PREF_KEY = "pref_mirror"
         val PATTERN_CHAPTER_DATA = """var\s+chapterData\s*=\s*(\{.*\})""".toRegex()
     }
 }

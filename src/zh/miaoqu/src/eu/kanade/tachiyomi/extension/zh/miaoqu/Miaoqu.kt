@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.Response
@@ -18,7 +19,8 @@ import rx.Observable
 import kotlin.experimental.xor
 
 // This site shares the same database with 6Manhua (SixMH), but uses manga slug as URL.
-class Miaoqu : MCCMSWeb("喵趣漫画", "https://www.miaoqumh.org") {
+@Source
+abstract class Miaoqu : MCCMSWeb() {
     override fun parseListing(document: Document): MangasPage {
         // There's no genre list to parse, so we fetch genres from mobile page in getFilterList()
         val entries = document.selectFirst("#mangawrap")!!.children().map { element ->

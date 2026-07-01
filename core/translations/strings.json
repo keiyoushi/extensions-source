@@ -23,5 +23,10 @@
     "mirrorTitle": "Chọn tên miền",
     "customUrlTitle": "Tên miền tự chọn",
     "customUrlDialogMessage": "Bỏ trống để sử dụng giá trị mặc định"
+  },
+  "zh": {
+    "mirrorTitle": "鏡像站點",
+    "customUrlTitle": "自訂基本 URL",
+    "customUrlDialogMessage": "留空則使用預設網址。"
   }
 }

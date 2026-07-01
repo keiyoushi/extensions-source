@@ -1,10 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.manhwahub
 
 import eu.kanade.tachiyomi.multisrc.manhwaz.ManhwaZ
+import keiyoushi.annotation.Source
 
-class ManhwaHub :
-    ManhwaZ(
-        "ManhwaHub",
-        "https://manhwahub.net",
-        "en",
-    )
+@Source
+abstract class ManhwaHub : ManhwaZ()

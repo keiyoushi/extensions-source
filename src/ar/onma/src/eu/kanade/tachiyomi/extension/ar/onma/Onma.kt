@@ -2,15 +2,14 @@ package eu.kanade.tachiyomi.extension.ar.onma
 
 import eu.kanade.tachiyomi.multisrc.mmrcms.MMRCMS
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
 
-class Onma :
-    MMRCMS(
-        "مانجا اون لاين",
-        "https://onma.me",
-        "ar",
-        detailsTitleSelector = ".panel-heading",
-    ) {
+@Source
+abstract class Onma : MMRCMS() {
+
+    override val detailsTitleSelector = ".panel-heading"
+
     override fun searchMangaSelector() = "div.chapter-container"
 
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {

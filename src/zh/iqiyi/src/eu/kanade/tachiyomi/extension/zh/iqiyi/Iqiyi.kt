@@ -8,16 +8,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.Request
 import okhttp3.Response
 
-class Iqiyi : HttpSource() {
-    override val name: String = "爱奇艺叭嗒"
-    override val lang get() = "zh-Hans"
-    override val id get() = 2198877009406729694
+@Source
+abstract class Iqiyi : HttpSource() {
     override val supportsLatest: Boolean = true
-    override val baseUrl: String = "https://www.iqiyi.com/manhua"
 
     override fun headersBuilder() = super.headersBuilder()
         .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36")

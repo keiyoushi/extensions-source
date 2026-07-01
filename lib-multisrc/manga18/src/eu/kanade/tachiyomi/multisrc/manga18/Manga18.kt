@@ -21,11 +21,7 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-abstract class Manga18(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class Manga18 : HttpSource() {
 
     override val supportsLatest = true
 

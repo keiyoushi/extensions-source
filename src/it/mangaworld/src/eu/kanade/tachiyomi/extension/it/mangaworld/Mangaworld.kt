@@ -1,10 +1,7 @@
 package eu.kanade.tachiyomi.extension.it.mangaworld
 
 import eu.kanade.tachiyomi.multisrc.mangaworld.MangaWorld
+import keiyoushi.annotation.Source
 
-class Mangaworld :
-    MangaWorld(
-        "Mangaworld",
-        "https://www.mangaworld.mx",
-        "it",
-    )
+@Source
+abstract class Mangaworld : MangaWorld()

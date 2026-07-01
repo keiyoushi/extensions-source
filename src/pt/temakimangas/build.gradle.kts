@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Temaki mangás"
-    className = "TemakiMangas"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "zeistmanga"
-    baseUrl = "https://temakimangas.blogspot.com"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://temakimangas.blogspot.com"
+    }
 }

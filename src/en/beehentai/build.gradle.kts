@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "BeeHentai"
-    className = "BeeHentai"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madtheme"
-    baseUrl = "https://beehentai.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://beehentai.com"
+    }
 }

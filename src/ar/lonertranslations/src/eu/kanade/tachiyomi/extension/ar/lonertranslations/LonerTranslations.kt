@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.ar.lonertranslations
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
+import keiyoushi.annotation.Source
 
-class LonerTranslations : ZeistManga("Loner Translations", "https://loner-tl.blogspot.com", "ar")
+@Source
+abstract class LonerTranslations : ZeistManga()
