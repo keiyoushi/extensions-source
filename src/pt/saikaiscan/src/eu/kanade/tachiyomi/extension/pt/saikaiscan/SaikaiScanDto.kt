@@ -90,7 +90,7 @@ data class SaikaiScanReleaseDto(
         chapter_number = chapter.toFloatOrNull() ?: -1f
         date_upload = runCatching { DATE_FORMATTER.parse(publishedAt)?.time }
             .getOrNull() ?: 0L
-        scanlator = SaikaiScan.SOURCE_NAME
+        scanlator = "Saikai Scan"
         url = "/ler/comics/$storySlug/$id/$slug"
     }
 
