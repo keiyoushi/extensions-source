@@ -2,18 +2,15 @@ package eu.kanade.tachiyomi.extension.en.manhwaz
 
 import eu.kanade.tachiyomi.multisrc.manhwaz.ManhwaZ
 import eu.kanade.tachiyomi.network.GET
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Element
 
-class ManhwaZCom :
-    ManhwaZ(
-        "ManhwaZ",
-        "https://manhwaz.com",
-        "en",
-    ) {
+@Source
+abstract class ManhwaZCom : ManhwaZ() {
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(2)
         .build()

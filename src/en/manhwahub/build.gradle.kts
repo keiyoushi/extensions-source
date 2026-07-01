@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "ManhwaHub"
-    className = "ManhwaHub"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "manhwaz"
-    baseUrl = "https://manhwahub.net"
+
+    source {
+        lang = "en"
+        baseUrl = "https://manhwahub.net"
+    }
 }
