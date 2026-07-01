@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.readnanatsunotaizai7deadlysinsmangaonline
 
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
+import keiyoushi.annotation.Source
 
-class ReadNanatsuNoTaizai7DeadlySinsMangaOnline : MangaCatalog("Read Nanatsu no Taizai 7 Deadly Sins Manga Online", "https://ww7.read7deadlysins.com", "en") {
+@Source
+abstract class ReadNanatsuNoTaizai7DeadlySinsMangaOnline : MangaCatalog() {
     override val sourceList = listOf(
         Pair("Four Horsemen of the Apocalypse", "$baseUrl/manga/four-horsemen-of-the-apocalypse/"),
         Pair("7DS: School", "$baseUrl/manga/mayoe-nanatsu-no-taizai-gakuen/"),

@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.readchainsawmanmangaonline
 
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
+import keiyoushi.annotation.Source
 
-class ReadChainsawManMangaOnline : MangaCatalog("Read Chainsaw Man Manga Online", "https://ww5.readchainsawman.com", "en") {
+@Source
+abstract class ReadChainsawManMangaOnline : MangaCatalog() {
     override val sourceList = listOf(
         Pair("Chainsaw Man", "$baseUrl/manga/chainsaw-man/"),
         Pair("17-21", "$baseUrl/manga/17-21-fujimoto-tatsuki-tanpenshuu/"),
