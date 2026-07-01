@@ -17,11 +17,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 
-abstract class Masonry(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class Masonry : HttpSource() {
 
     override val supportsLatest = true
 

@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.metarthunter
 
 import eu.kanade.tachiyomi.multisrc.masonry.Masonry
+import keiyoushi.annotation.Source
 
-class MetartHunter : Masonry("Metart Hunter", "https://www.metarthunter.com", "all")
+@Source
+abstract class MetartHunter : Masonry()
