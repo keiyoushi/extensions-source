@@ -32,8 +32,6 @@ abstract class PlumaComics : HttpSource() {
         .add("Referer", "$baseUrl/")
         .build()
 
-    override val versionId = 5
-
     // Popular
 
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(sort = "popular")
