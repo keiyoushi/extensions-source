@@ -177,7 +177,11 @@ abstract class Cmoa :
         if (response.request.url.pathSegments.contains("speedreader")) {
             return reader.pageListParse(response)
         }
-        return emptyList()
+
+        if (response.request.url.encodedPath.contains("/bib/reader")) {
+            throw Exception("Novels are not supported.")
+        }
+        throw Exception("Log in via WebView and purchase this product to read.")
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
