@@ -77,12 +77,12 @@ abstract class Cmoa :
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        fun Builder.addFilter(param: String, filter: Filter.Text) = filter.state.takeIf { it.isNotEmpty() }?.let { addQueryParameter(param, it) }
-        fun Builder.addFilter(param: String, filter: SelectFilter) = filter.value.takeIf { it.isNotEmpty() }?.let { addQueryParameter(param, it) }
+        fun Builder.addFilter(param: String, filter: Filter.Text) = filter.state.takeIf { it.isNotBlank() }?.let { addQueryParameter(param, it) }
+        fun Builder.addFilter(param: String, filter: SelectFilter) = filter.value.takeIf { it.isNotBlank() }?.let { addQueryParameter(param, it) }
         fun Builder.addFilter(param: String, filter: Filter.CheckBox) = filter.state.takeIf { it }?.let { addQueryParameter(param, "1") }
 
         val url = "$baseUrl/search/result".toHttpUrl().newBuilder().apply {
-            if (query.isNotEmpty()) addQueryParameter("word", query)
+            if (query.isNotBlank()) addQueryParameter("word", query)
             addFilter("title_nm", filters.firstInstance<TitleFilter>())
             addFilter("author_nm", filters.firstInstance<AuthorFilter>())
             addFilter("magazine_nm", filters.firstInstance<MagazineFilter>())
