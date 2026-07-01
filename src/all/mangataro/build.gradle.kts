@@ -9,9 +9,10 @@ keiyoushi {
     libVersion = "1.4"
     theme = "mangataro"
 
-    source {
-        lang = "all"
-        baseUrl = "https://mangataro.org"
-        skipCodeGen = true
+    listOf("en", "pt-BR").forEach { language ->
+        source {
+            lang = language
+            baseUrl = "https://mangataro.org"
+        }
     }
 }
