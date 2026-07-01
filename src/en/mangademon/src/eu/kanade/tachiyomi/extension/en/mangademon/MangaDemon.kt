@@ -132,10 +132,15 @@ abstract class MangaDemon : HttpSource() {
                 thumbnail_url = selectFirst("div#manga-page img")!!.attr("abs:src")
                 genre = select("div.genres-list > li").joinToString { it.text() }
                 description = selectFirst("div#manga-info-rightColumn > div > div.white-font")!!.text()
-                author = select("div#manga-info-stats > div:has(> li:eq(0):contains(Author)) > li:eq(1)").text()
+                author = parseAuthor(select("div#manga-info-stats > div:has(> li:eq(0):contains(Author)) > li:eq(1)").text())
                 status = parseStatus(select("div#manga-info-stats > div:has(> li:eq(0):contains(Status)) > li:eq(1)").text())
             }
         }
+    }
+
+    private fun parseAuthor(author: String?) = when {
+        author == null || author.contains("Updating", ignoreCase = true) -> null
+        else -> author
     }
 
     private fun parseStatus(status: String?) = when {

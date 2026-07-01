@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "KL Raw"
-    className = "KLRaw"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangareader"
-    baseUrl = "https://www.klraw.info"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://www.klraw.info"
+    }
 }

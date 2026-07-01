@@ -16,16 +16,11 @@ import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
-open class MonochromeCMS(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class MonochromeCMS : HttpSource() {
     override val supportsLatest = false
 
-    protected open val apiUrl by lazy {
-        baseUrl.replaceFirst("://", "://api.")
-    }
+    protected open val apiUrl: String
+        get() = baseUrl.replaceFirst("://", "://api.")
 
     private val json by injectLazy<Json>()
 

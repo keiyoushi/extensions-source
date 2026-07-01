@@ -3,15 +3,12 @@ package eu.kanade.tachiyomi.extension.pt.apenasumafa
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import org.jsoup.nodes.Document
 
-class ApenasUmaFa :
-    ZeistManga(
-        "Apenas Uma Fã",
-        "https://apenasuma-fa.blogspot.com",
-        "pt-BR",
-    ) {
+@Source
+abstract class ApenasUmaFa : ZeistManga() {
     override val supportsLatest = false
 
     override fun fetchPopularManga(page: Int) = fetchLatestUpdates(page)

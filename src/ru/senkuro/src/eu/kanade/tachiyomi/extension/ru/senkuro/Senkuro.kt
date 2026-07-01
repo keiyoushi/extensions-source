@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.ru.senkuro
 
 import eu.kanade.tachiyomi.multisrc.senkuro.Senkuro
+import keiyoushi.annotation.Source
 
-class Senkuro : Senkuro("Senkuro", "https://senkuro.com", "ru")
+@Source
+abstract class Senkuro : Senkuro()

@@ -20,12 +20,10 @@ import keiyoushi.utils.parseAs as parseAsRaw
 /**
  * 漫城CMS http://mccms.cn/
  */
-open class MCCMS(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String = "zh",
-    private val config: MCCMSConfig = MCCMSConfig(),
-) : HttpSource() {
+abstract class MCCMS : HttpSource() {
+
+    protected open val config: MCCMSConfig = MCCMSConfig()
+
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val supportsLatest get() = true

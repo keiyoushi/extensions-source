@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import okhttp3.OkHttpClient
@@ -18,10 +19,8 @@ import java.util.Calendar
 import java.util.Locale
 import kotlin.time.Duration.Companion.minutes
 
-class Niceoppai : HttpSource() {
-    override val baseUrl: String = "https://www.niceoppai.net"
-    override val lang: String = "th"
-    override val name: String = "Niceoppai"
+@Source
+abstract class Niceoppai : HttpSource() {
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.client.newBuilder()

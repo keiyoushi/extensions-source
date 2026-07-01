@@ -7,8 +7,8 @@ import android.graphics.Rect
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayOutputStream
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 import java.io.InputStream
 
 class UnscramblerInterceptor : Interceptor {
@@ -29,12 +29,12 @@ class UnscramblerInterceptor : Interceptor {
 
             val image = response.body.byteStream().use { descramble(it, parts) }
 
-            val body = image.toResponseBody("image/jpeg".toMediaType())
+            val body = image.asResponseBody("image/jpeg".toMediaType())
             response.newBuilder().body(body).build()
         }
     }
 
-    private fun descramble(image: InputStream, partsCount: Int): ByteArray {
+    private fun descramble(image: InputStream, partsCount: Int): Buffer {
         val srcBitmap = BitmapFactory.decodeStream(image)
         val width = srcBitmap.width
         val height = srcBitmap.height
@@ -63,8 +63,11 @@ class UnscramblerInterceptor : Interceptor {
             }
         }
 
-        val output = ByteArrayOutputStream()
-        result.compress(Bitmap.CompressFormat.JPEG, 90, output)
-        return output.toByteArray()
+        srcBitmap.recycle()
+
+        val output = Buffer()
+        result.compress(Bitmap.CompressFormat.JPEG, 90, output.outputStream())
+        result.recycle()
+        return output
     }
 }

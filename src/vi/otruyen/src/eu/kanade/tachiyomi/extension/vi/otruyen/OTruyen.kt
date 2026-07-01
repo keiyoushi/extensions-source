@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
@@ -20,20 +21,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import kotlin.collections.flatMap
-import kotlin.collections.map
 
-class OTruyen : HttpSource() {
-
-    override val name: String = "OTruyen"
-
-    override val lang: String = "vi"
+@Source
+abstract class OTruyen : HttpSource() {
 
     override val supportsLatest: Boolean = true
 
     private val domainName = "otruyen"
-
-    override val baseUrl: String = "https://$domainName.cc"
 
     private val domainApi = "${domainName}api.com"
 
@@ -110,12 +104,12 @@ class OTruyen : HttpSource() {
                 listOf("tim-kiem") to mapOf("keyword" to query)
             }
 
-            filters.filterIsInstance<GenreList>().isNotEmpty() -> {
-                val genre = filters.filterIsInstance<GenreList>().first()
+            filters.filterIsInstance<GenresFilter>().isNotEmpty() -> {
+                val genre = filters.filterIsInstance<GenresFilter>().first()
                 listOf("the-loai", genre.values[genre.state].slug) to emptyMap()
             }
 
-            filters.filterIsInstance<GenreList>().isEmpty() -> {
+            filters.filterIsInstance<GenresFilter>().isEmpty() -> {
                 val status = filters.filterIsInstance<StatusList>().first()
                 listOf("danh-sach", status.values[status.state].slug) to emptyMap()
             }
@@ -127,7 +121,7 @@ class OTruyen : HttpSource() {
 
         val url = apiUrl.toHttpUrl().newBuilder().apply {
             segments.forEach { addPathSegment(it) }
-            addQueryParameter("page", "$page")
+            addQueryParameter("page", page.toString())
             params.forEach { (k, v) -> addQueryParameter(k, v) }
         }.build()
 
@@ -136,18 +130,20 @@ class OTruyen : HttpSource() {
 
     private fun genresRequest(): Request = GET("$apiUrl/the-loai", headers)
 
-    private fun parseGenres(response: Response): List<Pair<String, String>> = response.parseAs<DataDto<GenresData>>().data.items.map { Pair(it.slug, it.name) }
+    private fun parseGenres(response: Response): List<Genre> = response.parseAs<DataDto<GenresData>>().data.items.map { Genre(it.name, it.slug) }
 
-    private var genreList: List<Pair<String, String>> = emptyList()
+    private var genreList: List<Genre> = emptyList()
 
     private var fetchGenresAttempts: Int = 0
     private fun fetchGenres() {
         launchIO {
             try {
                 client.newCall(genresRequest()).await()
-                    .use { parseGenres(it) }
+                    .use { response ->
+                        parseGenres(response).sortedBy { it.name }
+                    }
                     .takeIf { it.isNotEmpty() }
-                    ?.also { genreList = it }
+                    ?.let { genreList = it }
             } catch (_: Exception) {
             } finally {
                 fetchGenresAttempts++
@@ -158,8 +154,6 @@ class OTruyen : HttpSource() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private fun launchIO(block: suspend () -> Unit) = scope.launch { block() }
-
-    private class GenreList(name: String, pairs: List<Pair<String, String>>) : GenresFilter(name, pairs)
 
     private class StatusList :
         Filter.Select<Genre>(
@@ -172,10 +166,10 @@ class OTruyen : HttpSource() {
             ),
         )
 
-    private open class GenresFilter(title: String, pairs: List<Pair<String, String>>) :
+    private open class GenresFilter(title: String, pairs: List<Genre>) :
         Filter.Select<Genre>(
             title,
-            pairs.map { Genre(it.second, it.first) }.toTypedArray(),
+            pairs.map { Genre(it.name, it.slug) }.toTypedArray(),
         )
 
     private class Genre(val name: String, val slug: String) {
@@ -194,7 +188,7 @@ class OTruyen : HttpSource() {
         } else {
             FilterList(
                 Filter.Header("Không dùng chung được với tìm kiếm bằng tên"),
-                GenreList("Thể loại", genreList),
+                GenresFilter("Thể loại", genreList),
             )
         }
     }

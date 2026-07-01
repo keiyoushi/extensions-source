@@ -4,13 +4,15 @@ import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ReadBerserkManga : MangaCatalog("Read Berserk Manga", "https://readberserk.com", "en") {
+@Source
+abstract class ReadBerserkManga : MangaCatalog() {
     override val sourceList = listOf(
         Pair("Berserk", "$baseUrl/manga/berserk/"),
         Pair("Guidebook", "$baseUrl/manga/berserk-official-guidebook/"),

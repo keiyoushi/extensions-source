@@ -19,12 +19,10 @@ import org.jsoup.nodes.Element
 import org.jsoup.select.Evaluator
 import rx.Observable
 
-open class MCCMSWeb(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String = "zh",
-    protected val config: MCCMSConfig = MCCMSConfig(),
-) : HttpSource() {
+abstract class MCCMSWeb : HttpSource() {
+
+    protected open val config: MCCMSConfig = MCCMSConfig()
+
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val supportsLatest get() = true

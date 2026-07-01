@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import okhttp3.Cookie
@@ -29,13 +30,11 @@ import rx.Observable
 
 const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua_"
 
-class Happymh :
+@Source
+abstract class Happymh :
     HttpSource(),
     ConfigurableSource {
-    override val name: String = "嗨皮漫画"
-    override val lang: String = "zh"
     override val supportsLatest: Boolean = true
-    override val baseUrl: String = "https://m.happymh.com"
 
     private val preferences = getPreferences()
     private val decoder = Decoder()

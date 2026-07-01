@@ -4,10 +4,17 @@ plugins {
 
 keiyoushi {
     name = "Senkognito"
-    className = "Senkognito"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "senkuro"
-    baseUrl = "https://senkognito.com"
+
+    source {
+        baseUrl("https://senkuro.me") {
+            mirrors = listOf(
+                "https://senkognito.com",
+            )
+        }
+        lang = "ru"
+    }
 }

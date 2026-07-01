@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -36,12 +37,8 @@ const val DOMAIN = "mangacloud.org"
 const val API_URL = "https://api.$DOMAIN"
 const val CDN_URL = "https://pika.$DOMAIN"
 
-class MangaCloud : HttpSource() {
-    override val name = "MangaCloud"
-    override val lang = "en"
-
-    override val baseUrl = "https://$DOMAIN"
-
+@Source
+abstract class MangaCloud : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()

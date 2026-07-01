@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.zh.dm5
 import android.util.Log
 import android.webkit.CookieManager
 import android.widget.Toast
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -15,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.unpacker.Unpacker
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
@@ -24,17 +24,18 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
-class Dm5 :
+@Source
+abstract class Dm5 :
     HttpSource(),
     ConfigurableSource {
-    override val lang = "zh"
+
     override val supportsLatest = true
-    override val name = "动漫屋"
+
     override val client = network.client.newBuilder().addInterceptor(CommentsInterceptor).build()
 
     private val preferences by getPreferencesLazy()
-    override val baseUrl = preferences.getString(MIRROR_PREF, MIRROR_ENTRIES[0])!!
 
     // Some mangas are blocked without this
     override fun headersBuilder() = super.headersBuilder().set("Accept-Language", "zh-TW")
@@ -51,9 +52,9 @@ class Dm5 :
 
     private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst("h2.title > a")!!.text()
-        thumbnail_url = element.selectFirst("p.mh-cover")!!.attr("style")
-            .substringAfter("url(").substringBefore(")")
-        url = element.selectFirst("h2.title > a")!!.attr("href")
+        thumbnail_url = element.selectFirst("p.mh-cover")?.attr("style")
+            ?.substringAfter("url(")?.substringBefore(")")
+        setUrlWithoutDomain(element.selectFirst("h2.title > a")!!.absUrl("href"))
     }
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manhua-list-s2-p$page/", headers)
@@ -76,23 +77,24 @@ class Dm5 :
 
     private fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst(".title > a")!!.text()
+        setUrlWithoutDomain(element.selectFirst(".title > a")!!.absUrl("href"))
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
-            ?: element.selectFirst("p.mh-cover")!!.attr("style")
-                .substringAfter("url(").substringBefore(")")
-        url = element.selectFirst(".title > a")!!.attr("href")
+            ?: element.selectFirst("p.mh-cover")?.attr("style")
+                ?.substringAfter("url(")?.substringBefore(")")
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
             title = document.selectFirst("div.banner_detail_form p.title")!!.ownText()
-            thumbnail_url = document.selectFirst("div.banner_detail_form img")!!.absUrl("src")
-            author = document.selectFirst("div.banner_detail_form p.subtitle > a")!!.text()
+            thumbnail_url = document.selectFirst("div.banner_detail_form img")?.absUrl("src")
+            author = document.selectFirst("div.banner_detail_form p.subtitle > a")?.text()
             artist = author
-            genre = document.select("div.banner_detail_form p.tip a").eachText().joinToString(", ")
-            val el = document.selectFirst("div.banner_detail_form p.content")!!
-            description = el.ownText() + el.selectFirst("span")?.ownText().orEmpty()
-            status = when (document.selectFirst("div.banner_detail_form p.tip > span > span")!!.text()) {
+            genre = document.select("div.banner_detail_form p.tip a").eachText().joinToString()
+            description = document.selectFirst("div.banner_detail_form p.content")?.let {
+                it.ownText() + it.selectFirst("span")?.ownText().orEmpty()
+            }.orEmpty()
+            status = when (document.selectFirst("div.banner_detail_form p.tip > span > span")?.text()) {
                 "连载中" -> SManga.ONGOING
                 "已完结" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
@@ -111,10 +113,10 @@ class Dm5 :
         val li = container.select("> ul").flatMapIndexed { i, ul ->
             ul.select("li > a").map {
                 SChapter.create().apply {
-                    url = it.attr("href")
+                    setUrlWithoutDomain(it.absUrl("href"))
                     name = it.selectFirst("p.title")?.text() ?: it.text()
                     it.selectFirst(".detail-lock, .view-lock")?.let { name = "\uD83D\uDD12 $name" }
-                    scanlator = titles[i]
+                    scanlator = titles.getOrNull(i)
                     it.selectFirst("p.tip")?.let { date ->
                         date_upload = dateFormat.tryParse(date.text())
                     }
@@ -124,11 +126,11 @@ class Dm5 :
 
         // Sort chapter by url (related to upload time)
         if (preferences.getBoolean(SORT_CHAPTER_PREF, false)) {
-            return li.sortedByDescending { it.url.drop(2).dropLast(1).toInt() }
+            return li.sortedByDescending { it.url.drop(2).dropLast(1).toIntOrNull() ?: 0 }
         }
 
         // Sometimes list is in ascending order, probably unread paid manga
-        return if (document.selectFirst("div.detail-list-title a.order")!!.text() == "正序") {
+        return if (document.selectFirst("div.detail-list-title a.order")?.text() == "正序") {
             li.reversed()
         } else {
             li
@@ -141,7 +143,7 @@ class Dm5 :
         val result: MutableList<Page>
         val script = document.selectFirst("script:containsData(DM5_MID)")!!.data()
         if (!script.contains("DM5_VIEWSIGN_DT")) {
-            throw Exception(document.selectFirst("div.view-pay-form p.subtitle")!!.text())
+            throw Exception(document.selectFirst("div.view-pay-form p.subtitle")?.text() ?: "Required viewsign data missing from script")
         }
         val cid = script.substringAfter("var DM5_CID=").substringBefore(";")
         if (images.isNotEmpty()) {
@@ -167,7 +169,7 @@ class Dm5 :
                     .addQueryParameter("_dt", dt)
                     .addQueryParameter("_sign", sign)
                     .build()
-                Page(it, url.toString())
+                Page(it, url = url.toString())
             }.toMutableList()
         }
 
@@ -202,19 +204,12 @@ class Dm5 :
 
     override fun imageRequest(page: Page): Request {
         val url = page.imageUrl!!.toHttpUrl()
-        val cid = url.queryParameter("cid")!!
+        val cid = url.queryParameter("cid") ?: ""
         val headers = headers.newBuilder().add("Referer", "$baseUrl/m$cid").build()
         return GET(url, headers)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val mirrorPreference = ListPreference(screen.context).apply {
-            key = MIRROR_PREF
-            title = "使用镜像网址"
-            entries = MIRROR_ENTRIES
-            entryValues = MIRROR_ENTRIES
-            setDefaultValue(MIRROR_ENTRIES[0])
-        }
         val chapterCommentsPreference = SwitchPreferenceCompat(screen.context).apply {
             key = CHAPTER_COMMENTS_PREF
             title = "章末吐槽页"
@@ -226,7 +221,6 @@ class Dm5 :
             title = "依照上傳時間排序章節"
             setDefaultValue(false)
         }
-        screen.addPreference(mirrorPreference)
         screen.addPreference(chapterCommentsPreference)
         screen.addPreference(sortChapterPreference)
 
@@ -238,22 +232,26 @@ class Dm5 :
                     val manager = CookieManager.getInstance()
                     var before = 0
                     var after = 0
-                    for (mirror in MIRROR_ENTRIES) {
-                        val cookies = manager.getCookie(mirror) ?: continue
+
+                    val cookies = manager.getCookie(baseUrl)
+                    if (cookies != null) {
                         val cookieList = cookies.split("; ")
                         before += cookieList.size
-                        val url = mirror.toHttpUrl()
+                        val url = baseUrl.toHttpUrl()
                         val domain = url.host
                         val topDomain = url.topPrivateDomain()
                         for (cookie in cookieList) {
                             val name = cookie.substringBefore('=')
-                            manager.setCookie(mirror, "$name=; Max-Age=-1; Path=/")
-                            manager.setCookie(mirror, "$name=; Max-Age=-1; Domain=$domain; Path=/")
-                            manager.setCookie(mirror, "$name=; Max-Age=-1; Domain=$topDomain; Path=/")
+                            manager.setCookie(baseUrl, "$name=; Max-Age=-1; Path=/")
+                            manager.setCookie(baseUrl, "$name=; Max-Age=-1; Domain=$domain; Path=/")
+                            manager.setCookie(baseUrl, "$name=; Max-Age=-1; Domain=$topDomain; Path=/")
                         }
-                        val cookiesAfter = manager.getCookie(mirror) ?: continue
-                        after += cookiesAfter.split("; ").size
+                        val cookiesAfter = manager.getCookie(baseUrl)
+                        if (cookiesAfter != null) {
+                            after += cookiesAfter.split("; ").size
+                        }
                     }
+
                     "一共 $before 条 Cookie，清除了 ${before - after} 条"
                 } catch (e: Exception) {
                     Log.e("Dm5", "failed to clear cookies", e)
@@ -267,14 +265,11 @@ class Dm5 :
     }
 
     companion object {
-        private val MIRROR_ENTRIES get() = arrayOf(
-            "https://www.dm5.cn",
-            "https://www.dm5.com",
-        )
-        private const val MIRROR_PREF = "mirror"
         private const val CHAPTER_COMMENTS_PREF = "chapterComments"
         private const val SORT_CHAPTER_PREF = "sortChapter"
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+        private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
+            timeZone = TimeZone.getTimeZone("Asia/Shanghai")
+        }
 
         private const val POPULAR_MANGA_SELECTOR = "ul.mh-list > li > div.mh-item"
         private const val NEXT_PAGE_SELECTOR = "div.page-pagination a:contains(>)"

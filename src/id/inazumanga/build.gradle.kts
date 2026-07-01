@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "ReYume"
-    className = "ReYume"
     versionCode = 29
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "zeistmanga"
-    baseUrl = "https://www.re-yume.my.id"
+
+    source {
+        lang = "id"
+        baseUrl = "https://www.re-yume.my.id"
+    }
 }

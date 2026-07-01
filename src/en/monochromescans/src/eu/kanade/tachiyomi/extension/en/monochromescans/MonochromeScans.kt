@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.monochromescans
 
 import eu.kanade.tachiyomi.multisrc.monochrome.MonochromeCMS
+import keiyoushi.annotation.Source
 
-class MonochromeScans : MonochromeCMS("Monochrome Scans", "https://manga.d34d.one", "en")
+@Source
+abstract class MonochromeScans : MonochromeCMS()

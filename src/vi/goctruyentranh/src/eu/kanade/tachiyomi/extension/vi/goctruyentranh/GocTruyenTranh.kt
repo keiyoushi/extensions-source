@@ -1,10 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.goctruyentranh
 
-import android.content.SharedPreferences
-import android.widget.Toast
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,8 +8,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -27,21 +23,12 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class GocTruyenTranh :
-    HttpSource(),
-    ConfigurableSource {
-
-    override val lang = "vi"
-
-    private val defaultBaseUrl = "https://goctruyentranh.com"
-
-    override val baseUrl get() = getPrefBaseUrl()
-
-    override val name = "GocTruyenTranh"
+@Source
+abstract class GocTruyenTranh : HttpSource() {
 
     override val supportsLatest = true
 
-    private val searchUrl by lazy { "${getPrefBaseUrl()}/baseapi/comics/filterComic" }
+    private val searchUrl get() = "$baseUrl/baseapi/comics/filterComic"
 
     private val dateFormat = SimpleDateFormat("dd-MM-yyyy HH:mm:ss", Locale.US)
 
@@ -226,54 +213,4 @@ class GocTruyenTranh :
         SortByList(),
         CountryList(),
     )
-
-    private val preferences: SharedPreferences = getPreferences()
-
-    init {
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != defaultBaseUrl) {
-                preferences.edit()
-                    .putString(BASE_URL_PREF, defaultBaseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
-                    .apply()
-            }
-        }
-    }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            setDefaultValue(defaultBaseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $defaultBaseUrl"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val inputUrl = newValue as String
-                    if (inputUrl.isNotBlank()) {
-                        inputUrl.toHttpUrl()
-                    }
-                    Toast.makeText(screen.context, NOTIFICATION_SHOW, Toast.LENGTH_LONG).show()
-                    true
-                } catch (e: Exception) {
-                    Toast.makeText(screen.context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                    false
-                }
-            }
-        }
-        screen.addPreference(baseUrlPref)
-    }
-
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
-
-    companion object {
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-        private const val NOTIFICATION_SHOW = "Tên miền đã được thay đổi."
-        private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_SUMMARY =
-            "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
-    }
 }

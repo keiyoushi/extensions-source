@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Novato Scans"
-    className = "NovatoScans"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "zeistmanga"
-    baseUrl = "https://www.novatoscans.top"
+
+    source {
+        lang = "es"
+        baseUrl = "https://www.novatoscans.top"
+    }
 }

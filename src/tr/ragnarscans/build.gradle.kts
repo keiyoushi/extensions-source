@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Ragnar Scans"
-    className = "RagnarScans"
     versionCode = 45
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "initmanga"
-    baseUrl = "https://ragnarscans.com"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://ragnarscans.com"
+        versionId = 2
+    }
 }

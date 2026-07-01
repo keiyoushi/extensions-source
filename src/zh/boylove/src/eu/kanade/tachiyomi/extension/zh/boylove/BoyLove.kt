@@ -1,11 +1,8 @@
 package eu.kanade.tachiyomi.extension.zh.boylove
 
 import android.util.Log
-import androidx.preference.ListPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,37 +11,23 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.getPreferences
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
+import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.select.Evaluator
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import kotlin.concurrent.thread
 
 // Uses MACCMS http://www.maccms.la/
 // 支持站点，不要添加屏蔽广告选项，何况广告本来就不多
-class BoyLove :
-    HttpSource(),
-    ConfigurableSource {
-    override val name = "香香腐宅"
-    override val lang = "zh"
+@Source
+abstract class BoyLove : HttpSource() {
+
     override val supportsLatest = true
-
-    private val json: Json by injectLazy()
-
-    override val baseUrl by lazy {
-        val preferences = getPreferences()
-
-        val mirrors = MIRRORS
-        val index = preferences.getString(MIRROR_PREF, "0")!!.toInt().coerceIn(0, mirrors.size - 1)
-        "https://" + mirrors[index]
-    }
 
     override val client = network.client.newBuilder()
         .addInterceptor(UnscramblerInterceptor())
@@ -54,7 +37,7 @@ class BoyLove :
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/home/api/getpage/tp/1-topestmh-${page - 1}", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val listPage: ListPageDto<MangaDto> = response.parseAs()
+        val listPage = response.parseAs<ResultDto<ListPageDto<MangaDto>>>().result
         val mangas = listPage.list.map { it.toSManga() }
         return MangasPage(mangas, !listPage.lastPage)
     }
@@ -62,7 +45,7 @@ class BoyLove :
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/home/Api/getDailyUpdate.html?widx=4&page=${page - 1}&limit=10", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val mangas = response.parseAs<List<MangaDto>>().map { it.toSManga() }
+        val mangas = response.parseAs<ResultDto<List<MangaDto>>>().result.map { it.toSManga() }
         return MangasPage(mangas, mangas.size >= 10)
     }
 
@@ -77,18 +60,18 @@ class BoyLove :
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // for WebView
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/home/book/index/id/${manga.url}")
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/home/book/index/id/${manga.url}", headers)
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(textSearchRequest(1, manga.title)).asObservableSuccess().map { response ->
         val id = manga.url.toInt()
-        response.parseAs<ListPageDto<MangaDto>>().list.find { it.id == id }!!.toSManga()
+        response.parseAs<ResultDto<ListPageDto<MangaDto>>>().result.list.find { it.id == id }!!.toSManga()
     }
 
     override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
     override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/home/api/chapter_list/tp/${manga.url}", headers)
 
-    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<ListPageDto<ChapterDto>>().list.map { it.toSChapter() }.reversed()
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<ResultDto<ListPageDto<ChapterDto>>>().result.list.map { it.toSChapter() }.reversed()
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val chapterUrl = chapter.url
@@ -127,21 +110,8 @@ class BoyLove :
         }
     }
 
-    private fun Document.getPartsCount(): Int? = selectFirst("script:containsData(firstMergeImg):containsData(imageData)")?.data()?.run {
-        substringBefore("var scrollTop")
-            .substringAfterLast("var randomClass = ")
-            .substringBefore(';')
-            .trim()
-            .substringAfterLast(" ")
-            .toIntOrNull()
-    }
-
     override fun pageListParse(response: Response) = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromStream<ResultDto<T>>(body.byteStream()).result
-    }
 
     private var genres: Array<String> = emptyArray()
     private var isFetchingGenres = false
@@ -180,24 +150,12 @@ class BoyLove :
         }
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = MIRROR_PREF
-            title = "镜像网址"
-            summary = "选择要使用的镜像网址，重启生效"
-            val desc = MIRRORS_DESC
-            entries = desc
-            entryValues = Array(desc.size, Int::toString)
-            setDefaultValue("0")
-        }.let { screen.addPreference(it) }
-    }
-
-    companion object {
-        private const val MIRROR_PREF = "MIRROR"
-
-        // redirect URL: https://fuhouse.club/bl
-        // link source URL: https://boylovepage.github.io/boylove_page
-        private val MIRRORS get() = arrayOf("boylove1.mobi", "boylove3.cc", "boylove.cc", "boyloves.space", "boylove4.xyz", "boyloves.fun", "boylove.today", "fuzai.one", "xxfuzai.xyz", "fuzai.cc")
-        private val MIRRORS_DESC get() = arrayOf("boylove1.mobi", "boylove3.cc", "boylove.cc（非大陆）", "boyloves.space", "boylove4.xyz", "boyloves.fun", "boylove.today", "fuzai.one", "xxfuzai.xyz", "fuzai.cc（非大陆）")
+    private fun Document.getPartsCount(): Int? = selectFirst("script:containsData(firstMergeImg):containsData(imageData)")?.data()?.run {
+        substringBefore("var scrollTop")
+            .substringAfterLast("var randomClass = ")
+            .substringBefore(';')
+            .trim()
+            .substringAfterLast(" ")
+            .toIntOrNull()
     }
 }
