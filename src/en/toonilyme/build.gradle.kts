@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Toonily.me"
-    className = "ToonilyMe"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madtheme"
-    baseUrl = "https://toonily.me"
+
+    source {
+        lang = "en"
+        baseUrl = "https://toonily.me"
+    }
 }
