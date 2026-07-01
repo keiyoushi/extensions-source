@@ -13,6 +13,7 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.parser.Parser
@@ -25,26 +26,28 @@ abstract class Doujindesu : HttpSource() {
     override val supportsLatest = true
     private val apiUrl: String get() = "$baseUrl/api"
 
-    val decryptor = Decryptor(apiUrl)
+    private val decryptor by lazy { Decryptor(apiUrl) }
 
     private val slugCache = object : LinkedHashMap<String, String>() {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 30
     }
 
-    override val client = super.client.newBuilder()
-        .addInterceptor(decryptor.xorInterceptor())
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val url = request.url.toString()
-            val headers = request.headers.newBuilder()
+    override val client: OkHttpClient by lazy {
+        network.client.newBuilder()
+            .addInterceptor(decryptor.xorInterceptor())
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                val headers = request.headers.newBuilder()
 
-            if (imageDomains.any { url.contains(it) }) {
-                headers.removeAll("x-app-secret")
+                if (imageDomains.any { url.contains(it) }) {
+                    headers.removeAll("x-app-secret")
+                }
+
+                chain.proceed(request.newBuilder().headers(headers.build()).build())
             }
-
-            chain.proceed(request.newBuilder().headers(headers.build()).build())
-        }
-        .build()
+            .build()
+    }
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("x-app-secret", APP_SECRET)

@@ -13,7 +13,7 @@ keiyoushi {
         baseUrl("https://doujin.desu.xxx") {
             withCustom = true
         }
-        id = 7704282043609669342
+        id = 7704282043609669342L
     }
 }
 
