@@ -28,16 +28,15 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-abstract class InitManga(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-    override val versionId: Int,
-    private val mangaUrlDirectory: String = "seri",
-    dateFormatStr: String = "yyyy-MM-dd'T'HH:mm:ss",
-    private val popularUrlSlug: String = mangaUrlDirectory,
-    private val latestUrlSlug: String = "son-guncellemeler",
-) : HttpSource() {
+abstract class InitManga : HttpSource() {
+
+    protected open val mangaUrlDirectory: String = "seri"
+
+    protected open val dateFormatStr: String = "yyyy-MM-dd'T'HH:mm:ss"
+
+    protected open val popularUrlSlug: String = mangaUrlDirectory
+
+    protected open val latestUrlSlug: String = "son-guncellemeler"
 
     override val supportsLatest = true
 

@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.kemono
 
 import eu.kanade.tachiyomi.multisrc.kemono.Kemono
+import keiyoushi.annotation.Source
 
-class Kemono : Kemono("Kemono", "https://kemono.cr", "all") {
+@Source
+abstract class Kemono : Kemono() {
     override val getTypes = listOf(
         "Patreon",
         "Pixiv Fanbox",

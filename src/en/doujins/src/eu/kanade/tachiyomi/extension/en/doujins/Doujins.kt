@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -27,13 +28,8 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-class Doujins : HttpSource() {
-
-    override val baseUrl: String = "https://doujins.com"
-
-    override val lang: String = "en"
-
-    override val name: String = "Doujins"
+@Source
+abstract class Doujins : HttpSource() {
 
     override val supportsLatest: Boolean = true
 

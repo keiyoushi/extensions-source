@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.ftvhunter
 
 import eu.kanade.tachiyomi.multisrc.masonry.Masonry
+import keiyoushi.annotation.Source
 
-class FTVHunter : Masonry("FTV Hunter", "https://www.ftvhunter.com", "all")
+@Source
+abstract class FTVHunter : Masonry()

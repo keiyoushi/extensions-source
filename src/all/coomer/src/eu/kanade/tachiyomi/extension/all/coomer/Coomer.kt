@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.coomer
 
 import eu.kanade.tachiyomi.multisrc.kemono.Kemono
+import keiyoushi.annotation.Source
 
-class Coomer : Kemono("Coomer", "https://coomer.st", "all") {
+@Source
+abstract class Coomer : Kemono() {
     override val getTypes = listOf(
         "OnlyFans",
         "Fansly",

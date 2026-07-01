@@ -9,15 +9,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class Comicabc : HttpSource() {
-    override val name: String = "無限動漫"
-    override val lang: String = "zh"
+@Source
+abstract class Comicabc : HttpSource() {
     override val supportsLatest: Boolean = true
-    override val baseUrl: String = "https://www.8comic.com"
     private val chaptersBaseUrl: String = "https://articles.onemoreplace.tw"
 
     // ============================== Popular ==============================

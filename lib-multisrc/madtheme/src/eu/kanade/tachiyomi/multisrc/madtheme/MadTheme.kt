@@ -28,12 +28,9 @@ import java.util.Calendar
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-abstract class MadTheme(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH),
-) : HttpSource() {
+abstract class MadTheme : HttpSource() {
+
+    protected open val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
 
     override val supportsLatest = true
 

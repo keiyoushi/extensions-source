@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.mangatoday
 
 import eu.kanade.tachiyomi.multisrc.mangahub.MangaHub
+import keiyoushi.annotation.Source
 
-class MangaToday : MangaHub("MangaToday", "https://mangatoday.fun", "en", "m03")
+@Source
+abstract class MangaToday : MangaHub() {
+    override val mangaSource = "m03"
+}

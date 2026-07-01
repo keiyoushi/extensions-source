@@ -4,10 +4,20 @@ plugins {
 
 keiyoushi {
     name = "KaliScan"
-    className = "KaliScanCom"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madtheme"
-    baseUrl = "https://kaliscan.com"
+
+    source {
+        lang = "en"
+        baseUrl("https://kaliscan.com") {
+            mirrors = listOf(
+                "https://kaliscan.me",
+                "https://kaliscan.io",
+                "https://mgjinx.com",
+            )
+        }
+        id = 7660637864742395387L
+    }
 }

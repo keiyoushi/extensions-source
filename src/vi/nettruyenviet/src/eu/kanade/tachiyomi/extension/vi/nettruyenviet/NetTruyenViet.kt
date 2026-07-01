@@ -1,10 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.nettruyenviet
 
-import android.content.SharedPreferences
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,9 +8,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -27,17 +23,8 @@ import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 
-class NetTruyenViet :
-    HttpSource(),
-    ConfigurableSource {
-
-    override val name = "NetTruyenViet (unoriginal)"
-
-    override val lang = "vi"
-
-    private val defaultBaseUrl = "https://nettruyenviet10.com"
-
-    override val baseUrl get() = getPrefBaseUrl()
+@Source
+abstract class NetTruyenViet : HttpSource() {
 
     override val supportsLatest = true
 
@@ -45,21 +32,8 @@ class NetTruyenViet :
         .rateLimit(5)
         .build()
 
-    private val preferences: SharedPreferences = getPreferences()
-
     private val chapterDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
-    }
-
-    init {
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != defaultBaseUrl) {
-                preferences.edit()
-                    .putString(BASE_URL_PREF, defaultBaseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
-                    .apply()
-            }
-        }
     }
 
     override fun headersBuilder() = super.headersBuilder()
@@ -265,21 +239,6 @@ class NetTruyenViet :
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // ============================== Settings ===============================
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            setDefaultValue(defaultBaseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $defaultBaseUrl"
-        }.let(screen::addPreference)
-    }
-
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
-
     // ============================== Filters ================================
 
     override fun getFilterList(): FilterList = getFilters(
@@ -291,9 +250,5 @@ class NetTruyenViet :
         private val RELATIVE_DATE_NUMBER_REGEX = Regex("\\d+")
         private val NETTRUYEN_LOGO_URL_REGEX = Regex("/assets/images/nettruyenviet\\.webp", RegexOption.IGNORE_CASE)
         private const val NEXT_PAGE_SYMBOL = "›"
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
-        private const val BASE_URL_PREF_SUMMARY = "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
     }
 }

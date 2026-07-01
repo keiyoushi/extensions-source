@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "OneManga.info"
-    className = "OneMangaInfo"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangahub"
-    baseUrl = "https://onemanga.info"
+
+    source {
+        lang = "en"
+        baseUrl = "https://onemanga.info"
+    }
 }

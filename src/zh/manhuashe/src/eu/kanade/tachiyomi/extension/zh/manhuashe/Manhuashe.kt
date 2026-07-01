@@ -8,16 +8,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
-class Manhuashe : HttpSource() {
+@Source
+abstract class Manhuashe : HttpSource() {
 
-    override val name: String = "漫画社"
-    override val lang: String = "zh"
     override val supportsLatest: Boolean = true
-    override val baseUrl = "https://www.311s.com"
 
     // Popular
 

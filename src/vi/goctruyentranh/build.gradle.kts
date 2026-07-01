@@ -4,8 +4,15 @@ plugins {
 
 keiyoushi {
     name = "Goc Truyen Tranh"
-    className = "GocTruyenTranh"
     versionCode = 12
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        name = "GocTruyenTranh"
+        lang = "vi"
+        baseUrl("https://goctruyentranh.com") {
+            withCustom = true
+        }
+    }
 }
