@@ -1,9 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.arcrelight
 
 import eu.kanade.tachiyomi.multisrc.mangadventure.MangAdventure
+import keiyoushi.annotation.Source
 
 /** Arc-Relight source. */
-class ArcRelight : MangAdventure("Arc-Relight", "https://arc-relight.com") {
+@Source
+abstract class ArcRelight : MangAdventure() {
     override val categories = listOf(
         "4-Koma",
         "Chaos;Head",

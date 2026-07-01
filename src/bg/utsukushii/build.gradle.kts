@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Utsukushii"
-    className = "Utsukushii"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mmrcms"
-    baseUrl = "https://utsukushii-bg.com"
+
+    source {
+        lang = "bg"
+        baseUrl = "https://utsukushii-bg.com"
+    }
 }

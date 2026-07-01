@@ -4,9 +4,11 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Response
 
-class Tooncubus : ZeistManga("Tooncubus", "https://www.tooncubus.top", "id") {
+@Source
+abstract class Tooncubus : ZeistManga() {
 
     override val pageListSelector = "div.check-box center"
 

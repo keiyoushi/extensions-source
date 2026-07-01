@@ -4,10 +4,15 @@ plugins {
 
 keiyoushi {
     name = "SayHentai"
-    className = "SayHentai"
     versionCode = 18
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "manhwaz"
-    baseUrl = "https://sayhentai.cx"
+
+    source {
+        lang = "vi"
+        baseUrl("https://sayhentai.cx") {
+            withCustom = true
+        }
+    }
 }

@@ -4,8 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Toonkor"
-    className = "Toonkor"
-    versionCode = 6
+    versionCode = 7
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "ko"
+        baseUrl("https://tkor131.com") {
+            withCustom = true
+        }
+    }
 }

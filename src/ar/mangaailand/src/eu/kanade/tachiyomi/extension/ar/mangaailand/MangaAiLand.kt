@@ -2,8 +2,10 @@ package eu.kanade.tachiyomi.extension.ar.mangaailand
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.Genre
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
+import keiyoushi.annotation.Source
 
-class MangaAiLand : ZeistManga("Manga Ai Land", "https://manga-ai-land.blogspot.com", "ar") {
+@Source
+abstract class MangaAiLand : ZeistManga() {
 
     override val hasFilters = true
     override val hasLanguageFilter = false

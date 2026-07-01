@@ -4,13 +4,21 @@ plugins {
 
 keiyoushi {
     name = "Komiic"
-    className = "Komiic"
-    versionCode = 7
-    contentWarning = ContentWarning.NSFW
+    versionCode = 8
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
+    source {
+        lang = "zh"
+
+        baseUrl("https://komiic.com") {
+            mirrors = listOf(
+                "https://komiic.cc",
+            )
+        }
+    }
+
     deeplink {
-        host("komiic.com")
         path("/comic/..*")
     }
 }

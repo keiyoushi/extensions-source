@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.femjoyhunter
 
 import eu.kanade.tachiyomi.multisrc.masonry.Masonry
+import keiyoushi.annotation.Source
 
-class FemjoyHunter : Masonry("Femjoy Hunter", "https://www.femjoyhunter.com", "all")
+@Source
+abstract class FemjoyHunter : Masonry()

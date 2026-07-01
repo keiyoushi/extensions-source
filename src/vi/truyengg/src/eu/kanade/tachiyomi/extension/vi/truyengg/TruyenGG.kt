@@ -24,14 +24,11 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class TruyenGG : HttpSource() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val supportsLatest = true
 
-    override val id: Long = 1458993267006200127
-
     override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
+        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", "$baseUrl/")
@@ -111,9 +108,9 @@ abstract class TruyenGG : HttpSource() {
     }
 
     private fun parseStatus(status: String?): Int {
-        val ongoingWords = listOf("Đang Cập Nhật", "Đang Tiến Hành", "Còn tiếp")
+        val ongoingWords = listOf("Đang Cập Nhật", "Đang Tiến Hành", "Còn tiếp", "Đang ra")
         val completedWords = listOf("Hoàn Thành", "Đã Hoàn Thành", "Hoàn")
-        val hiatusWords = listOf("Tạm ngưng", "Tạm hoãn")
+        val hiatusWords = listOf("Tạm ngưng", "Tạm hoãn", "Bị drop")
         return when {
             status == null -> SManga.UNKNOWN
             ongoingWords.any { status.contains(it, ignoreCase = true) } -> SManga.ONGOING

@@ -9,16 +9,13 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import okhttp3.Response
 
-class GistamisHouse :
-    ZeistManga(
-        "Gistamis House",
-        "https://gistamishousefansub.blogspot.com",
-        "es",
-    ) {
+@Source
+abstract class GistamisHouse : ZeistManga() {
     override val useNewChapterFeed = true
     override val hasFilters = true
     override val hasLanguageFilter = false

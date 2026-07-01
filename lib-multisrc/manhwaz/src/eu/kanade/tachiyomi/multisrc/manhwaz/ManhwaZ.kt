@@ -21,13 +21,11 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.util.Calendar
 
-abstract class ManhwaZ(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String,
-    private val mangaDetailsAuthorHeading: String = "author(s)",
-    private val mangaDetailsStatusHeading: String = "status",
-) : HttpSource() {
+abstract class ManhwaZ : HttpSource() {
+
+    protected open val mangaDetailsAuthorHeading: String = "author(s)"
+
+    protected open val mangaDetailsStatusHeading: String = "status"
 
     override val supportsLatest = true
 

@@ -23,12 +23,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-abstract class MangaWork(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String,
-    protected open val chapterDateFormat: SimpleDateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-) : HttpSource() {
+abstract class MangaWork : HttpSource() {
+
+    protected open val chapterDateFormat: SimpleDateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
 
     override val supportsLatest = true
 

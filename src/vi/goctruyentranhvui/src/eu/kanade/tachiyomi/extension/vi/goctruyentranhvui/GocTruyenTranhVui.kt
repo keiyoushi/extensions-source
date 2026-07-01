@@ -326,6 +326,7 @@ abstract class GocTruyenTranhVui :
             }
         }.also(screen::addPreference)
     }
+
     companion object {
         private const val CUSTOM_TOKEN = "custom_token"
         private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng token mới nhập."

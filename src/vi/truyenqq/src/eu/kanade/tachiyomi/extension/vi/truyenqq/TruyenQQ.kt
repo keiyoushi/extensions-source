@@ -25,6 +25,7 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class TruyenQQ : HttpSource() {
+
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.client.newBuilder()

@@ -9,11 +9,11 @@ keiyoushi {
     libVersion = "1.4"
 
     source {
+        id = 6495630445796108150L
         lang = "vi"
         baseUrl("https://lxmanga.space") {
             withCustom = true
         }
-        id = 6495630445796108150
     }
 
     deeplink {

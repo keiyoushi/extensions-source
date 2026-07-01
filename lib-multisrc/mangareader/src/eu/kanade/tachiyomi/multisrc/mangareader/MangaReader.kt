@@ -23,11 +23,7 @@ import org.jsoup.nodes.TextNode
 import uy.kohesive.injekt.injectLazy
 import java.net.URLEncoder
 
-abstract class MangaReader(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String,
-) : HttpSource() {
+abstract class MangaReader : HttpSource() {
 
     override val supportsLatest = true
 

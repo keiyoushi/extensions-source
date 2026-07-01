@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "MikoRoku"
-    className = "MikoRoku"
     versionCode = 6
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "zeistmanga"
-    baseUrl = "https://www.mikoroku.com"
+
+    source {
+        lang = "id"
+        baseUrl = "https://www.mikoroku.com"
+    }
 }

@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.mangabox.MangaBox
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -18,15 +19,8 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.time.Duration.Companion.seconds
 
-class Mangakakalot :
-    MangaBox(
-        "Mangakakalot",
-        arrayOf(
-            "www.mangakakalot.gg",
-            "www.mangakakalove.com",
-        ),
-        "en",
-    ) {
+@Source
+abstract class Mangakakalot : MangaBox() {
 
     /* ================================
      * Slug Utilities
