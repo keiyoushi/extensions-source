@@ -26,12 +26,9 @@ import java.util.Locale
 /**
  * For sites based on the Flat-Manga CMS
  */
-abstract class FMReader(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ENGLISH),
-) : HttpSource() {
+abstract class FMReader : HttpSource() {
+
+    protected open val dateFormat: SimpleDateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ENGLISH)
 
     override val supportsLatest = true
 
