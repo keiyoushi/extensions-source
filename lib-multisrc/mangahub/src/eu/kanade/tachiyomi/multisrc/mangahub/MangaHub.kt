@@ -39,14 +39,13 @@ import java.util.concurrent.locks.ReentrantLock
 import java.util.zip.GZIPInputStream
 import kotlin.random.Random
 
-abstract class MangaHub(
-    override val name: String,
-    final override val baseUrl: String,
-    override val lang: String,
-    private val mangaSource: String,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH),
-) : HttpSource(),
+abstract class MangaHub :
+    HttpSource(),
     ConfigurableSource {
+
+    abstract val mangaSource: String
+
+    protected open val dateFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
 
     override val supportsLatest = true
 
