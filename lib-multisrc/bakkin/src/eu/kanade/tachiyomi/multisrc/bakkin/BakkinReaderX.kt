@@ -22,7 +22,8 @@ import okhttp3.Response
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-abstract class BakkinReaderX : HttpSource(),
+abstract class BakkinReaderX :
+    HttpSource(),
     ConfigurableSource {
 
     override val supportsLatest = false
