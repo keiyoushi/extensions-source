@@ -9,14 +9,14 @@ keiyoushi {
     libVersion = "1.4"
     theme = "monochrome"
 
+    source {
+        lang = "en"
+        baseUrl = "https://manga.d34d.one"
+    }
+
     deeplink {
         host("manga.d34d.one")
         host("*.manga.d34d.one")
         path("/manga/..*")
-    }
-
-    source {
-        lang = "en"
-        baseUrl = "https://manga.d34d.one"
     }
 }
