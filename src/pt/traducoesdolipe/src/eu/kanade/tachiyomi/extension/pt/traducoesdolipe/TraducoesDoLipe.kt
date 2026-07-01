@@ -4,16 +4,13 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class TraducoesDoLipe :
-    ZeistManga(
-        "Traduções do Lipe",
-        "https://traducoesdolipe.blogspot.com",
-        "pt-BR",
-    ) {
+@Source
+abstract class TraducoesDoLipe : ZeistManga() {
     override val supportsLatest = false
     override val mangaCategory = "Projeto"
     override val chapterCategory = "Capítulo"

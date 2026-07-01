@@ -4,10 +4,17 @@ plugins {
 
 keiyoushi {
     name = "Mangakakalot"
-    className = "Mangakakalot"
     versionCode = 8
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangabox"
-    baseUrl = "https://www.mangakakalot.gg"
+
+    source {
+        lang = "en"
+        baseUrl("https://www.mangakakalot.gg") {
+            mirrors = listOf(
+                "https://www.mangakakalove.com",
+            )
+        }
+    }
 }

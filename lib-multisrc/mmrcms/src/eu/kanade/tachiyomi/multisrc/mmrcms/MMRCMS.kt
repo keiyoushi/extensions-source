@@ -33,35 +33,33 @@ import java.util.Locale
 import kotlin.math.min
 
 /**
- * @param dateFormat The date format used for parsing chapter dates.
- * @param itemPath The path used in the URL for entries.
- * @param fetchFilterOptions Whether to fetch filtering options (categories, types, tags).
- * @param supportsAdvancedSearch Whether the source supports advanced search under /advanced-search.
- * @param detailsTitleSelector Selector for the entry's title in its details page.
- * @param chapterNamePrefix A word that always precedes the chapter title, e.g. "Scan "
- * @param chapterString The word for "Chapter" in the source's language.
+ * dateFormat The date format used for parsing chapter dates.
+ * itemPath The path used in the URL for entries.
+ * fetchFilterOptions Whether to fetch filtering options (categories, types, tags).
+ * supportsAdvancedSearch Whether the source supports advanced search under /advanced-search.
+ * detailsTitleSelector Selector for the entry's title in its details page.
+ * chapterNamePrefix A word that always precedes the chapter title, e.g. "Scan "
+ * chapterString The word for "Chapter" in the source's language.
  */
-abstract class MMRCMS
-@Suppress("UNUSED")
-constructor(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String,
+abstract class MMRCMS : HttpSource() {
 
-    vararg useNamedArgumentsBelow: Forbidden,
+    protected open val dateFormat: SimpleDateFormat = SimpleDateFormat("d MMM. yyyy", Locale.US)
 
-    protected val dateFormat: SimpleDateFormat = SimpleDateFormat("d MMM. yyyy", Locale.US),
-    protected val itemPath: String = "manga",
-    private val fetchFilterOptions: Boolean = true,
-    private val supportsAdvancedSearch: Boolean = true,
-    private val detailsTitleSelector: String = ".listmanga-header, .widget-title",
-    private val chapterNamePrefix: String = "",
-    private val chapterString: String = when (lang) {
+    protected open val itemPath: String = "manga"
+
+    protected open val fetchFilterOptions: Boolean = true
+
+    protected open val supportsAdvancedSearch: Boolean = true
+
+    protected open val detailsTitleSelector: String = ".listmanga-header, .widget-title"
+
+    protected open val chapterNamePrefix: String = ""
+
+    protected open val chapterString: String = when (lang) {
         "es" -> "Capítulo"
         "fr" -> "Chapitre"
         else -> "Chapter"
-    },
-) : HttpSource() {
+    }
 
     override val supportsLatest = true
 

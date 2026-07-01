@@ -3,14 +3,11 @@ package eu.kanade.tachiyomi.extension.en.manganow
 import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 
-class MangaNow :
-    MangaReader(
-        "MangaNow",
-        "https://manganow.to",
-        "en",
-    ) {
+@Source
+abstract class MangaNow : MangaReader() {
 
     override val client = super.client.newBuilder()
         .rateLimit(2)

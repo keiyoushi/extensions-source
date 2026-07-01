@@ -10,9 +10,9 @@ import keiyoushi.utils.parseAs
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 import org.jsoup.parser.Parser
-import java.io.ByteArrayOutputStream
 
 // This file is modified from DMZJ extension
 
@@ -70,10 +70,10 @@ object CommentsInterceptor : Interceptor {
             y += layout.height + UNIT
         }
 
-        val output = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.PNG, 0, output)
+        val buffer = Buffer()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 0, buffer.outputStream())
         bitmap.recycle()
-        val body = output.toByteArray().toResponseBody("image/png".toMediaType())
+        val body = buffer.asResponseBody("image/png".toMediaType())
         return response.newBuilder().body(body).build()
     }
 }

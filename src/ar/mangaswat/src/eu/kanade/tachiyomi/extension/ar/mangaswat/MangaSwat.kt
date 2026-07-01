@@ -1,17 +1,14 @@
 package eu.kanade.tachiyomi.extension.ar.mangaswat
 
-import android.widget.Toast
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -23,23 +20,12 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class MangaSwat :
-    HttpSource(),
-    ConfigurableSource {
-
-    override val name = "MangaSwat"
-
-    override val lang = "ar"
+@Source
+abstract class MangaSwat : HttpSource() {
 
     override val supportsLatest = true
 
-    override val baseUrl by lazy { getPrefBaseUrl() }
-
-    private val preferences by getPreferencesLazy()
-
     private val apiBaseUrl = "https://meshmanga.com/v2/api/v2"
-
-    override val versionId = 2
 
     private val apiHeaders: Headers by lazy {
         headersBuilder()
@@ -211,48 +197,10 @@ class MangaSwat :
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
 
-    // Preference
-
     companion object {
         internal val apiDateFormat by lazy {
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply {
                 timeZone = TimeZone.getTimeZone("UTC")
-            }
-        }
-        private const val RESTART_APP = "Restart the app to apply the new URL"
-        private const val BASE_URL_PREF_TITLE = "Override BaseUrl"
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_SUMMARY = "For temporary uses. Updating the extension will erase this setting."
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-        private const val DEFAULT_BASE_URL = "https://meshmanga.com"
-    }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            setDefaultValue(DEFAULT_BASE_URL)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $DEFAULT_BASE_URL"
-
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
-                true
-            }
-        }
-        screen.addPreference(baseUrlPref)
-    }
-
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, DEFAULT_BASE_URL)!!
-
-    init {
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != DEFAULT_BASE_URL) {
-                preferences.edit()
-                    .putString(BASE_URL_PREF, DEFAULT_BASE_URL)
-                    .putString(DEFAULT_BASE_URL_PREF, DEFAULT_BASE_URL)
-                    .apply()
             }
         }
     }

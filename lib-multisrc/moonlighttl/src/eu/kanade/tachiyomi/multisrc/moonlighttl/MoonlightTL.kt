@@ -20,11 +20,7 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import kotlin.math.min
 
-abstract class MoonlightTL(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class MoonlightTL : HttpSource() {
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()

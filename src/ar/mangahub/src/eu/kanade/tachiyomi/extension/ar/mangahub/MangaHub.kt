@@ -2,16 +2,13 @@ package eu.kanade.tachiyomi.extension.ar.mangahub
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.Response
 import org.jsoup.Jsoup
 
-class MangaHub :
-    ZeistManga(
-        "MangaHub",
-        "https://www.mangaxhentai.com",
-        "ar",
-    ) {
+@Source
+abstract class MangaHub : ZeistManga() {
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()

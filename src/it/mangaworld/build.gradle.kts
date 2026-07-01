@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Mangaworld"
-    className = "Mangaworld"
     versionCode = 9
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangaworld"
-    baseUrl = "https://www.mangaworld.mx"
+
+    source {
+        lang = "it"
+        baseUrl = "https://www.mangaworld.mx"
+    }
 }

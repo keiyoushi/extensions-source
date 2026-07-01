@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
@@ -18,13 +19,8 @@ import okhttp3.Response
 import rx.Observable
 import kotlin.time.Duration.Companion.seconds
 
-class PlumaComics : HttpSource() {
-
-    override val name: String = "Pluma Comics"
-
-    override val lang: String = "pt-BR"
-
-    override val baseUrl: String = "https://plumacomics.cloud"
+@Source
+abstract class PlumaComics : HttpSource() {
 
     override val supportsLatest: Boolean = true
 
