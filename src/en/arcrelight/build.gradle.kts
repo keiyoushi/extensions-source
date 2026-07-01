@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "Arc-Relight"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangadventure"
@@ -12,5 +12,6 @@ keiyoushi {
     source {
         lang = "en"
         baseUrl = "https://arc-relight.com"
+        id = 6809555026902049727L
     }
 }

@@ -9,6 +9,7 @@ keiyoushi {
     libVersion = "1.4"
 
     source {
+        name = "GocTruyenTranh"
         lang = "vi"
         baseUrl("https://goctruyentranh.com") {
             withCustom = true
