@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import kotlinx.serialization.Serializable
@@ -27,16 +28,49 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import rx.Observable
 
-abstract class DbMultiverse(override val lang: String, private val internalLang: String) : HttpSource() {
+@Source
+abstract class DbMultiverse : HttpSource() {
 
-    override val name =
-        if (internalLang.endsWith("_PA")) {
-            "Dragon Ball Multiverse Parody"
-        } else {
-            "Dragon Ball Multiverse"
+    private val internalLang: String
+        get() = when (lang) {
+            "en" -> "en"
+            "fr" -> if (name.endsWith("Parody")) "fr_PA" else "fr"
+            "ja" -> "jp"
+            "zh" -> "cn"
+            "es" -> "es"
+            "it" -> "it"
+            "pt" -> "pt"
+            "de" -> "de"
+            "pl" -> "pl"
+            "nl" -> "nl"
+            "tr" -> "tr_TR"
+            "pt-BR" -> "pt_BR"
+            "hu" -> "hu_HU"
+            "ga" -> "ga_ES"
+            "ca" -> "ct_CT"
+            "no" -> "no_NO"
+            "ru" -> "ru_RU"
+            "ro" -> "ro_RO"
+            "eu" -> "eu_EH"
+            "lt" -> "lt_LT"
+            "hr" -> "hr_HR"
+            "ko" -> "kr_KR"
+            "fi" -> "fi_FI"
+            "he" -> "he_HE"
+            "bg" -> "bg_BG"
+            "sv" -> "sv_SE"
+            "el" -> "gr_GR"
+            "es-419" -> "es_CO"
+            "ar" -> "ar_JO"
+            "fil" -> "tl_PI"
+            "la" -> "la_LA"
+            "da" -> "da_DK"
+            "co" -> "co_FR"
+            "br" -> "br_FR"
+            "vec" -> "xx_VE"
+            "lmo" -> "xx_LMO"
+            else -> lang
         }
-
-    override val baseUrl = "https://www.dragonball-multiverse.com"
 
     override val supportsLatest = false
 

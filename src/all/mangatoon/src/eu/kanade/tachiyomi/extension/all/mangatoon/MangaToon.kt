@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -20,18 +21,15 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-open class MangaToon(
-    final override val lang: String,
-    private val urlLang: String = lang,
-) : HttpSource() {
+@Source
+abstract class MangaToon : HttpSource() {
 
-    override val name = "MangaToon (Limited)"
-
-    override val baseUrl = "https://mangatoon.mobi"
-
-    override val id: Long = when (lang) {
-        "pt-BR" -> 2064722193112934135
-        else -> super.id
+    private val urlLang: String get() = if (lang == "zh") {
+        "cn"
+    } else if (lang == "pt-BR") {
+        "pt"
+    } else {
+        lang
     }
 
     override val supportsLatest = true

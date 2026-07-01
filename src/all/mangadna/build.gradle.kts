@@ -4,8 +4,14 @@ plugins {
 
 keiyoushi {
     name = "MangaDNA"
-    className = "MangaDNAFactory"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    listOf("en", "all").forEach {
+        source {
+            lang = it
+            baseUrl = "https://mangadna.com"
+        }
+    }
 }

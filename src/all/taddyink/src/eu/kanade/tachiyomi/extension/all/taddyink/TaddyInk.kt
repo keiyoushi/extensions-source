@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -21,14 +22,13 @@ import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
-open class TaddyInk(
-    override val lang: String,
-    private val taddyLang: String,
-) : HttpSource(),
+@Source
+abstract class TaddyInk :
+    HttpSource(),
     ConfigurableSource {
 
-    final override val baseUrl = "https://taddy.org"
-    override val name = "Taddy INK (Webtoons)"
+    private val taddyLang = ""
+
     override val supportsLatest = false
 
     override val client: OkHttpClient by lazy {

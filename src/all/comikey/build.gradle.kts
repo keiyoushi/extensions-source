@@ -4,10 +4,21 @@ plugins {
 
 keiyoushi {
     name = "Comikey"
-    className = "ComikeyFactory"
     versionCode = 7
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    listOf("en", "es", "id", "pt-BR").forEach {
+        source {
+            lang = it
+            baseUrl = "https://comikey.com"
+        }
+    }
+    source {
+        name = "Comikey Brasil"
+        lang = "pt-BR"
+        baseUrl = "https://br.comikey.com"
+    }
 
     deeplink {
         host("comikey.com")
