@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Niceoppai"
-    className = "Niceoppai"
     versionCode = 29
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "th"
+        baseUrl = "https://www.niceoppai.net"
+    }
 }

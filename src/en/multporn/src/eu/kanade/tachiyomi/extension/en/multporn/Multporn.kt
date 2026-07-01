@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -20,11 +21,9 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import rx.schedulers.Schedulers
 
-class Multporn : HttpSource() {
+@Source
+abstract class Multporn : HttpSource() {
 
-    override val name = "Multporn"
-    override val lang: String = "en"
-    override val baseUrl = "https://multporn.net"
     override val supportsLatest = true
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()

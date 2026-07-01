@@ -4,11 +4,16 @@ plugins {
 
 keiyoushi {
     name = "New Manhwa"
-    className = "NewManhwa"
     versionCode = 34
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
-    baseUrl = "https://newmanhwa.com"
+
+    source {
+        lang = "en"
+        baseUrl("https://newmanhwa.com") {
+            mirrors = listOf("https://fullmanhwa.com")
+        }
+    }
 
     deeplink {
         host("newmanhwa.com")
