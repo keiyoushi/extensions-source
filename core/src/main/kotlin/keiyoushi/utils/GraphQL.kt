@@ -159,7 +159,7 @@ inline fun <reified V : Any> Builder.appendGraphQLParams(
     operationName = operationName,
     variables = variables.toJsonElement(json),
     extensions = extensions,
-    json = jsonInstance,
+    json = json,
 )
 
 /**
@@ -238,10 +238,10 @@ fun graphQLGet(
     cache: CacheControl? = null,
     json: Json = jsonInstance,
 ): Request {
-    val url = url.toHttpUrl().newBuilder()
+    val httpUrl = url.toHttpUrl().newBuilder()
         .appendGraphQLParams(query, operationName, variables, extensions, json)
         .build()
-    return if (cache != null) GET(url, headers, cache) else GET(url, headers)
+    return if (cache != null) GET(httpUrl, headers, cache) else GET(httpUrl, headers)
 }
 
 /**

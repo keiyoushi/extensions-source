@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
-import kotlinx.serialization.decodeFromString
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -62,7 +62,7 @@ class SpeedBinbReader(
             .setQueryParameter("k", sharedKey)
             .setQueryParameter("dmytime", System.currentTimeMillis().toString())
             .build()
-        val contentInfo = client.newCall(GET(contentInfoUrl, headers)).execute().parseAs<BibContentInfo>()
+        val contentInfo = client.newCall(GET(contentInfoUrl, headers)).execute().parseAs<BibContentInfo>(json)
 
         if (contentInfo.result != 1) {
             throw Exception("Failed to execute bibGetCntntInfo API.")
@@ -135,8 +135,6 @@ class SpeedBinbReader(
 
         return pages
     }
-
-    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 }
 
 private fun HttpUrl.Builder.buildImageUrl(
