@@ -1,13 +1,12 @@
 package eu.kanade.tachiyomi.extension.tr.merlinscans
 
 import eu.kanade.tachiyomi.multisrc.initmanga.InitManga
+import keiyoushi.annotation.Source
 
-class MerlinScans :
-    InitManga(
-        "Merlin Scans",
-        "https://merlintoon.com",
-        "tr",
-        popularUrlSlug = "seri-siralamasi",
-        latestUrlSlug = "son-guncellenenler",
-        versionId = 2,
-    )
+@Source
+abstract class MerlinScans : InitManga() {
+
+    override val popularUrlSlug = "seri-siralamasi"
+
+    override val latestUrlSlug = "son-guncellenenler"
+}
