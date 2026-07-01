@@ -27,11 +27,7 @@ import org.jsoup.select.Evaluator
 import rx.Observable
 import rx.schedulers.Schedulers
 
-abstract class Guya(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource(),
+abstract class Guya : HttpSource(),
     ConfigurableSource {
 
     override val supportsLatest = true
