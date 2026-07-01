@@ -30,7 +30,7 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class MangaFox : HttpSource() {
 
-    private val mobileUrl: String = "https://m.fanfox.net"
+    private val mobileUrl get() = baseUrl.replace("://", "://m.")
 
     override val supportsLatest: Boolean = true
 
