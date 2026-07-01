@@ -31,7 +31,8 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-abstract class HentaiHand : HttpSource(),
+abstract class HentaiHand :
+    HttpSource(),
     ConfigurableSource {
 
     abstract val chapters: Boolean
