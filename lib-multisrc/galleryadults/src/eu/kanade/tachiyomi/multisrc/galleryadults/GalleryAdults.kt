@@ -36,7 +36,8 @@ import org.jsoup.select.Elements
 import rx.Observable
 import java.text.SimpleDateFormat
 
-abstract class GalleryAdults : HttpSource(),
+abstract class GalleryAdults :
+    HttpSource(),
     ConfigurableSource {
 
     protected open val mangaLang: String = LANGUAGE_MULTI
