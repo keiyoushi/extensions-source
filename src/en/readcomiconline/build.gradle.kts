@@ -4,14 +4,20 @@ plugins {
 
 keiyoushi {
     name = "ReadComicOnline"
-    className = "Readcomiconline"
     versionCode = 44
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
+    source {
+        lang = "en"
+        baseUrl("https://readcomiconline.li") {
+            mirrors = listOf(
+                "https://rcostation.xyz",
+            )
+        }
+    }
+
     deeplink {
-        host("readcomiconline.li")
-        host("rcostation.xyz")
         path("/Comic/..*")
     }
 }
