@@ -264,8 +264,8 @@ abstract class ComiciViewer :
 
     companion object {
         private const val SEARCH_PAGE_SIZE = 24
-        const val SHOW_LOCKED_PREF_KEY = "pref_show_locked_chapters"
-        const val SHOW_CAMPAIGN_LOCKED_PREF_KEY = "pref_show_campaign_locked_chapters"
+        private const val SHOW_LOCKED_PREF_KEY = "pref_show_locked_chapters"
+        private const val SHOW_CAMPAIGN_LOCKED_PREF_KEY = "pref_show_campaign_locked_chapters"
         const val LOGIN_SUFFIX = "#LOGIN"
         private val LAZY_REF = Regex($$"\\$L([0-9a-f]+)")
     }
