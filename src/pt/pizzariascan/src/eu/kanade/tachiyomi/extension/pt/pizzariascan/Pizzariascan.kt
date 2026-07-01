@@ -1,17 +1,12 @@
 package eu.kanade.tachiyomi.extension.pt.pizzariascan
 
 import eu.kanade.tachiyomi.multisrc.mangawork.MangaWork
+import keiyoushi.annotation.Source
 import java.text.Normalizer
 import java.util.Locale
 
-class Pizzariascan :
-    MangaWork(
-        name = "PizzariaScan",
-        baseUrl = "https://pizzariacomics.com",
-        lang = "pt-BR",
-    ) {
-
-    override val id: Long = 3359822911747375789
+@Source
+abstract class Pizzariascan : MangaWork() {
 
     override val seriesPath = "todas-as-obras"
 
