@@ -4,9 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Hentai Slayer"
-    className = "HentaiSlayer"
     versionCode = 4
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "fuzzydoodle"
+
+    source {
+        name = "هنتاي سلاير"
+        lang = "ar"
+        baseUrl = "https://hentaislayer.net"
+    }
 }
