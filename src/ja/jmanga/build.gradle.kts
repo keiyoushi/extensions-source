@@ -4,10 +4,15 @@ plugins {
 
 keiyoushi {
     name = "Jmanga"
-    className = "Jmanga"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangareader"
-    baseUrl = "https://jmanga.codes"
+
+    source {
+        lang = "ja"
+        baseUrl("https://jmanga.codes") {
+            withCustom = true
+        }
+    }
 }

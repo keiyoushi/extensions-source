@@ -3,15 +3,12 @@ package eu.kanade.tachiyomi.extension.ja.rawotaku
 import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl
 
-class RawOtaku :
-    MangaReader(
-        "Raw Otaku",
-        "https://rawotaku.com",
-        "ja",
-    ) {
+@Source
+abstract class RawOtaku : MangaReader() {
 
     override val client = super.client.newBuilder()
         .rateLimit(2)
