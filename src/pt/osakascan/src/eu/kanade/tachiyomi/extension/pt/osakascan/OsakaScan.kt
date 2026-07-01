@@ -4,15 +4,12 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.Response
 
-class OsakaScan :
-    ZeistManga(
-        "Osaka Scan",
-        "https://www.osakascan.com",
-        "pt-BR",
-    ) {
+@Source
+abstract class OsakaScan : ZeistManga() {
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()

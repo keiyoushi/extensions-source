@@ -8,11 +8,13 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class Hanmokkuscan : ZeistManga("Hanmokku Scan", "https://hanmokkuscan.blogspot.com", "pt-BR") {
+@Source
+abstract class Hanmokkuscan : ZeistManga() {
 
     override val mangaCategory = "Todos os Projetos"
     override val chapterCategory = "Capítulo"

@@ -1,14 +1,11 @@
 package eu.kanade.tachiyomi.extension.es.datgarscanlation
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 
-class DatGarScanlation :
-    ZeistManga(
-        "Dat-Gar Scan",
-        "https://datgarscanlation.blogspot.com",
-        "es",
-    ) {
+@Source
+abstract class DatGarScanlation : ZeistManga() {
     override val useNewChapterFeed = true
     override val hasFilters = true
     override val hasLanguageFilter = false

@@ -1,17 +1,14 @@
 package eu.kanade.tachiyomi.extension.ar.yurimoonsub
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import org.jsoup.nodes.Document
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
-class YuriMoonSub :
-    ZeistManga(
-        "Yuri Moon Sub",
-        "https://yurimoonsub.blogspot.com",
-        "ar",
-    ) {
+@Source
+abstract class YuriMoonSub : ZeistManga() {
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()

@@ -2,13 +2,15 @@ package eu.kanade.tachiyomi.extension.ar.yokai
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class Yokai : ZeistManga("Yokai", "https://yokai-team.blogspot.com", "ar") {
+@Source
+abstract class Yokai : ZeistManga() {
 
     override val preferChapterUpdatedDate = true
 
