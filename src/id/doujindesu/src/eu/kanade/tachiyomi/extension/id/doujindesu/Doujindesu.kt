@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.doujindesu
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -21,9 +20,7 @@ import java.io.IOException
 import java.util.LinkedHashMap
 
 @Source
-abstract class Doujindesu :
-    HttpSource(),
-    ConfigurableSource {
+abstract class Doujindesu : HttpSource() {
 
     override val supportsLatest = true
     private val apiUrl: String get() = "$baseUrl/api"
