@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "FlameScans.lol"
-    className = "FlameScanslol"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://flamescans.lol"
+
+    source {
+        lang = "en"
+        baseUrl = "https://flamescans.lol"
+        id = 1001157238479601077L
+    }
 }

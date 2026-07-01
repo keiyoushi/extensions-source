@@ -1,10 +1,7 @@
 package eu.kanade.tachiyomi.extension.th.speedmanga
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class SpeedManga :
-    MangaThemesia(
-        "Speed Manga",
-        "https://speed-manga.net",
-        "th",
-    )
+@Source
+abstract class SpeedManga : MangaThemesia()

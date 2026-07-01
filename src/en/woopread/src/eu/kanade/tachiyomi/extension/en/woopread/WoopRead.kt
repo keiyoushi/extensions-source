@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.woopread
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class WoopRead : Madara("WoopRead", "https://woopread.com", "en")
+@Source
+abstract class WoopRead : Madara()

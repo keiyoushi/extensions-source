@@ -4,10 +4,15 @@ plugins {
 
 keiyoushi {
     name = "Ikiru"
-    className = "Ikiru"
     versionCode = 48
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "natsuid"
-    baseUrl = "https://06.ikiru.wtf"
+
+    source {
+        lang = "id"
+        baseUrl = "https://06.ikiru.wtf"
+        // Formerly "MangaTale"
+        id = 1532456597012176985L
+    }
 }

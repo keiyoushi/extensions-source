@@ -1,8 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.lhtranslation
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class LHTranslation : Madara("LHTranslation", "https://lhtranslation.net", "en") {
-    override val versionId = 2
+@Source
+abstract class LHTranslation : Madara() {
     override val useNewChapterEndpoint = true
 }

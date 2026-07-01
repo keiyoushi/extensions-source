@@ -4,8 +4,15 @@ plugins {
 
 keiyoushi {
     name = "Ikigai Mangas"
-    className = "IkigaiMangas"
-    versionCode = 33
+    versionCode = 34
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "es"
+        baseUrl("https://zonaikigai.gamesview.shop") {
+            withCustom = true
+        }
+        versionId = 2
+    }
 }

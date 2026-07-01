@@ -5,17 +5,14 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.CacheControl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 
-class IsekaiScanTop :
-    Madara(
-        "IsekaiScan.top (unoriginal)",
-        "https://isekaiscan.top",
-        "en",
-    ) {
+@Source
+abstract class IsekaiScanTop : Madara() {
 
     override fun popularMangaRequest(page: Int): Request = GET(
         url = "$baseUrl/popular-manga?page=$page",

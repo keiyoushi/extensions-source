@@ -3,16 +3,13 @@ package eu.kanade.tachiyomi.extension.en.culturedworks
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
-class CulturedWorks :
-    MangaThemesia(
-        "CulturedWorks",
-        "https://culturedworks.com",
-        "en",
-    ) {
+@Source
+abstract class CulturedWorks : MangaThemesia() {
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()

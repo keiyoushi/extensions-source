@@ -17,20 +17,12 @@ import kotlinx.serialization.encodeToString
 import okhttp3.Request
 import okhttp3.Response
 import java.lang.ref.SoftReference
-import java.text.SimpleDateFormat
-import java.util.Locale
-
 abstract class MangaThemesiaAlt(
-    name: String,
-    baseUrl: String,
-    lang: String,
-    mangaUrlDirectory: String = "/manga",
-    dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
     private val randomUrlPrefKey: String = "pref_auto_random_url",
-) : MangaThemesia(name, baseUrl, lang, mangaUrlDirectory, dateFormat),
+) : MangaThemesia(),
     ConfigurableSource {
 
-    protected open val listUrl = "$mangaUrlDirectory/list-mode/"
+    protected open val listUrl get() = "$mangaUrlDirectory/list-mode/"
     protected open val listSelector = "div#content div.soralist ul li a.series"
 
     protected val preferences by getPreferencesLazy {

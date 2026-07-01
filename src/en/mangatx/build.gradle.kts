@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "MangaTX"
-    className = "MangaTX"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://mangatx.cc"
+
+    source {
+        lang = "en"
+        baseUrl = "https://mangatx.cc"
+    }
 }

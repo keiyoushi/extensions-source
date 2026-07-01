@@ -4,9 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Uzay Manga"
-    className = "UzayManga"
     versionCode = 42
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "uzaymanga"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://uzaymanga.com"
+        versionId = 3
+    }
 }

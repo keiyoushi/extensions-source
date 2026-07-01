@@ -1,16 +1,13 @@
 package eu.kanade.tachiyomi.extension.pt.covenscan
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import kotlin.time.Duration.Companion.seconds
 
-class CovenScan :
-    Madara(
-        "Coven Scan",
-        "https://covendasbruxonas.com",
-        "pt-BR",
-    ) {
+@Source
+abstract class CovenScan : Madara() {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 2.seconds)

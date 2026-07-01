@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.cs.evilproduction
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class Evilproduction : MangaThemesia("Evil production", "https://evil-manga.eu", "cs")
+@Source
+abstract class Evilproduction : MangaThemesia()

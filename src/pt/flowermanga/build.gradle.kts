@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "FlowerManga.net"
-    className = "FlowerMangaDotNet"
     versionCode = 4
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://flowermangas.net"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://flowermangas.net"
+        id = 2421010180391442293L
+    }
 }

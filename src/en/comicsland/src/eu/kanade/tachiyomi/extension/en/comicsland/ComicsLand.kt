@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.comicsland
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class ComicsLand : MangaThemesia("Comics Land", "https://comicsland.org", "en")
+@Source
+abstract class ComicsLand : MangaThemesia()

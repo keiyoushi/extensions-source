@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -13,12 +14,8 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 
-class LeerManga :
-    Madara(
-        "LeerManga",
-        "https://leermanga.net",
-        "es",
-    ) {
+@Source
+abstract class LeerManga : Madara() {
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(3)
         .build()

@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Fin Manga"
-    className = "FinManga"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://www.fin-manga.com"
+
+    source {
+        lang = "th"
+        baseUrl = "https://www.fin-manga.com"
+    }
 }

@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Slow Manga"
-    className = "SlowManga"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://www.slow-manga.net"
+
+    source {
+        lang = "th"
+        baseUrl = "https://www.slow-manga.net"
+    }
 }

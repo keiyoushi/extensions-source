@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.FormBody
 import okhttp3.Request
@@ -11,13 +12,9 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MGKomik :
-    Madara(
-        "MG Komik",
-        "https://id.mgkomik.cc",
-        "id",
-        SimpleDateFormat("dd MMM yy", Locale.US),
-    ) {
+@Source
+abstract class MGKomik : Madara() {
+    override val dateFormat = SimpleDateFormat("dd MMM yy", Locale.US)
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val mangaSubString = "komik"

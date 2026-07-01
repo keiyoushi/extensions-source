@@ -1,12 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.noxenscans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class NoxenScans :
-    MangaThemesia(
-        "Noxen Scans",
-        "https://noxenscan.com",
-        "en",
-    ) {
+@Source
+abstract class NoxenScans : MangaThemesia() {
     override fun chapterListSelector(): String = "#chapterlist li:not(:has(svg))"
 }

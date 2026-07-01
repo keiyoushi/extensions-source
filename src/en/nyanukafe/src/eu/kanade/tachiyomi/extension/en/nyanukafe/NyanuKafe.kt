@@ -1,13 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.nyanukafe
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
+import keiyoushi.annotation.Source
 
-class NyanuKafe :
-    Keyoapp(
-        "Nyanu Kafe",
-        "https://nyanukafe.com",
-        "en",
-    ) {
+@Source
+abstract class NyanuKafe : Keyoapp() {
     override fun popularMangaSelector(): String = ".series-splide .splide__slide:not(.splide__slide--clone)"
 
     override val descriptionSelector: String = "div.grid > div#expand_content > p"

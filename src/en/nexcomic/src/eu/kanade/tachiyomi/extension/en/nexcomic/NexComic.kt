@@ -5,10 +5,12 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferences
 
-class NexComic :
-    MangaThemesia("NexComic", "https://nexcomic.com", "en"),
+@Source
+abstract class NexComic :
+    MangaThemesia(),
     ConfigurableSource {
 
     private val preferences: SharedPreferences = getPreferences()

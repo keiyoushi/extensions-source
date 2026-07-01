@@ -4,18 +4,15 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class TopManhuaFan :
-    Madara(
-        "TopManhua.fan",
-        "https://www.topmanhua.fan",
-        "en",
-        dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale("en")),
-    ) {
+@Source
+abstract class TopManhuaFan : Madara() {
+    override val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale("en"))
     override val mangaSubString = "manhua"
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = false

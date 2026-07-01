@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.toon18
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class Toon18 : Madara("Toon18", "https://toon18.to", "en") {
+@Source
+abstract class Toon18 : Madara() {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = false
 }

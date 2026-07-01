@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.manhuaonline
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -9,14 +10,9 @@ import java.net.SocketTimeoutException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class SamuraiScan :
-    Madara(
-        "SamuraiScan",
-        "https://samurai.j5z.xyz",
-        "es",
-        SimpleDateFormat("dd MMMM, yyyy", Locale("es")),
-    ) {
-    override val id = 5713083996691468192
+@Source
+abstract class SamuraiScan : Madara() {
+    override val dateFormat = SimpleDateFormat("dd MMMM, yyyy", Locale("es"))
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 

@@ -4,10 +4,15 @@ plugins {
 
 keiyoushi {
     name = "Manhwa18.cc"
-    className = "Manhwa18CcFactory"
     versionCode = 7
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://manhwa18.cc"
+
+    listOf("en", "ko", "all").forEach {
+        source {
+            lang = it
+            baseUrl = "https://manhwa18.cc"
+        }
+    }
 }

@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Mangadusleri"
-    className = "Mangadusleri"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://mangadusleri.lol"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://mangadusleri.lol"
+    }
 }

@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Comics Land"
-    className = "ComicsLand"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://comicsland.org"
+
+    source {
+        lang = "en"
+        baseUrl = "https://comicsland.org"
+    }
 }

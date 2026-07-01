@@ -4,10 +4,15 @@ plugins {
 
 keiyoushi {
     name = "APKOMIK"
-    className = "Apkomik"
     versionCode = 5
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://01.apkomik.com"
+
+    source {
+        lang = "id"
+        baseUrl = "https://01.apkomik.com"
+        // Formerly "Komik AV (WP Manga Stream)"
+        id = 7875815514004535629L
+    }
 }

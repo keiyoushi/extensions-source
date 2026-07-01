@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "KokoMangas"
-    className = "Wearehunger"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://kokomangas.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://kokomangas.com"
+        versionId = 2
+    }
 }

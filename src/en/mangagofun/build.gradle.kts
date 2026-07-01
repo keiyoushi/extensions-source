@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "MangaGo.fun"
-    className = "MangaGoFun"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://www.mangago.fun"
+
+    source {
+        lang = "en"
+        baseUrl = "https://www.mangago.fun"
+    }
 }

@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import keiyoushi.lib.unpacker.Unpacker
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
@@ -14,14 +15,10 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaTV :
-    MangaThemesia(
-        "Manga  TV",
-        "https://mangatv.net",
-        "es",
-        mangaUrlDirectory = "/lista",
-        dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT),
-    ) {
+@Source
+abstract class MangaTV : MangaThemesia() {
+    override val mangaUrlDirectory = "/lista"
+    override val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
 
     override val seriesDescriptionSelector = "b:contains(Sinopsis) + span"
     override fun chapterListSelector() = "#chapterlist ul.clstyle li:has(.dt a)"

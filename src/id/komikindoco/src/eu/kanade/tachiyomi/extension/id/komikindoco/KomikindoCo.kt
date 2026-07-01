@@ -1,14 +1,15 @@
 package eu.kanade.tachiyomi.extension.id.komikindoco
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class KomikindoCo : MangaThemesia("KomikIndo.co", "https://komiksin.net", "id", dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("id"))) {
-    // Formerly "Komikindo.co"
-    override val id = 734619124437406170
+@Source
+abstract class KomikindoCo : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("id"))
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(4)

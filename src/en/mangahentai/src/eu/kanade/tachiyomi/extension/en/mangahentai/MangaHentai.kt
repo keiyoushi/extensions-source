@@ -2,10 +2,12 @@ package eu.kanade.tachiyomi.extension.en.mangahentai
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
+import keiyoushi.annotation.Source
 import okhttp3.FormBody
 import okhttp3.Request
 
-class MangaHentai : Madara("Manga Hentai", "https://mangahentai.me", "en") {
+@Source
+abstract class MangaHentai : Madara() {
     override val mangaSubString = "manga-hentai"
 
     override val useNewChapterEndpoint: Boolean = false

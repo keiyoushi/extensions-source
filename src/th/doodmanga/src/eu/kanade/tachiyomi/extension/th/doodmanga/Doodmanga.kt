@@ -3,12 +3,15 @@ package eu.kanade.tachiyomi.extension.th.doodmanga
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Doodmanga : Madara("Doodmanga", "https://www.doodmanga.com", "th", SimpleDateFormat("dd MMMMM yyyy", Locale("th"))) {
+@Source
+abstract class Doodmanga : Madara() {
+    override val dateFormat = SimpleDateFormat("dd MMMMM yyyy", Locale("th"))
     override val filterNonMangaItems = false
 
     override val client: OkHttpClient = super.client.newBuilder()

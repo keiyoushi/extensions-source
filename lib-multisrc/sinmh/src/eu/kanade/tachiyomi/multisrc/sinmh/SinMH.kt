@@ -25,14 +25,11 @@ import java.util.Locale
  * ref: https://github.com/kanasimi/CeJS/tree/master/application/net/work_crawler/sites
  *      https://github.com/kanasimi/work_crawler/blob/master/document/README.cmn-Hant-TW.md
  */
-abstract class SinMH(
-    override val name: String,
-    _baseUrl: String,
-    override val lang: String = "zh",
-) : HttpSource() {
+abstract class SinMH : HttpSource() {
 
-    override val baseUrl = _baseUrl
-    protected open val mobileUrl = _baseUrl.replaceFirst("www.", "m.")
+    protected open val mobileUrl: String
+        get() = baseUrl.replaceFirst("www.", "m.")
+
     override val supportsLatest = true
 
     override val client = network.client.newBuilder().rateLimit(2).build()

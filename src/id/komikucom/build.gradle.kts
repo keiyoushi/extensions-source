@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Komiku.com"
-    className = "KomikuCom"
     versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://01.komiku.asia"
+
+    source {
+        lang = "id"
+        baseUrl = "https://01.komiku.asia"
+    }
 }

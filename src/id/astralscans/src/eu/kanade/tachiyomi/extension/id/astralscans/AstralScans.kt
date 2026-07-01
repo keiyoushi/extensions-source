@@ -5,13 +5,15 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import okhttp3.MultipartBody
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
-class AstralScans : MangaThemesia("Astral Scans", "https://astralscans.top", "id") {
+@Source
+abstract class AstralScans : MangaThemesia() {
 
     override val hasProjectPage = true
 
