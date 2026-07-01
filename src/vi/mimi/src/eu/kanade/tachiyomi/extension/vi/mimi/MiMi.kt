@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
@@ -22,15 +23,10 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class MiMi : HttpSource() {
-
-    override val name = "MiMi"
-
-    override val baseUrl: String = "https://mimimoe.moe"
+@Source
+abstract class MiMi : HttpSource() {
 
     private val apiUrl: String = "$baseUrl/api"
-
-    override val lang = "vi"
 
     override val supportsLatest = true
 
