@@ -1,16 +1,12 @@
 package eu.kanade.tachiyomi.extension.ja.rimacomiplus
 
-import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewerAlt
+import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewer
 import eu.kanade.tachiyomi.network.GET
+import keiyoushi.annotation.Source
 import okhttp3.Request
 
-class RimacomiPlus :
-    ComiciViewerAlt(
-        "RimacomiPlus",
-        "https://rimacomiplus.jp",
-        "ja",
-        "https://rimacomiplus.jp/api",
-    ) {
+@Source
+abstract class RimacomiPlus : ComiciViewer() {
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/category/manga/$page", headers)
 
     override fun getFilterOptions(): List<Pair<String, String>> = listOf(

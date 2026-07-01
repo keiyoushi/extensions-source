@@ -1,14 +1,8 @@
 package eu.kanade.tachiyomi.extension.ja.mangacross
 
-import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewerAlt
+import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewer
+import keiyoushi.annotation.Source
 
 // MangaCross became ChampionCross
-class MangaCross :
-    ComiciViewerAlt(
-        "Champion Cross",
-        "https://championcross.jp",
-        "ja",
-        "https://championcross.jp/api",
-    ) {
-    override val versionId = 2
-}
+@Source
+abstract class MangaCross : ComiciViewer()
