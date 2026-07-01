@@ -30,7 +30,8 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-abstract class FoolSlide : HttpSource(),
+abstract class FoolSlide :
+    HttpSource(),
     ConfigurableSource {
 
     protected open val urlModifier: String = ""
