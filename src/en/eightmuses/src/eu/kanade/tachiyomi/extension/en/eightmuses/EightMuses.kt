@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.eightmuses
 
 import eu.kanade.tachiyomi.multisrc.eromuse.EroMuse
+import keiyoushi.annotation.Source
 import kotlin.ExperimentalStdlibApi
 
+@Source
 @ExperimentalStdlibApi
-class EightMuses : EroMuse("8Muses", "https://comics.8muses.com")
+abstract class EightMuses : EroMuse()
