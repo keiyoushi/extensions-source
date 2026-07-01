@@ -11,7 +11,7 @@ keiyoushi {
 
     source {
         lang = "tr"
-        baseUrl = "https://siyahmelek.vip"
+        baseUrl = "https://siyahmelek.fun"
         versionId = 2
     }
 }
