@@ -5,8 +5,16 @@ plugins {
 keiyoushi {
     name = "HotComics"
     className = "HotComics"
-    versionCode = 0
+    versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
-    theme = "hotcomics"
+
+    source {
+        lang = "en"
+        baseUrl = "https://hotcomics.me"
+    }
+}
+
+dependencies {
+    implementation(project(":lib:cookieinterceptor"))
 }
