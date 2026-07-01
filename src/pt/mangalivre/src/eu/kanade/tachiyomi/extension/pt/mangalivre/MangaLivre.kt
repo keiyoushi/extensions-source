@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -24,14 +23,20 @@ import okhttp3.Response
 import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
-@Source
-abstract class MangaLivre :
+class MangaLivre :
     HttpSource(),
     ConfigurableSource {
-
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
+    override val name: String = "Manga Livre"
+
+    override val baseUrl: String = "https://toonlivre.net"
+
+    override val lang: String = "pt-BR"
+
     override val supportsLatest: Boolean = true
+
+    override val versionId: Int = 2
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::clientHeaderInterceptor)
@@ -239,19 +244,20 @@ abstract class MangaLivre :
     }
 
     /**
-     * O front-end fixa o header de cliente via `Headers.set("nome", "valor")` no bundle,
-     * e nome/valor rotacionam toda hora (x-toonlivre-client/web-x -> app-token/tok-z99).
-     * Em vez de fixar isso, coletamos os pares de `.set(...)` dos /assets (ignorando headers
+     * O gate de "aplicativo oficial" (endpoints de leitura) exige um header de cliente que o
+     * front-end injeta no bundle via `Headers.append("x-tly-token", "v99-web-z")` — e há um
+     * decoy `set("app-token", ...)` que os endpoints abertos ignoram. Nome/valor rotacionam.
+     * Coletamos TODOS os pares literais de `.set(...)`/`.append(...)` dos /assets (fora headers
      * padrão) e o interceptor testa cada candidato quando a API recusa com 403.
      */
     private fun scrapeCandidates(): List<ClientToken> = try {
         val html = scrapeClient.newCall(GET("$baseUrl/", headers)).execute()
-            .use { if (it.isSuccessful) it.body.string() else "" }
+            .use { if (it.isSuccessful) it.body?.string().orEmpty() else "" }
         val assets = ASSET_REGEX.findAll(html).map { it.value }.distinct().toList()
         val js = buildString {
             assets.take(MAX_ASSETS).forEach { path ->
                 scrapeClient.newCall(GET("$baseUrl$path", headers)).execute()
-                    .use { if (it.isSuccessful) append(it.body.string()) }
+                    .use { if (it.isSuccessful) append(it.body?.string().orEmpty()) }
             }
         }
         extractCandidates(js)
@@ -285,9 +291,9 @@ abstract class MangaLivre :
         private const val MAX_CANDIDATES = 8
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
-        private val DEFAULT_TOKEN = ClientToken("app-token", "tok-z99")
+        private val DEFAULT_TOKEN = ClientToken("x-tly-token", "v99-web-z")
         private val ASSET_REGEX = Regex("/assets/[\\w-]+\\.js")
-        private val SET_REGEX = Regex("\\.set\\(\\s*\"([A-Za-z][\\w.-]{1,40})\"\\s*,\\s*\"([^\"]{1,60})\"\\s*\\)")
+        private val SET_REGEX = Regex("\\.(?:set|append)\\(\\s*\"([A-Za-z][\\w.-]{1,40})\"\\s*,\\s*\"([^\"]{1,60})\"\\s*\\)")
         private val STANDARD_HEADERS = setOf("content-type", "accept", "authorization", "x-csrf-token")
     }
 }
