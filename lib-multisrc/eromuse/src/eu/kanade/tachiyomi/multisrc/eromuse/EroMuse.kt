@@ -17,7 +17,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 
-@ExperimentalStdlibApi
 abstract class EroMuse : HttpSource() {
 
     override val supportsLatest = true

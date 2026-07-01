@@ -12,7 +12,6 @@ import okhttp3.Response
 import rx.Observable
 
 @Source
-@ExperimentalStdlibApi
 abstract class Erofus : EroMuse() {
 
     override val albumSelector = "a.a-click"
