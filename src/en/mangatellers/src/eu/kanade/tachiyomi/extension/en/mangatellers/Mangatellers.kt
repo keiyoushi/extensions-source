@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.mangatellers
 
 import eu.kanade.tachiyomi.multisrc.foolslide.FoolSlide
+import keiyoushi.annotation.Source
 
-class Mangatellers : FoolSlide("Mangatellers", "https://reader.mangatellers.gr", "en")
+@Source
+abstract class Mangatellers : FoolSlide()

@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Anime GDR Club"
-    className = "AnimeGDRClub"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "it"
+        baseUrl = "http://www.agcscanlation.it"
+    }
 }

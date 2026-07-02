@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import okhttp3.OkHttpClient
@@ -13,14 +14,11 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class HadesScans :
-    MangaThemesia(
-        name = "Hades Scans",
-        baseUrl = "https://hadesscans.com",
-        lang = "en",
-        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH),
-    ),
+@Source
+abstract class HadesScans :
+    MangaThemesia(),
     ConfigurableSource {
+    override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH)
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(2)

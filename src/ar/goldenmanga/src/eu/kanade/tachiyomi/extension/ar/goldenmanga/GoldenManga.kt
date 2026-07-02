@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.ar.goldenmanga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class GoldenManga : Madara("Golden Manga", "https://goldenmanga.net", "ar") {
+@Source
+abstract class GoldenManga : Madara() {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 }

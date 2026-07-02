@@ -4,20 +4,15 @@ import eu.kanade.tachiyomi.multisrc.iken.Iken
 import eu.kanade.tachiyomi.multisrc.iken.Manga
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.MangasPage
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import okhttp3.Request
 import okhttp3.Response
 
-class EternalMangas :
-    Iken(
-        "EternalMangas",
-        "es",
-        "https://eternalmangas.org",
-        "https://api.eternalmangas.org",
-    ) {
-
+@Source
+abstract class EternalMangas : Iken() {
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, rscHeaders)
 
     override fun popularMangaParse(response: Response): MangasPage {

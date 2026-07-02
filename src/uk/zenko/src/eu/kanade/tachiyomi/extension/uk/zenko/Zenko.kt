@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -21,14 +22,12 @@ import okhttp3.Request
 import okhttp3.Response
 import java.util.Calendar
 
-class Zenko :
+@Source
+abstract class Zenko :
     HttpSource(),
     ConfigurableSource {
     private val apiurlHost by lazy { API_URL.toHttpUrl().host }
 
-    override val name = "Zenko"
-    override val baseUrl = "https://zenko.online"
-    override val lang = "uk"
     override val supportsLatest = true
     private val preferences by getPreferencesLazy()
 

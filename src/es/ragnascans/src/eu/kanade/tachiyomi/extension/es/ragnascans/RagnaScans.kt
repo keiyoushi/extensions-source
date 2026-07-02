@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
@@ -23,11 +24,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class RagnaScans : HttpSource() {
+@Source
+abstract class RagnaScans : HttpSource() {
 
-    override val name = "Ragna Scans"
-    override val baseUrl = "https://lector.ragnascan.xyz"
-    override val lang = "es"
     override val supportsLatest = true
 
     // Limit to 1 request per second to prevent HTTP 429 on parallel manga update fetches

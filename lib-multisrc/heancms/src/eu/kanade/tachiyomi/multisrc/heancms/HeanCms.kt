@@ -29,13 +29,12 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.concurrent.thread
 
-abstract class HeanCms(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-    protected val apiUrl: String = baseUrl.replace("://", "://api."),
-) : HttpSource(),
+abstract class HeanCms :
+    HttpSource(),
     ConfigurableSource {
+
+    protected open val apiUrl: String
+        get() = baseUrl.replace("://", "://api.")
 
     protected val preferences: SharedPreferences by getPreferencesLazy()
 

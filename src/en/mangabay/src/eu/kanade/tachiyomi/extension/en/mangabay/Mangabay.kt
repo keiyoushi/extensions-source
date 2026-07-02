@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
@@ -28,11 +29,9 @@ import java.security.MessageDigest
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
-class Mangabay : HttpSource() {
+@Source
+abstract class Mangabay : HttpSource() {
 
-    override val name = "Manga-Bay"
-    override val lang = "en"
-    override val baseUrl = "https://read.manga-bay.org"
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()

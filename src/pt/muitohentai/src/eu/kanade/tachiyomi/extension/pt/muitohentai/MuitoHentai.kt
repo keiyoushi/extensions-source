@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonArray
@@ -21,13 +22,8 @@ import org.jsoup.nodes.Element
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class MuitoHentai : HttpSource() {
-
-    override val name = "Muito Hentai"
-
-    override val baseUrl = "https://www.muitohentai.com"
-
-    override val lang = "pt-BR"
+@Source
+abstract class MuitoHentai : HttpSource() {
 
     override val supportsLatest = true
 

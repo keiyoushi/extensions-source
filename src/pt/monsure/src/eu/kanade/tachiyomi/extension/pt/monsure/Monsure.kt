@@ -1,17 +1,14 @@
 package eu.kanade.tachiyomi.extension.pt.monsure
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Monsure :
-    Madara(
-        "Monsure",
-        "https://monsuresu.com",
-        "pt-BR",
-        SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-    ) {
+@Source
+abstract class Monsure : Madara() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
 
     override val client = super.client.newBuilder()
         .rateLimit(3)

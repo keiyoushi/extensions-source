@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.pawmanga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class PawManga : Madara("Paw Manga", "https://pawmanga.com", "en") {
+@Source
+abstract class PawManga : Madara() {
     override val useNewChapterEndpoint = true
 }

@@ -7,15 +7,14 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
-class Mangalay : HttpSource() {
-    override val name = "Mangalay"
-    override val baseUrl = "http://mangalay.blogspot.com"
-    override val lang = "id"
+@Source
+abstract class Mangalay : HttpSource() {
     override val supportsLatest = false
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/2013/04/daftar-baca-komik_20.html", headers)

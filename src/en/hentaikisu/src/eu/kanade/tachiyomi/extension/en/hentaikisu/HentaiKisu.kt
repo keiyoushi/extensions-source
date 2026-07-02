@@ -10,18 +10,14 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class HentaiKisu : HttpSource() {
-
-    override val name = "HentaiKisu"
-
-    override val baseUrl = "https://hentaikisu.com"
-
-    override val lang = "en"
+@Source
+abstract class HentaiKisu : HttpSource() {
 
     override val supportsLatest = false
 

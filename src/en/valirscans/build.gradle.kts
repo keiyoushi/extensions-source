@@ -4,9 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Valir Scans"
-    className = "ValirScans"
     versionCode = 22
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
-    baseUrl = "https://valirscans.org"
+
+    source {
+        lang = "en"
+        baseUrl = "https://valirscans.org"
+        versionId = 3
+    }
 }

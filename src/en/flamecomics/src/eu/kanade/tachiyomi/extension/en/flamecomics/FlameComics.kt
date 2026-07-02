@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -28,12 +29,9 @@ import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
 import kotlin.time.Duration.Companion.seconds
 
-class FlameComics : HttpSource() {
-    override val name = "Flame Comics"
-    override val lang = "en"
+@Source
+abstract class FlameComics : HttpSource() {
     override val supportsLatest = true
-    override val versionId: Int = 2
-    override val baseUrl = "https://flamecomics.xyz"
     private val cdn = "https://cdn.flamecomics.xyz"
 
     private val json: Json by injectLazy()

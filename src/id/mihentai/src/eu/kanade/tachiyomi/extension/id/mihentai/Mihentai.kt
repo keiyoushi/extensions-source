@@ -2,8 +2,10 @@ package eu.kanade.tachiyomi.extension.id.mihentai
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 
-class Mihentai : MangaThemesia("Mihentai", "https://mihentai.net", "id") {
+@Source
+abstract class Mihentai : MangaThemesia() {
     private class StatusFilter :
         SelectFilter(
             "Status",

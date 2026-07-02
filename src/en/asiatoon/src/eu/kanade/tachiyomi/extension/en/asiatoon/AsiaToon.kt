@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -17,10 +18,8 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class AsiaToon : HttpSource() {
-    override val name = "AsiaToon"
-    override val lang = "en"
-    override val baseUrl = "https://asiatoon.net"
+@Source
+abstract class AsiaToon : HttpSource() {
     override val supportsLatest = true
 
     private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)

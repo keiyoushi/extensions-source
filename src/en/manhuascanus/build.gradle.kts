@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Manhuascan.us"
-    className = "ManhuascanUs"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://manhuascan.us"
+
+    source {
+        lang = "en"
+        baseUrl = "https://manhuascan.us"
+    }
 }

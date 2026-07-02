@@ -1,39 +1,20 @@
 package eu.kanade.tachiyomi.extension.zh.baozimhorg
 
-import androidx.preference.ListPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.goda.GoDa
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
-import keiyoushi.utils.getPreferences
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import okio.IOException
 
-class GoDaManhua :
-    GoDa("GoDa漫画", "", "zh"),
-    ConfigurableSource {
-
-    override val id get() = 774030471139699415
-
-    override val baseUrl: String
+@Source
+abstract class GoDaManhua : GoDa() {
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/").add("Origin", baseUrl)
-
-    init {
-        val mirrors = MIRRORS
-        if (System.getenv("CI") == "true") {
-            baseUrl = mirrors.joinToString("#, ") { "https://$it" }
-        } else {
-            val mirrorIndex = getPreferences()
-                .getString(MIRROR_PREF, "0")!!.toInt().coerceAtMost(mirrors.size - 1)
-            baseUrl = "https://" + mirrors[mirrorIndex]
-        }
-    }
 
     override val client = super.client.newBuilder().addInterceptor(NotFoundInterceptor()).build()
 
@@ -52,24 +33,7 @@ class GoDaManhua :
         val decoded = ChapterImageDecoder.decode(info.images.images)
         return decoded.parseAs<List<ImageDto>>().map { it.toPage() }
     }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            val mirrors = MIRRORS
-            key = MIRROR_PREF
-            title = "镜像网址"
-            summary = "%s\n重启生效"
-            entries = mirrors
-            entryValues = Array(mirrors.size, Int::toString)
-            setDefaultValue("0")
-        }.let(screen::addPreference)
-    }
 }
-
-private const val MIRROR_PREF = "MIRROR"
-
-// https://nav.telltome.net/
-private val MIRRORS get() = arrayOf("baozimh.org", "godamh.com", "m.baozimh.one", "bzmh.org", "g-mh.org", "m.g-mh.org")
 
 private class NotFoundInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {

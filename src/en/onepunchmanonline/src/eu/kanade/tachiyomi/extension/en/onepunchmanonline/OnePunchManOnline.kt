@@ -8,15 +8,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class OnePunchManOnline : HttpSource() {
+@Source
+abstract class OnePunchManOnline : HttpSource() {
 
-    override val name = "One Punch Man Online"
-    override val baseUrl = "https://w11.1punchman.com"
-    override val lang = "en"
     override val supportsLatest = true
 
     // ============================== Popular ===============================

@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.madaradex
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import okhttp3.Cookie
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -10,13 +11,9 @@ import java.security.SecureRandom
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MadaraDex :
-    Madara(
-        "MadaraDex",
-        "https://madaradex.org",
-        "en",
-        dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US),
-    ) {
+@Source
+abstract class MadaraDex : Madara() {
+    override val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
     override fun headersBuilder() = super.headersBuilder()
         .set("sec-fetch-site", "same-site")
 

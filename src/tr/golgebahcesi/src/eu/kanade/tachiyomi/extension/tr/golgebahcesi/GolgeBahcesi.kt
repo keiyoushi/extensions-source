@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -17,14 +18,11 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class GolgeBahcesi : HttpSource() {
+@Source
+abstract class GolgeBahcesi : HttpSource() {
 
-    override val name = "Gölge Bahçesi"
-    override val baseUrl = "https://golgebahcesi.com"
     private val apiBaseUrl = "https://api.golgebahcesi.com/api"
-    override val lang = "tr"
     override val supportsLatest = true
-    override val versionId = 2
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")

@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -25,10 +26,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class DaoMeoDen : HttpSource() {
-    override val name = "DaoMeoDen"
-    override val lang = "vi"
-    override val baseUrl = "https://daomeoden.net"
+@Source
+abstract class DaoMeoDen : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()

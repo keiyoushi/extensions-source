@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
@@ -17,14 +18,9 @@ import okhttp3.Response
 import rx.Observable
 import kotlin.time.Duration.Companion.seconds
 
-class Lmtos : HttpSource() {
+@Source
+abstract class Lmtos : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val name = "Lmtos"
-
-    override val baseUrl = "https://lmtos.net"
-
-    override val lang = "es"
 
     override val supportsLatest = true
 

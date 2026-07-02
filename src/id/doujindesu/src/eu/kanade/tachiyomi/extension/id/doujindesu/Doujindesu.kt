@@ -1,10 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.doujindesu
 
-import android.widget.Toast
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,51 +8,46 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.parser.Parser
 import java.io.IOException
 import java.util.LinkedHashMap
 
-class Doujindesu :
-    HttpSource(),
-    ConfigurableSource {
+@Source
+abstract class Doujindesu : HttpSource() {
 
-    override val id = 7704282043609669342L
-    override val name = "Doujindesu"
-    override val lang = "id"
     override val supportsLatest = true
-
-    private val defaultBaseUrl = "https://doujin.desu.xxx"
-    override val baseUrl: String get() = getDefaultBaseUrl()
     private val apiUrl: String get() = "$baseUrl/api"
 
-    private val preferences by getPreferencesLazy()
-    val decryptor = Decryptor(apiUrl)
+    private val decryptor by lazy { Decryptor(apiUrl) }
 
     private val slugCache = object : LinkedHashMap<String, String>() {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 30
     }
 
-    override val client = super.client.newBuilder()
-        .addInterceptor(decryptor.xorInterceptor())
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val url = request.url.toString()
-            val headers = request.headers.newBuilder()
+    override val client: OkHttpClient by lazy {
+        network.client.newBuilder()
+            .addInterceptor(decryptor.xorInterceptor())
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                val headers = request.headers.newBuilder()
 
-            if (imageDomains.any { url.contains(it) }) {
-                headers.removeAll("x-app-secret")
+                if (imageDomains.any { url.contains(it) }) {
+                    headers.removeAll("x-app-secret")
+                }
+
+                chain.proceed(request.newBuilder().headers(headers.build()).build())
             }
-
-            chain.proceed(request.newBuilder().headers(headers.build()).build())
-        }
-        .build()
+            .build()
+    }
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("x-app-secret", APP_SECRET)
@@ -222,43 +213,5 @@ class Doujindesu :
         private const val LIMIT = 24
 
         private val imageDomains = listOf("desu.photos", "cdn-static.desu.xxx", "desu.pics", "uploads", "upload")
-
-        private const val PREF_BASE_URL = "defaultBaseUrl"
-        private const val PREF_CUSTOM_BASE_URL = "customBaseUrl"
-        private const val PREF_BASE_URL_TITLE = "Mengganti BaseUrl"
-        private const val PREF_BASE_URL_SUMMARY = "Mengganti domain default dengan domain yang berbeda"
-        private const val RESTART_MSG = "Mulai ulang aplikasi untuk menerapkan pengaturan baru"
-    }
-
-    init {
-        preferences.getString(PREF_BASE_URL, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != defaultBaseUrl) {
-                preferences
-                    .edit()
-                    .putString(PREF_CUSTOM_BASE_URL, defaultBaseUrl)
-                    .putString(PREF_BASE_URL, defaultBaseUrl)
-                    .apply()
-            }
-        }
-    }
-
-    private fun getDefaultBaseUrl(): String = preferences.getString(PREF_CUSTOM_BASE_URL, defaultBaseUrl)!!
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref =
-            EditTextPreference(screen.context).apply {
-                key = PREF_CUSTOM_BASE_URL
-                title = PREF_BASE_URL_TITLE
-                summary = PREF_BASE_URL_SUMMARY
-                this.setDefaultValue(defaultBaseUrl)
-                dialogTitle = PREF_BASE_URL_TITLE
-                dialogMessage = "Default: $defaultBaseUrl"
-
-                setOnPreferenceChangeListener { _, _ ->
-                    Toast.makeText(screen.context, RESTART_MSG, Toast.LENGTH_LONG).show()
-                    true
-                }
-            }
-        screen.addPreference(baseUrlPref)
     }
 }

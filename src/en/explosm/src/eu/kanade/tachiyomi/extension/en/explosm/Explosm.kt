@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -22,13 +23,8 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Explosm : HttpSource() {
-
-    override val name = "Cyanide & Happiness"
-
-    override val baseUrl = "https://explosm.net"
-
-    override val lang = "en"
+@Source
+abstract class Explosm : HttpSource() {
 
     override val supportsLatest = false
 

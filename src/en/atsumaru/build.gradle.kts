@@ -4,8 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Atsumaru"
-    className = "Atsumaru"
     versionCode = 19
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://atsu.moe"
+        versionId = 2
+    }
 }

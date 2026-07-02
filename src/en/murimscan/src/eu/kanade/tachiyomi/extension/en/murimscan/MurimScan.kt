@@ -2,13 +2,12 @@ package eu.kanade.tachiyomi.extension.en.murimscan
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.MangasPage
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import org.jsoup.nodes.Document
 
-class MurimScan : ZeistManga("MurimScan", "https://www.murimscans.site", "en") {
-
-    // Madara -> ZeistManga
-    override val versionId = 2
+@Source
+abstract class MurimScan : ZeistManga() {
 
     // Popular
     override val popularMangaSelector = ".PopularPosts article"

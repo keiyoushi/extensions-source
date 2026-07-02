@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "LustToon"
-    className = "LustToon"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://lustoon.com"
+    }
 }

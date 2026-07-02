@@ -1,9 +1,12 @@
 package eu.kanade.tachiyomi.extension.fr.pantheonscan
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class PantheonScan : Madara("Pantheon Scan", "https://pantheon-scan.com", "fr", dateFormat = SimpleDateFormat("d MMMM yyyy", Locale.FRANCE)) {
+@Source
+abstract class PantheonScan : Madara() {
+    override val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale.FRANCE)
     override val useNewChapterEndpoint = true
 }

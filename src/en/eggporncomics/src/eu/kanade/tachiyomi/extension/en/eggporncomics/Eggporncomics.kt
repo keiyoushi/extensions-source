@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -18,13 +19,8 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Calendar
 
-class Eggporncomics : HttpSource() {
-
-    override val name = "Eggporncomics"
-
-    override val baseUrl = "https://eggporncomics.com"
-
-    override val lang = "en"
+@Source
+abstract class Eggporncomics : HttpSource() {
 
     override val supportsLatest = true
 

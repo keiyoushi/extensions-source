@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.GraphQLErrorInterceptor
 import keiyoushi.utils.GraphQLException
 import keiyoushi.utils.firstInstance
@@ -21,13 +22,11 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 
-class Sokuyomi :
+@Source
+abstract class Sokuyomi :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Sokuyomi"
-    override val lang = "ja"
     private val domain = "sokuyomi.jp"
-    override val baseUrl = "https://sokuyomi.jp"
     override val supportsLatest = true
 
     private val apiUrl = "https://api.$domain/graphql"

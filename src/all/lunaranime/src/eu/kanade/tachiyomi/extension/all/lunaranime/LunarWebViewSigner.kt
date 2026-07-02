@@ -7,6 +7,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import keiyoushi.utils.applicationContext
 import okhttp3.Interceptor
+import okhttp3.Response
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -41,21 +42,38 @@ class LunarWebViewSigner(
             return cachedWv!!
         }
 
+    private var needsCaptcha = false
+
     fun dpopInterceptor() = Interceptor { chain ->
-        var req = chain.request()
-        val url = req.url.toString()
+        fun proceed(url: String): Response {
+            var req = chain.request()
 
-        if (!url.contains(apiUrl)) return@Interceptor chain.proceed(req)
+            if (needsCaptcha) {
+                val dpop = signUrlWv(req.method, url.substringBefore('?')).orEmpty()
+                if (dpop.isNotEmpty()) {
+                    req = req.newBuilder().addHeader("dpop", dpop).build()
+                }
+            }
+            return chain.proceed(req)
+        }
 
-        val dpop = signUrlWv(req.method, url.substringBefore('?')) ?: ""
-        if (dpop.isNotEmpty()) req = req.newBuilder().addHeader("dpop", dpop).build()
+        val url = chain.request().url.toString()
 
-        val resp = chain.proceed(req)
+        if (!url.contains(apiUrl)) return@Interceptor chain.proceed(chain.request())
 
-        if (resp.code == 403 && resp.peekBody(1024).string().contains("validate", ignoreCase = true)) {
-            handler.post { destroyWv?.run() }
+        val resp = proceed(url)
+
+        if (
+            resp.code == 403 &&
+            resp.peekBody(1024).string().contains("validate", ignoreCase = true)
+        ) {
             resp.close()
 
+            if (!needsCaptcha) {
+                needsCaptcha = true
+                handler.post { destroyWv?.run() }
+                return@Interceptor proceed(url)
+            }
             throw IOException("Solve captcha in webview and retry")
         }
         resp
@@ -131,23 +149,82 @@ class LunarWebViewSigner(
 
                     req.onsuccess = function(e) {
                         db = e.target.result;
-                        const tx = db.transaction("store", "readonly");
-                        const store = tx.objectStore("store");
-                        const get = store.get("device-key-secure");
+                        try {
+                            const storeNames = Array.from(db.objectStoreNames);
+                            let found = false;
+                            let checked = 0;
 
-                        get.onsuccess = function() {
-                            db.close();
-                            resolve(get.result);
-                        };
+                            for (const storeName of storeNames) {
+                                const tx = db.transaction(storeName, "readonly");
+                                const store = tx.objectStore(storeName);
 
-                        get.onerror = function() {
+                                function fallbackScan() {
+                                    const getAllReq = store.getAll();
+                                    getAllReq.onsuccess = function() {
+                                        const items = getAllReq.result || [];
+                                        for (const item of items) {
+                                            if (item && item.privateKey && item.publicJwk) {
+                                                found = true;
+                                                db.close();
+                                                resolve(item);
+                                                return;
+                                            }
+                                        }
+                                        checked++;
+                                        if (checked === storeNames.length && !found) {
+                                            db.close();
+                                            reject();
+                                        }
+                                    };
+                                    getAllReq.onerror = function() {
+                                        checked++;
+                                        if (checked === storeNames.length && !found) {
+                                            db.close();
+                                            reject();
+                                        }
+                                    };
+                                }
+
+                                const metaReq = store.get("sw-cache-meta");
+                                metaReq.onsuccess = function() {
+                                    const meta = metaReq.result;
+                                    let activeId = null;
+                                    if (meta && typeof meta === 'object' && Array.isArray(meta.ids) &&
+                                        typeof meta.sel === 'number' && meta.sel >= 0 && meta.sel < meta.ids.length) {
+                                        activeId = meta.ids[meta.sel];
+                                    }
+                                    if (activeId) {
+                                        const keyReq = store.get(activeId);
+                                        keyReq.onsuccess = function() {
+                                            const keyData = keyReq.result;
+                                            if (keyData && keyData.privateKey && keyData.publicJwk) {
+                                                found = true;
+                                                db.close();
+                                                resolve(keyData);
+                                                return;
+                                            }
+                                            fallbackScan();
+                                        };
+                                        keyReq.onerror = fallbackScan;
+                                    } else {
+                                        fallbackScan();
+                                    }
+                                };
+                                metaReq.onerror = fallbackScan;
+                            }
+
+                            if (storeNames.length === 0) {
+                                db.close();
+                                reject();
+                            }
+                        } catch (err) {
                             db.close();
-                            reject(get.error);
-                        };
+                            reject();
+                        }
                     };
 
                     req.onerror = function() {
-                        reject(req.error);
+                        reject();
                     };
                 });
             }

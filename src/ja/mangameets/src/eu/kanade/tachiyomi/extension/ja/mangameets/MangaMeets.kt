@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
@@ -17,10 +18,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class MangaMeets : HttpSource() {
-    override val name = "MangaMeets"
-    override val baseUrl = "https://manga-meets.jp"
-    override val lang = "ja"
+@Source
+abstract class MangaMeets : HttpSource() {
     override val supportsLatest = true
 
     private val apiUrl = "$baseUrl/api"

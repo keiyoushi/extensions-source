@@ -4,8 +4,13 @@ plugins {
 
 keiyoushi {
     name = "DreComi+"
-    className = "DreComics"
     versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://drecomi-plus.jp"
+        versionId = 2
+    }
 }

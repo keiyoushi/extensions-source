@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.manhuahot
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class ManhuaHot : Madara("ManhuaHot", "https://manhuahot.com", "en")
+@Source
+abstract class ManhuaHot : Madara()

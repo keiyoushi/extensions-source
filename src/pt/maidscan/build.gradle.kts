@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Maid Scan"
-    className = "MaidScan"
     versionCode = 51
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "greenshit"
-    baseUrl = "https://empreguetes.wtf"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://empreguetes.wtf"
+    }
 }

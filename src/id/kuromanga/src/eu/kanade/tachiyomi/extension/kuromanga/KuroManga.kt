@@ -3,18 +3,14 @@ package eu.kanade.tachiyomi.extension.id.kuromanga
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class KuroManga :
-    MangaThemesia(
-        "Kuro Manga",
-        "https://kuromanga.me",
-        "id",
-        dateFormat = KMdateFormat,
-    ) {
+@Source
+abstract class KuroManga : MangaThemesia() {
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 

@@ -1,11 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.herosweb
 
-import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewerAlt
+import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewer
+import keiyoushi.annotation.Source
 
-class HerosWeb :
-    ComiciViewerAlt(
-        "HERO'S Web",
-        "https://heros-web.com",
-        "ja",
-        "https://heros-web.com/api",
-    )
+@Source
+abstract class HerosWeb : ComiciViewer()

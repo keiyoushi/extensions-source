@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -14,13 +15,10 @@ import okhttp3.Response
 import rx.Observable
 import java.net.URI
 
-class BigSolo : HttpSource() {
+@Source
+abstract class BigSolo : HttpSource() {
 
-    override val name = "BigSolo"
-    override val baseUrl = "https://bigsolo.org"
-    override val lang = "fr"
     override val supportsLatest = true
-    override val id = 4410528266393104437
 
     // Popular
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/data/series", headers)

@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
@@ -20,14 +21,12 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class VortexScans :
+@Source
+abstract class VortexScans :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Vortex Scans"
-    override val baseUrl = "https://vortexscans.org"
     private val apiUrl = "https://api.vortexscans.org"
-    override val lang = "en"
     override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()

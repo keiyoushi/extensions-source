@@ -30,13 +30,11 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-abstract class FoolSlide(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-    open val urlModifier: String = "",
-) : HttpSource(),
+abstract class FoolSlide :
+    HttpSource(),
     ConfigurableSource {
+
+    protected open val urlModifier: String = ""
 
     override val supportsLatest = true
 

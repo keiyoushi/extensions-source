@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -19,11 +20,9 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class FourKHD : HttpSource() {
-    override val name = "4KHD"
-    override val lang = "all"
+@Source
+abstract class FourKHD : HttpSource() {
     override val supportsLatest = true
-    override val baseUrl = "https://www.4khd.com"
 
     private val apiUrl = "$baseUrl/index.php".toHttpUrl()
     private val pageSize = 20

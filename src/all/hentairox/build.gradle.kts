@@ -4,10 +4,15 @@ plugins {
 
 keiyoushi {
     name = "HentaiRox"
-    className = "HentaiRoxFactory"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "galleryadults"
-    baseUrl = "https://hentairox.com"
+
+    listOf("en", "ja", "zh", "all").forEach { language ->
+        source {
+            lang = language
+            baseUrl = "https://hentairox.com"
+        }
+    }
 }

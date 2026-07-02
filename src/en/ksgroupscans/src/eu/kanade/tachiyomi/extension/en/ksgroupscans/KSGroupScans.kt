@@ -1,8 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.ksgroupscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class KSGroupScans : Madara("KSGroupScans", "https://ksgroupscans.com", "en") {
-    override val versionId = 2
+@Source
+abstract class KSGroupScans : Madara() {
     override val useNewChapterEndpoint = true
 }

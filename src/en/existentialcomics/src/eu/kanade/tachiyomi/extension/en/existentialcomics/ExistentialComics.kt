@@ -7,17 +7,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class ExistentialComics : HttpSource() {
-
-    override val name = "Existential Comics"
-
-    override val baseUrl = "https://existentialcomics.com"
-
-    override val lang = "en"
+@Source
+abstract class ExistentialComics : HttpSource() {
 
     override val supportsLatest = false
 

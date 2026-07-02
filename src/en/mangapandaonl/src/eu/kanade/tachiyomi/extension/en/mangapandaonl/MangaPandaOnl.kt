@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.mangapandaonl
 
 import eu.kanade.tachiyomi.multisrc.mangahub.MangaHub
+import keiyoushi.annotation.Source
 
-class MangaPandaOnl : MangaHub("MangaPanda.onl", "https://mangapanda.onl", "en", "mr02")
+@Source
+abstract class MangaPandaOnl : MangaHub() {
+    override val mangaSource = "mr02"
+}

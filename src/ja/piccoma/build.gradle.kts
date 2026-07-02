@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Piccoma"
-    className = "Piccoma"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://piccoma.com"
+    }
 }
 
 dependencies {

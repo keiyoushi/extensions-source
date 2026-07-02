@@ -3,15 +3,12 @@ package eu.kanade.tachiyomi.extension.tr.gafeland
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import org.jsoup.nodes.Document
 
-class Gafeland :
-    MangaThemesia(
-        "gafeland",
-        "https://gafeland.com",
-        "tr",
-    ) {
+@Source
+abstract class Gafeland : MangaThemesia() {
 
     override fun pageListParse(document: Document): List<Page> {
         // dHNfcmVhZGVyLnJ1bih7 is "ts_reader.run({" in base64

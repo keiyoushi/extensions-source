@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.Request
 import okhttp3.Response
@@ -16,13 +17,8 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ZeurelScan : HttpSource() {
-
-    override val name = "ZeurelScan"
-
-    override val baseUrl = "https://www.zeurelscan.com"
-
-    override val lang = "it"
+@Source
+abstract class ZeurelScan : HttpSource() {
 
     override val supportsLatest = true
 

@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -17,10 +18,8 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ManhwaBuddy : HttpSource() {
-    override val baseUrl = "https://manhwabuddy.com"
-    override val lang = "en"
-    override val name = "ManhwaBuddy"
+@Source
+abstract class ManhwaBuddy : HttpSource() {
     override val supportsLatest = true
 
     private val dateFormat by lazy { SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH) }

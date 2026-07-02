@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
@@ -22,12 +23,10 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import kotlin.collections.flatten
 
-class GorakuWeb :
+@Source
+abstract class GorakuWeb :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Goraku Web"
-    override val baseUrl = "https://gorakuweb.com"
-    override val lang = "ja"
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()

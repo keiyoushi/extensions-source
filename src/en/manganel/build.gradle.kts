@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "MangaNel"
-    className = "MangaNel"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangahub"
-    baseUrl = "https://manganel.me"
+
+    source {
+        lang = "en"
+        baseUrl = "https://manganel.me"
+    }
 }

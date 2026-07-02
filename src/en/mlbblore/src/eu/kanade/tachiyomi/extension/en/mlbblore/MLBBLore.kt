@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.Request
@@ -15,11 +16,9 @@ import okhttp3.Response
 private const val SORT_NEWEST = 1
 private const val SORT_POPULARITY = 3
 
-class MLBBLore : HttpSource() {
+@Source
+abstract class MLBBLore : HttpSource() {
 
-    override val name = "MLBB Lore Comics"
-    override val baseUrl = "https://play.mobilelegends.com"
-    override val lang = "en"
     override val supportsLatest = true
 
     private val apiUrl = "https://api.mobilelegends.com"

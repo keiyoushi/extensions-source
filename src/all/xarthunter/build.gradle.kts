@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "XArt Hunter"
-    className = "XArtHunter"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "masonry"
-    baseUrl = "https://www.xarthunter.com"
+
+    source {
+        lang = "all"
+        baseUrl = "https://www.xarthunter.com"
+    }
 }

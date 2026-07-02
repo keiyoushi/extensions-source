@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -16,10 +17,8 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ComicGrast : HttpSource() {
-    override val name = "Comic Grast"
-    override val baseUrl = "https://novema.jp"
-    override val lang = "ja"
+@Source
+abstract class ComicGrast : HttpSource() {
     override val supportsLatest = false
 
     private val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.ROOT)

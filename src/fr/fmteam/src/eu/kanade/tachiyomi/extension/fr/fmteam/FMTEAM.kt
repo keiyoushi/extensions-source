@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.fr.fmteam
 
 import eu.kanade.tachiyomi.multisrc.pizzareader.PizzaReader
+import keiyoushi.annotation.Source
 
-class FMTEAM : PizzaReader("FMTEAM", "https://fmteam.fr", "fr") {
-    override val versionId = 2
-}
+@Source
+abstract class FMTEAM : PizzaReader()

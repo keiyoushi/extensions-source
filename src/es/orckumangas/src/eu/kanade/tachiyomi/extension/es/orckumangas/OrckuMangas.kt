@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -16,11 +17,9 @@ import okhttp3.Response
 import org.jsoup.select.Elements
 import kotlin.time.Duration.Companion.seconds
 
-class OrckuMangas : HttpSource() {
+@Source
+abstract class OrckuMangas : HttpSource() {
 
-    override val name = "Orcku Mangas"
-    override val baseUrl = "https://orckumangas.com"
-    override val lang = "es"
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()

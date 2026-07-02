@@ -4,8 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Koinobori Scan"
-    className = "KoinoboriScan"
     versionCode = 40
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "es"
+        baseUrl = "https://visorkoi.com"
+        versionId = 3
+    }
 }

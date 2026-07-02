@@ -2,14 +2,11 @@ package eu.kanade.tachiyomi.extension.en.gedecomix
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Element
 
-class GEDEComix :
-    Madara(
-        "GEDE Comix",
-        "https://gedecomix.com",
-        "en",
-    ) {
+@Source
+abstract class GEDEComix : Madara() {
     override val mangaDetailsSelectorThumbnail = "${super.mangaDetailsSelectorThumbnail}:not([data-eio])"
 
     override val useNewChapterEndpoint = true

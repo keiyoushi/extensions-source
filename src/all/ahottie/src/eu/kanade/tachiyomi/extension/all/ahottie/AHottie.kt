@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -17,10 +18,8 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class AHottie : HttpSource() {
-    override val baseUrl = "https://ahottie.top"
-    override val lang = "all"
-    override val name = "AHottie"
+@Source
+abstract class AHottie : HttpSource() {
     override val supportsLatest = false
 
     override fun headersBuilder() = super.headersBuilder()

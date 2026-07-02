@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Zonatmo.to (unoriginal)"
-    className = "ZonatmoTo"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "es"
+        baseUrl = "https://zonatmo.to"
+    }
 
     deeplink {
         host("zonatmo.to")

@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
@@ -19,19 +20,27 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-open class SimplyHentai(
-    override val lang: String,
-    private val langName: String,
-) : HttpSource(),
+@Source
+abstract class SimplyHentai :
+    HttpSource(),
     ConfigurableSource {
-
-    override val name = "Simply Hentai"
-
-    override val baseUrl = "https://www.simply-hentai.com"
 
     override val supportsLatest = true
 
-    override val versionId = 2
+    private val langName: String
+        get() = when (lang) {
+            "en" -> "english"
+            "ja" -> "japanese"
+            "zh" -> "chinese"
+            "ko" -> "korean"
+            "es" -> "spanish"
+            "ru" -> "russian"
+            "fr" -> "french"
+            "de" -> "german"
+            "it" -> "italian"
+            "pl" -> "polish"
+            else -> lang
+        }
 
     private val apiUrl = "https://api.simply-hentai.com/v3"
 

@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.th.sodsaime
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Sodsaime : MangaThemesia("สดใสเมะ", "https://www.xn--l3c0azab5a2gta.com", "th", dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("th")))
+@Source
+abstract class Sodsaime : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("th"))
+}

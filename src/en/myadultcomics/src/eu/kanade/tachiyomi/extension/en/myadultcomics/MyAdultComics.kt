@@ -10,16 +10,15 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class MyAdultComics : HttpSource() {
+@Source
+abstract class MyAdultComics : HttpSource() {
 
-    override val name = "MyAdultComics"
-    override val baseUrl = "https://myadultcomics.com"
-    override val lang = "en"
     override val supportsLatest = false
 
     override fun headersBuilder() = super.headersBuilder()

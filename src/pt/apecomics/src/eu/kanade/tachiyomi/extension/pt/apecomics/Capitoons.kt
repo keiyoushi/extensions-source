@@ -1,14 +1,10 @@
 package eu.kanade.tachiyomi.extension.pt.apecomics
 
 import eu.kanade.tachiyomi.multisrc.mangawork.MangaWork
+import keiyoushi.annotation.Source
 
-class Capitoons :
-    MangaWork(
-        name = "Capitoons",
-        baseUrl = "https://capitoons.com",
-        lang = "pt-BR",
-    ) {
-    override val id: Long = 4475020039832513819
+@Source
+abstract class Capitoons : MangaWork() {
 
     override fun getOrderFilterOptions() = orderFilterOptions
 

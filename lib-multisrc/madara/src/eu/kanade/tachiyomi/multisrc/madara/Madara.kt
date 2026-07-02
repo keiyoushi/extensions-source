@@ -35,12 +35,9 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-abstract class Madara(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String,
-    protected val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
-) : HttpSource() {
+abstract class Madara : HttpSource() {
+
+    protected open val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
 
     override val supportsLatest = true
 

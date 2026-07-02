@@ -8,18 +8,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 
-class NuxScans : HttpSource() {
-
-    override val name = "Nux Scans"
-
-    override val baseUrl = "https://nuxscans-comics.blogspot.com"
-
-    override val lang = "en"
+@Source
+abstract class NuxScans : HttpSource() {
 
     override val supportsLatest = true
 

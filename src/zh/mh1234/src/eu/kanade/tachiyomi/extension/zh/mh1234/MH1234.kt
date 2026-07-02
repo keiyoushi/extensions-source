@@ -8,17 +8,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
-class MH1234 : HttpSource() {
+@Source
+abstract class MH1234 : HttpSource() {
 
-    override val baseUrl = "https://m.wmh1234.com"
-    override val lang = "zh"
-    override val name = "漫画1234"
     override val supportsLatest = true
 
     // Popular Page

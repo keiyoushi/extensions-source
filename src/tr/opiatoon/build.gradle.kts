@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Opiatoon"
-    className = "Opiatoon"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://opiatoon.pics"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://opiatoon.shop"
+    }
 }

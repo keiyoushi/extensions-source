@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Shadow Manga"
-    className = "ShadowManga"
     versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "es"
+        baseUrl = "https://shademanga.com"
+    }
 }

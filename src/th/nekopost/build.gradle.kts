@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Nekopost"
-    className = "Nekopost"
     versionCode = 15
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "th"
+        baseUrl = "https://www.nekopost.net"
+    }
 }
 
 dependencies {

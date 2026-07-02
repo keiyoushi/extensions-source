@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -22,12 +23,10 @@ import kotlin.time.Duration.Companion.seconds
 // I’m sorry if this extension causes too much traffic for your site.
 // Unfortunately we can’t just download and use your Zip downloads.
 // Shall problems arise, we’ll reduce the rate limit.
-class DarthsDroids : HttpSource() {
+@Source
+abstract class DarthsDroids : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
-    override val name = "Darths & Droids"
-    override val baseUrl = "https://www.darthsanddroids.net"
-    override val lang = "en"
     override val supportsLatest = false
     override val client = network.client.newBuilder()
         .rateLimit(10, 1.seconds) { it.host == baseUrlHost }

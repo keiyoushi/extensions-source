@@ -8,24 +8,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
-import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class Rncalation : HttpSource() {
-
-    override val name = "Rncalation"
-
-    override val baseUrl = "https://rncalation.online"
-
-    override val lang = "es"
+@Source
+abstract class Rncalation : HttpSource() {
 
     override val supportsLatest = true
 
@@ -35,8 +26,6 @@ class Rncalation : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-
-    private val dateFormat = SimpleDateFormat("M/d/yyyy", Locale.ROOT)
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/library?sort=views&page=$page", headers)
 
@@ -99,14 +88,9 @@ class Rncalation : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst(".comic-hero-wrap h1")!!.text()
-            thumbnail_url = document.selectFirst(".comic-hero-wrap img")?.attr("abs:src")
-            description = document.select(".comic-hero-wrap p.leading-relaxed").text()
+            description = document.selectFirst("""p.text-\[0\.875rem\].text-\[var\(--color-text2\)\]""")?.text() ?: ""
 
-            author = document.select(".comic-hero-wrap span:contains(Autor)").text().substringAfter("Autor:").ifEmpty { null }
-            artist = document.select(".comic-hero-wrap span:contains(Arte)").text().substringAfter("Arte:").ifEmpty { author }
-
-            val badges = document.select(".comic-hero-wrap span.comic-badge").map { it.text().lowercase(Locale.ROOT) }
+            val badges = document.select("span.inline-flex.items-center.rounded").map { it.text().lowercase() }
             status = when {
                 badges.any { it.contains("emisión") || it.contains("curso") || it.contains("ongoing") } -> SManga.ONGOING
                 badges.any { it.contains("completado") || it.contains("completed") } -> SManga.COMPLETED
@@ -115,45 +99,35 @@ class Rncalation : HttpSource() {
                 else -> SManga.UNKNOWN
             }
 
-            genre = document.select(".comic-hero-wrap a[href*=genre]").joinToString { it.text() }
-        }
-    }
+            genre = document.select("span.inline-flex.items-center.rounded")
+                .filter { it.text().lowercase() !in listOf("emisión", "completado", "pausa", "cancelado") }
+                .joinToString(", ") { it.text() }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val chapters = mutableListOf<SChapter>()
+            val groupName = document.selectFirst("a[href^='/groups/']")?.text()
+            if (!groupName.isNullOrEmpty()) {
+                author = groupName
+                artist = groupName
+            }
 
-        document.select("#chapter-list a[data-chapter-id]").forEach { element ->
-            chapters.add(chapterFromElement(element))
-        }
-
-        document.selectFirst("template#chapters-extra")?.let { template ->
-            val extraHtml = template.html()
-            val extraDoc = Jsoup.parseBodyFragment(extraHtml, document.baseUri())
-            extraDoc.select("a[data-chapter-id]").forEach { element ->
-                chapters.add(chapterFromElement(element))
+            document.select(".flex.items-baseline.justify-between.gap-2").forEach { row ->
+                val label = row.selectFirst("span.text-\\[var\\(--color-text3\\)\\]")?.text()
+                val value = row.selectFirst("span.text-\\[var\\(--color-text2\\)\\]")?.text()
+                if (label == "Autor") author = value
+                if (label == "Arte") artist = value
             }
         }
-
-        return chapters
     }
 
-    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        setUrlWithoutDomain(element.absUrl("href"))
-        name = element.selectFirst("span.flex-1")!!.text()
-
-        val dateText = element.selectFirst("span:matches(\\d{1,2}/\\d{1,2}/\\d{4})")?.text()
-        date_upload = dateFormat.tryParse(dateText)
-
-        scanlator = element.select("span").firstOrNull {
-            val text = it.text().lowercase()
-            text.isNotEmpty() &&
-                !it.hasClass("flex-1") &&
-                !text.contains("/") &&
-                text != "gratis" &&
-                text != "nuevo"
-        }?.text()
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("a[data-chapter-id]").mapIndexed { num, it ->
+        SChapter.create().apply {
+            setUrlWithoutDomain(it.attr("href"))
+            chapter_number = it.attr("data-chapter-num").toFloatOrNull() ?: num.toFloat()
+            name = it.attr("data-chapter-label").trim().ifEmpty { "Capítulo ${chapter_number.toInt()}" }
+            date_upload = it.selectFirst(".text-\\[0\\.65rem\\]")?.let { parseDate(it.text()) } ?: 0L
+        }
     }
+
+    private fun chapterRequest(slug: String, page: Int): Request = GET("$baseUrl/comics/$slug/chapters?page=$page", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()

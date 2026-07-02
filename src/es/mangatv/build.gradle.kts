@@ -4,12 +4,16 @@ plugins {
 
 keiyoushi {
     name = "Manga TV"
-    className = "MangaTV"
     versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://mangatv.net"
+
+    source {
+        name = "Manga  TV"
+        lang = "es"
+        baseUrl = "https://mangatv.net"
+    }
 }
 
 dependencies {

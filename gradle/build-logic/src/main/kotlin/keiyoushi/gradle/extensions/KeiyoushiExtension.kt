@@ -38,7 +38,9 @@ abstract class SourceSpec @Inject constructor(private val objects: ObjectFactory
 
     var baseUrl: String
         get() = error("baseUrl is write-only")
-        set(value) { resolvedBaseUrl.set(BaseUrlSpec.Static(value)) }
+        set(value) {
+            resolvedBaseUrl.set(BaseUrlSpec.Static(value))
+        }
 
     fun baseUrl(url: String, block: BaseUrlDsl.() -> Unit) {
         val dsl = objects.newInstance(BaseUrlDsl::class.java)

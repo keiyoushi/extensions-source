@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Bladetoons"
-    className = "BladeToons"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangotheme"
-    baseUrl = "https://bladetoons.com"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://bladetoons.com"
+    }
 }

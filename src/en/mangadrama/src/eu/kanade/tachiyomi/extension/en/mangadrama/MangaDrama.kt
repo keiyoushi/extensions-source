@@ -2,8 +2,10 @@ package eu.kanade.tachiyomi.extension.en.mangadrama
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.multisrc.madara.Madara.LoadMoreStrategy
+import keiyoushi.annotation.Source
 
-class MangaDrama : Madara("Manga Drama", "https://mangadrama.com", "en") {
+@Source
+abstract class MangaDrama : Madara() {
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true

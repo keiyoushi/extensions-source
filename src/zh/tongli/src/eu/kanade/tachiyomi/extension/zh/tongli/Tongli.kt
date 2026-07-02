@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.SerializationException
@@ -25,13 +26,11 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
-class Tongli :
+@Source
+abstract class Tongli :
     HttpSource(),
     ConfigurableSource {
-    override val name: String = "東立"
-    override val lang: String = "zh"
     override val supportsLatest: Boolean = true
-    override val baseUrl: String = "https://ebook.tongli.com.tw"
     private val apiUrl = "https://api.tongli.tw"
 
     private val preferences: SharedPreferences = getPreferences()

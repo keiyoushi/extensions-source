@@ -7,19 +7,16 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import rx.Observable
 
-class MangaCan :
-    MangaThemesia(
-        "Manga Can",
-        "https://mangacanblog.com",
-        "id",
-        "/",
-    ) {
+@Source
+abstract class MangaCan : MangaThemesia() {
+    override val mangaUrlDirectory = "/"
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()

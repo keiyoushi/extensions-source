@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.Headers
@@ -17,12 +18,10 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class HentaiClub : HttpSource() {
+@Source
+abstract class HentaiClub : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
-    override val name = "绅士会所"
-    override val baseUrl = "https://www.hentaiclub.net"
-    override val lang = "zh"
     override val supportsLatest = false
 
     override val client = network.client.newBuilder()

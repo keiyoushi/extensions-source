@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -21,13 +22,8 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
-class Megatokyo : HttpSource() {
-
-    override val name = "Megatokyo"
-
-    override val baseUrl = "https://megatokyo.com"
-
-    override val lang = "en"
+@Source
+abstract class Megatokyo : HttpSource() {
 
     override val supportsLatest = false
 

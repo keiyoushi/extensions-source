@@ -4,9 +4,15 @@ plugins {
 
 keiyoushi {
     name = "Monochrome Custom"
-    className = "MonochromeCustom"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "monochrome"
+
+    source {
+        lang = "en"
+        baseUrl("https://monochromecms.netlify.app") {
+            withCustom = true
+        }
+    }
 }

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -17,10 +18,8 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.util.Calendar
 
-class KamiComic : HttpSource() {
-    override val name = "KamiComic"
-    override val lang = "vi"
-    override val baseUrl = "https://kamicomi.com"
+@Source
+abstract class KamiComic : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()

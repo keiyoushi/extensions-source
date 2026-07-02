@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -25,12 +26,10 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DeviantArt :
+@Source
+abstract class DeviantArt :
     HttpSource(),
     ConfigurableSource {
-    override val name = "DeviantArt"
-    override val baseUrl = "https://www.deviantart.com"
-    override val lang = "all"
     override val supportsLatest = false
 
     private val preferences: SharedPreferences by getPreferencesLazy()

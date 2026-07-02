@@ -20,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -43,13 +44,11 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.minutes
 
 @Suppress("unused")
-class MangaDash :
+@Source
+abstract class MangaDash :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "MangaDash"
-    override val baseUrl = "https://mangadash.net"
-    override val lang = "pt-BR"
     override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()

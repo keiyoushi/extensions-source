@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -22,15 +23,10 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 
-class RimuScans :
+@Source
+abstract class RimuScans :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "Rimu Scans"
-
-    override val baseUrl = "https://rimuscan.fr"
-
-    override val lang = "fr"
 
     override val supportsLatest = true
 

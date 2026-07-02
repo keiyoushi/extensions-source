@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -19,11 +20,9 @@ import org.jsoup.select.Elements
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DoujinHentai : HttpSource() {
+@Source
+abstract class DoujinHentai : HttpSource() {
 
-    override val name = "DoujinHentai"
-    override val baseUrl = "https://doujinhentai.net"
-    override val lang = "es"
     override val supportsLatest = true
 
     private val chapterDateFormat by lazy { SimpleDateFormat("d MMM. yyyy", Locale.ENGLISH) }

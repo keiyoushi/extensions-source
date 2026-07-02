@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "ManhwaManhua"
-    className = "ManhwaManhua"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://manhwamanhua.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://manhwamanhua.com"
+    }
 }

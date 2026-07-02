@@ -45,11 +45,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-abstract class LibGroup(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String,
-) : HttpSource(),
+abstract class LibGroup :
+    HttpSource(),
     ConfigurableSource {
     private val apiDomainHost by lazy { apiDomain.toHttpUrl().host }
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }

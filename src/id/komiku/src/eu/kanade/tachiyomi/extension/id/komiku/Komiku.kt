@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -18,14 +19,10 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class Komiku : HttpSource() {
-    override val name = "Komiku"
-
-    override val baseUrl = "https://komiku.org"
+@Source
+abstract class Komiku : HttpSource() {
 
     private val apiUrl = "https://api.komiku.org"
-
-    override val lang = "id"
 
     override val supportsLatest = true
 

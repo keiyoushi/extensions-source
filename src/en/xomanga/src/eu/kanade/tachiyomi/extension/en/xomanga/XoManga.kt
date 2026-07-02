@@ -7,16 +7,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class XoManga : HttpSource() {
-    override val baseUrl = "https://www.xomanga.site"
-    override val lang = "en"
+@Source
+abstract class XoManga : HttpSource() {
     override val supportsLatest = true
-    override val name = "XoManga"
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/our-works.html", headers)
 

@@ -4,10 +4,15 @@ plugins {
 
 keiyoushi {
     name = "SeiManga"
-    className = "SeiManga"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "grouple"
-    baseUrl = "https://1.seimanga.me"
+
+    source {
+        baseUrl("https://1.seimanga.me") {
+            withCustom = true
+        }
+        lang = "ru"
+    }
 }

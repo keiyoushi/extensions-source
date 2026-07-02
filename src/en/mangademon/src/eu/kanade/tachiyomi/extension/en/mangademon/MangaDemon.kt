@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -20,14 +21,10 @@ import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaDemon : HttpSource() {
+@Source
+abstract class MangaDemon : HttpSource() {
 
-    override val versionId = 2
-
-    override val lang = "en"
     override val supportsLatest = true
-    override val name = "Manga Demon"
-    override val baseUrl = "https://demonicscans.org"
 
     override val client = network.client.newBuilder()
         .rateLimit(6) { it.toString().contains("images/thumbnails") }
@@ -135,10 +132,15 @@ class MangaDemon : HttpSource() {
                 thumbnail_url = selectFirst("div#manga-page img")!!.attr("abs:src")
                 genre = select("div.genres-list > li").joinToString { it.text() }
                 description = selectFirst("div#manga-info-rightColumn > div > div.white-font")!!.text()
-                author = select("div#manga-info-stats > div:has(> li:eq(0):contains(Author)) > li:eq(1)").text()
+                author = parseAuthor(select("div#manga-info-stats > div:has(> li:eq(0):contains(Author)) > li:eq(1)").text())
                 status = parseStatus(select("div#manga-info-stats > div:has(> li:eq(0):contains(Status)) > li:eq(1)").text())
             }
         }
+    }
+
+    private fun parseAuthor(author: String?) = when {
+        author == null || author.contains("Updating", ignoreCase = true) -> null
+        else -> author
     }
 
     private fun parseStatus(status: String?) = when {

@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.tcbscansunoriginal
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class TCBScansUnoriginal : MangaThemesia("TCB Scans (Unoriginal)", "https://tcbscanonepiecechapters.com", "en")
+@Source
+abstract class TCBScansUnoriginal : MangaThemesia()

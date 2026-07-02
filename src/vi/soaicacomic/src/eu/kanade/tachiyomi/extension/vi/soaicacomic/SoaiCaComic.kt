@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -24,13 +25,10 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
 
-class SoaiCaComic : HttpSource() {
+@Source
+abstract class SoaiCaComic : HttpSource() {
 
-    override val name = "SoaiCaComic"
-    override val lang = "vi"
     override val supportsLatest = true
-
-    override val baseUrl = "https://soaicacomic2.top"
 
     private val thumbnailFallbackInterceptor = Interceptor { chain ->
         val request = chain.request()

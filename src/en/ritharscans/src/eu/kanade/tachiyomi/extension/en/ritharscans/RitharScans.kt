@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
@@ -14,7 +15,8 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 
-class RitharScans : Keyoapp("RitharScans", "https://ritharscans.com", "en") {
+@Source
+abstract class RitharScans : Keyoapp() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangas = super.popularMangaParse(response).mangas

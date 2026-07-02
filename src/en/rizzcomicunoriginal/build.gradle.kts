@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Rizz Comic (unoriginal)"
-    className = "RizzComicUnoriginal"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://rizzcomic.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://rizzcomic.com"
+    }
 }

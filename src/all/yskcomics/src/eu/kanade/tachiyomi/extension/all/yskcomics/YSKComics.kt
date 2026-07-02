@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -15,11 +16,8 @@ import okhttp3.Response
 import rx.Observable
 import java.lang.Exception
 
-class YSKComics(
-    override val lang: String,
-) : HttpSource() {
-    override val name = "YSK Comics"
-    override val baseUrl = "https://www.ysk-comics.com"
+@Source
+abstract class YSKComics : HttpSource() {
     private val apiBaseUrl = "https://api.ysk-comics.com"
     override val supportsLatest = true
 

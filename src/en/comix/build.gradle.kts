@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Comix"
-    className = "Comix"
-    versionCode = 32
+    versionCode = 33
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://comix.to"
+    }
 
     deeplink {
         host("comix.to")

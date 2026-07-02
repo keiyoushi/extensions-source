@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -20,16 +21,12 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class TencentComics : HttpSource() {
-
-    override val name = "腾讯动漫"
+@Source
+abstract class TencentComics : HttpSource() {
 
     // its easier to parse the mobile version of the website
-    override val baseUrl = "https://m.ac.qq.com"
 
     private val desktopUrl = "https://ac.qq.com"
-
-    override val lang = "zh-Hans"
 
     override val supportsLatest = true
 

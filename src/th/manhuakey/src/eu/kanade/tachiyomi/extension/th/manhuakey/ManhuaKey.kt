@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import keiyoushi.lib.unpacker.Unpacker
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -17,7 +18,8 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import java.io.ByteArrayOutputStream
 
-class ManhuaKey : Madara("ManhuaKey", "https://www.manhuakey.com", "th") {
+@Source
+abstract class ManhuaKey : Madara() {
 
     override val filterNonMangaItems = false
     override fun searchMangaSelector() = "div.page-item-detail"

@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -30,10 +31,8 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
 
-class TuiTruyen : HttpSource() {
-    override val name = "TuiTruyen"
-    override val lang = "vi"
-    override val baseUrl = "https://tuitruyen.top"
+@Source
+abstract class TuiTruyen : HttpSource() {
     override val supportsLatest = true
 
     private val imgxGrants = ConcurrentHashMap<String, PageAccessEntry>()

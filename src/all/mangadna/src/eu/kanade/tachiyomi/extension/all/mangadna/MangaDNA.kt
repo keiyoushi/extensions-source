@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
@@ -21,11 +22,8 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-open class MangaDNA(override val lang: String) : HttpSource() {
-
-    override val name = "MangaDNA"
-
-    override val baseUrl = "https://mangadna.com"
+@Source
+abstract class MangaDNA : HttpSource() {
 
     override val supportsLatest = true
 

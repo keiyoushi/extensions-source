@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -18,12 +19,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class Manhwa18Net : HttpSource() {
+@Source
+abstract class Manhwa18Net : HttpSource() {
 
-    override val versionId = 2
-    override val name = "Manhwa18.Net"
-    override val baseUrl = "https://manhwa18.net"
-    override val lang = "en"
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()

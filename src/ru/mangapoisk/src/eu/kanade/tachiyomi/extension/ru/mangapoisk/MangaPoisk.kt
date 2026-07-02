@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -22,12 +23,8 @@ import java.util.Locale
 private val chapterRegex = Regex("""Глава\s(\d+)""", RegexOption.IGNORE_CASE)
 private val dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale("ru"))
 
-class MangaPoisk : HttpSource() {
-    override val name = "MangaPoisk"
-
-    override val baseUrl = "https://mangapsk.ru"
-
-    override val lang = "ru"
+@Source
+abstract class MangaPoisk : HttpSource() {
 
     override val supportsLatest = true
 

@@ -4,10 +4,15 @@ plugins {
 
 keiyoushi {
     name = "Miau Scan"
-    className = "MiauScanFactory"
     versionCode = 7
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://leemiau.com"
+
+    listOf("es", "pt-BR").forEach { sourceLang ->
+        source {
+            lang = sourceLang
+            baseUrl = "https://leemiau.com"
+        }
+    }
 }

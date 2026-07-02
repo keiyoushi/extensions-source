@@ -7,18 +7,15 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 
-class TimelessToons :
-    Keyoapp(
-        "TimelessToons",
-        "https://timelesstoons.org",
-        "en",
-    ) {
+@Source
+abstract class TimelessToons : Keyoapp() {
 
     override fun popularMangaSelector() = "div:has(> h2:contains(Trending)) + div .group"
 

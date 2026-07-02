@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
@@ -19,10 +20,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class FastScan : HttpSource() {
-    override val name = "FastScan"
-    override val lang = "vi"
-    override val baseUrl = "https://fastscan.org"
+@Source
+abstract class FastScan : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()

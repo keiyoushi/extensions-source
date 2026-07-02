@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.getPreferencesLazy
@@ -24,15 +25,12 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class PoseidonScans :
+@Source
+abstract class PoseidonScans :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Poseidon Scans"
-    override val baseUrl = "https://poseidon-scans.net"
-    override val lang = "fr"
     override val supportsLatest = true
-    override val versionId = 2
 
     val rscHeaders = headersBuilder().add("RSC", "1").build()
 

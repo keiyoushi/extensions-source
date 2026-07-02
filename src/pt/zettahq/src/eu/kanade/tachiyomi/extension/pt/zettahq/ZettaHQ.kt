@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -17,13 +18,8 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.Normalizer
 
-class ZettaHQ : HttpSource() {
-
-    override val name = "ZettaHQ"
-
-    override val baseUrl = "https://zettahq.com"
-
-    override val lang = "pt-BR"
+@Source
+abstract class ZettaHQ : HttpSource() {
 
     override val supportsLatest = false
 

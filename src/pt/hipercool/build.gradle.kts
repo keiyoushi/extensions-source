@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "HipercooL"
-    className = "Hipercool"
-    versionCode = 3
+    versionCode = 55
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
-    theme = "madara"
-    baseUrl = "https://hiper.cool"
+
+    source {
+        name = "Hipercool"
+        lang = "pt-BR"
+        baseUrl = "https://lerhentais.com"
+        id = 2379514871370953957
+    }
 }

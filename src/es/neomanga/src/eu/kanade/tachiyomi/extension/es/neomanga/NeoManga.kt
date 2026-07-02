@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -21,11 +22,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class NeoManga : HttpSource() {
+@Source
+abstract class NeoManga : HttpSource() {
 
-    override val name = "NeoManga"
-    override val baseUrl = "https://www.neomanga.online"
-    override val lang = "es"
     override val supportsLatest = false
 
     override fun headersBuilder() = super.headersBuilder()

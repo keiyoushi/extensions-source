@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -16,11 +17,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Submanhwa : HttpSource() {
+@Source
+abstract class Submanhwa : HttpSource() {
 
-    override val name = "Submanhwa"
-    override val baseUrl = "https://submanhwa.com"
-    override val lang = "es"
     override val supportsLatest = true
 
     private val dateFormat = SimpleDateFormat("dd MMM. yyyy", Locale.ENGLISH)

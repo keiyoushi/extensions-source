@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "TritiniaScans"
-    className = "TritiniaScans"
     versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://tritinia.org"
+
+    source {
+        lang = "en"
+        baseUrl = "https://tritinia.org"
+    }
 }

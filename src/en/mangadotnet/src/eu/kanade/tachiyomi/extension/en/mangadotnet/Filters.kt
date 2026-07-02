@@ -82,6 +82,18 @@ class GenreFilter(genreValues: List<String>, excluded: Set<String>) :
     val excluded get() = state.filter { it.isExcluded() }.map { it.value }
 }
 
+class TagFilter(name: String, tagValues: List<String>, excluded: Set<String> = emptySet()) :
+    Filter.Group<TriStateFilter>(
+        name = name,
+        state = tagValues.map { tag ->
+            val state = if (tag in excluded) TriState.STATE_EXCLUDE else TriState.STATE_IGNORE
+            TriStateFilter(tag, state = state)
+        },
+    ) {
+    val included get() = state.filter { it.isIncluded() }.map { it.value }
+    val excluded get() = state.filter { it.isExcluded() }.map { it.value }
+}
+
 class AuthorFilter : Filter.Text("Author")
 
 class ArtistFilter : Filter.Text("Artist")

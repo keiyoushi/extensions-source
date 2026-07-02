@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.Dispatcher
@@ -14,15 +15,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class HentaiHall : HttpSource() {
-
-    override val name = "HentaiHall"
-
-    override val baseUrl = "https://hentaihall.com"
+@Source
+abstract class HentaiHall : HttpSource() {
 
     private val apiUrl = "https://hentaihallbackend-production.up.railway.app"
-
-    override val lang = "es"
 
     override val supportsLatest = true
 

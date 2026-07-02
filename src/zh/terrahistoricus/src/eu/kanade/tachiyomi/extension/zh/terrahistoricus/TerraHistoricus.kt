@@ -8,16 +8,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
-class TerraHistoricus : HttpSource() {
-    override val name = "泰拉记事社"
-    override val lang = "zh"
-    override val baseUrl = "https://comic.hypergryph.com"
+@Source
+abstract class TerraHistoricus : HttpSource() {
     override val supportsLatest = true
 
     private val json: Json by injectLazy()

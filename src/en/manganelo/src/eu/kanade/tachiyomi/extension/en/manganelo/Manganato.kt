@@ -2,21 +2,11 @@ package eu.kanade.tachiyomi.extension.en.manganelo
 
 import eu.kanade.tachiyomi.multisrc.mangabox.MangaBox
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import okhttp3.Request
 
-class Manganato :
-    MangaBox(
-        "Manganato",
-        arrayOf(
-            "www.natomanga.com",
-            "www.nelomanga.com",
-            "www.nelomanga.net",
-            "www.manganato.gg",
-        ),
-        "en",
-    ) {
-
-    override val id: Long = 1024627298672457456
+@Source
+abstract class Manganato : MangaBox() {
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         if (LEGACY_DOMAINS.any { manga.url.startsWith(it) }) {

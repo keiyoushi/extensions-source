@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.SpeedBinbReader
 import keiyoushi.utils.jsonInstance
@@ -16,13 +17,8 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class OhtaWebComic : HttpSource() {
-
-    override val name = "Ohta Web Comic"
-
-    override val baseUrl = "https://webcomic.ohtabooks.com"
-
-    override val lang = "ja"
+@Source
+abstract class OhtaWebComic : HttpSource() {
 
     override val supportsLatest = false
 

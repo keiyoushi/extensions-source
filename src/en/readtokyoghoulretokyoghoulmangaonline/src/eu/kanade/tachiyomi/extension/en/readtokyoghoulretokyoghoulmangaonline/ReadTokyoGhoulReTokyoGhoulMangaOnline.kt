@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.readtokyoghoulretokyoghoulmangaonline
 
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
+import keiyoushi.annotation.Source
 
-class ReadTokyoGhoulReTokyoGhoulMangaOnline : MangaCatalog("Read Tokyo Ghoul Re & Tokyo Ghoul Manga Online", "https://ww11.tokyoghoulre.com", "en") {
+@Source
+abstract class ReadTokyoGhoulReTokyoGhoulMangaOnline : MangaCatalog() {
     override val sourceList = listOf(
         Pair("Tokyo Ghoul", "$baseUrl/manga/tokyo-ghoul/"),
         Pair("Tokyo Ghoul Jack", "$baseUrl/manga/tokyo-ghoul-jack/"),

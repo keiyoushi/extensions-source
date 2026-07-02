@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.littletyrant
 
+import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -7,35 +8,26 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.Headers
-import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import java.net.URLDecoder
-import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class LittleTyrant :
-    Madara(
-        "Little Tyrant",
-        "https://tiraninha.world",
-        "pt-BR",
-        dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("pt", "BR")),
-    ) {
+@Source
+abstract class LittleTyrant : Madara() {
+    override val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("pt", "BR"))
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .addNetworkInterceptor(ImageDecoderInterceptor())
         .rateLimit(3, 1.seconds)
         .build()
 
@@ -105,36 +97,18 @@ class LittleTyrant :
 
     // =============================== Pages =================================
 
-    private fun pageTokenRequest(pageBaseUrl1: HttpUrl): Request {
-        val pageHeaders = headers.newBuilder()
-            .set("X-Reader-Sec", "tiraninha-web")
-            .build()
-        return GET("$pageBaseUrl1/gatekeeper.php?t=${System.currentTimeMillis()}", pageHeaders)
-    }
-
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val script = document.selectFirst("script:containsData(_proxyUrls)")?.data()
-            ?: return emptyList()
+        val html = response.asJsoup().html()
+        val match = PAGES_REGEX.find(html) ?: return emptyList()
 
-        val pages = PAGES_REGEX.find(script)?.groupValues?.last() ?: return emptyList()
-        val tokenBaseUrl = BASE_URL_PAGE_REGEX.find(script)?.groupValues?.last()?.toHttpUrlOrNull() ?: return emptyList()
+        val imageUrls = match.groupValues[1].split(",")
+            .map { it.trim().trim('"') }
+            .filter { it.isNotBlank() }
+            .map { String(Base64.decode(it, Base64.DEFAULT)) }
 
-        val token = client
-            .newCall(pageTokenRequest(tokenBaseUrl))
-            .execute()
-            .body.string()
-
-        return pages
-            .parseAs<List<String>>()
-            .mapIndexed { index, pathSegment ->
-                val decodePath = URLDecoder.decode(pathSegment, StandardCharsets.UTF_8.name())
-                val imageUrl = "$baseUrl$decodePath".toHttpUrl().newBuilder()
-                    .addQueryParameter("t_force", System.currentTimeMillis().toString())
-                    .fragment(token)
-                    .build().toString()
-                Page(index, imageUrl = imageUrl)
-            }
+        return imageUrls.mapIndexed { idx, url ->
+            Page(idx, imageUrl = url)
+        }
     }
 
     // =============================== Images =================================
@@ -151,7 +125,6 @@ class LittleTyrant :
     companion object {
         private val CHAPTER_NUMBER_REGEX = """\d+(?:\.\d+)?""".toRegex()
         private val COMMA_REGEX = """,\s*""".toRegex()
-        private val PAGES_REGEX = """_proxyUrls\s+=\s+(\[[^]]+])""".toRegex(RegexOption.IGNORE_CASE)
-        private val BASE_URL_PAGE_REGEX = """_themePath\s+=\s+"([^"]+)""".toRegex(RegexOption.IGNORE_CASE)
+        private val PAGES_REGEX = """var\s+pages\s*=\s*\[([\s\S]*?)\]""".toRegex()
     }
 }
