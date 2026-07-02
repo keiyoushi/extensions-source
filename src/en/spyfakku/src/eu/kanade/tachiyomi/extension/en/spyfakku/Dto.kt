@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.spyfakku
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
@@ -18,27 +19,20 @@ class Hentai(
     val title: String,
     val thumbnail: Int,
     val pages: Int,
-    val tags: List<Name>?,
+    val tags: List<Name>? = null,
 )
 
 @Serializable
 class ShortHentai(
     val hash: String,
     val thumbnail: Int,
-    val description: String?,
-    val released_at: String? = null,
-    val created_at: String? = null,
-    var releasedAt: String? = null,
-    var createdAt: String? = null,
-    val tags: List<Name>?,
+    val description: String? = null,
+    @SerialName("released_at") val releasedAt: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    val tags: List<Name>? = null,
     val size: Long,
     val pages: Int,
-) {
-    init {
-        releasedAt = released_at ?: releasedAt
-        createdAt = created_at ?: createdAt
-    }
-}
+)
 
 @Serializable
 class Name(
@@ -61,8 +55,8 @@ class HentaiIndexes(
     val hash: Int,
     val thumbnail: Int,
     val description: Int,
-    val released_at: Int,
-    val created_at: Int,
+    @SerialName("released_at") val releasedAt: Int,
+    @SerialName("created_at") val createdAt: Int,
     val tags: Int,
     val size: Int,
     val pages: Int,
