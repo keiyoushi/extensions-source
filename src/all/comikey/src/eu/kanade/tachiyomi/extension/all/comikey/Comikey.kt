@@ -320,7 +320,7 @@ abstract class Comikey :
                         response.headers["Content-Type"] ?: "application/divina+json+vnd.e4p.drm",
                         null,
                         response.code,
-                        response.message?.takeIf { it.isNotEmpty() } ?: "OK",
+                        response.message.takeIf { it.isNotEmpty() } ?: "OK",
                         response.headers.toMap(),
                         response.body.byteStream(),
                     )
@@ -472,6 +472,6 @@ abstract class Comikey :
     companion object {
         internal const val PREFIX_SLUG_SEARCH = "slug:"
         internal const val PREF_HIDE_LOCKED_CHAPTERS = "hide_locked_chapters"
-        private val RELAY_HOST_REGEX = Regex("""relay-\w+\.epub\.rocks""")
+        private val RELAY_HOST_REGEX = Regex("""relay-\w+\.(epub\.rocks|comikey\.com)""")
     }
 }
