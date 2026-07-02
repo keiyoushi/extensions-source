@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.mangataro
 
 import eu.kanade.tachiyomi.multisrc.mangataro.MangaTaro
-import eu.kanade.tachiyomi.multisrc.mangataro.MangaTaroGroup
 import eu.kanade.tachiyomi.multisrc.mangataro.SearchWithFilters
 import eu.kanade.tachiyomi.multisrc.mangataro.SortFilter
 import eu.kanade.tachiyomi.multisrc.mangataro.StatusFilter
@@ -9,18 +8,12 @@ import eu.kanade.tachiyomi.multisrc.mangataro.TagFilter
 import eu.kanade.tachiyomi.multisrc.mangataro.TagFilterMatch
 import eu.kanade.tachiyomi.multisrc.mangataro.TypeFilter
 import eu.kanade.tachiyomi.multisrc.mangataro.YearFilter
-import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 
-class MangaTaroFactory : SourceFactory {
-    override fun createSources() = listOf(
-        MangaTaroSource("en"),
-        MangaTaroGroupSource("pt-BR", groups = listOf(9)),
-    )
-}
-
-class MangaTaroSource(lang: String) : MangaTaro("MangaTaro", "https://mangataro.org", lang) {
+@Source
+abstract class MangaTaro : MangaTaro() {
     override fun getFilterList() = FilterList(
         SearchWithFilters(),
         Filter.Header("If unchecked, all filters will be ignored with search query"),
@@ -34,8 +27,6 @@ class MangaTaroSource(lang: String) : MangaTaro("MangaTaro", "https://mangataro.
         TagFilterMatch(),
     )
 }
-
-class MangaTaroGroupSource(lang: String, groups: List<Long>) : MangaTaroGroup("MangaTaro", "https://mangataro.org", lang, groups)
 
 private val mangaTaroTags = listOf(
     "4-Koma" to 2094,
