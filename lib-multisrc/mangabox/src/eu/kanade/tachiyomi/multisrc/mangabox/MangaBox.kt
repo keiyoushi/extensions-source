@@ -510,7 +510,7 @@ abstract class MangaBox :
                 val prev = imageList.lastOrNull()
                 val prevSize = prev?.size
                 if (
-                // size is known
+                    // size is known
                     size != null &&
 
                     // previous size is known
