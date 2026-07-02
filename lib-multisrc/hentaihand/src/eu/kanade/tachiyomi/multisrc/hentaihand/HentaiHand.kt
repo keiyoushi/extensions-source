@@ -31,14 +31,13 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-abstract class HentaiHand(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-    private val chapters: Boolean,
-    private val hhLangId: List<Int> = emptyList(),
-) : HttpSource(),
+abstract class HentaiHand :
+    HttpSource(),
     ConfigurableSource {
+
+    abstract val chapters: Boolean
+
+    protected open val hhLangId: List<Int> = emptyList()
 
     override val supportsLatest = true
 
