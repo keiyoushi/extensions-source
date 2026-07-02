@@ -45,7 +45,7 @@ abstract class Toptoon : HttpSource() {
             .substringBefore("'")
         val jsonResponse = client.newCall(GET("https:$jsonUrl", headers)).execute()
         val mangas = jsonResponse.parseAs<Map<String, MangaDto>>().values
-            .sortedByDescending { it.lastUpdated.pubDate }
+            .sortedByDescending { it.pubDate }
             .map {
                 it.toSManga()
             }
