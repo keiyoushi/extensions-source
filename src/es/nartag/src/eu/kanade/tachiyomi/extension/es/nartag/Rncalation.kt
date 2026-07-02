@@ -118,33 +118,13 @@ abstract class Rncalation : HttpSource() {
         }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val slug = response.request.url.pathSegments.last()
-
-        val totalChapters = response.asJsoup().selectFirst("[data-chapters-total]")
-            ?.attr("data-chapters-total")?.toInt() ?: return emptyList()
-
-        var page = 1
-        val chapters = mutableListOf<SChapter>()
-
-        while (true) {
-            val doc = client.newCall(chapterRequest(slug, page)).execute().asJsoup()
-            val items = doc.select("a[data-chapter-id]")
-
-            chapters.addAll(
-                items.map {
-                    SChapter.create().apply {
-                        setUrlWithoutDomain(it.absUrl("href"))
-                        name = it.selectFirst("span[data-read-label]")?.text()?.trim() ?: ""
-                        date_upload = it.selectFirst(".text-\\[\\.65rem\\]")?.let { parseDate(it.text()) } ?: 0L
-                    }
-                },
-            )
-            if (chapters.size >= totalChapters) break
-            page += 1
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("a[data-chapter-id]").mapIndexed { num, it ->
+        SChapter.create().apply {
+            setUrlWithoutDomain(it.attr("href"))
+            chapter_number = it.attr("data-chapter-num").toFloatOrNull() ?: num.toFloat()
+            name = it.attr("data-chapter-label").trim().ifEmpty { "Capítulo ${chapter_number.toInt()}" }
+            date_upload = it.selectFirst(".text-\\[0\\.65rem\\]")?.let { parseDate(it.text()) } ?: 0L
         }
-
-        return chapters
     }
 
     private fun chapterRequest(slug: String, page: Int): Request = GET("$baseUrl/comics/$slug/chapters?page=$page", headers)
