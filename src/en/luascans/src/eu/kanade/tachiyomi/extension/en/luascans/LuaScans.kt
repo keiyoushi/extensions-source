@@ -1,18 +1,13 @@
 package eu.kanade.tachiyomi.extension.en.luascans
 
 import eu.kanade.tachiyomi.multisrc.heancms.HeanCms
+import keiyoushi.annotation.Source
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class LuaScans :
-    HeanCms(
-        "Lua Scans",
-        "https://luacomic.org",
-        "en",
-    ) {
-    // Moved from Keyoapp to HeanCms
-    override val versionId = 3
+@Source
+abstract class LuaScans : HeanCms() {
 
     override val useNewChapterEndpoint = true
 
