@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Kurage Bunch"
-    className = "KurageBunch"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "gigaviewer"
-    baseUrl = "https://kuragebunch.com"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://kuragebunch.com"
+    }
 }

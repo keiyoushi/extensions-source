@@ -2,14 +2,11 @@ package eu.kanade.tachiyomi.extension.ja.magcomi
 
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Element
 
-class MagComi :
-    GigaViewer(
-        "MAGCOMI",
-        "https://magcomi.com",
-        "ja",
-    ) {
+@Source
+abstract class MagComi : GigaViewer() {
     override val supportsLatest: Boolean = false
 
     override val popularMangaSelector: String = "ul[class^=\"SeriesSection_series_list\"] > li > a"
