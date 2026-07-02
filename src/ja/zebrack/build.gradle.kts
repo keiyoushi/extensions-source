@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Zebrack"
-    className = "Zebrack"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://zebrack-comic.shueisha.co.jp"
+    }
 }
