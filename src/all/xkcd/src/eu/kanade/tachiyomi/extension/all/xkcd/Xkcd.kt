@@ -289,6 +289,8 @@ abstract class Xkcd :
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
     override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
+    override fun getMangaUrl(manga: SManga): String = baseUrl
+
     // ============================= Chapters ==============================
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(getGroupedChapters()[manga.url] ?: emptyList())
