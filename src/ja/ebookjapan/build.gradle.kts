@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "eBookJapan"
-    className = "EbookJapan"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://ebookjapan.yahoo.co.jp"
+    }
 }
 
 dependencies {

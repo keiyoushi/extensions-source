@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -21,13 +22,10 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 
-class FodFuji :
+@Source
+abstract class FodFuji :
     HttpSource(),
     ConfigurableSource {
-    override val name = "FOD"
-    private val domain = "manga.fod.fujitv.co.jp"
-    override val baseUrl = "https://$domain"
-    override val lang = "ja"
     override val supportsLatest = true
 
     private val apiUrl = "$baseUrl/web/books"
@@ -38,7 +36,7 @@ class FodFuji :
 
     override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
-        .addNetworkInterceptor(CookieInterceptor(domain, ("sfsc" to "0")))
+        .addNetworkInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, ("sfsc" to "0")))
         .addInterceptor {
             val request = it.request()
             val response = it.proceed(request)
