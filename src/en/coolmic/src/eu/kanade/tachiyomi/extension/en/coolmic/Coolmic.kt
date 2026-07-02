@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -21,15 +22,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class Coolmic :
+@Source
+abstract class Coolmic :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Coolmic"
-    private val domain = "coolmic.me"
-    override val baseUrl = "https://$domain"
-    override val lang = "en"
     override val supportsLatest = true
 
+    private val domain = baseUrl.toHttpUrl().host
     private val apiUrl = "$baseUrl/api/v1"
     private val cdnUrl = "https://en-img.$domain"
     private val searchUrl = "https://en-search.$domain"
