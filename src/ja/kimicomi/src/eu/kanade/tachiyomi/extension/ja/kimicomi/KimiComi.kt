@@ -1,11 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.kimicomi
 
-import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewerAlt
+import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewer
+import keiyoushi.annotation.Source
 
-class KimiComi :
-    ComiciViewerAlt(
-        "KimiComi",
-        "https://kimicomi.com",
-        "ja",
-        "https://kimicomi.com/api",
-    )
+@Source
+abstract class KimiComi : ComiciViewer()

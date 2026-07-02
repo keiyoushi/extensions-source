@@ -1,11 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.comicride
 
-import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewerAlt
+import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewer
+import keiyoushi.annotation.Source
 
-class ComicRide :
-    ComiciViewerAlt(
-        "Comic Ride",
-        "https://comicride.jp",
-        "ja",
-        "https://comicride.jp/api",
-    )
+@Source
+abstract class ComicRide : ComiciViewer()
