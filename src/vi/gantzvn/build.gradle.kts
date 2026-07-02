@@ -4,8 +4,8 @@ plugins {
 
 keiyoushi {
     name = "GantzVN"
-    versionCode = 2
-    contentWarning = ContentWarning.NSFW
+    versionCode = 1
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
 
