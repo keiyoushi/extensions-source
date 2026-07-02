@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.coolmic
 
-import eu.kanade.tachiyomi.extension.en.coolmic.Coolmic.Companion.SEARCH_SIZE
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
@@ -9,35 +8,23 @@ import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.collections.flatten
+import kotlin.text.padStart
 
 @Serializable
 class SeriesResponse(
-    val hits: Hits,
+    val total: Int,
+    val results: List<Result>,
 )
 
 @Serializable
-class Hits(
-    val found: Int,
-    val start: Int,
-    val hit: List<Hit>,
-) {
-    fun hasNextPage() = start + SEARCH_SIZE < found
-}
-
-@Serializable
-class Hit(
-    val fields: Fields,
-)
-
-@Serializable
-class Fields(
-    @SerialName("title_id") private val titleId: String,
+class Result(
+    @SerialName("title_id") private val titleId: Int,
     @SerialName("title_name") private val titleName: String,
 ) {
     fun toSManga(cdnUrl: String) = SManga.create().apply {
-        url = titleId
+        url = titleId.toString()
         title = titleName
-        val id = titleId.padStart(9, '0')
+        val id = titleId.toString().padStart(9, '0')
         thumbnail_url = "$cdnUrl/titles/${id.take(3)}/${id.take(6)}/$id/${id}_large_vertical.jpg"
     }
 }
