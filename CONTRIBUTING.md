@@ -325,12 +325,12 @@ keiyoushi {
 | Field            | Description                                                                                                                                                                                                          |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`           | The name of the extension. Should be romanized if site name is not in English.                                                                                                                                       |
-| `className`      | Points to the class that implements `Source`. Not required when using `source {}` blocks — it is set to `ExtensionGenerated` automatically in that case.                                                             |
+| `className`      | **Legacy.** Points to the class that implements `Source`. Not required when using `source {}` blocks — it is set to `ExtensionGenerated` automatically in that case. This and the top-level `baseUrl` will be removed after migration to `source {}` blocks is complete.  |
 | `versionCode`    | The extension version code. This must be a positive integer and incremented with any change to the code. Do not bump for changes that do not affect users, such as changing a private function to a public function. |
 | `contentWarning` | Content safety classification. Must be set explicitly to one of `ContentWarning.SAFE`, `ContentWarning.MIXED`, or `ContentWarning.NSFW`.                                                                             |
 | `libVersion`     | The extension library version. Always set to `"1.4"`.                                                                                                                                                                |
 | `theme`          | Name of a multi-source theme from `lib-multisrc/` to inherit from (e.g. `"madara"`). When set, the extension's version code is `theme.baseVersionCode + versionCode`. |
-| `baseUrl`        | The source's base URL (e.g. `"https://example.com"`). Used to automatically derive the deeplink `host` when no explicit `host()` call is present in a `deeplink {}` block. Not needed when using `source {}` blocks. |
+| `baseUrl`        | **Legacy.** The source's base URL (e.g. `"https://example.com"`). Used to automatically derive the deeplink `host` when no explicit `host()` call is present in a `deeplink {}` block. Not needed when using `source {}` blocks. This and `className` will be removed after migration to `source {}` blocks is complete. |
 | `source {}`      | Declares one source (or multiple, for multi-language or multi-mirror extensions) using KSP code generation. See [Source declaration](#source-declaration).                                                           |
 | `deeplink {}`    | Declares a URL deeplink intent filter. See [URL intent filter](#url-intent-filter).                                                                                                                                  |
 
@@ -380,7 +380,7 @@ keiyoushi {
 | `baseUrl`    | The source's base URL. See [baseUrl modes](#baseurl-modes) below.                                                                                                                  |
 | `id`         | Explicit source ID. Optional — auto-computed from `name + lang + versionId` if omitted. Set this explicitly when renaming a source to preserve users' libraries.                  |
 | `versionId`  | Integer used as a seed for auto-computing `id`. Defaults to `1`. Only bump this if the source's URL structure fundamentally changes and old entries can no longer be redirected.   |
-| `skipCodeGen`| If `true`, skips property injection and generates only a passthrough subclass. Cannot be combined with multiple `source {}` blocks, or with `mirrors`/`withCustom` baseUrl modes — those require property injection. Use only for sources that must declare all properties manually for structural reasons.               |
+| `skipCodeGen`| **Discouraged — not needed 99% of the time.** If `true`, skips property injection and generates only a passthrough subclass. Cannot be combined with multiple `source {}` blocks, or with `mirrors`/`withCustom` baseUrl modes — those require property injection. Use only for sources that must declare all properties manually for structural reasons.               |
 
 #### baseUrl modes
 
