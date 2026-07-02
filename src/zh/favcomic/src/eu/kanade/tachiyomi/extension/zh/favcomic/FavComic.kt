@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -17,20 +18,10 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
-class FavComic :
+@Source
+abstract class FavComic :
     HttpSource(),
     ConfigurableSource {
-
-    override val baseUrl: String
-        get() {
-            val index = pref.getString(PREF_BASE_URL, "0")!!.toInt()
-                .coerceAtMost(mirrorUrls.size - 1)
-            return mirrorUrls[index]
-        }
-
-    override val lang = "zh"
-
-    override val name = "喜漫漫画"
 
     override val supportsLatest = true
 
