@@ -349,7 +349,7 @@ Add `@Source` to your main class and remove any manual declarations of `name`, `
 import keiyoushi.annotation.Source
 
 @Source
-class MySource : HttpSource() {
+abstract class MySource : HttpSource() {
     // name, lang, id, and baseUrl are injected automatically — do not declare them here.
     // All other overrides go here as normal.
 }
@@ -399,8 +399,10 @@ source {
 source {
     lang = "en"
     baseUrl("https://example.com") {
-        mirrors.add("https://mirror1.com")
-        mirrors.add("https://mirror2.com")
+        mirrors = listOf(
+            "https://mirror1.com",
+            "https://mirror2.com",
+        )
     }
 }
 ```
@@ -1284,14 +1286,12 @@ $ tree lib-multisrc/<theme_name>/
 lib-multisrc/<theme_name>/
 ├── build.gradle.kts
 └── src
-    └── main
-        └── java
-            └── eu
-                └── kanade
-                    └── tachiyomi
-                        └── multisrc
-                            └── <theme_name>
-                                └── <ThemeName>.kt
+    └── eu
+        └── kanade
+            └── tachiyomi
+                └── multisrc
+                    └── <theme_name>
+                        └── <ThemeName>.kt
 ```
 
 `<theme_name>` should be adapted from the CMS/theme name, and can only contain lowercase ASCII letters and digits. Your theme code must be placed in the package `eu.kanade.tachiyomi.multisrc.<theme_name>`.
@@ -1342,11 +1342,11 @@ package eu.kanade.tachiyomi.multisrc.<theme_name>
 
 import eu.kanade.tachiyomi.source.online.HttpSource
 
-abstract class <ThemeName>(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class <ThemeName> : HttpSource() {
+
+    // name, lang, and baseUrl are inherited from HttpSource. They are automatically
+    // overridden and injected by the KSP generator via each extension's `source {}`
+    // block (or legacy property overrides). Do not declare them in the constructor.
 
     // Theme default implementation...
 
@@ -1392,7 +1392,7 @@ keiyoushi {
 
 // MySource.kt
 @Source
-class MySource : ThemeName(/* theme-specific constructor args if any */) {
+abstract class MySource : ThemeName() {
     // name, lang, id, baseUrl injected automatically
     // override theme defaults as needed
 }
