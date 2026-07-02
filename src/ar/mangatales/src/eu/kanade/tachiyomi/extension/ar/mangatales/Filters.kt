@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.gmanga
+package eu.kanade.tachiyomi.extension.ar.mangatales
 
 import eu.kanade.tachiyomi.source.model.Filter
 import java.text.ParseException

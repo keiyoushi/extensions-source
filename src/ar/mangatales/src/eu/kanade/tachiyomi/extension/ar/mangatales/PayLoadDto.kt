@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.gmanga
+package eu.kanade.tachiyomi.extension.ar.mangatales
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
