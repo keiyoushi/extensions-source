@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.reimanga
 
-import android.app.Application
 import android.util.Log
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
@@ -15,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
@@ -31,7 +31,6 @@ import okhttp3.Request
 import okhttp3.Response
 import okio.IOException
 import rx.Observable
-import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -62,7 +61,7 @@ abstract class Reimanga :
     }
 
     private val tagsCacheFile by lazy {
-        Injekt.get<Application>().cacheDir
+        applicationContext.cacheDir
             .resolve("source_$id")
             .also { it.mkdirs() }
             .resolve("tags.json")
