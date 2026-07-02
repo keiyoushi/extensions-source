@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.zerobyw
 
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferences
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -17,27 +16,16 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
-class Zerobyw :
-    HttpSource(),
-    ConfigurableSource {
+@Source
+abstract class Zerobyw : HttpSource() {
 
-    override val name: String = "zero搬运网"
-    override val lang: String = "zh"
     override val supportsLatest: Boolean = false
 
-    private val preferences = getPreferences { clearOldBaseUrl() }
+    private val preferences = getPreferences()
 
     override val client = network.client.newBuilder()
         .addInterceptor(UpdateUrlInterceptor(preferences))
         .build()
-
-    override val baseUrl
-        get() = when {
-            isCi -> ciGetUrl(client)
-            else -> preferences.baseUrl
-        }
-
-    private val isCi = System.getenv("CI") == "true"
 
     override fun headersBuilder() = Headers.Builder()
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
@@ -178,8 +166,4 @@ class Zerobyw :
     }
 
     private fun browseUrlBuilder() = "$baseUrl/pc/pc/".toHttpUrl().newBuilder()
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addPreference(getBaseUrlPreference(screen.context))
-    }
 }
