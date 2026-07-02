@@ -19,7 +19,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import okhttp3.Callback
@@ -42,11 +42,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-abstract class MangaTaro(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class MangaTaro : HttpSource() {
 
     override val supportsLatest = true
 
@@ -402,17 +398,15 @@ abstract class MangaTaro(
 }
 
 // Map groups by language
-abstract class MangaTaroGroup(
-    name: String,
-    baseUrl: String,
-    lang: String,
-    val groups: List<Long>,
-) : MangaTaro(name, baseUrl, lang),
+abstract class MangaTaroGroup :
+    MangaTaro(),
     ConfigurableSource {
+
+    abstract val groups: List<Long>
 
     override val supportsLatest: Boolean = false
 
-    private val preferences: SharedPreferences = getPreferences()
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val libraryCached: MutableList<SManga> = mutableListOf()
 

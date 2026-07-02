@@ -13,10 +13,12 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import rx.Observable
 
-class RoliaScan : MangaTaro("Rolia Scan", "https://roliascan.com", "en") {
+@Source
+abstract class RoliaScan : MangaTaro() {
 
     // ========================== Search =========================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
