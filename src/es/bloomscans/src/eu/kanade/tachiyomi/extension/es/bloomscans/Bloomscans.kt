@@ -36,14 +36,18 @@ abstract class Bloomscans : MangaThemesia() {
 
     override fun chapterListSelector() = "#lrs-native-chapterlist li"
 
+    private val imagesRegex = Regex(""""images":\[([^\]]+)]""")
+
     override fun pageListParse(document: Document): List<Page> {
-        // The site protects /reader-image/ with a "Bloom Reader Guard" cookie that is only
-        // issued when the reader-bootstrap script is fetched. Without it, images return 403.
-        document.selectFirst("script[data-brg-bootstrap][src]")?.absUrl("src")?.let { bootstrapUrl ->
-            runCatching {
-                client.newCall(GET(bootstrapUrl, headers)).execute().close()
-            }
-        }
-        return super.pageListParse(document)
+        val script = document.selectFirst("script:containsData(ts_reader.run)")
+            ?: return emptyList()
+
+        val match = imagesRegex.find(script.data()) ?: return emptyList()
+
+        val imagePaths = match.groupValues[1]
+            .split(",")
+            .map { it.trim().removeSurrounding("\"") }
+
+        return imagePaths.mapIndexed { idx, url -> Page(idx, imageUrl = baseUrl + url) }
     }
 }
