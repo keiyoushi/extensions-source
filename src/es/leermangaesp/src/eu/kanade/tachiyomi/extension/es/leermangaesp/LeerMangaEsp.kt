@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl
@@ -20,17 +21,17 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class LeerMangaEsp : HttpSource() {
-
-    override val name = "LeerMangaEsp"
-
-    override val baseUrl = "https://$DOMAIN"
-
-    override val lang = "es"
+@Source
+abstract class LeerMangaEsp : HttpSource() {
 
     override val supportsLatest = true
 
     private val chapterDateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH)
+
+    private val imageBaseUrl by lazy {
+        val url = baseUrl.replace("https://", "https://images.") + "/file/leermangaesp"
+        return@lazy url.toHttpUrl()
+    }
 
     // ========================= Popular =========================
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
@@ -43,7 +44,7 @@ class LeerMangaEsp : HttpSource() {
         }
 
         return MangasPage(
-            mangas = allMangas.mapNotNull { it.toSManga() },
+            mangas = allMangas.mapNotNull { it.toSManga(imageBaseUrl) },
             hasNextPage = false,
         )
     }
@@ -63,7 +64,7 @@ class LeerMangaEsp : HttpSource() {
         val sortedMangas = allMangas.sortedByDescending { it.fecha_publicacion.orEmpty() }
 
         return MangasPage(
-            mangas = sortedMangas.mapNotNull { it.toSManga() },
+            mangas = sortedMangas.mapNotNull { it.toSManga(imageBaseUrl) },
             hasNextPage = false,
         )
     }
@@ -106,8 +107,7 @@ class LeerMangaEsp : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage {
         val requestPath = response.request.url.encodedPath
         return if (requestPath.startsWith(MANGA_PATH_PREFIX)) {
-            parseMangaDetails(response.asJsoup())
-                .let { MangasPage(listOf(it), false) }
+            MangasPage(listOf(parseMangaDetails(response.asJsoup())), false)
         } else {
             parseSearchMangaPage(response)
         }
@@ -235,7 +235,7 @@ class LeerMangaEsp : HttpSource() {
         val dto = response.parseAs<MangaListDto>()
 
         val mangas = dto.resultados
-            .mapNotNull { it.toSManga() }
+            .mapNotNull { it.toSManga(imageBaseUrl) }
 
         return MangasPage(
             mangas = mangas,
@@ -296,9 +296,7 @@ class LeerMangaEsp : HttpSource() {
         .takeIf { it.isNotBlank() }
 
     companion object {
-        const val DOMAIN = "leermangaesp.net"
         const val PAGE_SIZE = 20
         const val MANGA_PATH_PREFIX = "/manga/"
-        val IMAGE_BASE_URL = "https://images.$DOMAIN/file/leermangaesp".toHttpUrl()
     }
 }
