@@ -4,7 +4,6 @@ plugins {
 
 keiyoushi {
     name = "ManHuaGui"
-    className = "Manhuagui"
     versionCode = 28
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
