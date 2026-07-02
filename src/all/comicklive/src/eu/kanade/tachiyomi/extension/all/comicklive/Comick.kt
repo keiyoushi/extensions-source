@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.comicklive
 
 import android.util.Log
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -15,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
@@ -37,26 +37,15 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class Comick(
-    override val lang: String,
-    private val siteLang: String = lang,
-) : HttpSource(),
+@Source
+abstract class Comick :
+    HttpSource(),
     ConfigurableSource {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val name = "Comick (Unoriginal)"
 
     override val supportsLatest = true
 
     private val preferences = getPreferences()
-
-    override val baseUrl: String
-        get() {
-            val index = preferences.getString(DOMAIN_PREF, "0")!!.toInt()
-                .coerceAtMost(domains.size - 1)
-
-            return domains[index]
-        }
 
     override val client = network.client.newBuilder()
         // Referer in interceptor due to domain change preference
@@ -367,7 +356,7 @@ class Comick(
         }
     }
 
-    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/comics/${manga.url}/chapter-list?lang=$siteLang", headers)
+    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/comics/${manga.url}/chapter-list?lang=$lang", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         var data = response.parseAs<ChapterList>()
@@ -420,15 +409,6 @@ class Comick(
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = DOMAIN_PREF
-            title = "Preferred Domain"
-            entries = domains
-            entryValues = Array(domains.size) { it.toString() }
-            summary = "%s"
-            setDefaultValue("0")
-        }.also(screen::addPreference)
-
         SwitchPreferenceCompat(screen.context).apply {
             key = GET_TAGS
             title = "Tags Input Type"
@@ -439,6 +419,4 @@ class Comick(
     }
 }
 
-private val domains = arrayOf("https://comick.live", "https://comick.art")
-private const val DOMAIN_PREF = "domain_pref"
 private const val GET_TAGS = "get_tags"
