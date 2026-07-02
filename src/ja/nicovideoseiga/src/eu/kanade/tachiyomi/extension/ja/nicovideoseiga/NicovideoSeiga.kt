@@ -56,8 +56,7 @@ abstract class NicovideoSeiga : HttpSource() {
 
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        GET("$apiUrl/contents?mode=keyword&sort=score&q=$query&limit=20&offset=${(page - 1) * 20}", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$apiUrl/contents?mode=keyword&sort=score&q=$query&limit=20&offset=${(page - 1) * 20}", headers)
 
     override fun searchMangaParse(response: Response): MangasPage {
         val r = response.parseAs<ApiResponse<Manga>>()
