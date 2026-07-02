@@ -9,6 +9,13 @@ keiyoushi {
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
+    source {
+        name = "禁漫天堂"
+        lang = "zh"
+        baseUrl = "https://18comic.vip"
+        skipCodeGen = true
+    }
+
     deeplink {
         host("18comic.vip")
         host("18comic.ink")
