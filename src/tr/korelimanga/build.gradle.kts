@@ -12,6 +12,5 @@ keiyoushi {
     source {
         lang = "tr"
         baseUrl = "https://korelimanga.com"
-        versionId = 1
     }
 }
