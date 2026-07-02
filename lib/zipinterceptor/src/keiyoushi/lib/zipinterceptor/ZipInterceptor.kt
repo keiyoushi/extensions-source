@@ -1,17 +1,19 @@
 package keiyoushi.lib.zipinterceptor
 
 import android.app.ActivityManager
+import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
-import keiyoushi.utils.applicationContext
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import tachiyomi.decoder.ImageDecoder
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -203,7 +205,8 @@ open class ZipInterceptor {
      * considering how heavy image processing can be.
      */
     private val isLowRamDevice by lazy {
-        val activityManager = applicationContext.getSystemService("activity") as ActivityManager
+        val ctx = Injekt.get<Application>()
+        val activityManager = ctx.getSystemService("activity") as ActivityManager
         val memInfo = ActivityManager.MemoryInfo()
 
         activityManager.getMemoryInfo(memInfo)
