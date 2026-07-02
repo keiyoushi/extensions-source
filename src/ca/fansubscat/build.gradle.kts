@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Fansubs.cat"
-    className = "FansubsCat"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "fansubscat"
-    baseUrl = "https://manga.fansubs.cat"
+
+    source {
+        lang = "ca"
+        baseUrl = "https://manga.fansubs.cat"
+    }
 }
