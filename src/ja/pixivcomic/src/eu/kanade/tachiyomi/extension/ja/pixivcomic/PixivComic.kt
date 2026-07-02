@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -21,11 +22,9 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import uy.kohesive.injekt.injectLazy
 
-class PixivComic : HttpSource() {
-    override val lang: String = "ja"
+@Source
+abstract class PixivComic : HttpSource() {
     override val supportsLatest = true
-    override val name = "Pixivコミック"
-    override val baseUrl = "https://comic.pixiv.net"
 
     private val json: Json by injectLazy()
 
