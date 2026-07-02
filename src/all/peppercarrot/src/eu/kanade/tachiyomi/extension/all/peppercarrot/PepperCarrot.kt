@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.CacheControl
@@ -18,40 +19,45 @@ import okhttp3.Response
 import org.jsoup.nodes.TextNode
 import org.jsoup.select.Evaluator
 import rx.Observable
-import rx.Single
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
-class PepperCarrot :
+@Source
+abstract class PepperCarrot :
     HttpSource(),
     ConfigurableSource {
-    override val name = TITLE
-    override val lang = "all"
-    override val supportsLatest = false
 
-    override val baseUrl = BASE_URL
+    override val supportsLatest = false
 
     private val preferences by getPreferencesLazy()
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Single.create<MangasPage> {
-        updateLangData(client, headers, preferences)
+    // ============================== Popular ==============================
+
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
+        updateLangData(client, headers, preferences, baseUrl)
         val lang = preferences.lang.ifEmpty {
             throw Exception("Please select language in the filter")
         }
         val langMap = preferences.langData.associateBy { langData -> langData.key }
         val mangas = lang.map { key -> langMap[key]!!.toSManga() }
         val miniFantasyTheaters = lang.map { key -> langMap[key]!!.getMiniFantasyTheaterEntry() }
-        val result = MangasPage(mangas + miniFantasyTheaters + getArtworkList(), false)
-        it.onSuccess(result)
-    }.toObservable()
 
-    private fun getArtworkList(): List<SManga> = arrayOf(
-        "artworks", "wallpapers", "sketchbook", "misc",
-        "book-publishing", "comissions", "eshop", "framasoft", "press", "references", "wiki",
-    ).map(::getArtworkEntry)
+        MangasPage(mangas + miniFantasyTheaters + getArtworkList(), false)
+    }
 
-    override fun getFilterList() = getFilters(preferences)
+    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
+
+    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
+
+    // ============================== Latest ===============================
+
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+
+    // ============================== Search ===============================
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.isNotEmpty()) return Observable.error(Exception("No search"))
@@ -59,17 +65,16 @@ class PepperCarrot :
         return fetchPopularManga(page)
     }
 
-    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
+
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Single.create<SManga> {
-        updateLangData(client, headers, preferences)
+    // ============================== Details ==============================
+
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.fromCallable {
+        updateLangData(client, headers, preferences, baseUrl)
         val key = manga.url
-        val result = if (key.startsWith('#')) {
+        if (key.startsWith('#')) {
             getArtworkEntry(key.substring(1))
         } else if (key.startsWith("miniFantasyTheater")) {
             val langKey = key.substringAfter("#")
@@ -77,76 +82,37 @@ class PepperCarrot :
         } else {
             preferences.langData.find { lang -> lang.key == key }!!.toSManga()
         }
-        it.onSuccess(result)
-    }.toObservable()
+    }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val key = manga.url
         val url = if (key.startsWith('#')) { // artwork
-            "$BASE_URL/en/files/${key.substring(1)}.html"
+            "$baseUrl/en/files/${key.substring(1)}.html"
         } else if (key.startsWith("miniFantasyTheater")) {
             val langKey = key.substringAfter("#")
-            "$BASE_URL/$langKey/webcomics/miniFantasyTheater.html"
+            "$baseUrl/$langKey/webcomics/miniFantasyTheater.html"
         } else {
-            "$BASE_URL/$key/webcomics/peppercarrot.html"
+            "$baseUrl/$key/webcomics/peppercarrot.html"
         }
         return GET(url, headers)
     }
 
     override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    private fun LangData.toSManga() = SManga.create().apply {
-        url = key
-        title = this@toSManga.title ?: if (key == "en") TITLE else "$TITLE (${key.uppercase()})"
-        author = AUTHOR
-        description = this@toSManga.run {
-            "Language: $name\nTranslators: $translators"
-        }
-        status = SManga.ONGOING
-        thumbnail_url =
-            "$BASE_URL/0_sources/0ther/artworks/low-res/2016-02-24_vertical-cover_remake_by-David-Revoy.jpg"
-        initialized = true
-    }
+    // ============================= Chapters ==============================
 
-    private fun LangData.getMiniFantasyTheaterEntry() = SManga.create().apply {
-        url = "miniFantasyTheater#$key"
-        title = "Mini Fantasy Theater" + if (key != "en") " (${key.uppercase()})" else ""
-        author = AUTHOR
-        description =
-            "A webcomic series featuring short stories set in the enchanting world of Pepper&Carrot. With its playful humor and whimsical tales, this collection of gag strips is perfect for audiences of all ages."
-        status = SManga.ONGOING
-        thumbnail_url = "$BASE_URL/0_sources/0ther/artworks/low-res/2018-11-22_vertical-cover-book-three_by-David-Revoy.jpg"
-        initialized = true
-    }
-
-    private fun getArtworkEntry(key: String) = SManga.create().apply {
-        url = "#$key"
-        title = when (key) {
-            "comissions" -> "Commissions"
-            "eshop" -> "Shop"
-            else -> key.replaceFirstChar { it.uppercase() }
-        }
-        author = AUTHOR
-        status = SManga.ONGOING
-        thumbnail_url = "$BASE_URL/0_sources/0ther/press/low-res/2015-10-12_logo_by-David-Revoy.jpg"
-        initialized = true
-    }
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Single.create<List<SChapter>> {
-        updateLangData(client, headers, preferences)
-        val response = client.newCall(chapterListRequest(manga)).execute()
-        it.onSuccess(chapterListParse(response))
-    }.toObservable()
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable { updateLangData(client, headers, preferences, baseUrl) }
+        .flatMap { super.fetchChapterList(manga) }
 
     override fun chapterListRequest(manga: SManga): Request {
         val key = manga.url
         val url = if (key.startsWith('#')) { // artwork
-            "$BASE_URL/0_sources/0ther/${key.substring(1)}/low-res/"
+            "$baseUrl/0_sources/0ther/${key.substring(1)}/low-res/"
         } else if (key.startsWith("miniFantasyTheater")) {
             val langKey = key.substringAfter("#")
-            "$BASE_URL/$langKey/webcomics/miniFantasyTheater.html"
+            "$baseUrl/$langKey/webcomics/miniFantasyTheater.html"
         } else {
-            "$BASE_URL/$key/webcomics/peppercarrot.html"
+            "$baseUrl/$key/webcomics/peppercarrot.html"
         }
         val lastUpdated = preferences.lastUpdated
         if (lastUpdated == 0L) return GET(url, headers)
@@ -166,7 +132,7 @@ class PepperCarrot :
 
         return translatedChapters.map { (number, it) ->
             SChapter.create().apply {
-                url = it.selectFirst(Evaluator.Tag("a"))!!.attr("href").removePrefix(BASE_URL)
+                url = it.selectFirst(Evaluator.Tag("a"))!!.attr("href").removePrefix(baseUrl)
                 name = it.selectFirst(Evaluator.Tag("img"))!!.attr("title").run {
                     val index = lastIndexOf('（')
                     when {
@@ -182,8 +148,95 @@ class PepperCarrot :
         }
     }
 
+    // =============================== Pages ===============================
+
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        val url = chapter.url
+        return if (url.endsWith(".jpg")) {
+            Observable.just(listOf(Page(0, imageUrl = baseUrl + url)))
+        } else {
+            super.fetchPageList(chapter)
+        }
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val urls =
+            document.select(".webcomic-page img").map { it.attr("src") } +
+                document.select(".mft-cv-image").map { it.attr("src") }
+
+        if (urls.isEmpty()) return emptyList()
+
+        val thumbnail =
+            if (urls[0].contains("miniFantasyTheater", true)) {
+                emptyList()
+            } else {
+                listOf(urls[0].replace("P00.jpg", ".jpg"))
+            }
+
+        return (thumbnail + urls).mapIndexed { index, imageUrl ->
+            Page(index, imageUrl = imageUrl)
+        }
+    }
+
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    override fun imageRequest(page: Page): Request {
+        val url = page.imageUrl!!
+        val newUrl = if (preferences.isHiRes) url.replace("/low-res/", "/hi-res/") else url
+        return GET(newUrl, headers)
+    }
+
+    // ============================== Filters ==============================
+
+    override fun getFilterList() = getFilters(preferences)
+
+    // ============================= Utilities =============================
+
+    private fun getArtworkList(): List<SManga> = arrayOf(
+        "artworks", "wallpapers", "sketchbook", "misc",
+        "book-publishing", "comissions", "eshop", "framasoft", "press", "references", "wiki",
+    ).map(::getArtworkEntry)
+
+    private fun getArtworkEntry(key: String) = SManga.create().apply {
+        url = "#$key"
+        title = when (key) {
+            "comissions" -> "Commissions"
+            "eshop" -> "Shop"
+            else -> key.replaceFirstChar { it.uppercase() }
+        }
+        author = AUTHOR
+        status = SManga.ONGOING
+        thumbnail_url = "$baseUrl/0_sources/0ther/press/low-res/2015-10-12_logo_by-David-Revoy.jpg"
+        initialized = true
+    }
+
+    private fun LangData.toSManga() = SManga.create().apply {
+        url = key
+        title = this@toSManga.title ?: if (key == "en") TITLE else "$TITLE (${key.uppercase()})"
+        author = AUTHOR
+        description = this@toSManga.run {
+            "Language: $name\nTranslators: $translators"
+        }
+        status = SManga.ONGOING
+        thumbnail_url =
+            "$baseUrl/0_sources/0ther/artworks/low-res/2016-02-24_vertical-cover_remake_by-David-Revoy.jpg"
+        initialized = true
+    }
+
+    private fun LangData.getMiniFantasyTheaterEntry() = SManga.create().apply {
+        url = "miniFantasyTheater#$key"
+        title = "Mini Fantasy Theater" + if (key != "en") " (${key.uppercase()})" else ""
+        author = AUTHOR
+        description =
+            "A webcomic series featuring short stories set in the enchanting world of Pepper&Carrot. With its playful humor and whimsical tales, this collection of gag strips is perfect for audiences of all ages."
+        status = SManga.ONGOING
+        thumbnail_url = "$baseUrl/0_sources/0ther/artworks/low-res/2018-11-22_vertical-cover-book-three_by-David-Revoy.jpg"
+        initialized = true
+    }
+
     private fun parseArtwork(response: Response): List<SChapter> {
-        val baseDir = response.request.url.toString().removePrefix(BASE_URL)
+        val baseDir = response.request.url.toString().removePrefix(baseUrl)
         return response.asJsoup().select(Evaluator.Tag("a")).asReversed().mapNotNull {
             val filename = it.attr("href")
             if (!filename.endsWith(".jpg")) return@mapNotNull null
@@ -214,43 +267,12 @@ class PepperCarrot :
         }
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        val url = chapter.url
-        return if (url.endsWith(".jpg")) {
-            Observable.just(listOf(Page(0, imageUrl = BASE_URL + url)))
-        } else {
-            super.fetchPageList(chapter)
-        }
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val urls =
-            document.select(".webcomic-page img").map { it.attr("src") } +
-                document.select(".mft-cv-image").map { it.attr("src") }
-        val thumbnail =
-            if (urls[0].contains("miniFantasyTheater", true)) {
-                emptyList()
-            } else {
-                listOf(urls[0].replace("P00.jpg", ".jpg"))
-            }
-        return (thumbnail + urls).mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = imageUrl)
-        }
-    }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun imageRequest(page: Page): Request {
-        val url = page.imageUrl!!
-        val newUrl = if (preferences.isHiRes) url.replace("/low-res/", "/hi-res/") else url
-        return GET(newUrl, headers)
-    }
-
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         getPreferences(screen.context).forEach(screen::addPreference)
     }
 
-    private val dateRegex by lazy { Regex("""\d{4}-\d{2}-\d{2}""") }
-    private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH) }
+    private val dateRegex = Regex("""\d{4}-\d{2}-\d{2}""")
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
 }

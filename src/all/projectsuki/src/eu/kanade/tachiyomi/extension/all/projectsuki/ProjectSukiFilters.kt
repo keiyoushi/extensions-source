@@ -5,19 +5,11 @@ package eu.kanade.tachiyomi.extension.all.projectsuki
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
 
-/**
- *  @see EXTENSION_INFO Found in ProjectSuki.kt
- */
 @Suppress("unused")
 private inline val INFO: Nothing get() = error("INFO")
 
 internal val newlineRegex = """\R""".toRegex(RegexOption.IGNORE_CASE)
 
-/**
- * Handler for Project Suki's applicable [filters][Filter]
- *
- * @author Federico d'Alonzo &lt;me@npgx.dev&gt;
- */
 @Suppress("NOTHING_TO_INLINE")
 object ProjectSukiFilters {
 
@@ -50,7 +42,6 @@ object ProjectSukiFilters {
     @Suppress("UNUSED_PARAMETER")
     fun footersSequence(preferences: ProjectSukiPreferences): Sequence<Filter.Header> = sequenceOf()
 
-    /** Project Suki requires an extra `adv=1` query parameter when using these filters */
     private inline fun HttpUrl.Builder.ensureAdv(): HttpUrl.Builder = setQueryParameter("adv", "1")
 
     enum class StatusValue(val display: String, val query: String) {
@@ -64,8 +55,7 @@ object ProjectSukiFilters {
         override fun toString(): String = display
 
         companion object {
-            private val values: Array<StatusValue> = values()
-            operator fun get(ordinal: Int): StatusValue = values[ordinal]
+            operator fun get(ordinal: Int): StatusValue = entries[ordinal]
         }
     }
 
@@ -79,8 +69,7 @@ object ProjectSukiFilters {
         override fun toString(): String = display
 
         companion object {
-            private val values: Array<OriginValue> = OriginValue.values()
-            operator fun get(ordinal: Int): OriginValue = values[ordinal]
+            operator fun get(ordinal: Int): OriginValue = entries[ordinal]
         }
     }
 
@@ -93,13 +82,12 @@ object ProjectSukiFilters {
         override fun toString(): String = display
 
         companion object {
-            private val values: Array<SearchMode> = SearchMode.values()
-            operator fun get(ordinal: Int): SearchMode = values[ordinal]
+            operator fun get(ordinal: Int): SearchMode = entries[ordinal]
         }
     }
 
     class SearchModeFilter(default: SearchMode) :
-        Filter.Select<SearchMode>("Search Mode", SearchMode.values(), state = default.ordinal),
+        Filter.Select<SearchMode>("Search Mode", SearchMode.entries.toTypedArray(), state = default.ordinal),
         ProjectSukiFilter {
         override val headers: List<Header> = headers {
             """
@@ -144,26 +132,22 @@ object ProjectSukiFilters {
     }
 
     class Status :
-        Filter.Select<StatusValue>("Status", StatusValue.values()),
+        Filter.Select<StatusValue>("Status", StatusValue.entries.toTypedArray()),
         ProjectSukiFilter {
         override fun HttpUrl.Builder.applyFilter() {
-            when (val state = StatusValue[state]) {
+            when (val state = StatusValue.entries[state]) {
                 StatusValue.ANY -> {}
-
-                // default, do nothing
                 else -> ensureAdv().addQueryParameter("status", state.query)
             }
         }
     }
 
     class Origin :
-        Filter.Select<OriginValue>("Origin", OriginValue.values()),
+        Filter.Select<OriginValue>("Origin", OriginValue.entries.toTypedArray()),
         ProjectSukiFilter {
         override fun HttpUrl.Builder.applyFilter() {
-            when (val state = OriginValue[state]) {
+            when (val state = OriginValue.entries[state]) {
                 OriginValue.ANY -> {}
-
-                // default, do nothing
                 else -> ensureAdv().addQueryParameter("origin", state.query)
             }
         }
