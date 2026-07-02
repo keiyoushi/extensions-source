@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Rolia Scan"
-    className = "RoliaScan"
     versionCode = 7
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangataro"
-    baseUrl = "https://roliascan.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://roliascan.com"
+    }
 }
