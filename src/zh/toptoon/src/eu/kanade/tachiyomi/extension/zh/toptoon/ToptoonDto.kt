@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -15,8 +16,15 @@ class MangaDto(
     private val meta: MetaDto,
     private val thumbnail: ThumbnailDto,
     private val id: String,
-    val lastUpdated: LastUpdatedDto,
+    val lastUpdated: JsonElement,
 ) {
+    // can be empty array or object
+    val pubDate: String
+        get() = when (lastUpdated) {
+            is JsonObject -> lastUpdated["pubDate"]!!.jsonPrimitive.content
+            else -> "0"
+        }
+
     fun toSManga() = SManga.create().apply {
         url = "/comic/epList/$id"
         title = meta.title
@@ -40,6 +48,3 @@ class ThumbnailDto(private val standard: JsonElement) {
         else -> throw Exception("Unexpected JSON type")
     }
 }
-
-@Serializable
-class LastUpdatedDto(val pubDate: String)
