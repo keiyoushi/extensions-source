@@ -13,6 +13,7 @@ import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -88,7 +89,7 @@ abstract class Rncalation : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            description = document.selectFirst("""p.text-\[0\.875rem\].text-\[var\(--color-text2\)\]""")?.text() ?: ""
+            description = document.selectFirst("div.comic-page-wrap p[class*=text-][^data-astro-cid]")?.text() ?: ""
 
             val badges = document.select("span.inline-flex.items-center.rounded").map { it.text().lowercase() }
             status = when {
@@ -118,6 +119,27 @@ abstract class Rncalation : HttpSource() {
         }
     }
 
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+        val slug = manga.url.removeSuffix("/").substringAfterLast("/")
+        val allChapters = mutableListOf<SChapter>()
+        var page = 1
+        do {
+            val response = client.newCall(chapterListRequest(slug, page)).execute()
+            val chapters = chapterListParse(response)
+            if (chapters.isEmpty()) break
+            allChapters.addAll(chapters)
+
+            val currentPage = response.header("x-page")?.toIntOrNull() ?: break
+            val totalPages = response.header("x-pages")?.toIntOrNull() ?: break
+
+            page++
+        } while (currentPage < totalPages)
+
+        return@fromCallable allChapters.toList()
+    }
+
+    private fun chapterListRequest(slug: String, page: Int) = GET("$baseUrl/comics/$slug/chapters?page=$page", headers)
+
     override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("a[data-chapter-id]").mapIndexed { num, it ->
         SChapter.create().apply {
             setUrlWithoutDomain(it.attr("href"))
@@ -126,8 +148,6 @@ abstract class Rncalation : HttpSource() {
             date_upload = it.selectFirst(".text-\\[0\\.65rem\\]")?.let { parseDate(it.text()) } ?: 0L
         }
     }
-
-    private fun chapterRequest(slug: String, page: Int): Request = GET("$baseUrl/comics/$slug/chapters?page=$page", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
