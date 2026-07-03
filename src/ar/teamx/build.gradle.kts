@@ -4,13 +4,18 @@ plugins {
 
 keiyoushi {
     name = "Team X"
-    className = "TeamX"
     versionCode = 30
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
+    source {
+        baseUrl("https://olympustaff.com") {
+            withCustom = true
+        }
+        lang = "ar"
+    }
+
     deeplink {
-        host("olympustaff.com")
         path("/series/..*")
     }
 }

@@ -1,10 +1,6 @@
 package eu.kanade.tachiyomi.extension.ar.teamx
 
-import android.content.SharedPreferences
-import android.widget.Toast
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,8 +9,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.getPreferencesLazy
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -23,16 +19,8 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import kotlin.time.Duration.Companion.seconds
 
-class TeamX :
-    HttpSource(),
-    ConfigurableSource {
-    override val name = "Team X"
-
-    private val defaultBaseUrl = "https://olympustaff.com"
-
-    override val baseUrl by lazy { getPrefBaseUrl() }
-
-    override val lang = "ar"
+@Source
+abstract class TeamX : HttpSource() {
 
     override val supportsLatest = true
 
@@ -42,8 +30,6 @@ class TeamX :
         .readTimeout(30.seconds)
         .rateLimit(10, 1.seconds)
         .build()
-
-    private val preferences: SharedPreferences by getPreferencesLazy()
 
     /**
      * Whether filters have been fetched
@@ -364,44 +350,4 @@ class TeamX :
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    companion object {
-        private const val RESTART_APP = ".لتطبيق الإعدادات الجديدة أعد تشغيل التطبيق"
-        private const val BASE_URL_PREF_TITLE = "تعديل الرابط"
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_SUMMARY = ".للاستخدام المؤقت. تحديث التطبيق سيؤدي الى حذف الإعدادات"
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-    }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref =
-            androidx.preference.EditTextPreference(screen.context).apply {
-                key = BASE_URL_PREF
-                title = BASE_URL_PREF_TITLE
-                summary = BASE_URL_PREF_SUMMARY
-                this.setDefaultValue(defaultBaseUrl)
-                dialogTitle = BASE_URL_PREF_TITLE
-                dialogMessage = "Default: $defaultBaseUrl"
-
-                setOnPreferenceChangeListener { _, _ ->
-                    Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
-                    true
-                }
-            }
-        screen.addPreference(baseUrlPref)
-    }
-
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
-
-    init {
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != defaultBaseUrl) {
-                preferences
-                    .edit()
-                    .putString(BASE_URL_PREF, defaultBaseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
-                    .apply()
-            }
-        }
-    }
 }
