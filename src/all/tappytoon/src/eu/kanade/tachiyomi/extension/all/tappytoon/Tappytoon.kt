@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
@@ -24,11 +25,8 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class Tappytoon(override val lang: String) : HttpSource() {
-    override val name = "Tappytoon"
-
-    override val baseUrl = "https://www.tappytoon.com/$lang"
-
+@Source
+abstract class Tappytoon : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder().addInterceptor { chain ->

@@ -4,8 +4,14 @@ plugins {
 
 keiyoushi {
     name = "HOLONOMETRIA"
-    className = "HolonometriaFactory"
     versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    listOf("ja", "en", "id").forEach {
+        source {
+            lang = it
+            baseUrl = "https://holoearth.com"
+        }
+    }
 }

@@ -4,10 +4,21 @@ plugins {
 
 keiyoushi {
     name = "Comick (Unoriginal)"
-    className = "ComickFactory"
     versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    listOf(
+        "en", "ru", "vi", "fr", "pl", "id", "tr", "it", "es", "uk",
+        "de", "ko", "th", "ro", "ms", "ja", "sv", "no",
+    ).forEach {
+        source {
+            lang = it
+            baseUrl("https://comick.live") {
+                mirrors = listOf("https://comick.art")
+            }
+        }
+    }
 }
 
 dependencies {

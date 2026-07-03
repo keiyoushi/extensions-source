@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.Request
 import okhttp3.Response
@@ -16,15 +17,12 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-abstract class CommitStrip(
-    override val lang: String,
-    private val siteLang: String,
-) : HttpSource() {
-
-    override val name = "Commit Strip"
-    override val baseUrl = "https://www.commitstrip.com"
+@Source
+abstract class CommitStrip : HttpSource() {
 
     override val supportsLatest = false
+
+    private val siteLang: String get() = lang
 
     private val dateFormat by lazy { SimpleDateFormat("yyyy/MM/dd", Locale.US) }
 

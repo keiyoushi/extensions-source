@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.e4p.E4PInterceptor
 import keiyoushi.lib.e4p.E4PManifestReader
 import keiyoushi.utils.extractNextJs
@@ -23,15 +24,13 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 
-class JNovel :
+@Source
+abstract class JNovel :
     HttpSource(),
     ConfigurableSource {
-    override val name = "J-Novel"
-    private val domain = "j-novel.club"
-    override val baseUrl = "https://$domain"
-    override val lang = "en"
     override val supportsLatest = false
 
+    private val domain = baseUrl.toHttpUrl().host
     private val viewerUrl = "https://labs.$domain/embed/v2"
     private val preferences by getPreferencesLazy()
     private val rscHeaders = headersBuilder()

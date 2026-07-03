@@ -2,14 +2,11 @@ package eu.kanade.tachiyomi.extension.ja.comicgardo
 
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Element
 
-class ComicGardo :
-    GigaViewer(
-        "Comic Gardo",
-        "https://comic-gardo.com",
-        "ja",
-    ) {
+@Source
+abstract class ComicGardo : GigaViewer() {
     override val supportsLatest: Boolean = false
 
     override val popularMangaSelector: String = "a[class^=SeriesListItem_link_]"

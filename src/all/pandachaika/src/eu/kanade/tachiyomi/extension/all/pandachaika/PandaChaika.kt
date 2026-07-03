@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.zip.dataRange
@@ -26,14 +27,32 @@ import okio.buffer
 import rx.Observable
 import java.lang.String.CASE_INSENSITIVE_ORDER
 
-class PandaChaika(
-    override val lang: String = "all",
-    private val searchLang: String = "",
-) : HttpSource() {
+@Source
+abstract class PandaChaika : HttpSource() {
 
-    override val name = "PandaChaika"
-
-    override val baseUrl = "https://panda.chaika.moe"
+    private val searchLang: String
+        get() = when (lang) {
+            "en" -> "english"
+            "zh" -> "chinese"
+            "ko" -> "korean"
+            "es" -> "spanish"
+            "ru" -> "russian"
+            "pt" -> "portuguese"
+            "fr" -> "french"
+            "th" -> "thai"
+            "vi" -> "vietnamese"
+            "ja" -> "japanese"
+            "id" -> "indonesian"
+            "ar" -> "arabic"
+            "uk" -> "ukrainian"
+            "tr" -> "turkish"
+            "cs" -> "czech"
+            "tl" -> "tagalog"
+            "fi" -> "finnish"
+            "jv" -> "javanese"
+            "el" -> "greek"
+            else -> ""
+        }
 
     private val baseSearchUrl = "$baseUrl/search"
 

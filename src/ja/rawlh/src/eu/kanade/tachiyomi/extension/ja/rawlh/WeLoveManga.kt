@@ -5,13 +5,13 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
-class WeLoveManga : FMReader("WeLoveManga", "https://weloma.art", "ja") {
-    // Formerly "RawLH"
-    override val id = 7595224096258102519
+@Source
+abstract class WeLoveManga : FMReader() {
 
     override val chapterUrlSelector = ""
 

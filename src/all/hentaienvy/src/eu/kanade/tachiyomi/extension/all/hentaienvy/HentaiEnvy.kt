@@ -5,17 +5,25 @@ import eu.kanade.tachiyomi.multisrc.galleryadults.Genre
 import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class HentaiEnvy(
-    lang: String = "all",
-    override val mangaLang: String = LANGUAGE_MULTI,
-) : GalleryAdults(
-    "HentaiEnvy",
-    "https://hentaienvy.com",
-    lang = lang,
-) {
+@Source
+abstract class HentaiEnvy : GalleryAdults() {
+
+    override val mangaLang = when (lang) {
+        "en" -> LANGUAGE_ENGLISH
+        "ja" -> LANGUAGE_JAPANESE
+        "es" -> LANGUAGE_SPANISH
+        "fr" -> LANGUAGE_FRENCH
+        "ko" -> LANGUAGE_KOREAN
+        "de" -> LANGUAGE_GERMAN
+        "ru" -> LANGUAGE_RUSSIAN
+        "all" -> LANGUAGE_MULTI
+        else -> throw IllegalArgumentException("Invalid lang: $lang")
+    }
+
     override val supportsLatest = mangaLang.isNotBlank()
     override val supportAdvancedSearch = true
     override val supportSpeechless = true

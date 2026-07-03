@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -18,10 +19,8 @@ import org.jsoup.select.Evaluator
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Hennojin(override val lang: String) : HttpSource() {
-    override val baseUrl = "https://hennojin.com"
-
-    override val name = "Hennojin"
+@Source
+abstract class Hennojin : HttpSource() {
 
     // Popular is latest
     override val supportsLatest = false

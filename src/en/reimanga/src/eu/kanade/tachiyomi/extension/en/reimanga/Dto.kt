@@ -7,6 +7,22 @@ import kotlinx.serialization.json.JsonNames
 import kotlin.math.roundToInt
 
 @Serializable
+class Manga(
+    private val id: Long,
+    @SerialName("name_url")
+    private val slug: String,
+    private val title: String,
+    @SerialName("cover_url")
+    private val cover: String? = null,
+) {
+    fun toSManga(baseUrl: String) = SManga.create().apply {
+        url = "$slug-$id"
+        title = this@Manga.title
+        thumbnail_url = cover ?: "$baseUrl/covers/$id/thumbnail.png"
+    }
+}
+
+@Serializable
 class MangaList(
     @JsonNames("initialData")
     val data: List<Manga>,
@@ -20,34 +36,6 @@ class MangaList(
         fun hasNextPage() = currentPage < totalPages
     }
 }
-
-@Serializable
-class Manga(
-    private val id: Long,
-    @SerialName("name_url")
-    private val slug: String,
-    private val title: String,
-    @SerialName("cover_url")
-    private val cover: String? = null,
-) {
-    fun toSManga() = SManga.create().apply {
-        url = "$slug-$id"
-        title = this@Manga.title
-        thumbnail_url = cover ?: "https://$DOMAIN/covers/$id/thumbnail.png"
-    }
-}
-
-@Serializable
-class TagList(
-    val genres: List<Tag>,
-    val tags: List<Tag>,
-)
-
-@Serializable
-class Tag(
-    val name: String,
-    val slug: String,
-)
 
 @Serializable
 class MangaPage(
@@ -72,10 +60,10 @@ class MangaPage(
         private val tags: List<Tag> = emptyList(),
         private val authors: List<Name> = emptyList(),
     ) {
-        fun toSManga() = SManga.create().apply {
+        fun toSManga(baseUrl: String) = SManga.create().apply {
             url = "$slug-$id"
             title = this@MangaDetails.title
-            thumbnail_url = cover ?: "https://$DOMAIN/covers/$id/thumbnail.png"
+            thumbnail_url = cover ?: "$baseUrl/covers/$id/thumbnail.png"
             description = buildString {
                 if (rating > 0.0) {
                     val filled = (rating / 2).roundToInt().coerceIn(0, 5)
@@ -151,3 +139,15 @@ class Images(
         val url: String,
     )
 }
+
+@Serializable
+class TagList(
+    val genres: List<Tag>,
+    val tags: List<Tag>,
+)
+
+@Serializable
+class Tag(
+    val name: String,
+    val slug: String,
+)

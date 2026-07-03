@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -25,11 +26,8 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class Cubari(override val lang: String) : HttpSource() {
-
-    override val name = "Cubari"
-
-    override val baseUrl = "https://cubari.moe"
+@Source
+abstract class Cubari : HttpSource() {
 
     override val supportsLatest = true
 

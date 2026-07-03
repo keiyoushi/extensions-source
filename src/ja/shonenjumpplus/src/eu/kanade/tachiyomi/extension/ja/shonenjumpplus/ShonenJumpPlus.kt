@@ -1,13 +1,10 @@
 package eu.kanade.tachiyomi.extension.ja.shonenjumpplus
 
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
+import keiyoushi.annotation.Source
 
-class ShonenJumpPlus :
-    GigaViewer(
-        "Shonen Jump+",
-        "https://shonenjumpplus.com",
-        "ja",
-    ) {
+@Source
+abstract class ShonenJumpPlus : GigaViewer() {
     override val searchMangaNextPageSelector = "a.pager-next"
 
     override fun getCollections(): List<Collection> = listOf(

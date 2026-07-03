@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.gmanga
+package eu.kanade.tachiyomi.extension.ar.mangatales
 
 import android.util.Base64
 import keiyoushi.utils.decodeHex

@@ -239,9 +239,10 @@ abstract class MangaLivre :
     }
 
     /**
-     * O front-end fixa o header de cliente via `Headers.set("nome", "valor")` no bundle,
-     * e nome/valor rotacionam toda hora (x-toonlivre-client/web-x -> app-token/tok-z99).
-     * Em vez de fixar isso, coletamos os pares de `.set(...)` dos /assets (ignorando headers
+     * O gate de "aplicativo oficial" (endpoints de leitura) exige um header de cliente que o
+     * front-end injeta no bundle via `Headers.append("x-tly-token", "v99-web-z")` — e há um
+     * decoy `set("app-token", ...)` que os endpoints abertos ignoram. Nome/valor rotacionam.
+     * Coletamos TODOS os pares literais de `.set(...)`/`.append(...)` dos /assets (fora headers
      * padrão) e o interceptor testa cada candidato quando a API recusa com 403.
      */
     private fun scrapeCandidates(): List<ClientToken> = try {
@@ -285,9 +286,9 @@ abstract class MangaLivre :
         private const val MAX_CANDIDATES = 8
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
-        private val DEFAULT_TOKEN = ClientToken("app-token", "tok-z99")
+        private val DEFAULT_TOKEN = ClientToken("x-tly-token", "v99-web-z")
         private val ASSET_REGEX = Regex("/assets/[\\w-]+\\.js")
-        private val SET_REGEX = Regex("\\.set\\(\\s*\"([A-Za-z][\\w.-]{1,40})\"\\s*,\\s*\"([^\"]{1,60})\"\\s*\\)")
+        private val SET_REGEX = Regex("\\.(?:set|append)\\(\\s*\"([A-Za-z][\\w.-]{1,40})\"\\s*,\\s*\"([^\"]{1,60})\"\\s*\\)")
         private val STANDARD_HEADERS = setOf("content-type", "accept", "authorization", "x-csrf-token")
     }
 }

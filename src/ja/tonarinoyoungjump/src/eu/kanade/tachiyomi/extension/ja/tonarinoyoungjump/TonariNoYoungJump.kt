@@ -2,14 +2,11 @@ package eu.kanade.tachiyomi.extension.ja.tonarinoyoungjump
 
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Element
 
-class TonariNoYoungJump :
-    GigaViewer(
-        "Tonari no Young Jump",
-        "https://tonarinoyj.jp",
-        "ja",
-    ) {
+@Source
+abstract class TonariNoYoungJump : GigaViewer() {
 
     override val supportsLatest: Boolean = false
 

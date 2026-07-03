@@ -4,9 +4,15 @@ plugins {
 
 keiyoushi {
     name = "FoolSlide Customizable"
-    className = "FoolSlideCustomizableFactory"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "foolslide"
+
+    source {
+        lang = "other"
+        baseUrl("https://127.0.0.1") {
+            withCustom = true
+        }
+    }
 }

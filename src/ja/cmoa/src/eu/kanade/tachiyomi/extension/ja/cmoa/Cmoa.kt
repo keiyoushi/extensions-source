@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.SpeedBinbReader
@@ -25,35 +26,26 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class Cmoa :
+@Source
+abstract class Cmoa :
     HttpSource(),
     ConfigurableSource {
-    override val name = "C'moA"
-    private val domain = "cmoa.jp"
-    override val baseUrl = "https://www.$domain"
-    override val lang = "ja"
     override val supportsLatest = true
-
-    private val reader by lazy { SpeedBinbReader(client, headers, jsonInstance, true) } // 1.7070.1001 SBC
-    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
         .addInterceptor(SpeedBinbInterceptor(jsonInstance))
-        .addNetworkInterceptor(CookieInterceptor(domain, listOf("safesearch" to "0", "R18user" to "1")))
+        .addNetworkInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, listOf("safesearch" to "0", "R18user" to "1")))
         .build()
+
+    private val reader by lazy { SpeedBinbReader(client, headers, jsonInstance, true) } // 1.7070.1001 SBC
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         // load desktop selectors
         .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/search/purpose/ranking/all".toHttpUrl().newBuilder()
-            .addQueryParameter("period", "daily")
-            .addQueryParameter("daily", "all")
-            .build()
-        return GET(url, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/search/purpose/ranking/all?period=daily&daily=all", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -62,8 +54,7 @@ class Cmoa :
                 title = it.selectFirst("div.search_result_box_right_sec1 a.title")!!.text()
                 val img = it.selectFirst("div.search_result_box_left img")
                 thumbnail_url = img?.absUrl("data-src")?.ifEmpty { img.absUrl("src") }
-                val id = it.selectFirst("div.search_result_box_left a.title")!!.absUrl("href").toHttpUrl().pathSegments[1]
-                setUrlWithoutDomain(id)
+                url = it.selectFirst("div.search_result_box_left a.title")!!.absUrl("href").toHttpUrl().pathSegments[1]
             }
         }
         val hasNextPage = document.selectFirst("li.next:not(.nopage)") != null
@@ -78,8 +69,7 @@ class Cmoa :
             SManga.create().apply {
                 title = it.selectFirst("div.text_box p.title_name")!!.text()
                 thumbnail_url = it.selectFirst("div.thum_box a img")?.absUrl("src")
-                val id = it.selectFirst("div.thum_box a")!!.absUrl("href").toHttpUrl().pathSegments[1]
-                setUrlWithoutDomain(id)
+                url = it.selectFirst("div.thum_box a")!!.absUrl("href").toHttpUrl().pathSegments[1]
             }
         }
         val hasNextPage = document.selectFirst("div.pageSlider div.swiper-slide.selected + div.swiper-slide") != null
@@ -122,11 +112,11 @@ class Cmoa :
         val document = response.asJsoup()
         return SManga.create().apply {
             title = document.selectFirst("h1.titleName")!!.text().replace(TITLE_REGEX, "")
-            author = document.select("div.title_details_author_name a")?.joinToString { it.text() }
+            author = document.select("div.title_details_author_name a").joinToString { it.text() }
             description = document.selectFirst("div#comic_description > p")?.text()
             genre = buildList {
                 document.selectFirst("a.comic_mark_thum")?.text()?.let { add(it) }
-                document.select("div.category_line_f_r_l.genre_detail a")?.mapTo(this) { it.text() }
+                document.select("div.category_line_f_r_l.genre_detail a").mapTo(this) { it.text() }
             }.joinToString()
             val completed = document.selectFirst("div.volume")?.text()?.contains("完結")
             status = if (completed == true) SManga.COMPLETED else SManga.ONGOING
@@ -181,6 +171,8 @@ class Cmoa :
         return Observable.just(chapters)
     }
 
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
+
     override fun pageListParse(response: Response): List<Page> {
         if (response.request.url.pathSegments.contains("speedreader")) {
             return reader.pageListParse(response)
@@ -191,6 +183,8 @@ class Cmoa :
         }
         throw Exception("Log in via WebView and purchase this product to read.")
     }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList(
         Filter.Header("Note: Search and active filters are applied together"),
@@ -222,11 +216,6 @@ class Cmoa :
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
-
-    // Unsupported
-    override fun chapterListRequest(manga: SManga) = throw UnsupportedOperationException()
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"

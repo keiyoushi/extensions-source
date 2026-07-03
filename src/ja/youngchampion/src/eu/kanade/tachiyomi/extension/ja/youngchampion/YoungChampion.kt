@@ -1,10 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.youngchampion
 
 import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewer
+import keiyoushi.annotation.Source
 
-class YoungChampion :
-    ComiciViewer(
-        "Young Champion",
-        "https://youngchampion.jp",
-        "ja",
-    )
+@Source
+abstract class YoungChampion : ComiciViewer()
