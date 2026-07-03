@@ -24,7 +24,7 @@ class ChapterLivewireRequest(
     @Serializable
     class Component(
         val snapshot: String,
-        val updates: EmptyUpdatesDto,
+        val updates: ChapterUpdatesDto,
         val calls: List<LivewireCall>,
     )
 }
@@ -34,7 +34,7 @@ class LivewireCall(
     val type: String = "call",
     val path: String = "",
     val method: String,
-    val params: List<Int> = emptyList(),
+    val params: List<String> = emptyList(),
 )
 
 @Serializable
@@ -74,4 +74,9 @@ class PageApiResponse(
     val url: String? = null,
     val order: Int? = null,
     val message: String? = null,
+)
+
+@Serializable
+class ChapterUpdatesDto(
+    val language: String = "",
 )

@@ -38,7 +38,8 @@ abstract class OniSaga :
     HttpSource(),
     ConfigurableSource {
 
-    private val langKey: String? get() = when (lang) {
+    // Returns the uppercase language code required by the Livewire updates payload
+    private val langCode: String? get() = when (lang) {
         "en" -> "EN"
         "fr" -> "FR"
         "ja" -> "JA"
@@ -104,8 +105,6 @@ abstract class OniSaga :
         .build()
 
     private val preferences: SharedPreferences by getPreferencesLazy()
-
-    private val langKeys = arrayOf("EN", "FR", "JA", "PT-BR", "PT", "ES-LA", "ES")
 
     private fun buildLivewireHeaders(referer: String): Headers = headersBuilder()
         .set("X-Livewire", "")
@@ -183,7 +182,7 @@ abstract class OniSaga :
                     calls = listOf(
                         LivewireCall(
                             method = "gotoPage",
-                            params = listOf(page),
+                            params = listOf(page.toString()),
                         ),
                     ),
                 ),
@@ -511,47 +510,54 @@ abstract class OniSaga :
             val state = doc.extractLivewireState("manga.chapter-list")
                 ?: return@fromCallable emptyList()
 
-            var chapters = parseChaptersFromDoc(doc, langKey)
-            var currentSnapshot = state.snapshot
+            // If langCode is null (the "all" source), loop through all 7 languages
+            val langCodes = langCode?.let { listOf(it) }
+                ?: listOf("EN", "FR", "JA", "PT-BR", "PT", "ES-LA", "ES")
 
-            while (true) {
-                val request = ChapterLivewireRequest(
-                    token = state.token,
-                    components = listOf(
-                        ChapterLivewireRequest.Component(
-                            snapshot = currentSnapshot,
-                            updates = EmptyUpdatesDto(),
-                            calls = listOf(
-                                LivewireCall(
-                                    method = "loadMoreChapters",
-                                ),
+            val allChapters = mutableListOf<SChapter>()
+
+            for (code in langCodes) {
+                var currentSnapshot = state.snapshot
+                var prevChapterCount = 0
+                var langChapters = listOf<SChapter>()
+
+                while (true) {
+                    val request = ChapterLivewireRequest(
+                        token = state.token,
+                        components = listOf(
+                            ChapterLivewireRequest.Component(
+                                snapshot = currentSnapshot,
+                                updates = ChapterUpdatesDto(language = code),
+                                calls = listOf(LivewireCall(method = "loadMoreChapters")),
                             ),
                         ),
-                    ),
-                )
+                    )
 
-                val chapterRequest = POST("$baseUrl/livewire/update", buildLivewireHeaders(baseUrl + manga.url), request.toJsonRequestBody(livewireJson))
+                    val chapterRequest = POST("$baseUrl/livewire/update", buildLivewireHeaders(baseUrl + manga.url), request.toJsonRequestBody(livewireJson))
 
-                val dto = client.newCall(chapterRequest).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        null
-                    } else {
-                        response.parseAs<LivewireResponse>()
-                    }
-                } ?: break
+                    val dto = client.newCall(chapterRequest).execute().use { response ->
+                        if (!response.isSuccessful) {
+                            null
+                        } else {
+                            response.parseAs<LivewireResponse>()
+                        }
+                    } ?: break
 
-                val html = dto.components.firstOrNull()?.effects?.html ?: break
+                    val html = dto.components.firstOrNull()?.effects?.html ?: break
+                    val chapterDoc = Jsoup.parseBodyFragment(html, baseUrl)
 
-                val chapterDoc = Jsoup.parseBodyFragment(html, baseUrl)
-                val newChapters = parseChaptersFromDoc(chapterDoc, langKey)
+                    langChapters = parseChaptersFromDoc(chapterDoc, code, langCode == null)
 
-                if (newChapters.size <= chapters.size) break
+                    if (langChapters.size <= prevChapterCount) break
 
-                chapters = newChapters
-                currentSnapshot = dto.components.first().snapshot
+                    prevChapterCount = langChapters.size
+                    currentSnapshot = dto.components.first().snapshot
+                }
+
+                allChapters.addAll(langChapters)
             }
 
-            chapters.distinctBy { it.url }
+            allChapters.distinctBy { it.url }
                 .sortedByDescending {
                     CHAPTER_NUMBER_REGEX.find(it.name)?.groupValues?.get(1)?.toFloatOrNull() ?: 0f
                 }
@@ -560,79 +566,35 @@ abstract class OniSaga :
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
-    private fun parseChaptersFromDoc(doc: Document, langId: String?): List<SChapter> {
+    private fun parseChaptersFromDoc(doc: Document, langCode: String, isAllSource: Boolean): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
 
-        // Structure 1: Direct chapter links
-        doc.select("a[wire:key^=ch-]").forEach { el ->
+        // langCode is already uppercase ("EN", "FR", etc.)
+        val langDisplay = langCode
+
+        doc.select("a.gap-4:has(div[data-flux-heading])").forEach { el ->
             val headingText = el.selectFirst("div[data-flux-heading]")?.text()?.replace("Chapter ", "")?.trim()
             val number = headingText?.ifBlank { null } ?: el.selectFirst("div.w-10")?.text() ?: return@forEach
 
             val url = el.absUrl("href").ifEmpty { el.attr("href") }
-            if (url.isEmpty()) return@forEach
+            if (url.isEmpty() || !url.contains("/read/")) return@forEach
 
             val textEl = el.selectFirst("p[data-flux-text]")
             val details = textEl?.text()?.replace(" - ", " · ")?.split("\\s*·\\s*".toRegex())?.filter { it.isNotEmpty() } ?: emptyList()
 
-            val language = details.firstOrNull { it in langKeys }
-                ?: details.lastOrNull { it.lowercase().contains("language") }
-                ?: details.lastOrNull()
-                ?: ""
-
             val dateStr = details.firstOrNull {
                 val lower = it.lowercase()
                 lower.contains("ago") || lower == "today" || lower == "yesterday"
             } ?: ""
 
-            if (langId == null || language == langId) {
-                val chapterLang = if (langKey == null && language.isNotEmpty()) language else null
-
-                chapters.add(
-                    SChapter.create().apply {
-                        name = "Chapter $number"
-                        scanlator = chapterLang
-                        date_upload = parseChapterDate(dateStr)
-                        setUrlWithoutDomain(url)
-                    },
-                )
-            }
-        }
-
-        // Structure 2: Dropdown menus (multi-language chapters)
-        doc.select("ui-dropdown[wire:key^=ch-]").forEach { dropdown ->
-            val button = dropdown.selectFirst("button") ?: return@forEach
-
-            val headingText = dropdown.selectFirst("div[data-flux-heading]")?.text()?.replace("Chapter ", "")?.trim()
-            val number = headingText?.ifBlank { null } ?: button.selectFirst("div.w-10")?.text() ?: return@forEach
-
-            val textEl = dropdown.selectFirst("p[data-flux-text]")
-            val details = textEl?.text()?.replace(" - ", " · ")?.split("\\s*·\\s*".toRegex())?.filter { it.isNotEmpty() } ?: emptyList()
-
-            val dateStr = details.firstOrNull {
-                val lower = it.lowercase()
-                lower.contains("ago") || lower == "today" || lower == "yesterday"
-            } ?: ""
-
-            dropdown.select("ui-menu a[data-flux-menu-item]").forEach { linkEl ->
-                val url = linkEl.absUrl("href").ifEmpty { linkEl.attr("href") }
-                if (url.isEmpty()) return@forEach
-
-                val language = linkEl.selectFirst("div[data-flux-badge]")?.text()
-                    ?: linkEl.text()
-
-                if (langId == null || language == langId) {
-                    val chapterLang = if (langKey == null && language.isNotEmpty()) language else null
-
-                    chapters.add(
-                        SChapter.create().apply {
-                            name = "Chapter $number"
-                            scanlator = chapterLang
-                            date_upload = parseChapterDate(dateStr)
-                            setUrlWithoutDomain(url)
-                        },
-                    )
-                }
-            }
+            chapters.add(
+                SChapter.create().apply {
+                    name = "Chapter $number"
+                    scanlator = if (isAllSource) langDisplay else null
+                    date_upload = parseChapterDate(dateStr)
+                    setUrlWithoutDomain(url)
+                },
+            )
         }
 
         return chapters
