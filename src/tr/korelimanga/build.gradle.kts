@@ -3,14 +3,14 @@ plugins {
 }
 
 keiyoushi {
-    name = "Manga Livre"
-    versionCode = 70
+    name = "Koreli Manga"
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+    theme = "initmanga"
 
     source {
-        baseUrl = "https://toonlivre.net"
-        lang = "pt-BR"
-        versionId = 2
+        lang = "tr"
+        baseUrl = "https://korelimanga.com"
     }
 }
