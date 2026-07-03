@@ -12,7 +12,7 @@ keiyoushi {
         name = "MinoTruyen Manga"
         lang = "vi"
         baseUrl("https://minotruyenv5.xyz") {
-            withCustom.set(true)
+            withCustom = true
         }
     }
 
