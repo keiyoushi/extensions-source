@@ -5,7 +5,6 @@ import android.net.Uri
 import android.text.InputType
 import android.util.Base64
 import android.widget.Toast
-import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -17,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -36,18 +36,13 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.net.URL
-import java.security.MessageDigest
 import kotlin.math.max
 
-open class LANraragi(private val suffix: String = "") :
+@Source
+abstract class LANraragi :
     HttpSource(),
     ConfigurableSource,
     UnmeteredSource {
-    override val baseUrl by lazy { getPrefBaseUrl() }
-
-    override val lang = "all"
-
-    override val name by lazy { "LANraragi (${getPrefCustomLabel()})" }
 
     override val supportsLatest = true
 
@@ -283,46 +278,13 @@ open class LANraragi(private val suffix: String = "") :
 
     private var categories = emptyList<Category>()
 
-    // Preferences
-    override val id by lazy {
-        // Retain previous ID for first entry
-        val key = "lanraragi" + (if (suffix == "1") "" else "_$suffix") + "/all/$versionId"
-        val bytes = MessageDigest.getInstance("MD5").digest(key.toByteArray())
-        (0..7).map { bytes[it].toLong() and 0xff shl 8 * (7 - it) }.reduce(Long::or) and Long.MAX_VALUE
-    }
-
     internal val preferences: SharedPreferences by getPreferencesLazy()
 
-    private fun getPrefBaseUrl(): String = preferences.getString(HOSTNAME_KEY, HOSTNAME_DEFAULT)!!
     private fun getPrefAPIKey(): String = preferences.getString(APIKEY_KEY, "")!!
     private fun getPrefLatestNS(): String = preferences.getString(SORT_BY_NS_KEY, SORT_BY_NS_DEFAULT)!!
-    private fun getPrefCustomLabel(): String = preferences.getString(CUSTOM_LABEL_KEY, suffix)!!.ifBlank { suffix }
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        if (suffix == "1") {
-            ListPreference(screen.context).apply {
-                key = EXTRA_SOURCES_COUNT_KEY
-                title = "Number of extra sources"
-                summary = "Number of additional sources to create. There will always be at least one LANraragi source."
-                entries = EXTRA_SOURCES_ENTRIES
-                entryValues = EXTRA_SOURCES_ENTRIES
-
-                setDefaultValue(EXTRA_SOURCES_COUNT_DEFAULT)
-                setOnPreferenceChangeListener { _, newValue ->
-                    try {
-                        val setting = preferences.edit().putString(EXTRA_SOURCES_COUNT_KEY, newValue as String).commit()
-                        Toast.makeText(screen.context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
-                        setting
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        false
-                    }
-                }
-            }.also(screen::addPreference)
-        }
-        screen.addPreference(screen.editTextPreference(HOSTNAME_KEY, "Hostname", HOSTNAME_DEFAULT, baseUrl, refreshSummary = true))
         screen.addPreference(screen.editTextPreference(APIKEY_KEY, "API Key", "", "Required if No-Fun Mode is enabled.", true))
-        screen.addPreference(screen.editTextPreference(CUSTOM_LABEL_KEY, "Custom Label", "", "Show the given label for the source instead of the default."))
         screen.addPreference(screen.checkBoxPreference(CLEAR_NEW_KEY, "Clear New status", CLEAR_NEW_DEFAULT, "Clear an entry's New status when its details are viewed."))
         screen.addPreference(screen.checkBoxPreference(NEW_ONLY_KEY, "Latest - New Only", NEW_ONLY_DEFAULT))
         screen.addPreference(screen.editTextPreference(SORT_BY_NS_KEY, "Latest - Sort by Namespace", SORT_BY_NS_DEFAULT, "Sort by the given namespace for Latest, such as date_added."))
@@ -470,22 +432,8 @@ open class LANraragi(private val suffix: String = "") :
         }
         .build()
 
-    init {
-        if (baseUrl.isNotBlank()) {
-            // Save a FilterList reset
-            getCategories()
-        }
-    }
-
     companion object {
-        internal const val EXTRA_SOURCES_COUNT_KEY = "extraSourcesCount"
-        internal const val EXTRA_SOURCES_COUNT_DEFAULT = "2"
-        private val EXTRA_SOURCES_ENTRIES = (0..10).map { it.toString() }.toTypedArray()
-
-        private const val HOSTNAME_DEFAULT = "http://127.0.0.1:3000"
-        private const val HOSTNAME_KEY = "hostname"
         private const val APIKEY_KEY = "apiKey"
-        private const val CUSTOM_LABEL_KEY = "customLabel"
         private const val NEW_ONLY_DEFAULT = true
         private const val NEW_ONLY_KEY = "latestNewOnly"
         private const val SORT_BY_NS_DEFAULT = "date_added"
