@@ -218,8 +218,8 @@ abstract class OniSaga :
             nsfwSpan?.closest("div.absolute.inset-0.z-20")?.remove()
 
             val linkEl = card.selectFirst("a[href*=\"/manga/\"]") ?: return@forEach
-            val href = linkEl.absUrl("href").substringAfter(baseUrl)
-            if (!href.startsWith("/manga/")) return@forEach
+            val href = linkEl.absUrl("href")
+            if (href.toHttpUrl().pathSegments.firstOrNull()?.equals("manga", true) != true) return@forEach
 
             val titleEl = card.selectFirst("a[title]") ?: card.selectFirst("h3") ?: linkEl
             val currentTitle = titleEl.attr("title").ifEmpty { titleEl.text() }
@@ -406,11 +406,7 @@ abstract class OniSaga :
 
                 doc.selectFirst("p[class*=\"text-[13px]\"]")?.text()?.let { altText ->
                     if (altText.isNotEmpty()) {
-                        val altTitles = if (altText.contains("·")) {
-                            altText.split(" · ").map { t -> t.trim() }.filter { t -> t.isNotEmpty() }
-                        } else {
-                            listOf(altText)
-                        }
+                        val altTitles = altText.split("\\s*·\\s*".toRegex()).filter { it.isNotEmpty() }
                         if (altTitles.isNotEmpty()) {
                             append("\n\n**Alternative Titles:**\n")
                             altTitles.forEach { t -> append("- $t\n") }
@@ -479,8 +475,8 @@ abstract class OniSaga :
             if (nsfwSpan != null && !showNsfw) return@mapNotNull null
             nsfwSpan?.closest("div.absolute.inset-0.z-20")?.remove()
 
-            val href = link.absUrl("href").substringAfter(baseUrl)
-            if (!href.startsWith("/manga/") || href == currentUrl) return@mapNotNull null
+            val href = link.absUrl("href")
+            if (href.toHttpUrl().pathSegments.firstOrNull()?.equals("manga", true) != true || href.contains(currentUrl)) return@mapNotNull null
 
             val title = element.selectFirst("div[data-flux-heading], h3, h4")?.text()
                 ?: link.attr("title").ifEmpty { link.text() }
@@ -574,7 +570,7 @@ abstract class OniSaga :
 
         // Pattern 1: Direct chapter links (no dropdown)
         doc.select("a.gap-4:has(div[data-flux-heading])").forEach { el ->
-            val headingText = el.selectFirst("div[data-flux-heading]")?.text()?.replace("Chapter ", "")?.trim()
+            val headingText = el.selectFirst("div[data-flux-heading]")?.text()?.replace("Chapter ", "")
             val number = headingText?.ifBlank { null } ?: el.selectFirst("div.w-10")?.text() ?: return@forEach
 
             val url = el.absUrl("href").ifEmpty { el.attr("href") }
@@ -585,7 +581,7 @@ abstract class OniSaga :
 
             val dateStr = details.firstOrNull {
                 val lower = it.lowercase()
-                lower.contains("ago") || lower == "today" || lower == "yesterday"
+                lower.contains("ago") || lower.contains("today") || lower.contains("yesterday")
             } ?: ""
 
             chapters.add(
@@ -602,14 +598,14 @@ abstract class OniSaga :
         doc.select("ui-dropdown:has(button div[data-flux-heading])").forEach { dropdown ->
             val button = dropdown.selectFirst("button") ?: return@forEach
 
-            val headingText = button.selectFirst("div[data-flux-heading]")?.text()?.replace("Chapter ", "")?.trim()
+            val headingText = button.selectFirst("div[data-flux-heading]")?.text()?.replace("Chapter ", "")
             val number = headingText?.ifBlank { null } ?: button.selectFirst("div.w-10")?.text() ?: return@forEach
 
             val textEl = button.selectFirst("p[data-flux-text]")
             val details = textEl?.text()?.replace(" - ", " · ")?.split("\\s*·\\s*".toRegex())?.filter { it.isNotEmpty() } ?: emptyList()
             val dateStr = details.firstOrNull {
                 val lower = it.lowercase()
-                lower.contains("ago") || lower == "today" || lower == "yesterday"
+                lower.contains("ago") || lower.contains("today") || lower.contains("yesterday")
             } ?: ""
 
             val links = dropdown.select("ui-menu a[data-flux-menu-item]")
@@ -620,7 +616,7 @@ abstract class OniSaga :
                 if (url.isEmpty() || !url.contains("/read/")) return@forEach
 
                 // Extract group name from the span inside the menu item
-                val group = linkEl.selectFirst("span.text-sm")?.text()?.trim()
+                val group = linkEl.selectFirst("span.text-sm")?.text()
                     ?: linkEl.selectFirst("div.flex.items-center.gap-2 > span:not(.ml-auto)")?.text()
                     ?: ""
 
@@ -647,7 +643,7 @@ abstract class OniSaga :
     }
 
     private fun parseChapterDate(dateStr: String): Long {
-        val date = dateStr.lowercase().trim()
+        val date = dateStr.lowercase()
         if (date.isEmpty()) return 0L
 
         val now = System.currentTimeMillis()
@@ -655,8 +651,7 @@ abstract class OniSaga :
         if (date.contains("today")) return now
         if (date.contains("yesterday")) return now - 86_400_000L
 
-        val regex = Regex("(\\d+)\\s+(minute|hour|day|week|month|year)s?\\s+ago")
-        val match = regex.find(date) ?: return 0L
+        val match = RELATIVE_DATE_REGEX.find(date) ?: return 0L
 
         val value = match.groupValues[1].toInt()
         val unit = match.groupValues[2]
@@ -872,6 +867,7 @@ abstract class OniSaga :
         private val READER_TOKEN_REGEX = Regex("""readerToken["']?\s*:\s*["']([^"']+)["']""")
         private val PAGE_ORDER_REGEX = Regex("""["']?order["']?\s*:\s*(\d+)""")
         private val CHAPTER_NUMBER_REGEX = Regex("""Chapter\s+([\d.]+)""")
+        private val RELATIVE_DATE_REGEX = Regex("(\\d+)\\s+(minute|hour|day|week|month|year)s?\\s+ago")
         private val ORIGIN_REGEX = Regex("(Japanese|Korean|Chinese|English)", RegexOption.IGNORE_CASE)
         private val YEAR_REGEX = Regex("^\\d{4}$")
         private val RATING_REGEX = Regex("(\\d)\\.0(?=[/ ])")

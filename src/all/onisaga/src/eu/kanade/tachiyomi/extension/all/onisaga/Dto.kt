@@ -54,9 +54,6 @@ class LivewireResponse(
 }
 
 @Serializable
-class EmptyUpdatesDto
-
-@Serializable
 class PostFilterUpdatesDto(
     val platform: String = "",
     val status: String = "",
