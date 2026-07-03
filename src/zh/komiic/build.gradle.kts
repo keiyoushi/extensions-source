@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "Komiic"
-    versionCode = 8
+    versionCode = 9
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
@@ -19,6 +19,8 @@ keiyoushi {
     }
 
     deeplink {
+        host("komiic.com")
+        host("komiic.cc")
         path("/comic/..*")
     }
 }
