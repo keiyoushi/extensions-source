@@ -414,7 +414,7 @@ The extension automatically implements `ConfigurableSource` and adds a "Preferre
 source {
     lang = "en"
     baseUrl("https://example.com") {
-        withCustom.set(true)
+        withCustom = true
     }
 }
 ```
