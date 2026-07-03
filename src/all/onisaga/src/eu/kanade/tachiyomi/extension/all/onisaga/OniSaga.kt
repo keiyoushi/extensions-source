@@ -547,7 +547,7 @@ abstract class OniSaga :
                     if (langChapters.size <= prevChapterCount) break
 
                     prevChapterCount = langChapters.size
-                    currentSnapshot = dto.components.first().snapshot
+                    currentSnapshot = dto.components.firstOrNull()?.snapshot ?: break
                 }
 
                 allChapters.addAll(langChapters)
