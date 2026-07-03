@@ -39,12 +39,14 @@ abstract class Baozi :
         level = preferences.getString(BaoziBanner.PREF, DEFAULT_LEVEL)!!.toInt(),
     )
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(bannerInterceptor)
-        .addNetworkInterceptor(MissingImageInterceptor)
-        .addNetworkInterceptor(RedirectDomainInterceptor(baseUrl.toHttpUrl().host))
-        .rateLimit(2)
-        .build()
+    override val client by lazy {
+        network.client.newBuilder()
+            .addInterceptor(bannerInterceptor)
+            .addNetworkInterceptor(MissingImageInterceptor)
+            .addNetworkInterceptor(RedirectDomainInterceptor(baseUrl.toHttpUrl().host))
+            .rateLimit(2)
+            .build()
+    }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
