@@ -572,6 +572,7 @@ abstract class OniSaga :
         // langCode is already uppercase ("EN", "FR", etc.)
         val langDisplay = langCode
 
+        // Pattern 1: Direct chapter links (no dropdown)
         doc.select("a.gap-4:has(div[data-flux-heading])").forEach { el ->
             val headingText = el.selectFirst("div[data-flux-heading]")?.text()?.replace("Chapter ", "")?.trim()
             val number = headingText?.ifBlank { null } ?: el.selectFirst("div.w-10")?.text() ?: return@forEach
@@ -595,6 +596,51 @@ abstract class OniSaga :
                     setUrlWithoutDomain(url)
                 },
             )
+        }
+
+        // Pattern 2: Dropdowns (multiple versions/groups)
+        doc.select("ui-dropdown:has(button div[data-flux-heading])").forEach { dropdown ->
+            val button = dropdown.selectFirst("button") ?: return@forEach
+
+            val headingText = button.selectFirst("div[data-flux-heading]")?.text()?.replace("Chapter ", "")?.trim()
+            val number = headingText?.ifBlank { null } ?: button.selectFirst("div.w-10")?.text() ?: return@forEach
+
+            val textEl = button.selectFirst("p[data-flux-text]")
+            val details = textEl?.text()?.replace(" - ", " · ")?.split("\\s*·\\s*".toRegex())?.filter { it.isNotEmpty() } ?: emptyList()
+            val dateStr = details.firstOrNull {
+                val lower = it.lowercase()
+                lower.contains("ago") || lower == "today" || lower == "yesterday"
+            } ?: ""
+
+            val links = dropdown.select("ui-menu a[data-flux-menu-item]")
+            var unknownCount = 1
+
+            links.forEach { linkEl ->
+                val url = linkEl.absUrl("href").ifEmpty { linkEl.attr("href") }
+                if (url.isEmpty() || !url.contains("/read/")) return@forEach
+
+                // Extract group name from the span inside the menu item
+                val group = linkEl.selectFirst("span.text-sm")?.text()?.trim()
+                    ?: linkEl.selectFirst("div.flex.items-center.gap-2 > span:not(.ml-auto)")?.text()
+                    ?: ""
+
+                // If group is missing or "Unknown group", name them Unknown 1, Unknown 2...
+                val groupName = when {
+                    group.isBlank() || group.equals("Unknown group", true) -> "Unknown $unknownCount"
+                    else -> group
+                }
+                if (group.isBlank() || group.equals("Unknown group", true)) unknownCount++
+
+                chapters.add(
+                    SChapter.create().apply {
+                        name = "Chapter $number"
+                        // Append language to scanlator if it's the "all" source
+                        scanlator = if (isAllSource) "$langDisplay - $groupName" else groupName
+                        date_upload = parseChapterDate(dateStr)
+                        setUrlWithoutDomain(url)
+                    },
+                )
+            }
         }
 
         return chapters
