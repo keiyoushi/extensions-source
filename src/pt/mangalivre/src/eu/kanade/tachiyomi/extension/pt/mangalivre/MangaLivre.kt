@@ -241,9 +241,9 @@ abstract class MangaLivre :
 
     /**
      * O gate de "aplicativo oficial" (endpoints de leitura) exige um header de cliente que o
-     * front-end injeta via `Headers.append(...)` no bundle — hoje ofuscado com base64/`atob(...)`
-     * (ex.: app-sec-token/z11-web-y). Coletamos os pares de `.set`/`.append` (literais e atob) dos
-     * /assets, fora headers padrão, e o interceptor testa cada candidato quando a API recusa 403.
+     * front-end injeta no bundle ofuscado com base64/`atob(...)` — nome, valor e até o método
+     * (`S[atob("append")](...)`) rotacionam. Coletamos qualquer par `atob(...),atob(...)` e o
+     * formato literal, fora headers padrão; o interceptor testa cada candidato quando a API dá 403.
      */
     private fun scrapeCandidates(): List<ClientToken> = try {
         val html = scrapeClient.newCall(GET("$baseUrl/", headers)).execute()
@@ -294,12 +294,12 @@ abstract class MangaLivre :
         private const val MAX_CANDIDATES = 8
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
-        private val DEFAULT_TOKEN = ClientToken("app-sec-token", "z11-web-y")
+        private val DEFAULT_TOKEN = ClientToken("x-gateway-key", "fw7-mob-q")
         private val STANDARD_HEADERS = setOf("content-type", "accept", "authorization", "x-csrf-token")
         private val HEADER_NAME_REGEX = Regex("[A-Za-z][\\w.-]{1,40}")
         private val ASSET_REGEX = Regex("/assets/[\\w-]+\\.js")
         private const val B64 = "atob\\(\"([A-Za-z0-9+/=]{1,80})\"\\)"
         private val LITERAL_REGEX = Regex("\\.(?:set|append)\\(\\s*\"([A-Za-z][\\w.-]{1,40})\"\\s*,\\s*\"([^\"]{1,60})\"\\s*\\)")
-        private val ATOB_REGEX = Regex("\\.(?:set|append)\\(\\s*$B64\\s*,\\s*$B64\\s*\\)")
+        private val ATOB_REGEX = Regex("$B64\\s*,\\s*$B64")
     }
 }
