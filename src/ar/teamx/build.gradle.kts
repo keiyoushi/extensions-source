@@ -11,7 +11,7 @@ keiyoushi {
     source {
         lang = "ar"
         baseUrl("https://olympustaff.com") {
-            withCustom.set(true)
+            withCustom = true
         }
     }
 
