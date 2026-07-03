@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "JJCOS"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 

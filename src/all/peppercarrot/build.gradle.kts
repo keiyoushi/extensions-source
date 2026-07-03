@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "Pepper&Carrot"
-    versionCode = 5
+    versionCode = 6
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 

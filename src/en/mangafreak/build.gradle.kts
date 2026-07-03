@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "Mangafreak"
-    versionCode = 13
+    versionCode = 14
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 

@@ -9,10 +9,44 @@ keiyoushi {
     libVersion = "1.4"
 
     source {
-        lang = "all"
-        baseUrl = "https://xchina.co"
-        id = 170542391855030753L
-        skipCodeGen = true
+        name = "小黄书"
+        lang = "zh-Hans"
+        baseUrl("https://xchina.co") {
+            withCustom = true
+        }
+        id = 170542391855030753
+    }
+
+    source {
+        name = "小黄书"
+        lang = "zh-Hant"
+        baseUrl("https://tw.xchina.co") {
+            withCustom = true
+        }
+    }
+
+    source {
+        name = "小黄书"
+        lang = "en"
+        baseUrl("https://en.xchina.co") {
+            withCustom = true
+        }
+    }
+
+    source {
+        name = "小黄书"
+        lang = "es"
+        baseUrl("https://es.xchina.co") {
+            withCustom = true
+        }
+    }
+
+    source {
+        name = "小黄书"
+        lang = "ko"
+        baseUrl("https://kr.xchina.co") {
+            withCustom = true
+        }
     }
 }
 

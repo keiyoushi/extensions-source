@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "MinoTruyen"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
@@ -20,7 +20,7 @@ keiyoushi {
         name = "MinoTruyen Comics"
         lang = "vi"
         baseUrl("https://minotruyenv5.xyz") {
-            withCustom.set(true)
+            withCustom = (true)
         }
     }
 
@@ -28,7 +28,7 @@ keiyoushi {
         name = "MinoTruyen Hentai"
         lang = "vi"
         baseUrl("https://minotruyenv5.xyz") {
-            withCustom.set(true)
+            withCustom = (true)
         }
     }
 }

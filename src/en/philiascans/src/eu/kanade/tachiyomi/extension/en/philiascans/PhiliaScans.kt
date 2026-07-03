@@ -27,6 +27,7 @@ abstract class PhiliaScans :
     ConfigurableSource {
 
     override val supportsLatest = true
+    override val versionId = 5
 
     private val apiUrl: String
         get() = "$baseUrl/api"

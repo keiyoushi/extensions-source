@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "SpyFakku"
-    versionCode = 15
+    versionCode = 16
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
@@ -12,7 +12,6 @@ keiyoushi {
         lang = "en"
         baseUrl("https://hentalk.pw") {
             mirrors = listOf(
-                "https://hentalk.pw",
                 "https://fakku.cc",
                 "https://fakkuonion.airdns.org:4096",
             )

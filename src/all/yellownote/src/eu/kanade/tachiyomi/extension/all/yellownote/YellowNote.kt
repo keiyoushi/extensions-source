@@ -1,11 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.yellownote
 
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.extension.all.yellownote.Preferences.baseUrl
-import eu.kanade.tachiyomi.extension.all.yellownote.Preferences.language
-import eu.kanade.tachiyomi.extension.all.yellownote.Preferences.preferenceMigration
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -18,7 +13,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.utils.firstInstance
-import keiyoushi.utils.getPreferences
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -29,41 +23,25 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Source
-abstract class YellowNote :
-    HttpSource(),
-    ConfigurableSource {
-
-    override val id = 170542391855030753L
-
-    override val lang = "all"
-
-    override val name = "小黄书"
-
-    override val baseUrl: String get() = preferences.baseUrl()
+abstract class YellowNote : HttpSource() {
 
     override val supportsLatest = true
-
-    private val preferences = getPreferences { preferenceMigration() }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    private val intl get() = Intl(
-        language = preferences.language(),
-        baseLanguage = LanguageUtils.baseLocale.language,
-        availableLanguages = LanguageUtils.supportedLocaleTags.toSet(),
-        classLoader = this::class.java.classLoader!!,
-    )
-
+    private val intl by lazy {
+        Intl(
+            language = lang,
+            baseLanguage = "en",
+            availableLanguages = setOf("en", "es", "ko", "zh-Hans", "zh-Hant"),
+            classLoader = this::class.java.classLoader!!,
+        )
+    }
     private val dateFormat = SimpleDateFormat("yyyy.MM.dd", Locale.ROOT)
 
-    // yyyy.MM.dd
     private val dateRegex = """\d{4}\.\d{2}\.\d{2}""".toRegex()
-
-    // <div role="img" class="img" style="background-image:url('https://img.xchina.io/photos/641aea8f589cb/0068_600x0.webp');"></div>
     private val styleUrlRegex = """background-image\s*:\s*url\('([^']+)'\)""".toRegex()
-
-    // 100P + 2V
     private val mediaCountRegex = """\d+P( \+ \d+V)?""".toRegex()
 
     private val mangaSelector = "div.list.photo-list > div.item.photo, div.list.amateur-list > div.item.amateur"
@@ -94,12 +72,14 @@ abstract class YellowNote :
 
         val httpUrl = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegments(uriPart)
-            val sort = sortSelector.toUriPart()
-            if (sort.isNotEmpty()) {
-                addPathSegment(sort)
+            val sortPart = sortSelector.toUriPart()
+            if (sortPart.isNotBlank()) {
+                addPathSegment(sortPart)
             }
+
             addPathSegment("$page.html")
         }.build()
+
         return GET(httpUrl, headers)
     }
 
@@ -110,12 +90,17 @@ abstract class YellowNote :
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            val infoCardElement = document.selectFirst("div.info-card.photo-detail")!!
-            val name = parseInfoByIcon(infoCardElement, "i.fa-address-card")!!
-            val mediaCount = parseInfoByIcon(infoCardElement, "i.fa-image")!!
+            val infoCardElement = document.selectFirst("div.info-card.photo-detail")
+                ?: throw Exception("Could not find info card")
+
+            val name = parseInfoByIcon(infoCardElement, "i.fa-address-card")
+                ?: throw Exception("Could not find name")
+
+            val mediaCount = parseInfoByIcon(infoCardElement, "i.fa-image")
+                ?: throw Exception("Could not find media count")
+
             val no = parseInfoByIcon(infoCardElement, "i.fa-file")?.let { " $it" }.orEmpty()
-            val categories =
-                parseInfosByIcon(infoCardElement, "i.fa-video-camera")?.filter { it != "-" }
+            val categories = parseInfosByIcon(infoCardElement, "i.fa-video-camera")?.filter { it != "-" }
             val filters = parseInfosByIcon(infoCardElement, "i.fa-filter")
             val tags = parseInfosByIcon(infoCardElement, "i.fa-tags")
 
@@ -144,6 +129,7 @@ abstract class YellowNote :
         val maxPage = doc.select("div.pager:first-of-type a.pager-num").last()?.text()?.toIntOrNull() ?: 1
         val basePageUrl = response.request.url.toString()
             .removeSuffix(".html")
+
         return (maxPage downTo 1).map { page ->
             SChapter.create().apply {
                 setUrlWithoutDomain("$basePageUrl/$page.html")
@@ -157,11 +143,11 @@ abstract class YellowNote :
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select(imageSelector).mapIndexedNotNull { i, imageElement ->
-            val imgEl = imageElement.selectFirst("div.img") ?: return@mapIndexedNotNull null
-            val url = parseUrlFormStyle(imgEl) ?: return@mapIndexedNotNull null
-            Page(i, imageUrl = url)
-        }
+        return document.select(imageSelector)
+            .mapIndexedNotNull { i, imageElement ->
+                val url = parseUrlFormStyle(imageElement.selectFirst("div.img")) ?: return@mapIndexedNotNull null
+                Page(i, imageUrl = url)
+            }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -177,24 +163,22 @@ abstract class YellowNote :
 
     // ============================= Utilities =============================
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        Preferences.buildPreferences(screen.context, intl)
-            .forEach(screen::addPreference)
-    }
-
     private fun parseMangaList(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select(mangaSelector).mapNotNull { element ->
             val mangaEl = element.selectFirst("a") ?: return@mapNotNull null
+            val mangaUrl = mangaEl.absUrl("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val mangaTitle = mangaEl.attr("title").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+
             SManga.create().apply {
-                setUrlWithoutDomain(mangaEl.absUrl("href"))
+                setUrlWithoutDomain(mangaUrl)
 
                 val formatMediaCount = element.select("div.tags > div")
                     .map { it.text() }
                     .firstOrNull { mediaCountRegex.matches(it) }
                     ?.let { "($it)" }
                     .orEmpty()
-                title = "${mangaEl.attr("title")}$formatMediaCount"
+                title = "$mangaTitle$formatMediaCount"
 
                 thumbnail_url = parseUrlFormStyle(mangaEl.selectFirst("div.img"))
                 update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
