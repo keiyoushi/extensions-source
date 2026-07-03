@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -21,18 +22,15 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class Coolmic :
+@Source
+abstract class Coolmic :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Coolmic"
-    private val domain = "coolmic.me"
-    override val baseUrl = "https://$domain"
-    override val lang = "en"
     override val supportsLatest = true
 
+    private val domain = baseUrl.toHttpUrl().host
     private val apiUrl = "$baseUrl/api/v1"
     private val cdnUrl = "https://en-img.$domain"
-    private val searchUrl = "https://en-search.$domain"
     private val preferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -52,22 +50,22 @@ class Coolmic :
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val keywords = query.trim().split(Regex("\\s+"))
-            .filter(String::isNotBlank)
-            .joinToString(" ") { "($it|$it*)" }
         val status = filters.firstInstanceOrNull<StatusFilter>()?.value
         val sort = filters.firstInstanceOrNull<SortFilter>()?.value
 
-        val url = "$searchUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("q", keywords.ifBlank { "(matchall)" })
-            .addQueryParameter("size", SEARCH_SIZE.toString())
-            .addQueryParameter("start", ((page - 1) * SEARCH_SIZE).toString())
-            .addQueryParameter("q.options", "")
-            .addQueryParameter("q.parser", if (keywords.isBlank()) "structured" else "simple")
-            .addQueryParameter("return", "_all_fields")
-            .addEncodedQueryParameter("sort", sort)
-            .addQueryParameter("fq", if (status.orEmpty().isEmpty()) "" else "(and (term field=$status))")
-            .build()
+        val url = "$apiUrl/search_titles".toHttpUrl().newBuilder()
+            .addQueryParameter("keyword", query)
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("per", SEARCH_SIZE.toString())
+            .addQueryParameter("search_field", "all")
+            .addQueryParameter("sort", sort)
+            .apply {
+                if (!status.isNullOrEmpty()) {
+                    val (name, number) = status.split(":")
+                    addQueryParameter("status_filters[0][field]", name)
+                    addQueryParameter("status_filters[0][value]", number)
+                }
+            }.build()
         return GET(url, headers)
     }
 
@@ -77,9 +75,11 @@ class Coolmic :
     )
 
     override fun searchMangaParse(response: Response): MangasPage {
+        val page = response.request.url.queryParameter("page")!!.toInt()
         val result = response.parseAs<SeriesResponse>()
-        val mangas = result.hits.hit.map { it.fields.toSManga(cdnUrl) }
-        return MangasPage(mangas, result.hits.hasNextPage())
+        val mangas = result.results.map { it.toSManga(cdnUrl) }
+        val hasNextPage = page * SEARCH_SIZE < result.total
+        return MangasPage(mangas, hasNextPage)
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/titles/${manga.url}", headers)
@@ -162,6 +162,6 @@ class Coolmic :
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
-        const val SEARCH_SIZE = 20
+        private const val SEARCH_SIZE = 20
     }
 }
