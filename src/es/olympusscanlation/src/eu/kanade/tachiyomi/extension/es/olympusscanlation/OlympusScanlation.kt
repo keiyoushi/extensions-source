@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.olympusscanlation
 
 import android.content.SharedPreferences
-import android.widget.Toast
-import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -14,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -28,66 +27,39 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.time.Duration.Companion.seconds
 
-class OlympusScanlation :
+@Source
+abstract class OlympusScanlation :
     HttpSource(),
     ConfigurableSource {
-    private val fetchedDomainUrlHost by lazy { fetchedDomainUrl.toHttpUrl().host }
-    private val apiBaseUrlHost by lazy { apiBaseUrl.toHttpUrl().host }
 
-    override val versionId = 3
-    private val isCi = System.getenv("CI") == "true"
-
-    override val baseUrl: String get() = when {
-        isCi -> defaultBaseUrl
-        else -> preferences.prefBaseUrl
-    }
-
-    private val defaultBaseUrl: String = "https://olympusxyz.com"
-
-    private val fetchedDomainUrl: String by lazy {
-        if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
+    private fun fetchedDomainUrl() {
+        if (!preferences.fetchDomainPref()) return
         try {
             val initClient = network.client
             val headers = super.headersBuilder().build()
             val document = initClient.newCall(GET("https://olympus.pages.dev", headers)).execute().asJsoup()
             val domain = document.selectFirst("meta[property=og:url]")?.attr("content")
-                ?: return@lazy preferences.prefBaseUrl
+                ?: return
             val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
             val newDomain = "https://$host"
-            preferences.prefBaseUrl = newDomain
-            newDomain
+            preferences.edit().putString(BASE_URL_PREF, newDomain).apply()
         } catch (_: Exception) {
-            preferences.prefBaseUrl
+            return
         }
     }
 
-    private val apiBaseUrl by lazy {
-        fetchedDomainUrl.replace("https://", "https://panel.")
-    }
-
-    override val lang: String = "es"
-    override val name: String = "Olympus Scanlation"
+    private val apiBaseUrl get() = baseUrl.replace("https://", "https://panel.")
 
     override val supportsLatest: Boolean = true
 
-    private val preferences: SharedPreferences = getPreferences {
-        this.getString(DEFAULT_BASE_URL_PREF, null).let { domain ->
-            if (domain != defaultBaseUrl) {
-                this.edit()
-                    .putString(BASE_URL_PREF, defaultBaseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
-                    .apply()
-            }
-        }
-    }
+    private val preferences = getPreferences()
 
     override val client by lazy {
-        val client = network.client.newBuilder()
-            .rateLimit(1, 2.seconds) { it.host == fetchedDomainUrlHost }
-            .rateLimit(2, 1.seconds) { it.host == apiBaseUrlHost }
+        fetchedDomainUrl()
+        return@lazy network.client.newBuilder()
+            .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
+            .rateLimit(2, 1.seconds) { it.host == apiBaseUrl.toHttpUrl().host }
             .build()
-
-        return@lazy client
     }
 
     override fun headersBuilder() = super.headersBuilder()
@@ -135,11 +107,7 @@ class OlympusScanlation :
         return super.fetchPopularManga(page)
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        val apiUrl = "$baseUrl/api/rankings?page=$page&period=total_ranking".toHttpUrl().newBuilder()
-            .build()
-        return GET(apiUrl, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/rankings?page=$page&period=total_ranking", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<RankingDto>()
@@ -159,11 +127,7 @@ class OlympusScanlation :
         return super.fetchLatestUpdates(page)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val apiUrl = "$baseUrl/api/new-chapters?page=$page".toHttpUrl().newBuilder()
-            .build()
-        return GET(apiUrl, headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/api/new-chapters?page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = response.parseAs<NewChaptersDto>()
@@ -278,37 +242,11 @@ class OlympusScanlation :
             key = FETCH_DOMAIN_PREF
             title = "Buscar dominio automáticamente"
             summary = "Intenta buscar el dominio automáticamente al abrir la fuente."
-            setDefaultValue(FETCH_DOMAIN_PREF_DEFAULT)
-        }.also { screen.addPreference(it) }
-
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = "Editar URL de la fuente"
-            summary = "Para uso temporal, si la extensión se actualiza se perderá el cambio."
-            dialogTitle = "Editar URL de la fuente"
-            dialogMessage = "URL por defecto:\n$defaultBaseUrl"
-            setDefaultValue(defaultBaseUrl)
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Reinicie la aplicación para aplicar los cambios", Toast.LENGTH_LONG).show()
-                true
-            }
+            setDefaultValue(true)
         }.also { screen.addPreference(it) }
     }
 
-    private var cachedBaseUrl: String? = null
-    private var SharedPreferences.prefBaseUrl: String
-        get() {
-            if (cachedBaseUrl == null) {
-                cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
-            }
-            return cachedBaseUrl!!
-        }
-        set(value) {
-            cachedBaseUrl = value
-            edit().putString(BASE_URL_PREF, value).apply()
-        }
-
-    private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, FETCH_DOMAIN_PREF_DEFAULT)
+    private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, true)
 
     private var slugMapCache: Map<Int, String>? = null
     private var SharedPreferences.slugMap: Map<Int, String>
@@ -329,10 +267,7 @@ class OlympusScanlation :
 
     companion object {
         private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-
         private const val FETCH_DOMAIN_PREF = "fetchDomain"
-        private const val FETCH_DOMAIN_PREF_DEFAULT = true
 
         private const val SLUG_MAP = "slugMap"
 
