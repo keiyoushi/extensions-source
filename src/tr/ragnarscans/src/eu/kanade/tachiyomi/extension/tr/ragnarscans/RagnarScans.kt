@@ -17,15 +17,16 @@ abstract class RagnarScans : InitManga() {
 
     private val ragnarDateFormat = SimpleDateFormat("d MMMM yyyy HH:mm", Locale("tr"))
 
-    override fun chapterListSelector() = "div.chapter-list > div.uk-position-relative"
+    override fun chapterListSelector() = "div.chapter-list > div.chapter-item"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
 
-        name = element.selectFirst("div.uk-flex-none")?.text()
-            ?: element.select("a").text()
+        name = element.selectFirst("h3.uk-link-heading")!!.text()
+            .substringAfterLast("–")
+            .trim()
 
-        val dateStr = element.selectFirst("div.uk-text-meta")?.attr("uk-tooltip")
+        val dateStr = element.selectFirst("div.uk-article-meta span[uk-tooltip]")?.attr("uk-tooltip")
             ?.substringAfter("title: ")?.substringBefore(";")
         date_upload = ragnarDateFormat.tryParse(dateStr)
     }
