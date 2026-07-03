@@ -11,5 +11,6 @@ keiyoushi {
     source {
         lang = "en"
         baseUrl = "https://philiascans.org"
+        versionId = 5
     }
 }
