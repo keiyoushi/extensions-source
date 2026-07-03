@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "Ragnar Scans"
-    versionCode = 46
+    versionCode = 47
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "initmanga"
