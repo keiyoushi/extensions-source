@@ -470,13 +470,8 @@ open class LANraragi(private val suffix: String = "") :
 
     private fun getRandomID(query: String): String {
         val searchRandom = client.newCall(GET("$baseUrl/api/search/random?count=1&$query", headers)).execute()
-        val data = json.parseToJsonElement(searchRandom.body.string()).jsonObject["data"]
-        val archive = data!!.jsonArray.firstOrNull()?.jsonObject
-
-        // 0.8.2~0.8.7 = id, 0.8.8+ = arcid
-        val id = (archive?.get("arcid") ?: archive?.get("id"))?.jsonPrimitive?.content ?: ""
-        Log.d("LANraragi", "Random ID: $id")
-        return id
+        val result = searchRandom.parseAs<ArchiveSearchResult>()
+        return result.data.first().arcid
     }
 
     open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
