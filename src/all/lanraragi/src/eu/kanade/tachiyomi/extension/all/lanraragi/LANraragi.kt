@@ -93,6 +93,7 @@ open class LANraragi(private val suffix: String = "") :
             json.decodeFromString<Archive>(res)
         } catch (_: Exception) {
             val tank = json.decodeFromString<Tankoubon>(res)
+            // The separators are not the default ", " to merge properly when combining across multiple archives: ",tag:x" vs ", tag:x"
             val tags = tank.result?.full_data?.joinToString(",") { it.tags!! }?.split(",")?.sorted()?.joinToString(",")
 
             Archive(
@@ -557,7 +558,7 @@ open class LANraragi(private val suffix: String = "") :
         ?.map { it.split(":", limit = 2).last() }
         ?.distinct()
 
-    private fun getArtist(tags: String?): String = getNSTag(tags, "artist")?.joinToString(", ") ?: "N/A"
+    private fun getArtist(tags: String?): String = getNSTag(tags, "artist")?.joinToString() ?: "N/A"
 
     private fun getDateAdded(tags: String?): String {
         // Pad Date Added NS to milliseconds
