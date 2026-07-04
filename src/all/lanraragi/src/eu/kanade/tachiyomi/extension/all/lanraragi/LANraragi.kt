@@ -300,8 +300,8 @@ open class LANraragi(private val suffix: String = "") :
         description = if (archive.summary.isNullOrBlank()) archive.title else archive.summary
         thumbnail_url = getThumbnailUri(archive.arcid)
         genre = archive.tags?.replace(",", ", ")
-        artist = getArtist(archive.tags)
-        author = artist
+        artist = getNSTag(archive.tags, "artist")?.joinToString()
+        author = getNSTag(archive.tags, "group")?.joinToString() ?: artist
         status = SManga.COMPLETED
     }
 
@@ -533,8 +533,8 @@ open class LANraragi(private val suffix: String = "") :
         ?.filter { it.startsWith("$tag:") }
         ?.map { it.split(":", limit = 2).last() }
         ?.distinct()
-
     private fun getArtist(tags: String?): String = getNSTag(tags, "artist")?.joinToString() ?: "N/A"
+        ?.takeIf { it.isNotEmpty() }
 
     private fun getDateAdded(tags: String?): String {
         // Pad Date Added NS to milliseconds
