@@ -9,22 +9,17 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 
-private const val DOMAIN = "manta.net"
+@Source
+abstract class MantaComics : HttpSource() {
 
-open class MantaComics(
-    override val lang: String,
-) : HttpSource() {
-    override val name = "Manta"
-
-    override val baseUrl = "https://$DOMAIN/$lang"
-
-    private val apiUrl = "https://$DOMAIN"
+    private val apiUrl get() = "https://" + baseUrl.toHttpUrl().host
 
     override val supportsLatest = false
 

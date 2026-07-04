@@ -21,6 +21,7 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import okio.ByteString.Companion.decodeBase64
 import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
@@ -239,10 +240,10 @@ abstract class MangaLivre :
     }
 
     /**
-     * O front-end fixa o header de cliente via `Headers.set("nome", "valor")` no bundle,
-     * e nome/valor rotacionam toda hora (x-toonlivre-client/web-x -> app-token/tok-z99).
-     * Em vez de fixar isso, coletamos os pares de `.set(...)` dos /assets (ignorando headers
-     * padrão) e o interceptor testa cada candidato quando a API recusa com 403.
+     * O gate de "aplicativo oficial" (endpoints de leitura) exige um header de cliente que o
+     * front-end injeta via `Headers.append(...)` no bundle — hoje ofuscado com base64/`atob(...)`
+     * (ex.: app-sec-token/z11-web-y). Coletamos os pares de `.set`/`.append` (literais e atob) dos
+     * /assets, fora headers padrão, e o interceptor testa cada candidato quando a API recusa 403.
      */
     private fun scrapeCandidates(): List<ClientToken> = try {
         val html = scrapeClient.newCall(GET("$baseUrl/", headers)).execute()
@@ -260,8 +261,16 @@ abstract class MangaLivre :
     }
 
     private fun extractCandidates(js: String): List<ClientToken> {
-        val pairs = SET_REGEX.findAll(js)
+        val literals = LITERAL_REGEX.findAll(js)
             .map { ClientToken(it.groupValues[1], it.groupValues[2]) }
+        val encoded = ATOB_REGEX.findAll(js)
+            .mapNotNull {
+                val header = it.groupValues[1].decodeBase64()?.utf8() ?: return@mapNotNull null
+                val value = it.groupValues[2].decodeBase64()?.utf8() ?: return@mapNotNull null
+                ClientToken(header, value)
+            }
+        val pairs = (encoded + literals)
+            .filter { it.header.matches(HEADER_NAME_REGEX) }
             .filterNot { it.header.lowercase() in STANDARD_HEADERS }
             .distinct()
             .toList()
@@ -285,9 +294,12 @@ abstract class MangaLivre :
         private const val MAX_CANDIDATES = 8
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
-        private val DEFAULT_TOKEN = ClientToken("app-token", "tok-z99")
-        private val ASSET_REGEX = Regex("/assets/[\\w-]+\\.js")
-        private val SET_REGEX = Regex("\\.set\\(\\s*\"([A-Za-z][\\w.-]{1,40})\"\\s*,\\s*\"([^\"]{1,60})\"\\s*\\)")
+        private val DEFAULT_TOKEN = ClientToken("app-sec-token", "z11-web-y")
         private val STANDARD_HEADERS = setOf("content-type", "accept", "authorization", "x-csrf-token")
+        private val HEADER_NAME_REGEX = Regex("[A-Za-z][\\w.-]{1,40}")
+        private val ASSET_REGEX = Regex("/assets/[\\w-]+\\.js")
+        private const val B64 = "atob\\(\"([A-Za-z0-9+/=]{1,80})\"\\)"
+        private val LITERAL_REGEX = Regex("\\.(?:set|append)\\(\\s*\"([A-Za-z][\\w.-]{1,40})\"\\s*,\\s*\"([^\"]{1,60})\"\\s*\\)")
+        private val ATOB_REGEX = Regex("\\.(?:set|append)\\(\\s*$B64\\s*,\\s*$B64\\s*\\)")
     }
 }

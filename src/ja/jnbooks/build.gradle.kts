@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "J-N Books"
-    className = "JNBooks"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "comiciviewer"
-    baseUrl = "https://comic.j-nbooks.jp"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://comic.j-nbooks.jp"
+    }
 }

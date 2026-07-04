@@ -16,11 +16,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
-abstract class ColorlibAnime(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class ColorlibAnime : HttpSource() {
 
     override val supportsLatest = true
 

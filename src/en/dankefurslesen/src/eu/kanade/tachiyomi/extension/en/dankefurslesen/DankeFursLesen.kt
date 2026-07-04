@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.dankefurslesen
 
 import eu.kanade.tachiyomi.multisrc.guya.Guya
+import keiyoushi.annotation.Source
 
-class DankeFursLesen : Guya("Danke fürs Lesen", "https://danke.moe", "en")
+@Source
+abstract class DankeFursLesen : Guya()

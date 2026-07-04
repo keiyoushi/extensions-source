@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -19,15 +20,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class PhiliaScans :
+@Source
+abstract class PhiliaScans :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Philia Scans"
-    private val domain = "philiascans.org"
-    override val baseUrl = "https://$domain"
-    override val lang = "en"
     override val supportsLatest = true
-    override val versionId = 5
 
     private val apiUrl = "$baseUrl/api"
     private val preferences by getPreferencesLazy()

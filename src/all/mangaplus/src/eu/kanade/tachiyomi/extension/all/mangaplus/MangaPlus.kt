@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
@@ -30,18 +31,40 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.util.UUID
 
-class MangaPlus(
-    override val lang: String,
-    private val internalLang: String,
-    private val langCode: Language,
-) : HttpSource(),
+@Source
+abstract class MangaPlus :
+    HttpSource(),
     ConfigurableSource {
+    private val internalLang: String
+        get() = when (lang) {
+            "en" -> "eng"
+            "es" -> "esp"
+            "fr" -> "fra"
+            "id" -> "ind"
+            "pt-BR" -> "ptb"
+            "ru" -> "rus"
+            "th" -> "tha"
+            "vi" -> "vie"
+            "de" -> "deu"
+            else -> throw IllegalStateException("Unsupported lang: $lang")
+        }
+
+    private val langCode: Language
+        get() = when (lang) {
+            "en" -> Language.ENGLISH
+            "es" -> Language.SPANISH
+            "fr" -> Language.FRENCH
+            "id" -> Language.INDONESIAN
+            "pt-BR" -> Language.PORTUGUESE_BR
+            "ru" -> Language.RUSSIAN
+            "th" -> Language.THAI
+            "vi" -> Language.VIETNAMESE
+            "de" -> Language.GERMAN
+            else -> throw IllegalStateException("Unsupported lang: $lang")
+        }
+
     private val apiurlHost by lazy { API_URL.toHttpUrl().host }
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val name = "MANGA Plus by SHUEISHA"
-
-    override val baseUrl = "https://mangaplus.shueisha.co.jp"
 
     override val supportsLatest = true
 

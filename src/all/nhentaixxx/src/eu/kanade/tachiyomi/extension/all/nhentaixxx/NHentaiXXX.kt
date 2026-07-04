@@ -4,20 +4,24 @@ import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
 import eu.kanade.tachiyomi.multisrc.galleryadults.SortOrderFilter
 import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class NHentaiXXX(
-    lang: String = "all",
-    override val mangaLang: String = LANGUAGE_MULTI,
-) : GalleryAdults(
-    "NHentai.xxx",
-    "https://nhentai.xxx",
-    lang = lang,
-) {
+@Source
+abstract class NHentaiXXX : GalleryAdults() {
+
+    override val mangaLang = when (lang) {
+        "en" -> LANGUAGE_ENGLISH
+        "ja" -> LANGUAGE_JAPANESE
+        "zh" -> LANGUAGE_CHINESE
+        "all" -> LANGUAGE_MULTI
+        else -> throw IllegalArgumentException("Invalid lang: $lang")
+    }
+
     override val supportsLatest = true
 
     // This site treats all Speechless as English

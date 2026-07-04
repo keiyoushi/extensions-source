@@ -13,6 +13,7 @@ import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -88,7 +89,7 @@ abstract class Rncalation : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            description = document.selectFirst("""p.text-\[0\.875rem\].text-\[var\(--color-text2\)\]""")?.text() ?: ""
+            description = document.selectFirst("div.comic-page-wrap p[class*=text-][^data-astro-cid]")?.text() ?: ""
 
             val badges = document.select("span.inline-flex.items-center.rounded").map { it.text().lowercase() }
             status = when {
@@ -118,36 +119,35 @@ abstract class Rncalation : HttpSource() {
         }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val slug = response.request.url.pathSegments.last()
-
-        val totalChapters = response.asJsoup().selectFirst("[data-chapters-total]")
-            ?.attr("data-chapters-total")?.toInt() ?: return emptyList()
-
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+        val slug = manga.url.removeSuffix("/").substringAfterLast("/")
+        val allChapters = mutableListOf<SChapter>()
         var page = 1
-        val chapters = mutableListOf<SChapter>()
+        do {
+            val response = client.newCall(chapterListRequest(slug, page)).execute()
+            val chapters = chapterListParse(response)
+            if (chapters.isEmpty()) break
+            allChapters.addAll(chapters)
 
-        while (true) {
-            val doc = client.newCall(chapterRequest(slug, page)).execute().asJsoup()
-            val items = doc.select("a[data-chapter-id]")
+            val currentPage = response.header("x-page")?.toIntOrNull() ?: break
+            val totalPages = response.header("x-pages")?.toIntOrNull() ?: break
 
-            chapters.addAll(
-                items.map {
-                    SChapter.create().apply {
-                        setUrlWithoutDomain(it.absUrl("href"))
-                        name = it.selectFirst("span[data-read-label]")?.text()?.trim() ?: ""
-                        date_upload = it.selectFirst(".text-\\[\\.65rem\\]")?.let { parseDate(it.text()) } ?: 0L
-                    }
-                },
-            )
-            if (chapters.size >= totalChapters) break
-            page += 1
-        }
+            page++
+        } while (currentPage < totalPages)
 
-        return chapters
+        return@fromCallable allChapters.toList()
     }
 
-    private fun chapterRequest(slug: String, page: Int): Request = GET("$baseUrl/comics/$slug/chapters?page=$page", headers)
+    private fun chapterListRequest(slug: String, page: Int) = GET("$baseUrl/comics/$slug/chapters?page=$page", headers)
+
+    override fun chapterListParse(response: Response): List<SChapter> = response.asJsoup().select("a[data-chapter-id]").mapIndexed { num, it ->
+        SChapter.create().apply {
+            setUrlWithoutDomain(it.attr("href"))
+            chapter_number = it.attr("data-chapter-num").toFloatOrNull() ?: num.toFloat()
+            name = it.attr("data-chapter-label").trim().ifEmpty { "Capítulo ${chapter_number.toInt()}" }
+            date_upload = it.selectFirst(".text-\\[0\\.65rem\\]")?.let { parseDate(it.text()) } ?: 0L
+        }
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()

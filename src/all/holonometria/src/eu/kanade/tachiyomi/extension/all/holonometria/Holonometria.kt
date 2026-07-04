@@ -8,19 +8,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Holonometria(
-    override val lang: String,
-    private val langPath: String = "$lang/",
-) : HttpSource() {
+@Source
+abstract class Holonometria : HttpSource() {
 
-    override val name = "HOLONOMETRIA"
-
-    override val baseUrl = "https://holoearth.com"
+    private val langPath: String get() = if (lang == "ja") "" else "$lang/"
 
     override val supportsLatest = false
 

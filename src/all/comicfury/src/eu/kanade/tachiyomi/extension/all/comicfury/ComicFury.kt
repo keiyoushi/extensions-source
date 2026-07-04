@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import keiyoushi.utils.getPreferencesLazy
@@ -25,14 +26,17 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ComicFury(
-    override val lang: String,
-    private val siteLang: String = lang, // override lang string used in MangaSearch
-    private val extraName: String = "",
-) : HttpSource(),
+@Source
+abstract class ComicFury :
+    HttpSource(),
     ConfigurableSource {
-    override val baseUrl: String = "https://comicfury.com"
-    override val name: String = "Comic Fury$extraName" // Used for No Text
+    // override lang string used in MangaSearch; "notext" is the No Text variant of "other"
+    private val siteLang: String
+        get() = when {
+            lang == "other" && name.endsWith("(No Text)") -> "notext"
+            lang == "pt-BR" -> "pt"
+            else -> lang
+        }
     override val supportsLatest: Boolean = true
 
     override val client = network.client.newBuilder()

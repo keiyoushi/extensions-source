@@ -4,9 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Manga Tales"
-    className = "MangaTales"
-    versionCode = 0
+    versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
-    theme = "gmanga"
+
+    source {
+        lang = "ar"
+        baseUrl = "https://www.mangatales.com"
+    }
 }

@@ -22,6 +22,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
@@ -45,13 +46,12 @@ private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROO
     timeZone = TimeZone.getTimeZone("UTC")
 }
 
-open class Comikey(
-    final override val lang: String,
-    override val name: String = "Comikey",
-    override val baseUrl: String = "https://comikey.com",
-    private val defaultLanguage: String = "en",
-) : HttpSource(),
+@Source
+abstract class Comikey :
+    HttpSource(),
     ConfigurableSource {
+
+    private val defaultLanguage: String get() = if (baseUrl == "https://br.comikey.com") "pt-BR" else "en"
 
     private val gundamUrl: String = "https://gundam.comikey.net"
 
@@ -320,7 +320,7 @@ open class Comikey(
                         response.headers["Content-Type"] ?: "application/divina+json+vnd.e4p.drm",
                         null,
                         response.code,
-                        response.message?.takeIf { it.isNotEmpty() } ?: "OK",
+                        response.message.takeIf { it.isNotEmpty() } ?: "OK",
                         response.headers.toMap(),
                         response.body.byteStream(),
                     )
@@ -472,6 +472,6 @@ open class Comikey(
     companion object {
         internal const val PREFIX_SLUG_SEARCH = "slug:"
         internal const val PREF_HIDE_LOCKED_CHAPTERS = "hide_locked_chapters"
-        private val RELAY_HOST_REGEX = Regex("""relay-\w+\.epub\.rocks""")
+        private val RELAY_HOST_REGEX = Regex("""relay-\w+\.(epub\.rocks|comikey\.com)""")
     }
 }

@@ -17,11 +17,7 @@ import org.jsoup.nodes.Element
 import org.jsoup.nodes.Entities
 import rx.Observable
 
-open class GoDa(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class GoDa : HttpSource() {
 
     override val supportsLatest get() = true
 

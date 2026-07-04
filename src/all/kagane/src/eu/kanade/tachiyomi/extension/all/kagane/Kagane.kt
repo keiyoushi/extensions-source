@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -36,17 +37,16 @@ import okhttp3.brotli.BrotliInterceptor
 import okio.IOException
 import rx.Observable
 
-abstract class Kagane(
-    final override val lang: String,
-    private val kaganeLangs: List<String> = listOf(lang),
-) : HttpSource(),
+@Source
+abstract class Kagane :
+    HttpSource(),
     ConfigurableSource {
 
-    override val name = "Kagane"
+    private val kaganeLangs: List<String>
+        get() = if (lang == "zh") listOf("zh-Hans", "zh-Hant") else listOf(lang)
 
-    private val domain = "kagane.to"
-    private val apiUrl = "https://yuzuki.$domain"
-    override val baseUrl = "https://$domain"
+    private val domain get() = baseUrl.removePrefix("https://")
+    private val apiUrl get() = "https://yuzuki.$domain"
 
     override val supportsLatest = true
 

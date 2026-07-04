@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Comic Growl"
-    className = "ComicGrowl"
     versionCode = 8
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "comiciviewer"
-    baseUrl = "https://comic-growl.com"
+
+    source {
+        lang = "all"
+        baseUrl = "https://comic-growl.com"
+    }
 }

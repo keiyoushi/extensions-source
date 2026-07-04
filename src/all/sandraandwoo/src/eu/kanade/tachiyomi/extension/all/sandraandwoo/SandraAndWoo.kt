@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.Response
 import org.jsoup.nodes.Element
@@ -16,19 +17,27 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.floor
 
-abstract class SandraAndWoo(
-    final override val baseUrl: String = "https://www.sandraandwoo.com",
-    final override val lang: String,
-) : HttpSource() {
+@Source
+abstract class SandraAndWoo : HttpSource() {
     override val supportsLatest = false
 
-    protected abstract val writer: String
-    protected abstract val illustrator: String
-    protected abstract val synopsis: String
-    protected abstract val genres: String
-    protected abstract val state: Int
-    protected abstract val thumbnail: String
-    protected abstract val archive: String
+    private val writer = "Oliver Knörzer"
+    private val illustrator = "Powree"
+    private val genres = "Comedy"
+    private val state = SManga.ON_HIATUS
+    private val thumbnail = "https://www.sandraandwoo.com/images/fanart/fanart-contest-2014/pictures/zheng-qu-01-color-corrected.jpg"
+
+    private val synopsis: String
+        get() = when (lang) {
+            "de" -> "Sandra und Woo ist ein Comedy-Webcomic mit dem zwölfjährigen Mädchen Sandra North und ihrem Waschbären Woo in den Hauptrollen. Zwar sollen die meisten Strips einfach nur lustig oder gewitzt sein, gelegentlich werden aber auch ernste Themen wie die Missachtung von Menschenrechten in Burma oder die Zerstörung der Natur angesprochen. Wir wollen außerdem zeigen, was es für Sandra und ihre Schulfreunde Cloud und Larisa bedeutet, erwachsen zu werden. Nicht vergessen werden sollten außerdem Woos Ausflüge in den nahen Wald um dort seine tierischen Freunde Shadow, ein Fuchs, und Sid, ein Eichhörnchen, zu treffen. Als weiteres Alleinstellungsmerkmal des Comics darf gelten, dass sich immer wieder einzelne Strips oder sogar längere Geschichten um die Nebenfiguren drehen."
+            else -> "Sandra and Woo is a comedy comic strip featuring the 13-year-old girl Sandra North and her mischievous pet raccoon Woo. While most strips are just supposed to be funny or tell an exciting story, some also deal with more serious topics. We also want to show what growing up means for Sandra and her best friends in middle school, Cloud and Larisa. Another regular feature of the comic are Woo’s trips to the forest to meet his furry friends Shadow (a fox) and Sid (a squirrel) and his love interest Lily."
+        }
+
+    private val archive: String
+        get() = when (lang) {
+            "de" -> "/woode/archiv"
+            else -> "/archive"
+        }
 
     private val manga: SManga
         get() = SManga.create().apply {
