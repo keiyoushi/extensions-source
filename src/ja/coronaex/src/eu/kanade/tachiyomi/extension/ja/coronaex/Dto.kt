@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.coronaex
+package eu.kanade.tachiyomi.extension.ja.coronaex
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -8,6 +8,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 @Serializable
 class TitleResponse(
@@ -111,16 +112,16 @@ class ViewerPages(
 @Suppress("unused")
 @Serializable
 class LoginRequestBody(
-    val email: String,
-    val password: String,
-    val returnSecureToken: Boolean,
+    private val email: String,
+    private val password: String,
+    private val returnSecureToken: Boolean,
 )
 
 @Suppress("unused")
 @Serializable
 class RefreshRequestBody(
-    @SerialName("grant_type") val grantType: String,
-    @SerialName("refresh_token") val refreshToken: String,
+    @SerialName("grant_type") private val grantType: String,
+    @SerialName("refresh_token") private val refreshToken: String,
 )
 
 @Serializable
@@ -129,4 +130,6 @@ class LoginResponse(
     @JsonNames("refresh_token") val refreshToken: String,
 )
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.ROOT)
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.ROOT).apply {
+    timeZone = TimeZone.getTimeZone("Asia/Tokyo")
+}

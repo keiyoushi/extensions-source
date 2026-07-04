@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.coronaex
+package eu.kanade.tachiyomi.extension.ja.coronaex
 
 import eu.kanade.tachiyomi.source.model.Filter
 

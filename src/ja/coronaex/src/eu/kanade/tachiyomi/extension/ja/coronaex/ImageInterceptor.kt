@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.coronaex
+package eu.kanade.tachiyomi.extension.ja.coronaex
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -15,31 +15,25 @@ class ImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
+        val hash = request.url.queryParameter("drm_hash") ?: return response
 
-        if (request.url.fragment.isNullOrEmpty() && !request.url.queryParameterNames.contains("drm_hash")) {
-            return response
-        }
-
-        val hash = request.url.fragment
-        val imageBytes = response.body.bytes()
-        val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+        val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
         val result = unscramble(bitmap, hash)
-
         bitmap.recycle()
+
         val buffer = Buffer()
         result.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
         result.recycle()
 
         return response.newBuilder()
-            .body(buffer.asResponseBody("image/jpeg".toMediaType(), buffer.size))
+            .body(buffer.asResponseBody(MEDIA_TYPE, buffer.size))
             .build()
     }
 
-    private fun unscramble(image: Bitmap, drmHash: String?): Bitmap {
+    private fun unscramble(image: Bitmap, drmHash: String): Bitmap {
         val scrambleData = Base64.decode(drmHash, Base64.DEFAULT)
         val col = scrambleData[0].toInt() and 0xFF
         val row = scrambleData[1].toInt() and 0xFF
-        val blockIndexMap = scrambleData.drop(2)
 
         val width = image.width
         val height = image.height
@@ -48,13 +42,13 @@ class ImageInterceptor : Interceptor {
 
         val blockWidth = (width - width % 8) / col
         val blockHeight = (height - height % 8) / row
+        val blockAreaWidth = blockWidth * col
+        val blockAreaHeight = blockHeight * row
         val srcRect = Rect()
         val dstRect = Rect()
 
-        canvas.drawBitmap(image, 0f, 0f, null)
-
         for (dstBlockIndex in 0 until (col * row)) {
-            val srcBlockIndex = blockIndexMap[dstBlockIndex].toInt() and 0xFF
+            val srcBlockIndex = scrambleData[dstBlockIndex + 2].toInt() and 0xFF
             val srcX = (srcBlockIndex % col) * blockWidth
             val srcY = (srcBlockIndex / col) * blockHeight
             val dstX = (dstBlockIndex % col) * blockWidth
@@ -66,6 +60,19 @@ class ImageInterceptor : Interceptor {
             canvas.drawBitmap(image, srcRect, dstRect, null)
         }
 
+        if (blockAreaWidth < width) {
+            srcRect.set(blockAreaWidth, 0, width, height)
+            canvas.drawBitmap(image, srcRect, srcRect, null)
+        }
+        if (blockAreaHeight < height) {
+            srcRect.set(0, blockAreaHeight, blockAreaWidth, height)
+            canvas.drawBitmap(image, srcRect, srcRect, null)
+        }
+
         return result
+    }
+
+    companion object {
+        private val MEDIA_TYPE = "image/jpeg".toMediaType()
     }
 }
