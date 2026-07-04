@@ -53,6 +53,9 @@ abstract class Mangago :
 
     private val domain = "mangago.me"
 
+    // Chapter reader mirror; "/chapter/..." paths 404 on the main domain.
+    private val readerDomain = "www.mangago.zone"
+
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
@@ -217,6 +220,11 @@ abstract class Mangago :
                     val urlOriginal = link.attr("abs:href")
                     val isExternal = urlOriginal.startsWith("http") && !urlOriginal.contains(baseUrlHost)
 
+                    // The site rotates chapter links between mirror domains
+                    // (e.g. mangago.zone, youhim.me) on every page load. Store only
+                    // the path so the chapter URL stays stable across refreshes,
+                    // otherwise the app treats chapters as new entries and read
+                    // state is lost for unnumbered chapters such as "Special."
                     // Retain external links as absolute URLs, strip domain otherwise.
                     if (isExternal) {
                         url = urlOriginal
@@ -303,10 +311,26 @@ abstract class Mangago :
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
+        // Absolute URLs may still be present in the library from older
+        // versions of the extension.
         if (chapter.url.startsWith("http")) {
             return GET(chapter.url, headers)
         }
+        // Reader paths only resolve on the mirror domains, not on baseUrl.
+        if (chapter.url.startsWith("/chapter/")) {
+            return GET("https://$readerDomain${chapter.url}", headers)
+        }
         return super.pageListRequest(chapter)
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        if (chapter.url.startsWith("http")) {
+            return chapter.url
+        }
+        if (chapter.url.startsWith("/chapter/")) {
+            return "https://$readerDomain${chapter.url}"
+        }
+        return super.getChapterUrl(chapter)
     }
 
     override fun imageUrlParse(response: Response): String {
