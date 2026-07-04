@@ -1,12 +1,8 @@
 package eu.kanade.tachiyomi.extension.ko.wolfdotcom
 
-import android.content.SharedPreferences
 import android.util.Log
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,7 +12,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
@@ -28,27 +23,18 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import rx.Observable
-import java.io.IOException
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Source
-abstract class Wolf :
-    HttpSource(),
-    ConfigurableSource {
+abstract class Wolf : HttpSource() {
 
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .addInterceptor(::domainNumberInterceptor)
         .addNetworkInterceptor(::refererInterceptor)
         .build()
-
-    private val preference: SharedPreferences by getPreferencesLazy()
-
-    private val currentBaseUrl: String
-        get() = "https://wfwf$domainNumber.com"
 
     private val isWebtoon get() = name.endsWith("웹툰")
     private val isComic get() = name.endsWith("만화책")
@@ -114,7 +100,7 @@ abstract class Wolf :
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$currentBaseUrl/$browsePath".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/$browsePath".toHttpUrl().newBuilder().apply {
             filters.filterIsInstance<UrlPartFilter>().forEach { filter ->
                 filter.addToUrl(this)
             }
@@ -159,7 +145,7 @@ abstract class Wolf :
             throw Exception("두 글자 이상 입력 해주세요.")
         }
         val stdQuery = query.replace(specialChars, "")
-        val searchUrl = "$currentBaseUrl/search.html?q=${URLEncoder.encode(stdQuery, "EUC-KR")}"
+        val searchUrl = "$baseUrl/search.html?q=${URLEncoder.encode(stdQuery, "EUC-KR")}"
 
         return client.newCall(GET(searchUrl, headers))
             .asObservableSuccess()
@@ -191,7 +177,7 @@ abstract class Wolf :
 
     // ============================== Details ==============================
 
-    override fun getMangaUrl(manga: SManga): String = currentBaseUrl.toHttpUrl().newBuilder()
+    override fun getMangaUrl(manga: SManga): String = baseUrl.toHttpUrl().newBuilder()
         .addPathSegment(entryPath)
         .addQueryParameter("toon", manga.url)
         .toString()
@@ -239,7 +225,7 @@ abstract class Wolf :
     override fun getChapterUrl(chapter: SChapter): String {
         val chapUrl = chapter.url.parseAs<ChapterUrl>()
 
-        return currentBaseUrl.toHttpUrl().newBuilder()
+        return baseUrl.toHttpUrl().newBuilder()
             .addPathSegment(readerPath)
             .addQueryParameter("toon", chapUrl.toon)
             .addQueryParameter("num", chapUrl.num)
@@ -320,100 +306,15 @@ abstract class Wolf :
 
     // ============================= Utilities =============================
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = PREF_DOMAIN_NUM
-            title = "도메인 번호"
-            setOnPreferenceChangeListener { _, newValue ->
-                val value = newValue as String
-                if (value.isEmpty() || value.toIntOrNull() == null) {
-                    false
-                } else {
-                    domainNumber = value.trim()
-                    false
-                }
-            }
-        }.also(screen::addPreference)
-    }
-
-    private var domainNumber = ""
-        get() {
-            val currentValue = field
-            if (currentValue.isNotEmpty()) return currentValue
-
-            val prefValue = preference.getString(PREF_DOMAIN_NUM, "")!!
-            val prefDefaultValue = preference.getString(PREF_DOMAIN_NUM_DEFAULT, "")!!
-
-            if (prefDefaultValue != DEFAULT_DOMAIN_NUMBER) {
-                preference.edit()
-                    .putString(PREF_DOMAIN_NUM_DEFAULT, DEFAULT_DOMAIN_NUMBER)
-                    .putString(PREF_DOMAIN_NUM, DEFAULT_DOMAIN_NUMBER)
-                    .apply()
-
-                field = DEFAULT_DOMAIN_NUMBER
-                return DEFAULT_DOMAIN_NUMBER
-            }
-
-            if (prefValue.isNotEmpty()) {
-                field = prefValue
-                return prefValue
-            }
-
-            return DEFAULT_DOMAIN_NUMBER
-        }
-        set(value) {
-            preference.edit().putString(PREF_DOMAIN_NUM, value).apply()
-
-            field = value
-        }
-
-    private fun domainNumberInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val response = chain.proceed(request)
-
-        val url = request.url.toString()
-
-        if (url.contains(domainRegex)) {
-            val document = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
-            val newUrl = document.selectFirst("""#pop-content a[href~=^https?://wfwf\d+\.com]""")
-                ?: return response
-
-            response.close()
-
-            val newDomainNum = domainRegex.find(newUrl.attr("href"))?.groupValues?.get(1)
-                ?: throw IOException("Failed to update domain number")
-
-            domainNumber = newDomainNum.trim()
-
-            return chain.proceed(
-                request.newBuilder()
-                    .url(
-                        request.url.newBuilder()
-                            .host(currentBaseUrl.toHttpUrl().host)
-                            .build(),
-                    )
-                    .build(),
-            )
-        }
-
-        return response
-    }
-
-    private val domainRegex = Regex("""^https?://wfwf(\d+)\.com""")
-
     private fun refererInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request().newBuilder()
-            .header("Referer", "$currentBaseUrl/")
+            .header("Referer", "$baseUrl/")
             .build()
 
         return chain.proceed(request)
     }
 
     companion object {
-        private const val DEFAULT_DOMAIN_NUMBER = "411"
-        private const val PREF_DOMAIN_NUM = "domain_number"
-        private const val PREF_DOMAIN_NUM_DEFAULT = "domain_number_default"
-
         private val dateFormat by lazy {
             SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
         }
