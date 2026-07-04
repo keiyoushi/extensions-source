@@ -89,25 +89,22 @@ open class LANraragi(private val suffix: String = "") :
 
     override fun mangaDetailsParse(response: Response): SManga {
         val res = response.body.string()
-        val isTank = !json.parseToJsonElement(res).jsonObject.containsKey("arcid")
-
-        if (!isTank) {
-            val archive = json.decodeFromString<Archive>(res)
-            return archiveToSManga(archive)
-        } else {
+        val archive = try {
+            json.decodeFromString<Archive>(res)
+        } catch (_: Exception) {
             val tank = json.decodeFromString<Tankoubon>(res)
             val tags = tank.result?.full_data?.joinToString(",") { it.tags!! }?.split(",")?.sorted()?.joinToString(",")
 
-            val archive = Archive(
+            Archive(
                 arcid = tank.result!!.id,
                 isnew = false,
                 tags = tags,
                 summary = tank.result.summary,
                 title = tank.result.name!!,
             )
-
-            return archiveToSManga(archive)
         }
+
+        return archiveToSManga(archive)
     }
 
     override fun getMangaUrl(manga: SManga): String {
