@@ -20,7 +20,7 @@ keiyoushi {
         name = "MinoTruyen Comics"
         lang = "vi"
         baseUrl("https://minotruyenv5.xyz") {
-            withCustom = (true)
+            withCustom = true
         }
     }
 
@@ -28,7 +28,7 @@ keiyoushi {
         name = "MinoTruyen Hentai"
         lang = "vi"
         baseUrl("https://minotruyenv5.xyz") {
-            withCustom = (true)
+            withCustom = true
         }
     }
 }
