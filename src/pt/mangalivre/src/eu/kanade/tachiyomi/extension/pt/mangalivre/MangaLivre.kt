@@ -314,11 +314,14 @@ abstract class MangaLivre :
         private const val ENCODED_BONUS = 1000
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
-        private val DEFAULT_TOKEN = ClientToken("x-gateway-key", "fw7-mob-q")
+        private val DEFAULT_TOKEN = ClientToken("x-tly-quantum", "j55-zero-o")
         private val STANDARD_HEADERS = setOf("content-type", "accept", "accept-language", "authorization", "x-csrf-token")
         private val HEADER_NAME_REGEX = Regex("[A-Za-z][\\w.-]{1,40}")
         private val ASSET_REGEX = Regex("/assets/[\\w-]+\\.js")
         private const val ARG = "(?:\"([^\"]{1,60})\"|atob\\(\"([A-Za-z0-9+/=]{1,80})\"\\))"
-        private val PAIR_REGEX = Regex("$ARG\\s*,\\s*$ARG")
+
+        // O par header/valor pode vir como argumentos adjacentes (`("k","v")`) ou como
+        // propriedades de objeto (`{k:atob(..),v:atob(..)}`); tolera uma chave opcional entre eles.
+        private val PAIR_REGEX = Regex("$ARG\\s*,\\s*(?:\\w+\\s*:\\s*)?$ARG")
     }
 }
