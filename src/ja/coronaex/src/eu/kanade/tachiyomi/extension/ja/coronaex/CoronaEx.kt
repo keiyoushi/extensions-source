@@ -1,9 +1,7 @@
-package eu.kanade.tachiyomi.extension.all.coronaex
+package eu.kanade.tachiyomi.extension.ja.coronaex
 
-import android.content.SharedPreferences
 import android.text.InputType
 import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -33,12 +31,12 @@ abstract class CoronaEx :
     ConfigurableSource {
     override val supportsLatest = true
 
-    private val domain get() = baseUrl.removePrefix("https://")
-    private val apiUrl get() = "https://api.$domain"
+    private val domain = baseUrl.toHttpUrl().host
+    private val apiUrl = "https://api.$domain"
     private val authDomain = "googleapis.com"
     private val loginUrl = "https://identitytoolkit.$authDomain/v1"
     private val refeshUrl = "https://securetoken.$authDomain/v1"
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy()
 
     private var cursor: String? = null
     private var bearerToken: String? = null
@@ -63,18 +61,15 @@ abstract class CoronaEx :
         }
         .build()
 
-    override fun headersBuilder() = super.headersBuilder().apply {
-        val apiKey = if (lang == "ja") API_KEY_JA else API_KEY_EN
-        add("X-Api-Environment-Key", apiKey)
-    }
+    override fun headersBuilder() = super.headersBuilder()
+        .add("X-Api-Environment-Key", API_KEY)
 
     override fun popularMangaRequest(page: Int): Request {
         if (page == 1) cursor = null
-        val sort = if (lang == "ja") "title_yomigana" else "title_alphanumeric"
         val url = "$apiUrl/comics".toHttpUrl().newBuilder()
             .addQueryParameter("limit", "24")
             .addQueryParameter("order", "asc")
-            .addQueryParameter("sort", sort)
+            .addQueryParameter("sort", "title_yomigana")
             .apply {
                 cursor?.let { addQueryParameter("after_than", it) }
             }
@@ -181,7 +176,7 @@ abstract class CoronaEx :
     override fun pageListParse(response: Response): List<Page> {
         val results = response.parseAs<ViewerResponse>()
         return results.pages.mapIndexed { index, page ->
-            Page(index, imageUrl = "${page.pageImageUrl}#${page.drmHash}")
+            Page(index, imageUrl = page.pageImageUrl)
         }
     }
 
@@ -224,13 +219,10 @@ abstract class CoronaEx :
         return ""
     }
 
-    private val loginKey: String
-        get() = if (lang == "ja") LOGIN_KEY_JA else LOGIN_KEY_EN
-
     private fun login(email: String, password: String): LoginResponse {
         val body = LoginRequestBody(email, password, true).toJsonString().toRequestBody("application/json".toMediaType())
         val url = "$loginUrl/accounts:signInWithPassword".toHttpUrl().newBuilder()
-            .addQueryParameter("key", loginKey)
+            .addQueryParameter("key", LOGIN_KEY)
             .build()
         val request = POST(url.toString(), headers, body)
 
@@ -240,7 +232,7 @@ abstract class CoronaEx :
     private fun refresh(refreshToken: String): LoginResponse {
         val body = RefreshRequestBody("refresh_token", refreshToken).toJsonString().toRequestBody("application/json".toMediaType())
         val url = "$refeshUrl/token".toHttpUrl().newBuilder()
-            .addQueryParameter("key", loginKey)
+            .addQueryParameter("key", LOGIN_KEY)
             .build()
         val request = POST(url.toString(), headers, body)
 
@@ -279,34 +271,34 @@ abstract class CoronaEx :
             setDefaultValue(false)
         }.also(screen::addPreference)
 
-        ListPreference(screen.context).apply {
-            EditTextPreference(screen.context).apply {
-                key = EMAIL_PREF_KEY
-                title = "E-Mail"
-                setOnPreferenceChangeListener { _, _ ->
-                    clearTokens()
-                    true
-                }
-            }.also(screen::addPreference)
+        EditTextPreference(screen.context).apply {
+            key = EMAIL_PREF_KEY
+            title = "E-Mail"
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+            }
+            setOnPreferenceChangeListener { _, _ ->
+                clearTokens()
+                true
+            }
+        }.also(screen::addPreference)
 
-            EditTextPreference(screen.context).apply {
-                key = PASSWORD_PREF_KEY
-                title = "Password"
-                setOnBindEditTextListener {
-                    it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-                }
-                setOnPreferenceChangeListener { _, _ ->
-                    clearTokens()
-                    true
-                }
-            }.also(screen::addPreference)
-        }
+        EditTextPreference(screen.context).apply {
+            key = PASSWORD_PREF_KEY
+            title = "Password"
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+            setOnPreferenceChangeListener { _, _ ->
+                clearTokens()
+                true
+            }
+        }.also(screen::addPreference)
     }
 
-    override fun getFilterList(): FilterList {
-        if (lang != "ja") return FilterList()
-        return FilterList(GenreFilter())
-    }
+    override fun getFilterList() = FilterList(
+        GenreFilter(),
+    )
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
@@ -315,9 +307,7 @@ abstract class CoronaEx :
         private const val TOKEN = "token"
         private const val REFRESH = "refresh"
         private const val EXPIRES = "expires"
-        private const val API_KEY_JA = "K4FWy7Iqott9mrw37hDKfZ2gcLOwO-kiLHTwXT8ad1E="
-        private const val API_KEY_EN = "YMiCe3ofO07MjQSroVEYDEUzyDm2sUHwDeDgqAhsTC8"
-        private const val LOGIN_KEY_JA = "AIzaSyCeiy1JMHVkFuI8zbiAxMjNO3zoXECENhE"
-        private const val LOGIN_KEY_EN = "AIzaSyByfbwJ2lzGAH7mT2PNfXt7VuwsZZhfSe8"
+        private const val API_KEY = "K4FWy7Iqott9mrw37hDKfZ2gcLOwO-kiLHTwXT8ad1E="
+        private const val LOGIN_KEY = "AIzaSyCeiy1JMHVkFuI8zbiAxMjNO3zoXECENhE"
     }
 }

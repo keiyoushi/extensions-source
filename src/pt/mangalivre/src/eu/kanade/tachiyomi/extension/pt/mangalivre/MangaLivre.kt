@@ -241,9 +241,10 @@ abstract class MangaLivre :
 
     /**
      * O gate de "aplicativo oficial" (endpoints de leitura) exige um header de cliente que o
-     * front-end injeta via `Headers.append(...)` no bundle — hoje ofuscado com base64/`atob(...)`
-     * (ex.: app-sec-token/z11-web-y). Coletamos os pares de `.set`/`.append` (literais e atob) dos
-     * /assets, fora headers padrão, e o interceptor testa cada candidato quando a API recusa 403.
+     * front-end injeta no bundle, ofuscado e rotacionado todo dia (nome, valor, método e até
+     * base64/`atob`). Em vez de perseguir cada formato, coletamos TODO par de argumentos
+     * "literal"/`atob(...)` dos /assets, filtramos por forma de header e ranqueamos; o interceptor
+     * testa os candidatos contra o 403 "aplicativo oficial" até um funcionar e memoriza o vencedor.
      */
     private fun scrapeCandidates(): List<ClientToken> = try {
         val html = scrapeClient.newCall(GET("$baseUrl/", headers)).execute()
@@ -261,22 +262,39 @@ abstract class MangaLivre :
     }
 
     private fun extractCandidates(js: String): List<ClientToken> {
-        val literals = LITERAL_REGEX.findAll(js)
-            .map { ClientToken(it.groupValues[1], it.groupValues[2]) }
-        val encoded = ATOB_REGEX.findAll(js)
-            .mapNotNull {
-                val header = it.groupValues[1].decodeBase64()?.utf8() ?: return@mapNotNull null
-                val value = it.groupValues[2].decodeBase64()?.utf8() ?: return@mapNotNull null
-                ClientToken(header, value)
+        val pairs = PAIR_REGEX.findAll(js)
+            .mapNotNull { m ->
+                val header = decodeArg(m.groupValues[1], m.groupValues[2]) ?: return@mapNotNull null
+                val value = decodeArg(m.groupValues[3], m.groupValues[4]) ?: return@mapNotNull null
+                val encoded = m.groupValues[2].isNotEmpty() || m.groupValues[4].isNotEmpty()
+                Triple(header, value, encoded)
             }
-        val pairs = (encoded + literals)
-            .filter { it.header.matches(HEADER_NAME_REGEX) }
-            .filterNot { it.header.lowercase() in STANDARD_HEADERS }
-            .distinct()
+            .filter { isHeaderCandidate(it.first, it.second) }
+            .distinctBy { "${it.first}|${it.second}" }
             .toList()
-        val ranked = pairs.sortedByDescending { it.value.length + if ('-' in it.value) 100 else 0 }
+        val ranked = pairs.sortedByDescending { score(it.second, it.third) }
             .take(MAX_CANDIDATES)
+            .map { ClientToken(it.first, it.second) }
         return (ranked + DEFAULT_TOKEN).distinct()
+    }
+
+    private fun decodeArg(literal: String, b64: String): String? = when {
+        literal.isNotEmpty() -> literal
+        b64.isNotEmpty() -> b64.decodeBase64()?.utf8()
+        else -> null
+    }
+
+    private fun isHeaderCandidate(header: String, value: String): Boolean {
+        if (!header.matches(HEADER_NAME_REGEX) || '-' !in header) return false
+        if (header.lowercase() in STANDARD_HEADERS) return false
+        return value.length <= MAX_VALUE_LEN && value.none { it.isWhitespace() }
+    }
+
+    private fun score(value: String, encoded: Boolean): Int {
+        var total = if (encoded) ENCODED_BONUS else 0
+        if (value.any { it.isDigit() }) total += 200
+        if ('-' in value) total += 100
+        return total + (MAX_VALUE_LEN - value.length).coerceAtLeast(0)
     }
 
     private fun Response.isOfficialAppError(): Boolean = try {
@@ -291,15 +309,16 @@ abstract class MangaLivre :
         private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
         private const val MAX_PEEK = 1024L
         private const val MAX_ASSETS = 8
-        private const val MAX_CANDIDATES = 8
+        private const val MAX_CANDIDATES = 16
+        private const val MAX_VALUE_LEN = 40
+        private const val ENCODED_BONUS = 1000
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
-        private val DEFAULT_TOKEN = ClientToken("app-sec-token", "z11-web-y")
-        private val STANDARD_HEADERS = setOf("content-type", "accept", "authorization", "x-csrf-token")
+        private val DEFAULT_TOKEN = ClientToken("x-gateway-key", "fw7-mob-q")
+        private val STANDARD_HEADERS = setOf("content-type", "accept", "accept-language", "authorization", "x-csrf-token")
         private val HEADER_NAME_REGEX = Regex("[A-Za-z][\\w.-]{1,40}")
         private val ASSET_REGEX = Regex("/assets/[\\w-]+\\.js")
-        private const val B64 = "atob\\(\"([A-Za-z0-9+/=]{1,80})\"\\)"
-        private val LITERAL_REGEX = Regex("\\.(?:set|append)\\(\\s*\"([A-Za-z][\\w.-]{1,40})\"\\s*,\\s*\"([^\"]{1,60})\"\\s*\\)")
-        private val ATOB_REGEX = Regex("\\.(?:set|append)\\(\\s*$B64\\s*,\\s*$B64\\s*\\)")
+        private const val ARG = "(?:\"([^\"]{1,60})\"|atob\\(\"([A-Za-z0-9+/=]{1,80})\"\\))"
+        private val PAIR_REGEX = Regex("$ARG\\s*,\\s*$ARG")
     }
 }

@@ -1,17 +1,14 @@
 package eu.kanade.tachiyomi.extension.zh.vomic
 
 import android.util.Base64
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.getPreferences
+import keiyoushi.annotation.Source
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -26,30 +23,20 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-class Vomic :
-    HttpSource(),
-    ConfigurableSource {
-
-    override val name = "vomic"
-
-    override val lang = "zh"
+@Source
+abstract class Vomic : HttpSource() {
 
     override val supportsLatest = false
 
-    override val baseUrl: String
-
     private val apiUrl: String
+        get() = apiUrl()
 
-    init {
-        val domain = getPreferences().getString(DOMAIN_PREF, DEFAULT_DOMAIN)!!
-        if (domain.startsWith("www.") || domain.startsWith("api.")) {
-            val tld = domain.substring(4)
-            baseUrl = "http://www.$tld"
-            apiUrl = "http://api.$tld"
+    private fun apiUrl(): String {
+        val host = baseUrl.toHttpUrl().host
+        return if (host.startsWith("www.") || host.startsWith("api.")) {
+            "https://api.${host.substring(4)}"
         } else {
-            val url = "http://$domain"
-            baseUrl = url
-            apiUrl = url
+            baseUrl
         }
     }
 
@@ -164,23 +151,11 @@ class Vomic :
         return GET(url, headers)
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = DOMAIN_PREF
-            title = "网址"
-            summary = "不带 http:// 前缀，重启生效\n备选网址：$DEFAULT_DOMAIN 或 119.23.243.52"
-            setDefaultValue(DEFAULT_DOMAIN)
-        }.let(screen::addPreference)
-    }
-
     private val json: Json by injectLazy()
 
     private inline fun <reified T> Response.parseAs(): T = json.decodeFromString<ResponseDto<T>>(body.string()).data
 
     companion object {
-        private const val DOMAIN_PREF = "DOMAIN"
-        private const val DEFAULT_DOMAIN = "www.vomicmh.com"
-
         private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd hh:mm:ss", Locale.ENGLISH) }
     }
 }
