@@ -77,7 +77,7 @@ open class LANraragi(private val suffix: String = "") :
 
         return client.newCall(GET(uri.toString(), headers))
             .asObservableSuccess()
-            .map { mangaDetailsParse(it).apply { initialized = false } }
+            .map { mangaDetailsParse(it).apply { initialized = true } }
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
