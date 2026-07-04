@@ -24,8 +24,8 @@ abstract class Dilib : HttpSource() {
         .set("Referer", "$baseUrl$LIST_PATH")
 
     override val client = network.client.newBuilder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(30.seconds)
+        .readTimeout(60.seconds)
         .rateLimit(3)
         .build()
 
