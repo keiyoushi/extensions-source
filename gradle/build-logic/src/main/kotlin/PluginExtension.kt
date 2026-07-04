@@ -250,11 +250,14 @@ private data class ResolvedSourceData(val name: String, val lang: String, val id
 private data class BaseUrlSpecData(
     val type: String,
     val urls: List<String>,
+    val withCustom: Boolean = false,
+    val entries: List<String>? = null,
+    val values: List<String>? = null,
 )
 
 private fun BaseUrlSpec.toData(): BaseUrlSpecData = when (this) {
     is BaseUrlSpec.Static -> BaseUrlSpecData("static", listOf(url))
-    is BaseUrlSpec.Mirrors -> BaseUrlSpecData("mirrors", mirrors)
+    is BaseUrlSpec.Mirrors -> BaseUrlSpecData("mirrors", mirrors, withCustom, entries, values)
     is BaseUrlSpec.Custom -> BaseUrlSpecData("custom", listOf(defaultUrl))
 }
 

@@ -43,6 +43,9 @@ data class LocaleStrings(
 data class BaseUrlSpecData(
     val type: String,
     val urls: List<String>,
+    val withCustom: Boolean = false,
+    val entries: List<String>? = null,
+    val values: List<String>? = null,
 ) {
     val defaultUrl: String get() = urls.first()
 }
@@ -60,6 +63,7 @@ private val configurable = ClassName("eu.kanade.tachiyomi.source", "Configurable
 private val preferenceScreen = ClassName("androidx.preference", "PreferenceScreen")
 private val mirrorPrefsClass = ClassName("keiyoushi.source", "MirrorPreferences")
 private val customUrlPrefsClass = ClassName("keiyoushi.source", "CustomUrlPreferences")
+private val customAndMirrorPrefsClass = ClassName("keiyoushi.source", "CustomAndMirrorPreferences")
 private val getPreferencesFn = MemberName("keiyoushi.utils", "getPreferences")
 
 class SourceProcessor(
@@ -148,7 +152,6 @@ class SourceProcessor(
 
     private fun buildPassthroughClass(annotatedClass: ClassName): TypeSpec =
         TypeSpec.classBuilder("ExtensionGenerated")
-            .addModifiers(KModifier.INTERNAL)
             .superclass(annotatedClass)
             .build()
 
@@ -157,7 +160,6 @@ class SourceProcessor(
         source: SourceDef,
         isConfigurable: Boolean,
     ): TypeSpec = TypeSpec.classBuilder("ExtensionGenerated")
-        .addModifiers(KModifier.INTERNAL)
         .superclass(annotatedClass)
         .applySourceMembers(source, isConfigurable)
         .build()
@@ -235,16 +237,54 @@ class SourceProcessor(
                         add("%S", url)
                     }
                 }.build()
-                addProperty(
-                    PropertySpec.builder("mirrorPrefs", mirrorPrefsClass)
-                        .addModifiers(KModifier.PRIVATE)
-                        .delegate(
-                            CodeBlock.of(
-                                "lazy { %T(%M(id), arrayOf(%L), title = %S) }",
-                                mirrorPrefsClass, getPreferencesFn, mirrorsArg, strings.mirrorTitle,
-                            ),
-                        ).build(),
-                )
+
+                if (urlSpec.withCustom) {
+                    val entriesArg = urlSpec.entries?.let { entries ->
+                        CodeBlock.builder().apply {
+                            add("listOf(")
+                            entries.forEachIndexed { i, e ->
+                                if (i > 0) add(", ")
+                                add("%S", e)
+                            }
+                            add(")")
+                        }.build()
+                    } ?: CodeBlock.of("null")
+
+                    val valuesArg = urlSpec.values?.let { values ->
+                        CodeBlock.builder().apply {
+                            add("listOf(")
+                            values.forEachIndexed { i, v ->
+                                if (i > 0) add(", ")
+                                add("%S", v)
+                            }
+                            add(")")
+                        }.build()
+                    } ?: CodeBlock.of("null")
+
+                    addProperty(
+                        PropertySpec.builder("mirrorPrefs", customAndMirrorPrefsClass)
+                            .addModifiers(KModifier.PRIVATE)
+                            .delegate(
+                                CodeBlock.of(
+                                    "lazy { %T(%M(id), listOf(%L), %S, true, %S, %S, %S, mirrorEntries = %L, mirrorEntryValues = %L) }",
+                                    customAndMirrorPrefsClass, getPreferencesFn, mirrorsArg, urlSpec.defaultUrl,
+                                    strings.mirrorTitle, strings.customUrlTitle, strings.customUrlDialogMessage,
+                                    entriesArg, valuesArg,
+                                ),
+                            ).build(),
+                    )
+                } else {
+                    addProperty(
+                        PropertySpec.builder("mirrorPrefs", mirrorPrefsClass)
+                            .addModifiers(KModifier.PRIVATE)
+                            .delegate(
+                                CodeBlock.of(
+                                    "lazy { %T(%M(id), arrayOf(%L), title = %S) }",
+                                    mirrorPrefsClass, getPreferencesFn, mirrorsArg, strings.mirrorTitle,
+                                ),
+                            ).build(),
+                    )
+                }
                 addProperty(
                     PropertySpec.builder("baseUrl", String::class.asClassName(), KModifier.OVERRIDE)
                         .getter(FunSpec.getterBuilder().addStatement("return mirrorPrefs.baseUrl").build())
