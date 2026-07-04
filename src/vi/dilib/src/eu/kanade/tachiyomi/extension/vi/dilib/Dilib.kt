@@ -21,9 +21,6 @@ abstract class Dilib : HttpSource() {
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
-        .set("Sec-CH-UA-Mobile", "?0")
-        .set("Sec-CH-UA-Platform", "\"Windows\"")
         .set("Referer", "$baseUrl$LIST_PATH")
 
     override val client = network.client.newBuilder()
@@ -35,9 +32,10 @@ abstract class Dilib : HttpSource() {
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl$LIST_PATH".toHttpUrl().newBuilder()
+        val url = "$baseUrl$SEARCH_PATH".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("order", POPULAR_ORDER)
+            .addQueryParameter("media", BOOK_TYPE)
+            .addQueryParameter("sort", POPULAR_ORDER)
             .build()
 
         return GET(url, headers)
@@ -47,15 +45,9 @@ abstract class Dilib : HttpSource() {
 
     // ============================== Latest ================================
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl$LIST_PATH".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .build()
+    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
-        return GET(url, headers)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseBrowsePage(response)
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // ============================== Search ================================
 
@@ -68,7 +60,7 @@ abstract class Dilib : HttpSource() {
         val bookType = BOOK_TYPE
         val order = filterList.firstInstanceOrNull<SortFilter>()?.toUriPart() ?: DEFAULT_ORDER
 
-        val url = "$baseUrl$LIST_PATH".toHttpUrl().newBuilder()
+        val url = "$baseUrl$SEARCH_PATH".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .apply {
                 if (query.isNotBlank()) {
@@ -84,10 +76,10 @@ abstract class Dilib : HttpSource() {
                     addQueryParameter("author", author)
                 }
                 if (bookType.isNotBlank()) {
-                    addQueryParameter("bookType", bookType)
+                    addQueryParameter("media", bookType)
                 }
                 if (order != DEFAULT_ORDER) {
-                    addQueryParameter("order", order)
+                    addQueryParameter("sort", order)
                 }
             }
             .build()
@@ -114,7 +106,7 @@ abstract class Dilib : HttpSource() {
             }
         }
 
-        val hasNextPage = document.selectFirst(".page_redirect a:contains(›)") != null
+        val hasNextPage = document.selectFirst(".woocommerce-pagination a.pagecurrent ~ span a") != null
 
         return MangasPage(mangas, hasNextPage)
     }
@@ -126,6 +118,9 @@ abstract class Dilib : HttpSource() {
 
         val subtitle = document.selectFirst("div#content h2")?.text()
         val intro = document.selectFirst("div#content h2 + p")?.text()
+        val updateTimeValue = document.selectFirst("p:contains(Cập nhật lúc)")?.ownText()?.trim()
+        val updateTime = updateTimeValue?.let { "Cập nhật lúc: $it" }
+        val statusText = document.selectFirst("p:contains(Tình trạng)")?.ownText()?.trim() ?: ""
 
         return SManga.create().apply {
             title = document.selectFirst("div#primary h1")!!.text()
@@ -136,10 +131,19 @@ abstract class Dilib : HttpSource() {
                 .joinToString { it.text() }
                 .ifEmpty { null }
             author = document.selectFirst("div#primary h1 + p")?.text()
-            description = listOfNotNull(subtitle, intro)
+            description = listOfNotNull(updateTime, subtitle, intro)
                 .joinToString("\n\n")
                 .trim()
+            status = parseStatus(
+                document.selectFirst("p:contains(Tình trạng)")?.ownText()?.trim() ?: "",
+            )
         }
+    }
+
+    private fun parseStatus(statusText: String?): Int = when {
+        statusText?.contains("Đang cập nhật", ignoreCase = true) == true -> SManga.ONGOING
+        statusText?.contains("Hoàn thành", ignoreCase = true) == true -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
     }
 
     // ============================== Chapters ==============================
@@ -213,6 +217,7 @@ abstract class Dilib : HttpSource() {
     private fun String.normalizeImageUrl(): String = if (startsWith("//")) "https:$this" else this
 
     companion object {
+        private const val SEARCH_PATH = "/search.php"
         private const val LIST_PATH = "/truyen-tranh/"
         private const val BOOK_TYPE = "5"
         private const val POPULAR_ORDER = "5"

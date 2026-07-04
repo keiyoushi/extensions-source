@@ -14,6 +14,7 @@ class MainCategoriesFilter :
     UriPartFilter(
         "Nhóm chính",
         arrayOf(
+            Pair("All", ""),
             Pair("Manga", "manga"),
             Pair("Manhua", "manhua"),
             Pair("Manhwa", "manhwa"),
@@ -59,6 +60,7 @@ class SubCategoriesFilter :
     UriPartFilter(
         "Nhóm phụ",
         arrayOf(
+            Pair("All", ""),
             Pair("Manga", "manga"),
             Pair("Manhua", "manhua"),
             Pair("Manhwa", "manhwa"),
