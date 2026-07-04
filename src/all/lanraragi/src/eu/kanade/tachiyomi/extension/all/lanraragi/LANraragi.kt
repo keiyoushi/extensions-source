@@ -498,7 +498,7 @@ open class LANraragi(private val suffix: String = "") :
         // Maintain categories sync for next FilterList reset.
         getCategories()
 
-        return listOf(Pair("", ""))
+        return listOf(Pair("", if (categories.isNotEmpty()) "" else "Reset to populate"))
             .plus(
                 categories
                     .sortedWith(compareByDescending<Category> { it.pinned }.thenBy { it.name })
@@ -549,13 +549,6 @@ open class LANraragi(private val suffix: String = "") :
             response
         }
         .build()
-
-    init {
-        if (baseUrl.isNotBlank()) {
-            // Save a FilterList reset
-            getCategories()
-        }
-    }
 
     companion object {
         internal const val EXTRA_SOURCES_COUNT_KEY = "extraSourcesCount"
