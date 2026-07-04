@@ -4,8 +4,15 @@ plugins {
 
 keiyoushi {
     name = "Zerobyw"
-    className = "Zerobyw"
     versionCode = 21
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        name = "zero搬运网"
+        lang = "zh"
+        baseUrl("http://www.zerobyw33.com") {
+            withCustom = true
+        }
+    }
 }

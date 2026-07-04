@@ -4,16 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Corona EX"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
     source {
         lang = "ja"
         baseUrl = "https://to-corona-ex.com"
-    }
-    source {
-        lang = "en"
-        baseUrl = "https://en.to-corona-ex.com"
+        id = 4760608706245794364
     }
 }

@@ -16,11 +16,7 @@ import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import org.jsoup.select.Evaluator
 
-abstract class MangabzTheme(
-    override val name: String,
-) : HttpSource() {
-
-    override val lang = "zh"
+abstract class MangabzTheme : HttpSource() {
 
     override val supportsLatest = true
 
