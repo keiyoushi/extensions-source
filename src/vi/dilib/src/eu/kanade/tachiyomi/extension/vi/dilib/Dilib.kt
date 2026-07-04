@@ -14,7 +14,7 @@ import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import kotlin.time.Duration.Companion.second
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Dilib : HttpSource() {
