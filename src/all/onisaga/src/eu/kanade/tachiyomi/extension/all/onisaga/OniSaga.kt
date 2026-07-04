@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -32,14 +33,22 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import rx.Observable
 
-class OniSaga(
-    override val lang: String,
-    private val langKey: String?,
-) : HttpSource(),
+@Source
+abstract class OniSaga :
+    HttpSource(),
     ConfigurableSource {
 
-    override val name = "OniSaga"
-    override val baseUrl = "https://onisaga.com"
+    private val langKey: String? get() = when (lang) {
+        "en" -> "EN"
+        "fr" -> "FR"
+        "ja" -> "JA"
+        "pt-BR" -> "PT-BR"
+        "pt" -> "PT"
+        "es-419" -> "ES-LA"
+        "es" -> "ES"
+        else -> null
+    }
+
     override val supportsLatest = true
 
     private val livewireJson = Json {

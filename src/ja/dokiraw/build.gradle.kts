@@ -4,13 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Dokiraw"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "liliana"
 
     source {
         lang = "ja"
-        baseUrl = "https://dokiraw.cloud"
+        baseUrl = "https://dokiraw.win"
     }
 }

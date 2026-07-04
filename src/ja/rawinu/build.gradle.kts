@@ -4,12 +4,15 @@ plugins {
 
 keiyoushi {
     name = "RawINU"
-    className = "RawINU"
     versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "fmreader"
-    baseUrl = "https://rawinu.com"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://rawinu.com"
+    }
 }
 
 dependencies {

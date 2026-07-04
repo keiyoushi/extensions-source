@@ -4,12 +4,17 @@ plugins {
 
 keiyoushi {
     name = "NihonKuni"
-    className = "MangaGun"
     versionCode = 8
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "fmreader"
-    baseUrl = "https://nihonkuni.com"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://nihonkuni.com"
+        // Formerly "MangaGun(漫画軍)"
+        id = 3811800324362294701L
+    }
 }
 
 dependencies {

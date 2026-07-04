@@ -1,14 +1,10 @@
 package eu.kanade.tachiyomi.extension.ja.younganimal
 
-import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewerAlt
+import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewer
+import keiyoushi.annotation.Source
 
-class YoungAnimal :
-    ComiciViewerAlt(
-        "Young Animal",
-        "https://younganimal.com",
-        "ja",
-        "https://younganimal.com/api",
-    ) {
+@Source
+abstract class YoungAnimal : ComiciViewer() {
     override fun getFilterOptions(): List<Pair<String, String>> = listOf(
         Pair("ランキング", "/ranking/manga"),
         Pair("更新順", "/series/list/up"),

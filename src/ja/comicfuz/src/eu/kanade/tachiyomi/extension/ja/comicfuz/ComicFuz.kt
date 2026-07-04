@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.encodeToByteArray
 import kotlinx.serialization.protobuf.ProtoBuf
@@ -18,16 +19,11 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okio.IOException
 
-class ComicFuz : HttpSource() {
-
-    override val name = "COMIC FUZ"
-
-    private val domain = "comic-fuz.com"
-    override val baseUrl = "https://$domain"
+@Source
+abstract class ComicFuz : HttpSource() {
+    private val domain = baseUrl.toHttpUrl().host
     private val apiUrl = "https://api.$domain/v1"
     private val cdnUrl = "https://img.$domain"
-
-    override val lang = "ja"
 
     override val supportsLatest = true
 

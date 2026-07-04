@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
 import keiyoushi.utils.parseAs
@@ -18,14 +19,11 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup.parseBodyFragment
 
-class Docomo : HttpSource() {
-    override val name = "Docomo"
-    private val domain = "docomo.ne.jp"
-    override val baseUrl = "https://dbook.$domain"
-    override val lang = "ja"
+@Source
+abstract class Docomo : HttpSource() {
     override val supportsLatest = false
 
-    private val apiUrl = "https://dxp-system.$domain"
+    private val apiUrl = "https://dxp-system.docomo.ne.jp"
     private val sessionUrl = "https://rs4x.mw-pf.jp"
 
     override val client = network.client.newBuilder()

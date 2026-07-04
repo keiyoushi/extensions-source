@@ -4,14 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Siyah Melek"
-    versionCode = 60
+    versionCode = 61
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "initmanga"
 
     source {
         lang = "tr"
-        baseUrl = "https://siyahmelek.vip"
+        baseUrl = "https://siyahmelek.fun"
         versionId = 2
     }
 }

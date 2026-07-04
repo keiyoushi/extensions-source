@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "MangaReader.in"
-    versionCode = 4
+    versionCode = 6
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 

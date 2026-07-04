@@ -4,18 +4,15 @@ import eu.kanade.tachiyomi.multisrc.gattsu.Gattsu
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import kotlin.time.Duration.Companion.seconds
 
-class UniversoHentai :
-    Gattsu(
-        "Universo Hentai",
-        "https://universohentai.com",
-        "pt-BR",
-    ) {
+@Source
+abstract class UniversoHentai : Gattsu() {
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 2.seconds)

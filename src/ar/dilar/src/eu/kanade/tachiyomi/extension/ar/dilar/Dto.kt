@@ -100,10 +100,10 @@ class ReleaseDto(
     private val id: String,
     @SerialName("created_at") private val createdAt: String? = null,
 ) {
-    fun toSChapter(chapter: ChapterReleasesDto) = SChapter.create().apply {
+    fun toSChapter(chapter: ChapterReleasesDto, mangaUrl: String) = SChapter.create().apply {
         val title = if (!chapter.title.isNullOrBlank()) " - ${chapter.title}" else ""
         val number = chapter.chapter.removeSuffix(".00")
-        url = "$number#$id"
+        url = "$mangaUrl/$number#$id"
         name = "$number$title"
         date_upload = dateFormat.tryParse(createdAt)
     }

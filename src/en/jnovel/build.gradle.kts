@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "J-Novel"
-    className = "JNovel"
     versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://j-novel.club"
+    }
 }
 
 dependencies {

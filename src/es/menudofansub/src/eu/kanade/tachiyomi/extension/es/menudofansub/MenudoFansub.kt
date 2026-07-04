@@ -1,5 +1,10 @@
 package eu.kanade.tachiyomi.extension.es.menudofansub
 
 import eu.kanade.tachiyomi.multisrc.foolslide.FoolSlide
+import keiyoushi.annotation.Source
 
-class MenudoFansub : FoolSlide("Menudo-Fansub", "https://www.menudo-fansub.com", "es", "/slide")
+@Source
+abstract class MenudoFansub : FoolSlide() {
+
+    override val urlModifier = "/slide"
+}

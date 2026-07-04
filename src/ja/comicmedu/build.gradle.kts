@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "G-Comi"
-    className = "ComicMeDu"
     versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "comiciviewer"
-    baseUrl = "https://g-comi.jp"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://g-comi.jp"
+        id = 7310112963091407823
+    }
 }

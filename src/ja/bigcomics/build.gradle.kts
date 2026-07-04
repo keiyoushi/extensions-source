@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Big Comics"
-    className = "BigComics"
     versionCode = 1
-    contentWarning = ContentWarning.SAFE
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "comiciviewer"
-    baseUrl = "https://bigcomics.jp"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://bigcomics.jp"
+    }
 }

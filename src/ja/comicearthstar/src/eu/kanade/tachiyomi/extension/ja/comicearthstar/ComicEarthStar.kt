@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
+import keiyoushi.annotation.Source
 import keiyoushi.utils.GraphQLErrorInterceptor
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.graphQLPost
@@ -13,12 +14,8 @@ import okhttp3.Response
 import java.util.Calendar
 import java.util.TimeZone
 
-class ComicEarthStar :
-    GigaViewer(
-        "Comic Earth Star",
-        "https://comic-earthstar.com",
-        "ja",
-    ) {
+@Source
+abstract class ComicEarthStar : GigaViewer() {
     private val apiUrl = "$baseUrl/graphql"
     private val jst = TimeZone.getTimeZone("Asia/Tokyo")
 

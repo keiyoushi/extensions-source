@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.Request
@@ -25,11 +26,30 @@ import java.util.Locale
 
 private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.US)
 
-open class MyReadingManga(override val lang: String, private val siteLang: String, private val latestLang: String) : HttpSource() {
+@Source
+abstract class MyReadingManga : HttpSource() {
+
+    private val siteLang: String
+        get() = when (lang) {
+            "ar" -> "Arabic"
+            "id" -> "Indonesia"
+            "zh" -> "Chinese"
+            "en" -> "English"
+            "de" -> "German"
+            "it" -> "Italian"
+            "ja" -> "Japanese"
+            "ko" -> "Korean"
+            "pt-BR" -> "Portuguese"
+            "ru" -> "Russian"
+            "es" -> "Spanish"
+            "tr" -> "Turkish"
+            "vi" -> "Vietnamese"
+            else -> lang
+        }
+
+    private val latestLang: String get() = if (lang == "ja") "jp" else siteLang
 
     // Basic Info
-    override val name = "MyReadingManga"
-    final override val baseUrl = "https://myreadingmanga.info"
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("User-Agent", USER_AGENT)
         .add("X-Requested-With", randomString((1..20).random()))

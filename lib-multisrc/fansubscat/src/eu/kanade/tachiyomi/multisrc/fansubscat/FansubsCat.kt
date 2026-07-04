@@ -25,13 +25,12 @@ import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
-abstract class FansubsCat(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-    val apiBaseUrl: String,
-    val isHentaiSite: Boolean,
-) : HttpSource() {
+abstract class FansubsCat : HttpSource() {
+
+    protected open val apiBaseUrl: String
+        get() = baseUrl.replace("https://manga.", "https://api.")
+
+    abstract val isHentaiSite: Boolean
 
     override val supportsLatest = true
 
