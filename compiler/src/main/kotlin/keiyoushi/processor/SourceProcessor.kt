@@ -152,7 +152,6 @@ class SourceProcessor(
 
     private fun buildPassthroughClass(annotatedClass: ClassName): TypeSpec =
         TypeSpec.classBuilder("ExtensionGenerated")
-            .addModifiers(KModifier.INTERNAL)
             .superclass(annotatedClass)
             .build()
 
@@ -161,7 +160,6 @@ class SourceProcessor(
         source: SourceDef,
         isConfigurable: Boolean,
     ): TypeSpec = TypeSpec.classBuilder("ExtensionGenerated")
-        .addModifiers(KModifier.INTERNAL)
         .superclass(annotatedClass)
         .applySourceMembers(source, isConfigurable)
         .build()
@@ -193,7 +191,6 @@ class SourceProcessor(
             .build()
 
         return TypeSpec.classBuilder("ExtensionGenerated")
-            .addModifiers(KModifier.INTERNAL)
             .addSuperinterface(sourceFactoryType)
             .addFunction(
                 FunSpec.builder("createSources")
@@ -233,49 +230,40 @@ class SourceProcessor(
             }
             "mirrors" -> {
                 val strings = stringsForLang(source.lang)
-                val mirrorsArg = CodeBlock.builder().apply {
-                    urlSpec.urls.forEachIndexed { i, url ->
-                        if (i > 0) add(", ")
-                        add("%S", url)
-                    }
-                }.build()
+                val config = PreferenceConfig(
+                    mirrors = urlSpec.urls.toCodeBlock(isListOf = true),
+                    entries = urlSpec.entries.toCodeBlock(),
+                    values = urlSpec.values.toCodeBlock(),
+                )
 
                 if (urlSpec.withCustom) {
-                    val entriesArg = urlSpec.entries?.let { entries ->
-                        CodeBlock.builder().apply {
-                            add("listOf(")
-                            entries.forEachIndexed { i, e ->
-                                if (i > 0) add(", ")
-                                add("%S", e)
-                            }
-                            add(")")
-                        }.build()
-                    } ?: CodeBlock.of("null")
-
-                    val valuesArg = urlSpec.values?.let { values ->
-                        CodeBlock.builder().apply {
-                            add("listOf(")
-                            values.forEachIndexed { i, v ->
-                                if (i > 0) add(", ")
-                                add("%S", v)
-                            }
-                            add(")")
-                        }.build()
-                    } ?: CodeBlock.of("null")
-
                     addProperty(
                         PropertySpec.builder("mirrorPrefs", customAndMirrorPrefsClass)
                             .addModifiers(KModifier.PRIVATE)
                             .delegate(
-                                CodeBlock.of(
-                                    "lazy { %T(%M(id), listOf(%L), %S, true, %S, %S, %S, mirrorEntries = %L, mirrorEntryValues = %L) }",
-                                    customAndMirrorPrefsClass, getPreferencesFn, mirrorsArg, urlSpec.defaultUrl,
-                                    strings.mirrorTitle, strings.customUrlTitle, strings.customUrlDialogMessage,
-                                    entriesArg, valuesArg,
-                                ),
+                                CodeBlock.builder()
+                                    .add("lazy {\n")
+                                    .indent()
+                                    .add("%T(\n", customAndMirrorPrefsClass)
+                                    .indent()
+                                    .add("preferences = %M(id),\n", getPreferencesFn)
+                                    .add("mirrors = %L,\n", config.mirrors)
+                                    .add("defaultUrl = %S,\n", urlSpec.defaultUrl)
+                                    .add("withCustom = true,\n")
+                                    .add("mirrorTitle = %S,\n", strings.mirrorTitle)
+                                    .add("customTitle = %S,\n", strings.customUrlTitle)
+                                    .add("customDialogMessage = %S,\n", strings.customUrlDialogMessage)
+                                    .add("mirrorEntries = %L,\n", config.entries)
+                                    .add("mirrorEntryValues = %L\n", config.values)
+                                    .unindent()
+                                    .add(")\n")
+                                    .unindent()
+                                    .add("}")
+                                    .build(),
                             ).build(),
                     )
                 } else {
+                    val mirrorsArg = urlSpec.urls.toCodeBlock(isListOf = false)
                     addProperty(
                         PropertySpec.builder("mirrorPrefs", mirrorPrefsClass)
                             .addModifiers(KModifier.PRIVATE)
@@ -332,6 +320,24 @@ class SourceProcessor(
                 .build(),
         )
     }
+
+    private fun List<String>?.toCodeBlock(isListOf: Boolean = true): CodeBlock {
+        if (this == null) return CodeBlock.of("null")
+        return CodeBlock.builder().apply {
+            if (isListOf) add("listOf(")
+            forEachIndexed { i, s ->
+                if (i > 0) add(", ")
+                add("%S", s)
+            }
+            if (isListOf) add(")")
+        }.build()
+    }
+
+    private data class PreferenceConfig(
+        val mirrors: CodeBlock,
+        val entries: CodeBlock,
+        val values: CodeBlock,
+    )
 
     class Provider : SymbolProcessorProvider {
         override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor =
