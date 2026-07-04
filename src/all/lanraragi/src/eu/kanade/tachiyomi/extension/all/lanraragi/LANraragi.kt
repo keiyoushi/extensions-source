@@ -439,7 +439,7 @@ open class LANraragi(private val suffix: String = "") :
         screen.addPreference(screen.editTextPreference(SORT_BY_NS_KEY, "Latest - Sort by Namespace", SORT_BY_NS_DEFAULT, "Sort by the given namespace for Latest, such as date_added."))
         screen.addPreference(latestSortOrder)
         screen.addPreference(randomPageSize)
-        screen.addPreference(screen.checkBoxPreference(REDUPE_KEY, "Random Sort - Ignore dedupe", REDUPE_DEFAULT, "If enabled, ignores app's enforced deduping at the cost of spamming the its database. If disabled, Random will eventually run out and the app will infinitely spam the server."))
+        screen.addPreference(screen.checkBoxPreference(REDUPE_KEY, "Random Sort - Ignore dedupe", REDUPE_DEFAULT, "If enabled, ignores app's enforced deduping at the cost of spamming its database. If disabled, Random will eventually run out and the app will infinitely spam the server."))
         screen.addPreference(screen.editTextPreference(URL_TAG_PREFIX_KEY, "Set tag prefix to get WebView URL", URL_TAG_PREFIX_DEFAULT, "Example: 'source:' will try to get the URL from the first tag starting with 'source:' and it will open it in the WebView. Leave empty for the default behavior."))
     }
 
