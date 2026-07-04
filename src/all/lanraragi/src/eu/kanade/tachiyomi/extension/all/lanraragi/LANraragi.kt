@@ -281,7 +281,7 @@ open class LANraragi(private val suffix: String = "") :
                     url = "/api/search/random?count=1&$randQuery"
                     title = "Random"
                     description = "Refresh for a random archive."
-                    thumbnail_url = getThumbnailUri("tachiyomi") // noThumb
+                    thumbnail_url = getThumbnailUri("0".repeat(40))
                 },
             )
         }
