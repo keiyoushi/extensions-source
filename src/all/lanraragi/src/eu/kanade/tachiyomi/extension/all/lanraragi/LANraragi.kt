@@ -95,13 +95,15 @@ open class LANraragi(private val suffix: String = "") :
             val archive = json.decodeFromString<Archive>(res)
             return archiveToSManga(archive)
         } else {
-            val tank = json.decodeFromString<TankoubonMetadataJson>(res)
+            val tank = json.decodeFromString<Tankoubon>(res)
+            val tags = tank.result?.full_data?.joinToString(",") { it.tags!! }?.split(",")?.sorted()?.joinToString(",")
+
             val archive = Archive(
-                arcid = tank.id,
+                arcid = tank.result!!.id,
                 isnew = false,
-                tags = tank.tags,
-                summary = tank.summary,
-                title = tank.name!!,
+                tags = tags,
+                summary = tank.result.summary,
+                title = tank.result.name!!,
             )
 
             return archiveToSManga(archive)
@@ -160,25 +162,16 @@ open class LANraragi(private val suffix: String = "") :
         } else {
             Log.d("LANraragi", "Handling as tank")
 
-            val tank = json.decodeFromString<TankoubonMetadataJson>(res)
-            // Help
-            tank.archives!!.forEach {
-                val apiURL = getApiUriBuilder("/api/archives/$it/metadata").build().toString()
-                val response = client.newCall(GET(apiURL, headers)).execute()
+            val tank = json.decodeFromString<Tankoubon>(res)
 
-                if (!response.isSuccessful) {
-                    return@forEach
-                }
-
-                val archive = response.parseAs<Archive>()
-
+            tank.result?.full_data?.forEach {
                 chapters.add(
                     SChapter.create().apply {
-                        url = getApiUriBuilder("/api/archives/${archive.arcid}/files").build().toString()
+                        url = getApiUriBuilder("/api/archives/${it.arcid}/files").build().toString()
                         chapter_number = 1F + chapters.size
-                        name = archive.title
+                        name = it.title
 
-                        getDateAdded(archive.tags).toLongOrNull()?.let { date ->
+                        getDateAdded(it.tags).toLongOrNull()?.let { date ->
                             date_upload = date
                         }
                     },
@@ -490,7 +483,7 @@ open class LANraragi(private val suffix: String = "") :
     // Helper
     private fun apiTypeByID(id: String): Uri = getApiUriBuilder(
         if (id.startsWith("TANK_")) {
-            "/api/tankoubons/$id"
+            "/api/tankoubons/$id/full"
         } else {
             "/api/archives/$id/metadata"
         },
@@ -562,22 +555,16 @@ open class LANraragi(private val suffix: String = "") :
 
     private fun getThumbnailId(url: String): String = Regex("""/(TANK_[0-9]{10}|\w{40})/thumbnail""").find(url)?.groupValues?.get(1) ?: ""
 
-    private fun getNSTag(tags: String?, tag: String): List<String>? {
-        tags?.split(',')?.forEach {
-            if (it.contains(':')) {
-                val temp = it.trim().split(":", limit = 2)
-                if (temp[0].equals(tag, true)) return temp
-            }
-        }
+    private fun getNSTag(tags: String?, tag: String): List<String>? = tags?.split(',')
+        ?.filter { it.startsWith("$tag:") }
+        ?.map { it.split(":", limit = 2).last() }
+        ?.distinct()
 
-        return null
-    }
-
-    private fun getArtist(tags: String?): String = getNSTag(tags, "artist")?.get(1) ?: "N/A"
+    private fun getArtist(tags: String?): String = getNSTag(tags, "artist")?.joinToString(", ") ?: "N/A"
 
     private fun getDateAdded(tags: String?): String {
         // Pad Date Added NS to milliseconds
-        return getNSTag(tags, "date_added")?.get(1)?.padEnd(13, '0') ?: ""
+        return getNSTag(tags, "date_added")?.get(0)?.padEnd(13, '0') ?: ""
     }
 
     // Headers (currently auth) are done in headersBuilder

@@ -44,4 +44,5 @@ data class TankoubonMetadataJson(
     val summary: String?,
     val tags: String?,
     val archives: List<String>?,
+    val full_data: List<Archive>?,
 )
