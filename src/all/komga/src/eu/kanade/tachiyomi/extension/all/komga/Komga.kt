@@ -3,6 +3,8 @@ package eu.kanade.tachiyomi.extension.all.komga
 import android.content.SharedPreferences
 import android.text.InputType
 import android.util.Log
+import android.widget.Toast
+import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.AppInfo
@@ -25,7 +27,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,7 +45,6 @@ import uy.kohesive.injekt.injectLazy
 import java.security.MessageDigest
 import java.util.Locale
 
-@Source
 open class Komga(private val suffix: String = "") :
     HttpSource(),
     ConfigurableSource,
@@ -347,6 +347,22 @@ open class Komga(private val suffix: String = "") :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         fetchFilterOptions()
 
+        if (suffix.isEmpty()) {
+            ListPreference(screen.context).apply {
+                key = PREF_EXTRA_SOURCES_COUNT
+                title = "Number of extra sources"
+                summary = "Number of additional sources to create. There will always be at least one Komga source."
+                entries = PREF_EXTRA_SOURCES_ENTRIES
+                entryValues = PREF_EXTRA_SOURCES_ENTRIES
+
+                setDefaultValue(PREF_EXTRA_SOURCES_DEFAULT)
+                setOnPreferenceChangeListener { _, _ ->
+                    Toast.makeText(screen.context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
+                    true
+                }
+            }.also(screen::addPreference)
+        }
+
         screen.addEditTextPreference(
             title = "Source display name",
             default = suffix,
@@ -507,6 +523,9 @@ open class Komga(private val suffix: String = "") :
     private val logTag by lazy { "komga${if (suffix.isNotBlank()) ".$suffix" else ""}" }
 
     companion object {
+        internal const val PREF_EXTRA_SOURCES_COUNT = "Number of extra sources"
+        internal const val PREF_EXTRA_SOURCES_DEFAULT = "2"
+
         internal const val TYPE_SERIES = "Series"
         internal const val TYPE_READLISTS = "Read lists"
         internal const val TYPE_BOOKS = "Books"
@@ -518,6 +537,8 @@ private enum class FetchFilterStatus {
     FETCHING,
     FETCHED,
 }
+
+private val PREF_EXTRA_SOURCES_ENTRIES = (0..10).map { it.toString() }.toTypedArray()
 
 private const val PREF_DISPLAY_NAME = "Source display name"
 private const val PREF_ADDRESS = "Address"

@@ -11,7 +11,7 @@ keiyoushi {
     source {
         name = "Komga"
         lang = "all"
-        baseUrl = "https://example.com" // Dummy URL, overridden by skipCodeGen = true
+        baseUrl = "https://127.0.0.1"
         skipCodeGen = true
     }
 }
