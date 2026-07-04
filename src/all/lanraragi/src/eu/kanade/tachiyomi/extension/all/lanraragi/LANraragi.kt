@@ -533,7 +533,6 @@ open class LANraragi(private val suffix: String = "") :
         ?.filter { it.startsWith("$tag:") }
         ?.map { it.split(":", limit = 2).last() }
         ?.distinct()
-    private fun getArtist(tags: String?): String = getNSTag(tags, "artist")?.joinToString() ?: "N/A"
         ?.takeIf { it.isNotEmpty() }
 
     private fun getDateAdded(tags: String?): String {
