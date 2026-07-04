@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.yellownote
 
+import android.content.SharedPreferences
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,6 +17,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -23,9 +28,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Source
-abstract class YellowNote : HttpSource() {
+abstract class YellowNote :
+    HttpSource(),
+    ConfigurableSource {
 
     override val supportsLatest = true
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -38,6 +47,7 @@ abstract class YellowNote : HttpSource() {
             classLoader = this::class.java.classLoader!!,
         )
     }
+
     private val dateFormat = SimpleDateFormat("yyyy.MM.dd", Locale.ROOT)
 
     private val dateRegex = """\d{4}\.\d{2}\.\d{2}""".toRegex()
@@ -47,6 +57,19 @@ abstract class YellowNote : HttpSource() {
     private val mangaSelector = "div.list.photo-list > div.item.photo, div.list.amateur-list > div.item.amateur"
     private val nextPageSelector = "div.pager:first-of-type > a.pager-next"
     private val imageSelector = "div.list.photo-items > div.item.photo-image, div.list.amateur-items > div.item.amateur-image"
+
+    // ============================== Preferences ==========================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = "XChina::IMAGE_QUALITY"
+            title = intl["config.image_quality.title"]
+            summary = intl["config.image_quality.summary"]
+            entries = arrayOf("原图(JPG)", "高清(WebP)")
+            entryValues = arrayOf("original", "webp_hd")
+            setDefaultValue("original")
+        }.also(screen::addPreference)
+    }
 
     // ============================== Popular ==============================
 
@@ -72,6 +95,7 @@ abstract class YellowNote : HttpSource() {
 
         val httpUrl = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegments(uriPart)
+
             val sortPart = sortSelector.toUriPart()
             if (sortPart.isNotBlank()) {
                 addPathSegment(sortPart)
@@ -108,6 +132,7 @@ abstract class YellowNote : HttpSource() {
             author = infoCardElement.selectFirst("div.item.floating")
                 ?.text()
                 ?: parseInfoByIcon(infoCardElement, "i.fa-circle-user")
+
             genre = listOfNotNull(categories, filters, tags)
                 .flatten()
                 .takeIf { it.isNotEmpty() }
@@ -143,10 +168,20 @@ abstract class YellowNote : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
+        val quality = preferences.getString("XChina::IMAGE_QUALITY", "original") ?: "original"
+
         return document.select(imageSelector)
             .mapIndexedNotNull { i, imageElement ->
                 val url = parseUrlFormStyle(imageElement.selectFirst("div.img")) ?: return@mapIndexedNotNull null
-                Page(i, imageUrl = url)
+
+                // PR #15991: Replace WebP with JPG for original quality
+                val finalUrl = if (quality == "original" && url.contains("_600x0.webp")) {
+                    url.replace("_600x0.webp", ".jpg")
+                } else {
+                    url
+                }
+
+                Page(i, imageUrl = finalUrl)
             }
     }
 
@@ -165,6 +200,7 @@ abstract class YellowNote : HttpSource() {
 
     private fun parseMangaList(response: Response): MangasPage {
         val document = response.asJsoup()
+
         val mangas = document.select(mangaSelector).mapNotNull { element ->
             val mangaEl = element.selectFirst("a") ?: return@mapNotNull null
             val mangaUrl = mangaEl.absUrl("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
