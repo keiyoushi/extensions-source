@@ -231,7 +231,7 @@ open class LANraragi(private val suffix: String = "") :
 
                 is HideCompleted -> if (filter.state) uri.appendQueryParameter("hidecompleted", "true")
 
-                is GroupByTanks -> if (!filter.state) uri.appendQueryParameter("groupby_tanks", "true")
+                is GroupByTanks -> uri.appendQueryParameter("groupby_tanks", filter.state.toString())
 
                 is SortByNamespace -> if (filter.state.isNotEmpty()) uri.appendQueryParameter("sortby", filter.state.trim())
 
