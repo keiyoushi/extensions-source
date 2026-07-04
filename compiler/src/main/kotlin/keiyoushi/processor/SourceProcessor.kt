@@ -152,6 +152,7 @@ class SourceProcessor(
 
     private fun buildPassthroughClass(annotatedClass: ClassName): TypeSpec =
         TypeSpec.classBuilder("ExtensionGenerated")
+            .addModifiers(KModifier.INTERNAL)
             .superclass(annotatedClass)
             .build()
 
@@ -160,6 +161,7 @@ class SourceProcessor(
         source: SourceDef,
         isConfigurable: Boolean,
     ): TypeSpec = TypeSpec.classBuilder("ExtensionGenerated")
+        .addModifiers(KModifier.INTERNAL)
         .superclass(annotatedClass)
         .applySourceMembers(source, isConfigurable)
         .build()
@@ -191,6 +193,7 @@ class SourceProcessor(
             .build()
 
         return TypeSpec.classBuilder("ExtensionGenerated")
+            .addModifiers(KModifier.INTERNAL)
             .addSuperinterface(sourceFactoryType)
             .addFunction(
                 FunSpec.builder("createSources")
