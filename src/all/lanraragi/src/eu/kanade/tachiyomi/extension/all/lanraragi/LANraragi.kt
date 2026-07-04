@@ -25,9 +25,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.CacheControl
 import okhttp3.Dns
 import okhttp3.Headers
@@ -128,55 +125,39 @@ open class LANraragi(private val suffix: String = "") :
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val res = response.body.string()
-        val isTank = !json.parseToJsonElement(res).jsonObject.containsKey("arcid")
         val chapters = mutableListOf<SChapter>()
+        val archives = try {
+            listOf(json.decodeFromString<Archive>(res))
+        } catch (_: Exception) {
+            json.decodeFromString<Tankoubon>(res).result?.full_data
+        }
 
-        if (!isTank) {
-            val archive = json.decodeFromString<Archive>(res)
-            val prefClearNew = preferences.getBoolean(CLEAR_NEW_KEY, CLEAR_NEW_DEFAULT)
+        // Legacy extension-exclusive behavior to remove isnew on single archives when viewing
+        val prefClearNew = preferences.getBoolean(CLEAR_NEW_KEY, CLEAR_NEW_DEFAULT)
+        if (prefClearNew && archives?.size == 1 && archives[0].isnew) {
+            val clearNew = Request.Builder()
+                .url("$baseUrl/api/archives/${archives[0].arcid}/isnew")
+                .headers(headers)
+                .delete()
+                .build()
 
-            // Legacy extension-exclusive behavior to remove isnew on single archives when viewing
-            if (archive.isnew && prefClearNew) {
-                val clearNew = Request.Builder()
-                    .url("$baseUrl/api/archives/${archive.arcid}/isnew")
-                    .headers(headers)
-                    .delete()
-                    .build()
+            client.newCall(clearNew).execute()
+        }
 
-                client.newCall(clearNew).execute()
-            }
-
+        archives?.forEach {
             chapters.add(
                 SChapter.create().apply {
-                    url = getApiUriBuilder("/api/archives/${archive.arcid}/files").build().toString()
-                    chapter_number = 1F
-                    name = "Chapter"
+                    url = getApiUriBuilder("/api/archives/${it.arcid}/files").build().toString()
+                    chapter_number = 1F + chapters.size
+                    name = if (archives.size == 1) "Chapter" else it.title
 
-                    getDateAdded(archive.tags).toLongOrNull()?.let {
-                        date_upload = it
+                    getDateAdded(it.tags).toLongOrNull()?.let { date ->
+                        date_upload = date
                     }
                 },
             )
-        } else {
-            Log.d("LANraragi", "Handling as tank")
-
-            val tank = json.decodeFromString<Tankoubon>(res)
-
-            tank.result?.full_data?.forEach {
-                chapters.add(
-                    SChapter.create().apply {
-                        url = getApiUriBuilder("/api/archives/${it.arcid}/files").build().toString()
-                        chapter_number = 1F + chapters.size
-                        name = it.title
-
-                        getDateAdded(it.tags).toLongOrNull()?.let { date ->
-                            date_upload = date
-                        }
-                    },
-                )
-            }
-            chapters.reverse()
         }
+        chapters.reverse() // Useless for singles, but for tanks orders them in "latest first"
 
         return chapters
     }
