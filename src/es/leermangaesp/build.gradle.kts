@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "LeerMangaEsp"
-    className = "LeerMangaEsp"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "es"
+        baseUrl = "https://leermangaesp.net"
+    }
 
     deeplink {
         host("leermangaesp.net")

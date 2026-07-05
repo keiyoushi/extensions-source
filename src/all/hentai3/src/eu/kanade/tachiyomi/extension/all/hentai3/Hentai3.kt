@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -23,15 +24,44 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-open class Hentai3(
-    override val lang: String = "all",
-    private val searchLang: String = "",
-) : HttpSource(),
+@Source
+abstract class Hentai3 :
+    HttpSource(),
     ConfigurableSource {
 
-    override val name = "3Hentai"
-
-    override val baseUrl = "https://3hentai.net"
+    private val searchLang: String
+        get() = when (lang) {
+            "all" -> ""
+            "en" -> "english"
+            "ja" -> "japanese"
+            "ko" -> "korean"
+            "zh" -> "chinese"
+            "mo" -> "mongolian"
+            "es" -> "spanish"
+            "pt" -> "Portuguese"
+            "id" -> "indonesian"
+            "jv" -> "javanese"
+            "tl" -> "tagalog"
+            "vi" -> "vietnamese"
+            "th" -> "thai"
+            "my" -> "burmese"
+            "tr" -> "turkish"
+            "ru" -> "russian"
+            "uk" -> "ukrainian"
+            "pl" -> "polish"
+            "fi" -> "finnish"
+            "de" -> "german"
+            "it" -> "italian"
+            "fr" -> "french"
+            "nl" -> "dutch"
+            "cs" -> "czech"
+            "hu" -> "hungarian"
+            "bg" -> "bulgarian"
+            "is" -> "icelandic"
+            "la" -> "latin"
+            "ar" -> "arabic"
+            else -> ""
+        }
 
     override val supportsLatest = true
 

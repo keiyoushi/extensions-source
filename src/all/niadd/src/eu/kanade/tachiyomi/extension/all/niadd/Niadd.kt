@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -16,14 +17,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-open class Niadd(
-    baseUrlParam: String,
-    langParam: String,
-) : HttpSource() {
+@Source
+abstract class Niadd : HttpSource() {
 
-    override val name = "Niadd"
-    override val baseUrl = baseUrlParam
-    override val lang = langParam
     override val supportsLatest = true
 
     companion object {

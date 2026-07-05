@@ -4,8 +4,17 @@ plugins {
 
 keiyoushi {
     name = "Danbooru"
-    className = "Danbooru"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "all"
+        baseUrl = "https://danbooru.donmai.us"
+    }
+
+    deeplink {
+        host("danbooru.donmai.us")
+        path("/pools/..*")
+    }
 }

@@ -16,13 +16,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-abstract class EZManhwa(
-    override val name: String,
-    override val baseUrl: String,
-    val apiUrl: String,
-    final override val lang: String = "en",
-) : HttpSource(),
+abstract class EZManhwa :
+    HttpSource(),
     ConfigurableSource {
+
+    abstract val apiUrl: String
 
     override val supportsLatest = true
 

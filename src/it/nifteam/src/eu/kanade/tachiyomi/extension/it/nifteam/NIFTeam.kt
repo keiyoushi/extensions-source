@@ -1,5 +1,10 @@
 package eu.kanade.tachiyomi.extension.it.nifteam
 
 import eu.kanade.tachiyomi.multisrc.foolslide.FoolSlide
+import keiyoushi.annotation.Source
 
-class NIFTeam : FoolSlide("NIFTeam", "https://read-nifteam.info", "it", "/slide")
+@Source
+abstract class NIFTeam : FoolSlide() {
+
+    override val urlModifier = "/slide"
+}

@@ -4,8 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Manwa"
-    className = "Manwa"
     versionCode = 14
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        name = "漫蛙"
+        lang = "zh"
+        baseUrl = "https://manwa.me"
+        skipCodeGen = true
+    }
 }

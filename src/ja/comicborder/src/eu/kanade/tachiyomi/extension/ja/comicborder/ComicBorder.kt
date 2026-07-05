@@ -5,16 +5,13 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
-class ComicBorder :
-    GigaViewer(
-        "Comic Border",
-        "https://comicborder.com",
-        "ja",
-    ) {
+@Source
+abstract class ComicBorder : GigaViewer() {
     override val supportsLatest = false
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)

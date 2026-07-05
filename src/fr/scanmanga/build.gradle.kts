@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Scan-Manga"
-    className = "ScanManga"
     versionCode = 23
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        baseUrl = "https://m.scan-manga.com"
+        lang = "fr"
+    }
 }

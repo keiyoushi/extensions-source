@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.comiciviewer
 
-import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewerAlt.Companion.LOGIN_SUFFIX
+import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewer.Companion.LOGIN_SUFFIX
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.parseAs
@@ -70,12 +70,6 @@ class PageDto(
 )
 
 @Serializable
-class TilePos(
-    val x: Int,
-    val y: Int,
-)
-
-@Serializable
 class ApiResponse(
     val series: SeriesData,
 )
@@ -132,8 +126,7 @@ class SeriesSummary(
     private val tag: List<Tag>?,
     private val isCompleted: Boolean?,
 ) {
-    fun toSManga(seriesHash: String): SManga = SManga.create().apply {
-        url = "/series/$seriesHash"
+    fun toSManga(): SManga = SManga.create().apply {
         title = name
         author = this@SeriesSummary.author?.joinToString { it.name }
         artist = author
@@ -255,6 +248,7 @@ class EpisodeDetailsApiResponse(
 @Serializable
 class EpisodeDetails(
     val content: List<EpisodeContent>,
+    val contentId: Int,
 )
 
 @Serializable

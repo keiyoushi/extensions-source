@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
@@ -31,23 +32,14 @@ import okio.use
 import org.jsoup.Jsoup
 import rx.Observable
 
-class Dynasty :
+@Source
+abstract class Dynasty :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "Dynasty Scans"
-
-    override val lang = "en"
-
-    private val domain = "dynasty-scans.com"
-    override val baseUrl = "https://$domain"
 
     override val supportsLatest = false
 
     private val preferences by getPreferencesLazy()
-
-    // Dynasty-Series
-    override val id = 669095474988166464
 
     override val client = network.client.newBuilder()
         .addInterceptor(::fetchCoverUrlInterceptor)
@@ -56,6 +48,8 @@ class Dynasty :
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+
+    // ============================== Popular ==============================
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/$CHAPTERS_DIR/added.json?page=$page", headers)
 
@@ -96,6 +90,13 @@ class Dynasty :
         )
     }
 
+    // ============================== Latest ===============================
+
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+
+    // ============================== Search ===============================
+
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://") || query.startsWith("deeplink:")) {
             return deepLink(query)
@@ -107,21 +108,22 @@ class Dynasty :
     }
 
     private fun deepLink(query: String): Observable<MangasPage> {
-        var query = query
+        var mutableQuery = query
 
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
+        if (mutableQuery.startsWith("https://")) {
+            val url = mutableQuery.toHttpUrl()
             val path = url.pathSegments
+            val host = baseUrl.toHttpUrl().host
 
-            if (url.host == domain && path.size > 1) {
-                query = "deeplink:${path[0]}:${path[1]}"
+            if (url.host == host && path.size > 1) {
+                mutableQuery = "deeplink:${path[0]}:${path[1]}"
             } else {
                 throw Exception("Invalid url")
             }
         }
 
-        if (query.startsWith("deeplink:")) {
-            var (_, directory, permalink) = query.split(":", limit = 3)
+        if (mutableQuery.startsWith("deeplink:")) {
+            var (_, directory, permalink) = mutableQuery.split(":", limit = 3)
 
             if (directory == CHAPTERS_DIR) {
                 val seriesPermalink = CHAPTER_SLUG_REGEX.find(permalink)?.groupValues?.get(1)
@@ -147,25 +149,6 @@ class Dynasty :
         }
 
         throw Exception("Invalid url")
-    }
-
-    override fun getFilterList(): FilterList {
-        val tags = this::class.java
-            .getResourceAsStream("/assets/tags.json")!!
-            .bufferedReader().use { it.readText() }
-            .parseAs<List<Tag>>()
-
-        return FilterList(
-            SortFilter(),
-            TypeFilter(),
-            Filter.Header("Note: Sort and Type may not always work"),
-            Filter.Separator(),
-            TagFilter(tags),
-            AuthorFilter(),
-            ScanlatorFilter(),
-            PairingFilter(),
-            Filter.Header("Note: Author, Scanlator and Pairing filters require exact name. You can add multiple by comma (,) separation"),
-        )
     }
 
     private val lruCache = object : LinkedHashMap<String, Int>() {
@@ -273,6 +256,8 @@ class Dynasty :
         }?.id
     }
 
+    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
+
     private fun searchMangaParse(response: Response, filters: FilterList): MangasPage {
         val typeFilter = filters.firstInstance<TypeFilter>()
         val includedSeries = typeFilter.checked.contains(SERIES_TYPE)
@@ -315,9 +300,6 @@ class Dynasty :
                 firstEntry = entry
             }
 
-            // since we convert chapters to their series counterpart, and select doujins from chapters
-            // it is possible to get a certain type even if it is unselected from filters
-            // so don't include in that case
             if ((!includedSeries && directory == SERIES_DIR) ||
                 (!includedChapters && directory == CHAPTERS_DIR) ||
                 (!includedDoujins && directory == DOUJINS_DIR)
@@ -340,6 +322,8 @@ class Dynasty :
             hasNextPage = hasNextPage,
         )
     }
+
+    // ============================== Details ==============================
 
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
@@ -482,13 +466,6 @@ class Dynasty :
         }
     }
 
-    private fun decodeUnicode(input: String): String = UNICODE_REGEX.replace(input) { matchResult ->
-        matchResult.groupValues[1]
-            .toInt(16)
-            .toChar()
-            .toString()
-    }
-
     private fun chapterDetailsParse(response: Response): SManga {
         val data = response.parseAs<ChapterResponse>()
 
@@ -523,6 +500,8 @@ class Dynasty :
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
     }
+
+    // ============================= Chapters ==============================
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
@@ -592,6 +571,8 @@ class Dynasty :
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
+    // =============================== Pages ===============================
+
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterPath = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
 
@@ -618,6 +599,30 @@ class Dynasty :
         }
     }
 
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    // ============================== Filters ==============================
+
+    override fun getFilterList(): FilterList {
+        val tags = requireNotNull(this::class.java.getResourceAsStream("/assets/tags.json")) {
+            "tags.json not found"
+        }.bufferedReader().use { it.readText() }.parseAs<List<Tag>>()
+
+        return FilterList(
+            SortFilter(),
+            TypeFilter(),
+            Filter.Header("Note: Sort and Type may not always work"),
+            Filter.Separator(),
+            TagFilter(tags),
+            AuthorFilter(),
+            ScanlatorFilter(),
+            PairingFilter(),
+            Filter.Header("Note: Author, Scanlator and Pairing filters require exact name. You can add multiple by comma (,) separation"),
+        )
+    }
+
+    // ============================= Utilities =============================
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
             key = CHAPTER_FETCH_LIMIT_PREF
@@ -637,7 +642,7 @@ class Dynasty :
     }
 
     private val SharedPreferences.chapterFetchLimit: Int
-        get() = getString(CHAPTER_FETCH_LIMIT_PREF, CHAPTER_FETCH_LIMITS[0])!!.let {
+        get() = (getString(CHAPTER_FETCH_LIMIT_PREF, CHAPTER_FETCH_LIMITS[0]) ?: CHAPTER_FETCH_LIMITS[0]).let {
             if (it == "all") {
                 Int.MAX_VALUE
             } else {
@@ -646,10 +651,9 @@ class Dynasty :
         }
 
     private val covers: Map<String, Map<String, String>> by lazy {
-        this::class.java
-            .getResourceAsStream("/assets/covers.json")!!
-            .bufferedReader().use { it.readText() }
-            .parseAs()
+        requireNotNull(this::class.java.getResourceAsStream("/assets/covers.json")) {
+            "covers.json not found"
+        }.bufferedReader().use { it.readText() }.parseAs()
     }
 
     private fun getCachedCoverUrl(directory: String?, permalink: String): String? {
@@ -718,7 +722,9 @@ class Dynasty :
             return chain.proceed(request)
         }
 
-        val permalink = request.url.queryParameter("permalink")!!
+        val permalink = requireNotNull(request.url.queryParameter("permalink")) {
+            "permalink is missing"
+        }
 
         val chapterUrl = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment(CHAPTERS_DIR)
@@ -743,8 +749,10 @@ class Dynasty :
             word.replaceFirstChar { it.uppercase() }
         }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
+    private fun decodeUnicode(input: String): String = UNICODE_REGEX.replace(input) { matchResult ->
+        matchResult.groupValues[1]
+            .toInt(16)
+            .toChar()
+            .toString()
+    }
 }

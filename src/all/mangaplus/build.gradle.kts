@@ -4,10 +4,16 @@ plugins {
 
 keiyoushi {
     name = "MANGA Plus by SHUEISHA"
-    className = "MangaPlusFactory"
     versionCode = 62
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    listOf("en", "es", "fr", "id", "pt-BR", "ru", "th", "vi", "de").forEach {
+        source {
+            lang = it
+            baseUrl = "https://mangaplus.shueisha.co.jp"
+        }
+    }
 
     deeplink {
         host("mangaplus.shueisha.co.jp")

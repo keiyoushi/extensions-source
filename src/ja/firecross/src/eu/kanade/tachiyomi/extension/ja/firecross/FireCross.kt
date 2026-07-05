@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -28,13 +29,11 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class FireCross :
-    ClipStudioReader(
-        "FireCross",
-        "https://firecross.jp",
-        "ja",
-    ),
+@Source
+abstract class FireCross :
+    ClipStudioReader(),
     ConfigurableSource {
+
     override val supportsLatest = false
 
     private val apiUrl = "$baseUrl/api"

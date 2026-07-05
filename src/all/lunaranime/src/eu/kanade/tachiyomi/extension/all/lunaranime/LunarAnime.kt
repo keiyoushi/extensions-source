@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.lunaranime
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,13 +12,13 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import java.security.MessageDigest
 
 @Source
 abstract class LunarAnime : HttpSource() {
@@ -192,13 +193,29 @@ abstract class LunarAnime : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException("Not used.")
 
     // =============================== Pages ================================
+
+    private fun viewChapter(slug: String, number: String, lang: String) {
+        val statusRequest = GET(API_URL + "/api/manga/rating/status/$slug/$number")
+        client.newCall(statusRequest).execute().close()
+
+        val body = ViewRequestBody(slug, number, lang).toJsonRequestBody()
+        val viewRequest = POST(API_URL + "/api/manga/chapter/view", headers, body)
+        client.newCall(viewRequest).execute().close()
+    }
+
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
         val chapterUrl = (baseUrl + chapter.url).toHttpUrl()
         val language = chapterUrl.queryParameter("lang") ?: "en"
         val (slug, chapterNumber) = chapterUrl.pathSegments.takeLast(2)
 
+        val response = client.newCall(GET(chapterUrl)).execute()
+        if (!response.isSuccessful) error("HTTP ${response.code} fetching chapter")
+
+        // Required requests or fake images are returned
+        viewChapter(slug, chapterNumber, language)
+
         // I see decryption is always required now
-        val decryptedImages = crypto.decryptChapterImages(chapterUrl.toString(), slug, chapterNumber, language)
+        val decryptedImages = crypto.decryptChapterImages(response, slug, chapterNumber, language)
         decryptedImages.mapIndexed { index, imageUrl ->
             Page(index, chapter.url, imageUrl)
         }
@@ -239,8 +256,6 @@ abstract class LunarAnime : HttpSource() {
 
         return FilterList(filters)
     }
-
-    private fun String.sha256(): ByteArray = MessageDigest.getInstance("SHA-256").digest(toByteArray())
 
     companion object {
         private const val API_URL = "https://api.lunaranime.ru"

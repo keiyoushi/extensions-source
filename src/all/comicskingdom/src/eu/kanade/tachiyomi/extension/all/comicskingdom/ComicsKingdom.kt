@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -25,12 +26,11 @@ import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
-class ComicsKingdom(override val lang: String) :
+@Source
+abstract class ComicsKingdom :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Comics Kingdom"
-    override val baseUrl = "https://wp.comicskingdom.com"
     override val supportsLatest = true
 
     private val json: Json by injectLazy()

@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -22,11 +23,10 @@ import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
-class Pixiv(override val lang: String) :
+@Source
+abstract class Pixiv :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Pixiv"
-    override val baseUrl = "https://www.pixiv.net"
     override val supportsLatest = true
 
     private val json: Json by injectLazy()

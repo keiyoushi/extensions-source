@@ -4,10 +4,16 @@ plugins {
 
 keiyoushi {
     name = "Pixiv"
-    className = "PixivFactory"
     versionCode = 12
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    listOf("en", "ja", "zh", "zh-tw", "ko").forEach {
+        source {
+            lang = it
+            baseUrl = "https://www.pixiv.net"
+        }
+    }
 
     deeplink {
         host("pixiv.net")

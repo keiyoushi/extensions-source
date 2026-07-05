@@ -6,17 +6,14 @@ import android.util.Base64
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromByteArray
-import kotlinx.serialization.decodeFromString
+import keiyoushi.utils.decodeProtoBase64
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.protoInstance
 import kotlinx.serialization.encodeToByteArray
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.protobuf.ProtoBuf
 import okhttp3.Headers
 import okhttp3.OkHttpClient
-import okhttp3.Response
 import org.jsoup.parser.Parser.unescapeEntities
 import org.jsoup.select.Evaluator
-import uy.kohesive.injekt.injectLazy
 import java.util.Locale
 
 fun getPreferences(context: Context) = arrayOf(
@@ -45,36 +42,38 @@ val SharedPreferences.langData: List<LangData>
     get() {
         val data = getString(LANG_DATA_PREF, "")!!
         if (data.isEmpty()) return emptyList()
-        return ProtoBuf.decodeFromBase64(data)
+        return data.decodeProtoBase64<List<LangData>>()
     }
 
 @Synchronized
-fun updateLangData(client: OkHttpClient, headers: Headers, preferences: SharedPreferences) {
-    val lastUpdated = client.newCall(GET("$BASE_URL/0_sources/last_updated.txt", headers))
-        .execute().body.string().substringBefore('\n').toLong()
+fun updateLangData(client: OkHttpClient, headers: Headers, preferences: SharedPreferences, baseUrl: String) {
+    val lastUpdated = client.newCall(GET("$baseUrl/0_sources/last_updated.txt", headers))
+        .execute().use { it.body.string().substringBefore('\n').toLong() }
+
     if (lastUpdated <= preferences.lastUpdated) return
 
     val editor = preferences.edit().putLong(LAST_UPDATED_PREF, lastUpdated)
 
-    val episodes = client.newCall(GET("$BASE_URL/0_sources/episodes.json", headers))
+    val episodes = client.newCall(GET("$baseUrl/0_sources/episodes.json", headers))
         .execute().parseAs<List<EpisodeDto>>()
+
     val total = episodes.size
-    val translatedCount = episodes.flatMap { it.translated_languages }
+    val translatedCount = episodes.flatMap { it.translatedLanguages }
         .groupingBy { it }.eachCount()
 
     // framagit.org is IP blocked in some countries
     val titles = try {
         fetchTitles(client, headers)
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         null
     }
 
-    val langs = client.newCall(GET("$BASE_URL/0_sources/langs.json", headers))
+    val langs = client.newCall(GET("$baseUrl/0_sources/langs.json", headers))
         .execute().parseAs<LangsDto>().entries.map { (key, dto) ->
             Lang(
                 key = key,
-                name = dto.local_name,
-                code = dto.iso_code.ifEmpty { key },
+                name = dto.localName,
+                code = dto.isoCode.ifEmpty { key },
                 translators = dto.translators.joinToString(),
                 translatedCount = translatedCount[key] ?: 0,
             )
@@ -88,7 +87,8 @@ fun updateLangData(client: OkHttpClient, headers: Headers, preferences: SharedPr
             LangData(it.key, it.name, progress, it.translators, titles?.get(it.key) ?: if (it.key == "en") TITLE else "$TITLE (${it.key.uppercase()})")
         }
 
-    editor.putString(LANG_DATA_PREF, ProtoBuf.encodeToBase64(langs)).apply()
+    val encodedLangs = Base64.encodeToString(protoInstance.encodeToByteArray(langs), Base64.NO_WRAP)
+    editor.putString(LANG_DATA_PREF, encodedLangs).apply()
 }
 
 private fun SharedPreferences.Editor.chooseLang(langs: List<Lang>) {
@@ -101,7 +101,7 @@ private fun SharedPreferences.Editor.chooseLang(langs: List<Lang>) {
 
 private fun fetchTitles(client: OkHttpClient, headers: Headers): Map<String, String> {
     val url = "https://framagit.org/search?project_id=76196&search=core/mod-header.php:4"
-    val document = client.newCall(GET(url, headers)).execute().asJsoup()
+    val document = client.newCall(GET(url, headers)).execute().use { it.asJsoup() }
     val result = hashMapOf<String, String>()
     for (file in document.selectFirst(Evaluator.Class("search-results"))!!.children()) {
         val filename = file.selectFirst(Evaluator.Tag("strong"))!!.ownText()
@@ -129,15 +129,6 @@ private fun fetchTitles(client: OkHttpClient, headers: Headers): Map<String, Str
     return result
 }
 
-private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
-
-private inline fun <reified T> ProtoBuf.decodeFromBase64(base64: String): T = decodeFromByteArray(Base64.decode(base64, Base64.NO_WRAP))
-
-private inline fun <reified T> ProtoBuf.encodeToBase64(value: T): String = Base64.encodeToString(encodeToByteArray(value), Base64.NO_WRAP)
-
-private val json: Json by injectLazy()
-
-const val BASE_URL = "https://www.peppercarrot.com"
 const val TITLE = "Pepper&Carrot"
 const val AUTHOR = "David Revoy"
 

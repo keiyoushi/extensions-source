@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -26,15 +27,13 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
 
-class Kodansha :
+@Source
+abstract class Kodansha :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Kodansha"
-    private val domain = "kodansha.us"
-    override val baseUrl = "https://$domain"
-    override val lang = "en"
     override val supportsLatest = true
 
+    private val domain = baseUrl.toHttpUrl().host
     private val apiUrl = "https://api.$domain"
     private val tokenUrl = "$apiUrl/account/token"
     private val preferences: SharedPreferences by getPreferencesLazy()

@@ -6,10 +6,14 @@ import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwaStatusFilter
 import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwaTypeFilter
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
-class QiScans : EZManhwa("QiScans", "https://qimanga.com", "https://api.qimanga.com/api/v1") {
+@Source
+abstract class QiScans : EZManhwa() {
+
+    override val apiUrl = "https://api.qimanga.com/api/v1"
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Origin", baseUrl)

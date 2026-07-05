@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -21,12 +22,10 @@ import okhttp3.Response
 import java.io.IOException
 import java.util.UUID.randomUUID
 
-class ReaderStore :
+@Source
+abstract class ReaderStore :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Reader Store"
-    override val baseUrl = BASE_URL
-    override val lang = "ja"
     override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()

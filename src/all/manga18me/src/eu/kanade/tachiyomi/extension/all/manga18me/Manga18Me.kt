@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -17,9 +18,8 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-open class Manga18Me(override val lang: String) : HttpSource() {
-    override val name = "Manga18.me"
-    override val baseUrl = "https://manga18.me"
+@Source
+abstract class Manga18Me : HttpSource() {
     override val supportsLatest = true
 
     override fun headersBuilder() = Headers.Builder().apply {

@@ -7,16 +7,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-open class VinnieVeritas(override val lang: String = "en") : HttpSource() {
+@Source
+abstract class VinnieVeritas : HttpSource() {
 
-    override val name = "Vinnie Veritas - CCC"
     override val supportsLatest = false
-
-    override val baseUrl = "https://ccc.vinnieveritas.com"
 
     companion object {
         private val ONCLICK_REGEX = Regex("""changeToComic\("(.+?)"\)""")

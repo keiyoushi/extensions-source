@@ -19,10 +19,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromByteArray
-import kotlinx.serialization.protobuf.ProtoBuf
+import keiyoushi.utils.parseAsProto
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -35,15 +35,13 @@ import java.util.TimeZone
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class Zebrack :
+@Source
+abstract class Zebrack :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Zebrack"
-    private val subdomain = "zebrack-comic"
-    override val baseUrl = "https://$subdomain.shueisha.co.jp"
-    override val lang = "ja"
     override val supportsLatest = true
 
+    private val subdomain = "zebrack-comic"
     private val apiUrl = "https://api2.$subdomain.com/api"
     private val magazineApiUrl = "https://api.$subdomain.com/api"
     private val jst = TimeZone.getTimeZone("Asia/Tokyo")
@@ -346,8 +344,6 @@ class Zebrack :
             }.ifEmpty { throw Exception(LOCKED) }
         }
     }
-
-    private inline fun <reified T> Response.parseAsProto(): T = ProtoBuf.decodeFromByteArray(body.bytes())
 
     private fun getLatestDay(): String {
         val calendar = Calendar.getInstance(jst)

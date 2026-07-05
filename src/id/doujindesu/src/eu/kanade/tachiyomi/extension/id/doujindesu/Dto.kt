@@ -53,18 +53,20 @@ class MangaItem(
 ) {
     fun isCompleted(): Boolean = status.lowercase() in listOf("completed", "finished")
 
+    fun List<String>?.orUnknown(): String = this
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() && !it.equals("N/A", true) }
+        ?.takeIf { it.isNotEmpty() }
+        ?.joinToString()
+        ?: "Tidak Diketahui"
+
+    fun List<String>?.orNull(): String? = this
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() && !it.equals("N/A", true) }
+        ?.takeIf { it.isNotEmpty() }
+        ?.joinToString()
+
     fun toSManga(): SManga = SManga.create().apply {
-        url = "/manga/$slug/"
-        title = this@MangaItem.title
-        thumbnail_url = coverUrl
-        author = this@MangaItem.author
-
-        status = when {
-            this@MangaItem.status.lowercase() in listOf("ongoing", "publishing") -> SManga.ONGOING
-            isCompleted() -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
-
         val termMap = mutableMapOf<String, MutableList<String>>()
         termList?.split("|")?.forEach {
             val parts = it.split(":")
@@ -73,43 +75,129 @@ class MangaItem(
             }
         }
 
-        description = buildString {
-            append("**Tipe:** ${this@MangaItem.type.replaceFirstChar { it.uppercase() }}\n")
-
-            termMap["group"]?.let { append("**Group:** ${it.joinToString()}\n") }
-            termMap["character"]?.let { append("**Karakter:** ${it.joinToString()}\n") }
-            termMap["series"]?.let { append("**Seri:** ${it.joinToString()}\n") }
-
-            this@MangaItem.description?.takeIf { it.isNotBlank() }?.let { desc ->
-                val unescapedDesc = Parser.unescapeEntities(desc, false)
-                val document = Jsoup.parseBodyFragment(unescapedDesc)
-
-                val paragraphs = document.select("p")
-                val targetNode = paragraphs.firstOrNull {
-                    it.text().lowercase().removeSuffix(":").trim() != "sinopsis"
-                } ?: paragraphs.firstOrNull() ?: document.body()
-
-                targetNode.select("b, strong").forEach {
-                    it.prepend("**")
-                    it.append("**")
+        val mangaAuthor = this@MangaItem.author
+            ?.takeIf { it.isNotBlank() && !it.equals("N/A", ignoreCase = true) }
+            ?: listOf("author", "artist", "author_artist", "creator")
+                .firstNotNullOfOrNull { key ->
+                    termMap[key]
+                        ?.orNull()
                 }
-                targetNode.select("br").prepend("\\n")
+            ?: termMap["group"].orNull()
 
-                val cleanDesc = targetNode.text().replace("\\n", "\n")
-                if (cleanDesc.isNotBlank()) append("\n\n$cleanDesc")
+        url = "/manga/$slug/"
+        title = this@MangaItem.title
+        thumbnail_url = coverUrl
+        author = mangaAuthor
+
+        status = when {
+            this@MangaItem.status.lowercase() in listOf("ongoing", "publishing") -> SManga.ONGOING
+            isCompleted() -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+
+        val finalDescription = buildString {
+            val cleanDesc = this@MangaItem.description
+                ?.takeIf { it.isNotBlank() }
+                ?.let { desc ->
+                    val document = Jsoup.parseBodyFragment(Parser.unescapeEntities(desc, false))
+                    val root = document.selectFirst(".rich-text-content") ?: document.body()
+
+                    val html = root.outerHtml()
+                        .replace(textRegex, "%%BR%%")
+
+                    val text = Jsoup.parse(html).text()
+
+                    val lines = mutableListOf<String>()
+
+                    for (line in text.split("%%BR%%")) {
+                        var cleanLine = line
+                            .replace(whitespaceRegex, " ")
+                            .trim()
+
+                        if (cleanLine.isBlank()) continue
+
+                        val lower = cleanLine.lowercase()
+
+                        val downloadIndex = listOf(
+                            lower.indexOf("download batch"),
+                            lower.indexOf("download volume"),
+                        ).filter { it >= 0 }
+                            .minOrNull()
+
+                        if (downloadIndex != null) {
+                            cleanLine = cleanLine.substring(0, downloadIndex).trim()
+                        }
+
+                        if (cleanLine.isNotBlank()) {
+                            lines += cleanLine
+                                .replaceFirst(synopsisRegex, "")
+                                .trim()
+                        }
+
+                        if (downloadIndex != null) {
+                            break
+                        }
+                    }
+
+                    lines
+                        .filter { it.isNotBlank() }
+                        .takeIf { it.isNotEmpty() }
+                }
+
+            if (cleanDesc != null) {
+                val isChapterList = cleanDesc.first().matches(chapterRegex)
+
+                append("\n\n**${if (isChapterList) "Daftar Chapter" else "Sinopsis"}:**\n")
+                append(
+                    cleanDesc.joinToString(
+                        if (isChapterList) "\n" else "\n\n",
+                    ),
+                )
+            } else {
+                append("\n\nTidak ada deskripsi yang tersedia bosque")
             }
+            append("\n\n")
 
+            val isManhwa =
+                this@MangaItem.type.equals("manhwa", ignoreCase = true) ||
+                    termMap["series"]?.any { it.equals("Manhwa", ignoreCase = true) } == true
+
+            if (!isManhwa) {
+                append("**Tipe:** ${this@MangaItem.type.replaceFirstChar { it.uppercase() }}\n")
+                append("**Group:** ${termMap["group"].orUnknown()}\n")
+                append("**Karakter:** ${termMap["character"].orUnknown()}\n")
+            }
+            termMap["series"]?.let {
+                append("**Seri:** ${it.joinToString()}\n")
+            }
             this@MangaItem.altTitles?.takeIf { it.isNotBlank() }?.let { alt ->
                 val formattedAlts = alt.split("|", ",")
+                    .map { it.trim() }
                     .filter { it.isNotBlank() }
-                    .joinToString { it.trim() }
-                append("\n\n**Judul Alternatif:**\n$formattedAlts")
+                    .joinToString()
+
+                append("**Judul Alternatif:** $formattedAlts")
             }
         }.trim()
 
-        genre = termMap["genre"]?.joinToString()
+        description = finalDescription
+
+        genre = termMap["genre"]
+            ?.sortedBy { it.lowercase() }
+            ?.joinToString { it.toTitleCase() }
     }
 }
+
+val synopsisRegex = Regex("""(?i)^\s*(?:sinopsis|synopsis)\s*:?\s*""")
+val whitespaceRegex = Regex("\\s+")
+val textRegex = Regex("(?i)<br\\s*/?>")
+val chapterRegex = Regex("""^\d+(?:-\d+)?\.\s*.+$""")
+
+private fun String.toTitleCase(): String = lowercase()
+    .split(whitespaceRegex)
+    .joinToString(" ") {
+        it.replaceFirstChar { c -> c.uppercase() }
+    }
 
 @Serializable
 class Chapter(

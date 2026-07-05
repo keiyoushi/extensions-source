@@ -20,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.encodeToString
@@ -32,12 +33,21 @@ import okhttp3.Response
 import okio.IOException
 import rx.Observable
 
-abstract class NamiComi(final override val lang: String, private val extLang: String = lang) :
+@Source
+abstract class NamiComi :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "NamiComi"
-    override val baseUrl = NamiComiConstants.WEB_URL
+    private val extLang: String
+        get() = when (lang) {
+            "zh-Hans" -> "zh-hans"
+            "zh-Hant" -> "zh-hant"
+            "pt-BR" -> "pt-br"
+            "pt" -> "pt-pt"
+            "es" -> "es-es"
+            else -> lang
+        }
+
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()

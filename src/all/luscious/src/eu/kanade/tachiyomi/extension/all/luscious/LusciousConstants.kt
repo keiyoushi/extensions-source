@@ -95,9 +95,3 @@ const val SORT_PREF_TITLE = "Page Sort"
 val SORT_PREF_ENTRIES = arrayOf("Position", "Date", "Rating")
 val SORT_PREF_ENTRY_VALUES = arrayOf("position", "date_newest", "rating_all_time")
 val SORT_PREF_DEFAULT_VALUE = SORT_PREF_ENTRY_VALUES[0]
-
-const val MIRROR_PREF_KEY = "MIRROR"
-const val MIRROR_PREF_TITLE = "Mirror"
-val MIRROR_PREF_ENTRIES = arrayOf("Guest", "Members")
-val MIRROR_PREF_ENTRY_VALUES = arrayOf("https://www.luscious.net", "https://members.luscious.net")
-val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]

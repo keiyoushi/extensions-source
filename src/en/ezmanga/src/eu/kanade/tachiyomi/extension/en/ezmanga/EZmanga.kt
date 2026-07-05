@@ -7,13 +7,16 @@ import eu.kanade.tachiyomi.multisrc.ezmanhwa.EZManhwaTypeFilter
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
-class EZmanga : EZManhwa("EZmanga", "https://ezmanga.org", "https://vapi.ezmanga.org/api/v1") {
+@Source
+abstract class EZmanga : EZManhwa() {
 
-    override val versionId = 5
+    override val apiUrl = "https://vapi.ezmanga.org/api/v1"
+
     override val client = network.client.newBuilder()
         .rateLimit(2)
         .build()

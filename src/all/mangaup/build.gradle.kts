@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Manga UP!"
-    className = "MangaUpFactory"
     versionCode = 8
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://global.manga-up.com"
+    }
 
     deeplink {
         host("global.manga-up.com")

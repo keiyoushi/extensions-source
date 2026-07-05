@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.goda
 
 import eu.kanade.tachiyomi.multisrc.goda.GoDa
+import keiyoushi.annotation.Source
 
-class Goda : GoDa("Goda", "https://manhuascans.org", "en")
+@Source
+abstract class Goda : GoDa()

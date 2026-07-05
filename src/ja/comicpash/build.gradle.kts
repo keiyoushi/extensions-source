@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Comic Pash"
-    className = "ComicPash"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "comiciviewer"
-    baseUrl = "https://comicpash.jp"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://comicpash.jp"
+    }
 }

@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromByteArray
@@ -33,12 +34,11 @@ import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class MangaUp(override val lang: String) :
+@Source
+abstract class MangaUp :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Manga UP!"
     private val domain = "manga-up.com"
-    override val baseUrl = "https://global.$domain"
     override val supportsLatest = true
 
     private val apiUrl = "https://global-api.$domain/api"

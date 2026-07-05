@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Young Jump+"
-    className = "YnJn"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://ynjn.jp"
+    }
 }

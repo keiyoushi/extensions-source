@@ -4,13 +4,16 @@ plugins {
 
 keiyoushi {
     name = "Mangago"
-    className = "Mangago"
-    versionCode = 34
+    versionCode = 35
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://www.mangago.me"
+    }
 }
 
 dependencies {
-
     implementation(project(":lib:cookieinterceptor"))
 }

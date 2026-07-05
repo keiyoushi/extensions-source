@@ -1,46 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.stashapp
 
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-
-// ===== GraphQL Types =====
-
-/**
- * [graphql over http](https://graphql.org/learn/serving-over-http)
- */
-@Serializable
-class GraphQLRequest<T>(
-    val query: String,
-    val operationName: String? = null,
-    val variables: T? = null,
-    val extensions: JsonObject? = null,
-)
-
-@Serializable
-class GraphQLErrorLocation(
-    val line: Int,
-    val column: Int,
-)
-
-@Serializable
-class GraphQLError(
-    val message: String,
-    val locations: List<GraphQLErrorLocation>? = null,
-    val path: List<JsonElement>? = null,
-    val extensions: JsonObject? = null,
-)
-
-/**
- * [graphql over http](https://graphql.org/learn/serving-over-http)
- */
-@Serializable
-class GraphQLResponse<T>(
-    val data: T? = null,
-    val errors: List<GraphQLError>? = null,
-    val extensions: JsonObject? = null,
-)
 
 // ===== StashApp Requests/Responses =====
 
@@ -105,42 +69,27 @@ class FindFilterType(
     val direction: SortDirectionEnum? = null,
 )
 
-/**
- * There is more field, ignored because not used
- */
 @Serializable
 class Folder(
     val path: String? = null,
 )
 
-/**
- * There is more field, ignored because not used
- */
 @Serializable
 class Tag(
     val name: String = "",
 )
 
-/**
- * There is more field, ignored because not used
- */
 @Serializable
 class ImagePathsType(
     val thumbnail: String? = null,
 )
 
-/**
- * There is more field, ignored because not used
- */
 @Serializable
 class VisualFile(
     @SerialName("__typename")
-    val __typename: String? = null,
+    val typename: String? = null,
 )
 
-/**
- * There is more field, ignored because not used
- */
 @Serializable
 class Image(
     val id: String? = null,
@@ -149,9 +98,6 @@ class Image(
     val visualFiles: List<VisualFile> = emptyList(),
 )
 
-/**
- * There is more field, ignored because not used
- */
 @Serializable
 class Gallery(
     val id: String? = null,
@@ -174,15 +120,79 @@ class FindGalleriesResultType(
 @Serializable
 class FindImagesResultType(
     val count: Int? = null,
-    /**
-     * Total megapixels of the images
-     */
     val megapixels: Float? = null,
-    /**
-     * Total file size in bytes
-     */
     @SerialName("filesize")
     val fileSize: Float? = null,
-
     val images: List<Image>? = null,
 )
+
+// ===== Extension Mapping & Utilities =====
+
+internal fun Gallery.toMangaBrief(baseUrl: String): SManga? {
+    val galleryId = id?.takeIf(String::isNotBlank) ?: return null
+
+    return SManga.create().apply {
+        url = toAbsoluteUrl(baseUrl, "/galleries/$galleryId")
+        title = toTitle()
+        thumbnail_url = cover?.toThumbnailUrl()
+    }
+}
+
+internal fun Gallery.toMangaDetails(baseUrl: String): SManga? {
+    val galleryId = id?.takeIf(String::isNotBlank) ?: return null
+
+    return SManga.create().apply {
+        url = toAbsoluteUrl(baseUrl, "/galleries/$galleryId")
+        title = toTitle()
+        artist = photographer?.takeIf(String::isNotBlank)
+        author = artist
+        description = details?.takeIf(String::isNotBlank)
+        genre = tags
+            .orEmpty()
+            .mapNotNull(Tag::name)
+            .filter(String::isNotBlank)
+            .joinToString()
+            .takeIf(String::isNotBlank)
+        status = SManga.UNKNOWN
+        thumbnail_url = cover?.toThumbnailUrl()
+        update_strategy = UpdateStrategy.ALWAYS_UPDATE
+        initialized = true
+    }
+}
+
+internal fun Image.toPage(index: Int, baseUrl: String): Page? {
+    val imageId = id?.takeIf(String::isNotBlank) ?: return null
+    return Page(
+        index = index,
+        url = toAbsoluteUrl(baseUrl, "/images/$imageId"),
+        imageUrl = toAbsoluteUrl(baseUrl, "/image/$imageId/image"),
+    )
+}
+
+internal fun urlLast(url: String): String = url.substringBefore('?')
+    .substringBefore('#')
+    .let(::pathLast)
+
+internal fun toAbsoluteUrl(baseUrl: String, path: String): String = when {
+    path.startsWith("http://") || path.startsWith("https://") -> path
+    path.startsWith("/") -> "$baseUrl$path"
+    else -> "$baseUrl/$path"
+}
+
+private fun Gallery.toTitle(): String = title?.takeIf(String::isNotBlank)
+    ?: folder?.path?.takeIf(String::isNotBlank)?.let(::pathLast)
+    ?: id!!
+
+private fun Image.toThumbnailUrl(): String? {
+    if (visualFiles.firstOrNull()?.isImage() != true) return null
+
+    return paths
+        ?.thumbnail
+        ?.takeIf(String::isNotBlank)
+}
+
+private fun VisualFile.isImage(): Boolean = typename == "ImageFile"
+
+private fun pathLast(path: String): String = path.trimEnd('/', '\\')
+    .substringAfterLast('/')
+    .substringAfterLast('\\')

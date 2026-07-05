@@ -6,11 +6,11 @@ class SortFilter :
     SelectFilter(
         "Sort by",
         arrayOf(
-            "Relevance" to "_score+desc,+like_vote_count+desc",
-            "Recently Added" to "start_at+desc",
-            "Oldest" to "start_at+asc",
-            "Popular" to "like_vote_count+desc",
-            "Explicitness" to "erotic_rating_average+desc,+like_vote_count+desc",
+            "Relevance" to "relevance",
+            "Recently Added" to "newest",
+            "Oldest" to "oldest",
+            "Popular" to "like_vote",
+            "Explicitness" to "erotic_rating",
         ),
     )
 
@@ -19,9 +19,9 @@ class StatusFilter :
         "Content Rating",
         arrayOf(
             "All" to "",
-            "All Ages" to "is_mature '0'",
-            "Mature (18+)" to "is_mature '1'",
-            "Uncensored" to "is_uncensored '1'",
+            "All Ages" to "is_mature:0",
+            "Mature (18+)" to "is_mature:1",
+            "Uncensored" to "is_uncensored:1",
         ),
     )
 
