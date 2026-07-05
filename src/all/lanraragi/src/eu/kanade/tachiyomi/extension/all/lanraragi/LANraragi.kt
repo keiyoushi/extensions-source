@@ -24,7 +24,6 @@ import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
 import okhttp3.CacheControl
 import okhttp3.Dns
 import okhttp3.Headers
@@ -32,7 +31,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.net.URL
@@ -58,8 +56,6 @@ open class LANraragi(private val suffix: String = "") :
     private val latestSortOrderPref by lazy { getPrefLatestSortOrder() }
 
     private val randomPageSizePref by lazy { getPrefRandomPageSize() }
-
-    private val json by lazy { Injekt.get<Json>() }
 
     private var randomArchiveID: String = ""
 
