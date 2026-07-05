@@ -26,7 +26,7 @@ class Item(
     fun toSManga(baseUrl: String) = SManga.create().apply {
         url = slug
         title = this@Item.title
-        thumbnail_url = if (coverImageUrl?.startsWith("http") == true) coverImageUrl else "$baseUrl/$coverImageUrl"
+        thumbnail_url = coverImageUrl?.let { if (it.startsWith("http")) it else "$baseUrl/$it" }
     }
 }
 
@@ -53,12 +53,12 @@ class DetailsResponse(
         author = authors?.joinToString { it.name }
         artist = artists?.joinToString { it.name }
         genre = genres?.joinToString { it.name }
-        status = when (this@DetailsResponse.status) {
-            "ON_GOING" -> SManga.ONGOING
-            "COMPLETED" -> SManga.COMPLETED
+        status = when (this@DetailsResponse.status?.lowercase()) {
+            "on_going" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        thumbnail_url = if (coverImageUrl?.startsWith("http") == true) coverImageUrl else "$baseUrl/$coverImageUrl"
+        thumbnail_url = coverImageUrl?.let { if (it.startsWith("http")) it else "$baseUrl/$it" }
     }
 }
 

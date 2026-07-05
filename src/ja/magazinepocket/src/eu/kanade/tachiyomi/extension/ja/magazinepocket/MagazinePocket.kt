@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -31,16 +32,13 @@ import java.util.GregorianCalendar
 import java.util.Locale
 import java.util.TimeZone
 
-class MagazinePocket :
+@Source
+abstract class MagazinePocket :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Magazine Pocket"
-    private val domain = "pocket.shonenmagazine.com"
-    override val baseUrl = "https://$domain"
-    override val lang = "ja"
     override val supportsLatest = true
-    override val versionId = 2
 
+    private val domain = baseUrl.toHttpUrl().host
     private val apiUrl = "https://api.$domain"
     private val jst = TimeZone.getTimeZone("Asia/Tokyo")
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply { timeZone = jst }

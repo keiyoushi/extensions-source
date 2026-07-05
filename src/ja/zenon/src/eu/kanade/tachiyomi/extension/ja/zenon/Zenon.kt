@@ -3,15 +3,12 @@ package eu.kanade.tachiyomi.extension.ja.zenon
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import org.jsoup.nodes.Element
 
-class Zenon :
-    GigaViewer(
-        "Zenon",
-        "https://comic-zenon.com",
-        "ja",
-    ) {
+@Source
+abstract class Zenon : GigaViewer() {
     override val supportsLatest: Boolean = false
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series/zenyon", headers)

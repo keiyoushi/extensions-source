@@ -1,11 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.comicgrowl
 
-import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewerAlt
+import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewer
+import keiyoushi.annotation.Source
 
-class ComicGrowl :
-    ComiciViewerAlt(
-        "Comic Growl",
-        "https://comic-growl.com",
-        "all",
-        "https://comic-growl.com/api",
-    )
+@Source
+abstract class ComicGrowl : ComiciViewer()

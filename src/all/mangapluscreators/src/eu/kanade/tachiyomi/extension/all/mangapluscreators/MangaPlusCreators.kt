@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -21,13 +22,10 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaPlusCreators(override val lang: String) : HttpSource() {
+@Source
+abstract class MangaPlusCreators : HttpSource() {
 
-    override val name = "MANGA Plus Creators by SHUEISHA"
-
-    override val baseUrl = "https://mangaplus-creators.jp"
-
-    private val apiUrl = "$baseUrl/api"
+    private val apiUrl get() = "$baseUrl/api"
 
     override val supportsLatest = true
 

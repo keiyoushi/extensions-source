@@ -8,21 +8,16 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Toast
 import androidx.annotation.MainThread
-import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
-import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.encodeToString
@@ -43,24 +38,11 @@ import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class Yidan :
-    HttpSource(),
-    ConfigurableSource {
-    override val name get() = "一耽女孩"
-    override val lang get() = "zh"
+@Source
+abstract class Yidan : HttpSource() {
+
     override val supportsLatest get() = true
     private val apiUrl = "https://yd-api.hangtech.cn"
-    override val baseUrl: String = getPreferences().run {
-        val customBaseUrl = getString(PREF_KEY_CUSTOM_HOST, "")
-        if (customBaseUrl.isNullOrEmpty()) {
-            val mirrors = MIRRORS
-            val index = getPreferences()
-                .getString(PREF_KEY_MIRROR, "0")!!.toInt().coerceAtMost(mirrors.size - 1)
-            "https://${mirrors[index]}"
-        } else {
-            customBaseUrl.removeSuffix("/")
-        }
-    }
 
     override val client: OkHttpClient = network.client.newBuilder().addInterceptor { chain ->
         val request = chain.request()
@@ -215,35 +197,6 @@ class Yidan :
         CategoryFilter(),
     )
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.apply {
-            addPreference(
-                ListPreference(context).apply {
-                    val mirrors = MIRRORS
-                    key = PREF_KEY_MIRROR
-                    title = "镜像网址（重启生效）"
-                    summary = "%s"
-                    entries = mirrors
-                    entryValues = Array(mirrors.size, Int::toString)
-                    setDefaultValue("0")
-                },
-            )
-            addPreference(
-                EditTextPreference(context).apply {
-                    key = PREF_KEY_CUSTOM_HOST
-                    val customUrl = this@Yidan.getPreferences().getString(PREF_KEY_CUSTOM_HOST, "")
-                    title = "自定义网址：$customUrl"
-                    summary =
-                        "请点击后输入自定义网址（例如：https://yidan1.club），如果不需要自定义时请设置为空"
-                    setOnPreferenceChangeListener { _, _ ->
-                        Toast.makeText(context, "重启应用后生效", Toast.LENGTH_LONG).show()
-                        true
-                    }
-                },
-            )
-        }
-    }
-
     //region utils functions
 
     private lateinit var userId: String
@@ -329,11 +282,6 @@ class Yidan :
     //endregion
 
     companion object {
-        private const val PREF_KEY_MIRROR = "MIRROR"
-        private const val PREF_KEY_CUSTOM_HOST = "CUSTOM_HOST"
-
-        private val MIRRORS = arrayOf("yidan1.club", "yidan22.club", "yidan10.club", "yidan9.club")
-
         private const val PAGE_SIZE = 16
     }
 }

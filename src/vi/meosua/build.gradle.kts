@@ -4,12 +4,12 @@ plugins {
 
 keiyoushi {
     name = "MeoSua"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
     source {
         lang = "vi"
-        baseUrl = "https://meosua.com"
+        baseUrl = "https://meosua.org"
     }
 }

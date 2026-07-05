@@ -4,13 +4,18 @@ plugins {
 
 keiyoushi {
     name = "MoeTruyen"
-    className = "MoeTruyen"
-    versionCode = 6
+    versionCode = 7
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "vi"
+        baseUrl("https://moetruyen.net") {
+            mirrors = listOf("https://truyen.moe")
+        }
+    }
 }
 
 dependencies {
-
     implementation(project(":lib:cookieinterceptor"))
 }

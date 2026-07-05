@@ -1,14 +1,10 @@
 package eu.kanade.tachiyomi.extension.ca.fansubscathentai
 
 import eu.kanade.tachiyomi.multisrc.fansubscat.FansubsCat
+import keiyoushi.annotation.Source
 
-class HentaiCat :
-    FansubsCat(
-        "Hentai.cat",
-        "https://manga.hentai.cat",
-        "ca",
-        "https://api.hentai.cat",
-        isHentaiSite = true,
-    ) {
-    override val id: Long = 7575385310756416449
+@Source
+abstract class HentaiCat : FansubsCat() {
+
+    override val isHentaiSite = true
 }

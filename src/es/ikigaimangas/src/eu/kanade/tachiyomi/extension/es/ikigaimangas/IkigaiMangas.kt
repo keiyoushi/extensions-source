@@ -68,10 +68,6 @@ abstract class IkigaiMangas :
 
     private val imageCdnUrl: String = "https://image2.ikigaimangas.cloud"
 
-    override val lang: String = "es"
-
-    override val name: String = "Ikigai Mangas"
-
     override val supportsLatest: Boolean = true
 
     override val client by lazy {

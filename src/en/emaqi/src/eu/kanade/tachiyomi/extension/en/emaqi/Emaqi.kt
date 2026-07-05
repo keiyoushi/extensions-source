@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLPost
@@ -26,15 +27,13 @@ import java.io.IOException
 import java.security.KeyPairGenerator
 import java.security.PrivateKey
 
-class Emaqi :
+@Source
+abstract class Emaqi :
     HttpSource(),
     ConfigurableSource {
-    override val name = "emaqi"
-    override val lang = "en"
-    private val domain = "emaqi.com"
-    override val baseUrl = "https://$domain"
     override val supportsLatest = true
 
+    private val domain = baseUrl.toHttpUrl().host
     private val apiUrl = "https://api.$domain/graphql"
     private val authDomain = "googleapis.com"
     private val loginUrl = "https://identitytoolkit.$authDomain/v1"

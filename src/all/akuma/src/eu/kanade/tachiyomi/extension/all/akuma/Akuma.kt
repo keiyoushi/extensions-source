@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
@@ -30,15 +31,42 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class Akuma(
-    override val lang: String,
-    private val akumaLang: String,
-) : HttpSource(),
+@Source
+abstract class Akuma :
+    HttpSource(),
     ConfigurableSource {
 
-    override val name = "Akuma"
-
-    override val baseUrl = "https://akuma.moe"
+    private val akumaLang: String
+        get() = when (lang) {
+            "all" -> "all"
+            "en" -> "english"
+            "id" -> "indonesian"
+            "jv" -> "javanese"
+            "ca" -> "catalan"
+            "ceb" -> "cebuano"
+            "cs" -> "czech"
+            "da" -> "danish"
+            "de" -> "german"
+            "et" -> "estonian"
+            "es" -> "spanish"
+            "eo" -> "esperanto"
+            "fr" -> "french"
+            "it" -> "italian"
+            "hi" -> "hindi"
+            "hu" -> "hungarian"
+            "nl" -> "dutch"
+            "pl" -> "polish"
+            "pt" -> "portuguese"
+            "vi" -> "vietnamese"
+            "tr" -> "turkish"
+            "ru" -> "russian"
+            "uk" -> "ukrainian"
+            "ar" -> "arabic"
+            "ko" -> "korean"
+            "zh" -> "chinese"
+            "ja" -> "japanese"
+            else -> lang
+        }
 
     override val supportsLatest = false
 

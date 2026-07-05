@@ -9,24 +9,19 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
-import kotlinx.serialization.decodeFromByteArray
-import kotlinx.serialization.encodeToByteArray
-import kotlinx.serialization.protobuf.ProtoBuf
+import keiyoushi.utils.parseAsProto
+import keiyoushi.utils.toRequestBodyProto
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
-import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
-class ZerosumOnline : HttpSource() {
-    override val name = "Zerosum Online"
-    private val domain = "zerosumonline.com"
-    override val baseUrl = "https://$domain"
-    override val lang = "ja"
+@Source
+abstract class ZerosumOnline : HttpSource() {
     override val supportsLatest = false
 
+    private val domain = baseUrl.toHttpUrl().host
     private val apiUrl = "https://api.$domain/api/v1"
 
     override fun popularMangaRequest(page: Int): Request {
@@ -108,12 +103,6 @@ class ZerosumOnline : HttpSource() {
                 Page(i, imageUrl = img.url)
             }
     }
-
-    // Helpers
-    private inline fun <reified T> Response.parseAsProto(): T = ProtoBuf.decodeFromByteArray(body.bytes())
-
-    private inline fun <reified T : Any> T.toRequestBodyProto(): RequestBody = ProtoBuf.encodeToByteArray(this)
-        .toRequestBody("application/protobuf".toMediaType())
 
     // Filter
     override fun getFilterList() = FilterList(

@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.lzstring.LZString
 import keiyoushi.lib.unpacker.Unpacker
 import keiyoushi.network.rateLimit
@@ -29,7 +30,6 @@ import kotlinx.coroutines.launch
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.Headers
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -43,58 +43,39 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class Manhuagui(
-    override val name: String = "漫画柜",
-    override val lang: String = "zh",
-) : HttpSource(),
+@Source
+abstract class Manhuagui :
+    HttpSource(),
     ConfigurableSource {
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    private val baseHost = if (preferences.getBoolean(USE_MIRROR_URL_PREF, false)) {
-        "mhgui.com"
-    } else {
-        "manhuagui.com"
-    }
-
-    override val baseUrl =
-        if (preferences.getBoolean(SHOW_ZH_HANT_WEBSITE_PREF, false)) {
-            "https://tw.$baseHost"
-        } else {
-            "https://www.$baseHost"
-        }
-
     override val supportsLatest = true
 
     private val imageServer = arrayOf("https://i.hamreus.com", "https://cf.hamreus.com")
-    private val mobileWebsiteUrl = "https://m.$baseHost"
+    private val mobileWebsiteUrl: String
+        get() = baseUrl.replace("www.", "m.").replace("tw.", "m.")
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.CHINA)
 
-    override val client: OkHttpClient
+    override val client: OkHttpClient = network.client.newBuilder()
+        .apply {
+            if (getShowR18()) {
+                addNetworkInterceptor(AddCookieHeaderInterceptor())
+            }
+        }
+        .rateLimit(
+            preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_DEFAULT_VALUE)!!.toInt(),
+            10.seconds,
+        ) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(
+            preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt(),
+        ) { url -> url.host in imageServer.map { it.toHttpUrl().host } }
+        .build()
 
-    init {
-        val baseHttpUrl: HttpUrl = baseUrl.toHttpUrl()
-        client =
-            network.client.newBuilder()
-                .apply {
-                    if (getShowR18()) {
-                        addNetworkInterceptor(AddCookieHeaderInterceptor(baseHttpUrl.host))
-                    }
-                }
-                .rateLimit(
-                    preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_DEFAULT_VALUE)!!.toInt(),
-                    10.seconds,
-                ) { it.host == baseHttpUrl.host }
-                .rateLimit(
-                    preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt(),
-                ) { url -> url.host in imageServer.map { it.toHttpUrl().host } }
-                .build()
-    }
-
-    class AddCookieHeaderInterceptor(private val baseHost: String) : Interceptor {
+    inner class AddCookieHeaderInterceptor : Interceptor {
         override fun intercept(chain: Interceptor.Chain): Response {
-            if (chain.request().url.host == baseHost) {
+            if (chain.request().url.host == baseUrl.toHttpUrl().host) {
                 val originalCookies = chain.request().header("Cookie") ?: ""
                 if (originalCookies.isNotEmpty() && !originalCookies.contains("isAdult=1")) {
                     return chain.proceed(
@@ -389,25 +370,9 @@ class Manhuagui(
         }
 
         CheckBoxPreference(screen.context).run {
-            key = SHOW_ZH_HANT_WEBSITE_PREF
-            title = SHOW_ZH_HANT_WEBSITE_PREF_TITLE
-            summary = SHOW_ZH_HANT_WEBSITE_PREF_SUMMARY
-            screen.addPreference(this)
-        }
-
-        CheckBoxPreference(screen.context).run {
             key = SHOW_R18_PREF
             title = SHOW_R18_PREF_TITLE
             summary = SHOW_R18_PREF_SUMMARY
-            screen.addPreference(this)
-        }
-
-        CheckBoxPreference(screen.context).run {
-            key = USE_MIRROR_URL_PREF
-            title = USE_MIRROR_URL_PREF_TITLE
-            summary = USE_MIRROR_URL_PREF_SUMMARY
-
-            setDefaultValue(false)
             screen.addPreference(this)
         }
     }
@@ -428,14 +393,6 @@ class Manhuagui(
         private const val SHOW_R18_PREF = "showR18Default"
         private const val SHOW_R18_PREF_TITLE = "显示R18作品"
         private const val SHOW_R18_PREF_SUMMARY = "请确认您的IP不在漫画柜的屏蔽列表内，例如中国大陆IP。需要重启软件以生效。\n开启后如需关闭，需要到Tachiyomi高级设置内清除Cookies后才能生效。"
-
-        private const val SHOW_ZH_HANT_WEBSITE_PREF = "showZhHantWebsite"
-        private const val SHOW_ZH_HANT_WEBSITE_PREF_TITLE = "使用繁体版网站"
-        private const val SHOW_ZH_HANT_WEBSITE_PREF_SUMMARY = "需要重启软件以生效。"
-
-        private const val USE_MIRROR_URL_PREF = "useMirrorWebsitePreference"
-        private const val USE_MIRROR_URL_PREF_TITLE = "使用镜像网址"
-        private const val USE_MIRROR_URL_PREF_SUMMARY = "使用镜像网址: mhgui.com，部分漫画可能无法观看。"
 
         private const val MAINSITE_RATELIMIT_PREF = "mainSiteRatelimitPreference"
         private const val MAINSITE_RATELIMIT_PREF_TITLE = "主站每十秒连接数限制"

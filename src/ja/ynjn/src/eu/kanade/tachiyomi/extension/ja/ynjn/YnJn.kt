@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -20,15 +21,13 @@ import okhttp3.Response
 import java.util.Calendar
 import java.util.TimeZone
 
-class YnJn :
+@Source
+abstract class YnJn :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Young Jump+"
-    private val domain = "ynjn.jp"
-    override val baseUrl = "https://$domain"
-    override val lang = "ja"
     override val supportsLatest = true
 
+    private val domain = baseUrl.toHttpUrl().host
     private val apiUrl = "https://webapi.$domain"
     private val preferences: SharedPreferences by getPreferencesLazy()
     private val jst = TimeZone.getTimeZone("Asia/Tokyo")

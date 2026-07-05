@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
@@ -20,17 +21,14 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-open class OnePieceFans(
-    override val lang: String,
-    val internalLang: String,
-) : HttpSource(),
+@Source
+abstract class OnePieceFans :
+    HttpSource(),
     ConfigurableSource {
 
-    override val name = "One Piece Fans"
-
-    override val baseUrl = "https://one-piece-fans2.com"
-
     override val supportsLatest = false
+
+    private val internalLang: String get() = lang
 
     private val preferences = getPreferences()
 

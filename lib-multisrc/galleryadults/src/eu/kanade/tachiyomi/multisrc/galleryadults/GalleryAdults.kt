@@ -36,14 +36,13 @@ import org.jsoup.select.Elements
 import rx.Observable
 import java.text.SimpleDateFormat
 
-abstract class GalleryAdults(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String = "all",
-    protected open val mangaLang: String = LANGUAGE_MULTI,
-    protected val simpleDateFormat: SimpleDateFormat? = null,
-) : HttpSource(),
+abstract class GalleryAdults :
+    HttpSource(),
     ConfigurableSource {
+
+    protected open val mangaLang: String = LANGUAGE_MULTI
+
+    protected open val simpleDateFormat: SimpleDateFormat? = null
 
     protected open val xhrHeaders = headers.newBuilder()
         .add("X-Requested-With", "XMLHttpRequest")

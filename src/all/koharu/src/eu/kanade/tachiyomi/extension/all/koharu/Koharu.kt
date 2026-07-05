@@ -7,7 +7,6 @@ import android.os.Handler
 import android.os.Looper
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -34,6 +33,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CoroutineScope
@@ -53,27 +53,20 @@ import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class Koharu(
-    override val lang: String = "all",
-    private val searchLang: String = "",
-) : HttpSource(),
+@Source
+abstract class Koharu :
+    HttpSource(),
     ConfigurableSource {
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val name = "SchaleNetwork"
-
-    override val baseUrl: String
-        get() {
-            val preferenceValue = preferences.getString(PREF_MIRROR, MIRROR_PREF_DEFAULT) ?: MIRROR_PREF_DEFAULT
-            val mirror = preferenceValue.toIntOrNull()?.let { index ->
-                mirrors[index.coerceAtMost(mirrors.lastIndex)]
-            } ?: preferenceValue.takeIf { it in mirrors } ?: MIRROR_PREF_DEFAULT
-
-            return "https://$mirror"
+    private val searchLang: String
+        get() = when (lang) {
+            "en" -> "english"
+            "ja" -> "japanese"
+            "zh" -> "chinese"
+            else -> ""
         }
-
-    override val id = if (lang == "en") 1484902275639232927 else super.id
 
     private val apiUrl = API_DOMAIN
 
@@ -471,20 +464,6 @@ class Koharu(
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
-            key = PREF_MIRROR
-            title = "Preferred Mirror"
-            entries = mirrors
-            entryValues = mirrors
-            setDefaultValue(MIRROR_PREF_DEFAULT)
-            summary = "%s"
-
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Restart the app to apply changes", Toast.LENGTH_LONG).show()
-                true
-            }
-        }.also(screen::addPreference)
-
-        ListPreference(screen.context).apply {
             key = PREF_IMAGERES
             title = "Image Resolution"
             entries = arrayOf("780x", "980x", "1280x", "1600x", "Original")
@@ -513,16 +492,7 @@ class Koharu(
 
     companion object {
         const val PREFIX_ID_KEY_SEARCH = "id:"
-        private const val PREF_MIRROR = "pref_mirror"
-        private const val MIRROR_PREF_DEFAULT = "schale.network"
         private const val API_DOMAIN = "https://api.schale.network"
-        private val mirrors = arrayOf(
-            MIRROR_PREF_DEFAULT,
-            "anchira.to",
-            "gehenna.jp",
-            "niyaniya.moe",
-            "shupogaki.moe",
-        )
         private const val PREF_IMAGERES = "pref_image_quality"
         private const val PREF_REM_ADD = "pref_remove_additional"
         private const val PREF_EXCLUDE_TAGS = "pref_exclude_tags"

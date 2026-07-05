@@ -20,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -39,17 +40,14 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.zip.Inflater
 
-class ScanManga :
+@Source
+abstract class ScanManga :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Scan-Manga"
 
-    private val domain = "scan-manga.com"
-    override val baseUrl = "https://m.$domain"
+    private val domain = baseUrl.toHttpUrl().host
     private val baseImageUrl = "https://static.$domain/img/manga"
     private val baseSearchUrl = "https://bqj.$domain/search/quick.json"
-
-    override val lang = "fr"
 
     override val supportsLatest = true
 

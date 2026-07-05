@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -28,20 +29,17 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import rx.Observable
 import kotlin.math.ceil
 
-abstract class Luscious(
-    final override val lang: String,
-) : HttpSource(),
+@Source
+abstract class Luscious :
+    HttpSource(),
     ConfigurableSource {
 
     override val supportsLatest: Boolean = true
-    override val name: String = "Luscious"
-    val lusLang: String = toLusLang(lang)
+    val lusLang: String get() = toLusLang(lang)
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val baseUrl: String = getMirrorPref()!!
-
-    private val apiBaseUrl: String = "$baseUrl/graphql/nobatch/"
+    private val apiBaseUrl: String get() = "$baseUrl/graphql/nobatch/"
     private val cdnHost: String = "ah-img.luscious.net"
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -531,29 +529,12 @@ abstract class Luscious(
                 preferences.edit().putBoolean("${MERGE_CHAPTER_PREF_KEY}_$lang", checkValue).commit()
             }
         }
-        val mirrorPref = ListPreference(screen.context).apply {
-            key = "${MIRROR_PREF_KEY}_$lang"
-            title = MIRROR_PREF_TITLE
-            entries = MIRROR_PREF_ENTRIES
-            entryValues = MIRROR_PREF_ENTRY_VALUES
-            setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
-            summary = "%s"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString("${MIRROR_PREF_KEY}_$lang", entry).commit()
-            }
-        }
         screen.addPreference(resolutionPref)
         screen.addPreference(sortPref)
         screen.addPreference(mergeChapterPref)
-        screen.addPreference(mirrorPref)
     }
 
     fun getMergeChapterPref(): Boolean = preferences.getBoolean("${MERGE_CHAPTER_PREF_KEY}_$lang", MERGE_CHAPTER_PREF_DEFAULT_VALUE)
     fun getResolutionPref(): String? = preferences.getString("${RESOLUTION_PREF_KEY}_$lang", RESOLUTION_PREF_DEFAULT_VALUE)
     fun getSortPref(): String? = preferences.getString("${SORT_PREF_KEY}_$lang", SORT_PREF_DEFAULT_VALUE)
-    fun getMirrorPref(): String? = preferences.getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)
 }

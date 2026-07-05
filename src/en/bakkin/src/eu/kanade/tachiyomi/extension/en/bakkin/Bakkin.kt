@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.bakkin
 
 import eu.kanade.tachiyomi.multisrc.bakkin.BakkinReaderX
+import keiyoushi.annotation.Source
 
-class Bakkin : BakkinReaderX("Bakkin", "https://bakkin.moe/reader/", "en")
+@Source
+abstract class Bakkin : BakkinReaderX()

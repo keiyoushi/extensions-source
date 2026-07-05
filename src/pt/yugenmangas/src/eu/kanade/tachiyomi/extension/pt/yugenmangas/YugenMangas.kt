@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.yugenmangas
 
-import android.widget.Toast
-import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -12,9 +10,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -24,49 +22,23 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Calendar
 
-class YugenMangas :
+@Source
+abstract class YugenMangas :
     HttpSource(),
     ConfigurableSource {
+
     private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
-
-    override val name = "Yugen Mangás"
-
-    private val isCi = System.getenv("CI") == "true"
-
-    override val baseUrl: String get() = when {
-        isCi -> defaultBaseUrl
-        else -> preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
-    }
-
-    private val defaultBaseUrl: String = "https://yugenmangasbr.dxtg.online"
 
     private val apiUrl: String = "https://api.yugenweb.com"
 
     private val imageBaseUrl: String get() = "$baseUrl/_next/image?url=$apiUrl/media"
 
-    override val lang = "pt-BR"
-
     override val supportsLatest = true
-
-    private val preferences by getPreferencesLazy()
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(2)
         .rateLimit(2) { it.host == apiUrlHost }
         .build()
-
-    override val versionId = 2
-
-    init {
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { domain ->
-            if (domain != defaultBaseUrl) {
-                preferences.edit()
-                    .putString(BASE_URL_PREF, defaultBaseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
-                    .apply()
-            }
-        }
-    }
 
     // ================================ Popular =======================================
 
@@ -161,7 +133,7 @@ class YugenMangas :
             }
     }
 
-    // ================================ Pages =======================================}
+    // ================================ Pages =======================================
 
     override fun pageListParse(response: Response): List<Page> {
         val pages = response.getJsonBody().parseAs<List<PageDto>>()
@@ -182,21 +154,6 @@ class YugenMangas :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         screen.addRandomUAPreference()
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = URL_PREF_SUMMARY
-
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "URL padrão:\n$defaultBaseUrl"
-
-            setDefaultValue(defaultBaseUrl)
-
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
-                true
-            }
-        }.also(screen::addPreference)
     }
 
     // ================================ Utils =======================================
@@ -235,11 +192,6 @@ class YugenMangas :
     """.trimIndent()
 
     companion object {
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_TITLE = "Editar URL da fonte"
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-        private const val RESTART_APP_MESSAGE = "Reinicie o aplicativo para aplicar as alterações"
-        private const val URL_PREF_SUMMARY = "Para uso temporário, se a extensão for atualizada, a alteração será perdida."
         private val MANGA_REGEX = """(\{\\"initialData.+\"\}.+)(?:\]\}){2}\]""".toRegex()
         private val PAGES_REGEX = """pages\\":(\[.+\])\}\}""".toRegex()
         private val GET_JSON_BODY_REGEX = """$MANGA_REGEX|$PAGES_REGEX""".toRegex()

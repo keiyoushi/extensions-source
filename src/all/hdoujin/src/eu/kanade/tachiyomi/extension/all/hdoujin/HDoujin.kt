@@ -26,6 +26,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import getFilters
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.jsonInstance
@@ -39,18 +40,20 @@ import uy.kohesive.injekt.injectLazy
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class HDoujin(
-    override val lang: String,
-    private val siteLang: String = lang,
-) : HttpSource(),
+@Source
+abstract class HDoujin :
+    HttpSource(),
     ConfigurableSource {
 
-    override val name = "HDoujin"
-
-    override val id: Long = when (lang) {
-        "ko" -> 8377507648400729012L
-        else -> super.id
-    }
+    private val siteLang: String
+        get() = when (lang) {
+            "en" -> "english"
+            "es" -> "spanish"
+            "ja" -> "japanese"
+            "ko" -> "korean"
+            "zh" -> "chinese"
+            else -> lang
+        }
 
     override val supportsLatest = true
     private val preferences = getPreferences()
@@ -92,9 +95,8 @@ class HDoujin(
         return ""
     }
 
-    override val baseUrl: String = "https://hdoujin.org"
-    private val baseApiUrl: String = "https://api.hdoujin.org"
-    private val bookApiUrl: String = "$baseApiUrl/books"
+    private val baseApiUrl: String get() = "https://api." + baseUrl.removePrefix("https://")
+    private val bookApiUrl: String get() = "$baseApiUrl/books"
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")

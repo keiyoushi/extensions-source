@@ -12,5 +12,10 @@ class Pool(
 
 @Serializable
 class Post(
-    @SerialName("file_url") val fileUrl: String,
-)
+    @SerialName("file_url") private val fileUrl: String? = null,
+    @SerialName("large_file_url") private val largeFileUrl: String? = null,
+    @SerialName("preview_file_url") private val previewFileUrl: String? = null,
+) {
+    val bestUrl: String
+        get() = fileUrl ?: largeFileUrl ?: previewFileUrl ?: throw Exception("Image URL not found for post")
+}

@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -36,14 +37,17 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
-class MangaFire(
-    override val lang: String,
-    private val langCode: String = lang,
-) : HttpSource(),
+@Source
+abstract class MangaFire :
+    HttpSource(),
     ConfigurableSource {
-    override val name = "MangaFire"
 
-    override val baseUrl = "https://mangafire.to"
+    private val langCode: String
+        get() = when (lang) {
+            "es-419" -> "es-la"
+            "pt-BR" -> "pt-br"
+            else -> lang
+        }
 
     override val supportsLatest = true
     private val preferences by getPreferencesLazy()
