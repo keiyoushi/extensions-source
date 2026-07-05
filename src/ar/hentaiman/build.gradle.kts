@@ -3,15 +3,14 @@ plugins {
 }
 
 keiyoushi {
-    name = "ArabManhwa"
-    versionCode = 0
+    name = "HentaiMan"
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
-    theme = "madara"
 
     source {
-        name = "ArabManhwa"
         lang = "ar"
-        baseUrl = "https://arabmanhwa.com"
+        baseUrl = "https://hentaiman.net"
+        skipCodeGen.set(true)
     }
 }
