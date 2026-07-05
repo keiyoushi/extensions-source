@@ -143,7 +143,6 @@ class PluginExtension : Plugin<Project> {
         val manifestTask = tasks.register<GenerateExtensionManifestTask>("generateExtensionManifest") {
             this.filters.set(deeplinksProvider)
             this.extensionName.set(keiyoushi.name)
-            this.className.set("ExtensionGenerated")
             this.contentWarning.set(keiyoushi.contentWarning)
             this.extensionLib.set(keiyoushi.libVersion)
         }
@@ -157,7 +156,6 @@ class PluginExtension : Plugin<Project> {
                 if (keepRules != null) {
                     val task = tasks.register<GenerateKeepRulesTask>("generate${variantName}KeepRules") {
                         this.applicationId.set(variant.applicationId)
-                        this.className.set("ExtensionGenerated")
                     }
                     keepRules.addGeneratedSourceDirectory(task) { it.outputDir }
                 }
