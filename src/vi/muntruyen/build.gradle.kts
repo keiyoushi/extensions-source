@@ -10,7 +10,7 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl("https://moonnovel.store") {
+        baseUrl("https://munedge.com") {
             withCustom = true
         }
     }
