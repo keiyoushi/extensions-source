@@ -4,14 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Top Truyen"
-    versionCode = 30
+    versionCode = 31
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "wpcomics"
 
     source {
         lang = "vi"
-        baseUrl("https://www.toptruyenzone5.com") {
+        baseUrl("https://www.toptruyenzone6.com") {
             withCustom = true
         }
     }
