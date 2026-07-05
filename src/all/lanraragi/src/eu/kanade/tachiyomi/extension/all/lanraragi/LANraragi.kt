@@ -31,7 +31,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.net.URL
 import java.security.MessageDigest
@@ -60,7 +59,7 @@ open class LANraragi(private val suffix: String = "") :
     private var randomArchiveID: String = ""
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        val id = if (manga.url.startsWith("/api/search/random")) randomArchiveID else getReaderId(manga.url)
+        val id = if (manga.url.startsWith("/api/search/random")) randomArchiveID else getIDFromURL(manga.url)
         val uri = apiTypeByID(id)
 
         if (manga.url.startsWith("/api/search/random")) {
@@ -75,7 +74,7 @@ open class LANraragi(private val suffix: String = "") :
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         // Catch-all that includes random's ID via thumbnail
-        val id = getThumbnailId(manga.thumbnail_url!!)
+        val id = getIDFromURL(manga.thumbnail_url!!)
 
         return GET("$baseUrl/reader?id=$id", headers)
     }
@@ -113,7 +112,7 @@ open class LANraragi(private val suffix: String = "") :
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val id = if (manga.url.startsWith("/api/search/random")) randomArchiveID else getReaderId(manga.url)
+        val id = if (manga.url.startsWith("/api/search/random")) randomArchiveID else getIDFromURL(manga.url)
         val uri = apiTypeByID(id)
 
         return GET(uri.toString(), headers)
@@ -517,9 +516,7 @@ open class LANraragi(private val suffix: String = "") :
 
     private fun getStart(response: Response): Int = getTopResponse(response).request.url.queryParameter("start")!!.toIntOrNull() ?: 0
 
-    private fun getReaderId(url: String): String = Regex("""/reader\?id=(TANK_[0-9]{10}|\w{40})""").find(url)?.groupValues?.get(1) ?: ""
-
-    private fun getThumbnailId(url: String): String = Regex("""/(TANK_[0-9]{10}|\w{40})/thumbnail""").find(url)?.groupValues?.get(1) ?: ""
+    private fun getIDFromURL(url: String): String = REGEX_ID_FROM_URL.find(url)?.groupValues?.get(1) ?: ""
 
     private fun getNSTag(tags: String?, tag: String): List<String>? = tags?.split(',')
         ?.filter { it.startsWith("$tag:") }
@@ -543,6 +540,8 @@ open class LANraragi(private val suffix: String = "") :
         internal const val EXTRA_SOURCES_COUNT_KEY = "extraSourcesCount"
         internal const val EXTRA_SOURCES_COUNT_DEFAULT = "2"
         private val EXTRA_SOURCES_ENTRIES = (0..10).map { it.toString() }.toTypedArray()
+
+        private val REGEX_ID_FROM_URL = Regex("""(?:/reader\?id=)?(TANK_[0-9]{10}|\w{40})(?:/thumbnail)?""")
 
         private const val HOSTNAME_DEFAULT = "http://127.0.0.1:3000"
         private const val HOSTNAME_KEY = "hostname"
