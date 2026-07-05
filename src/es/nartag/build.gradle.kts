@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "Rncalation"
-    versionCode = 63
+    versionCode = 64
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
