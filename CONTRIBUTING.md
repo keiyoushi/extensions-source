@@ -486,7 +486,6 @@ Declare the module in your extension's `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation(project(":lib:dataimage")) // Replace 'dataimage' with the actual library name
     implementation(project(":lib:<name>"))
 }
 ```
