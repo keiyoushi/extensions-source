@@ -5,10 +5,18 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Archive(
     val arcid: String,
-    val isnew: Boolean,
+    val title: String,
     val tags: String?,
     val summary: String?,
-    val title: String,
+    val isnew: Boolean,
+    val pagecount: Int,
+    val toc: List<ArchiveTOCEntry>?,
+)
+
+@Serializable
+data class ArchiveTOCEntry(
+    val name: String,
+    val page: Int,
 )
 
 @Serializable

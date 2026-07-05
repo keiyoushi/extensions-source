@@ -94,6 +94,8 @@ open class LANraragi(private val suffix: String = "") :
                 tags = tags,
                 summary = tank.result.summary,
                 title = tank.result.name!!,
+                toc = emptyList(),
+                pagecount = 0,
             )
         }
 
@@ -138,17 +140,49 @@ open class LANraragi(private val suffix: String = "") :
             client.newCall(clearNew).execute()
         }
 
-        archives?.forEach {
-            chapters.add(
-                SChapter.create().apply {
-                    url = getApiUriBuilder("/api/archives/${it.arcid}/files").build().toString()
-                    chapter_number = 1F + chapters.size
-                    name = if (archives.size == 1) "Chapter" else "${chapter_number.toInt()} - ${it.title}"
-                    date_upload = 1000 * (getNSTag(it.tags, "date_added")?.first()?.toLong() ?: 0)
-                },
-            )
+        var baseChapter = 0F
+
+        // Supports single, single+ToC, tank, tank+ToC...
+        archives?.forEach { arc ->
+            baseChapter += 1F
+
+            val baseFiles = getApiUriBuilder("/api/archives/${arc.arcid}/files").build().toString()
+            val date = 1000 * (getNSTag(arc.tags, "date_added")?.first()?.toLong() ?: 0)
+
+            if (arc.toc?.isEmpty() == false) {
+                var lastStart = 0
+
+                val toc = buildList {
+                    if (arc.toc.first().page > 1) add(ArchiveTOCEntry(arc.title, 1)) // Starting gap filler
+                    addAll(arc.toc)
+                }
+
+                toc.forEachIndexed { i, entry ->
+                    val nextPage = if (i + 1 < toc.size) toc[i + 1].page - 1 else arc.pagecount
+
+                    chapters.add(
+                        SChapter.create().apply {
+                            url = "$baseFiles#$lastStart-$nextPage"
+                            chapter_number = baseChapter + "0.${i + 1}".toFloat()
+                            name = "$chapter_number - ${entry.name}"
+                            date_upload = date
+                        },
+                    )
+
+                    lastStart = nextPage
+                }
+            } else {
+                chapters.add(
+                    SChapter.create().apply {
+                        url = baseFiles
+                        chapter_number = baseChapter
+                        name = if (archives.size == 1) "Chapter" else "${chapter_number.toInt()} - ${arc.title}"
+                        date_upload = date
+                    },
+                )
+            }
         }
-        chapters.reverse() // Useless for singles, but for tanks orders them in "latest first"
+        chapters.reverse() // For tanks orders them in "latest first"
 
         return chapters
     }
@@ -157,8 +191,9 @@ open class LANraragi(private val suffix: String = "") :
 
     override fun pageListParse(response: Response): List<Page> {
         val archivePage = response.parseAs<ArchivePage>()
+        val range = response.request.url.fragment?.split("-")?.map { it.toInt() } ?: listOf(0, archivePage.pages.size)
 
-        return archivePage.pages.mapIndexed { index, url ->
+        return archivePage.pages.subList(range.first(), range.last()).mapIndexed { index, url ->
             var newUrl = url
             val subPath = URL(baseUrl).path
             if (!subPath.isNullOrEmpty()) {
