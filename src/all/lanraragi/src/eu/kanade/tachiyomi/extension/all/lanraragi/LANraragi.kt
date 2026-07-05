@@ -85,11 +85,11 @@ open class LANraragi(private val suffix: String = "") :
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val res = response.body.string()
-        val archive = try {
-            json.decodeFromString<Archive>(res)
-        } catch (_: Exception) {
-            val tank = json.decodeFromString<Tankoubon>(res)
+        val archive = if (!response.isTank()) {
+            response.parseAs<Archive>()
+        } else {
+            val tank = response.parseAs<Tankoubon>()
+
             // The separators are not the default ", " to merge properly when combining across multiple archives: ",tag:x" vs ", tag:x"
             val tags = tank.result?.full_data?.joinToString(",") { it.tags!! }?.split(",")?.sorted()?.joinToString(",")
 
@@ -124,12 +124,11 @@ open class LANraragi(private val suffix: String = "") :
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val res = response.body.string()
         val chapters = mutableListOf<SChapter>()
-        val archives = try {
-            listOf(json.decodeFromString<Archive>(res))
-        } catch (_: Exception) {
-            json.decodeFromString<Tankoubon>(res).result?.full_data
+        val archives = if (!response.isTank()) {
+            listOf(response.parseAs<Archive>())
+        } else {
+            response.parseAs<Tankoubon>().result?.full_data
         }
 
         // Legacy extension-exclusive behavior to remove isnew on single archives when viewing
@@ -162,7 +161,7 @@ open class LANraragi(private val suffix: String = "") :
     override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val archivePage = json.decodeFromString<ArchivePage>(response.body.string())
+        val archivePage = response.parseAs<ArchivePage>()
 
         return archivePage.pages.mapIndexed { index, url ->
             var newUrl = url
@@ -257,7 +256,7 @@ open class LANraragi(private val suffix: String = "") :
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val jsonResult = json.decodeFromString<ArchiveSearchResult>(response.body.string())
+        val jsonResult = response.parseAs<ArchiveSearchResult>()
         val currentStart = getStart(response)
         val archives = arrayListOf<SManga>()
 
@@ -531,6 +530,8 @@ open class LANraragi(private val suffix: String = "") :
         ?.map { it.split(":", limit = 2).last() }
         ?.distinct()
         ?.takeIf { it.isNotEmpty() }
+
+    fun Response.isTank() = request.url.toString().contains("/TANK_")
 
     // Headers (currently auth) are done in headersBuilder
     override val client: OkHttpClient = network.client.newBuilder()
