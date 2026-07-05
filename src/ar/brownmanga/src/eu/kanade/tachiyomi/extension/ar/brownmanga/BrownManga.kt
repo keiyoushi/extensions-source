@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ar.brownmanga
+git add .package eu.kanade.tachiyomi.extension.ar.brownmanga
 
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
