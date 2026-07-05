@@ -4,8 +4,14 @@ plugins {
 
 keiyoushi {
     name = "StashApp"
-    className = "StashApp"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "all"
+        baseUrl("http://localhost:9999") {
+            withCustom = true
+        }
+    }
 }

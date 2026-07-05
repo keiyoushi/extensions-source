@@ -4,13 +4,32 @@ plugins {
 
 keiyoushi {
     name = "xkcd"
-    className = "XkcdFactory"
-    versionCode = 16
+    versionCode = 17
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://xkcd.com"
+    }
+    source {
+        lang = "es"
+        baseUrl = "https://es.xkcd.com"
+    }
+    source {
+        lang = "zh"
+        baseUrl = "https://xkcd.tw"
+    }
+    source {
+        lang = "fr"
+        baseUrl = "https://xkcd.lapin.org"
+    }
+    source {
+        lang = "ru"
+        baseUrl = "https://xkcd.ru"
+    }
 }
 
 dependencies {
-
     implementation(project(":lib:textinterceptor"))
 }

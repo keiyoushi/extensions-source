@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -15,13 +16,13 @@ import okhttp3.Response
 import rx.Observable
 import kotlin.concurrent.Volatile
 
-class EnchiladaScan : HttpSource() {
+@Source
+abstract class EnchiladaScan : HttpSource() {
 
-    override val name = "EnchiladaScan"
-    private val domainUrl = "https://enchiladascan.github.io"
-    override val baseUrl = "$domainUrl/enchiladaweb"
-    override val lang = "es"
     override val supportsLatest = false
+
+    private val domainUrl: String
+        get() = baseUrl.toHttpUrl().let { "${it.scheme}://${it.host}" }
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
@@ -32,7 +33,7 @@ class EnchiladaScan : HttpSource() {
     @Synchronized
     private fun fetchCatalog() {
         if (catalog.isEmpty()) {
-            val result = client.newCall(GET("$baseUrl/catalogo.json")).execute()
+            val result = client.newCall(GET("$baseUrl/catalogo.json", headers)).execute()
             if (!result.isSuccessful) {
                 throw Exception("Failed to fetch catalog: HTTP ${result.code}")
             }
@@ -40,29 +41,37 @@ class EnchiladaScan : HttpSource() {
         }
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+    // ============================== Popular ==============================
+
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
         fetchCatalog()
         val mangaList = catalog.map { it.toSManga(baseUrl) }
-        return Observable.just(MangasPage(mangaList, false))
+        MangasPage(mangaList, false)
     }
 
     override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
     override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
 
+    // ============================== Latest ===============================
+
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
     override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    // ============================== Search ===============================
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
         fetchCatalog()
         val mangaList = catalog
             .filter { it.title.contains(query, ignoreCase = true) }
             .map { it.toSManga(baseUrl) }
 
-        return Observable.just(MangasPage(mangaList, false))
+        MangasPage(mangaList, false)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    // ============================== Details ==============================
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
@@ -80,11 +89,7 @@ class EnchiladaScan : HttpSource() {
         }
     }
 
-    private fun parseStatus(text: String?): Int = when (text?.trim()?.lowercase()) {
-        "en publicación" -> SManga.ONGOING
-        "finalizado" -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
+    // ============================= Chapters ==============================
 
     override fun getChapterUrl(chapter: SChapter) = "$domainUrl${chapter.url}"
 
@@ -97,6 +102,8 @@ class EnchiladaScan : HttpSource() {
             }
         }.reversed()
     }
+
+    // =============================== Pages ===============================
 
     override fun pageListRequest(chapter: SChapter): Request {
         val url = (domainUrl + chapter.url.removeSuffix("/")).toHttpUrl()
@@ -114,4 +121,12 @@ class EnchiladaScan : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    // ============================= Utilities =============================
+
+    private fun parseStatus(text: String?): Int = when (text?.lowercase()) {
+        "en publicación" -> SManga.ONGOING
+        "finalizado" -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 }

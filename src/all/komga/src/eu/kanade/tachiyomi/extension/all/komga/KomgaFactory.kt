@@ -2,8 +2,10 @@ package eu.kanade.tachiyomi.extension.all.komga
 
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
+import keiyoushi.annotation.Source as KeiyoushiSource
 
-class KomgaFactory : SourceFactory {
+@KeiyoushiSource
+abstract class KomgaFactory : SourceFactory {
     override fun createSources(): List<Source> {
         val firstKomga = Komga("")
         val komgaCount = firstKomga.preferences

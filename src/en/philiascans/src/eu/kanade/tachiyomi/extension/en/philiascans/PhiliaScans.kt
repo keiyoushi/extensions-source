@@ -19,14 +19,18 @@ import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 
 @Source
 abstract class PhiliaScans :
     HttpSource(),
     ConfigurableSource {
+
     override val supportsLatest = true
 
-    private val apiUrl = "$baseUrl/api"
+    private val apiUrl: String
+        get() = "$baseUrl/api"
+
     private val preferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
@@ -36,6 +40,8 @@ abstract class PhiliaScans :
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
+    // ============================== Popular ==============================
+
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter().apply { state = 2 }, OrderFilter()))
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -44,9 +50,13 @@ abstract class PhiliaScans :
         return MangasPage(mangas, result.hasNextPage())
     }
 
+    // ============================== Latest ===============================
+
     override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", FilterList(SortFilter(), OrderFilter()))
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+
+    // ============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/manga".toHttpUrl().newBuilder()
@@ -74,11 +84,15 @@ abstract class PhiliaScans :
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
+    // ============================== Details ==============================
+
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/manga/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<DetailsResponse>().toSManga(baseUrl)
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
+
+    // ============================= Chapters ==============================
 
     override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/manga/${manga.url}/chapters", headers)
 
@@ -92,8 +106,10 @@ abstract class PhiliaScans :
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/series/${chapter.url}"
 
+    // =============================== Pages ===============================
+
     override fun pageListRequest(chapter: SChapter): Request {
-        val parts = "$baseUrl/${chapter.url}".toHttpUrl().pathSegments
+        val parts = chapter.url.split("/")
         val mangaSlug = parts.first()
         val chapterSlug = parts.last()
         return GET("$apiUrl/manga/$mangaSlug/chapters/$chapterSlug", headers)
@@ -106,15 +122,17 @@ abstract class PhiliaScans :
         .set("X-Requested-With", "XMLHttpRequest")
         .build()
 
-    override fun pageListParse(response: Response): List<Page> {
-        val token = client.newCall(POST("$apiUrl/reader/access-token", tokenHeaders)).execute().parseAs<TokenResponse>().token
-        val readerHeaders = tokenHeaders.newBuilder().add("X-Reader-Access-Token", token).build()
-
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        val response = client.newCall(pageListRequest(chapter)).execute()
         val result = response.parseAs<ViewerResponse>()
         if (!result.hasAccess) throw Exception("Log in via Webview and purchased this chapter to read.")
 
+        val token = client.newCall(POST("$apiUrl/reader/access-token", tokenHeaders)).execute().parseAs<TokenResponse>().token
+        val readerHeaders = tokenHeaders.newBuilder().add("X-Reader-Access-Token", token).build()
+
         val isScrambled = if (result.chapter.scrambled) "1" else "0"
         val pageKeyResponse = client.newCall(GET("$apiUrl/chapters/${result.chapter.id}/page-keys", readerHeaders)).execute().parseAs<PageKeys>()
+
         val (payloadA, payloadB) = if (pageKeyResponse.sessionDefault) {
             val openResponse = client.newCall(POST("$apiUrl/chapters/${result.chapter.id}/open", readerHeaders)).execute().parseAs<OpenResponse>()
             val drmCall = client.newCall(GET("$apiUrl/chapters/${result.chapter.id}/get-drm?session=${openResponse.sessionId}", readerHeaders)).execute()
@@ -129,11 +147,17 @@ abstract class PhiliaScans :
             null to null
         }
 
-        return result.chapter.pages.sortedBy { it.position }.mapIndexed { i, page ->
+        result.chapter.pages.sortedBy { it.position }.mapIndexed { i, page ->
             val imageUrl = if (page.url.startsWith("http")) page.url else "$baseUrl/${page.url}"
             Page(i, imageUrl = "$imageUrl#$isScrambled;${page.mime};${pageKeyResponse.chapterKeyB64};${pageKeyResponse.gridSize};$payloadA;$payloadB;$i")
         }
     }
+
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    // ============================= Utilities =============================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -143,8 +167,6 @@ abstract class PhiliaScans :
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"

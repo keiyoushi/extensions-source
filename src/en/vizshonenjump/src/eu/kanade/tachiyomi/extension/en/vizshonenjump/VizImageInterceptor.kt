@@ -14,10 +14,10 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody
-import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 import java.io.IOException
+import java.io.InputStream
 
 class VizImageInterceptor : Interceptor {
 
@@ -62,20 +62,15 @@ class VizImageInterceptor : Interceptor {
     }
 
     private fun Response.decodeImage(): ResponseBody {
-        // See: https://stackoverflow.com/a/5924132
-        // See: https://github.com/tachiyomiorg/tachiyomi-extensions/issues/2678#issuecomment-645857603
-        val byteOutputStream = ByteArrayOutputStream()
-            .apply { body.byteStream().copyTo(this) }
-        val contentType = headers["Content-Type"]?.toMediaType()
+        val source = body.source()
 
-        val byteInputStreamForImage = ByteArrayInputStream(byteOutputStream.toByteArray())
-        val byteInputStreamForMetadata = ByteArrayInputStream(byteOutputStream.toByteArray())
+        // Peak the source to safely fetch image metadata without consuming the actual stream.
+        val imageData = source.peek().inputStream().use { it.getImageData().getOrNull() }
+            ?: return body
 
-        val imageData = byteInputStreamForMetadata.getImageData().getOrNull()
-            ?: return byteOutputStream.toByteArray().toResponseBody(contentType)
-
-        val input = BitmapFactory.decodeStream(byteInputStreamForImage)
-            ?: return byteOutputStream.toByteArray().toResponseBody(contentType)
+        // Decode directly from the source's InputStream. (This will natively consume the Okio network stream).
+        val input = BitmapFactory.decodeStream(source.inputStream())
+            ?: return body
 
         val width = input.width
         val height = input.height
@@ -143,14 +138,14 @@ class VizImageInterceptor : Interceptor {
             )
         }
 
-        val bytes = ByteArrayOutputStream()
-            .apply { result.compress(Bitmap.CompressFormat.JPEG, 95, this) }
-            .toByteArray()
+        // Standard rules: write directly to an Okio Buffer to preserve memory efficiency
+        val output = Buffer()
+        result.compress(Bitmap.CompressFormat.JPEG, 95, output.outputStream())
 
         input.recycle()
         result.recycle()
 
-        return bytes.toResponseBody(JPEG_MEDIA_TYPE)
+        return output.asResponseBody(JPEG_MEDIA_TYPE)
     }
 
     private fun Canvas.drawImage(
@@ -167,7 +162,7 @@ class VizImageInterceptor : Interceptor {
         drawBitmap(from, srcRect, dstRect, null)
     }
 
-    private fun ByteArrayInputStream.getImageData(): Result<ImageData?> = runCatching {
+    private fun InputStream.getImageData(): Result<ImageData?> = runCatching {
         val metadata = ImageMetadataReader.readMetadata(this)
 
         val keyDir = metadata.directories

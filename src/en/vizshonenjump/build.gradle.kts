@@ -4,8 +4,7 @@ plugins {
 
 keiyoushi {
     name = "VIZ"
-    className = "VizFactory"
-    versionCode = 25
+    versionCode = 26
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
@@ -14,9 +13,20 @@ keiyoushi {
         path("/..*/chapters/..*")
         path("/..*/..*/chapter/..*")
     }
+
+    source {
+        name = "VIZ Shonen Jump"
+        lang = "en"
+        baseUrl = "https://www.viz.com"
+    }
+
+    source {
+        name = "VIZ Manga"
+        lang = "en"
+        baseUrl = "https://www.viz.com"
+    }
 }
 
 dependencies {
-
     implementation("com.drewnoakes:metadata-extractor:2.18.0")
 }

@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "3asq"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
@@ -12,6 +12,6 @@ keiyoushi {
     source {
         name = "مانجا العاشق"
         lang = "ar"
-        baseUrl = "https://3asq.org"
+        baseUrl = "https://3asq.pro"
     }
 }

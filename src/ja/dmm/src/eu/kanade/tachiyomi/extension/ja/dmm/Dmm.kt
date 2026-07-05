@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
@@ -23,15 +24,15 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 
+@Source
 abstract class Dmm :
     HttpSource(),
     ConfigurableSource {
-    protected abstract val domain: String
-    protected abstract val shopName: String
 
-    override val baseUrl get() = "https://$domain"
-    override val lang = "ja"
     override val supportsLatest = true
+
+    private val domain get() = baseUrl.substringAfter("https://")
+    private val shopName get() = if (name == "FANZA") "adult" else "general"
 
     private val apiUrl get() = "$baseUrl/ajax/bff"
     private val preferences: SharedPreferences by getPreferencesLazy()

@@ -44,6 +44,17 @@ class Chapter(
 )
 
 @Serializable
+class ChapterRequestBody(
+    @SerialName("news_id") private val newsId: String,
+    @SerialName("chapter_id") private val chapterId: String,
+)
+
+@Serializable
+class ChapterApiResponse(
+    val data: Images,
+)
+
+@Serializable
 class Images(
     val images: List<String> = emptyList(),
 )

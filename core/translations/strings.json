@@ -25,8 +25,18 @@
     "customUrlDialogMessage": "Bỏ trống để sử dụng giá trị mặc định"
   },
   "zh": {
+    "mirrorTitle": "镜像站点",
+    "customUrlTitle": "自定义基础 URL",
+    "customUrlDialogMessage": "留空则使用默认 URL"
+  },
+  "zh-Hans": {
+    "mirrorTitle": "镜像站点",
+    "customUrlTitle": "自定义基础 URL",
+    "customUrlDialogMessage": "留空则使用默认 URL"
+  },
+  "zh-Hant": {
     "mirrorTitle": "鏡像站點",
     "customUrlTitle": "自訂基本 URL",
-    "customUrlDialogMessage": "留空則使用預設網址。"
+    "customUrlDialogMessage": "留空則使用預設 URL"
   }
 }
