@@ -5,12 +5,14 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.inline.Context // قد يختلف مسار الاستيراد حسب بنية المستودع لديك
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
 
+@Source // <-- تم إضافة الوسم هنا ليتعرف عليه الـ KSP وينجح البناء
 class ArabManhwa : Madara("ArabManhwa", "https://arabmanhwa.com", "ar") {
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
