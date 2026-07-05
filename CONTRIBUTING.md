@@ -285,7 +285,7 @@ Your extension code must be placed in the package `eu.kanade.tachiyomi.extension
 
 #### build.gradle.kts
 
-Extensions using the `source {}` approach look like this:
+Extensions' `build.gradle.kts` should look like this:
 
 ```kotlin
 plugins {
@@ -295,10 +295,11 @@ plugins {
 keiyoushi {
     name = "Example" // Replace with your actual source name
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // Options: ContentWarning.SAFE, ContentWarning.MIXED, ContentWarning.NSFW
     libVersion = "1.4"
 
     source {
+        name = "Example" // Optional, defaults to the top-level name
         lang = "en"
         baseUrl = "https://example.com"
     }
@@ -486,6 +487,7 @@ Declare the module in your extension's `build.gradle.kts`:
 ```kotlin
 dependencies {
     implementation(project(":lib:dataimage")) // Replace 'dataimage' with the actual library name
+    implementation(project(":lib:<name>"))
 }
 ```
 
@@ -547,7 +549,7 @@ contributors can understand the lib without needing to read `CONTRIBUTING.md`.
 
 The `core/utils` module provides a set of shared extension functions that are available to all extensions
 without any extra Gradle dependency. Prefer using these helpers instead of implementing your own equivalents, as they provide standardized and maintained solutions.
-The utilities primarily live in the `keiyoushi.utils` package (with certain specialized modules like ZIP streaming residing in `keiyoushi.zip`) and are imported individually.
+The utilities live in the `keiyoushi.utils` package and are imported individually.
 
 ##### JSON parsing - `parseAs`
 
@@ -818,10 +820,10 @@ import keiyoushi.utils.obj
 import keiyoushi.utils.string
 
 val root: JsonElement = response.parseAs()
-val title = root["data"]!!["title"]!!.string
-val count = root["data"]!!["count"]!!.int
-val items = root["data"]!!["items"]!!.array
-val nested = root["data"]!!["meta"]!!.obj
+val title = root["data"]["title"].string
+val count = root["data"]["count"].int
+val items = root["data"]["items"].array
+val nested = root["data"]["meta"].obj
 ```
 
 `element[key]` returns `JsonElement?` (null-safe). The terminal accessors (`.string`, `.int`, `.long`, `.boolean`) throw if the element is null. `JsonObject` also has `getStringOrNull`, `getIntOrNull`, `getLongOrNull`, and `getBooleanOrNull` variants for optional fields.
@@ -1014,18 +1016,18 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
 
 #### Manga Details
 
-- When a user taps on a manga, `getMangaDetails` and `getChapterList` are called and the results are cached.
+- When a user taps on a manga, `fetchMangaDetails` and `fetchChapterList` are called and the results are cached.
   - A `SManga` entry is identified by its `url`.
-- `getMangaDetails` is called to update a manga's details from when it was initialized earlier.
-  - `SManga.initialized` tells the app whether to call `getMangaDetails`. If you are overriding
-      `getMangaDetails`, ensure you set it to `true`.
+- `fetchMangaDetails` is called to update a manga's details from when it was initialized earlier.
+  - `SManga.initialized` tells the app whether to call `fetchMangaDetails`. If you are overriding
+      `fetchMangaDetails`, ensure you set it to `true`.
   - `SManga.genre` is a string containing a list of all genres separated by `", "`.
   - `SManga.status` is an "enum" value. Refer to [the values in the `SManga` companion object](https://github.com/tachiyomiorg/extensions-lib/blob/8240b5cfecbd281bc737ac159ea7d4e5825ed3df/library/src/main/java/eu/kanade/tachiyomi/source/model/SManga.kt#L26).
   - During a backup, only `url` and `title` are stored. To restore the rest of the manga data, the
-      app calls `getMangaDetails`, so all fields should be (re)filled if possible.
-  - If a `SManga` is cached, `getMangaDetails` is only called when the user performs a manual
+      app calls `fetchMangaDetails`, so all fields should be (re)filled if possible.
+  - If a `SManga` is cached, `fetchMangaDetails` is only called when the user performs a manual
       update (Swipe-to-Refresh).
-- `getChapterList` is called to display the chapter list.
+- `fetchChapterList` is called to display the chapter list.
   - **The list should be sorted descending by the source order**.
 - `getMangaUrl` is called when the user taps "Open in WebView".
   - If the source uses an API to fetch the data, consider overriding this method to return the manga's
