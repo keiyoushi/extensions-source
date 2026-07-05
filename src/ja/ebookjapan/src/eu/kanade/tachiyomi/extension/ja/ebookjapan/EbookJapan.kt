@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -25,13 +26,10 @@ import okhttp3.Response
 import rx.Observable
 import java.io.IOException
 
-class EbookJapan :
+@Source
+abstract class EbookJapan :
     HttpSource(),
     ConfigurableSource {
-    override val name = "eBookJapan"
-    override val lang = "ja"
-    private val domain = "ebookjapan.yahoo.co.jp"
-    override val baseUrl = "https://$domain"
     override val supportsLatest = true
 
     private val apiUrl = "$baseUrl/proxy/apis"
@@ -43,7 +41,7 @@ class EbookJapan :
 
     override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
-        .addNetworkInterceptor(CookieInterceptor(domain, "ebaf" to "1"))
+        .addNetworkInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, "ebaf" to "1"))
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)

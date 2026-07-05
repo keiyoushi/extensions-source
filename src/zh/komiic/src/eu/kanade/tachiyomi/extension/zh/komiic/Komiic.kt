@@ -5,7 +5,6 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -14,12 +13,11 @@ import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseGraphQLAs
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
-import rx.Observable
 import java.io.IOException
 
 @Source
@@ -30,6 +28,15 @@ abstract class Komiic :
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
+        .addInterceptor { chain ->
+            val origin = chain.request()
+            val host = baseUrl.removePrefix("https://")
+            val request = origin.takeUnless { host != "komiic.com" && it.url.host.endsWith("komiic.com") } ?: origin.run {
+                val newHost = url.host.removeSuffix("komiic.com") + host
+                newBuilder().url(url.newBuilder().host(newHost).build()).build()
+            }
+            chain.proceed(request)
+        }
         .addInterceptor { chain ->
             val origin = chain.request()
             if (origin.url.toString().contains("api/image")) {
@@ -61,21 +68,10 @@ abstract class Komiic :
 
     override fun latestUpdatesParse(response: Response) = parseListing(response.parseGraphQLAs())
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("不支持这个 URL")
-            }
-            val id = url.pathSegments[1]
-            return fetchSearchManga(page, PREFIX_ID_SEARCH + id, filters)
-        }
-        return super.fetchSearchManga(page, query, filters)
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = if (query.startsWith(PREFIX_ID_SEARCH)) {
-        idsQuery(query.removePrefix(PREFIX_ID_SEARCH)).request()
-    } else if (query.isNotBlank()) {
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = query.toHttpUrlOrNull()?.let {
+        if (it.pathSegments[0] != "comic") throw Exception("不支持这个 URL")
+        idsQuery(it.pathSegments[1]).request()
+    } ?: if (query.isNotBlank()) {
         searchQuery(query).request()
     } else {
         val variables = ListingVariables(Pagination((page - 1) * PAGE_SIZE))
@@ -149,5 +145,3 @@ abstract class Komiic :
         return POST("$baseUrl/api/query$extra", headers, this)
     }
 }
-
-const val PREFIX_ID_SEARCH = "id:"

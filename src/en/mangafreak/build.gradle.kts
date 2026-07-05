@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Mangafreak"
-    className = "Mangafreak"
-    versionCode = 13
+    versionCode = 14
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://ww2.mangafreak.me"
+    }
 }

@@ -122,8 +122,10 @@ abstract class LeituraManga : HttpSource() {
         genre = document.select("h2 + div > a[href*=genre]").joinToString { it.text() }
 
         status = when (document.selectFirst("h2:contains(Informações) +div p:contains(Status)")?.text()?.substringAfter(":")?.trim()?.lowercase()) {
-            "ongoing" -> SManga.ONGOING
-            "completed" -> SManga.COMPLETED
+            "Em breve", "Em andamento" -> SManga.ONGOING
+            "Completo" -> SManga.COMPLETED
+            "Cancelado" -> SManga.CANCELLED
+            "Em pausa" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
 

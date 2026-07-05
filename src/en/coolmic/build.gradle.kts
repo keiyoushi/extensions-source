@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Coolmic"
-    className = "Coolmic"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://coolmic.me"
+    }
 }
 
 dependencies {

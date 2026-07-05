@@ -11,76 +11,69 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 
 class ImageInterceptor : Interceptor {
-
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        val response = chain.proceed(request)
         val scrambleData = request.url.fragment
 
-        if (scrambleData.isNullOrEmpty()) {
-            return chain.proceed(request)
-        }
+        if (scrambleData.isNullOrEmpty() || !scrambleData.startsWith("scramble=") || !response.isSuccessful) return response
 
-        val newUrl = request.url.newBuilder()
-            .removeAllQueryParameters("scramble")
-            .build()
-        val newRequest = request.newBuilder().url(newUrl).build()
-
-        val response = chain.proceed(newRequest)
-
-        if (!response.isSuccessful) {
-            return response
-        }
-
-        val tiles = buildList {
-            scrambleData.drop(1).dropLast(1).replace(" ", "").split(",").forEach {
-                val scrambleInt = it.toInt()
-                add(TilePos(scrambleInt / 4, scrambleInt % 4))
-            }
-        }
-
+        val tiles = scrambleData.substringAfter("scramble=").trim('[', ']').split(",").map { it.trim().toInt() }
         val scrambledImg = BitmapFactory.decodeStream(response.body.byteStream())
-        val descrambledImg =
-            unscrambleImage(scrambledImg, scrambledImg.width, scrambledImg.height, tiles)
+        val descrambledImg = unscrambleImage(scrambledImg, tiles)
         scrambledImg.recycle()
         val buffer = Buffer()
         descrambledImg.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
         descrambledImg.recycle()
-        val body = buffer.asResponseBody("image/jpeg".toMediaType())
+        val body = buffer.asResponseBody(MEDIA_TYPE, buffer.size)
 
-        return response.newBuilder().body(body).build()
+        return response.newBuilder()
+            .body(body)
+            .build()
     }
 
-    private fun unscrambleImage(
-        rawImage: Bitmap,
-        width: Int,
-        height: Int,
-        tiles: List<TilePos>,
-    ): Bitmap {
-        val descrambledImg = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(descrambledImg)
+    private fun unscrambleImage(image: Bitmap, tiles: List<Int>): Bitmap {
+        val width = image.width
+        val height = image.height
 
-        val tileWidth = width / 4
-        val tileHeight = height / 4
+        val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
 
-        var count = 0
-        for (x in 0..3) {
-            for (y in 0..3) {
-                val desRect = Rect(
-                    x * tileWidth,
-                    y * tileHeight,
-                    (x + 1) * tileWidth,
-                    (y + 1) * tileHeight,
-                )
-                val srcRect = Rect(
-                    tiles[count].x * tileWidth,
-                    tiles[count].y * tileHeight,
-                    (tiles[count].x + 1) * tileWidth,
-                    (tiles[count].y + 1) * tileHeight,
-                )
-                canvas.drawBitmap(rawImage, srcRect, desRect, null)
-                count++
-            }
+        val tileWidth = width / GRID_SIZE
+        val tileHeight = height / GRID_SIZE
+        val tileAreaWidth = tileWidth * GRID_SIZE
+        val tileAreaHeight = tileHeight * GRID_SIZE
+
+        val srcRect = Rect()
+        val dstRect = Rect()
+
+        for (destIndex in tiles.indices) {
+            val destX = (destIndex / GRID_SIZE) * tileWidth
+            val destY = (destIndex % GRID_SIZE) * tileHeight
+            dstRect.set(destX, destY, destX + tileWidth, destY + tileHeight)
+
+            val sourceIndex = tiles[destIndex]
+            val sourceX = (sourceIndex / GRID_SIZE) * tileWidth
+            val sourceY = (sourceIndex % GRID_SIZE) * tileHeight
+            srcRect.set(sourceX, sourceY, sourceX + tileWidth, sourceY + tileHeight)
+
+            canvas.drawBitmap(image, srcRect, dstRect, null)
         }
-        return descrambledImg
+
+        if (tileAreaWidth < width) {
+            srcRect.set(tileAreaWidth, 0, width, height)
+            canvas.drawBitmap(image, srcRect, srcRect, null)
+        }
+        if (tileAreaHeight < height) {
+            srcRect.set(0, tileAreaHeight, tileAreaWidth, height)
+            canvas.drawBitmap(image, srcRect, srcRect, null)
+        }
+
+        return result
+    }
+
+    companion object {
+        private const val GRID_SIZE = 4
+        private val MEDIA_TYPE = "image/jpeg".toMediaType()
     }
 }

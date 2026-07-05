@@ -9,18 +9,17 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class ComicRyu : HttpSource() {
-    override val name = "Comic Ryu"
-    private val domain = "comic-ryu.jp"
-    override val baseUrl = "https://www.$domain"
-    override val lang = "ja"
+@Source
+abstract class ComicRyu : HttpSource() {
     override val supportsLatest = true
 
+    private val domain = baseUrl.toHttpUrl().host
     private val subDomain = "https://unicorn.$domain"
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)

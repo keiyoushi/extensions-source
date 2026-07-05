@@ -4,8 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Tappytoon"
-    className = "TappytoonFactory"
     versionCode = 10
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    listOf("en", "fr", "de").forEach {
+        source {
+            lang = it
+            baseUrl = "https://www.tappytoon.com/$it"
+        }
+    }
 }

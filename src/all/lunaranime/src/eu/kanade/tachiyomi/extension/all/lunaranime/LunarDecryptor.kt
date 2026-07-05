@@ -18,8 +18,8 @@ class LunarDecryptor(
     private val apiUrl: String,
 ) {
 
-    fun decryptChapterImages(chapterUrl: String, slug: String, chapterNum: String, lang: String): List<String> {
-        val seedObjs = getSeeds(chapterUrl)
+    fun decryptChapterImages(chapterResponse: Response, slug: String, chapterNum: String, lang: String): List<String> {
+        val seedObjs = chapterResponse.extractSeeds()
         require(seedObjs.size >= 2) { "Failed to find payload seeds" }
 
         val rctx0 = generateRctxFrom(seedObjs[0])
@@ -27,19 +27,12 @@ class LunarDecryptor(
 
         val token = generateToken(rctx0, rctx1, slug, chapterNum)
 
-        // Submit the token first, fake images are returned otherwise
-        val response = client.newCall(GET("$apiUrl/api/user/server-region?v=$token")).execute().close()
+        // val response = client.newCall(GET("$apiUrl/api/user/server-region?v=$token")).execute().close()
 
         val sessionDataB64 = fetchSessionData(token, lang)
 
         val finalJson = decryptSessionImages(sessionDataB64, rctx0)
         return finalJson.parseAs<LunarPageListDecrypted>().data.images
-    }
-
-    private fun getSeeds(url: String): List<Map<String, String>> {
-        val response = client.newCall(GET(url)).execute()
-        if (!response.isSuccessful) error("HTTP ${response.code}")
-        return response.extractSeeds()
     }
 
     private fun fetchSessionData(token: String, lang: String): String {

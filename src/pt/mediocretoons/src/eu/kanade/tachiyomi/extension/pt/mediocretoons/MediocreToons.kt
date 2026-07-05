@@ -32,7 +32,7 @@ abstract class MediocreToons :
     HttpSource(),
     ConfigurableSource {
     override val supportsLatest = true
-    private val apiUrl = "https://back.mediocrescan.com"
+    private val apiUrl = "https://back2.mediocrescan.com"
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 

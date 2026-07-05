@@ -4,8 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Kodansha"
-    className = "Kodansha"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://kodansha.us"
+    }
 }

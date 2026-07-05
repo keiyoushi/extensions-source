@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
@@ -23,15 +24,13 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 
-class AmebaManga :
+@Source
+abstract class AmebaManga :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Ameba Manga"
-    private val domain = "dokusho-ojikan.jp"
-    override val baseUrl = "https://$domain"
-    override val lang = "ja"
     override val supportsLatest = true
 
+    private val domain = baseUrl.toHttpUrl().host
     private val apiUrl = "https://api.$domain/dokusho-server"
     private val pageSize = 50
     private val preferences by getPreferencesLazy()

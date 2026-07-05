@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Komikzoid"
-    className = "Komikzoid"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "colorlibanime"
-    baseUrl = "https://komikzoid.id"
+
+    source {
+        lang = "id"
+        baseUrl = "https://komikzoid.id"
+    }
 }

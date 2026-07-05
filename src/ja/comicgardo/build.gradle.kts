@@ -4,10 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Comic Gardo"
-    className = "ComicGardo"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "gigaviewer"
-    baseUrl = "https://comic-gardo.com"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://comic-gardo.com"
+    }
 }

@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
@@ -33,15 +34,59 @@ import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaBall(
-    override val lang: String,
-    private vararg val siteLang: String,
-) : HttpSource(),
+@Source
+abstract class MangaBall :
+    HttpSource(),
     ConfigurableSource {
 
-    override val name = "Manga Ball"
-    private val domain = "mangaball.net"
-    override val baseUrl = "https://$domain"
+    private val siteLang: List<String>
+        get() = when (lang) {
+            "ar" -> listOf("ar")
+            "bg" -> listOf("bg")
+            "bn" -> listOf("bn")
+            "ca" -> listOf("ca", "ca-ad", "ca-es", "ca-fr", "ca-it", "ca-pt")
+            "cs" -> listOf("cs")
+            "da" -> listOf("da")
+            "de" -> listOf("de")
+            "el" -> listOf("el")
+            "en" -> listOf("en")
+            "es" -> listOf("es", "es-ar", "es-mx", "es-es", "es-la", "es-419")
+            "fa" -> listOf("fa")
+            "fi" -> listOf("fi")
+            "fr" -> listOf("fr")
+            "he" -> listOf("he")
+            "hi" -> listOf("hi")
+            "hu" -> listOf("hu")
+            "id" -> listOf("id")
+            "it" -> listOf("it", "it-it")
+            "is" -> listOf("ib", "ib-is", "is")
+            "ja" -> listOf("jp")
+            "ko" -> listOf("kr")
+            "kn" -> listOf("kn", "kn-in", "kn-my", "kn-sg", "kn-tw")
+            "ml" -> listOf("ml", "ml-in", "ml-my", "ml-sg", "ml-tw")
+            "ms" -> listOf("ms")
+            "ne" -> listOf("ne")
+            "nl" -> listOf("nl", "nl-be")
+            "no" -> listOf("no")
+            "pl" -> listOf("pl")
+            "pt-BR" -> listOf("pt-br", "pt-pt")
+            "ro" -> listOf("ro")
+            "ru" -> listOf("ru")
+            "sk" -> listOf("sk")
+            "sl" -> listOf("sl")
+            "sq" -> listOf("sq")
+            "sr" -> listOf("sr", "sr-cyrl")
+            "sv" -> listOf("sv")
+            "ta" -> listOf("ta")
+            "th" -> listOf("th", "th-hk", "th-kh", "th-la", "th-my", "th-sg")
+            "tr" -> listOf("tr")
+            "uk" -> listOf("uk")
+            "vi" -> listOf("vi")
+            "zh" -> listOf("zh", "zh-cn", "zh-hk", "zh-mo", "zh-sg", "zh-tw")
+            else -> listOf(lang)
+        }
+
+    private val domain get() = baseUrl.removePrefix("https://")
     override val supportsLatest = true
     private val preferences by getPreferencesLazy()
 

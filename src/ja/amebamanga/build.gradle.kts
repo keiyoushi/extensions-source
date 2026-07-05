@@ -4,10 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Ameba Manga"
-    className = "AmebaManga"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://dokusho-ojikan.jp"
+    }
 }
 
 dependencies {

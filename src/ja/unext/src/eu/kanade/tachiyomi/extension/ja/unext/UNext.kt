@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.GraphQLErrorInterceptor
 import keiyoushi.utils.GraphQLException
 import keiyoushi.utils.getPreferencesLazy
@@ -39,16 +40,13 @@ import uy.kohesive.injekt.api.get
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class UNext :
+@Source
+abstract class UNext :
     HttpSource(),
     ConfigurableSource {
-    override val name = "U-NEXT"
-    private val domain = "unext.jp"
-    override val baseUrl = "https://video.$domain"
-    override val lang = "ja"
     override val supportsLatest = true
 
-    private val apiUrl = "https://cc.$domain"
+    private val apiUrl = "https://cc.unext.jp"
     private val preferences: SharedPreferences by getPreferencesLazy()
     private val apiHeaders = headersBuilder()
         .set("Content-Type", "application/json")

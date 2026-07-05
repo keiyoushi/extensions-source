@@ -1,12 +1,8 @@
 package eu.kanade.tachiyomi.extension.ko.wolfdotcom
 
-import android.content.SharedPreferences
 import android.util.Log
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,7 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
@@ -27,92 +23,54 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import rx.Observable
-import java.io.IOException
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-open class Wolf(
-    name: String,
-    private val browsePath: String,
-    private val entryPath: String,
-    private val readerPath: String,
-) : HttpSource(),
-    ConfigurableSource {
-
-    override val name = "늑대닷컴 - $name"
-
-    override val lang = "ko"
-
-    override val baseUrl: String
-        get() = "https://wfwf$domainNumber.com"
+@Source
+abstract class Wolf : HttpSource() {
 
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
-        .addInterceptor(::domainNumberInterceptor)
         .addNetworkInterceptor(::refererInterceptor)
         .build()
 
-    private val preference: SharedPreferences by getPreferencesLazy()
+    private val isWebtoon get() = name.endsWith("웹툰")
+    private val isComic get() = name.endsWith("만화책")
+    private val isPhoto get() = name.endsWith("포토툰")
+
+    private val browsePath get() = when {
+        isComic -> "cm"
+        isPhoto -> "pt"
+        else -> "ing" // Webtoon
+    }
+
+    private val entryPath get() = when {
+        isComic -> "cl"
+        else -> "list"
+    }
+
+    private val readerPath get() = when {
+        isComic -> "cv"
+        else -> "view"
+    }
+
+    // ============================== Popular ==============================
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = fetchSearchManga(page, "", POPULAR)
 
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
+
+    // ============================== Latest ===============================
+
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = fetchSearchManga(page, "", LATEST)
 
-    private var searchFilters: List<FilterData> = emptyList()
-    private var filterParseError = false
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun getFilterList(): FilterList {
-        val filters: MutableList<Filter<*>> = mutableListOf(
-            SortFilter(),
-        )
-
-        if (searchFilters.isNotEmpty()) {
-            filters.add(
-                SearchFilter(searchFilters),
-            )
-        } else if (filterParseError) {
-            filters.add(
-                Filter.Header("unable to parse filters"),
-            )
-        } else {
-            filters.add(
-                Filter.Header("press 'reset' to attempt to load more filters"),
-            )
-        }
-
-        return FilterList(filters)
-    }
-
-    protected open fun parseSearchFilters(document: Document) {
-        if (searchFilters.isNotEmpty() || filterParseError) return
-
-        try {
-            val displayName = document.select(".sub-tab > a").eachText()
-            assert(displayName.size == 3)
-            searchFilters =
-                document.select(".tab-day > a, .tab-genre1 > a, .tab-genre2 > a, .tab-alphabet > a")
-                    .map {
-                        val url = it.absUrl("href").toHttpUrl()
-                        val type = url.queryParameter("type1")!!
-                        FilterData(
-                            type = type,
-                            typeDisplayName = when (type) {
-                                "day", "complete" -> displayName[0]
-                                "genre" -> displayName[1]
-                                "alphabet" -> displayName[2]
-                                else -> null
-                            },
-                            value = url.queryParameter("type2"),
-                            valueDisplayName = it.ownText(),
-                        )
-                    }
-        } catch (e: Throwable) {
-            Log.e(name, "error parsing filters", e)
-            filterParseError = true
-        }
-    }
+    // ============================== Search ===============================
 
     private lateinit var browseCache: List<List<BrowseItem>>
 
@@ -215,6 +173,10 @@ open class Wolf(
             }
     }
 
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    // ============================== Details ==============================
+
     override fun getMangaUrl(manga: SManga): String = baseUrl.toHttpUrl().newBuilder()
         .addPathSegment(entryPath)
         .addQueryParameter("toon", manga.url)
@@ -233,6 +195,8 @@ open class Wolf(
             author = document.selectFirst(".text-box .sub:has(> strong:contains(작가))")?.ownText()?.replace("/", ", ")
         }
     }
+
+    // ============================= Chapters ==============================
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
@@ -258,8 +222,6 @@ open class Wolf(
         }
     }
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
-
     override fun getChapterUrl(chapter: SChapter): String {
         val chapUrl = chapter.url.parseAs<ChapterUrl>()
 
@@ -269,6 +231,8 @@ open class Wolf(
             .addQueryParameter("num", chapUrl.num)
             .toString()
     }
+
+    // =============================== Pages ===============================
 
     override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), headers)
 
@@ -280,86 +244,67 @@ open class Wolf(
         }
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = PREF_DOMAIN_NUM
-            title = "도메인 번호"
-            setOnPreferenceChangeListener { _, newValue ->
-                val value = newValue as String
-                if (value.isEmpty() || value.toIntOrNull() == null) {
-                    false
-                } else {
-                    domainNumber = value.trim()
-                    false
-                }
-            }
-        }.also(screen::addPreference)
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private var domainNumber = ""
-        get() {
-            val currentValue = field
-            if (currentValue.isNotEmpty()) return currentValue
+    // ============================== Filters ==============================
 
-            val prefValue = preference.getString(PREF_DOMAIN_NUM, "")!!
-            val prefDefaultValue = preference.getString(PREF_DOMAIN_NUM_DEFAULT, "")!!
+    private var searchFilters: List<FilterData> = emptyList()
+    private var filterParseError = false
 
-            if (prefDefaultValue != DEFAULT_DOMAIN_NUMBER) {
-                preference.edit()
-                    .putString(PREF_DOMAIN_NUM_DEFAULT, DEFAULT_DOMAIN_NUMBER)
-                    .putString(PREF_DOMAIN_NUM, DEFAULT_DOMAIN_NUMBER)
-                    .apply()
+    override fun getFilterList(): FilterList {
+        if (isPhoto) return FilterList()
 
-                field = DEFAULT_DOMAIN_NUMBER
-                return DEFAULT_DOMAIN_NUMBER
-            }
+        val filters: MutableList<Filter<*>> = mutableListOf(
+            SortFilter(),
+        )
 
-            if (prefValue.isNotEmpty()) {
-                field = prefValue
-                return prefValue
-            }
-
-            return DEFAULT_DOMAIN_NUMBER
-        }
-        set(value) {
-            preference.edit().putString(PREF_DOMAIN_NUM, value).apply()
-
-            field = value
-        }
-
-    private fun domainNumberInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val response = chain.proceed(request)
-
-        val url = request.url.toString()
-
-        if (url.contains(domainRegex)) {
-            val document = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
-            val newUrl = document.selectFirst("""#pop-content a[href~=^https?://wfwf\d+\.com]""")
-                ?: return response
-
-            response.close()
-
-            val newDomainNum = domainRegex.find(newUrl.attr("href"))?.groupValues?.get(1)
-                ?: throw IOException("Failed to update domain number")
-
-            domainNumber = newDomainNum.trim()
-
-            return chain.proceed(
-                request.newBuilder()
-                    .url(
-                        request.url.newBuilder()
-                            .host(baseUrl.toHttpUrl().host)
-                            .build(),
-                    )
-                    .build(),
+        if (searchFilters.isNotEmpty()) {
+            filters.add(
+                SearchFilter(searchFilters),
+            )
+        } else if (filterParseError) {
+            filters.add(
+                Filter.Header("unable to parse filters"),
+            )
+        } else {
+            filters.add(
+                Filter.Header("press 'reset' to attempt to load more filters"),
             )
         }
 
-        return response
+        return FilterList(filters)
     }
 
-    private val domainRegex = Regex("""^https?://wfwf(\d+)\.com""")
+    private fun parseSearchFilters(document: Document) {
+        if (isPhoto || searchFilters.isNotEmpty() || filterParseError) return
+
+        try {
+            val displayName = document.select(".sub-tab > a").eachText()
+            assert(displayName.size == 3)
+            searchFilters =
+                document.select(".tab-day > a, .tab-genre1 > a, .tab-genre2 > a, .tab-alphabet > a")
+                    .map {
+                        val url = it.absUrl("href").toHttpUrl()
+                        val type = url.queryParameter("type1")!!
+                        FilterData(
+                            type = type,
+                            typeDisplayName = when (type) {
+                                "day", "complete" -> displayName[0]
+                                "genre" -> displayName[1]
+                                "alphabet" -> displayName[2]
+                                else -> null
+                            },
+                            value = url.queryParameter("type2"),
+                            valueDisplayName = it.ownText(),
+                        )
+                    }
+        } catch (e: Throwable) {
+            Log.e(name, "error parsing filters", e)
+            filterParseError = true
+        }
+    }
+
+    // ============================= Utilities =============================
 
     private fun refererInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request().newBuilder()
@@ -369,13 +314,9 @@ open class Wolf(
         return chain.proceed(request)
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    companion object {
+        private val dateFormat by lazy {
+            SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+        }
+    }
 }
-
-private const val PREF_DOMAIN_NUM = "domain_number"
-private const val PREF_DOMAIN_NUM_DEFAULT = "domain_number_default"

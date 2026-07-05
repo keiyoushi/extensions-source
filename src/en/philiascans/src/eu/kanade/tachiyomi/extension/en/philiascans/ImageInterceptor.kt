@@ -38,11 +38,11 @@ class ImageInterceptor : Interceptor {
         val pageIndex = parts[6].toInt()
 
         val chapterKey = if (payloadA != "null" && payloadA.isNotBlank() && payloadB != "null" && payloadB.isNotBlank()) {
-            val a = payloadA.decodeBase64()!!.toByteArray()
-            val b = payloadB.decodeBase64()!!.toByteArray()
+            val a = payloadA.decodeBase64()?.toByteArray() ?: return response
+            val b = payloadB.decodeBase64()?.toByteArray() ?: return response
             ByteArray(32) { i -> a[i] xor b[i] }
         } else {
-            chapterKeyB64.decodeBase64()!!.toByteArray()
+            chapterKeyB64.decodeBase64()?.toByteArray() ?: return response
         }
 
         val source = response.body.source()
@@ -60,9 +60,9 @@ class ImageInterceptor : Interceptor {
 
         val plainSource: Source = when {
             isAes4Scheme -> source.cipherSource(aesCtrCipher(chapterKey, pageIndex, "aesctr4:"))
-            isChachaScheme -> Buffer().write(chacha20Decrypt(chapterKey, pageIndex, source.readByteArray()))
+            isChachaScheme -> ChaCha20Source(source, chapterKey, pageIndex)
             isAesScheme -> source.cipherSource(aesCtrCipher(chapterKey, pageIndex, "aesctr:"))
-            else -> Buffer().write(xorKeystream(chapterKey, pageIndex, source.readByteArray()))
+            else -> XorKeystreamSource(source, chapterKey, pageIndex)
         }
 
         if (isScrambled != "1" || isChachaScheme || isAes4Scheme) {
@@ -151,35 +151,91 @@ class ImageInterceptor : Interceptor {
         return result
     }
 
-    private fun xorKeystream(chapterKey: ByteArray, pageIndex: Int, data: ByteArray): ByteArray {
-        val mac = initMac(chapterKey)
-        val numBlocks = (data.size + 31) / 32
-        for (i in 0 until numBlocks) {
-            val hash = mac.doFinal("page:$pageIndex:$i".toByteArray(Charsets.UTF_8))
-            val base = i * 32
-            for (j in 0 until minOf(32, data.size - base)) {
-                data[base + j] = data[base + j] xor hash[j]
-            }
+    private fun aesCtrCipher(chapterKey: ByteArray, pageIndex: Int, prefix: String): Cipher {
+        val derivedKey = initMac(chapterKey).doFinal("$prefix$pageIndex".toByteArray(Charsets.UTF_8))
+        return Cipher.getInstance("AES/CTR/NoPadding").apply {
+            init(Cipher.DECRYPT_MODE, SecretKeySpec(derivedKey, "AES"), IvParameterSpec(ByteArray(16)))
         }
-        return data
     }
 
-    private fun chacha20Decrypt(chapterKey: ByteArray, pageIndex: Int, data: ByteArray): ByteArray {
-        val key = initMac(chapterKey).doFinal("cc:$pageIndex".toByteArray(Charsets.UTF_8))
-        val nonce = ByteArray(12)
-        var counter = 0
-        var offset = 0
-
-        while (offset < data.size) {
-            val block = chacha20Block(key, nonce, counter++)
-            for (i in 0 until minOf(block.size, data.size - offset)) {
-                data[offset + i] = data[offset + i] xor block[i]
-            }
-            offset += block.size
-        }
-
-        return data
+    companion object {
+        private val AES_MAGIC = "ff02".decodeHex()
+        private val CHACHA_MAGIC = "ff03".decodeHex()
+        private val AES4_MAGIC = "ff04".decodeHex()
+        private val SCRAMBLED = Regex(""".*_s\.[^.]+$""")
+        fun initMac(key: ByteArray): Mac = Mac.getInstance("HmacSHA256").also { it.init(SecretKeySpec(key, "HmacSHA256")) }
     }
+}
+
+// -------------------------------------------------------------
+// Stream Wrappers to avoid ByteArray Memory limits
+// -------------------------------------------------------------
+
+private class XorKeystreamSource(
+    private val upstream: Source,
+    chapterKey: ByteArray,
+    private val pageIndex: Int,
+) : Source {
+    private val mac = ImageInterceptor.initMac(chapterKey)
+    private var blockIndex = 0
+    private var blockOffset = 0
+    private var currentHash: ByteArray = mac.doFinal("page:$pageIndex:$blockIndex".toByteArray(Charsets.UTF_8))
+
+    override fun read(sink: Buffer, byteCount: Long): Long {
+        val temp = Buffer()
+        val readCount = upstream.read(temp, byteCount)
+        if (readCount == -1L) return -1L
+
+        val bytes = temp.readByteArray()
+        for (i in bytes.indices) {
+            if (blockOffset == 32) {
+                blockIndex++
+                currentHash = mac.doFinal("page:$pageIndex:$blockIndex".toByteArray(Charsets.UTF_8))
+                blockOffset = 0
+            }
+            bytes[i] = bytes[i] xor currentHash[blockOffset]
+            blockOffset++
+        }
+        sink.write(bytes)
+        return readCount
+    }
+
+    override fun timeout() = upstream.timeout()
+    override fun close() = upstream.close()
+}
+
+private class ChaCha20Source(
+    private val upstream: Source,
+    chapterKey: ByteArray,
+    pageIndex: Int,
+) : Source {
+    private val key = ImageInterceptor.initMac(chapterKey).doFinal("cc:$pageIndex".toByteArray(Charsets.UTF_8))
+    private val nonce = ByteArray(12)
+    private var counter = 0
+    private var blockOffset = 0
+    private var currentBlock = chacha20Block(key, nonce, counter)
+
+    override fun read(sink: Buffer, byteCount: Long): Long {
+        val temp = Buffer()
+        val readCount = upstream.read(temp, byteCount)
+        if (readCount == -1L) return -1L
+
+        val bytes = temp.readByteArray()
+        for (i in bytes.indices) {
+            if (blockOffset == 64) {
+                counter++
+                currentBlock = chacha20Block(key, nonce, counter)
+                blockOffset = 0
+            }
+            bytes[i] = bytes[i] xor currentBlock[blockOffset]
+            blockOffset++
+        }
+        sink.write(bytes)
+        return readCount
+    }
+
+    override fun timeout() = upstream.timeout()
+    override fun close() = upstream.close()
 
     private fun chacha20Block(key: ByteArray, nonce: ByteArray, counter: Int): ByteArray {
         val state = IntArray(16)
@@ -224,32 +280,16 @@ class ImageInterceptor : Interceptor {
         state[c] += state[d]
         state[b] = Integer.rotateLeft(state[b] xor state[c], 7)
     }
+}
 
-    private fun aesCtrCipher(chapterKey: ByteArray, pageIndex: Int, prefix: String): Cipher {
-        val derivedKey = initMac(chapterKey).doFinal("$prefix$pageIndex".toByteArray(Charsets.UTF_8))
-        return Cipher.getInstance("AES/CTR/NoPadding").apply {
-            init(Cipher.DECRYPT_MODE, SecretKeySpec(derivedKey, "AES"), IvParameterSpec(ByteArray(16)))
-        }
-    }
+private fun ByteArray.readLittleEndianInt(offset: Int): Int = (this[offset].toInt() and 0xFF) or
+    ((this[offset + 1].toInt() and 0xFF) shl 8) or
+    ((this[offset + 2].toInt() and 0xFF) shl 16) or
+    ((this[offset + 3].toInt() and 0xFF) shl 24)
 
-    private fun initMac(key: ByteArray): Mac = Mac.getInstance("HmacSHA256").also { it.init(SecretKeySpec(key, "HmacSHA256")) }
-
-    private fun ByteArray.readLittleEndianInt(offset: Int): Int = (this[offset].toInt() and 0xFF) or
-        ((this[offset + 1].toInt() and 0xFF) shl 8) or
-        ((this[offset + 2].toInt() and 0xFF) shl 16) or
-        ((this[offset + 3].toInt() and 0xFF) shl 24)
-
-    private fun ByteArray.writeLittleEndianInt(offset: Int, value: Int) {
-        this[offset] = value.toByte()
-        this[offset + 1] = (value ushr 8).toByte()
-        this[offset + 2] = (value ushr 16).toByte()
-        this[offset + 3] = (value ushr 24).toByte()
-    }
-
-    companion object {
-        private val AES_MAGIC = "ff02".decodeHex()
-        private val CHACHA_MAGIC = "ff03".decodeHex()
-        private val AES4_MAGIC = "ff04".decodeHex()
-        private val SCRAMBLED = Regex(""".*_s\.[^.]+$""")
-    }
+private fun ByteArray.writeLittleEndianInt(offset: Int, value: Int) {
+    this[offset] = value.toByte()
+    this[offset + 1] = (value ushr 8).toByte()
+    this[offset + 2] = (value ushr 16).toByte()
+    this[offset + 3] = (value ushr 24).toByte()
 }

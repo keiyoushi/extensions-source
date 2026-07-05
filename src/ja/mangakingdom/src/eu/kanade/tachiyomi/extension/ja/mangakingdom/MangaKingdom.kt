@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
@@ -25,13 +26,10 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.io.IOException
 
-class MangaKingdom :
+@Source
+abstract class MangaKingdom :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Manga Kingdom"
-    private val domain = "comic.k-manga.jp"
-    override val baseUrl = "https://$domain"
-    override val lang = "ja"
     override val supportsLatest = true
 
     private val viewerUrl = "https://bv.k-manga.jp/public/app/action/bd00.php"
@@ -42,7 +40,7 @@ class MangaKingdom :
 
     override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
-        .addNetworkInterceptor(CookieInterceptor(domain, "is_verified_age_over_18" to "1"))
+        .addNetworkInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, "is_verified_age_over_18" to "1"))
         .addInterceptor {
             val request = it.request()
             val response = it.proceed(request)

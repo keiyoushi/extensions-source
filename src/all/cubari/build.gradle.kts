@@ -4,10 +4,16 @@ plugins {
 
 keiyoushi {
     name = "Cubari"
-    className = "CubariFactory"
     versionCode = 26
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    listOf("en", "all", "other").forEach {
+        source {
+            lang = it
+            baseUrl = "https://cubari.moe"
+        }
+    }
 
     deeplink {
         host("cubari.moe")

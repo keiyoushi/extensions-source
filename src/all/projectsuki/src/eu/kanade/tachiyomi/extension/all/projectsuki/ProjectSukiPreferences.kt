@@ -7,15 +7,9 @@ import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
 import java.util.Locale
 
-/**
- *  @see EXTENSION_INFO Found in ProjectSuki.kt
- */
 @Suppress("unused")
 private inline val INFO: Nothing get() = error("INFO")
 
-/**
- * @author Federico d'Alonzo &lt;me@npgx.dev&gt;
- */
 class ProjectSukiPreferences(internal val shared: SharedPreferences) {
 
     abstract inner class PSPreference<Raw : Any, T : Any>(val preferenceIdentifier: String, val default: Raw) {
@@ -31,13 +25,13 @@ class ProjectSukiPreferences(internal val shared: SharedPreferences) {
 
     val defaultSearchMode = object : PSPreference<String, ProjectSukiFilters.SearchMode>("$SHORT_FORM_ID-default-search-mode", ProjectSukiFilters.SearchMode.SMART.display) {
         override val rawGet: SharedPreferences.(identifier: String, default: String) -> String = { id, def -> getString(id, def)!! }
-        override fun String.transform(): ProjectSukiFilters.SearchMode = ProjectSukiFilters.SearchMode.values()
+        override fun String.transform(): ProjectSukiFilters.SearchMode = ProjectSukiFilters.SearchMode.entries
             .firstOrNull { it.display == this } ?: ProjectSukiFilters.SearchMode.SMART
 
         override fun PreferenceScreen.constructPreference() = ListPreference(context).apply {
             key = preferenceIdentifier
-            entries = ProjectSukiFilters.SearchMode.values().map { it.display }.toTypedArray()
-            entryValues = ProjectSukiFilters.SearchMode.values().map { it.display }.toTypedArray()
+            entries = ProjectSukiFilters.SearchMode.entries.map { it.display }.toTypedArray()
+            entryValues = ProjectSukiFilters.SearchMode.entries.map { it.display }.toTypedArray()
             setDefaultValue(ProjectSukiFilters.SearchMode.SMART.display)
             title = "Default search mode"
             summary = summary {

@@ -17,10 +17,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 
-@ExperimentalStdlibApi
-open class EroMuse(override val name: String, override val baseUrl: String) : HttpSource() {
-
-    override val lang = "en"
+abstract class EroMuse : HttpSource() {
 
     override val supportsLatest = true
 

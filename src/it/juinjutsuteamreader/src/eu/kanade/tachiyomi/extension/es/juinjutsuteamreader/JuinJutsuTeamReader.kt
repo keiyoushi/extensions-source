@@ -5,11 +5,13 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
-class JuinJutsuTeamReader : FoolSlide("Juin Jutsu Team Reader", "https://www.juinjutsureader.ovh", "it") {
+@Source
+abstract class JuinJutsuTeamReader : FoolSlide() {
     override val supportsLatest = false
 
     private val seenMangaUrls = mutableSetOf<String>()

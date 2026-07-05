@@ -2,14 +2,11 @@ package eu.kanade.tachiyomi.extension.ja.comicdays
 
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Element
 
-class ComicDays :
-    GigaViewer(
-        "Comic Days",
-        "https://comic-days.com",
-        "ja",
-    ) {
+@Source
+abstract class ComicDays : GigaViewer() {
     override val popularMangaSelector: String = "ul.daily-series li.daily-series-item:has(a.link)"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {

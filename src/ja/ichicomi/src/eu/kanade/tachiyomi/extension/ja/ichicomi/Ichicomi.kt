@@ -5,17 +5,14 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Element
 
-class Ichicomi :
-    GigaViewer(
-        "Ichicomi",
-        "https://ichicomi.com",
-        "ja",
-    ) {
+@Source
+abstract class Ichicomi : GigaViewer() {
     override val supportsLatest = false
 
     override val popularMangaSelector: String = "div[class^=Series_series__]"
