@@ -1113,7 +1113,7 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
 - **Preserving Source ID:** If you change a source's `name` or `lang`, its auto-generated `id` changes, disconnecting existing users' libraries. To prevent this, set `id` explicitly to the old value (found in `index.json`)- either in the `source {}` block or by overriding `id` in your class. See [Renaming existing sources](#renaming-existing-sources).
 - **Avoid hardcoded host checks:** When checking URLs in deep links or search overrides, avoid hardcoding the host string (e.g., `queryUrl.host == "site.com"`). This breaks if mirrors are added. Prefer dynamically checking against the source's `baseUrl`.
 - **Empty Lists vs. Exceptions:** If `pageListParse` or `chapterListParse` finds no items (e.g., a locked or empty chapter), return `emptyList()` instead of throwing a hardcoded exception. The app will display a localized error message.
-- **Avoid excessive comments:** Do not add verbose, redundant, or AI-generated comments explaining obvious code. Keep the code clean and self-documenting.
+- **Keep comments concise and preferably in English:** We recommend writing code comments and KDocs in English to make them accessible to all contributors. Additionally, avoid verbose, redundant, or AI-generated comments explaining obvious code. Keep the code clean and self-documenting.
 
 #### Configurable Sources and Preferences
 
