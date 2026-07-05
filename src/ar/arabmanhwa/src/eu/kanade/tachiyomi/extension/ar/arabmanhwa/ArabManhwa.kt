@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.ar.arabmanhwa
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.Source // <-- هذا السطر ضروري جداً لكي يتعرف جيت هوب على الـ Annotation
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
@@ -11,7 +12,7 @@ import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
 
-@Source // الكومبيلر (KSP) يحتاجه هنا ليتعرف على الحزمة
+@Source
 class ArabManhwa : Madara("ArabManhwa", "https://arabmanhwa.com", "ar") {
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
