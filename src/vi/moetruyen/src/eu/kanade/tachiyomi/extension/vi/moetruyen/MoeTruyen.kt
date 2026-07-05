@@ -49,6 +49,11 @@ abstract class MoeTruyen : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
+    // SimpleDateFormat is not thread-safe. Keep as class-level property!
+    private val dateFormat = java.text.SimpleDateFormat("dd/MM/yyyy", Locale.ROOT).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
+    }
+
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
@@ -201,8 +206,6 @@ abstract class MoeTruyen : HttpSource() {
             chapterListParsePaginated(response)
         }
     }
-
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> = parseChapterList(response.asJsoup())
 
@@ -417,15 +420,8 @@ abstract class MoeTruyen : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // ============================== Preferences ===========================
-
     companion object {
         private val NUMBER_REGEX = Regex("""\d+""")
-
-        private val dateFormat = java.text.SimpleDateFormat("dd/MM/yyyy", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
-        }
-
         private val secureRandom = SecureRandom()
     }
 }

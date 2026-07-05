@@ -3,11 +3,16 @@ plugins {
 }
 
 keiyoushi {
-    name = "Dynasty"
-    className = "Dynasty"
-    versionCode = 30
+    name = "Dynasty Scans"
+    versionCode = 31
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://dynasty-scans.com"
+        id = 669095474988166464L
+    }
 
     deeplink {
         host("dynasty-scans.com")

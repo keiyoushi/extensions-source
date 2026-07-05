@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.dynasty
 
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 const val SERIES_TYPE = "Series"
 const val CHAPTER_TYPE = "Chapter"
@@ -24,7 +25,9 @@ val UNICODE_REGEX = Regex("\\\\u([0-9A-Fa-f]{4})")
 
 const val AUTHORS_UPPER_LIMIT = 15
 
-val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
+    timeZone = TimeZone.getTimeZone("UTC")
+}
 
 const val CHAPTER_FETCH_LIMIT_PREF = "chapterFetchLimit"
 val CHAPTER_FETCH_LIMITS = arrayOf("2", "5", "10", "all")
