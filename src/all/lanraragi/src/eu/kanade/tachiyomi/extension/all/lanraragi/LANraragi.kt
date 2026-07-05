@@ -149,11 +149,8 @@ open class LANraragi(private val suffix: String = "") :
                 SChapter.create().apply {
                     url = getApiUriBuilder("/api/archives/${it.arcid}/files").build().toString()
                     chapter_number = 1F + chapters.size
-                    name = if (archives.size == 1) "Chapter" else it.title
-
-                    getDateAdded(it.tags).toLongOrNull()?.let { date ->
-                        date_upload = date
-                    }
+                    name = if (archives.size == 1) "Chapter" else "${chapter_number.toInt()} - ${it.title}"
+                    date_upload = 1000 * (getNSTag(it.tags, "date_added")?.first()?.toLong() ?: 0)
                 },
             )
         }
@@ -534,11 +531,6 @@ open class LANraragi(private val suffix: String = "") :
         ?.map { it.split(":", limit = 2).last() }
         ?.distinct()
         ?.takeIf { it.isNotEmpty() }
-
-    private fun getDateAdded(tags: String?): String {
-        // Pad Date Added NS to milliseconds
-        return getNSTag(tags, "date_added")?.get(0)?.padEnd(13, '0') ?: ""
-    }
 
     // Headers (currently auth) are done in headersBuilder
     override val client: OkHttpClient = network.client.newBuilder()
