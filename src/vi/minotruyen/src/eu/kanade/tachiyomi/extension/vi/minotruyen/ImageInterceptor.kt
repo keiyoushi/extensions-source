@@ -7,10 +7,10 @@ import android.graphics.Rect
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 
-class MinoImageInterceptor : Interceptor {
+class ImageInterceptor : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -54,7 +54,7 @@ class MinoImageInterceptor : Interceptor {
         unscrambled.recycle()
 
         return response.newBuilder()
-            .body(output.readByteArray().toResponseBody(mediaType))
+            .body(output.asResponseBody(mediaType))
             .build()
     }
 

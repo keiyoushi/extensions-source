@@ -2,8 +2,10 @@ package eu.kanade.tachiyomi.extension.all.lanraragi
 
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
+import keiyoushi.annotation.Source as KeiyoushiSource
 
-class LANraragiFactory : SourceFactory {
+@KeiyoushiSource
+abstract class LANraragiFactory : SourceFactory {
     override fun createSources(): List<Source> {
         val firstLrr = LANraragi("1")
         val lrrCount = firstLrr.preferences.getString(LANraragi.EXTRA_SOURCES_COUNT_KEY, LANraragi.EXTRA_SOURCES_COUNT_DEFAULT)!!.toInt()
