@@ -1,9 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.tasho
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -27,8 +29,19 @@ abstract class Tasho : Madara() {
     override fun popularMangaSelector() = "article.rs-manga-library__card"
     override val popularMangaUrlSelector = ".rs-manga-library__card-title a"
 
+    override fun popularMangaNextPageSelector() = "a.next.page-numbers, div.nav-previous, nav.navigation-ajax, a.nextwords"
+    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga/${searchPage(page)}?m_orderby=trending", headers)
+
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga/${searchPage(page)}?m_orderby=new-manga", headers)
+
     // Search and Latest use the same grid as Popular
     override fun searchMangaSelector() = popularMangaSelector()
+
+    override val mangaDetailsSelectorGenre = "div.post-content_item:has(h5:contains(Genre)) .summary-content a"
+    override val mangaDetailsSelectorStatus = "div.post-content_item:has(h5:contains(Status)) .summary-content"
 
     override fun chapterListSelector() = "li.wp-manga-chapter:not(:has(a[href*='#']))"
 
