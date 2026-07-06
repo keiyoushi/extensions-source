@@ -86,13 +86,12 @@ if __name__ == "__main__":
         required=True,
     )
     argparser.add_argument(
-        "-nsfw",
-        "--nsfw",
+        "-c",
+        "--content-warning",
         choices=["SAFE", "MIXED", "NSFW"],
-        help="Content Warning",
         type=str.upper,
-        required=False,
         default="SAFE",
+        help="Content warning level",
     )
     argparser.add_argument(
         "-m",
@@ -135,7 +134,7 @@ if __name__ == "__main__":
         else:
             f.write("\tversionCode = 1\n")
 
-        f.write(f"\tcontentWarning = ContentWarning.{args.nsfw}\n")
+        f.write(f"\tcontentWarning = ContentWarning.{args.content_warning}\n")
         f.write('\tlibVersion = "1.4"\n\n')
 
         f.write("\tsource {\n")
