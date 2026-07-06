@@ -1,7 +1,13 @@
 package eu.kanade.tachiyomi.extension.ru.astramanga
 
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 @Serializable
 class SearchResponse(val data: SearchData)
@@ -84,3 +90,70 @@ class PagesData(val pages: List<PageDto> = emptyList())
 class PageDto(
     @SerialName("image_url") val imageUrl: String,
 )
+
+// =============================== Mappers ================================
+
+private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
+    timeZone = TimeZone.getTimeZone("UTC")
+}
+
+private fun TitleDto.coverUrl(mediaUrl: String): String? {
+    val path = coverImage ?: coverVersions?.mid ?: coverVersions?.high ?: return null
+    return "$mediaUrl/$path"
+}
+
+fun TitleDto.toSManga(mediaUrl: String): SManga = SManga.create().apply {
+    url = slug
+    title = name
+    thumbnail_url = coverUrl(mediaUrl)
+}
+
+fun TitleDto.toSMangaDetails(mediaUrl: String): SManga = SManga.create().apply {
+    url = slug
+    title = name
+    thumbnail_url = coverUrl(mediaUrl)
+    author = publishingHouse?.name ?: publishers?.firstOrNull()?.name
+    description = buildString {
+        secondaryName?.takeIf { it.isNotBlank() }?.let { appendLine("Альт. название: $it") }
+        alternativeNames?.takeIf { it.isNotEmpty() }
+            ?.let { appendLine("Другие названия: ${it.joinToString()}") }
+        year?.let { appendLine("Год выпуска: $it") }
+        if (isNotEmpty()) appendLine()
+        append(this@toSMangaDetails.description?.trim().orEmpty())
+    }.trim()
+    genre = buildList {
+        this@toSMangaDetails.type?.let { add(typeName(it)) }
+        genres?.mapNotNull { it.name }?.let { addAll(it) }
+        tags?.mapNotNull { it.name }?.let { addAll(it) }
+    }.filter { it.isNotBlank() }.distinct().joinToString()
+    status = parseStatus(this@toSMangaDetails.status)
+}
+
+private fun ChapterDto.numberStr(): String = number.toString().removeSuffix(".0")
+
+fun ChapterDto.toSChapter(slug: String): SChapter = SChapter.create().apply {
+    url = "$slug/${numberStr()}/$id"
+    name = buildString {
+        if (volumeNumber != null) append("Том $volumeNumber ")
+        append("Глава ${numberStr()}")
+        this@toSChapter.name?.takeIf { it.isNotBlank() }?.let { append(" — $it") }
+    }
+    chapter_number = number
+    date_upload = DATE_FORMAT.tryParse(publishedAt)
+}
+
+private fun parseStatus(status: String?): Int = when (status) {
+    "ongoing" -> SManga.ONGOING
+    "completed" -> SManga.COMPLETED
+    "paused" -> SManga.ON_HIATUS
+    "frozen", "discontinued" -> SManga.CANCELLED
+    else -> SManga.UNKNOWN
+}
+
+private fun typeName(type: String): String = when (type) {
+    "manga" -> "Манга"
+    "manhwa" -> "Манхва"
+    "manhua" -> "Маньхуа"
+    "comics" -> "Комикс"
+    else -> type
+}
