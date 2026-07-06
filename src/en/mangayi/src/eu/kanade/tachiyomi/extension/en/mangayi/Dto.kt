@@ -16,7 +16,7 @@ class MangaDto(
     @SerialName("t") private val title: String,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = "/read/$slug/"
+        url = slug
         this.title = this@MangaDto.title
         thumbnail_url = "https://scp.keterfoundation.com/cover/$slug.jpg"
     }

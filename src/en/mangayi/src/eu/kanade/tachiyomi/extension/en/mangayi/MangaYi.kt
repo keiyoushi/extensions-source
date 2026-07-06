@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.mangayi
 
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -73,6 +74,8 @@ abstract class MangaYi : HttpSource() {
 
     // ============================== Details ==============================
 
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/read/${manga.url}/", headers)
+
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
@@ -95,6 +98,8 @@ abstract class MangaYi : HttpSource() {
 
     // ============================= Chapters ==============================
 
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val chapters = document.select("div.chapters a.c:not(.unreleased)")
@@ -105,9 +110,7 @@ abstract class MangaYi : HttpSource() {
             SChapter.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
                 name = element.selectFirst(".t")!!.text()
-                date_upload = element.selectFirst(".chapter-date")?.text()?.let {
-                    dateFormat.tryParse(it)
-                } ?: 0L
+                date_upload = dateFormat.tryParse(element.selectFirst(".chapter-date")?.text())
             }
         }
     }
