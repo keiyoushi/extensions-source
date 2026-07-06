@@ -21,7 +21,6 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import okio.ByteString.Companion.decodeBase64
 import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
@@ -38,12 +37,6 @@ abstract class MangaLivre :
         .addInterceptor(::clientHeaderInterceptor)
         .rateLimit(2, 1.seconds) { it.host == baseUrlHost }
         .build()
-
-    private val scrapeClient: OkHttpClient by lazy {
-        network.client.newBuilder()
-            .followRedirects(false)
-            .build()
-    }
 
     private val apiUrl: String = "$baseUrl/api"
 
@@ -181,10 +174,6 @@ abstract class MangaLivre :
 
     // ============================== Helper =======================================
 
-    /**
-     * Lê o corpo como JSON. Se vier HTML (página de despedida / redirecionamento do
-     * Cloudflare) ou vazio, falha com mensagem clara em vez de estourar no parser.
-     */
     private inline fun <reified T> Response.parseJson(): T {
         val peek = peekBody(MAX_PEEK).string().trimStart()
         if (peek.isEmpty() || peek.startsWith("<")) {
@@ -196,9 +185,6 @@ abstract class MangaLivre :
 
     @Volatile
     private var cachedToken: ClientToken? = null
-
-    @Volatile
-    private var cachedCandidates: List<ClientToken>? = null
 
     private fun clientHeaderInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -212,89 +198,23 @@ abstract class MangaLivre :
             return response
         }
 
-        // O header de cliente rotacionou. Redescobre os candidatos no bundle e testa
-        // cada um até a API parar de recusar, memorizando o que funcionar.
         response.close()
-        for (candidate in refreshCandidates()) {
-            if (candidate == token) continue
-            val retry = chain.proceed(request.withClientHeader(candidate))
-            if (retry.code != 403 || !retry.isOfficialAppError()) {
-                cachedToken = candidate
-                return retry
-            }
-            retry.close()
-        }
-        return chain.proceed(request.withClientHeader(token))
+        val newToken = extractTokenViaWebView() ?: return chain.proceed(request.withClientHeader(token))
+        cachedToken = newToken
+        return chain.proceed(request.withClientHeader(newToken))
     }
 
     private fun Request.withClientHeader(token: ClientToken): Request = newBuilder().header(token.header, token.value).build()
 
     private fun currentToken(): ClientToken = cachedToken ?: synchronized(this) {
-        cachedToken ?: candidates().first().also { cachedToken = it }
+        cachedToken ?: (extractTokenViaWebView() ?: DEFAULT_TOKEN).also { cachedToken = it }
     }
 
-    private fun candidates(): List<ClientToken> = cachedCandidates ?: refreshCandidates()
-
-    private fun refreshCandidates(): List<ClientToken> = synchronized(this) {
-        scrapeCandidates().also { cachedCandidates = it }
-    }
-
-    /**
-     * O gate de "aplicativo oficial" (endpoints de leitura) exige um header de cliente que o
-     * front-end injeta no bundle, ofuscado e rotacionado todo dia (nome, valor, método e até
-     * base64/`atob`). Em vez de perseguir cada formato, coletamos TODO par de argumentos
-     * "literal"/`atob(...)` dos /assets, filtramos por forma de header e ranqueamos; o interceptor
-     * testa os candidatos contra o 403 "aplicativo oficial" até um funcionar e memoriza o vencedor.
-     */
-    private fun scrapeCandidates(): List<ClientToken> = try {
-        val html = scrapeClient.newCall(GET("$baseUrl/", headers)).execute()
-            .use { if (it.isSuccessful) it.body.string() else "" }
-        val assets = ASSET_REGEX.findAll(html).map { it.value }.distinct().toList()
-        val js = buildString {
-            assets.take(MAX_ASSETS).forEach { path ->
-                scrapeClient.newCall(GET("$baseUrl$path", headers)).execute()
-                    .use { if (it.isSuccessful) append(it.body.string()) }
-            }
-        }
-        extractCandidates(js)
+    private fun extractTokenViaWebView(): ClientToken? = try {
+        TokenExtractor.extract(baseUrl, headers["User-Agent"])
+            ?.let { ClientToken(it.header, it.value) }
     } catch (_: Exception) {
-        listOf(DEFAULT_TOKEN)
-    }
-
-    private fun extractCandidates(js: String): List<ClientToken> {
-        val pairs = PAIR_REGEX.findAll(js)
-            .mapNotNull { m ->
-                val header = decodeArg(m.groupValues[1], m.groupValues[2]) ?: return@mapNotNull null
-                val value = decodeArg(m.groupValues[3], m.groupValues[4]) ?: return@mapNotNull null
-                val encoded = m.groupValues[2].isNotEmpty() || m.groupValues[4].isNotEmpty()
-                Triple(header, value, encoded)
-            }
-            .filter { isHeaderCandidate(it.first, it.second) }
-            .distinctBy { "${it.first}|${it.second}" }
-            .toList()
-        val ranked = pairs.sortedByDescending { score(it.second, it.third) }
-            .take(MAX_CANDIDATES)
-            .map { ClientToken(it.first, it.second) }
-        return (ranked + DEFAULT_TOKEN).distinct()
-    }
-
-    private fun decodeArg(literal: String, b64: String): String? = when {
-        literal.isNotEmpty() -> literal
-        b64.isNotEmpty() -> b64.decodeBase64()?.utf8()
-        else -> null
-    }
-
-    private fun isHeaderCandidate(header: String, value: String): Boolean {
-        if (!header.matches(HEADER_NAME_REGEX) || '-' !in header) return false
-        if (header.lowercase() in STANDARD_HEADERS) return false
-        return value.length <= MAX_VALUE_LEN && value.none { it.isWhitespace() }
-    }
-
-    private fun score(value: String, encoded: Boolean): Int {
-        var total = if (encoded) ENCODED_BONUS else 0
-        if (value.any { it.isDigit() }) total += 200
-        if ('-' in value) total += 100
-        return total + (MAX_VALUE_LEN - value.length).coerceAtLeast(0)
+        null
     }
 
     private fun Response.isOfficialAppError(): Boolean = try {
@@ -308,20 +228,8 @@ abstract class MangaLivre :
     companion object {
         private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
         private const val MAX_PEEK = 1024L
-        private const val MAX_ASSETS = 8
-        private const val MAX_CANDIDATES = 16
-        private const val MAX_VALUE_LEN = 40
-        private const val ENCODED_BONUS = 1000
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
-        private val DEFAULT_TOKEN = ClientToken("x-tly-quantum", "j55-zero-o")
-        private val STANDARD_HEADERS = setOf("content-type", "accept", "accept-language", "authorization", "x-csrf-token")
-        private val HEADER_NAME_REGEX = Regex("[A-Za-z][\\w.-]{1,40}")
-        private val ASSET_REGEX = Regex("/assets/[\\w-]+\\.js")
-        private const val ARG = "(?:\"([^\"]{1,60})\"|atob\\(\"([A-Za-z0-9+/=]{1,80})\"\\))"
-
-        // O par header/valor pode vir como argumentos adjacentes (`("k","v")`) ou como
-        // propriedades de objeto (`{k:atob(..),v:atob(..)}`); tolera uma chave opcional entre eles.
-        private val PAIR_REGEX = Regex("$ARG\\s*,\\s*(?:\\w+\\s*:\\s*)?$ARG")
+        private val DEFAULT_TOKEN = ClientToken("X-Tly-Nexus", "c77-block-q")
     }
 }
