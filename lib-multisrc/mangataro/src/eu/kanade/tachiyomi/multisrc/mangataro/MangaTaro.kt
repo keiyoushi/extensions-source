@@ -310,7 +310,7 @@ abstract class MangaTaro : HttpSource() {
 
     // ========================== Pages ==========================
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = getChapterUrl(chapter).toHttpUrl()
+        val chapterId = getChapterUrl(chapter).removeSuffix("/").toHttpUrl()
             .pathSegments.last()
             .substringAfterLast("-")
 
