@@ -15,14 +15,7 @@ import okhttp3.Request
 import okhttp3.Response
 
 @Source
-open class BrownManga : HttpSource() {
-
-    override val name = "Brown Manga"
-
-    override val lang = "ar"
-
-    override val baseUrl = "https://brownmanga.site"
-
+abstract class BrownManga : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
