@@ -496,8 +496,8 @@ open class LANraragi(private val suffix: String = "") :
 
     private fun getRandomID(query: String): String {
         val searchRandom = client.newCall(GET("$baseUrl/api/search/random?count=1&$query", headers)).execute()
-        val result = searchRandom.parseAs<ArchiveSearchResult>()
-        return result.data.first().arcid
+        val result = searchRandom.parseAs<ArchiveSearchResult>() // Intermittent empty data[] on parse, but not from manual API testing
+        return result.data.firstOrNull()?.arcid ?: randomArchiveID
     }
 
     open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
