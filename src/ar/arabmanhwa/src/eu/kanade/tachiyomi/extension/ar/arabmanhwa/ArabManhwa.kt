@@ -1,3 +1,4 @@
+```kotlin
 package eu.kanade.tachiyomi.extension.ar.arabmanhwa
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
@@ -13,15 +14,13 @@ import okhttp3.Request
 import okhttp3.Response
 
 @Source
-class ArabManhwa : Madara("ArabManhwa", "https://arabmanhwa.com", "ar") {
+abstract class ArabManhwa : Madara() {
+
+    override val name = "ArabManhwa"
+    override val baseUrl = "https://arabmanhwa.com"
+    override val lang = "ar"
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
-
-    override fun popularMangaSelector() = "article.page-item-detail, .manga__item"
-
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
-    override fun popularMangaNextPageSelector(): String = "div.nav-previous, nav.navigation-ajax, a.nextpostslink, wp-pagenavi .next"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = POST(
         "$baseUrl/wp-admin/admin-ajax.php",
@@ -63,3 +62,5 @@ class ArabManhwa : Madara("ArabManhwa", "https://arabmanhwa.com", "ar") {
         return MangasPage(manga, false)
     }
 }
+
+```
