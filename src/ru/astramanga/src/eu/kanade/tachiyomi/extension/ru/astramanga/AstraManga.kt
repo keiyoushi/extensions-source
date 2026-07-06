@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -18,15 +19,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class AstraManga : HttpSource() {
+@Source
+abstract class AstraManga : HttpSource() {
 
-    override val name = "AstraManga"
-    override val lang = "ru"
     override val supportsLatest = true
 
-    override val baseUrl = "https://astramanga.org"
-    private val apiUrl = "https://api.astramanga.org/api/v1"
-    private val mediaUrl = "https://astramanga.org/media"
+    private val domain by lazy { baseUrl.toHttpUrl().host }
+    private val apiUrl by lazy { "https://api.$domain/api/v1" }
+    private val mediaUrl by lazy { "https://$domain/media" }
 
     override val client = network.client.newBuilder()
         .rateLimit(2)
@@ -40,7 +40,7 @@ class AstraManga : HttpSource() {
 
     private fun searchUrlBuilder(page: Int) = "$apiUrl/search".toHttpUrl().newBuilder()
         .addQueryParameter("page", page.toString())
-        .addQueryParameter("size", PAGE_SIZE.toString())
+        .addQueryParameter("page_size", PAGE_SIZE.toString())
 
     override fun popularMangaRequest(page: Int): Request = GET(searchUrlBuilder(page).addQueryParameter("sort", "-popularity").build(), headers)
 
@@ -107,23 +107,15 @@ class AstraManga : HttpSource() {
             ?: branches.maxByOrNull { it.countChapters ?: 0 }
             ?: return@fromCallable emptyList<SChapter>()
 
-        val chapters = mutableListOf<SChapter>()
-        var page = 1
-        while (true) {
-            val url = "$apiUrl/branches/${branch.id}/chapters".toHttpUrl().newBuilder()
-                .addQueryParameter("page", page.toString())
-                .addQueryParameter("size", CHAPTERS_PAGE_SIZE.toString())
-                .build()
-            val data = client.newCall(GET(url, headers)).execute()
-                .parseAs<ChaptersResponse>().data
-            if (data.items.isEmpty()) break
-            chapters += data.items.map { it.toSChapter(slug) }
-            // The API ignores the requested "size" and returns a fixed page,
-            // so paginate by total count and stop on an empty page.
-            if (data.total > 0 && chapters.size >= data.total) break
-            page++
-        }
-        chapters.sortedByDescending { it.chapter_number }
+        // branches include count_chapters, so fetch every chapter in one request.
+        val pageSize = branch.countChapters?.takeIf { it > 0 } ?: CHAPTERS_PAGE_SIZE
+        val url = "$apiUrl/branches/${branch.id}/chapters".toHttpUrl().newBuilder()
+            .addQueryParameter("page_size", pageSize.toString())
+            .build()
+        client.newCall(GET(url, headers)).execute()
+            .parseAs<ChaptersResponse>().data.items
+            .map { it.toSChapter(slug) }
+            .sortedByDescending { it.chapter_number }
     }
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
@@ -220,7 +212,7 @@ class AstraManga : HttpSource() {
 
     companion object {
         private const val PAGE_SIZE = 30
-        private const val CHAPTERS_PAGE_SIZE = 50
+        private const val CHAPTERS_PAGE_SIZE = 10000
 
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("UTC")

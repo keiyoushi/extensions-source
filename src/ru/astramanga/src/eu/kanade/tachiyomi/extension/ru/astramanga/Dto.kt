@@ -63,7 +63,6 @@ class ChaptersResponse(val data: ChaptersData)
 @Serializable
 class ChaptersData(
     val items: List<ChapterDto> = emptyList(),
-    val total: Int = 0,
 )
 
 @Serializable
