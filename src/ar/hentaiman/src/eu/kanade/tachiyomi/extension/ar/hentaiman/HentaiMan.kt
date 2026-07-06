@@ -18,14 +18,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Source
-open class HentaiMan : HttpSource() {
-
-    override val name = "HentaiMan"
-
-    override val lang = "ar"
-
-    override val baseUrl = "https://hentaiman.net"
-
+abstract class HentaiMan : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
