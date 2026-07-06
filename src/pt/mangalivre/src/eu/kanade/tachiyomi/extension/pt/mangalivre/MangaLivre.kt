@@ -21,7 +21,6 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import okio.ByteString.Companion.decodeBase64
 import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
@@ -38,12 +37,6 @@ abstract class MangaLivre :
         .addInterceptor(::clientHeaderInterceptor)
         .rateLimit(2, 1.seconds) { it.host == baseUrlHost }
         .build()
-
-    private val scrapeClient: OkHttpClient by lazy {
-        network.client.newBuilder()
-            .followRedirects(false)
-            .build()
-    }
 
     private val apiUrl: String = "$baseUrl/api"
 
@@ -205,27 +198,23 @@ abstract class MangaLivre :
             return response
         }
 
-        // Token rotacionou — tenta extrair via WebView
         response.close()
         val newToken = extractTokenViaWebView() ?: return chain.proceed(request.withClientHeader(token))
         cachedToken = newToken
         return chain.proceed(request.withClientHeader(newToken))
     }
 
-    private fun Request.withClientHeader(token: ClientToken): Request =
-        newBuilder().header(token.header, token.value).build()
+    private fun Request.withClientHeader(token: ClientToken): Request = newBuilder().header(token.header, token.value).build()
 
     private fun currentToken(): ClientToken = cachedToken ?: synchronized(this) {
         cachedToken ?: (extractTokenViaWebView() ?: DEFAULT_TOKEN).also { cachedToken = it }
     }
 
-    private fun extractTokenViaWebView(): ClientToken? {
-        return try {
-            TokenExtractor.extract(baseUrl, headers["User-Agent"])
-                ?.let { ClientToken(it.header, it.value) }
-        } catch (_: Exception) {
-            null
-        }
+    private fun extractTokenViaWebView(): ClientToken? = try {
+        TokenExtractor.extract(baseUrl, headers["User-Agent"])
+            ?.let { ClientToken(it.header, it.value) }
+    } catch (_: Exception) {
+        null
     }
 
     private fun Response.isOfficialAppError(): Boolean = try {
