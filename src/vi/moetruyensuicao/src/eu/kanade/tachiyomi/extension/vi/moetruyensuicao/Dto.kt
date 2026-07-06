@@ -37,7 +37,7 @@ class MangaItem(
     val genres: List<GenreItem>? = null,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
-        url = "/manga/$id"
+        url = id.toString()
         this.title = this@MangaItem.title
         thumbnail_url = coverUrl ?: cover
         author = this@MangaItem.author

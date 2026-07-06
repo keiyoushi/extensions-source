@@ -103,7 +103,7 @@ abstract class MoeTruyenSuiCao : HttpSource() {
     // ============================== Details =======================================
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val mangaId = manga.url.substringAfterLast("/")
+        val mangaId = manga.url
         val url = "$baseUrl/v2/manga/$mangaId".toHttpUrl().newBuilder()
             .addQueryParameter("include", "genres")
             .build()
@@ -116,14 +116,14 @@ abstract class MoeTruyenSuiCao : HttpSource() {
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        val mangaId = manga.url.substringAfterLast("/")
+        val mangaId = manga.url
         return "$baseUrl/manga/$mangaId"
     }
 
     // ============================== Chapters ======================================
 
     override fun chapterListRequest(manga: SManga): Request {
-        val mangaId = manga.url.substringAfterLast("/")
+        val mangaId = manga.url
         val url = "$baseUrl/v2/manga/$mangaId/chapters/aggregate".toHttpUrl().newBuilder()
             .build()
         return GET(url, headers)
