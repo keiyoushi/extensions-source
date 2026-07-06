@@ -25,21 +25,53 @@ class TitleDetailResponse(val data: TitleDto)
 @Serializable
 class TitleDto(
     val id: Int,
-    val slug: String,
-    val name: String,
-    @SerialName("secondary_name") val secondaryName: String? = null,
-    @SerialName("alternative_names") val alternativeNames: List<String>? = null,
-    @SerialName("cover_image") val coverImage: String? = null,
-    @SerialName("cover_versions") val coverVersions: CoverVersions? = null,
-    val description: String? = null,
-    val type: String? = null,
-    val status: String? = null,
-    val year: Int? = null,
-    val genres: List<Named>? = null,
-    val tags: List<Named>? = null,
-    val publishers: List<Named>? = null,
-    @SerialName("publishing_house") val publishingHouse: Named? = null,
-)
+    private val slug: String,
+    private val name: String,
+    @SerialName("secondary_name") private val secondaryName: String? = null,
+    @SerialName("alternative_names") private val alternativeNames: List<String>? = null,
+    @SerialName("cover_image") private val coverImage: String? = null,
+    @SerialName("cover_versions") private val coverVersions: CoverVersions? = null,
+    private val description: String? = null,
+    private val type: String? = null,
+    private val status: String? = null,
+    private val year: Int? = null,
+    private val genres: List<Named>? = null,
+    private val tags: List<Named>? = null,
+    private val publishers: List<Named>? = null,
+    @SerialName("publishing_house") private val publishingHouse: Named? = null,
+) {
+    private fun coverUrl(mediaUrl: String): String? {
+        val path = coverImage ?: coverVersions?.mid ?: coverVersions?.high ?: return null
+        return "$mediaUrl/$path"
+    }
+
+    fun toSManga(mediaUrl: String): SManga = SManga.create().apply {
+        url = slug
+        title = name
+        thumbnail_url = coverUrl(mediaUrl)
+    }
+
+    fun toSMangaDetails(mediaUrl: String): SManga = SManga.create().apply {
+        url = slug
+        title = name
+        thumbnail_url = coverUrl(mediaUrl)
+        author = publishingHouse?.name ?: publishers?.firstOrNull()?.name
+        description = buildString {
+            secondaryName?.takeIf { it.isNotBlank() }?.let { appendLine("Альт. название: $it") }
+            alternativeNames?.takeIf { it.isNotEmpty() }
+                ?.let { appendLine("Другие названия: ${it.joinToString()}") }
+            year?.let { appendLine("Год выпуска: $it") }
+            if (isNotEmpty()) appendLine()
+            append(this@TitleDto.description?.trim().orEmpty())
+        }.trim()
+        genre = buildList {
+            type?.let { add(typeName(it)) }
+            genres?.mapNotNull { it.name }?.let { addAll(it) }
+            tags?.mapNotNull { it.name }?.let { addAll(it) }
+        }.filter { it.isNotBlank() }.distinct().joinToString()
+        status = parseStatus(this@TitleDto.status)
+    }
+}
 
 @Serializable
 class CoverVersions(
@@ -73,12 +105,25 @@ class ChaptersData(
 
 @Serializable
 class ChapterDto(
-    val id: Long,
-    val number: Float = 0f,
-    @SerialName("volume_number") val volumeNumber: Int? = null,
-    val name: String? = null,
-    @SerialName("published_at") val publishedAt: String? = null,
-)
+    private val id: Long,
+    private val number: Float = 0f,
+    @SerialName("volume_number") private val volumeNumber: Int? = null,
+    private val name: String? = null,
+    @SerialName("published_at") private val publishedAt: String? = null,
+) {
+    private fun numberStr(): String = number.toString().removeSuffix(".0")
+
+    fun toSChapter(slug: String): SChapter = SChapter.create().apply {
+        url = "$slug/${numberStr()}/$id"
+        name = buildString {
+            if (volumeNumber != null) append("Том $volumeNumber ")
+            append("Глава ${numberStr()}")
+            this@ChapterDto.name?.takeIf { it.isNotBlank() }?.let { append(" — $it") }
+        }
+        chapter_number = number
+        date_upload = DATE_FORMAT.tryParse(publishedAt)
+    }
+}
 
 @Serializable
 class PagesResponse(val data: PagesData)
@@ -91,55 +136,8 @@ class PageDto(
     @SerialName("image_url") val imageUrl: String,
 )
 
-// =============================== Mappers ================================
-
 private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
     timeZone = TimeZone.getTimeZone("UTC")
-}
-
-private fun TitleDto.coverUrl(mediaUrl: String): String? {
-    val path = coverImage ?: coverVersions?.mid ?: coverVersions?.high ?: return null
-    return "$mediaUrl/$path"
-}
-
-fun TitleDto.toSManga(mediaUrl: String): SManga = SManga.create().apply {
-    url = slug
-    title = name
-    thumbnail_url = coverUrl(mediaUrl)
-}
-
-fun TitleDto.toSMangaDetails(mediaUrl: String): SManga = SManga.create().apply {
-    url = slug
-    title = name
-    thumbnail_url = coverUrl(mediaUrl)
-    author = publishingHouse?.name ?: publishers?.firstOrNull()?.name
-    description = buildString {
-        secondaryName?.takeIf { it.isNotBlank() }?.let { appendLine("Альт. название: $it") }
-        alternativeNames?.takeIf { it.isNotEmpty() }
-            ?.let { appendLine("Другие названия: ${it.joinToString()}") }
-        year?.let { appendLine("Год выпуска: $it") }
-        if (isNotEmpty()) appendLine()
-        append(this@toSMangaDetails.description?.trim().orEmpty())
-    }.trim()
-    genre = buildList {
-        this@toSMangaDetails.type?.let { add(typeName(it)) }
-        genres?.mapNotNull { it.name }?.let { addAll(it) }
-        tags?.mapNotNull { it.name }?.let { addAll(it) }
-    }.filter { it.isNotBlank() }.distinct().joinToString()
-    status = parseStatus(this@toSMangaDetails.status)
-}
-
-private fun ChapterDto.numberStr(): String = number.toString().removeSuffix(".0")
-
-fun ChapterDto.toSChapter(slug: String): SChapter = SChapter.create().apply {
-    url = "$slug/${numberStr()}/$id"
-    name = buildString {
-        if (volumeNumber != null) append("Том $volumeNumber ")
-        append("Глава ${numberStr()}")
-        this@toSChapter.name?.takeIf { it.isNotBlank() }?.let { append(" — $it") }
-    }
-    chapter_number = number
-    date_upload = DATE_FORMAT.tryParse(publishedAt)
 }
 
 private fun parseStatus(status: String?): Int = when (status) {
