@@ -11,6 +11,5 @@ keiyoushi {
     source {
         lang = "ar"
         baseUrl = "https://hentaiman.net"
-        skipCodeGen.set(true)
     }
 }
