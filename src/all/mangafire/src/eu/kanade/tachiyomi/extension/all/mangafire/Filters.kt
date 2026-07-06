@@ -48,11 +48,9 @@ class TypeFilter :
         "types[]",
         arrayOf(
             Pair("Manga", "manga"),
-            Pair("One-Shot", "one_shot"),
-            Pair("Doujinshi", "doujinshi"),
-            Pair("Novel", "novel"),
             Pair("Manhwa", "manhwa"),
             Pair("Manhua", "manhua"),
+            Pair("Other", "other"),
         ),
     )
 
@@ -137,30 +135,62 @@ class MinChapterFilter :
     }
 }
 
+class YearFromFilter :
+    Filter.Text("Release year (From)"),
+    UriFilter {
+    override fun addToUri(builder: HttpUrl.Builder) {
+        state.toIntOrNull()?.let {
+            builder.addQueryParameter("year_from", it.toString())
+        }
+    }
+}
+
+class YearToFilter :
+    Filter.Text("Release year (To)"),
+    UriFilter {
+    override fun addToUri(builder: HttpUrl.Builder) {
+        state.toIntOrNull()?.let {
+            builder.addQueryParameter("year_to", it.toString())
+        }
+    }
+}
+
+class AuthorFilter : Filter.Text("Author / Artist")
+
 class SortFilter :
     Filter.Select<String>(
         "Sort by",
         arrayOf(
-            "Relevance",
             "Latest update",
+            "Best match",
             "Recently added",
-            "Views (7 days)",
-            "Views (Total)",
-            "Rating",
-            "Title A-Z",
+            "Title (A–Z)",
+            "Title (Z–A)",
+            "Year (newest)",
+            "Year (oldest)",
+            "Highest rated",
+            "Most viewed · 7 days",
+            "Most viewed · 30 days",
+            "Most viewed · all time",
+            "Most followed",
         ),
     ),
     UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         val sortKey = when (state) {
-            0 -> "relevance:desc"
-            1 -> "chapter_updated_at:desc"
+            0 -> "chapter_updated_at:desc"
+            1 -> "relevance:desc"
             2 -> "created_at:desc"
-            3 -> "views_7d:desc"
-            4 -> "views:desc"
-            5 -> "rating:desc"
-            6 -> "title:asc"
-            else -> "relevance:desc"
+            3 -> "title:asc"
+            4 -> "title:desc"
+            5 -> "year:desc"
+            6 -> "year:asc"
+            7 -> "score:desc"
+            8 -> "views_7d:desc"
+            9 -> "views_30d:desc"
+            10 -> "views_total:desc"
+            11 -> "follows_total:desc"
+            else -> "chapter_updated_at:desc"
         }
         val parts = sortKey.split(":")
         builder.addQueryParameter("order[${parts[0]}]", parts[1])

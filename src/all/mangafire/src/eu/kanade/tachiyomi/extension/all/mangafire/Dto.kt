@@ -18,6 +18,12 @@ class ApiMeta(
 )
 
 @Serializable
+class TagResponse(val data: List<TagDto> = emptyList())
+
+@Serializable
+class TagDto(val id: Int, val type: String)
+
+@Serializable
 class MangaDto(
     private val hid: String,
     private val slug: String? = null,
@@ -57,11 +63,11 @@ class MangaDetailsDto(
         artist = artists?.joinToString { it.title }
         description = synopsisHtml?.let { Jsoup.parseBodyFragment(it).text() }
         genre = buildList {
-            type?.let { add(it.replaceFirstChar { char -> char.uppercase() }) }
+            type?.replaceFirstChar { it.uppercase() }?.let { add(it) }
             genres?.forEach { add(it.title) }
             themes?.forEach { add(it.title) }
         }.joinToString()
-        status = when (this@MangaDetailsDto.status) {
+        status = when (this@MangaDetailsDto.status?.lowercase()) {
             "releasing" -> SManga.ONGOING
             "finished" -> SManga.COMPLETED
             "on_hiatus" -> SManga.ON_HIATUS
@@ -85,8 +91,8 @@ class ChapterDto(
     private val name: String? = null,
     private val createdAt: Long? = null,
 ) {
-    fun toSChapter(mangaUrl: String): SChapter = SChapter.create().apply {
-        url = "$mangaUrl/$id"
+    fun toSChapter(mangaUrl: String, langCode: String): SChapter = SChapter.create().apply {
+        url = "$mangaUrl/$id-chapter-${number.toString().removeSuffix(".0")}-$langCode"
         chapter_number = number
         name = buildString {
             append("Ch. ")
