@@ -145,7 +145,13 @@ abstract class MoeTruyenSuiCao : HttpSource() {
 
         if (pageCount == 0) return emptyList()
 
-        return fetchPagesWithGrants(chapterId, pageCount)
+        return try {
+            fetchPagesWithGrants(chapterId, pageCount).ifEmpty {
+                data.pageUrls.mapIndexed { index, url -> Page(index, imageUrl = url) }
+            }
+        } catch (_: Exception) {
+            data.pageUrls.mapIndexed { index, url -> Page(index, imageUrl = url) }
+        }
     }
 
     private fun fetchPagesWithGrants(chapterId: Int, pageCount: Int): List<Page> {
