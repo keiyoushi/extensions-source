@@ -39,7 +39,7 @@ abstract class RoliaScan : MangaTaro() {
 
     // ========================== Pages ==========================
     override fun pageListRequest(chapter: SChapter): Request {
-        if (!chapter.url.endsWith("/")) throw Exception("Refresh Manga to update information about chapters")
+        if (chapter.url.endsWith("/")) throw Exception("Refresh Manga to update information about chapters")
         return super.pageListRequest(chapter)
     }
 
