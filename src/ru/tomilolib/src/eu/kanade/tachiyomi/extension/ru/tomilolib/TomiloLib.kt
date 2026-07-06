@@ -15,14 +15,10 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 
 @Source
 abstract class TomiloLib :
@@ -32,7 +28,6 @@ abstract class TomiloLib :
     override val supportsLatest = true
 
     private val apiUrl by lazy { "$baseUrl/api" }
-    private val cdnUrl = "https://tomilolib.s3.regru.cloud"
 
     override val client = network.client.newBuilder()
         .rateLimit(3)
@@ -110,7 +105,7 @@ abstract class TomiloLib :
         val data = response.parseAs<ApiResponse<TitlesData>>().data
         val mangas = data.titles
             .filter { showAdult || !it.isAdult }
-            .map { it.toSManga() }
+            .map { it.toSManga(baseUrl) }
         return MangasPage(mangas, data.pagination.page < data.pagination.pages)
     }
 
@@ -120,7 +115,7 @@ abstract class TomiloLib :
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/titles/${manga.titleId()}", apiHeaders)
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<ApiResponse<TitleDto>>().data.toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<ApiResponse<TitleDto>>().data.toSManga(baseUrl)
 
     // ============================== Chapters ==============================
 
@@ -141,7 +136,7 @@ abstract class TomiloLib :
         return chapters
             .filter { it.isPublished }
             .sortedByDescending { it.chapterNumber }
-            .mapNotNull { it.toSChapter() }
+            .mapNotNull { it.toSChapter(hidePaidChapters) }
     }
 
     private fun chaptersPageRequest(titleId: String, page: Int): Request = GET("$apiUrl/chapters?titleId=$titleId&page=$page&limit=$CHAPTERS_PER_PAGE", apiHeaders)
@@ -158,7 +153,7 @@ abstract class TomiloLib :
             if (data.isPaid) throw Exception("Глава платная и ещё не открыта бесплатно")
             return emptyList()
         }
-        return data.pages.mapIndexed { i, url -> Page(i, imageUrl = resolveImageUrl(url)) }
+        return data.pages.mapIndexed { i, url -> Page(i, imageUrl = resolveImageUrl(url, baseUrl)) }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -196,78 +191,10 @@ abstract class TomiloLib :
 
     private fun SManga.titleId(): String = url.substringAfterLast('/')
 
-    private fun TitleDto.toSManga(): SManga = SManga.create().apply {
-        url = "$slug/$id"
-        title = name.trim()
-        thumbnail_url = resolveImageUrl(coverImage)
-        author = this@toSManga.author
-        artist = this@toSManga.artist
-        genre = genres.joinToString()
-        status = parseStatus(this@toSManga.status)
-        description = buildString {
-            val desc = this@toSManga.description
-            if (desc.isNotBlank()) append(desc.trim())
-            val others = altNames.filter { it.isNotBlank() }
-            if (others.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append("Альтернативные названия: ")
-                append(others.joinToString(" / "))
-            }
-        }
-    }
-
-    private fun ChapterDto.toSChapter(): SChapter? {
-        val locked = isPaid && unlockPrice > 0 && isLockedNow(freeAt)
-        if (locked && hidePaidChapters) return null
-        return SChapter.create().apply {
-            url = id
-            name = this@toSChapter.name ?: "Глава ${chapterNumber.toString().removeSuffix(".0")}"
-            chapter_number = chapterNumber.toFloat()
-            date_upload = DATE_FORMAT.tryParse(releaseDate)
-            if (locked) {
-                scanlator = "🔒 Платно"
-            }
-        }
-    }
-
-    private fun isLockedNow(freeAt: String?): Boolean {
-        val ts = DATE_FORMAT.tryParse(freeAt)
-        return ts == 0L || ts > System.currentTimeMillis()
-    }
-
-    private fun parseStatus(status: String?): Int = when (status) {
-        "ongoing" -> SManga.ONGOING
-        "completed" -> SManga.COMPLETED
-        "pause", "frozen" -> SManga.ON_HIATUS
-        else -> SManga.UNKNOWN
-    }
-
-    // "/uploads/..." objects are not publicly accessible on the S3 CDN (403),
-    // but the same objects are served from the CDN root without that prefix.
-    private fun resolveImageUrl(path: String?): String {
-        if (path.isNullOrBlank()) return ""
-        val url = when {
-            path.startsWith("http") -> path
-            path.startsWith("/") -> cdnUrl + path
-            else -> "$cdnUrl/$path"
-        }
-        return when {
-            url.startsWith("$cdnUrl/uploads") -> url.replace("$cdnUrl/uploads", cdnUrl)
-            url.startsWith("$baseUrl/uploads") -> url.replace("$baseUrl/uploads", cdnUrl)
-            else -> url
-        }
-    }
-
     companion object {
         private const val PAGE_LIMIT = 30
         private const val CHAPTERS_PER_PAGE = 200
         private const val PREF_SHOW_ADULT = "pref_show_adult"
         private const val PREF_HIDE_PAID = "pref_hide_paid"
-
-        private val DATE_FORMAT by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
-                timeZone = TimeZone.getTimeZone("UTC")
-            }
-        }
     }
 }
