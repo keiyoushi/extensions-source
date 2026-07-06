@@ -11,6 +11,5 @@ keiyoushi {
     source {
         lang = "ar"
         baseUrl = "https://brownmanga.site"
-        skipCodeGen.set(true)
     }
 }
