@@ -90,9 +90,7 @@ abstract class MangaFire : HttpSource() {
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseUrl/api/titles/${manga.hid()}", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/api/titles/${manga.hid()}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDetailsResponse>().data.toSManga()
 
