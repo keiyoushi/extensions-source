@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.multisrc.mangataro.TagFilter
 import eu.kanade.tachiyomi.multisrc.mangataro.TagFilterMatch
 import eu.kanade.tachiyomi.multisrc.mangataro.TypeFilter
 import eu.kanade.tachiyomi.multisrc.mangataro.YearFilter
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -17,7 +16,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import rx.Observable
 
@@ -41,7 +39,7 @@ abstract class RoliaScan : MangaTaro() {
 
     // ========================== Pages ==========================
     override fun pageListRequest(chapter: SChapter): Request {
-        if(!chapter.url.endsWith("/")) throw Exception("Refresh Manga to update information about chapters")
+        if (!chapter.url.endsWith("/")) throw Exception("Refresh Manga to update information about chapters")
         return super.pageListRequest(chapter)
     }
 
