@@ -10,7 +10,10 @@ keiyoushi {
 
     source {
         baseUrl {
-            custom("https://ru.com-x.life")
+            mirrors(
+                "Россия" to "https://ru.com-x.life",
+                "Публичный" to "https://com-x.life",
+            )
         }
         lang = "ru"
         id = 1114173092141608635L
