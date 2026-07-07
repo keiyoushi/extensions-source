@@ -30,9 +30,6 @@ abstract class MangaBlackCat : HttpSource() {
 
     override val supportsLatest = true
 
-    // migration from OneManga
-    override val id: Long = 2248402620929558947L
-
     private val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("th")).apply {
         timeZone = TimeZone.getTimeZone("Asia/Bangkok")
     }

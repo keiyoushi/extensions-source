@@ -190,14 +190,6 @@ class PluginExtension : Plugin<Project> {
                 val name = spec.name.orElse(extName).get()
                 val lang = spec.lang.get()
                 val baseUrlSpec = spec.resolvedBaseUrl.get()
-                val skipCodeGen = spec.skipCodeGen.getOrElse(false)
-
-                if (skipCodeGen && specs.size > 1) {
-                    error("skipCodeGen cannot be used with multiple source {} blocks")
-                }
-                if (skipCodeGen && baseUrlSpec !is BaseUrlSpec.Static) {
-                    error("skipCodeGen cannot be used with mirror or custom baseUrl — those require property injection")
-                }
 
                 val baseUrl = baseUrlSpec.toData()
                 val id = spec.id.orElse(
@@ -205,7 +197,7 @@ class PluginExtension : Plugin<Project> {
                         computeSourceId(name, lang, spec.versionId.orElse(1).get())
                     },
                 ).get()
-                ResolvedSourceData(name, lang, id, baseUrl, skipCodeGen)
+                ResolvedSourceData(name, lang, id, baseUrl)
             }
             val translationsFile = project(":core").projectDir.resolve("translations/strings.json")
             extensions.configure<KspExtension> {
@@ -227,7 +219,7 @@ class PluginExtension : Plugin<Project> {
 }
 
 @Serializable
-private data class ResolvedSourceData(val name: String, val lang: String, val id: Long, val baseUrl: BaseUrlSpecData, val skipCodeGen: Boolean = false)
+private data class ResolvedSourceData(val name: String, val lang: String, val id: Long, val baseUrl: BaseUrlSpecData)
 
 @Serializable
 private data class BaseUrlSpecData(
