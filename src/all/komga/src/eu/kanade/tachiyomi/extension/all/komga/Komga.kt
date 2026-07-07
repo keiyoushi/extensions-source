@@ -3,8 +3,6 @@ package eu.kanade.tachiyomi.extension.all.komga
 import android.content.SharedPreferences
 import android.text.InputType
 import android.util.Log
-import android.widget.Toast
-import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.AppInfo
@@ -27,6 +25,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,10 +41,10 @@ import okhttp3.Request
 import okhttp3.Response
 import org.apache.commons.text.StringSubstitutor
 import uy.kohesive.injekt.injectLazy
-import java.security.MessageDigest
 import java.util.Locale
 
-open class Komga(private val suffix: String = "") :
+@Source
+abstract class Komga :
     HttpSource(),
     ConfigurableSource,
     UnmeteredSource {
@@ -56,24 +55,20 @@ open class Komga(private val suffix: String = "") :
 
     override val name by lazy {
         val displayNameSuffix = displayName
-            .ifBlank { suffix }
+            .ifBlank { instanceSuffix }
             .let { if (it.isNotBlank()) " ($it)" else "" }
 
         "Komga$displayNameSuffix"
     }
 
-    override val lang = "all"
+    // Distinguish the fixed factory instances by position (Komga, Komga (2), Komga (3), ...)
+    // when the user hasn't set a display name. Inferred from the source id.
+    private val instanceSuffix: String
+        get() = INSTANCE_IDS.indexOf(id).let { if (it > 0) "${it + 1}" else "" }
 
     override val baseUrl by lazy { preferences.getString(PREF_ADDRESS, "")!!.removeSuffix("/") }
 
     override val supportsLatest = true
-
-    // keep the previous ID when lang was "en", so that preferences and manga bindings are not lost
-    override val id by lazy {
-        val key = "komga${if (suffix.isNotBlank()) " ($suffix)" else ""}/en/$versionId"
-        val bytes = MessageDigest.getInstance("MD5").digest(key.toByteArray())
-        (0..7).map { bytes[it].toLong() and 0xff shl 8 * (7 - it) }.reduce(Long::or) and Long.MAX_VALUE
-    }
 
     private val username by lazy { preferences.getString(PREF_USERNAME, "")!! }
 
@@ -347,26 +342,10 @@ open class Komga(private val suffix: String = "") :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         fetchFilterOptions()
 
-        if (suffix.isEmpty()) {
-            ListPreference(screen.context).apply {
-                key = PREF_EXTRA_SOURCES_COUNT
-                title = "Number of extra sources"
-                summary = "Number of additional sources to create. There will always be at least one Komga source."
-                entries = PREF_EXTRA_SOURCES_ENTRIES
-                entryValues = PREF_EXTRA_SOURCES_ENTRIES
-
-                setDefaultValue(PREF_EXTRA_SOURCES_DEFAULT)
-                setOnPreferenceChangeListener { _, _ ->
-                    Toast.makeText(screen.context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
-                    true
-                }
-            }.also(screen::addPreference)
-        }
-
         screen.addEditTextPreference(
             title = "Source display name",
-            default = suffix,
-            summary = displayName.ifBlank { "Here you can change the source displayed suffix" },
+            default = "",
+            summary = displayName.ifBlank { "Here you can change the source display name" },
             key = PREF_DISPLAY_NAME,
             restartRequired = true,
         )
@@ -520,11 +499,9 @@ open class Komga(private val suffix: String = "") :
 
     private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
-    private val logTag by lazy { "komga${if (suffix.isNotBlank()) ".$suffix" else ""}" }
+    private val logTag = "komga"
 
     companion object {
-        internal const val PREF_EXTRA_SOURCES_COUNT = "Number of extra sources"
-        internal const val PREF_EXTRA_SOURCES_DEFAULT = "2"
 
         internal const val TYPE_SERIES = "Series"
         internal const val TYPE_READLISTS = "Read lists"
@@ -538,7 +515,8 @@ private enum class FetchFilterStatus {
     FETCHED,
 }
 
-private val PREF_EXTRA_SOURCES_ENTRIES = (0..10).map { it.toString() }.toTypedArray()
+// Order must match the source { } blocks in build.gradle.kts (used to label factory instances).
+private val INSTANCE_IDS = listOf(4508733312114627536L, 8074481155021144106L, 5132811728275817394L)
 
 private const val PREF_DISPLAY_NAME = "Source display name"
 private const val PREF_ADDRESS = "Address"

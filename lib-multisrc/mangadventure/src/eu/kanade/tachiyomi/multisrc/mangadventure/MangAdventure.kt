@@ -42,8 +42,6 @@ abstract class MangAdventure : HttpSource() {
     /** The JSON parser of the class. */
     private val json by injectLazy<Json>()
 
-    override val versionId = 3
-
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder().set("User-Agent", userAgent)

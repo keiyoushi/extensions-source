@@ -22,12 +22,10 @@ import org.jsoup.nodes.Element
 import rx.Observable
 
 @Source
-open class WNACG :
+abstract class WNACG :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "紳士漫畫"
-    override val lang = "zh"
     override val supportsLatest = true
 
     private val preferences = getPreferences { preferenceMigration() }

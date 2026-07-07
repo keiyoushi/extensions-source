@@ -31,12 +31,10 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-open class Jinmantiantang :
+abstract class Jinmantiantang :
     HttpSource(),
     ConfigurableSource {
 
-    override val lang: String = "zh"
-    override val name: String = "禁漫天堂"
     override val supportsLatest: Boolean = true
 
     private val preferences = getPreferences { preferenceMigration() }

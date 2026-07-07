@@ -21,8 +21,6 @@ import rx.Observable
 @Source
 abstract class Kuaikanmanhua : HttpSource() {
 
-    override val id: Long = 8099870292642776005
-
     override val supportsLatest = true
 
     private val apiUrl = "https://api.kkmh.com"
