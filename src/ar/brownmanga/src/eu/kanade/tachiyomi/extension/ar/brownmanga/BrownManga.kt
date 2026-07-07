@@ -26,13 +26,9 @@ abstract class BrownManga : HttpSource() {
         .set("Referer", "$baseUrl/")
         .set("Origin", baseUrl)
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/manga/${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl/chapter/${chapter.url}"
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url}"
 
     private fun apiQuery(body: QueryBody): Request {
         val apiHeaders = headersBuilder()
