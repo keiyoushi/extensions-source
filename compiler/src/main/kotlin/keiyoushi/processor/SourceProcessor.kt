@@ -10,6 +10,7 @@ import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.Modifier
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.FileSpec
@@ -53,8 +54,12 @@ data class SourceDef(
     val lang: String,
     val id: Long,
     val baseUrl: BaseUrlSpecData,
-    val skipCodeGen: Boolean = false,
 )
+
+private const val HTTP_SOURCE = "eu.kanade.tachiyomi.source.online.HttpSource"
+
+private fun KSClassDeclaration.derivesFromHttpSource(): Boolean =
+    getAllSuperTypes().any { it.declaration.qualifiedName?.asString() == HTTP_SOURCE }
 
 private val configurable = ClassName("eu.kanade.tachiyomi.source", "ConfigurableSource")
 private val preferenceScreen = ClassName("androidx.preference", "PreferenceScreen")
@@ -129,13 +134,30 @@ class SourceProcessor(
 
         val pkg = annotated.packageName.asString()
         val annotatedClass = annotated.toClassName()
-        val isConfigurable = annotated.getAllSuperTypes()
-            .any { it.declaration.qualifiedName?.asString() == "eu.kanade.tachiyomi.source.ConfigurableSource" }
+        val superTypeNames = annotated.getAllSuperTypes()
+            .mapNotNull { it.declaration.qualifiedName?.asString() }
+            .toSet()
+        val isConfigurable = "eu.kanade.tachiyomi.source.ConfigurableSource" in superTypeNames
 
-        val generatedClass = when {
-            sources.size == 1 && sources.single().skipCodeGen -> buildPassthroughClass(annotatedClass)
-            sources.size == 1 -> buildSingleSourceClass(annotatedClass, sources.single(), isConfigurable)
-            else -> buildSourceFactoryClass(annotatedClass, sources, isConfigurable)
+        if (HTTP_SOURCE !in superTypeNames) {
+            logger.error("@Source class must derive from HttpSource", annotated)
+            return emptyList()
+        }
+
+        // any overrides below HttpSource
+        val overridden = annotated.getAllProperties()
+            .filter { Modifier.OVERRIDE in it.modifiers && Modifier.ABSTRACT !in it.modifiers }
+            .filter { prop ->
+                val owner = prop.parentDeclaration as? KSClassDeclaration
+                owner != null && owner.qualifiedName?.asString() != HTTP_SOURCE && owner.derivesFromHttpSource()
+            }
+            .map { it.simpleName.asString() }
+            .toSet()
+
+        val generatedClass = if (sources.size == 1) {
+            buildSingleSourceClass(annotatedClass, sources.single(), isConfigurable, overridden, annotated)
+        } else {
+            buildSourceFactoryClass(annotatedClass, sources, isConfigurable, overridden, annotated)
         }
 
         FileSpec.builder(pkg, "ExtensionGenerated")
@@ -146,26 +168,24 @@ class SourceProcessor(
         return emptyList()
     }
 
-    private fun buildPassthroughClass(annotatedClass: ClassName): TypeSpec =
-        TypeSpec.classBuilder("ExtensionGenerated")
-            .addModifiers(KModifier.INTERNAL)
-            .superclass(annotatedClass)
-            .build()
-
     private fun buildSingleSourceClass(
         annotatedClass: ClassName,
         source: SourceDef,
         isConfigurable: Boolean,
+        overridden: Set<String>,
+        node: KSClassDeclaration,
     ): TypeSpec = TypeSpec.classBuilder("ExtensionGenerated")
         .addModifiers(KModifier.INTERNAL)
         .superclass(annotatedClass)
-        .applySourceMembers(source, isConfigurable)
+        .applySourceMembers(source, isConfigurable, overridden, node)
         .build()
 
     private fun buildSourceFactoryClass(
         annotatedClass: ClassName,
         sources: List<SourceDef>,
         isConfigurable: Boolean,
+        overridden: Set<String>,
+        node: KSClassDeclaration,
     ): TypeSpec {
         val sourceFactoryType = ClassName("eu.kanade.tachiyomi.source", "SourceFactory")
         val sourceType = ClassName("eu.kanade.tachiyomi.source", "Source")
@@ -179,7 +199,7 @@ class SourceProcessor(
                         "%L,\n",
                         TypeSpec.anonymousClassBuilder()
                             .superclass(annotatedClass)
-                            .applySourceMembers(source, isConfigurable)
+                            .applySourceMembers(source, isConfigurable, overridden, node)
                             .build(),
                     )
                 }
@@ -201,33 +221,62 @@ class SourceProcessor(
             .build()
     }
 
-    private fun TypeSpec.Builder.applySourceMembers(source: SourceDef, isConfigurable: Boolean): TypeSpec.Builder = apply {
-        addProperty(
-            PropertySpec.builder("name", String::class.asClassName(), KModifier.OVERRIDE)
-                .getter(FunSpec.getterBuilder().addStatement("return %S", source.name).build())
-                .build(),
-        )
-        addProperty(
-            PropertySpec.builder("lang", String::class.asClassName(), KModifier.OVERRIDE)
-                .getter(FunSpec.getterBuilder().addStatement("return %S", source.lang).build())
-                .build(),
-        )
-        addProperty(
-            PropertySpec.builder("id", Long::class.asClassName(), KModifier.OVERRIDE)
-                .getter(FunSpec.getterBuilder().addStatement("return %LL", source.id).build())
-                .build(),
-        )
+    private fun TypeSpec.Builder.applySourceMembers(
+        source: SourceDef,
+        isConfigurable: Boolean,
+        overridden: Set<String>,
+        node: KSClassDeclaration,
+    ): TypeSpec.Builder = apply {
+        val className = node.simpleName.asString()
+
+        if ("name" in overridden) {
+            logger.warn("name is provided by $className; skipping generated name (DSL name is used for metadata only)", node)
+        } else {
+            addProperty(
+                PropertySpec.builder("name", String::class.asClassName(), KModifier.OVERRIDE)
+                    .getter(FunSpec.getterBuilder().addStatement("return %S", source.name).build())
+                    .build(),
+            )
+        }
+
+        if ("lang" in overridden) {
+            logger.error("lang is owned by the DSL; remove 'override val lang' from $className", node)
+        } else {
+            addProperty(
+                PropertySpec.builder("lang", String::class.asClassName(), KModifier.OVERRIDE)
+                    .getter(FunSpec.getterBuilder().addStatement("return %S", source.lang).build())
+                    .build(),
+            )
+        }
+
+        if ("versionId" in overridden) {
+            logger.error("versionId is owned by the DSL; remove 'override val versionId' from $className (set 'versionId = …' in the source { } block)", node)
+        }
+
+        if ("id" in overridden) {
+            logger.error("id is owned by the DSL; remove 'override val id' from $className (set 'id = …' in the source { } block if you need a specific value)", node)
+        } else {
+            addProperty(
+                PropertySpec.builder("id", Long::class.asClassName(), KModifier.OVERRIDE)
+                    .getter(FunSpec.getterBuilder().addStatement("return %LL", source.id).build())
+                    .build(),
+            )
+        }
 
         val urlSpec = source.baseUrl
-        when (urlSpec.type) {
-            "static" -> {
+        when {
+            "baseUrl" in overridden && urlSpec.type == "static" ->
+                logger.warn("baseUrl is provided by $className; skipping generated baseUrl (DSL baseUrl is used for metadata/hosts only)", node)
+            "baseUrl" in overridden ->
+                logger.error("baseUrl is overridden in $className but the DSL declares a ${urlSpec.type} baseUrl, which is generated.", node)
+            urlSpec.type == "static" -> {
                 addProperty(
                     PropertySpec.builder("baseUrl", String::class.asClassName(), KModifier.OVERRIDE)
                         .getter(FunSpec.getterBuilder().addStatement("return %S", urlSpec.defaultUrl).build())
                         .build(),
                 )
             }
-            "mirrors" -> {
+            urlSpec.type == "mirrors" -> {
                 val strings = stringsForLang(source.lang)
                 val mirrorsArg = CodeBlock.builder().apply {
                     urlSpec.urls.forEachIndexed { i, url ->
@@ -253,7 +302,7 @@ class SourceProcessor(
                 addPreferenceScreen(isConfigurable) { addStatement("mirrorPrefs.setupPreferenceScreen(screen)") }
                 if (!isConfigurable) addSuperinterface(configurable)
             }
-            "custom" -> {
+            urlSpec.type == "custom" -> {
                 val strings = stringsForLang(source.lang)
                 addProperty(
                     PropertySpec.builder("customUrlPrefs", customUrlPrefsClass)

@@ -11,5 +11,6 @@ keiyoushi {
     source {
         lang = "en"
         baseUrl = "https://divascans.org"
+        id = 5481739102875145368L
     }
 }

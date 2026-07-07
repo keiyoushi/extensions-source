@@ -34,8 +34,6 @@ abstract class SourceSpec @Inject constructor(private val objects: ObjectFactory
     abstract val versionId: Property<Int>
     abstract val id: Property<Long>
 
-    abstract val skipCodeGen: Property<Boolean>
-
     var baseUrl: String
         get() = error("baseUrl is write-only")
         set(value) {

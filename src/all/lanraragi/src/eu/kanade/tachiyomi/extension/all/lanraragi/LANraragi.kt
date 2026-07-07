@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
@@ -33,18 +34,24 @@ import okhttp3.Response
 import rx.Observable
 import java.io.IOException
 import java.net.URL
-import java.security.MessageDigest
 import kotlin.math.max
 
-open class LANraragi(private val suffix: String = "") :
+@Source
+abstract class LANraragi :
     HttpSource(),
     ConfigurableSource,
     UnmeteredSource {
     override val baseUrl by lazy { getPrefBaseUrl() }
 
-    override val lang = "all"
+    override val name by lazy {
+        val label = getPrefCustomLabel().ifBlank { instanceNumber.toString() }
+        "LANraragi ($label)"
+    }
 
-    override val name by lazy { "LANraragi (${getPrefCustomLabel()})" }
+    // Distinguish the fixed factory instances (LANraragi (1), LANraragi (2), ...) by position,
+    // inferred from the source id, when the user hasn't set a custom label.
+    private val instanceNumber: Int
+        get() = (INSTANCE_IDS.indexOf(id) + 1).coerceAtLeast(1)
 
     override val supportsLatest = true
 
@@ -362,13 +369,6 @@ open class LANraragi(private val suffix: String = "") :
     private val sortOrders = arrayOf(Pair("asc", "Ascending"), Pair("desc", "Descending"), Pair("random", "Random"))
 
     // Preferences
-    override val id by lazy {
-        // Retain previous ID for first entry
-        val key = "lanraragi" + (if (suffix == "1") "" else "_$suffix") + "/all/$versionId"
-        val bytes = MessageDigest.getInstance("MD5").digest(key.toByteArray())
-        (0..7).map { bytes[it].toLong() and 0xff shl 8 * (7 - it) }.reduce(Long::or) and Long.MAX_VALUE
-    }
-
     internal val preferences: SharedPreferences by getPreferencesLazy()
 
     private fun getPrefBaseUrl(): String = preferences.getString(HOSTNAME_KEY, HOSTNAME_DEFAULT)!!
@@ -376,31 +376,9 @@ open class LANraragi(private val suffix: String = "") :
     private fun getPrefLatestNS(): String = preferences.getString(SORT_BY_NS_KEY, SORT_BY_NS_DEFAULT)!!
     private fun getPrefLatestSortOrder(): String = preferences.getString(SORT_ORDER_KEY, SORT_ORDER_DEFAULT)!!
     private fun getPrefRandomPageSize(): String = preferences.getString(RANDOM_SIZE_KEY, RANDOM_SIZE_DEFAULT)!!
-    private fun getPrefCustomLabel(): String = preferences.getString(CUSTOM_LABEL_KEY, suffix)!!.ifBlank { suffix }
+    private fun getPrefCustomLabel(): String = preferences.getString(CUSTOM_LABEL_KEY, "")!!
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        if (suffix == "1") {
-            ListPreference(screen.context).apply {
-                key = EXTRA_SOURCES_COUNT_KEY
-                title = "Number of extra sources"
-                summary = "Number of additional sources to create. There will always be at least one LANraragi source."
-                entries = EXTRA_SOURCES_ENTRIES
-                entryValues = EXTRA_SOURCES_ENTRIES
-
-                setDefaultValue(EXTRA_SOURCES_COUNT_DEFAULT)
-                setOnPreferenceChangeListener { _, newValue ->
-                    try {
-                        val setting = preferences.edit().putString(EXTRA_SOURCES_COUNT_KEY, newValue as String).commit()
-                        Toast.makeText(screen.context, "Restart app to apply new setting.", Toast.LENGTH_LONG).show()
-                        setting
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        false
-                    }
-                }
-            }.also(screen::addPreference)
-        }
-
         val randomPageSize = ListPreference(screen.context).apply {
             key = RANDOM_SIZE_KEY
             title = "Random Sort - Pagination amount"
@@ -572,9 +550,6 @@ open class LANraragi(private val suffix: String = "") :
         .build()
 
     companion object {
-        internal const val EXTRA_SOURCES_COUNT_KEY = "extraSourcesCount"
-        internal const val EXTRA_SOURCES_COUNT_DEFAULT = "2"
-        private val EXTRA_SOURCES_ENTRIES = (0..10).map { it.toString() }.toTypedArray()
 
         private val REGEX_ID_FROM_URL = Regex("""(?:/reader\?id=)?(TANK_[0-9]{10}|\w{40})(?:/thumbnail)?""")
 
@@ -582,6 +557,10 @@ open class LANraragi(private val suffix: String = "") :
         private const val HOSTNAME_KEY = "hostname"
         private const val APIKEY_KEY = "apiKey"
         private const val CUSTOM_LABEL_KEY = "customLabel"
+
+        // Order must match the source { } blocks in build.gradle.kts (used to label factory instances).
+        private val INSTANCE_IDS = listOf(4482480338677079857L, 6188058704030343819L)
+
         private const val REDUPE_KEY = "redupePref"
         private const val REDUPE_DEFAULT = false
         private const val NEW_ONLY_DEFAULT = true

@@ -18,6 +18,7 @@ or fix them directly by submitting a Pull Request.
   - [Getting help](#getting-help)
   - [Writing an extension](#writing-an-extension)
     - [Setting up a new Gradle module](#setting-up-a-new-gradle-module)
+      - [Using ext-bootstrap.py](#using-ext-bootstrappy)
     - [Loading a subset of Gradle modules](#loading-a-subset-of-gradle-modules)
       - [Extension file structure](#extension-file-structure)
       - [build.gradle.kts](#buildgradlekts)
@@ -223,8 +224,8 @@ and [negative refspecs](https://github.blog/2020-10-19-git-2-29-released/#user-c
 
 ## Writing an extension
 
-The quickest way to get started is to copy an existing extension's folder structure and rename it
-as needed. We also recommend reading through the code of a few existing extensions before beginning.
+The quickest way to get started is by using the [ext-bootstrap.py](#using-ext-bootstrappy) script.
+We also recommend reading through the code of a few existing extensions before beginning.
 
 ### Setting up a new Gradle module
 
@@ -234,6 +235,36 @@ source supports multiple languages or if it could support multiple sources.
 The `<lang>` used in the folder inside `src` should be the major `language` part. For example, if
 you will be creating a `pt-BR` source, use `<lang>` here as `pt` only. Inside the source class, use
 the full locale string instead.
+
+#### Using ext-bootstrap.py
+
+Instead of setting this up by hand, you can use the `ext-bootstrap.py` script to scaffold a new
+extension module automatically:
+
+```console
+$ python ext-bootstrap.py -n "My Source" -l en -u https://mysource.com
+```
+
+This creates `src/<lang>/<mysourcename>/build.gradle.kts` along with the extension's package
+directory and a starter source class implementing `HttpSource`.
+
+Available options:
+
+| Flag | Description |
+| --- | --- |
+| `-n`, `--extname` | Extension name |
+| `-l`, `--lang`, `--language` | Extension language (2- or 3-letter ISO code, or `all`) |
+| `-u`, `--baseurl` | Extension base URL (must be `https://`) |
+| `--source-name` | Source name (defaults to `--extname`) |
+| `-c`, `--content-warning` | `SAFE`, `MIXED`, or `NSFW` (default: `SAFE`) |
+| `-m`, `--multisrc` | Name of an existing multisrc theme to base the source on |
+| `--path` | Path to the extension repo directory (defaults to the current directory) |
+
+For example, to scaffold a source based on the `madara` multisrc theme:
+
+```console
+$ python ext-bootstrap.py -n "My Source" -l en -u https://mysource.com -m madara
+```
 
 ### Loading a subset of Gradle modules
 
@@ -364,7 +395,8 @@ keiyoushi {
 | `baseUrl`     | The source's base URL. See [baseUrl modes](#baseurl-modes) below.                                                                                                                                                                                                                                                                                        |
 | `id`          | Explicit source ID. Optional; auto-computed from `name + lang + versionId` if omitted. Set this explicitly when renaming a source to preserve users' libraries.                                                                                                                                                                                          |
 | `versionId`   | Integer used as a seed for auto-computing `id`. Defaults to `1`. Only bump this if the source's URL structure fundamentally changes and old entries can no longer be redirected.                                                                                                                                                                         |
-| `skipCodeGen` | **Discouraged - not needed 99% of the time.** If `true`, skips property injection and generates only a passthrough subclass. Cannot be combined with multiple `source {}` blocks, or with `mirrors`/`withCustom` baseUrl modes; those require property injection. Use only for sources that must declare all properties manually for structural reasons. |
+
+A source class may compute `name` and/or `baseUrl` itself by declaring `override val name` / `override val baseUrl`; codegen detects the override and skips generating that property (the DSL value is then used only for metadata such as the repo index and deeplink hosts). **This is discouraged** — prefer letting the DSL own `name` and `baseUrl`, and only override them in the source class when you have a very specific reason. `baseUrl` may only be overridden when the DSL declares a plain static `baseUrl` — the `mirrors`/`custom` modes generate preference infrastructure and cannot be hand-overridden. `id` and `lang` are always owned by the DSL; overriding them in the source class is an error.
 
 #### baseUrl modes
 
