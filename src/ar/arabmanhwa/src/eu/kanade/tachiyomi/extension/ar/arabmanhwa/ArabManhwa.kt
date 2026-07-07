@@ -1,4 +1,3 @@
-```kotlin
 package eu.kanade.tachiyomi.extension.ar.arabmanhwa
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
@@ -62,5 +61,3 @@ abstract class ArabManhwa : Madara() {
         return MangasPage(manga, false)
     }
 }
-
-```
