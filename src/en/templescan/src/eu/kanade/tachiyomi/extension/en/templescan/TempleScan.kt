@@ -159,10 +159,6 @@ abstract class TempleScan :
     // ============================== Chapters ==============================
     override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", rscHeaders)
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        val url = chapter.url.substringAfter("read/")
-        return "$baseUrl/read/$url"
-    }
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = response.extractNextJs<ChapterList>() ?: return emptyList()
         val mangaSlug = response.request.url.pathSegments.last()
