@@ -3,14 +3,13 @@ plugins {
 }
 
 keiyoushi {
-    name = "Manga Livre"
-    versionCode = 74
+    name = "MangaYi"
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
     source {
-        baseUrl = "https://toonlivre.net"
-        lang = "pt-BR"
-        versionId = 2
+        lang = "en"
+        baseUrl = "https://mangayi.com"
     }
 }
