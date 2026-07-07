@@ -16,7 +16,6 @@ import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJs
-import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
 import okhttp3.Request
 import okhttp3.Response
@@ -106,9 +105,7 @@ abstract class TempleScan :
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-        val details = DETAILS_REGEX.find(document.body().outerHtml())!!.groupValues[1]
-            .unescape()
-            .parseAs<SeriesDetails>()
+        val details = document.extractNextJs<SeriesDetails>()!!
 
         val tags = mutableListOf<String>()
 
@@ -170,9 +167,7 @@ abstract class TempleScan :
     override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chapters = DETAILS_REGEX.find(response.body.string())!!.groupValues[1]
-            .unescape()
-            .parseAs<ChapterList>()
+        val chapters = response.extractNextJs<ChapterList>() ?: return emptyList()
         val mangaSlug = response.request.url.pathSegments.last()
 
         return chapters.seasons.flatMap { season ->
@@ -194,7 +189,7 @@ abstract class TempleScan :
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val data = response.extractNextJs<ChaptersList>() ?: return emptyList()
+        val data = response.extractNextJs<PagesList>() ?: return emptyList()
         return data.pages.mapIndexed { idx, url ->
             Page(idx, imageUrl = url)
         }
@@ -219,5 +214,3 @@ abstract class TempleScan :
 }
 
 private val UNESCAPE_REGEX = """\\(.)""".toRegex()
-private val DETAILS_REGEX = Regex("""info\\":(\{.*\}).*userIsFollowed""")
-private val IMAGES_REGEX = Regex("""pages\\":(\[.*?]).*""")

@@ -71,7 +71,7 @@ class ChapterList(
 }
 
 @Serializable
-class ChaptersList(
+class PagesList(
     val pages: List<String>,
 )
 
