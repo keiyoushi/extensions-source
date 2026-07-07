@@ -224,13 +224,20 @@ private data class ResolvedSourceData(val name: String, val lang: String, val id
 @Serializable
 private data class BaseUrlSpecData(
     val type: String,
-    val urls: List<String>,
+    val defaultUrl: String,
+    val mirrors: List<MirrorData> = emptyList(),
+)
+
+@Serializable
+private data class MirrorData(
+    val url: String,
+    val label: String = "",
 )
 
 private fun BaseUrlSpec.toData(): BaseUrlSpecData = when (this) {
-    is BaseUrlSpec.Static -> BaseUrlSpecData("static", listOf(url))
-    is BaseUrlSpec.Mirrors -> BaseUrlSpecData("mirrors", mirrors)
-    is BaseUrlSpec.Custom -> BaseUrlSpecData("custom", listOf(defaultUrl))
+    is BaseUrlSpec.Static -> BaseUrlSpecData("static", url)
+    is BaseUrlSpec.Mirrors -> BaseUrlSpecData("mirrors", mirrors.first().url, mirrors.map { MirrorData(it.url, it.label.orEmpty()) })
+    is BaseUrlSpec.Custom -> BaseUrlSpecData("custom", defaultUrl)
 }
 
 private fun computeSourceId(name: String, lang: String, versionId: Int = 1): Long {

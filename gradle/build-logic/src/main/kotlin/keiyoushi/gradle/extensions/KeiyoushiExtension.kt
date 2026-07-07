@@ -27,7 +27,7 @@ abstract class DeeplinkSpec {
     }
 }
 
-abstract class SourceSpec @Inject constructor(private val objects: ObjectFactory) {
+abstract class SourceSpec {
     abstract val name: Property<String>
     abstract val lang: Property<String>
     internal abstract val resolvedBaseUrl: Property<BaseUrlSpec>
@@ -40,10 +40,8 @@ abstract class SourceSpec @Inject constructor(private val objects: ObjectFactory
             resolvedBaseUrl.set(BaseUrlSpec.Static(value))
         }
 
-    fun baseUrl(url: String, block: BaseUrlDsl.() -> Unit) {
-        val dsl = objects.newInstance(BaseUrlDsl::class.java)
-        dsl.block()
-        resolvedBaseUrl.set(dsl.build(url))
+    fun baseUrl(block: BaseUrlDsl.() -> Unit) {
+        resolvedBaseUrl.set(BaseUrlDsl().apply(block).build())
     }
 }
 

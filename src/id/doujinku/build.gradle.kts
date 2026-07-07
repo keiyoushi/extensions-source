@@ -11,8 +11,8 @@ keiyoushi {
 
     source {
         lang = "id"
-        baseUrl("https://doujinku.org") {
-            withCustom = true
+        baseUrl {
+            custom("https://doujinku.org")
         }
     }
 }

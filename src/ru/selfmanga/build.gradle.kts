@@ -10,8 +10,8 @@ keiyoushi {
     theme = "grouple"
 
     source {
-        baseUrl("https://1.selfmanga.live") {
-            withCustom = true
+        baseUrl {
+            custom("https://1.selfmanga.live")
         }
         lang = "ru"
         id = 5227602742162454547L

@@ -10,8 +10,11 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl("https://moetruyen.net") {
-            mirrors = listOf("https://truyen.moe")
+        baseUrl {
+            mirrors(
+                "https://moetruyen.net",
+                "https://truyen.moe",
+            )
         }
     }
 }

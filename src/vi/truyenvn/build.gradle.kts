@@ -11,8 +11,8 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl("https://truyenvn.sbs") {
-            withCustom = true
+        baseUrl {
+            custom("https://truyenvn.sbs")
         }
     }
 }

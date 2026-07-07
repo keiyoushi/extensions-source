@@ -10,8 +10,9 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl("https://hentalk.pw") {
-            mirrors = listOf(
+        baseUrl {
+            mirrors(
+                "https://hentalk.pw",
                 "https://fakku.cc",
                 "https://fakkuonion.airdns.org:4096",
             )

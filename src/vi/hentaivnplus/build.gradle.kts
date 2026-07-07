@@ -11,8 +11,8 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl("https://hentaivn.show") {
-            withCustom = true
+        baseUrl {
+            custom("https://hentaivn.show")
         }
     }
 }
