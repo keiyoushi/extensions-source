@@ -116,6 +116,7 @@ abstract class TempleScan :
     }
 
     override fun getFilterList() = getFilters()
+
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(response: Response): SManga {
         val details = response.extractNextJs<SeriesDetails>()!!
