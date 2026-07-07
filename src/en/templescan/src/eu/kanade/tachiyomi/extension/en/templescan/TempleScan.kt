@@ -15,8 +15,6 @@ import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJs
-import keiyoushi.utils.parseAs
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -51,36 +49,15 @@ abstract class TempleScan :
     private lateinit var seriesCache: List<BrowseSeries>
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.isNotEmpty()) {
-            val response = client.newCall(searchMangaRequest(page, query, filters)).execute()
-            val result = response.parseAs<SearchWrapper>()
-            val mangas = result.projects.map { it.toSManga() }
-            return Observable.just(MangasPage(mangas, result.page * 15 < result.total))
-        }
-
         if (page == 1) {
             client.newCall(searchMangaRequest(page, query, filters))
                 .execute()
                 .use(::parseSearchResponse)
         }
-
         return Observable.just(parseDirectory(page, query, filters))
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotEmpty()) {
-            if (query.length < 2) {
-                throw UnsupportedOperationException("The query must contain at least 2 characters")
-            }
-            val url = "$baseUrl/api/search".toHttpUrl().newBuilder()
-                .addQueryParameter("q", query)
-                .addQueryParameter("page", page.toString())
-                .addQueryParameter("limit", "15")
-                .build()
-            return GET(url, headers)
-        }
-        return GET("$baseUrl/comics", rscHeaders)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/comics", rscHeaders)
 
     private fun parseSearchResponse(response: Response) {
         seriesCache = response.extractNextJs<List<BrowseSeries>>()!!
