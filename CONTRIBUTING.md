@@ -224,8 +224,8 @@ and [negative refspecs](https://github.blog/2020-10-19-git-2-29-released/#user-c
 
 ## Writing an extension
 
-The quickest way to get started is to copy an existing extension's folder structure and rename it
-as needed. We also recommend reading through the code of a few existing extensions before beginning.
+The quickest way to get started is by using the [ext-bootstrap.py](#using-ext-bootstrappy) script.
+We also recommend reading through the code of a few existing extensions before beginning.
 
 ### Setting up a new Gradle module
 
