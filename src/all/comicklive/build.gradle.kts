@@ -16,8 +16,8 @@ keiyoushi {
             lang = it
             baseUrl {
                 mirrors(
-                    "https://comick.live",
-                    "https://comick.art",
+                    "Main" to "https://comick.live",
+                    "Mirror" to "https://comick.art",
                 )
             }
         }

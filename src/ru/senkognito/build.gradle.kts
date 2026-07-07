@@ -12,8 +12,8 @@ keiyoushi {
     source {
         baseUrl {
             mirrors(
-        "Россия" to "https://senkuro.me",
-        "Публичный" to "https://senkognito.com",
+                "Россия" to "https://senkuro.me",
+                "Публичный" to "https://senkognito.com",
             )
         }
         lang = "ru"

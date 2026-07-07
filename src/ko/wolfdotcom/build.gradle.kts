@@ -12,7 +12,7 @@ keiyoushi {
         name = "늑대닷컴 - 웹툰"
         lang = "ko"
         baseUrl {
-            custom("https://wfwf411.com")
+            custom("https://wfwf412.com")
         }
     }
 
@@ -20,7 +20,7 @@ keiyoushi {
         name = "늑대닷컴 - 만화책"
         lang = "ko"
         baseUrl {
-            custom("https://wfwf411.com")
+            custom("https://wfwf412.com")
         }
     }
 
@@ -28,7 +28,7 @@ keiyoushi {
         name = "늑대닷컴 - 포토툰"
         lang = "ko"
         baseUrl {
-            custom("https://wfwf411.com")
+            custom("https://wfwf412.com")
         }
     }
 }
