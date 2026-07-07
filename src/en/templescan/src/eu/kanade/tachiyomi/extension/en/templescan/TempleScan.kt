@@ -218,4 +218,4 @@ abstract class TempleScan :
 
 private val UNESCAPE_REGEX = """\\(.)""".toRegex()
 private val DETAILS_REGEX = Regex("""info\\":(\{.*\}).*userIsFollowed""")
-private val IMAGES_REGEX = Regex("""images\\":(\[.*?]).*""")
+private val IMAGES_REGEX = Regex("""pages\\":(\[.*?]).*""")
