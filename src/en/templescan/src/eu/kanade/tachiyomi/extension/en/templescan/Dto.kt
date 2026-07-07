@@ -8,26 +8,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Serializable
-class SearchWrapper(
-    val total: Int,
-    val page: Int,
-    val projects: List<SearchSeries> = emptyList(),
-)
-
-@Serializable
-class SearchSeries(
-    private val title: String,
-    @SerialName("series_slug") private val slug: String,
-    private val thumbnail: String,
-) {
-    fun toSManga() = SManga.create().apply {
-        url = "/comic/$slug"
-        title = this@SearchSeries.title
-        thumbnail_url = thumbnail
-    }
-}
-
-@Serializable
 class BrowseSeries(
     @SerialName("series_slug") private val slug: String,
     val title: String,
