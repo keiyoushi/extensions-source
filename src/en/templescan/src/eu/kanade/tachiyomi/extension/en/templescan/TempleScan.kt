@@ -112,8 +112,15 @@ abstract class TempleScan :
             }
             author = details.author
             artist = details.studio
+            // Sometimes site adds #tags at the end of description
+            // Site can use any word to indicate tags, I saw at least: "Tags:", "Keywords:", TAGS
+            val cleanDescription = if (details.description?.contains("#") == true) {
+                details.description.substringBefore("#").replace(LAST_WORD_REGEX, "").trim()
+            } else {
+                details.description.toString()
+            }
             description = buildString {
-                append(Jsoup.clean(details.description.toString(), Safelist.none()))
+                append(Jsoup.clean(cleanDescription, Safelist.none()))
                 details.alternativeNames?.takeIf { it.isNotBlank() }?.let {
                     append("\n\n")
                     append("Alternative Name: $it\n")
@@ -126,6 +133,9 @@ abstract class TempleScan :
                     add("Adult")
                 }
                 details.tags?.map { it.tag.name }?.let { addAll(it) }
+                details.description?.takeIf { it.contains("#") }?.let { desc ->
+                    addAll(TEXT_TAGS_REGEX.findAll(desc).map { it.groupValues[1] })
+                }
             }.filterNotNull().joinToString()
         }
     }
@@ -181,4 +191,9 @@ abstract class TempleScan :
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    companion object {
+        private val TEXT_TAGS_REGEX = """(?i)#(\w+)""".toRegex()
+        private val LAST_WORD_REGEX = """[\w\s]+:?\s*$""".toRegex()
+    }
 }
