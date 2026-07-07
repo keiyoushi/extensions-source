@@ -15,6 +15,8 @@ import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
 import okhttp3.Request
 import okhttp3.Response
@@ -191,12 +193,12 @@ abstract class TempleScan :
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> = IMAGES_REGEX.find(response.body.string())!!.groupValues[1]
-        .unescape()
-        .parseAs<List<String>>()
-        .mapIndexed { index, image ->
-            Page(index, imageUrl = image)
+    override fun pageListParse(response: Response): List<Page> {
+        val data = response.extractNextJs<ChaptersList>() ?: return emptyList()
+        return data.pages.mapIndexed { idx, url ->
+            Page(idx, imageUrl = url)
         }
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         screen.addRandomUAPreference()

@@ -70,6 +70,11 @@ class ChapterList(
     }
 }
 
+@Serializable
+class ChaptersList(
+    val pages: List<String>,
+)
+
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
 
 private fun SimpleDateFormat.tryParse(date: String?): Long {
