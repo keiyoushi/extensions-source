@@ -8,11 +8,13 @@ import java.net.URI
 class MirrorPreferences(
     private val preferences: SharedPreferences,
     private val mirrors: Array<String>,
+    private val labels: Array<String>,
     private val title: String,
 ) {
     private val prefKey = "preferred_mirror"
-    private val entries = mirrors.map { url ->
-        runCatching { URI(url).host }.getOrDefault(url)
+    private val entries = mirrors.mapIndexed { i, url ->
+        labels.getOrNull(i)?.takeIf { it.isNotBlank() }
+            ?: runCatching { URI(url).host }.getOrDefault(url)
     }
 
     val baseUrl: String

@@ -10,8 +10,8 @@ keiyoushi {
     theme = "grouple"
 
     source {
-        baseUrl("https://web.usagi.one") {
-            withCustom = true
+        baseUrl {
+            custom("https://web.usagi.one")
         }
         lang = "ru"
     }

@@ -10,8 +10,8 @@ keiyoushi {
     theme = "libgroup"
 
     source {
-        baseUrl("https://mangalib.me") {
-            withCustom = true
+        baseUrl {
+            custom("https://mangalib.me")
         }
         lang = "ru"
     }

@@ -11,8 +11,8 @@ keiyoushi {
     source {
         id = 6495630445796108150L
         lang = "vi"
-        baseUrl("https://lxmanga.space") {
-            withCustom = true
+        baseUrl {
+            custom("https://lxmanga.space")
         }
     }
 

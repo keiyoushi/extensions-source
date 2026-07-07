@@ -10,8 +10,8 @@ keiyoushi {
     theme = "multichan"
 
     source {
-        baseUrl("https://im.manga-chan.me") {
-            withCustom = true
+        baseUrl {
+            custom("https://im.manga-chan.me")
         }
         lang = "ru"
         id = 7L

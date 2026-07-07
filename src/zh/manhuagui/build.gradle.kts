@@ -11,8 +11,9 @@ keiyoushi {
     source {
         name = "漫画柜"
         lang = "zh"
-        baseUrl("https://www.manhuagui.com") {
-            mirrors = listOf(
+        baseUrl {
+            mirrors(
+                "https://www.manhuagui.com",
                 "https://tw.manhuagui.com",
                 "https://www.mhgui.com",
                 "https://tw.mhgui.com",

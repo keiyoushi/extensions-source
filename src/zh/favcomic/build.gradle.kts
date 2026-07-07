@@ -11,8 +11,9 @@ keiyoushi {
     source {
         name = "喜漫漫画"
         lang = "zh"
-        baseUrl("https://www.favcomic.com") {
-            mirrors = listOf(
+        baseUrl {
+            mirrors(
+                "https://www.favcomic.com",
                 "https://www.favcomic.xyz",
                 "https://www.favcomic.net",
                 "https://www.favcomic.cc",

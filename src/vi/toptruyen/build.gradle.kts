@@ -11,8 +11,8 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl("https://www.toptruyenzone6.com") {
-            withCustom = true
+        baseUrl {
+            custom("https://www.toptruyenzone6.com")
         }
     }
 }

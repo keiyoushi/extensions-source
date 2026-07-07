@@ -14,8 +14,9 @@ keiyoushi {
 
         // redirect URL: https://fuhouse.info/bl
         // link source URL: https://boylovepage.github.io
-        baseUrl("https://boylove.cc") {
-            mirrors = listOf(
+        baseUrl {
+            mirrors(
+                "https://boylove.cc",
                 "https://boylove4.xyz",
             )
         }

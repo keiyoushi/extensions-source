@@ -11,8 +11,8 @@ keiyoushi {
     source {
         name = "GocTruyenTranh"
         lang = "vi"
-        baseUrl("https://goctruyentranh.com") {
-            withCustom = true
+        baseUrl {
+            custom("https://goctruyentranh.com")
         }
     }
 }

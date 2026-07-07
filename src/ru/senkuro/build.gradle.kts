@@ -10,8 +10,9 @@ keiyoushi {
     theme = "senkuro"
 
     source {
-        baseUrl("https://senkuro.me") {
-            mirrors = listOf(
+        baseUrl {
+            mirrors(
+                "https://senkuro.me",
                 "https://senkuro.com",
             )
         }

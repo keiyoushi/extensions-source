@@ -10,8 +10,8 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl("http://127.0.0.1:9000") {
-            withCustom = true
+        baseUrl {
+            custom("http://127.0.0.1:9000")
         }
     }
 }
