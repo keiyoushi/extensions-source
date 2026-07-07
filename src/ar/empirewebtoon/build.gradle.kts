@@ -11,8 +11,8 @@ keiyoushi {
 
     source {
         lang = "ar"
-        baseUrl("https://webtoonempire-bl.com") {
-            withCustom = true
+        baseUrl {
+            custom("https://webtoonempire-bl.com")
         }
     }
 }

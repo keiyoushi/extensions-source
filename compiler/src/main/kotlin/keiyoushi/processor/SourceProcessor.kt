@@ -43,10 +43,15 @@ data class LocaleStrings(
 @Serializable
 data class BaseUrlSpecData(
     val type: String,
-    val urls: List<String>,
-) {
-    val defaultUrl: String get() = urls.first()
-}
+    val defaultUrl: String,
+    val mirrors: List<MirrorData> = emptyList(),
+)
+
+@Serializable
+data class MirrorData(
+    val url: String,
+    val label: String = "",
+)
 
 @Serializable
 data class SourceDef(
@@ -279,9 +284,9 @@ class SourceProcessor(
             urlSpec.type == "mirrors" -> {
                 val strings = stringsForLang(source.lang)
                 val mirrorsArg = CodeBlock.builder().apply {
-                    urlSpec.urls.forEachIndexed { i, url ->
+                    urlSpec.mirrors.forEachIndexed { i, mirror ->
                         if (i > 0) add(", ")
-                        add("%S", url)
+                        add("%S to %S", mirror.label, mirror.url)
                     }
                 }.build()
                 addProperty(

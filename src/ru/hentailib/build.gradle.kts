@@ -10,8 +10,8 @@ keiyoushi {
     theme = "libgroup"
 
     source {
-        baseUrl("https://hentailib.me") {
-            withCustom = true
+        baseUrl {
+            custom("https://hentailib.me")
         }
         lang = "ru"
     }

@@ -10,8 +10,9 @@ keiyoushi {
 
     source {
         lang = "zh"
-        baseUrl("https://mangabz.com") {
-            mirrors = listOf(
+        baseUrl {
+            mirrors(
+                "https://mangabz.com",
                 "https://xmanhua.com",
                 "https://yymanhua.com",
             )

@@ -12,8 +12,8 @@ keiyoushi {
     source {
         name = "巴卡漫画"
         lang = "zh"
-        baseUrl("https://bakamh.com") {
-            withCustom = true
+        baseUrl {
+            custom("https://bakamh.com")
         }
     }
 }

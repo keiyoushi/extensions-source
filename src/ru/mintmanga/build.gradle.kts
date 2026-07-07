@@ -10,8 +10,8 @@ keiyoushi {
     theme = "grouple"
 
     source {
-        baseUrl("https://2.mintmanga.one") {
-            withCustom = true
+        baseUrl {
+            custom("https://2.mintmanga.one")
         }
         lang = "ru"
         id = 6L

@@ -11,24 +11,24 @@ keiyoushi {
     source {
         name = "MinoTruyen Manga"
         lang = "vi"
-        baseUrl("https://minotruyenv5.xyz") {
-            withCustom = true
+        baseUrl {
+            custom("https://minotruyenv5.xyz")
         }
     }
 
     source {
         name = "MinoTruyen Comics"
         lang = "vi"
-        baseUrl("https://minotruyenv5.xyz") {
-            withCustom = true
+        baseUrl {
+            custom("https://minotruyenv5.xyz")
         }
     }
 
     source {
         name = "MinoTruyen Hentai"
         lang = "vi"
-        baseUrl("https://minotruyenv5.xyz") {
-            withCustom = true
+        baseUrl {
+            custom("https://minotruyenv5.xyz")
         }
     }
 }

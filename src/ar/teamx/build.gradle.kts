@@ -10,8 +10,8 @@ keiyoushi {
 
     source {
         lang = "ar"
-        baseUrl("https://olympustaff.com") {
-            withCustom = true
+        baseUrl {
+            custom("https://olympustaff.com")
         }
     }
 

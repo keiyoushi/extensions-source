@@ -10,8 +10,8 @@ keiyoushi {
     theme = "grouple"
 
     source {
-        baseUrl("https://1.seimanga.me") {
-            withCustom = true
+        baseUrl {
+            custom("https://1.seimanga.me")
         }
         lang = "ru"
     }
