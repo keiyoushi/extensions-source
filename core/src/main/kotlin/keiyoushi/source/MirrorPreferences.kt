@@ -7,13 +7,12 @@ import java.net.URI
 
 class MirrorPreferences(
     private val preferences: SharedPreferences,
-    private val mirrors: Array<String>,
-    private val labels: Array<String>,
+    private val mirrors: Array<Pair<String, String>>,
     private val title: String,
 ) {
     private val prefKey = "preferred_mirror"
-    private val entries = mirrors.mapIndexed { i, url ->
-        labels.getOrNull(i)?.takeIf { it.isNotBlank() }
+    private val entries = mirrors.map { (label, url) ->
+        label.takeIf { it.isNotBlank() }
             ?: runCatching { URI(url).host }.getOrDefault(url)
     }
 
@@ -21,7 +20,7 @@ class MirrorPreferences(
         get() {
             val index = preferences.getString(prefKey, "0")?.toIntOrNull() ?: 0
             val safeIndex = index.coerceIn(0, mirrors.size - 1)
-            return mirrors[safeIndex]
+            return mirrors[safeIndex].second
         }
 
     fun setupPreferenceScreen(screen: PreferenceScreen) {

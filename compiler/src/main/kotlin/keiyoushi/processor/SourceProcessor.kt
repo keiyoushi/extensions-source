@@ -43,11 +43,15 @@ data class LocaleStrings(
 @Serializable
 data class BaseUrlSpecData(
     val type: String,
-    val urls: List<String>,
-    val labels: List<String> = emptyList(),
-) {
-    val defaultUrl: String get() = urls.first()
-}
+    val defaultUrl: String,
+    val mirrors: List<MirrorData> = emptyList(),
+)
+
+@Serializable
+data class MirrorData(
+    val url: String,
+    val label: String = "",
+)
 
 @Serializable
 data class SourceDef(
@@ -279,21 +283,19 @@ class SourceProcessor(
             }
             urlSpec.type == "mirrors" -> {
                 val strings = stringsForLang(source.lang)
-                fun joinAsStrings(values: List<String>) = CodeBlock.builder().apply {
-                    values.forEachIndexed { i, value ->
+                val mirrorsArg = CodeBlock.builder().apply {
+                    urlSpec.mirrors.forEachIndexed { i, mirror ->
                         if (i > 0) add(", ")
-                        add("%S", value)
+                        add("%S to %S", mirror.label, mirror.url)
                     }
                 }.build()
-                val urlsArg = joinAsStrings(urlSpec.urls)
-                val labelsArg = joinAsStrings(urlSpec.urls.indices.map { urlSpec.labels.getOrElse(it) { "" } })
                 addProperty(
                     PropertySpec.builder("mirrorPrefs", mirrorPrefsClass)
                         .addModifiers(KModifier.PRIVATE)
                         .delegate(
                             CodeBlock.of(
-                                "lazy { %T(%M(id), arrayOf(%L), arrayOf(%L), title = %S) }",
-                                mirrorPrefsClass, getPreferencesFn, urlsArg, labelsArg, strings.mirrorTitle,
+                                "lazy { %T(%M(id), arrayOf(%L), title = %S) }",
+                                mirrorPrefsClass, getPreferencesFn, mirrorsArg, strings.mirrorTitle,
                             ),
                         ).build(),
                 )
