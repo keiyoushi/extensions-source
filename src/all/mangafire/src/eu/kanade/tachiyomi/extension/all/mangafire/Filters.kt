@@ -174,6 +174,7 @@ class SortFilter :
             "Most viewed · all time",
             "Most followed",
         ),
+        1,
     ),
     UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
