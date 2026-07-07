@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "Wolf.com"
-    versionCode = 5
+    versionCode = 4
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
