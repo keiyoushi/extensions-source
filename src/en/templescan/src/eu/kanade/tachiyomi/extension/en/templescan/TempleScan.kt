@@ -10,17 +10,18 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJs
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
+import org.jsoup.safety.Safelist
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import kotlin.math.min
 
 @Source
@@ -35,11 +36,13 @@ abstract class TempleScan :
         .set("origin", baseUrl)
         .setRandomUserAgent()
 
+    private val rscHeaders = headersBuilder()
+        .set("rsc", "1")
+        .build()
+
     override val client = network.client.newBuilder()
         .rateLimit(1)
         .build()
-
-    private val json: Json by injectLazy()
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = fetchSearchManga(page, "", OrderFilter.POPULAR)
 
@@ -48,6 +51,13 @@ abstract class TempleScan :
     private lateinit var seriesCache: List<BrowseSeries>
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.isNotEmpty()) {
+            val response = client.newCall(searchMangaRequest(page, query, filters)).execute()
+            val result = response.parseAs<SearchWrapper>()
+            val mangas = result.projects.map { it.toSManga() }
+            return Observable.just(MangasPage(mangas, result.page * 15 < result.total))
+        }
+
         if (page == 1) {
             client.newCall(searchMangaRequest(page, query, filters))
                 .execute()
@@ -57,19 +67,23 @@ abstract class TempleScan :
         return Observable.just(parseDirectory(page, query, filters))
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/comics", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        if (query.isNotEmpty()) {
+            if (query.length < 2) {
+                throw UnsupportedOperationException("The query must contain at least 2 characters")
+            }
+            val url = "$baseUrl/api/search".toHttpUrl().newBuilder()
+                .addQueryParameter("q", query)
+                .addQueryParameter("page", page.toString())
+                .addQueryParameter("limit", "15")
+                .build()
+            return GET(url, headers)
+        }
+        return GET("$baseUrl/comics", rscHeaders)
+    }
 
     private fun parseSearchResponse(response: Response) {
-        val document = response.asJsoup()
-        val script = document.selectFirst("script:containsData(allComics)")!!
-            .data().unescape()
-
-        with(script) {
-            val raw = substringAfter("""allComics":""")
-                .substringBeforeLast("}]")
-
-            seriesCache = raw.parseAs()
-        }
+        seriesCache = response.extractNextJs<List<BrowseSeries>>()!!
     }
 
     private fun parseDirectory(page: Int, query: String, filters: FilterList): MangasPage {
@@ -102,12 +116,9 @@ abstract class TempleScan :
     }
 
     override fun getFilterList() = getFilters()
-
+    // =========================== Manga Details ============================
     override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        val details = document.extractNextJs<SeriesDetails>()!!
-
-        val tags = mutableListOf<String>()
+        val details = response.extractNextJs<SeriesDetails>()!!
 
         return SManga.create().apply {
             url = "/comic/${details.slug}"
@@ -124,33 +135,10 @@ abstract class TempleScan :
             author = details.author
             artist = details.studio
             description = buildString {
-                document.selectFirst("div:has(> p:contains(description))")?.run {
-                    selectFirst("p:contains(description)")?.remove()
-                    selectFirst("div.mt-7:contains(Additional)")?.remove()
-                    selectFirst("div.mt-7:contains(tag)")?.also {
-                        tags += it.select("div.flex > p[class^=bg]").eachText()
-                    }?.remove()
-                    selectFirst("p:contains(tag), p:contains(genre)")?.let {
-                        tags += it.text().substringAfter(":")
-                            .split(",")
-                            .map(String::trim)
-                        // sometimes description <p> have the tag/genre, instead of it being separate
-                        val tmp = clone()
-                        tmp.selectFirst("p:contains(tag), p:contains(genre)")
-                            ?.remove()
-                        if (tmp.text().isNotBlank()) {
-                            it.remove()
-                        }
-                    }
-
-                    this@buildString.append(wholeText().trim())
-                }
-
-                if (!details.alternativeNames.isNullOrBlank()) {
-                    if (isNotBlank()) {
-                        append("\n\n")
-                    }
-                    append("Alternative Name: ", details.alternativeNames, "\n")
+                append(Jsoup.clean(details.description.toString(), Safelist.none()))
+                details.alternativeNames?.takeIf { it.isNotBlank() }?.let {
+                    append("\n\n")
+                    append("Alternative Name: $it\n")
                 }
             }
             genre = buildList {
@@ -159,13 +147,22 @@ abstract class TempleScan :
                 if (details.adult) {
                     add("Adult")
                 }
-                addAll(tags.distinct())
+                details.tags?.map { it.tag.name }?.let { addAll(it) }
             }.filterNotNull().joinToString()
         }
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", rscHeaders)
+
+    // ============================== Chapters ==============================
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", rscHeaders)
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val url = chapter.url.substringAfter("read/")
+        return "$baseUrl/read/$url"
+    }
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = response.extractNextJs<ChapterList>() ?: return emptyList()
         val mangaSlug = response.request.url.pathSegments.last()
@@ -188,6 +185,9 @@ abstract class TempleScan :
         }
     }
 
+    // =============================== Pages ================================
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", rscHeaders)
+
     override fun pageListParse(response: Response): List<Page> {
         val data = response.extractNextJs<PagesList>() ?: return emptyList()
         return data.pages.mapIndexed { idx, url ->
@@ -199,10 +199,6 @@ abstract class TempleScan :
         screen.addRandomUAPreference()
     }
 
-    private fun String.unescape(): String = UNESCAPE_REGEX.replace(this, "$1")
-
-    private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
-
     private inline fun <reified T : Filter<*>> FilterList.get(): T? = filterIsInstance<T>().firstOrNull()
 
     override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
@@ -212,5 +208,3 @@ abstract class TempleScan :
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }
-
-private val UNESCAPE_REGEX = """\\(.)""".toRegex()
