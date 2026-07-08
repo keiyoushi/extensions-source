@@ -76,30 +76,3 @@ jobs:
           name: "individual-apks-${{ matrix.chunk.number }}"
           path: "**/*.apk"
           retention-days: 1
-
-  inspect:
-    name: Inspect extensions
-    needs: [prepare, build]
-    if: "github.repository == 'keiyoushi/extensions-source'"
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Download APK artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          path: ~/apk-artifacts
-
-      - name: Set up JDK
-        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
-        with:
-          java-version: 17
-          distribution: temurin
-
-      - name: Run inspector
-        run: |
-          mkdir -p apk
-          find ~/apk-artifacts -name "*.apk" -type f -exec mv {} apk/ \;
-          INSPECTOR_LINK="$(curl -s "https://api.github.com/repos/keiyoushi/extensions-inspector/releases/latest" | jq -r '.assets[0].browser_download_url')"
-          curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
-          java -jar ./Inspector.jar "apk" "output.json" "tmp"
-          jq . output.json

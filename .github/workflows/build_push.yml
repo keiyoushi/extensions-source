@@ -90,7 +90,9 @@ jobs:
         if: "github.repository == 'keiyoushi/extensions-source'"
         with:
           name: "individual-apks-${{ matrix.chunk.number }}"
-          path: "**/*.apk"
+          path: |
+            **/*.apk
+            **/build/keiyoushi-source-info.json
           retention-days: 1
 
       - name: Clean up CI files
@@ -108,27 +110,12 @@ jobs:
         with:
           path: ~/apk-artifacts
 
-      - name: Set up JDK
-        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
-        with:
-          java-version: 17
-          distribution: temurin
-
       - name: Checkout main branch
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: main
           path: main
           persist-credentials: false
-
-      - name: Create repo artifacts
-        run: |
-          cd main
-          python ./.github/scripts/move-built-apks.py
-          INSPECTOR_LINK="$(curl -s "https://api.github.com/repos/keiyoushi/extensions-inspector/releases/latest" | jq -r '.assets[0].browser_download_url')"
-          curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
-          java -jar ./Inspector.jar "repo/apk" "output.json" "tmp"
-          python ./.github/scripts/create-repo.py
 
       - name: Checkout repo branch
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -139,11 +126,21 @@ jobs:
           path: repo
           persist-credentials: true
 
-      - name: Merge and deploy repo
+      - name: Publish and deploy repo
         env:
           DELETE: ${{ needs.prepare.outputs.delete }}
         run: |
           cd repo
           pip install protobuf
-          python ../main/.github/scripts/merge-repo.py "$DELETE"
-          ../main/.github/scripts/commit-repo.sh
+          python ../main/.github/scripts/publish-repo.py "$DELETE"
+          git config --global user.email "156378334+keiyoushi-bot@users.noreply.github.com"
+          git config --global user.name "keiyoushi-bot"
+          git status
+          if [ -n "$(git status --porcelain)" ]; then
+            git add .
+            git commit -m "Update extensions repo"
+            git push
+            curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.min.json
+          else
+            echo "No changes to commit"
+          fi
