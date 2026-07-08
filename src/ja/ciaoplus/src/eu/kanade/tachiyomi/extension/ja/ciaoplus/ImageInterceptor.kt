@@ -43,8 +43,8 @@ class ImageInterceptor : Interceptor {
 
     private class CoordPair(val source: Coord, val dest: Coord)
 
-    private fun xorshift32(seed: UInt): UInt {
-        var n = seed
+    private fun UInt.xorshift32(): UInt {
+        var n = this
         n = n xor (n shl 13)
         n = n xor (n shr 17)
         n = n xor (n shl 5)
@@ -56,7 +56,7 @@ class ImageInterceptor : Interceptor {
         val pairs = mutableListOf<Pair<UInt, Int>>()
 
         for (i in 0 until 16) {
-            seed32 = xorshift32(seed32)
+            seed32 = seed32.xorshift32()
             pairs.add(seed32 to i)
         }
 
@@ -70,18 +70,18 @@ class ImageInterceptor : Interceptor {
         }
     }
 
-    private fun tileSizeV1(size: Int) = (size / 8 * 8) / 4
+    private fun Int.tileSizeV1() = (this / 8 * 8) / 4
 
-    private fun tileSizeV2(size: Int) = (size / 32) * 8
+    private fun Int.tileSizeV2() = (this / 32) * 8
 
     private fun descramble(image: Bitmap, seed: Long, version: Int): Bitmap {
         val width = image.width
         val height = image.height
 
         val (tileWidth, tileHeight) = if (version == 2) {
-            tileSizeV2(width) to tileSizeV2(height)
+            width.tileSizeV2() to height.tileSizeV2()
         } else {
-            tileSizeV1(width) to tileSizeV1(height)
+            width.tileSizeV1() to height.tileSizeV1()
         }
 
         val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
