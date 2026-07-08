@@ -313,7 +313,7 @@ abstract class InkStory :
     ): Request {
         val url = "$apiBaseUrl/v2/books".toHttpUrl().newBuilder()
             .addQueryParameter("size", PAGE_SIZE.toString())
-            .addQueryParameter("page", page.toString())
+            .addQueryParameter("page", (page - 1).coerceAtLeast(0).toString())
             .addQueryParameter("sort", sort)
             .apply {
                 if (!query.isNullOrBlank()) {
@@ -341,7 +341,7 @@ abstract class InkStory :
     }
 
     private fun booksParse(response: Response): MangasPage {
-        val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
+        val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 0
         val totalHits = response.header("x-estimated-total-hits")?.toIntOrNull()
         val books = response.parseAs<List<BookDto>>()
 
@@ -354,7 +354,7 @@ abstract class InkStory :
         }
 
         val hasNextPage = if (totalHits != null) {
-            currentPage * PAGE_SIZE < totalHits
+            (currentPage + 1) * PAGE_SIZE < totalHits
         } else {
             mangas.size >= PAGE_SIZE
         }

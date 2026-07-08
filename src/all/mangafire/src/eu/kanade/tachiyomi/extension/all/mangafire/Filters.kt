@@ -2,58 +2,41 @@ package eu.kanade.tachiyomi.extension.all.mangafire
 
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
-import java.util.Calendar
 
 interface UriFilter {
     fun addToUri(builder: HttpUrl.Builder)
 }
 
-open class UriPartFilter(
-    name: String,
-    private val param: String,
-    private val vals: Array<Pair<String, String>>,
-    defaultValue: String? = null,
-) : Filter.Select<String>(
-    name,
-    vals.map { it.first }.toTypedArray(),
-    vals.indexOfFirst { it.second == defaultValue }.takeIf { it != -1 } ?: 0,
-),
-    UriFilter {
-    override fun addToUri(builder: HttpUrl.Builder) {
-        builder.addQueryParameter(param, vals[state].second)
-    }
-}
-
-open class UriMultiSelectOption(name: String, val value: String) : Filter.CheckBox(name)
+class UriMultiSelectOption(name: String, val value: String) : Filter.CheckBox(name)
 
 open class UriMultiSelectFilter(
     name: String,
     private val param: String,
-    private val vals: Array<Pair<String, String>>,
+    vals: Array<Pair<String, String>>,
 ) : Filter.Group<UriMultiSelectOption>(name, vals.map { UriMultiSelectOption(it.first, it.second) }),
     UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
-        val checked = state.filter { it.state }
-
-        checked.forEach {
+        state.filter { it.state }.forEach {
             builder.addQueryParameter(param, it.value)
         }
     }
 }
 
-open class UriTriSelectOption(name: String, val value: String) : Filter.TriState(name)
+class UriTriSelectOption(name: String, val value: String) : Filter.TriState(name)
 
 open class UriTriSelectFilter(
     name: String,
-    private val param: String,
-    private val vals: Array<Pair<String, String>>,
+    private val paramIn: String,
+    private val paramEx: String,
+    vals: Array<Pair<String, String>>,
 ) : Filter.Group<UriTriSelectOption>(name, vals.map { UriTriSelectOption(it.first, it.second) }),
     UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
-        state.forEach { s ->
-            when (s.state) {
-                TriState.STATE_INCLUDE -> builder.addQueryParameter(param, s.value)
-                TriState.STATE_EXCLUDE -> builder.addQueryParameter(param, "-${s.value}")
+        state.forEach {
+            when (it.state) {
+                TriState.STATE_INCLUDE -> builder.addQueryParameter(paramIn, it.value)
+                TriState.STATE_EXCLUDE -> builder.addQueryParameter(paramEx, it.value)
+                else -> {}
             }
         }
     }
@@ -62,21 +45,20 @@ open class UriTriSelectFilter(
 class TypeFilter :
     UriMultiSelectFilter(
         "Type",
-        "type[]",
+        "types[]",
         arrayOf(
             Pair("Manga", "manga"),
-            Pair("One-Shot", "one_shot"),
-            Pair("Doujinshi", "doujinshi"),
-            Pair("Novel", "novel"),
             Pair("Manhwa", "manhwa"),
             Pair("Manhua", "manhua"),
+            Pair("Other", "other"),
         ),
     )
 
 class GenreFilter :
     UriTriSelectFilter(
         "Genres",
-        "genre[]",
+        "genres_in[]",
+        "genres_ex[]",
         arrayOf(
             Pair("Action", "1"),
             Pair("Adventure", "78"),
@@ -123,82 +105,95 @@ class GenreFilter :
     )
 
 class GenreModeFilter :
-    Filter.CheckBox("Must have all the selected genres"),
+    Filter.Select<String>("Genre match mode", arrayOf("AND", "OR")),
     UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
-        if (state) {
-            builder.addQueryParameter("genre_mode", "and")
-        }
+        builder.addQueryParameter("genres_mode", if (state == 0) "and" else "or")
     }
 }
 
 class StatusFilter :
     UriMultiSelectFilter(
         "Status",
-        "status[]",
+        "statuses[]",
         arrayOf(
-            Pair("Completed", "completed"),
             Pair("Releasing", "releasing"),
+            Pair("Finished", "finished"),
             Pair("On Hiatus", "on_hiatus"),
             Pair("Discontinued", "discontinued"),
-            Pair("Not Yet Published", "info"),
+            Pair("Not Yet Released", "not_yet_released"),
         ),
     )
-
-class YearFilter :
-    UriMultiSelectFilter(
-        "Year",
-        "year[]",
-        years,
-    ) {
-    companion object {
-        private val currentYear by lazy {
-            Calendar.getInstance()[Calendar.YEAR]
-        }
-
-        private val years: Array<Pair<String, String>> = buildList(29) {
-            addAll(
-                (currentYear downTo (currentYear - 20)).map(Int::toString),
-            )
-
-            addAll(
-                (2000 downTo 1930 step 10).map { "${it}s" },
-            )
-        }.map { Pair(it, it) }.toTypedArray()
-    }
-}
 
 class MinChapterFilter :
-    Filter.Text("Minimum chapter length"),
+    Filter.Text("Minimum chapters"),
     UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
-        if (state.isNotEmpty()) {
-            val value = state.toIntOrNull()?.takeIf { it > 0 }
-                ?: throw IllegalArgumentException("Minimum chapter length must be a positive integer greater than 0")
-
-            builder.addQueryParameter("minchap", value.toString())
+        state.toIntOrNull()?.takeIf { it > 0 }?.let {
+            builder.addQueryParameter("min_chap", it.toString())
         }
     }
 }
 
-class SortFilter(defaultValue: String? = null) :
-    UriPartFilter(
-        "Sort",
-        "sort",
+class YearFromFilter :
+    Filter.Text("Release year (From)"),
+    UriFilter {
+    override fun addToUri(builder: HttpUrl.Builder) {
+        state.toIntOrNull()?.let {
+            builder.addQueryParameter("year_from", it.toString())
+        }
+    }
+}
+
+class YearToFilter :
+    Filter.Text("Release year (To)"),
+    UriFilter {
+    override fun addToUri(builder: HttpUrl.Builder) {
+        state.toIntOrNull()?.let {
+            builder.addQueryParameter("year_to", it.toString())
+        }
+    }
+}
+
+class AuthorFilter : Filter.Text("Author / Artist")
+
+class SortFilter :
+    Filter.Select<String>(
+        "Sort by",
         arrayOf(
-            Pair("Most relevance", "most_relevance"),
-            Pair("Recently updated", "recently_updated"),
-            Pair("Recently added", "recently_added"),
-            Pair("Release date", "release_date"),
-            Pair("Name A-Z", "title_az"),
-            Pair("Avg Score", "scores"),
-            Pair("MAL score", "mal_scores"),
-            Pair("Trending", "trending"),
-            Pair("Today views", "today_views"),
-            Pair("Weekly views", "weekly_views"),
-            Pair("Monthly views", "monthly_views"),
-            Pair("Total views", "most_viewed"),
-            Pair("Most favourited", "most_favourited"),
+            "Latest update",
+            "Best match",
+            "Recently added",
+            "Title (A–Z)",
+            "Title (Z–A)",
+            "Year (newest)",
+            "Year (oldest)",
+            "Highest rated",
+            "Most viewed · 7 days",
+            "Most viewed · 30 days",
+            "Most viewed · all time",
+            "Most followed",
         ),
-        defaultValue,
-    )
+        1,
+    ),
+    UriFilter {
+    override fun addToUri(builder: HttpUrl.Builder) {
+        val sortKey = when (state) {
+            0 -> "chapter_updated_at:desc"
+            1 -> "relevance:desc"
+            2 -> "created_at:desc"
+            3 -> "title:asc"
+            4 -> "title:desc"
+            5 -> "year:desc"
+            6 -> "year:asc"
+            7 -> "score:desc"
+            8 -> "views_7d:desc"
+            9 -> "views_30d:desc"
+            10 -> "views_total:desc"
+            11 -> "follows_total:desc"
+            else -> "chapter_updated_at:desc"
+        }
+        val parts = sortKey.split(":")
+        builder.addQueryParameter("order[${parts[0]}]", parts[1])
+    }
+}

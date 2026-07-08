@@ -159,13 +159,15 @@ class SourceProcessor(
             .map { it.simpleName.asString() }
             .toSet()
 
+        val fileProps = mutableListOf<PropertySpec>()
         val generatedClass = if (sources.size == 1) {
-            buildSingleSourceClass(annotatedClass, sources.single(), isConfigurable, overridden, annotated)
+            buildSingleSourceClass(annotatedClass, sources.single(), isConfigurable, overridden, annotated, fileProps)
         } else {
-            buildSourceFactoryClass(annotatedClass, sources, isConfigurable, overridden, annotated)
+            buildSourceFactoryClass(annotatedClass, sources, isConfigurable, overridden, annotated, fileProps)
         }
 
         FileSpec.builder(pkg, "ExtensionGenerated")
+            .apply { fileProps.forEach(::addProperty) }
             .addType(generatedClass)
             .build()
             .writeTo(codeGenerator, Dependencies(false, annotated.containingFile!!))
@@ -179,10 +181,11 @@ class SourceProcessor(
         isConfigurable: Boolean,
         overridden: Set<String>,
         node: KSClassDeclaration,
+        fileProps: MutableList<PropertySpec>,
     ): TypeSpec = TypeSpec.classBuilder("ExtensionGenerated")
         .addModifiers(KModifier.INTERNAL)
         .superclass(annotatedClass)
-        .applySourceMembers(source, isConfigurable, overridden, node)
+        .applySourceMembers(source, "", fileProps, isConfigurable, overridden, node)
         .build()
 
     private fun buildSourceFactoryClass(
@@ -191,6 +194,7 @@ class SourceProcessor(
         isConfigurable: Boolean,
         overridden: Set<String>,
         node: KSClassDeclaration,
+        fileProps: MutableList<PropertySpec>,
     ): TypeSpec {
         val sourceFactoryType = ClassName("eu.kanade.tachiyomi.source", "SourceFactory")
         val sourceType = ClassName("eu.kanade.tachiyomi.source", "Source")
@@ -199,12 +203,12 @@ class SourceProcessor(
             .add("return listOf(\n")
             .indent()
             .apply {
-                for (source in sources) {
+                for ((index, source) in sources.withIndex()) {
                     add(
                         "%L,\n",
                         TypeSpec.anonymousClassBuilder()
                             .superclass(annotatedClass)
-                            .applySourceMembers(source, isConfigurable, overridden, node)
+                            .applySourceMembers(source, index.toString(), fileProps, isConfigurable, overridden, node)
                             .build(),
                     )
                 }
@@ -228,6 +232,8 @@ class SourceProcessor(
 
     private fun TypeSpec.Builder.applySourceMembers(
         source: SourceDef,
+        suffix: String,
+        fileProps: MutableList<PropertySpec>,
         isConfigurable: Boolean,
         overridden: Set<String>,
         node: KSClassDeclaration,
@@ -283,49 +289,59 @@ class SourceProcessor(
             }
             urlSpec.type == "mirrors" -> {
                 val strings = stringsForLang(source.lang)
-                val mirrorsArg = CodeBlock.builder().apply {
-                    urlSpec.mirrors.forEachIndexed { i, mirror ->
-                        if (i > 0) add(", ")
-                        add("%S to %S", mirror.label, mirror.url)
+                val prefsName = "mirrorPrefs$suffix"
+                val initializer = CodeBlock.builder()
+                    .add("%T(\n", mirrorPrefsClass)
+                    .indent()
+                    .add("preferences = %M(%LL),\n", getPreferencesFn, source.id)
+                    .add("mirrors = arrayOf(\n")
+                    .indent()
+                    .apply {
+                        urlSpec.mirrors.forEach { mirror ->
+                            add("%S to %S,\n", mirror.label, mirror.url)
+                        }
                     }
-                }.build()
-                addProperty(
-                    PropertySpec.builder("mirrorPrefs", mirrorPrefsClass)
-                        .addModifiers(KModifier.PRIVATE)
-                        .delegate(
-                            CodeBlock.of(
-                                "lazy { %T(%M(id), arrayOf(%L), title = %S) }",
-                                mirrorPrefsClass, getPreferencesFn, mirrorsArg, strings.mirrorTitle,
-                            ),
-                        ).build(),
-                )
+                    .unindent()
+                    .add("),\n")
+                    .add("title = %S,\n", strings.mirrorTitle)
+                    .unindent()
+                    .add(")")
+                    .build()
+                fileProps += PropertySpec.builder(prefsName, mirrorPrefsClass)
+                    .addModifiers(KModifier.PRIVATE)
+                    .initializer(initializer)
+                    .build()
                 addProperty(
                     PropertySpec.builder("baseUrl", String::class.asClassName(), KModifier.OVERRIDE)
-                        .getter(FunSpec.getterBuilder().addStatement("return mirrorPrefs.baseUrl").build())
+                        .getter(FunSpec.getterBuilder().addStatement("return %N.baseUrl", prefsName).build())
                         .build(),
                 )
-                addPreferenceScreen(isConfigurable) { addStatement("mirrorPrefs.setupPreferenceScreen(screen)") }
+                addPreferenceScreen(isConfigurable) { addStatement("%N.setupPreferenceScreen(screen)", prefsName) }
                 if (!isConfigurable) addSuperinterface(configurable)
             }
             urlSpec.type == "custom" -> {
                 val strings = stringsForLang(source.lang)
-                addProperty(
-                    PropertySpec.builder("customUrlPrefs", customUrlPrefsClass)
-                        .addModifiers(KModifier.PRIVATE)
-                        .delegate(
-                            CodeBlock.of(
-                                "lazy { %T(%M(id), %S, title = %S, dialogMessage = %S) }",
-                                customUrlPrefsClass, getPreferencesFn, urlSpec.defaultUrl,
-                                strings.customUrlTitle, strings.customUrlDialogMessage,
-                            ),
-                        ).build(),
-                )
+                val prefsName = "customUrlPrefs$suffix"
+                val initializer = CodeBlock.builder()
+                    .add("%T(\n", customUrlPrefsClass)
+                    .indent()
+                    .add("preferences = %M(%LL),\n", getPreferencesFn, source.id)
+                    .add("defaultUrl = %S,\n", urlSpec.defaultUrl)
+                    .add("title = %S,\n", strings.customUrlTitle)
+                    .add("dialogMessage = %S,\n", strings.customUrlDialogMessage)
+                    .unindent()
+                    .add(")")
+                    .build()
+                fileProps += PropertySpec.builder(prefsName, customUrlPrefsClass)
+                    .addModifiers(KModifier.PRIVATE)
+                    .initializer(initializer)
+                    .build()
                 addProperty(
                     PropertySpec.builder("baseUrl", String::class.asClassName(), KModifier.OVERRIDE)
-                        .getter(FunSpec.getterBuilder().addStatement("return customUrlPrefs.baseUrl").build())
+                        .getter(FunSpec.getterBuilder().addStatement("return %N.baseUrl", prefsName).build())
                         .build(),
                 )
-                addPreferenceScreen(isConfigurable) { addStatement("customUrlPrefs.setupPreferenceScreen(screen)") }
+                addPreferenceScreen(isConfigurable) { addStatement("%N.setupPreferenceScreen(screen)", prefsName) }
                 if (!isConfigurable) addSuperinterface(configurable)
             }
         }
