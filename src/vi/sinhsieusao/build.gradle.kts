@@ -3,14 +3,15 @@ plugins {
 }
 
 keiyoushi {
-    name = "8Muses"
-    versionCode = 2
+    name = "SinhSieuSao"
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
-    theme = "eromuse"
 
     source {
-        lang = "en"
-        baseUrl = "https://comics.8muses.com"
+        lang = "vi"
+        baseUrl {
+            custom("https://sinhsieusao.com")
+        }
     }
 }
