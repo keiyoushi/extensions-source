@@ -12,7 +12,6 @@ keiyoushi {
         source {
             lang = it
             baseUrl = "https://mangafire.to"
-            versionId = 2
         }
     }
 }
