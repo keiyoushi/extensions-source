@@ -10,8 +10,8 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl("https://nettruyenviet10.com") {
-            withCustom = true
+        baseUrl {
+            custom("https://nettruyenviet10.com")
         }
     }
 }

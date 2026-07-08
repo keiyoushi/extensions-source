@@ -11,8 +11,8 @@ keiyoushi {
 
     source {
         lang = "ja"
-        baseUrl("https://jmanga.codes") {
-            withCustom = true
+        baseUrl {
+            custom("https://jmanga.codes")
         }
     }
 }

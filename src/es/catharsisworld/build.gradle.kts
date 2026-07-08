@@ -11,8 +11,8 @@ keiyoushi {
 
     source {
         lang = "es"
-        baseUrl("https://catharsisworld.dig-it.info") {
-            withCustom = true
+        baseUrl {
+            custom("https://catharsisworld.dig-it.info")
         }
         versionId = 2
     }

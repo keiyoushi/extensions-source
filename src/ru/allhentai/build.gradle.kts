@@ -10,8 +10,8 @@ keiyoushi {
     theme = "grouple"
 
     source {
-        baseUrl("https://20.allhen.online") {
-            withCustom = true
+        baseUrl {
+            custom("https://20.allhen.online")
         }
         lang = "ru"
         id = 1809051393403180443L

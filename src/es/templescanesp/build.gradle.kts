@@ -11,8 +11,8 @@ keiyoushi {
 
     source {
         lang = "es"
-        baseUrl("https://aedexnox.akan01.com") {
-            withCustom = true
+        baseUrl {
+            custom("https://aedexnox.akan01.com")
         }
         versionId = 4
     }

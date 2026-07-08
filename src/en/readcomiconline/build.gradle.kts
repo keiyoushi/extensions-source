@@ -10,8 +10,9 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl("https://readcomiconline.li") {
-            mirrors = listOf(
+        baseUrl {
+            mirrors(
+                "https://readcomiconline.li",
                 "https://rcostation.xyz",
             )
         }

@@ -11,8 +11,8 @@ keiyoushi {
 
     source {
         lang = "es"
-        baseUrl("https://nobledicion.yoveo.xyz") {
-            withCustom = true
+        baseUrl {
+            custom("https://nobledicion.yoveo.xyz")
         }
     }
 }

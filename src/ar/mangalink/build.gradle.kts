@@ -12,8 +12,8 @@ keiyoushi {
     source {
         name = "مانجا لينك"
         lang = "ar"
-        baseUrl("https://link-manga.net") {
-            withCustom = true
+        baseUrl {
+            custom("https://link-manga.net")
         }
     }
 }

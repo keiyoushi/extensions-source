@@ -25,8 +25,6 @@ abstract class NhentaiClub : HttpSource() {
 
     override val supportsLatest = true
 
-    override val id: Long = 9124366814387777661
-
     override val client = network.client.newBuilder()
         .rateLimit(5)
         .build()

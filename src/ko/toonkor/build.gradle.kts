@@ -10,8 +10,8 @@ keiyoushi {
 
     source {
         lang = "ko"
-        baseUrl("https://tkor131.com") {
-            withCustom = true
+        baseUrl {
+            custom("https://tkor131.com")
         }
     }
 }

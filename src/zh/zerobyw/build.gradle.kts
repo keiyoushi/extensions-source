@@ -11,8 +11,8 @@ keiyoushi {
     source {
         name = "zero搬运网"
         lang = "zh"
-        baseUrl("http://www.zerobyw33.com") {
-            withCustom = true
+        baseUrl {
+            custom("http://www.zerobyw33.com")
         }
     }
 }

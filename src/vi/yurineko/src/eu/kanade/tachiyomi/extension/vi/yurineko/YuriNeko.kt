@@ -27,8 +27,6 @@ import java.util.Base64
 abstract class YuriNeko : HttpSource() {
     override val supportsLatest = true
 
-    override val id: Long = 4413681066613655890
-
     private val apiUrl = "https://api.${baseUrl.toHttpUrl().host}"
     private val cdnUrl = "https://cdn.${baseUrl.toHttpUrl().host}"
     private val webApiUrl = "$baseUrl/api/v1"

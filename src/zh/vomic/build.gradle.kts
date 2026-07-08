@@ -10,8 +10,8 @@ keiyoushi {
 
     source {
         lang = "zh"
-        baseUrl("https://www.vomicmh.com") {
-            withCustom = true
+        baseUrl {
+            custom("https://www.vomicmh.com")
         }
     }
 }

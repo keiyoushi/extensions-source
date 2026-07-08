@@ -9,8 +9,8 @@ keiyoushi {
     libVersion = "1.4"
 
     source {
-        baseUrl("https://9grid.cc") {
-            withCustom = true
+        baseUrl {
+            custom("https://9grid.cc")
         }
         lang = "ru"
     }
