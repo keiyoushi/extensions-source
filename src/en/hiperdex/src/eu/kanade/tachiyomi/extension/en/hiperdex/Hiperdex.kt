@@ -43,6 +43,14 @@ abstract class Hiperdex :
     override val pageListParseSelector = "div.page-break:not([style*='display:none'])"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val noRemoveTitleBrowsingPref = CheckBoxPreference(screen.context).apply {
+            key = NO_REMOVE_TITLE_BROWSING_PREF
+            title = "Don't apply title cleaning in browsing/search results"
+            summary = "Don't apply the 2 options above when browsing or searching for manga, but still apply them in manga details."
+            setVisible(isRemoveTitleVersion() || customRemoveTitle().isNotEmpty())
+            setDefaultValue(false)
+        }
+
         CheckBoxPreference(screen.context).apply {
             key = "${REMOVE_TITLE_VERSION_PREF}_$lang"
             title = "Remove version information from entry titles"
@@ -51,6 +59,11 @@ abstract class Hiperdex :
                 "To update existing entries, remove them from your library (unfavorite) and refresh manually. " +
                 "You might also want to clear the database in advanced settings."
             setDefaultValue(false)
+            setOnPreferenceChangeListener { _, newValue ->
+                val enabled = newValue as Boolean
+                noRemoveTitleBrowsingPref.setVisible(enabled || customRemoveTitle().isNotEmpty())
+                true
+            }
         }.also { screen.addPreference(it) }
 
         EditTextPreference(screen.context).apply {
@@ -86,6 +99,7 @@ abstract class Hiperdex :
                 val (isValid, message) = validate(newValue as String)
                 if (isValid) {
                     summary = newValue
+                    noRemoveTitleBrowsingPref.setVisible(isRemoveTitleVersion() || newValue.isNotEmpty())
                 } else {
                     Toast.makeText(screen.context, message, Toast.LENGTH_LONG).show()
                 }
@@ -93,19 +107,27 @@ abstract class Hiperdex :
             }
         }.also { screen.addPreference(it) }
 
+        screen.addPreference(noRemoveTitleBrowsingPref)
+
         screen.addRandomUAPreference()
     }
 
     override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
-        title = title.cleanTitleIfNeeded()
+        if (!noCleanTitlesWhileBrowsing()) {
+            title = title.cleanTitleIfNeeded()
+        }
     }
 
     override fun latestUpdatesFromElement(element: Element): SManga = super.latestUpdatesFromElement(element).apply {
-        title = title.cleanTitleIfNeeded()
+        if (!noCleanTitlesWhileBrowsing()) {
+            title = title.cleanTitleIfNeeded()
+        }
     }
 
     override fun searchMangaFromElement(element: Element): SManga = super.searchMangaFromElement(element).apply {
-        title = title.cleanTitleIfNeeded()
+        if (!noCleanTitlesWhileBrowsing()) {
+            title = title.cleanTitleIfNeeded()
+        }
     }
 
     override fun searchMangaSelector() = "#loop-content div.page-listing-item"
@@ -139,9 +161,12 @@ abstract class Hiperdex :
     private fun isRemoveTitleVersion(): Boolean = preferences.getBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", false)
     private fun customRemoveTitle(): String = preferences.getString("${REMOVE_TITLE_CUSTOM_PREF}_$lang", "")!!
 
+    private fun noCleanTitlesWhileBrowsing(): Boolean = preferences.getBoolean(NO_REMOVE_TITLE_BROWSING_PREF, false)
+
     companion object {
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
         private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
+        private const val NO_REMOVE_TITLE_BROWSING_PREF = "NO_REMOVE_TITLE_BROWSING"
 
         private val titleRegex: Regex by lazy {
             Regex(
