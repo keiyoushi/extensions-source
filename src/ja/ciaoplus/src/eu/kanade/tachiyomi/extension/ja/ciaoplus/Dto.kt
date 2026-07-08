@@ -1,14 +1,13 @@
 package eu.kanade.tachiyomi.extension.ja.ciaoplus
 
-import eu.kanade.tachiyomi.extension.ja.ciaoplus.CiaoPlus.Companion.JST
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 @Serializable
 class RankingApiResponse(
@@ -40,8 +39,16 @@ class TitleDetail(
 }
 
 @Serializable
-class LatestTitleListResponse(
-    @SerialName("update_episode_titles") val updateEpisodeTitles: JsonElement?,
+class LatestResponse(
+    @SerialName("today_weekday_index") val todayWeekdayIndex: Int,
+    @SerialName("weekly_list") val weeklyList: List<Weekly>,
+    @SerialName("title_list") val titleList: List<TitleDetail>,
+)
+
+@Serializable
+class Weekly(
+    @SerialName("title_id_list") val titleIdList: List<Int>,
+    @SerialName("weekday_index") val weekdayIndex: Int,
 )
 
 @Serializable
@@ -111,7 +118,7 @@ class Episode(
 
 private fun Int.paddedTitleId(): String = toString().padStart(5, '0')
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {
-    timeZone = JST
+    timeZone = TimeZone.getTimeZone("Asia/Tokyo")
 }
 
 @Serializable

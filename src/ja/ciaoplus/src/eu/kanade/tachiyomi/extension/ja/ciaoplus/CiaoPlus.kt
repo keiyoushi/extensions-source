@@ -11,19 +11,12 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.JsonObject
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import okio.ByteString.Companion.encodeUtf8
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.GregorianCalendar
-import java.util.Locale
-import java.util.TimeZone
 
 @Source
 abstract class CiaoPlus : HttpSource() {
@@ -31,12 +24,6 @@ abstract class CiaoPlus : HttpSource() {
 
     private val apiUrl = "https://api.ciao.shogakukan.co.jp"
     private val pageLimit = 25
-    private val latestRequestDateFormat = SimpleDateFormat("yyyyMMdd", Locale.ROOT).apply {
-        timeZone = JST
-    }
-    private val latestResponseDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
-        timeZone = JST
-    }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -69,30 +56,17 @@ abstract class CiaoPlus : HttpSource() {
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request {
-        val calendar = GregorianCalendar(JST).apply {
-            time = Date()
-            add(Calendar.DAY_OF_MONTH, -(page - 1))
-        }
-        val dateString = latestRequestDateFormat.format(calendar.time)
-        val url = "$apiUrl/web/title/ids".toHttpUrl().newBuilder()
-            .addQueryParameter("updated_at", dateString)
+        val url = "$apiUrl/title/weekly".toHttpUrl().newBuilder()
             .addQueryParameter("platform", "3")
             .build()
         return hashedGet(url)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseAs<LatestTitleListResponse>()
-        val today = GregorianCalendar(JST).time
-        val mangas = (result.updateEpisodeTitles as? JsonObject).orEmpty()
-            .filterKeys {
-                if (it.startsWith("2099")) return@filterKeys false
-                val entryDate = latestResponseDateFormat.parse(it) ?: return@filterKeys false
-                !entryDate.after(today)
-            }
-            .flatMap { (_, v) -> v.parseAs<List<TitleDetail>>() }
-            .distinctBy { it.titleId }
-            .map { it.toSManga() }
+        val result = response.parseAs<LatestResponse>()
+        val todayIdList = result.weeklyList.first { it.weekdayIndex == result.todayWeekdayIndex }.titleIdList
+        val titleById = result.titleList.associateBy { it.titleId }
+        val mangas = todayIdList.mapNotNull { titleById[it]?.toSManga() }
         return MangasPage(mangas, false)
     }
 
@@ -248,8 +222,4 @@ abstract class CiaoPlus : HttpSource() {
 
     // Unsupported
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    companion object {
-        val JST: TimeZone = TimeZone.getTimeZone("Asia/Tokyo")
-    }
 }
