@@ -1,2 +1,2 @@
 # Keep class names for reflection (qualifiedName)
--keepnames class * extends eu.kanade.tachiyomi.extension.all.mangadex.MangaDex
+-keepnames class eu.kanade.tachiyomi.extension.all.mangadex.MangaDex

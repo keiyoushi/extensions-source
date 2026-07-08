@@ -44,8 +44,10 @@ import uy.kohesive.injekt.injectLazy
 import java.util.Locale
 
 @Source
-abstract class Komga :
-    HttpSource(),
+class Komga(
+    override val lang: String,
+    override val id: Long,
+) : HttpSource(),
     ConfigurableSource,
     UnmeteredSource {
 
