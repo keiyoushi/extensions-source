@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
@@ -23,6 +24,8 @@ import java.util.Locale
 @Source
 abstract class Mangadusleri : HttpSource() {
     override val supportsLatest = true
+
+    private val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.US)
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl$BROWSE_PATH")
@@ -169,7 +172,7 @@ abstract class Mangadusleri : HttpSource() {
             SChapter.create().apply {
                 setUrlWithoutDomain(element.attr("href"))
 
-                name = element.selectFirst("div > span")?.text()?.trim() ?: "Bölüm"
+                name = element.selectFirst("div > span")!!.text().trim()
 
                 val dateText = element.select("div > span").last()?.text()
 
@@ -213,11 +216,7 @@ abstract class Mangadusleri : HttpSource() {
 
     private fun String.normalizeImageUrl(): String = if (startsWith("//")) "https:$this" else this
 
-    private fun parseDate(dateStr: String): Long = try {
-        SimpleDateFormat("dd MMM yyyy", Locale.US).parse(dateStr)?.time ?: 0L
-    } catch (_: Exception) {
-        0L
-    }
+    private fun parseDate(dateStr: String): Long = dateFormat.tryParse(dateStr)
 
     companion object {
         private const val SEARCH_PATH = "/search.php"
