@@ -11,8 +11,9 @@ keiyoushi {
     source {
         name = "包子漫画"
         lang = "zh"
-        baseUrl("https://cn.baozimh.com") {
-            mirrors = listOf(
+        baseUrl {
+            mirrors(
+                "https://cn.baozimh.com",
                 "https://tw.baozimh.com",
                 "https://www.baozimh.com",
                 "https://cn.webmota.com",

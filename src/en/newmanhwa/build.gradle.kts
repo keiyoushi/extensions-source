@@ -10,8 +10,11 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl("https://newmanhwa.com") {
-            mirrors = listOf("https://fullmanhwa.com")
+        baseUrl {
+            mirrors(
+                "https://newmanhwa.com",
+                "https://fullmanhwa.com",
+            )
         }
     }
 

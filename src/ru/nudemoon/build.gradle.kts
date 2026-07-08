@@ -9,8 +9,8 @@ keiyoushi {
     libVersion = "1.4"
 
     source {
-        baseUrl("https://nude-moon.org") {
-            withCustom = true
+        baseUrl {
+            custom("https://nude-moon.org")
         }
         lang = "ru"
     }

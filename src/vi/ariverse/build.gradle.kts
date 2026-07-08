@@ -10,8 +10,8 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl("https://arigl.xyz") {
-            withCustom = true
+        baseUrl {
+            custom("https://arigl.xyz")
         }
         id = 4480433466073326866
     }

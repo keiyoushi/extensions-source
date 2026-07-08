@@ -10,8 +10,8 @@ keiyoushi {
 
     source {
         lang = "es"
-        baseUrl("https://zonaikigai.gamesview.shop") {
-            withCustom = true
+        baseUrl {
+            custom("https://zonaikigai.gamesview.shop")
         }
         versionId = 2
     }

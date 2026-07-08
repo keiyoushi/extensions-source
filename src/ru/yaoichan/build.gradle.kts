@@ -10,8 +10,8 @@ keiyoushi {
     theme = "multichan"
 
     source {
-        baseUrl("https://yaoi-chan.me") {
-            withCustom = true
+        baseUrl {
+            custom("https://yaoi-chan.me")
         }
         lang = "ru"
         id = 2466512768990363955L

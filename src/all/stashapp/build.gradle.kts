@@ -10,8 +10,8 @@ keiyoushi {
 
     source {
         lang = "all"
-        baseUrl("http://localhost:9999") {
-            withCustom = true
+        baseUrl {
+            custom("http://localhost:9999")
         }
     }
 }

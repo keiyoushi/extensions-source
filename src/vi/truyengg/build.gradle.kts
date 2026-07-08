@@ -10,8 +10,8 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl("https://foxtruyen2.com") {
-            withCustom = true
+        baseUrl {
+            custom("https://foxtruyen2.com")
         }
         id = 1458993267006200127
     }

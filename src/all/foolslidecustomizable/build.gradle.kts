@@ -11,8 +11,8 @@ keiyoushi {
 
     source {
         lang = "other"
-        baseUrl("https://127.0.0.1") {
-            withCustom = true
+        baseUrl {
+            custom("https://127.0.0.1")
         }
     }
 }

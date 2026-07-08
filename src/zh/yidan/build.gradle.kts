@@ -11,8 +11,8 @@ keiyoushi {
     source {
         name = "一耽女孩"
         lang = "zh"
-        baseUrl("https://yidan9.club") {
-            withCustom = true
+        baseUrl {
+            custom("https://yidan9.club")
         }
     }
 }

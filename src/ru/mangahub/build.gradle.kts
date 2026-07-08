@@ -9,8 +9,8 @@ keiyoushi {
     libVersion = "1.4"
 
     source {
-        baseUrl("https://mangahub.ru") {
-            withCustom = true
+        baseUrl {
+            custom("https://mangahub.ru")
         }
         lang = "ru"
     }
