@@ -12,8 +12,8 @@ class SortFilter :
     UriPartFilter(
         "Sıralama",
         arrayOf(
-            Pair("En Yeni", "latest"),
             Pair("En Çok Okunan", "popular"),
+            Pair("En Yeni", "latest"),
             Pair("Biten Seriler", "completed"),
             Pair("Eskiden Yeniye", "oldest"),
         ),

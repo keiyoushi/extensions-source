@@ -81,10 +81,17 @@ abstract class Mangadusleri : HttpSource() {
         val order = filterList.firstInstanceOrNull<SortFilter>()?.toUriPart() ?: LASTEST_SORT
 
         val url = if (query.isNotBlank()) {
-            "$baseUrl$SEARCH_PATH".toHttpUrl().newBuilder()
-                .addQueryParameter("q", query)
-                .addQueryParameter("page", page.toString())
-                .build()
+            if (KNOWN_GENRES.any { it.equals(query, ignoreCase = true) }) {
+                "$baseUrl$GENRE_PATH".toHttpUrl().newBuilder()
+                    .addQueryParameter("name", query)
+                    .addQueryParameter("page", page.toString())
+                    .build()
+            } else {
+                "$baseUrl$SEARCH_PATH".toHttpUrl().newBuilder()
+                    .addQueryParameter("q", query)
+                    .addQueryParameter("page", page.toString())
+                    .build()
+            }
         } else {
             "$baseUrl$BROWSE_PATH".toHttpUrl().newBuilder()
                 .addQueryParameter("page", page.toString())
@@ -215,7 +222,14 @@ abstract class Mangadusleri : HttpSource() {
     companion object {
         private const val SEARCH_PATH = "/search.php"
         private const val BROWSE_PATH = "/latest.php"
+        private const val GENRE_PATH = "/genre.php"
         private const val LASTEST_SORT = "latest"
         private const val POPULAR_SORT = "popular"
+
+        private val KNOWN_GENRES = listOf(
+            "+18", "Aksiyon", "Cinsellik", "Drama", "Kavga",
+            "Manhwa", "Romantic", "Romantik", "Romatik", "roamtik",
+            "Smut", "Tarih", "Yaoi", "Yetişkin",
+        )
     }
 }
