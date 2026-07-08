@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 import sys
+from functools import cache
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -15,7 +16,11 @@ import index_pb2
 APPLICATION_ICON_320_REGEX = re.compile(r"^application-icon-320:'([^']+)'", re.MULTILINE)
 LANGUAGE_REGEX = re.compile(r"tachiyomi-([^.]+)")
 
-*_, ANDROID_BUILD_TOOLS = (Path(os.environ["ANDROID_HOME"]) / "build-tools").iterdir()
+
+@cache
+def aapt() -> Path:
+    *_, build_tools = (Path(os.environ["ANDROID_HOME"]) / "build-tools").iterdir()
+    return build_tools / "aapt"
 
 # Artifacts downloaded from the build jobs: one APK per extension plus the source metadata JSON
 # emitted by each assembleRelease.
@@ -57,7 +62,7 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
     (REPO_APK_DIR / apk_name).write_bytes(apk.read_bytes())
 
     badging = subprocess.check_output(
-        [ANDROID_BUILD_TOOLS / "aapt", "dump", "--include-meta-data", "badging", apk]
+        [aapt(), "dump", "--include-meta-data", "badging", apk]
     ).decode()
     application_icon = APPLICATION_ICON_320_REGEX.search(badging).group(1)
     with (
