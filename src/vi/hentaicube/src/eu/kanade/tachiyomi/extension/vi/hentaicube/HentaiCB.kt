@@ -13,11 +13,11 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONObject
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import rx.Observable
@@ -183,14 +183,14 @@ abstract class HentaiCB : Madara() {
         val referer = chapterUrl
 
         // Step 1: Get initial token + session from challenge endpoint
-        var challengeJson = fetchChallenge(referer, cookies)
-        var token = challengeJson.getString("token")
-        var session = challengeJson.getString("session")
+        var challenge = fetchChallenge(referer, cookies)
+        var token: String? = challenge.token
+        var session = challenge.session
 
         // Step 2: Paginate images using token-based pagination
         val allImages = mutableListOf<String>()
 
-        while (token.isNotEmpty()) {
+        while (!token.isNullOrEmpty()) {
             val pagesUrl = baseUrl.toHttpUrl().newBuilder()
                 .addPathSegments("wp-json/manga-reader/v1/pages")
                 .addQueryParameter("token", token)
@@ -205,38 +205,24 @@ abstract class HentaiCB : Madara() {
                 .build()
 
             val pagesResponse = client.newCall(pagesRequest).execute()
-            val pagesJson = JSONObject(pagesResponse.body?.string().orEmpty())
-            pagesResponse.close()
+            val pages = pagesResponse.parseAs<PagesResponse>()
 
-            val items = pagesJson.optJSONArray("items") ?: break
-            if (items.length() == 0) break
+            if (pages.items.isEmpty()) break
 
-            for (i in 0 until items.length()) {
-                allImages.add(items.getString(i))
-            }
+            allImages += pages.items
 
-            val responseSession = pagesJson.optString("session", null)
-            if (responseSession != null) {
-                session = responseSession
-            }
+            pages.session?.let { session = it }
 
-            val protocolAction = pagesJson.optJSONObject("protocol_policy")
-                ?.optString("action", "continue") ?: "continue"
-
-            when (protocolAction) {
+            when (pages.protocolPolicy?.action) {
                 "refresh_challenge" -> {
-                    challengeJson = fetchChallenge(referer, cookies, session)
-                    token = challengeJson.getString("token")
-                    session = challengeJson.getString("session")
+                    challenge = fetchChallenge(referer, cookies, session)
+                    token = challenge.token
+                    session = challenge.session
                     continue
                 }
                 "done" -> break
                 else -> {
-                    token = if (pagesJson.optBoolean("done", true)) {
-                        null
-                    } else {
-                        pagesJson.optString("next_token", null)
-                    }
+                    token = if (pages.done) null else pages.nextToken
                 }
             }
         }
@@ -246,7 +232,7 @@ abstract class HentaiCB : Madara() {
         }
     }
 
-    private fun fetchChallenge(referer: String, cookies: String, fromSession: String? = null): JSONObject {
+    private fun fetchChallenge(referer: String, cookies: String, fromSession: String? = null): ChallengeResponse {
         val urlBuilder = baseUrl.toHttpUrl().newBuilder()
             .addPathSegments("wp-json/manga-reader/v1/challenge")
 
@@ -261,10 +247,7 @@ abstract class HentaiCB : Madara() {
             .header("Cookie", cookies)
             .build()
 
-        val challengeResponse = client.newCall(challengeRequest).execute()
-        val json = JSONObject(challengeResponse.body?.string().orEmpty())
-        challengeResponse.close()
-        return json
+        return client.newCall(challengeRequest).execute().parseAs()
     }
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
