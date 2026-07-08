@@ -45,6 +45,18 @@ class SeriesDetails(
     val adult: Boolean = false,
     val badge: String? = null,
     val status: String? = null,
+    val description: String? = null,
+    @SerialName("tag_series") val tags: List<TagWrapper>? = emptyList(),
+)
+
+@Serializable
+class TagWrapper(
+    val tag: Tag,
+)
+
+@Serializable
+class Tag(
+    val name: String,
 )
 
 @Serializable
@@ -69,6 +81,11 @@ class ChapterList(
         }
     }
 }
+
+@Serializable
+class PagesList(
+    val pages: List<String>,
+)
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
 
