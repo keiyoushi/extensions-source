@@ -3,13 +3,14 @@ plugins {
 }
 
 keiyoushi {
-    name = "InkStory"
-    versionCode = 4
+    name = "XYZ Comics"
+    versionCode = 7
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
     source {
-        lang = "ru"
-        baseUrl = "https://inkstory.net"
+        name = "XYZ Comics"
+        lang = "en"
+        baseUrl = "https://xyzcomics.com"
     }
 }
