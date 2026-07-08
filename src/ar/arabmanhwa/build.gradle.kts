@@ -4,14 +4,10 @@ plugins {
 
 keiyoushi {
     name = "ArabManhwa"
-    versionCode = 0
+    className = "ArabManhwa"
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-
-    source {
-        name = "ArabManhwa"
-        lang = "ar"
-        baseUrl = "https://arabmanhwa.com"
-    }
+    baseUrl = "https://arabmanhwa.com"
 }
