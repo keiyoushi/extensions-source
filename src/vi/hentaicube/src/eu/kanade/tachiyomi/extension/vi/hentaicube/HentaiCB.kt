@@ -182,32 +182,18 @@ abstract class HentaiCB : Madara() {
 
         val referer = chapterUrl
 
-        // Step 1: Get token + session from challenge endpoint
-        val challengeUrl = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("wp-json/manga-reader/v1/challenge")
-            .build()
-
-        val challengeRequest = Request.Builder()
-            .url(challengeUrl)
-            .header("Accept", "application/json")
-            .header("Referer", referer)
-            .header("Cookie", cookies)
-            .build()
-
-        val challengeResponse = client.newCall(challengeRequest).execute()
-        val challengeJson = JSONObject(challengeResponse.body?.string().orEmpty())
-        challengeResponse.close()
-        val token = challengeJson.getString("token")
-        val session = challengeJson.getString("session")
+        // Step 1: Get initial token + session from challenge endpoint
+        var challengeJson = fetchChallenge(referer, cookies)
+        var token = challengeJson.getString("token")
+        var session = challengeJson.getString("session")
 
         // Step 2: Paginate images using token-based pagination
         val allImages = mutableListOf<String>()
-        var currentToken: String? = token
 
-        while (currentToken != null) {
+        while (token.isNotEmpty()) {
             val pagesUrl = baseUrl.toHttpUrl().newBuilder()
                 .addPathSegments("wp-json/manga-reader/v1/pages")
-                .addQueryParameter("token", currentToken)
+                .addQueryParameter("token", token)
                 .build()
 
             val pagesRequest = Request.Builder()
@@ -229,12 +215,56 @@ abstract class HentaiCB : Madara() {
                 allImages.add(items.getString(i))
             }
 
-            currentToken = if (pagesJson.optBoolean("done", true)) null else pagesJson.optString("next_token", null)
+            val responseSession = pagesJson.optString("session", null)
+            if (responseSession != null) {
+                session = responseSession
+            }
+
+            val protocolAction = pagesJson.optJSONObject("protocol_policy")
+                ?.optString("action", "continue") ?: "continue"
+
+            when (protocolAction) {
+                "refresh_challenge" -> {
+                    challengeJson = fetchChallenge(referer, cookies, session)
+                    token = challengeJson.getString("token")
+                    session = challengeJson.getString("session")
+                    continue
+                }
+                "done" -> break
+                else -> {
+                    token = if (pagesJson.optBoolean("done", true)) {
+                        null
+                    } else {
+                        pagesJson.optString("next_token", null)
+                    }
+                }
+            }
         }
 
         return allImages.mapIndexed { i, imageUrl ->
             Page(i, chapterUrl, imageUrl)
         }
+    }
+
+    private fun fetchChallenge(referer: String, cookies: String, fromSession: String? = null): JSONObject {
+        val urlBuilder = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments("wp-json/manga-reader/v1/challenge")
+
+        if (fromSession != null) {
+            urlBuilder.addQueryParameter("from_session", fromSession)
+        }
+
+        val challengeRequest = Request.Builder()
+            .url(urlBuilder.build())
+            .header("Accept", "application/json")
+            .header("Referer", referer)
+            .header("Cookie", cookies)
+            .build()
+
+        val challengeResponse = client.newCall(challengeRequest).execute()
+        val json = JSONObject(challengeResponse.body?.string().orEmpty())
+        challengeResponse.close()
+        return json
     }
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
