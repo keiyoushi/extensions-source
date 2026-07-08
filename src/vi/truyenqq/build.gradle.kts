@@ -10,8 +10,8 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl("https://truyenqqko.com") {
-            withCustom = true
+        baseUrl {
+            custom("https://truyenqqko.com")
         }
     }
 }

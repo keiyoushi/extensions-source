@@ -11,8 +11,8 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl("https://monochromecms.netlify.app") {
-            withCustom = true
+        baseUrl {
+            custom("https://monochromecms.netlify.app")
         }
     }
 }

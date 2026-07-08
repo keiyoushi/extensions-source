@@ -21,8 +21,6 @@ abstract class ManhwaScan : HttpSource() {
 
     override val supportsLatest = true
 
-    override val id: Long = 7172992930543738693
-
     private val apiUrl = "$baseUrl/api"
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)

@@ -28,8 +28,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class Mangahere : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
-    override val id: Long = 2
-
     override val supportsLatest = true
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()

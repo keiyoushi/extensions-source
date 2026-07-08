@@ -40,9 +40,6 @@ abstract class MangoTheme :
     HttpSource(),
     ConfigurableSource {
 
-    abstract override val name: String
-    abstract override val baseUrl: String
-    abstract override val lang: String
     protected abstract val encryptionKey: String
 
     protected open val apiUrl: String

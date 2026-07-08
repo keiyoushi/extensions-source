@@ -11,8 +11,8 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl("https://gantzvn.com") {
-            withCustom = true
+        baseUrl {
+            custom("https://gantzvn.com")
         }
     }
 }

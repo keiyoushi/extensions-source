@@ -12,7 +12,6 @@ keiyoushi {
         name = "禁漫天堂"
         lang = "zh"
         baseUrl = "https://18comic.vip"
-        skipCodeGen = true
     }
 
     deeplink {

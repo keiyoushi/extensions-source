@@ -12,6 +12,5 @@ keiyoushi {
         name = "漫蛙"
         lang = "zh"
         baseUrl = "https://manwa.me"
-        skipCodeGen = true
     }
 }

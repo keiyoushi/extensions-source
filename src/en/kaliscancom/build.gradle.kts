@@ -11,8 +11,9 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl("https://kaliscan.com") {
-            mirrors = listOf(
+        baseUrl {
+            mirrors(
+                "https://kaliscan.com",
                 "https://kaliscan.me",
                 "https://kaliscan.io",
                 "https://mgjinx.com",

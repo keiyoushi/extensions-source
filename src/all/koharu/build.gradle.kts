@@ -12,8 +12,14 @@ keiyoushi {
         source {
             lang = it
             if (it == "en") id = 1484902275639232927L
-            baseUrl("https://schale.network") {
-                mirrors = listOf("https://anchira.to", "https://gehenna.jp", "https://niyaniya.moe", "https://shupogaki.moe")
+            baseUrl {
+                mirrors(
+                    "https://schale.network",
+                    "https://anchira.to",
+                    "https://gehenna.jp",
+                    "https://niyaniya.moe",
+                    "https://shupogaki.moe",
+                )
             }
         }
     }

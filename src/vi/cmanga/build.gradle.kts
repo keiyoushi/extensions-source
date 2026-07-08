@@ -10,8 +10,8 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl("https://cmangax17.com") {
-            withCustom = true
+        baseUrl {
+            custom("https://cmangax17.com")
         }
     }
 }
