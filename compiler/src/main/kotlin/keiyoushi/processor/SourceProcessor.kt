@@ -44,21 +44,16 @@ data class LocaleStrings(
 @Serializable
 data class BaseUrlSpecData(
     val type: String,
-    val urls: List<String>,
-    val withCustom: Boolean = false,
-    val entries: List<String>? = null,
-    val values: List<String>? = null,
-) {
-    val defaultUrl: String get() = urls.first()
-}
     val defaultUrl: String,
     val mirrors: List<MirrorData> = emptyList(),
+    val withCustom: Boolean = false,
 )
 
 @Serializable
 data class MirrorData(
     val url: String,
     val label: String = "",
+    val value: String = "",
 )
 
 @Serializable
@@ -76,8 +71,6 @@ private fun KSClassDeclaration.derivesFromHttpSource(): Boolean =
 
 private val configurable = ClassName("eu.kanade.tachiyomi.source", "ConfigurableSource")
 private val preferenceScreen = ClassName("androidx.preference", "PreferenceScreen")
-private val mirrorPrefsClass = ClassName("keiyoushi.source", "MirrorPreferences")
-private val customUrlPrefsClass = ClassName("keiyoushi.source", "CustomUrlPreferences")
 private val customAndMirrorPrefsClass = ClassName("keiyoushi.source", "CustomAndMirrorPreferences")
 private val getPreferencesFn = MemberName("keiyoushi.utils", "getPreferences")
 
@@ -292,7 +285,7 @@ class SourceProcessor(
         if ("name" !in ctorParams && "name" in overridden) {
             logger.warn("name is provided by $className; the DSL name is used for metadata only.", node)
         }
-        
+
         if ("baseUrl" !in ctorParams && "baseUrl" in overridden) {
             logger.warn("baseUrl is provided by $className; the DSL baseUrl is used for metadata/hosts only.", node)
         }
@@ -370,52 +363,53 @@ class SourceProcessor(
                         .build(),
                 )
             }
-            urlSpec.type == "mirrors" -> {
+            urlSpec.type == "mirrors" || urlSpec.type == "custom" -> {
                 val strings = stringsForLang(source.lang)
-                val prefsName = "mirrorPrefs$suffix"
+                val prefsName = "baseUrlPrefs$suffix"
                 val initializer = CodeBlock.builder()
-                    .add("%T(\n", mirrorPrefsClass)
+                    .add("%T(\n", customAndMirrorPrefsClass)
                     .indent()
                     .add("preferences = %M(%LL),\n", getPreferencesFn, source.id)
-                    .add("mirrors = arrayOf(\n")
+                    .add("mirrors = listOf(\n")
                     .indent()
                     .apply {
                         urlSpec.mirrors.forEach { mirror ->
-                            add("%S to %S,\n", mirror.label, mirror.url)
+                            add("%S,\n", mirror.url)
                         }
                     }
                     .unindent()
                     .add("),\n")
-                    .add("title = %S,\n", strings.mirrorTitle)
-                    .unindent()
-                    .add(")")
-                    .build()
-                fileProps += PropertySpec.builder(prefsName, mirrorPrefsClass)
-                    .addModifiers(KModifier.PRIVATE)
-                    .initializer(initializer)
-                    .build()
-                addProperty(
-                    PropertySpec.builder("baseUrl", String::class.asClassName(), KModifier.OVERRIDE)
-                        .getter(FunSpec.getterBuilder().addStatement("return %N.baseUrl", prefsName).build())
-                        .build(),
-                )
-                addPreferenceScreen(isConfigurable) { addStatement("%N.setupPreferenceScreen(screen)", prefsName) }
-                if (!isConfigurable) addSuperinterface(configurable)
-            }
-            urlSpec.type == "custom" -> {
-                val strings = stringsForLang(source.lang)
-                val prefsName = "customUrlPrefs$suffix"
-                val initializer = CodeBlock.builder()
-                    .add("%T(\n", customUrlPrefsClass)
-                    .indent()
-                    .add("preferences = %M(%LL),\n", getPreferencesFn, source.id)
                     .add("defaultUrl = %S,\n", urlSpec.defaultUrl)
-                    .add("title = %S,\n", strings.customUrlTitle)
-                    .add("dialogMessage = %S,\n", strings.customUrlDialogMessage)
+                    .add("withCustom = %L,\n", urlSpec.withCustom)
+                    .add("mirrorTitle = %S,\n", strings.mirrorTitle)
+                    .add("customTitle = %S,\n", strings.customUrlTitle)
+                    .add("customDialogMessage = %S,\n", strings.customUrlDialogMessage)
+                    .apply {
+                        if (urlSpec.mirrors.any { it.label.isNotBlank() }) {
+                            add("mirrorEntries = listOf(\n")
+                            indent()
+                            urlSpec.mirrors.forEach { mirror ->
+                                val label = mirror.label.takeIf { it.isNotBlank() } ?: mirror.url
+                                add("%S,\n", label)
+                            }
+                            unindent()
+                            add("),\n")
+                        }
+                        if (urlSpec.mirrors.any { it.value.isNotBlank() }) {
+                            add("mirrorEntryValues = listOf(\n")
+                            indent()
+                            urlSpec.mirrors.forEach { mirror ->
+                                val value = mirror.value.takeIf { it.isNotBlank() } ?: urlSpec.mirrors.indexOf(mirror).toString()
+                                add("%S,\n", value)
+                            }
+                            unindent()
+                            add("),\n")
+                        }
+                    }
                     .unindent()
                     .add(")")
                     .build()
-                fileProps += PropertySpec.builder(prefsName, customUrlPrefsClass)
+                fileProps += PropertySpec.builder(prefsName, customAndMirrorPrefsClass)
                     .addModifiers(KModifier.PRIVATE)
                     .initializer(initializer)
                     .build()
@@ -443,24 +437,6 @@ class SourceProcessor(
                 .build(),
         )
     }
-
-    private fun List<String>?.toCodeBlock(isListOf: Boolean = true): CodeBlock {
-        if (this == null) return CodeBlock.of("null")
-        return CodeBlock.builder().apply {
-            if (isListOf) add("listOf(")
-            forEachIndexed { i, s ->
-                if (i > 0) add(", ")
-                add("%S", s)
-            }
-            if (isListOf) add(")")
-        }.build()
-    }
-
-    private data class PreferenceConfig(
-        val mirrors: CodeBlock,
-        val entries: CodeBlock,
-        val values: CodeBlock,
-    )
 
     class Provider : SymbolProcessorProvider {
         override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor =

@@ -224,30 +224,31 @@ private data class ResolvedSourceData(val name: String, val lang: String, val id
 @Serializable
 private data class BaseUrlSpecData(
     val type: String,
-    val urls: List<String>,
-    val withCustom: Boolean = false,
-    val entries: List<String>? = null,
-    val values: List<String>? = null,
-)
-
-private fun BaseUrlSpec.toData(): BaseUrlSpecData = when (this) {
-    is BaseUrlSpec.Static -> BaseUrlSpecData("static", listOf(url))
-    is BaseUrlSpec.Mirrors -> BaseUrlSpecData("mirrors", mirrors, withCustom, entries, values)
-    is BaseUrlSpec.Custom -> BaseUrlSpecData("custom", listOf(defaultUrl))
     val defaultUrl: String,
     val mirrors: List<MirrorData> = emptyList(),
+    val withCustom: Boolean = false,
 )
 
 @Serializable
 private data class MirrorData(
     val url: String,
     val label: String = "",
+    val value: String = "",
 )
 
 private fun BaseUrlSpec.toData(): BaseUrlSpecData = when (this) {
     is BaseUrlSpec.Static -> BaseUrlSpecData("static", url)
-    is BaseUrlSpec.Mirrors -> BaseUrlSpecData("mirrors", mirrors.first().url, mirrors.map { MirrorData(it.url, it.label.orEmpty()) })
-    is BaseUrlSpec.Custom -> BaseUrlSpecData("custom", defaultUrl)
+    is BaseUrlSpec.Mirrors -> BaseUrlSpecData(
+        type = "mirrors",
+        defaultUrl = mirrors.first().url,
+        mirrors = mirrors.map { MirrorData(it.url, it.label.orEmpty(), it.value.orEmpty()) },
+    )
+    is BaseUrlSpec.Custom -> BaseUrlSpecData(
+        type = "custom",
+        defaultUrl = defaultUrl,
+        mirrors = mirrors.map { MirrorData(it.url, it.label.orEmpty(), it.value.orEmpty()) },
+        withCustom = true,
+    )
 }
 
 private fun computeSourceId(name: String, lang: String, versionId: Int = 1): Long {

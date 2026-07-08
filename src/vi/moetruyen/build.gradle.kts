@@ -10,10 +10,9 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl("https://moetruyen.net") {
-            entries.add("MoeTruyen.net (Trong nước)")
-            values.add("default")
-
+        baseUrl {
+            custom("https://moetruyen.net")
+            mirrorSpecial.add("https://moetruyen.net", "MoeTruyen.net (Trong nước)", "default")
             mirrorSpecial.add("https://truyen.moe", "Truyen.moe (Quốc tế)", "global")
         }
     }
