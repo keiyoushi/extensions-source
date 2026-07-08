@@ -45,7 +45,7 @@ class WorkDto(
     @SerialName("workable_id") val workableId: Int? = null,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = "/works/$id"
+        url = id.toString()
         title = name
         author = authorName
         description = this@WorkDto.description
@@ -116,7 +116,7 @@ class ChapterDto(
     @SerialName("processing_status") val processingStatus: String? = null,
 ) {
     fun toSChapter() = SChapter.create().apply {
-        url = "/chapters/$id"
+        url = id.toString()
         chapter_number = number.toFloatOrNull() ?: -1f
         name = this@ChapterDto.name?.ifEmpty { "Chapter $number" } ?: "Chapter $number"
         date_upload = DATE_FORMAT.tryParse(createdAt)
