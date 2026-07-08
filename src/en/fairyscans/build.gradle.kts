@@ -10,6 +10,6 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl = "https://fairyscans.org/"
+        baseUrl = "https://fairyscans.org"
     }
 }
