@@ -132,8 +132,7 @@ abstract class SinhSieuSao : HttpSource() {
     // ============================== Details =======================================
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val workId = manga.url.substringAfterLast("/")
-        val url = "$baseUrl/api/v1/works/$workId".toHttpUrl()
+        val url = "$baseUrl/api/v1/works/${manga.url}".toHttpUrl()
         return GET(url, headers)
     }
 
@@ -149,7 +148,7 @@ abstract class SinhSieuSao : HttpSource() {
     // ============================== Chapters ======================================
 
     override fun chapterListRequest(manga: SManga): Request {
-        val workId = manga.url.substringAfterLast("/")
+        val workId = manga.url
         val albumId = albumIds[workId.toIntOrNull()]
         if (albumId != null) {
             return GET("$baseUrl/api/v1/albums/$albumId?limit=200&offset=0&photos_sort=oldest".toHttpUrl(), headers)
@@ -179,7 +178,7 @@ abstract class SinhSieuSao : HttpSource() {
             val album = response.parseAs<AlbumResponse>()
             return listOf(
                 SChapter.create().apply {
-                    this.url = "/album/${album.id}"
+                    this.url = "album:${album.id}"
                     name = "Oneshot"
                     chapter_number = 1f
                     date_upload = DATE_FORMAT.tryParse(album.createdAt)
@@ -199,13 +198,13 @@ abstract class SinhSieuSao : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterUrl = chapter.url
 
-        if (chapterUrl.startsWith("/album/")) {
-            val albumId = chapterUrl.substringAfterLast("/")
+        if (chapterUrl.startsWith("album:")) {
+            val albumId = chapterUrl.removePrefix("album:")
             val url = "$baseUrl/api/v1/albums/$albumId?limit=200&offset=0&photos_sort=oldest".toHttpUrl()
             return GET(url, headers)
         }
 
-        val chapterId = chapterUrl.substringAfterLast("/")
+        val chapterId = chapterUrl
         val url = "$baseUrl/api/v1/chapters/$chapterId".toHttpUrl()
         return GET(url, headers)
     }
