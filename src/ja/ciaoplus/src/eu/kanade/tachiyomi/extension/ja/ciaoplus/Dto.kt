@@ -1,11 +1,14 @@
 package eu.kanade.tachiyomi.extension.ja.ciaoplus
 
+import eu.kanade.tachiyomi.extension.ja.ciaoplus.CiaoPlus.Companion.JST
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import java.text.SimpleDateFormat
+import java.util.Locale
 
 @Serializable
 class RankingApiResponse(
@@ -24,12 +27,12 @@ class TitleListResponse(
 
 @Serializable
 class TitleDetail(
-    @SerialName("title_id") private val titleId: Int,
+    @SerialName("title_id") val titleId: Int,
     @SerialName("title_name") private val titleName: String,
     @SerialName("thumbnail_image_url") private val thumbnailImageUrl: String?,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
-        val paddedId = titleId.toString().padStart(5, '0')
+        val paddedId = titleId.paddedTitleId()
         url = "/comics/title/$paddedId"
         title = titleName
         thumbnail_url = thumbnailImageUrl
@@ -38,22 +41,43 @@ class TitleDetail(
 
 @Serializable
 class LatestTitleListResponse(
-    @SerialName("update_episode_titles") val updateEpisodeTitles: Map<String, List<LatestTitleDetail>>,
+    @SerialName("update_episode_titles") val updateEpisodeTitles: JsonElement?,
 )
 
 @Serializable
-class LatestTitleDetail(
-    @SerialName("title_id") val titleId: Int,
-    @SerialName("title_name") private val titleName: String,
-    @SerialName("thumbnail_image") private val thumbnailImageUrl: String?,
+class DetailResponse(
+    @SerialName("title_list") val webTitle: List<WebTitle>,
+)
+
+@Serializable
+class WebTitle(
+    @SerialName("title_name") val titleName: String,
+    @SerialName("author_text") private val authorText: String?,
+    @SerialName("introduction_text") private val introductionText: String?,
+    @SerialName("genre_id_list") val genreIdList: List<Int>?,
+    @SerialName("episode_id_list") val episodeIdList: List<Int>,
+    @SerialName("new_episode_update_cycle_text") val newEpisodeUpdateCycleText: String?,
 ) {
-    fun toSManga(): SManga = SManga.create().apply {
-        val paddedId = titleId.toString().padStart(5, '0')
-        url = "/comics/title/$paddedId"
+    fun toSManga(genre: String?): SManga = SManga.create().apply {
         title = titleName
-        thumbnail_url = thumbnailImageUrl
+        author = authorText
+        description = buildString {
+            introductionText?.let { append(it) }
+            newEpisodeUpdateCycleText?.let { append("\n\n$it") }
+        }
+        this.genre = genre
     }
 }
+
+@Serializable
+class GenreListResponse(
+    @SerialName("genre_list") val genreList: List<GenreDetail>?,
+)
+
+@Serializable
+class GenreDetail(
+    @SerialName("genre_name") val genreName: String,
+)
 
 @Serializable
 class EpisodeListResponse(
@@ -65,66 +89,34 @@ class Episode(
     @SerialName("episode_id") private val episodeId: Int,
     @SerialName("episode_name") private val episodeName: String,
     private val index: Int,
-    @SerialName("start_time") private val startTime: String,
-    private val point: Int,
+    @SerialName("start_time") private val startTime: String?,
     @SerialName("title_id") private val titleId: Int,
-    private val badge: Int,
-    @SerialName("rental_finish_time") private val rentalFinishTime: String? = null,
 ) {
-    fun toSChapter(mangaTitle: String, dateFormat: SimpleDateFormat): SChapter = SChapter.create().apply {
-        val paddedId = titleId.toString().padStart(5, '0')
+    fun toSChapter(mangaTitle: String): SChapter = SChapter.create().apply {
+        val paddedId = titleId.paddedTitleId()
         url = "/comics/title/$paddedId/episode/$episodeId"
 
         val originalChapterName = episodeName.trim()
-        val chapterName = if (originalChapterName.startsWith(mangaTitle.trim())) {
+        name = if (originalChapterName.startsWith(mangaTitle.trim())) {
             // If entry title is in chapter name, that part of the chapter name is missing, so index is added here to the name
             "【第${index}話】 $originalChapterName"
         } else {
             originalChapterName
         }
 
-        // It is possible to read paid chapters even though you have to purchase them on the website, so leaving this here in case they change it
-        /*
-        name = if (point > 0 && badge != 3 && rentalFinishTime == null) {
-            "🔒 $chapterName"
-        } else {
-            chapterName
-        }
-         */
-
-        name = chapterName
         chapter_number = index.toFloat()
         date_upload = dateFormat.tryParse(startTime)
     }
 }
 
-@Serializable
-class DetailResponse(
-    @SerialName("title_list") val webTitle: List<WebTitle>,
-)
-
-@Serializable
-class WebTitle(
-    @SerialName("title_name") val titleName: String,
-    @SerialName("author_text") val authorText: String,
-    @SerialName("introduction_text") val introductionText: String,
-    @SerialName("genre_id_list") val genreIdList: List<Int>,
-    @SerialName("episode_id_list") val episodeIdList: List<Int>,
-)
+private fun Int.paddedTitleId(): String = toString().padStart(5, '0')
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {
+    timeZone = JST
+}
 
 @Serializable
 class ViewerApiResponse(
     @SerialName("page_list") val pageList: List<String>,
     @SerialName("scramble_seed") val scrambleSeed: Long,
     @SerialName("scramble_ver") val scrambleVer: Int,
-)
-
-@Serializable
-class GenreListResponse(
-    @SerialName("genre_list") val genreList: List<GenreDetail>,
-)
-
-@Serializable
-class GenreDetail(
-    @SerialName("genre_name") val genreName: String,
 )
