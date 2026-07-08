@@ -10,8 +10,8 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl("https://vinahentai.club") {
-            withCustom = true
+        baseUrl {
+            custom("https://vinahentai.club")
         }
     }
 }

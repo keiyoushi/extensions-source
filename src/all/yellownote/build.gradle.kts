@@ -11,8 +11,8 @@ keiyoushi {
     source {
         name = "小黄书"
         lang = "zh-Hans"
-        baseUrl("https://xchina.co") {
-            withCustom = true
+        baseUrl {
+            custom("https://xchina.co")
         }
         id = 170542391855030753
     }
@@ -20,32 +20,32 @@ keiyoushi {
     source {
         name = "小黄书"
         lang = "zh-Hant"
-        baseUrl("https://tw.xchina.co") {
-            withCustom = true
+        baseUrl {
+            custom("https://tw.xchina.co")
         }
     }
 
     source {
         name = "小黄书"
         lang = "en"
-        baseUrl("https://en.xchina.co") {
-            withCustom = true
+        baseUrl {
+            custom("https://en.xchina.co")
         }
     }
 
     source {
         name = "小黄书"
         lang = "es"
-        baseUrl("https://es.xchina.co") {
-            withCustom = true
+        baseUrl {
+            custom("https://es.xchina.co")
         }
     }
 
     source {
         name = "小黄书"
         lang = "ko"
-        baseUrl("https://kr.xchina.co") {
-            withCustom = true
+        baseUrl {
+            custom("https://kr.xchina.co")
         }
     }
 }

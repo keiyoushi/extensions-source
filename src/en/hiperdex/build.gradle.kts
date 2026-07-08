@@ -11,8 +11,8 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl("https://hiperdex.com") {
-            withCustom = true
+        baseUrl {
+            custom("https://hiperdex.com")
         }
     }
 }

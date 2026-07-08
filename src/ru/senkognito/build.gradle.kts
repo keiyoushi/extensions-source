@@ -10,9 +10,10 @@ keiyoushi {
     theme = "senkuro"
 
     source {
-        baseUrl("https://senkuro.me") {
-            mirrors = listOf(
-                "https://senkognito.com",
+        baseUrl {
+            mirrors(
+                "Россия" to "https://senkuro.me",
+                "Публичный" to "https://senkognito.com",
             )
         }
         lang = "ru"

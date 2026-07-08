@@ -9,8 +9,8 @@ keiyoushi {
     libVersion = "1.4"
 
     source {
-        baseUrl("https://desu.uno") {
-            withCustom = true
+        baseUrl {
+            custom("https://desu.uno")
         }
         lang = "ru"
         id = 6684416167758830305L

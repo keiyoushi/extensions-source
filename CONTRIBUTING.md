@@ -416,12 +416,24 @@ source {
 ```kotlin
 source {
     lang = "en"
-    baseUrl("https://example.com") {
-        mirrors = listOf(
+    baseUrl {
+        mirrors(
+            "https://example.com",
             "https://mirror1.com",
             "https://mirror2.com",
         )
     }
+}
+```
+
+The first url is the default; each mirror's host is shown in the picker. To show custom labels instead, pass `"label" to "url"` pairs — either all urls are naked or all are labeled, not a mix:
+
+```kotlin
+baseUrl {
+    mirrors(
+        "Main" to "https://example.com",
+        "Mirror" to "https://mirror1.com",
+    )
 }
 ```
 
@@ -432,8 +444,8 @@ The extension automatically implements `ConfigurableSource` and adds a "Preferre
 ```kotlin
 source {
     lang = "en"
-    baseUrl("https://example.com") {
-        withCustom = true
+    baseUrl {
+        custom("https://example.com")
     }
 }
 ```
@@ -441,7 +453,7 @@ source {
 Like `mirrors`, the extension automatically implements `ConfigurableSource` and adds a validated "Custom base URL" `EditTextPreference`. The default URL is restored automatically if the hardcoded default changes in a future update.
 
 > [!IMPORTANT]
-> When using `mirrors` or `withCustom`, **do not** implement mirror/URL selection manually in your class using `SharedPreferences` or a `ListPreference` - the generated code handles it. Doing both will create duplicate preferences.
+> When using `mirrors(...)` or `custom(...)`, **do not** implement mirror/URL selection manually in your class using `SharedPreferences` or a `ListPreference` - the generated code handles it. Doing both will create duplicate preferences.
 
 #### Multiple sources from one class
 

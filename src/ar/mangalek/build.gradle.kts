@@ -12,8 +12,9 @@ keiyoushi {
     source {
         name = "مانجا ليك"
         lang = "ar"
-        baseUrl("https://lek-manga.net") {
-            mirrors = listOf(
+        baseUrl {
+            mirrors(
+                "https://lek-manga.net",
                 "https://lekmanga.online",
                 "https://like-manga.net",
                 "https://lekmanga.site",

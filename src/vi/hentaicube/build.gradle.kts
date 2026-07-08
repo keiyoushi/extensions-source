@@ -4,15 +4,15 @@ plugins {
 
 keiyoushi {
     name = "CBHentai"
-    versionCode = 33
+    versionCode = 34
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
 
     source {
         lang = "vi"
-        baseUrl("https://2tencb.pro") {
-            withCustom = true
+        baseUrl {
+            custom("https://2tencb.pro")
         }
         id = 823638192569572166L
     }

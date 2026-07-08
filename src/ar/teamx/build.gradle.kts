@@ -4,14 +4,14 @@ plugins {
 
 keiyoushi {
     name = "Team X"
-    versionCode = 31
+    versionCode = 32
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
     source {
         lang = "ar"
-        baseUrl("https://olympustaff.com") {
-            withCustom = true
+        baseUrl {
+            custom("https://olympustaff.com")
         }
     }
 

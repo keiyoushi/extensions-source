@@ -10,8 +10,8 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl("https://munedge.com") {
-            withCustom = true
+        baseUrl {
+            custom("https://munedge.com")
         }
     }
 }

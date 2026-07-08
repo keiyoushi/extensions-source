@@ -11,8 +11,8 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl("https://sayhentai.cx") {
-            withCustom = true
+        baseUrl {
+            custom("https://sayhentai.cx")
         }
     }
 }
