@@ -12,8 +12,9 @@ keiyoushi {
     source {
         name = "GoDa漫画"
         lang = "zh"
-        baseUrl("https://baozimh.org") {
-            mirrors = listOf(
+        baseUrl {
+            mirrors(
+                "https://baozimh.org",
                 "https://godamh.com",
                 "https://m.baozimh.one",
                 "https://bzmh.org",

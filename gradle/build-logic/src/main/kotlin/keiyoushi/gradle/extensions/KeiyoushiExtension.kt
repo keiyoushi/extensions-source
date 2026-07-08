@@ -27,14 +27,12 @@ abstract class DeeplinkSpec {
     }
 }
 
-abstract class SourceSpec @Inject constructor(private val objects: ObjectFactory) {
+abstract class SourceSpec {
     abstract val name: Property<String>
     abstract val lang: Property<String>
     internal abstract val resolvedBaseUrl: Property<BaseUrlSpec>
     abstract val versionId: Property<Int>
     abstract val id: Property<Long>
-
-    abstract val skipCodeGen: Property<Boolean>
 
     var baseUrl: String
         get() = error("baseUrl is write-only")
@@ -42,10 +40,8 @@ abstract class SourceSpec @Inject constructor(private val objects: ObjectFactory
             resolvedBaseUrl.set(BaseUrlSpec.Static(value))
         }
 
-    fun baseUrl(url: String, block: BaseUrlDsl.() -> Unit) {
-        val dsl = objects.newInstance(BaseUrlDsl::class.java)
-        dsl.block()
-        resolvedBaseUrl.set(dsl.build(url))
+    fun baseUrl(block: BaseUrlDsl.() -> Unit) {
+        resolvedBaseUrl.set(BaseUrlDsl().apply(block).build())
     }
 }
 
@@ -53,12 +49,10 @@ abstract class KeiyoushiExtension @Inject constructor(
     private val objects: ObjectFactory,
 ) {
     abstract val name: Property<String>
-    abstract val className: Property<String>
     abstract val versionCode: Property<Int>
     abstract val contentWarning: Property<ContentWarning>
     abstract val theme: Property<String>
     abstract val libVersion: Property<String>
-    abstract val baseUrl: Property<String>
 
     abstract val deeplinks: ListProperty<DeeplinkSpec>
     abstract val sources: ListProperty<SourceSpec>

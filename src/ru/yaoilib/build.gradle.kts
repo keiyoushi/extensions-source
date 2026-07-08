@@ -10,8 +10,8 @@ keiyoushi {
     theme = "libgroup"
 
     source {
-        baseUrl("https://slashlib.me") {
-            withCustom = true
+        baseUrl {
+            custom("https://slashlib.me")
         }
         lang = "ru"
     }

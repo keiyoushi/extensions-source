@@ -11,5 +11,6 @@ keiyoushi {
     source {
         lang = "vi"
         baseUrl = "https://nhentaiclub.space"
+        id = 9124366814387777661L
     }
 }

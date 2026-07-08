@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "Mangalek"
-    versionCode = 10
+    versionCode = 11
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
@@ -12,8 +12,9 @@ keiyoushi {
     source {
         name = "مانجا ليك"
         lang = "ar"
-        baseUrl("https://lekmanga.net") {
-            mirrors = listOf(
+        baseUrl {
+            mirrors(
+                "https://lek-manga.net",
                 "https://lekmanga.online",
                 "https://like-manga.net",
                 "https://lekmanga.site",

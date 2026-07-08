@@ -32,7 +32,7 @@ class MangaDto(
     val slug: String,
     val author: String? = null,
     val description: String? = null,
-    val status: String? = null,
+    val status: Int? = null,
     val genres: List<GenreDto>? = emptyList(),
     val alternativeTitles: List<String>? = emptyList(),
 ) {
@@ -49,8 +49,10 @@ class MangaDto(
             }
         }
         status = when (this@MangaDto.status) {
-            "Ongoing" -> SManga.ONGOING
-            "Completed" -> SManga.COMPLETED
+            0, 1 -> SManga.ONGOING
+            2 -> SManga.COMPLETED
+            3 -> SManga.CANCELLED
+            4 -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
         genre = this@MangaDto.genres?.joinToString { it.name }

@@ -10,8 +10,8 @@ keiyoushi {
     theme = "grouple"
 
     source {
-        baseUrl("https://rumix.me") {
-            withCustom = true
+        baseUrl {
+            custom("https://rumix.me")
         }
         lang = "ru"
     }

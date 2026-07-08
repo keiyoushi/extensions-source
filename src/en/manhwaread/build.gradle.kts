@@ -10,8 +10,11 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl("https://manhwaread.com") {
-            mirrors = listOf("https://manhwaread.org")
+        baseUrl {
+            mirrors(
+                "https://manhwaread.com",
+                "https://manhwaread.org",
+            )
         }
     }
 

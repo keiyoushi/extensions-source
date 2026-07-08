@@ -11,8 +11,8 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl("https://2tencb.pro") {
-            withCustom = true
+        baseUrl {
+            custom("https://2tencb.pro")
         }
         id = 823638192569572166L
     }

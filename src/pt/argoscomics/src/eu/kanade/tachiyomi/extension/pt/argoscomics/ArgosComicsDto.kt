@@ -66,6 +66,7 @@ class MangaDetailsDto(
     private val genders: List<Value> = emptyList(),
     private val artists: List<Value> = emptyList(),
     private val authors: List<Value> = emptyList(),
+    val isUpcoming: Boolean? = null,
 ) {
 
     fun toSManga() = SManga.create().apply {

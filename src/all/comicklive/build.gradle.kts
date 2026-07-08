@@ -14,8 +14,11 @@ keiyoushi {
     ).forEach {
         source {
             lang = it
-            baseUrl("https://comick.live") {
-                mirrors = listOf("https://comick.art")
+            baseUrl {
+                mirrors(
+                    "https://comick.live",
+                    "https://comick.art",
+                )
             }
         }
     }

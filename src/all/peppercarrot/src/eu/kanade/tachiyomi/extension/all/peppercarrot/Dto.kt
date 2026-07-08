@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.peppercarrot
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 typealias LangsDto = Map<String, LangDto>
@@ -7,8 +8,8 @@ typealias LangsDto = Map<String, LangDto>
 @Serializable
 class LangDto(
     val translators: List<String>,
-    val local_name: String,
-    val iso_code: String,
+    @SerialName("local_name") val localName: String,
+    @SerialName("iso_code") val isoCode: String,
 )
 
 // ProtoBuf: should not change field type and order
@@ -31,5 +32,5 @@ class Lang(
 
 @Serializable
 class EpisodeDto(
-    val translated_languages: List<String>,
+    @SerialName("translated_languages") val translatedLanguages: List<String>,
 )

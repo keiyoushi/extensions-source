@@ -32,7 +32,6 @@ abstract class DivaScans :
     HttpSource(),
     ConfigurableSource {
 
-    override val id: Long = 5481739102875145368L
     override val supportsLatest = true
     private val preferences by getPreferencesLazy()
 

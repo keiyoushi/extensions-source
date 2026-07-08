@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangago
 
-import kotlin.IllegalArgumentException
-
 /*
     Ported from https://github.com/hax0r31337/JSDec/blob/master/js/dec.js
 

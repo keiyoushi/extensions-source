@@ -11,8 +11,9 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl("https://www.mangakakalot.gg") {
-            mirrors = listOf(
+        baseUrl {
+            mirrors(
+                "https://www.mangakakalot.gg",
                 "https://www.mangakakalove.com",
             )
         }

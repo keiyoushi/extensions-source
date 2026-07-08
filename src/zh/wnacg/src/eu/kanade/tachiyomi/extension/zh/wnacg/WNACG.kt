@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import okhttp3.Headers
@@ -20,12 +21,11 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class WNACG :
+@Source
+abstract class WNACG :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "紳士漫畫"
-    override val lang = "zh"
     override val supportsLatest = true
 
     private val preferences = getPreferences { preferenceMigration() }
