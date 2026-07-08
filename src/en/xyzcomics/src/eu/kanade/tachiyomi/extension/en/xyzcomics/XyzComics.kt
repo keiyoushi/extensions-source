@@ -9,17 +9,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class XyzComics : HttpSource() {
+@Source
+abstract class XyzComics : HttpSource() {
 
-    override val name = "XYZ Comics"
-    override val baseUrl = "https://xyzcomics.com"
-    override val lang = "en"
     override val supportsLatest = false
 
     private class ArtistTagFilter : Filter.Text(ARTIST_TAG_FILTER_NAME)
@@ -62,11 +61,11 @@ class XyzComics : HttpSource() {
         val thumbLink = el.selectFirst("figure.post-image a") ?: return null
         val titleEl = el.selectFirst("h2.post-title a") ?: return null
         val manga = SManga.create()
-        manga.setUrlWithoutDomain(thumbLink.attr("href"))
+        manga.setUrlWithoutDomain(thumbLink.absUrl("href"))
         manga.title = titleEl.text().trim()
         val img = el.selectFirst("figure.post-image img.wp-post-image")
         if (img != null) {
-            manga.thumbnail_url = img.attr("data-src").ifEmpty { img.attr("src") }
+            manga.thumbnail_url = img.absUrl("data-src").ifEmpty { img.absUrl("src") }
         }
         return manga
     }
@@ -75,11 +74,10 @@ class XyzComics : HttpSource() {
         val doc = response.asJsoup()
         val manga = SManga.create()
         manga.initialized = true
-        manga.title = doc.selectFirst("h1.post-title a, h1.post-title")?.text()?.trim()
-            ?: doc.selectFirst("title")?.text()?.trim()
-            ?: ""
+        manga.title = doc.selectFirst("h1.post-title a, h1.post-title")?.text()
+            ?: doc.selectFirst("title")!!.text()
         manga.thumbnail_url = doc.selectFirst(".pswp-gallery .pswp-gallery__item a[href]")
-            ?.attr("abs:href") ?: ""
+            ?.attr("abs:href")
         val tags = doc.select("a.post-tag-button")
         manga.genre = tags.joinToString(", ") { it.text().trim() }.ifEmpty { "" }
         manga.status = SManga.UNKNOWN

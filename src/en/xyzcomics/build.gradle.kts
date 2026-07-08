@@ -4,9 +4,13 @@ plugins {
 
 keiyoushi {
     name = "XYZ Comics"
-    className = "XyzComics"
-    versionCode = 6
-    baseUrl = "https://xyzcomics.com"
+    versionCode = 7
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        name = "XYZ Comics"
+        lang = "en"
+        baseUrl = "https://xyzcomics.com"
+    }
 }
