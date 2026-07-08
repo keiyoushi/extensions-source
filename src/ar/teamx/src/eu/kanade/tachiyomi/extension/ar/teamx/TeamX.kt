@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.ar.teamx
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -17,6 +18,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
+import rx.schedulers.Schedulers
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -37,6 +39,8 @@ abstract class TeamX : HttpSource() {
     private var filtersFetched: Boolean = false
 
     private val nextPageSelector = "a[rel=next]"
+
+    private val thumbnailSuffix = "thumbnail_"
 
     // ============================== Popular ==============================
 
@@ -73,8 +77,6 @@ abstract class TeamX : HttpSource() {
 
         return GET(baseUrl + if (page > 1) "?page=$page" else "", headers)
     }
-
-    private val thumbnailSuffix = "thumbnail_"
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -176,6 +178,7 @@ abstract class TeamX : HttpSource() {
             SManga.create().apply {
                 title = element.selectFirst("h4")!!.text()
                 thumbnail_url = element.selectFirst("img")?.absUrl("src")
+                    ?.replace(thumbnailSuffix, "")
                 setUrlWithoutDomain(element.absUrl("href"))
             }
         }
@@ -206,51 +209,64 @@ abstract class TeamX : HttpSource() {
 
     // ============================= Chapters ==============================
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.fromCallable {
-            val allChapters = mutableListOf<SChapter>()
-            var nextUrl: String? = baseUrl + manga.url
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
+        .asObservableSuccess()
+        .flatMap { response ->
+            val url = response.request.url
+            val document = response.asJsoup()
+            val firstPageChapters = parseChapterElements(document)
 
-            while (nextUrl != null) {
-                val request = GET(nextUrl, headers)
-                val response = client.newCall(request).execute()
-                val document = response.asJsoup()
+            val lastPage = document.select("ul.pagination a.page-link")
+                .mapNotNull { it.text().toIntOrNull() }
+                .maxOrNull() ?: 1
 
-                val pageChapters = document.select("div.chapter-card")
-                if (pageChapters.isEmpty()) {
-                    break
+            if (lastPage <= 1) {
+                Observable.just(firstPageChapters)
+            } else {
+                val remainingPages = (2..lastPage).map { page ->
+                    client.newCall(GET("$url?page=$page", headers))
+                        .asObservableSuccess()
+                        .subscribeOn(Schedulers.io())
+                        .map { parseChapterElements(it.asJsoup()) }
                 }
 
-                allChapters += pageChapters.mapNotNull { element ->
-                    if (element.selectFirst("span.locked") != null) return@mapNotNull null
-                    SChapter.create().apply {
-                        val chpNum = element.attr("data-number")
-                        val chpTitle = element.selectFirst("div.chapter-info div.chapter-title")?.text()
-
-                        name = buildString {
-                            append("الفصل $chpNum")
-                            chpTitle?.takeIf {
-                                it.isNotEmpty() &&
-                                    it != chpNum &&
-                                    it != "الفصل $chpNum" &&
-                                    it != "الفصل رقم $chpNum"
-                            }?.let { append(" - $it") }
-                        } + "\u200F"
-
-                        // data-date is Unix timestamp (seconds)
-                        date_upload = element.attr("data-date")
-                            .toLongOrNull()
-                            ?.times(1000)
-                            ?: 0L
-
-                        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+                Observable.zip(remainingPages) { results ->
+                    val allChapters = mutableListOf<SChapter>()
+                    allChapters += firstPageChapters
+                    results.forEach {
+                        @Suppress("UNCHECKED_CAST")
+                        allChapters += it as List<SChapter>
                     }
+                    allChapters
                 }
-
-                nextUrl = document.selectFirst(nextPageSelector)?.absUrl("href")
             }
+        }
 
-            allChapters
+    private fun parseChapterElements(document: Document): List<SChapter> {
+        return document.select("div.chapter-card").mapNotNull { element ->
+            if (element.selectFirst("span.locked") != null) return@mapNotNull null
+            SChapter.create().apply {
+                val chpNum = element.attr("data-number")
+                val chpTitle = element.selectFirst("div.chapter-info div.chapter-title")?.text()
+
+                name = buildString {
+                    append("الفصل $chpNum")
+                    chpTitle?.takeIf {
+                        it.isNotEmpty() &&
+                            it != chpNum &&
+                            it != "الفصل $chpNum" &&
+                            it != "الفصل رقم $chpNum"
+                    }?.let { append(" - $it") }
+                } + "\u200F"
+
+                // data-date is Unix timestamp (seconds)
+                date_upload = element.attr("data-date")
+                    .toLongOrNull()
+                    ?.times(1000)
+                    ?: 0L
+
+                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+            }
         }
     }
 

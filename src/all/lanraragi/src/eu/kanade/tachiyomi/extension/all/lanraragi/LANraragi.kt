@@ -37,8 +37,10 @@ import java.net.URL
 import kotlin.math.max
 
 @Source
-abstract class LANraragi :
-    HttpSource(),
+class LANraragi(
+    override val lang: String,
+    override val id: Long,
+) : HttpSource(),
     ConfigurableSource,
     UnmeteredSource {
     override val baseUrl by lazy { getPrefBaseUrl() }

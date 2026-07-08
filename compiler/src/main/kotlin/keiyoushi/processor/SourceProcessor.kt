@@ -21,6 +21,7 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asClassName
+import com.squareup.kotlinpoet.buildCodeBlock
 import com.squareup.kotlinpoet.ksp.toClassName
 import com.squareup.kotlinpoet.ksp.writeTo
 import java.io.File
@@ -160,7 +161,9 @@ class SourceProcessor(
             .toSet()
 
         val fileProps = mutableListOf<PropertySpec>()
-        val generatedClass = if (sources.size == 1) {
+
+        val isConcrete = Modifier.ABSTRACT !in annotated.modifiers
+        val generatedClass = if (sources.size == 1 && !isConcrete) {
             buildSingleSourceClass(annotatedClass, sources.single(), isConfigurable, overridden, annotated, fileProps)
         } else {
             buildSourceFactoryClass(annotatedClass, sources, isConfigurable, overridden, annotated, fileProps)
@@ -199,18 +202,34 @@ class SourceProcessor(
         val sourceFactoryType = ClassName("eu.kanade.tachiyomi.source", "SourceFactory")
         val sourceType = ClassName("eu.kanade.tachiyomi.source", "Source")
 
+        // A concrete @Source class is instantiated directly (preserving its FQN) instead of
+        // being wrapped in an anonymous subclass, whose qualifiedName would be null and break
+        // app-side deligated sources or enhanced trackers
+        val isConcrete = Modifier.ABSTRACT !in node.modifiers
+        val ctorParams = node.primaryConstructor?.parameters.orEmpty()
+            .mapNotNull { it.name?.asString() }
+            .toSet()
+
+        if (isConcrete) {
+            validateConcreteSource(node, sources, overridden, ctorParams)
+        }
+
         val createSourcesCode = CodeBlock.builder()
             .add("return listOf(\n")
             .indent()
             .apply {
                 for ((index, source) in sources.withIndex()) {
-                    add(
-                        "%L,\n",
-                        TypeSpec.anonymousClassBuilder()
-                            .superclass(annotatedClass)
-                            .applySourceMembers(source, index.toString(), fileProps, isConfigurable, overridden, node)
-                            .build(),
-                    )
+                    if (isConcrete) {
+                        add("%L,\n", buildConcreteSource(annotatedClass, source, ctorParams))
+                    } else {
+                        add(
+                            "%L,\n",
+                            TypeSpec.anonymousClassBuilder()
+                                .superclass(annotatedClass)
+                                .applySourceMembers(source, index.toString(), fileProps, isConfigurable, overridden, node)
+                                .build(),
+                        )
+                    }
                 }
             }
             .unindent()
@@ -228,6 +247,62 @@ class SourceProcessor(
                     .build(),
             )
             .build()
+    }
+
+    private fun validateConcreteSource(
+        node: KSClassDeclaration,
+        sources: List<SourceDef>,
+        overridden: Set<String>,
+        ctorParams: Set<String>,
+    ) {
+        val className = node.simpleName.asString()
+
+        if (sources.any { it.baseUrl.type != "static" }) {
+            logger.error(
+                "A concrete @Source class ($className) only supports a static baseUrl; " +
+                    "make it abstract to use a mirror/custom baseUrl.",
+                node,
+            )
+        }
+
+        if ("id" !in ctorParams || "lang" !in ctorParams) {
+            logger.error(
+                "A concrete @Source class ($className) must declare `override val lang` and " +
+                    "`override val id` as primary constructor parameters.",
+                node,
+            )
+        }
+
+        if ("versionId" in overridden || "versionId" in ctorParams) {
+            logger.error(
+                "versionId is owned by the DSL; remove `versionId` from $className " +
+                    "(set 'versionId = …' in the source { } block if you need a specific value).",
+                node,
+            )
+        }
+
+        if ("name" !in ctorParams && "name" in overridden) {
+            logger.warn("name is provided by $className; the DSL name is used for metadata only.", node)
+        }
+        
+        if ("baseUrl" !in ctorParams && "baseUrl" in overridden) {
+            logger.warn("baseUrl is provided by $className; the DSL baseUrl is used for metadata/hosts only.", node)
+        }
+    }
+
+    private fun buildConcreteSource(
+        annotatedClass: ClassName,
+        source: SourceDef,
+        ctorParams: Set<String>,
+    ): CodeBlock = buildCodeBlock {
+        add("%T(\n", annotatedClass)
+        indent()
+        if ("name" in ctorParams) add("name = %S,\n", source.name)
+        if ("lang" in ctorParams) add("lang = %S,\n", source.lang)
+        if ("id" in ctorParams) add("id = %LL,\n", source.id)
+        if ("baseUrl" in ctorParams) add("baseUrl = %S,\n", source.baseUrl.defaultUrl)
+        unindent()
+        add(")")
     }
 
     private fun TypeSpec.Builder.applySourceMembers(
