@@ -17,6 +17,7 @@ import keiyoushi.gradle.extensions.libs
 import keiyoushi.gradle.extensions.plugins
 import keiyoushi.gradle.tasks.GenerateExtensionManifestTask
 import keiyoushi.gradle.tasks.GenerateKeepRulesTask
+import keiyoushi.gradle.tasks.GenerateSourceInfoTask
 import keiyoushi.gradle.utils.assertWithoutFlag
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -147,6 +148,10 @@ class PluginExtension : Plugin<Project> {
             this.extensionLib.set(keiyoushi.libVersion)
         }
 
+        val sourceInfoTask = tasks.register<GenerateSourceInfoTask>("generateSourceInfo") {
+            this.outputFile.set(layout.buildDirectory.file("keiyoushi-source-info.json"))
+        }
+
         androidComponents {
             onVariants { variant ->
                 val variantName = variant.name.replaceFirstChar { it.uppercase() }
@@ -208,6 +213,30 @@ class PluginExtension : Plugin<Project> {
                 inputs.file(translationsFile)
             }
 
+            val packageName = "eu.kanade.tachiyomi.extension.$applicationIdSuffix"
+            val sourceInfos = resolvedSources.map { source ->
+                SourceInfoData(
+                    id = source.id,
+                    name = source.name,
+                    lang = source.lang,
+                    baseUrl = source.baseUrl.defaultUrl,
+                    mirrorUrls = source.baseUrl.mirrors.map { it.url },
+                )
+            }
+            val extensionInfo = ExtensionInfoData(
+                packageName = packageName,
+                name = extName,
+                versionCode = versionCodeProvider.get(),
+                versionName = versionNameProvider.get(),
+                extensionLib = keiyoushi.libVersion.get(),
+                // Proto ContentWarning: UNSPECIFIED=0, SAFE=1, MIXED=2, NSFW=3 (enum ordinal + 1).
+                contentWarning = keiyoushi.contentWarning.get().ordinal + 1,
+                sources = sourceInfos,
+            )
+            val sourceInfoJson = Json.encodeToString(extensionInfo)
+            sourceInfoTask.configure { content.set(sourceInfoJson) }
+            tasks.named("assembleRelease").configure { dependsOn(sourceInfoTask) }
+
             tasks.withType<PackageAndroidArtifact>().configureEach {
                 createdBy.set("")
                 doFirst {
@@ -220,6 +249,26 @@ class PluginExtension : Plugin<Project> {
 
 @Serializable
 private data class ResolvedSourceData(val name: String, val lang: String, val id: Long, val baseUrl: BaseUrlSpecData)
+
+@Serializable
+private data class ExtensionInfoData(
+    val packageName: String,
+    val name: String,
+    val versionCode: Int,
+    val versionName: String,
+    val extensionLib: String,
+    val contentWarning: Int,
+    val sources: List<SourceInfoData>,
+)
+
+@Serializable
+private data class SourceInfoData(
+    val id: Long,
+    val name: String,
+    val lang: String,
+    val baseUrl: String,
+    val mirrorUrls: List<String> = emptyList(),
+)
 
 @Serializable
 private data class BaseUrlSpecData(
