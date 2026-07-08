@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.ar.arabmanhwa
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class ArabManhwa : Madara("ArabManhwa", "https://arabmanhwa.com", "ar")
+@Source
+abstract class ArabManhwa : Madara()
