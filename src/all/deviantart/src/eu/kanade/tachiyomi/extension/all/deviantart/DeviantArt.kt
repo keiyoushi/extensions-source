@@ -331,36 +331,25 @@ abstract class DeviantArt :
             val imageUrl = document.selectFirst("img[fetchpriority=high]")?.absUrl("src")
             listOf(Page(0, imageUrl = imageUrl))
         } else {
-            // Multi-image: strip /v1/ transform to get raw image (with token)
+            // Multi-image: each page IS the "large" image for that file index.
+            // Thumb buttons link to /art/{title}-{deviationId}?file=N pages that
+            // already render the per-file large display image.  We read each page.
             buttons.mapIndexed { i, button ->
-                val thumbSrc = button.selectFirst("img")?.absUrl("src")
-                val imageUrl = resolveFullImageUrl(thumbSrc)
-                Page(i, imageUrl = imageUrl)
+                val fileUrl = button.attr("abs:href").ifBlank {
+                    button.selectFirst("a")?.attr("abs:href")
+                }
+                val pageUrl = fileUrl?.takeIf { it.isNotBlank() }
+                    ?: "${response.request.url}?file=${i + 1}"
+                Page(i, url = pageUrl)
             }
         }
     }
 
-    // Upgrade a gallery thumbnail URL, stripping the /v1/ transformation so the
-    // CDN serves the raw image.  Works when the multi-image token covers
-    // file.download (common for the second+ image in a set).
-    //
-    // If the page renders an image.operations token (fit / fill / …) we keep that
-    // transform but scale it up; if it renders a file.download token we strip the
-    // transform entirely.
-    private fun resolveFullImageUrl(src: String?): String? {
-        if (src == null) return null
-        return if (src.contains("/v1/fit/")) {
-            src.replace(
-                Regex("""/v1/fit/w_\d+,h_\d+,q_\d+"""),
-                "/v1/fit/w_1600,h_1600,q_80",
-            )
-        } else {
-            // No /v1/fit/ — probably a raw PNG with a file.download token
-            src.replaceFirst(Regex("""/v1(/.*)?(?=\?)"""), "")
-        }
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    // For multi-image pages: fetch the individual ?file=N page and extract the
+    // large display img src.
+    override fun imageUrlParse(response: Response): String = response.asJsoup()
+        .selectFirst("img[fetchpriority=high]")?.absUrl("src")
+        ?: throw Exception("Failed to extract image URL from ${response.request.url}")
 
     // WixMP CDN checks Referer to prevent hotlinking; must impersonate a page visit
     override fun imageRequest(page: Page): Request {
