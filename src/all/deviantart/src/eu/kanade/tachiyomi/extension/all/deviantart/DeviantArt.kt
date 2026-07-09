@@ -225,17 +225,21 @@ abstract class DeviantArt :
     override fun mangaDetailsParse(response: Response): SManga {
         val doc = response.asJsoup()
         val gallery = doc.selectFirst("#sub-folder-gallery")
+        val requestUrl = response.request.url
+        val folderSlug = requestUrl.pathSegments.lastOrNull()
+            ?.takeUnless { it.all(Char::isDigit) || it == "all" || it == "featured" }
         val rawName = gallery?.selectFirst("[aria-haspopup=listbox] > div")?.ownText()
             ?.replace(Regex("^.+'s\\s"), "")
             ?: gallery?.selectFirst("._2vMZg + ._2vMZg")?.text()?.substringBeforeLast(" ")
+            ?: folderSlug
             ?: throw Exception("Could not find gallery name")
         val galleryName = rawName.replace(Regex("\\s*-\\s*front page\\s*$", RegexOption.IGNORE_CASE), "")
         val artistInTitle = (preferences.artistInTitle == ArtistInTitle.ALWAYS.name) ||
             ((preferences.artistInTitle == ArtistInTitle.ONLY_ALL_GALLERIES.name) && galleryName == "All")
 
         return SManga.create().apply {
-            setUrlWithoutDomain(response.request.url.toString())
-            author = resolveUsername(doc, response.request.url.pathSegments[0])
+            setUrlWithoutDomain(requestUrl.toString())
+            author = resolveUsername(doc, requestUrl.pathSegments[0])
             title = if (artistInTitle) "$author - $galleryName" else galleryName
             description = gallery?.selectFirst(".legacy-journal")?.wholeText()
             thumbnail_url = gallery?.selectFirst("img[property=contentUrl]")?.absUrl("src")
