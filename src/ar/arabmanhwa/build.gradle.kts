@@ -3,14 +3,15 @@ plugins {
 }
 
 keiyoushi {
-    name = "Yaoihub"
-    versionCode = 3
+    name = "ArabManhwa"
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
 
     source {
-        lang = "en"
-        baseUrl = "https://yaoihub.org"
+        name = "ArabManhwa"
+        lang = "ar"
+        baseUrl = "https://arabmanhwa.com"
     }
 }
