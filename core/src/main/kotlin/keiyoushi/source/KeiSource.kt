@@ -37,6 +37,7 @@ import okio.source
 import rx.Observable
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.days
@@ -47,34 +48,42 @@ abstract class KeiSource : HttpSource() {
      * Customizes the OkHttpClient builder. Subclasses can override this to configure timeouts,
      * add application/network interceptors, or configure cookie/cache/dns settings.
      */
-    protected open fun OkHttpClient.Builder.configureClient() = this
+    protected open fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = this
 
     final override val client: OkHttpClient by lazy {
         network.client.newBuilder().apply {
             val interceptors = interceptors()
 
-            assert(
-                interceptors.indexOfFirst { it.javaClass.simpleName == "UncaughtExceptionInterceptor" } != -1,
-            ) { "UncaughtExceptionInterceptor must be present in default client" }
+            check(
+                interceptors.any { it.javaClass.simpleName == "UncaughtExceptionInterceptor" },
+            ) {
+                "UncaughtExceptionInterceptor must be present in default client"
+            }
 
-            assert(
-                interceptors.indexOfFirst { it.javaClass.simpleName == "UserAgentInterceptor" } != -1,
-            ) { "UserAgentInterceptor must be present in default client" }
+            check(
+                interceptors.any { it.javaClass.simpleName == "UserAgentInterceptor" },
+            ) {
+                "UserAgentInterceptor must be present in default client"
+            }
 
             val networkInterceptors = networkInterceptors()
 
-            assert(
-                networkInterceptors.indexOfFirst { it.javaClass.simpleName == "IgnoreGzipInterceptor" } == -1,
-            ) { "IgnoreGzipInterceptor must not be present in default client" }
+            check(
+                networkInterceptors.none { it.javaClass.simpleName == "IgnoreGzipInterceptor" },
+            ) {
+                "IgnoreGzipInterceptor must not be present in default client"
+            }
 
-            assert(
-                networkInterceptors.indexOfFirst { it is BrotliInterceptor } == -1,
-            ) { "BrotliInterceptor must not be present in default client" }
+            check(
+                networkInterceptors.none { it is BrotliInterceptor },
+            ) {
+                "BrotliInterceptor must not be present in default client"
+            }
 
             configureClient()
 
             // last application interceptor
-            addInterceptor(CompressionInterceptor(Gzip, Brotli, Zstd))
+            addInterceptor(CompressionInterceptor(Brotli, Gzip, Zstd))
         }.build()
     }
 
@@ -117,10 +126,10 @@ abstract class KeiSource : HttpSource() {
      *
      * @param page The page number to retrieve.
      * @param query The search query.
-     * @param filterList The list of filters to apply.
+     * @param filters The list of filters to apply.
      * @return A [MangasPage] containing the matching manga and whether there is a next page.
      */
-    abstract suspend fun getSearchMangaList(page: Int, query: String, filterList: FilterList): MangasPage
+    abstract suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage
 
     /**
      * Fetches details of a single manga directly using its HTTP URL.
@@ -142,38 +151,34 @@ abstract class KeiSource : HttpSource() {
     }
 
     private val filterFetchInFlight = AtomicBoolean(false)
-
     private val filterFetchAttemptCount = AtomicInteger(0)
-
     private val maxFilterFetchAttempts = 3
-
     private val filterCacheDir: File by lazy {
         applicationContext.cacheDir.resolve("source_$id").apply { mkdirs() }
     }
-
-    private val filterCacheFile: File by lazy { filterCacheDir.resolve("filters.json.gz") }
+    private val filterCacheFile: File by lazy {
+        filterCacheDir.resolve("filters.json.gz")
+    }
 
     /**
-     * Whether this source fetches its filters from the network (vs. having a static,
-     * hardcoded [FilterList]). When false, none of the caching/background-fetch machinery
-     * below runs — [getFilterList] just calls [getFilterList] with `null` directly — and
-     * [fetchFilterData] don't need to be implemented.
+     * Whether this source fetches its filters from the network
+     * implement [fetchFilterData] when true
      */
-    protected open val supportsFilterFetching: Boolean = false
+    protected open val supportsFilterFetching: Boolean get() = false
 
+    /**
+     * Don't implement
+     */
     protected abstract val filterFetchHint: String
 
     /**
-     * Fetches raw filter data from the network.
+     * Fetches filter data from the network.
      *
-     * Only called when [supportsFilterFetching] is true, on a background coroutine —
-     * never on the calling thread of [getFilterList]. Implementations should perform
-     * whatever requests are necessary (e.g. scraping a search/filter page) and return
-     * the result as a [JsonElement], or null if the source genuinely has no dynamic
-     * filters to offer.
+     * Only called when [supportsFilterFetching] is true, on a background coroutine.
+     * Implementations should perform whatever requests are necessary and return
+     * the result as a [JsonElement]
      *
      * Throwing is treated as a failed attempt and retried (see [maxFilterFetchAttempts]);
-     * returning null is treated as "no filters" and is not retried.
      */
     protected open suspend fun fetchFilterData(): JsonElement = JsonNull
 
@@ -183,9 +188,8 @@ abstract class KeiSource : HttpSource() {
      * This is called synchronously every time [getFilterList] is invoked, so it must be
      * fast and must NOT perform I/O or network requests — only convert [data] into filters.
      *
-     * @param data The cached filter data, freshly fetched data, or null when no (fresh)
-     *  data is available yet (e.g. first launch, cache expired and fetch still pending in
-     *  the background, fetching failed permanently, or the source returned no data).
+     * @param data The cached filter data or null when no data is available yet
+     * (e.g. first launch or fetching failed or cache deleted).
      */
     protected open fun getFilterList(data: JsonElement?): FilterList = FilterList()
 
@@ -196,7 +200,7 @@ abstract class KeiSource : HttpSource() {
         val parsed = cached?.let {
             try {
                 getFilterList(it)
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
                 Log.e(name, "Failed to parse filter data", e)
                 null
             }
@@ -226,13 +230,13 @@ abstract class KeiSource : HttpSource() {
         if (!file.exists()) return FilterCacheState(data = null, isFresh = false)
 
         val age = System.currentTimeMillis() - file.lastModified()
-        val isFresh = age <= 1.days.inWholeMilliseconds
+        val isFresh = age <= 3.days.inWholeMilliseconds
 
         val data = try {
             GzipSource(file.source()).buffer().use { source ->
                 jsonInstance.decodeFromBufferedSource(JsonElement.serializer(), source)
             }
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             null
         }
 
@@ -269,7 +273,7 @@ abstract class KeiSource : HttpSource() {
                 val data = fetchFilterData()
                 writeFilterCache(data)
                 filterFetchAttemptCount.set(0)
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
                 Log.e(name, "Failed to fetch filter data", e)
                 filterFetchAttemptCount.incrementAndGet()
             } finally {
@@ -293,28 +297,47 @@ abstract class KeiSource : HttpSource() {
      * @param fetchDetails Whether to include updated manga details.
      * @param fetchChapters Whether to include available chapters.
      */
-    abstract override suspend fun getMangaUpdate(
+    abstract suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate
 
+    private val updatesInFlight = ConcurrentHashMap.newKeySet<String>()
+
+    final override suspend fun getMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        check(fetchDetails || fetchChapters) { "getMangaUpdate called with nothing to fetch (fetchDetails=false, fetchChapters=false)" }
+
+        check(updatesInFlight.add(manga.url)) { "getMangaUpdate must not be called concurrently for same manga" }
+
+        try {
+            return fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters)
+        } finally {
+            updatesInFlight.remove(manga.url)
+        }
+    }
+
     /**
      * Whether the source supports retrieving related manga.
      */
-    override val supportsRelatedMangas = true
+    override val supportsRelatedMangas get() = true
 
     /**
      * Whether to fall back to searching the source by the manga's title if a direct related manga list is unavailable.
      */
-    protected open val supportRelatedMangasBySearch = false
+    protected open val supportRelatedMangasBySearch get() = false
 
     @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
     final override val disableRelatedMangasBySearch get() = !supportRelatedMangasBySearch
 
     @Deprecated("Hidden", level = DeprecationLevel.HIDDEN)
-    final override val disableRelatedMangas = false
+    final override val disableRelatedMangas get() = false
 
     /**
      * Fetches a list of related manga for the specified manga.
