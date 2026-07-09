@@ -1,8 +1,8 @@
 [versions]
 # Used in [/gradle/build-config/src/main/kotlin/PluginKotlinMultiplatform.kt]
 android-sdk-min = "21"
-android-sdk-compile = "34"
-android-sdk-target = "34"
+android-sdk-compile = "37"
+android-sdk-target = "37"
 java = "11"
 
 [plugins]

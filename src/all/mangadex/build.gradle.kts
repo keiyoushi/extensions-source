@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "MangaDex"
-    versionCode = 210
+    versionCode = 211
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 

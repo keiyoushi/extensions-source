@@ -12,6 +12,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -36,6 +37,7 @@ import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.asResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -54,6 +56,9 @@ abstract class Mangago :
     private val domain = "mangago.me"
 
     // Chapter reader mirror; "/chapter/..." paths 404 on the main domain.
+    // Chapter lists are also fetched from here: the main domain randomly
+    // alternates between two chapter URL formats with unrelated ids, while
+    // the mirror consistently serves "/chapter/<mangaId>/<chapterId>/".
     private val readerDomain = "www.mangago.zone"
 
     override val supportsLatest = true
@@ -83,7 +88,7 @@ abstract class Mangago :
                 .build()
         }
         .addNetworkInterceptor(CookieInterceptor(domain, "_m_superu" to "1"))
-        .rateLimit(1) { it.host == baseUrlHost }
+        .rateLimit(1) { it.host == baseUrlHost || it.host == readerDomain }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().apply {
@@ -211,6 +216,15 @@ abstract class Mangago :
 
     // ============================= Chapters ==============================
 
+    override fun chapterListRequest(manga: SManga): Request = GET("https://$readerDomain${manga.url}", headers)
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
+        .asObservableSuccess()
+        .onErrorResumeNext {
+            client.newCall(GET("$baseUrl${manga.url}", headers)).asObservableSuccess()
+        }
+        .map(::chapterListParse)
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         return document.select("table#chapter_table > tbody > tr, table.uk-table > tbody > tr")
@@ -218,18 +232,17 @@ abstract class Mangago :
                 SChapter.create().apply {
                     val link = element.select("a.chico")
                     val urlOriginal = link.attr("abs:href")
-                    val isExternal = urlOriginal.startsWith("http") && !urlOriginal.contains(baseUrlHost)
+                    val httpUrl = urlOriginal.toHttpUrl()
 
-                    // The site rotates chapter links between mirror domains
-                    // (e.g. mangago.zone, youhim.me) on every page load. Store only
-                    // the path so the chapter URL stays stable across refreshes,
-                    // otherwise the app treats chapters as new entries and read
-                    // state is lost for unnumbered chapters such as "Special."
-                    // Retain external links as absolute URLs, strip domain otherwise.
-                    if (isExternal) {
-                        url = urlOriginal
-                    } else {
-                        setUrlWithoutDomain(urlOriginal)
+                    // Reader links rotate between mirror hosts but keep a
+                    // stable path. Store only the path so rotated links don't
+                    // register as new chapters (resetting read state); the
+                    // host is restored by pageListRequest/getChapterUrl.
+                    // Truly external links stay absolute.
+                    when {
+                        httpUrl.pathSegments.firstOrNull() == "chapter" -> url = httpUrl.encodedPath
+                        httpUrl.host.endsWith(domain) -> setUrlWithoutDomain(urlOriginal)
+                        else -> url = urlOriginal
                     }
 
                     name = link.text()

@@ -285,6 +285,9 @@ abstract class Webtoons :
             addPathSegment(titleId)
             addPathSegment("episodes")
             addQueryParameter("pageSize", "99999")
+            if (type == "canvas") {
+                addQueryParameter("readingLanguageCode", langCode)
+            }
         }.build()
 
         return GET(url, mobileHeaders)
