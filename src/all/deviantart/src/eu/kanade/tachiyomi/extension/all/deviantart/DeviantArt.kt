@@ -98,12 +98,14 @@ abstract class DeviantArt :
     override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        // Paste a full URL
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
             if (url.host != baseUrl.toHttpUrl().host) throw Exception("Unsupported URL")
+            // Sub-gallery: pick the deepest numeric folderId from the URL path
+            // e.g. /leafybush7/gallery/98917122/halloweens → use 98917122
             val username = url.pathSegments[0]
-            val folderId = url.pathSegments[2]
+            val folderId = url.pathSegments.lastOrNull { it.all(Char::isDigit) }
+                ?: url.pathSegments.getOrNull(2).orEmpty()
             return super.fetchSearchManga(page, "gallery:$username/$folderId", filters)
         }
         // Plain username → list gallery folders
@@ -135,7 +137,7 @@ abstract class DeviantArt :
                 return@forEach
             }
             val segs = parsed.pathSegments
-            if (segs.size < 3 || segs.size > 5) return@forEach
+            if (segs.size < 3 || segs.size > 6) return@forEach
             if (segs[0].lowercase() != lowered) return@forEach
             if (segs[1] != "gallery") return@forEach
             val folderId = segs.getOrNull(2) ?: return@forEach
