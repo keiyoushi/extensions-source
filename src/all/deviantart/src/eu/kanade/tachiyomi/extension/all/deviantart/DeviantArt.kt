@@ -87,10 +87,6 @@ abstract class DeviantArt :
 
     override fun getFilterList() = FilterList(CookieLoginFilter())
 
-    // ══════════════════════════════════════════════════════════════════════
-    // SEARCH
-    // ══════════════════════════════════════════════════════════════════════
-
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException(SEARCH_HINT)
     override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException(SEARCH_HINT)
 
@@ -185,15 +181,13 @@ abstract class DeviantArt :
 
     private fun resolveUsername(doc: Document, fallback: String): String {
         val loweredFallback = fallback.lowercase()
-        return doc.select("a[href*=/gallery/]").firstOrNull { link ->
-            var href = link.attr("href").trim()
-            if (href.startsWith("/")) href = "https://www.deviantart.com$href"
-            href.toHttpUrl().pathSegments[0].lowercase() == loweredFallback
-        }?.let { link ->
-            var href = link.attr("href").trim()
-            if (href.startsWith("/")) href = "https://www.deviantart.com$href"
-            href.toHttpUrl().pathSegments[0]
-        } ?: fallback
+        // Try the profile header <h1> first (preserves correct casing)
+        doc.selectFirst("h1 a[href*=\"/$loweredFallback\"]")?.text()?.takeIf { it.isNotBlank() }?.let { return it }
+        // Fallback: find any user link matching the fallback username
+        doc.select("a[href*=\"/$loweredFallback\"]").firstOrNull { link ->
+            link.text().lowercase() == loweredFallback
+        }?.text()?.takeIf { it.isNotBlank() }?.let { return it }
+        return fallback
     }
 
     private fun createGalleryManga(user: String, title: String, url: String) = SManga.create().apply {
