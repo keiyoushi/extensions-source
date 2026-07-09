@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.manhwaweb
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,6 +8,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -17,27 +18,22 @@ import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
-class ManhwaWeb : HttpSource() {
-
-    override val name = "ManhwaWeb"
-
-    override val baseUrl = "https://manhwaweb.com"
+@Source
+abstract class ManhwaWeb : HttpSource() {
 
     private val apiUrl = "https://manhwawebbackend-production.up.railway.app"
-
-    override val lang = "es"
 
     override val supportsLatest = true
 
     private val json: Json by injectLazy()
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(2)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
-
+        .add("Referer", baseUrl)
     override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/manhwa/nuevos", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -157,6 +153,13 @@ class ManhwaWeb : HttpSource() {
         val result = json.decodeFromString<PayloadPageDto>(response.body.string())
         return result.data.images.filter { it.startsWith("http") }
             .mapIndexed { i, img -> Page(i, imageUrl = img) }
+    }
+
+    override fun imageRequest(page: Page): Request {
+        val headers = headersBuilder()
+            .add("Referer", "$baseUrl/")
+            .build()
+        return GET(page.imageUrl!!, headers)
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()

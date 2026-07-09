@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -18,15 +19,11 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DFlowScans : HttpSource() {
-    override val name = "DFlowScans"
-    override val baseUrl = "https://dflow.alwaysdata.net"
-    override val lang = "en"
+@Source
+abstract class DFlowScans : HttpSource() {
     override val supportsLatest = false
 
     private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
-
-    override val client = network.cloudflareClient
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/Series", headers)
 

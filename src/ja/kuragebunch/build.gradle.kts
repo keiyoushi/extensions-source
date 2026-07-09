@@ -1,0 +1,16 @@
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "Kurage Bunch"
+    versionCode = 0
+    contentWarning = ContentWarning.NSFW
+    libVersion = "1.4"
+    theme = "gigaviewer"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://kuragebunch.com"
+    }
+}

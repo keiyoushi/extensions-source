@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -15,12 +16,10 @@ import okhttp3.Response
 import rx.Observable
 import java.net.URI
 
-class ScanR : HttpSource() {
+@Source
+abstract class ScanR : HttpSource() {
 
-    override val name = "ScanR"
-    override val baseUrl = "https://teamscanr.fr"
     val cdnUrl = "https://cdn.teamscanr.fr"
-    override val lang = "fr"
     override val supportsLatest = false
     private val seriesDataCache = mutableMapOf<String, Serie>()
 
@@ -36,6 +35,18 @@ class ScanR : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     // Search
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val slug = url.pathSegments[0]
+            return fetchSearchManga(page, "SLUG:$slug", filters)
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$cdnUrl/index.json".toHttpUrl().newBuilder()
         if (query.isNotBlank()) {

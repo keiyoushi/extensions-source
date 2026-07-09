@@ -4,9 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class RawProjectCategory(
-    @SerialName("cateName")
+class RawProjectCategory(
+    @SerialName("CateName")
     val categoryName: String,
-    @SerialName("cateLink")
-    val categoryLink: String,
 )

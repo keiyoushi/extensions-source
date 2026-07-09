@@ -5,15 +5,23 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class Raw18 : WPComics("Raw18", "https://raw18.tel", "ja", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.JAPANESE), null) {
+@Source
+abstract class Raw18 : WPComics() {
+
+    override val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.JAPANESE)
+
+    override val gmtOffset = null
     override val searchPath = "search/manga"
 
     override val genresUrlDelimiter = "="
@@ -26,7 +34,8 @@ class Raw18 : WPComics("Raw18", "https://raw18.tel", "ja", SimpleDateFormat("yyy
 
     override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val document = response.asJsoup()
         document.selectFirst("article#item-detail").let { info ->
             author = info?.selectFirst("li.author p.col-xs-8")?.text()
             status = info?.selectFirst("li.status p.col-xs-8")?.text().toStatus()

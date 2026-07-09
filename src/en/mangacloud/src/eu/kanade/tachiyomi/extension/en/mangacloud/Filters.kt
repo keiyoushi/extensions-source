@@ -54,8 +54,8 @@ class SortFilter :
         name = "Sort by",
         options = listOf(
             "None" to null,
-            "Latest Upload" to "updated_date-DESC",
-            "Oldest Upload" to "updated_date-ASC",
+            "Latest Chapter" to "chapter_date-DESC",
+            "Oldest Chapter" to "chapter_date-ASC",
             "Title Ascending" to "title-ASC",
             "Title Descending" to "title-DESC",
             "Recently Added" to "created_date-DESC",

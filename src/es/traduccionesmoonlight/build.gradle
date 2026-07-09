@@ -1,9 +1,0 @@
-ext {
-    extName = 'Traducciones Moonlight'
-    extClass = '.TraduccionesMoonlight'
-    baseUrl = 'https://traduccionesmoonlight.com'
-    extVersionCode = 46
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

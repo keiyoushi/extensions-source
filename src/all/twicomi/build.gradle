@@ -1,8 +1,0 @@
-ext {
-    extName = "Twicomi"
-    extClass = ".Twicomi"
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

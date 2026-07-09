@@ -4,15 +4,17 @@ import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import okhttp3.OkHttpClient
 import okhttp3.Response
 
-class AthreaScans :
-    MangaThemesia("Athrea Scans", "https://athreascans.com", "en"),
+@Source
+abstract class AthreaScans :
+    MangaThemesia(),
     ConfigurableSource {
 
     override val client: OkHttpClient = super.client.newBuilder()

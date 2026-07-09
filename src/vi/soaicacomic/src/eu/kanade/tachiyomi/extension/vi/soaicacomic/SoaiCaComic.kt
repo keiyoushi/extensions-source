@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.vi.soaicacomic
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +9,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -24,13 +25,10 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
 
-class SoaiCaComic : HttpSource() {
+@Source
+abstract class SoaiCaComic : HttpSource() {
 
-    override val name = "SoaiCaComic"
-    override val lang = "vi"
     override val supportsLatest = true
-
-    override val baseUrl = "https://soaicacomic2.top"
 
     private val thumbnailFallbackInterceptor = Interceptor { chain ->
         val request = chain.request()
@@ -45,9 +43,9 @@ class SoaiCaComic : HttpSource() {
         chain.proceed(GET(fallbackUrl, request.headers))
     }
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(3)
+    override val client = network.client.newBuilder()
         .addInterceptor(thumbnailFallbackInterceptor)
+        .rateLimit(3)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

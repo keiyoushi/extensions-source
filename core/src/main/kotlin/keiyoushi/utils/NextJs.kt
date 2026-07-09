@@ -4,7 +4,9 @@ import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -36,7 +38,150 @@ private fun <T> extractValueNextJs(
     return null
 }
 
-private fun Document.extractAppRouterPayloads(): List<JsonElement> = select("script:not([src])")
+/**
+ * Recursively walks the JSON tree to resolve Next.js RSC references using the provided [chunkCache].
+ * Mirrors the special value markers emitted by React Flight
+ * ([ReactFlightServer.js](https://github.com/facebook/react/blob/main/packages/react-server/src/ReactFlightServer.js)):
+ * - `$$` -> Escaped string, drops the first `$`.
+ * - `$undefined` -> JS `undefined`, resolved to JSON null.
+ * - `$D<iso>` -> Date, drops `$D` to expose the ISO-8601 string ([ReactFlightDate]).
+ * - `$n<digits>` -> BigInt, drops `$n` to expose the digit string ([ReactFlightBigInt]).
+ * - `$Infinity` / `$-Infinity` / `$NaN` / `$-0` -> drops `$`, exposes the token string
+ *   ([ReactFlightNumber] parses it to the real `Double`; JSON itself has no Infinity/NaN).
+ * - `$Q<id>` -> Map, the outlined model at `<id>` is an array of `[key, value]` entries.
+ * - `$W<id>` -> Set, the outlined model at `<id>` is an array of values.
+ * - `$<id>` / `$<id>:<path>` -> Outlined model reference ([ReactFlightServer]'s `getOutlinedModel`).
+ *   `<id>` is looked up in the ByteText [chunkCache] then the [modelCache]; any `:`-separated
+ *   `<path>` segments walk into the model by object key or array index.
+ *
+ * [modelCache] holds outlined JSON model rows by hex id (for `$Q`/`$W` and lazy refs);
+ * [chunkCache] holds binary ByteText chunks by hex id. [resolving] guards against
+ * reference cycles between outlined models.
+ */
+private fun resolveNextJsRefs(
+    element: JsonElement,
+    chunkCache: Map<String, String>,
+    modelCache: Map<String, JsonElement>,
+    resolving: Set<String> = emptySet(),
+): JsonElement = when (element) {
+    is JsonObject -> JsonObject(element.mapValues { resolveNextJsRefs(it.value, chunkCache, modelCache, resolving) })
+    is JsonArray -> JsonArray(element.map { resolveNextJsRefs(it, chunkCache, modelCache, resolving) })
+    is JsonPrimitive -> {
+        if (element.isString && element.content.startsWith("$") && element.content.length >= 2) {
+            val str = element.content
+            when {
+                str == "\$undefined" -> JsonNull // JS undefined -> null
+                // Non-finite / negative-zero -> strip '$', keep token as string for ReactFlightNumber.
+                // JSON has no Infinity/NaN, so they can't live in the JsonElement tree as numbers.
+                str == "\$Infinity" || str == "\$-Infinity" || str == "\$NaN" || str == "\$-0" ->
+                    JsonPrimitive(str.substring(1))
+                str[1] == '$' -> JsonPrimitive(str.substring(1)) // Escaped '$' -> keep one
+                str[1] == 'D' -> JsonPrimitive(str.substring(2)) // Date -> strip '$D' for ReactFlightDate
+                str[1] == 'n' -> JsonPrimitive(str.substring(2)) // BigInt -> strip '$n' for ReactFlightBigInt
+                str[1] == 'Q' -> resolveMapRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
+                str[1] == 'W' -> resolveSetRef(str.substring(2), chunkCache, modelCache, resolving) ?: element
+                // RSC reference (`$<id>` or `$<id>:<path>`) -> resolve via chunk/model cache.
+                else -> resolveModelRef(str.substring(1), chunkCache, modelCache, resolving) ?: element
+            }
+        } else {
+            element
+        }
+    }
+}
+
+/**
+ * Resolves a flight reference of the form `<id>` or `<id>:<seg>:<seg>...` into the referenced
+ * element, mirroring React's
+ * [getOutlinedModel](https://github.com/facebook/react/blob/main/packages/react-server/src/ReactFlightServer.js).
+ *
+ * A bare `<id>` first resolves against the binary [chunkCache] (ByteText). Otherwise `<id>` is
+ * looked up in the outlined [modelCache] and the remaining `:`-separated segments walk into that
+ * model row by object key or array index; the reached element is then resolved recursively, with
+ * `<id>` added to the [resolving] cycle guard. Returns `null` if the reference can't be resolved.
+ *
+ * React elements travel on the wire as `["$", type, key, props]` tuples (the leading `"$"` is
+ * [REACT_ELEMENT_TYPE]); the client turns them into element objects before walking. We mirror that
+ * by mapping the `type`/`key`/`props` segments onto tuple indices 1/2/3. A reference encountered
+ * mid-walk (e.g. a lazily-outlined `props`) is resolved before the next segment indexes into it.
+ */
+private fun resolveModelRef(
+    reference: String,
+    chunkCache: Map<String, String>,
+    modelCache: Map<String, JsonElement>,
+    resolving: Set<String>,
+): JsonElement? {
+    val segments = reference.split(':')
+    val id = segments[0]
+    // Bare reference: prefer the binary ByteText chunk if present.
+    if (segments.size == 1) {
+        chunkCache[id]?.let { return JsonPrimitive(it) }
+    }
+    if (id in resolving) return null // cycle
+    val guard = resolving + id
+    var value: JsonElement = modelCache[id] ?: return null
+    for (i in 1 until segments.size) {
+        // A node reached mid-walk may itself be a `$`-reference; resolve it before indexing in.
+        if (value is JsonPrimitive && value.isString && value.content.startsWith("$")) {
+            value = resolveNextJsRefs(value, chunkCache, modelCache, guard)
+        }
+        value = walkRefSegment(value, segments[i]) ?: return null
+    }
+    return resolveNextJsRefs(value, chunkCache, modelCache, guard)
+}
+
+/** Indexes [value] by a single path [segment], honouring the React element tuple shape. */
+private fun walkRefSegment(value: JsonElement, segment: String): JsonElement? = when (value) {
+    is JsonObject -> value[segment]
+    is JsonArray ->
+        // React element tuple ["$", type, key, props] -> map named props to their indices.
+        if (value.size >= 4 && (value[0] as? JsonPrimitive)?.takeIf { it.isString }?.content == "$") {
+            when (segment) {
+                "type" -> value[1]
+                "key" -> value[2]
+                "props" -> value[3]
+                else -> segment.toIntOrNull()?.let { value.getOrNull(it) }
+            }
+        } else {
+            segment.toIntOrNull()?.let { value.getOrNull(it) }
+        }
+    else -> null
+}
+
+/** Resolves the outlined model at [id] (a row of `[key, value]` pairs) into a [JsonObject]. */
+private fun resolveMapRef(
+    id: String,
+    chunkCache: Map<String, String>,
+    modelCache: Map<String, JsonElement>,
+    resolving: Set<String>,
+): JsonElement? {
+    if (id in resolving) return null // cycle
+    val entries = modelCache[id] as? JsonArray ?: return null
+    val resolved = resolveNextJsRefs(entries, chunkCache, modelCache, resolving + id) as? JsonArray ?: return null
+    val pairs = resolved.mapNotNull { (it as? JsonArray)?.takeIf { p -> p.size == 2 } }
+    return JsonObject(
+        pairs.associate { (k, v) ->
+            val key = (k as? JsonPrimitive)?.content ?: k.toString()
+            key to v
+        },
+    )
+}
+
+/** Resolves the outlined model at [id] (a row of values) into a [JsonArray]. */
+private fun resolveSetRef(
+    id: String,
+    chunkCache: Map<String, String>,
+    modelCache: Map<String, JsonElement>,
+    resolving: Set<String>,
+): JsonElement? {
+    if (id in resolving) return null // cycle
+    val values = modelCache[id] as? JsonArray ?: return null
+    return resolveNextJsRefs(values, chunkCache, modelCache, resolving + id)
+}
+
+private fun Document.extractAppRouterPayloads(
+    chunkCache: MutableMap<String, String>,
+    modelCache: MutableMap<String, JsonElement>,
+): List<JsonElement> = select("script:not([src])")
     .map { it.data() }
     .filter { "self.__next_f.push" in it }
     .flatMap { script ->
@@ -45,7 +190,7 @@ private fun Document.extractAppRouterPayloads(): List<JsonElement> = select("scr
             val arr = jsonInstance.parseToJsonElement(raw).jsonArray
             val content = arr.getOrNull(1)?.jsonPrimitive?.contentOrNull ?: return@flatMap emptyList()
 
-            extractRscPayloads(content)
+            extractRscPayloads(content, chunkCache, modelCache)
         } catch (_: Exception) {
             emptyList()
         }
@@ -62,7 +207,11 @@ private fun Document.extractPagesRouterPayloads(): List<JsonElement> {
     }
 }
 
-private fun extractRscPayloads(body: String): List<JsonElement> {
+private fun extractRscPayloads(
+    body: String,
+    chunkCache: MutableMap<String, String>,
+    modelCache: MutableMap<String, JsonElement>,
+): List<JsonElement> {
     val results = mutableListOf<JsonElement>()
     var pos = 0
 
@@ -101,17 +250,27 @@ private fun extractRscPayloads(body: String): List<JsonElement> {
                         bytes += 4
                         pos++ // consume the high surrogate; the loop increment handles the low
                     }
+
                     else -> bytes += 3
                 }
                 pos++
             }
+
+            // Extract the content and cache it by its hex ID locally
+            val chunkContent = body.substring(start, pos)
+            chunkCache[id] = chunkContent
+
             try {
-                results.add(jsonInstance.parseToJsonElement(body.substring(start, pos)))
-            } catch (_: Exception) {}
+                results.add(jsonInstance.parseToJsonElement(chunkContent))
+            } catch (_: Exception) {
+            }
         } else {
             // JSON chunk — parse by bracket depth
             val (element, end) = parseJsonAt(body, pos)
-            if (element != null) results.add(element)
+            if (element != null) {
+                results.add(element)
+                modelCache[id] = element // outlined model row, referenced by $Q/$W
+            }
             pos = end
         }
     }
@@ -235,9 +394,13 @@ fun <T> Document.extractNextJs(
     predicate: (JsonElement) -> Boolean,
     deserializer: DeserializationStrategy<T>,
 ): T? {
-    val payloads = extractAppRouterPayloads().ifEmpty { extractPagesRouterPayloads() }
+    val chunkCache = mutableMapOf<String, String>()
+    val modelCache = mutableMapOf<String, JsonElement>()
+    val payloads = extractAppRouterPayloads(chunkCache, modelCache).ifEmpty { extractPagesRouterPayloads() }
+
     for (payload in payloads) {
-        val result = extractValueNextJs(payload, predicate, deserializer)
+        val resolvedPayload = resolveNextJsRefs(payload, chunkCache, modelCache)
+        val result = extractValueNextJs(resolvedPayload, predicate, deserializer)
         if (result != null) return result
     }
     return null
@@ -286,8 +449,11 @@ fun <T> String.extractNextJsRsc(
     predicate: (JsonElement) -> Boolean,
     deserializer: DeserializationStrategy<T>,
 ): T? {
-    for (payload in extractRscPayloads(this)) {
-        val result = extractValueNextJs(payload, predicate, deserializer)
+    val chunkCache = mutableMapOf<String, String>()
+    val modelCache = mutableMapOf<String, JsonElement>()
+    for (payload in extractRscPayloads(this, chunkCache, modelCache)) {
+        val resolvedPayload = resolveNextJsRefs(payload, chunkCache, modelCache)
+        val result = extractValueNextJs(resolvedPayload, predicate, deserializer)
         if (result != null) return result
     }
     return null

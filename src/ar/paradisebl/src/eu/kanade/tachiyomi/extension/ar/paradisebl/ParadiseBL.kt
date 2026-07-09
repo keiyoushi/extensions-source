@@ -1,13 +1,10 @@
 package eu.kanade.tachiyomi.extension.ar.paradisebl
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class ParadiseBL :
-    Madara(
-        "Paradise BL",
-        "https://paradise-bl.com",
-        "ar",
-    ) {
+@Source
+abstract class ParadiseBL : Madara() {
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = true
 

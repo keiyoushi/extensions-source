@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
@@ -31,10 +32,8 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class Softkomik : HttpSource() {
-    override val name = "Softkomik"
-    override val baseUrl = "https://softkomik.co"
-    override val lang = "id"
+@Source
+abstract class Softkomik : HttpSource() {
     override val supportsLatest = true
 
     // session cache by URL/page route.
@@ -45,7 +44,7 @@ class Softkomik : HttpSource() {
         .add("rsc", "1")
         .build()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(::imageInterceptor)
         .addInterceptor(::apiAuthInterceptor)
         .build()
@@ -312,25 +311,16 @@ class Softkomik : HttpSource() {
         }
 
         val route = resolveSessionRoute(request.url)
-        val sessionResult = getSession(route)
-        val newRequest = request.newBuilder()
-            .header("X-Token", sessionResult.token)
-            .header("X-Sign", sessionResult.sign)
-            .build()
+        val apiSession = getSession(route)
+        val newRequest = request.withHeaders(apiSession)
 
         var response = chain.proceed(newRequest)
-        if (response.code != 200) { // they now change the response status code
-            response.close()
+        if (response.isSuccessful) return response
 
-            // retry once with session from WebView, in case the session from api is invalid but WebView has valid session
-            val cookieSession = getSessionViaWebView(route)
-            val retryRequest = request.newBuilder()
-                .header("X-Token", cookieSession.token)
-                .header("X-Sign", cookieSession.sign)
-                .build()
-            response = chain.proceed(retryRequest)
-        }
-        return response
+        // Fallback to webivew just in case credentials were still invalid
+        response.close()
+        val webviewSession = getSessionViaWebView(route)
+        return chain.proceed(request.withHeaders(webviewSession))
     }
 
     private fun getBearerTokenFromCookie(): BearerTokenDto? {
@@ -375,9 +365,9 @@ class Softkomik : HttpSource() {
         val sessionKey = if (isChapterImageRequest) sessionKeyChapterImage else sessionKeyChapterList
 
         val sessionApiUrl = if (isChapterImageRequest) {
-            "$baseUrl/api/sessions/chapter"
+            "$baseUrl/api/session/chapter"
         } else {
-            "$baseUrl/api/sessions/kajsijas"
+            "$baseUrl/api/session/amsnuy"
         }
         val webViewUrl = if (isChapterImageRequest) {
             val chapterSegment = resolveWebViewChapterSegment(url)
@@ -553,4 +543,12 @@ class Softkomik : HttpSource() {
         "https://img.softdevices.my.id/softkomik-image",
         "https://image.softkomik.com/softkomik",
     )
+
+    // Clean garabage at trailing of signature and token
+    fun Request.withHeaders(session: SessionDto): Request = this.newBuilder()
+        .header("X-Token", session.token.cleanB64())
+        .header("X-Sign", session.sign.take(64))
+        .build()
+
+    fun String.cleanB64(): String = substringBefore('=').let { it -> it + "=".repeat((4 - (it.length % 4)) % 4) }
 }

@@ -2,9 +2,11 @@ package eu.kanade.tachiyomi.extension.en.allanime
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
+import org.jsoup.Jsoup
 
 typealias ApiPopularResponse = Data<PopularData>
 
@@ -13,8 +15,6 @@ typealias ApiSearchResponse = Data<SearchData>
 typealias ApiMangaDetailsResponse = Data<MangaDetailsData>
 
 typealias ApiChapterListResponse = Data<ChapterListData>
-
-typealias ApiPageListResponse = Data<PageListData>
 
 @Serializable
 class Data<T>(val data: T)
@@ -81,7 +81,7 @@ class Manga(
         title = englishName ?: name
         url = "/manga/$id/${name.titleToSlug()}"
         thumbnail_url = thumbnail?.parseThumbnailUrl()
-        description = this@Manga.description?.parseDescription()
+        description = this@Manga.description?.let { Jsoup.parseBodyFragment(it).wholeText() }
         if (!altNames.isNullOrEmpty()) {
             if (description.isNullOrEmpty()) {
                 description = "Alternative Titles:\n"
@@ -104,7 +104,20 @@ class Manga(
 // chapters details
 @Serializable
 class ChapterListData(
-    @SerialName("episodeInfos") val chapterList: List<ChapterData>? = emptyList(),
+    val manga: ChapterMangaData,
+    @SerialName("episodeInfos") val chapterList: List<ChapterData>,
+)
+
+@Serializable
+class ChapterMangaData(
+    @SerialName("_id") val mangaId: String,
+    val name: String,
+    val availableChaptersDetail: AvailableChaptersDetail,
+)
+
+@Serializable
+class AvailableChaptersDetail(
+    val sub: List<String>,
 )
 
 @Serializable
@@ -118,8 +131,8 @@ class ChapterData(
         if (!title.isNullOrEmpty() && !title.contains(numberRegex)) {
             name += ": $title"
         }
-        url = "/manga/$mangaUrl/chapter-$chapterNum-sub"
-        date_upload = uploadDates?.sub.parseDate()
+        url = "/read/$mangaUrl/chapter-$chapterNum-sub"
+        date_upload = dateFormat.tryParse(uploadDates?.sub)
     }
 
     companion object {
@@ -132,12 +145,6 @@ class DateDto(
     val sub: String? = null,
 )
 
-// page list - encrypted response wrapper
-@Serializable
-class EncryptedOrPageListData(
-    val tobeparsed: String? = null,
-)
-
 // page list
 @Serializable
 class PageListData(
@@ -147,7 +154,7 @@ class PageListData(
 @Serializable
 class Servers(
     @SerialName("pictureUrlHead") val serverUrl: String? = null,
-    val pictureUrls: List<PageUrl>?,
+    val pictureUrls: List<PageUrl> = emptyList(),
 )
 
 @Serializable

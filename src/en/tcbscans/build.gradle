@@ -1,7 +1,0 @@
-ext {
-    extName = 'TCB Scans'
-    extClass = '.TCBScans'
-    extVersionCode = 11
-}
-
-apply from: "$rootDir/common.gradle"

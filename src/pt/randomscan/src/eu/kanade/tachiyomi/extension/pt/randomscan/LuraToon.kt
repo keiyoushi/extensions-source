@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.extension.pt.randomscan.dto.Manga
 import eu.kanade.tachiyomi.extension.pt.randomscan.dto.SearchResponse
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,7 +15,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -27,18 +28,15 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.getValue
 
-class LuraToon :
+@Source
+abstract class LuraToon :
     HttpSource(),
     ConfigurableSource {
-    override val baseUrl = "https://luratoons.net"
-    override val name = "Lura Toon"
-    override val lang = "pt-BR"
     override val supportsLatest = true
-    override val versionId = 2
 
     private val json: Json by injectLazy()
 
-    override val client = network.cloudflareClient
+    override val client = network.client
         .newBuilder()
         .addInterceptor(::loggedVerifyInterceptor)
         .addInterceptor(LuraZipInterceptor()::zipImageInterceptor)

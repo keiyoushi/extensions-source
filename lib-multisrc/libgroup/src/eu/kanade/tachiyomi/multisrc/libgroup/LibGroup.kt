@@ -13,8 +13,6 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -23,6 +21,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,13 +42,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
-abstract class LibGroup(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String,
-) : HttpSource(),
+abstract class LibGroup :
+    HttpSource(),
     ConfigurableSource {
+    private val apiDomainHost by lazy { apiDomain.toHttpUrl().host }
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     private val json: Json = Json {
         ignoreUnknownKeys = true
@@ -74,12 +74,9 @@ abstract class LibGroup(
     private val apiDomain: String = preferences.getString(API_DOMAIN_PREF, API_DOMAIN_DEFAULT).toString()
 
     override val client by lazy {
-        network.cloudflareClient.newBuilder()
-            .rateLimit(3)
-            .rateLimitHost(apiDomain.toHttpUrl(), 1)
-            .rateLimitHost(baseUrl.toHttpUrl(), 1)
-            .connectTimeout(1, TimeUnit.MINUTES)
-            .readTimeout(30, TimeUnit.SECONDS)
+        network.client.newBuilder()
+            .connectTimeout(1.minutes)
+            .readTimeout(30.seconds)
             .addInterceptor(::checkForToken)
             .addInterceptor { chain ->
                 val response = chain.proceed(chain.request())
@@ -91,6 +88,8 @@ abstract class LibGroup(
                 }
                 return@addInterceptor response
             }
+            .rateLimit(1) { it.host == apiDomainHost || it.host == baseUrlHost }
+            .rateLimit(3)
             .build()
     }
 
@@ -418,20 +417,29 @@ abstract class LibGroup(
 
     override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, imageHeader())
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-        val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH).substringBefore("/").substringBefore("?")
-        client.newCall(GET("$apiDomain/api/manga/$realQuery", headers))
-            .asObservableSuccess()
-            .map { response ->
-                val details = response.parseAs<Data<MangaShort>>().data.toSManga(isEng())
-                MangasPage(listOf(details), false)
-            }
-    } else {
-        client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response ->
-                searchMangaParse(response)
-            }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            val titleId = url.pathSegments.getOrNull(2)?.takeIf { it.isNotEmpty() }
+                ?: throw Exception("Unsupported url")
+            return fetchSearchManga(page, "$PREFIX_SLUG_SEARCH$titleId", filters)
+        }
+
+        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH).substringBefore("/").substringBefore("?")
+            client.newCall(GET("$apiDomain/api/manga/$realQuery", headers))
+                .asObservableSuccess()
+                .map { response ->
+                    val details = response.parseAs<Data<MangaShort>>().data.toSManga(isEng())
+                    MangasPage(listOf(details), false)
+                }
+        } else {
+            client.newCall(searchMangaRequest(page, query, filters))
+                .asObservableSuccess()
+                .map { response ->
+                    searchMangaParse(response)
+                }
+        }
     }
 
     // Search

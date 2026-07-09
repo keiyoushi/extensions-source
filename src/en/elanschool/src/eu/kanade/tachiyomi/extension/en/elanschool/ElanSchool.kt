@@ -8,17 +8,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class ElanSchool : HttpSource() {
-
-    override val name = "Elan School"
-
-    override val lang = "en"
-
-    override val baseUrl = "https://elan.school"
+@Source
+abstract class ElanSchool : HttpSource() {
 
     override val supportsLatest = false
 

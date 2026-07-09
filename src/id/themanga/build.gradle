@@ -1,9 +1,0 @@
-ext {
-    extName = 'TheManga'
-    extClass = '.TheManga'
-    baseUrl = 'https://themanga.my.id'
-    extVersionCode = 47
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

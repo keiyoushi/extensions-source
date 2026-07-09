@@ -1,14 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.plutoscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class FlameScanslol :
-    Madara(
-        "FlameScans.lol",
-        "https://flamescans.lol",
-        "en",
-    ) {
-    override val id = 1001157238479601077
+@Source
+abstract class FlameScanslol : Madara() {
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = true

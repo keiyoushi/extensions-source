@@ -1,8 +1,0 @@
-ext {
-    extName = 'Nicovideo Seiga'
-    extClass = '.NicovideoSeiga'
-    extVersionCode = 8
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

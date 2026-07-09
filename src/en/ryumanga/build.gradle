@@ -1,9 +1,0 @@
-ext {
-    extName = 'Ryumanga'
-    extClass = '.Ryumanga'
-    themePkg = 'keyoapp'
-    baseUrl = 'https://ryumanga.org'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

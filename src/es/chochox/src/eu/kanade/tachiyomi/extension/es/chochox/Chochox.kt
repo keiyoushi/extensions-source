@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.es.chochox
 
 import eu.kanade.tachiyomi.multisrc.vercomics.VerComics
+import keiyoushi.annotation.Source
 
-class Chochox : VerComics("ChoChoX", "https://chochox.com", "es") {
+@Source
+abstract class Chochox : VerComics() {
 
     override val urlSuffix = "porno"
     override val genreSuffix = "tag"

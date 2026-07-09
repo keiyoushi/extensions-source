@@ -1,8 +1,0 @@
-ext {
-    extName = 'BigSolo'
-    extClass = '.BigSolo'
-    extVersionCode = 4
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,8 +1,0 @@
-ext {
-    extName = 'Manga-Park'
-    extClass = '.MangaParkPublisher'
-    extVersionCode = 1
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

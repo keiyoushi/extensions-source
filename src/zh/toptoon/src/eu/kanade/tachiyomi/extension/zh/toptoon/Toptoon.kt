@@ -8,17 +8,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Toptoon : HttpSource() {
-    override val name: String = "TOPTOON頂通"
-    override val lang: String = "zh"
+@Source
+abstract class Toptoon : HttpSource() {
     override val supportsLatest = true
-    override val baseUrl = "https://www.toptoon.net"
 
     // Popular
 
@@ -46,7 +45,7 @@ class Toptoon : HttpSource() {
             .substringBefore("'")
         val jsonResponse = client.newCall(GET("https:$jsonUrl", headers)).execute()
         val mangas = jsonResponse.parseAs<Map<String, MangaDto>>().values
-            .sortedByDescending { it.lastUpdated.pubDate }
+            .sortedByDescending { it.pubDate }
             .map {
                 it.toSManga()
             }

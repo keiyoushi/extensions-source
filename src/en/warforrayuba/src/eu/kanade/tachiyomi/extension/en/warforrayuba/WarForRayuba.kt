@@ -6,7 +6,6 @@ import eu.kanade.tachiyomi.extension.en.warforrayuba.dto.PageDto
 import eu.kanade.tachiyomi.extension.en.warforrayuba.dto.RoundDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,6 +13,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -21,17 +22,12 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class WarForRayuba : HttpSource() {
-
-    override val name = "War For Rayuba"
-
-    override val baseUrl = "https://xrabohrok.github.io/WarMap/#/"
-
-    override val lang = "en"
+@Source
+abstract class WarForRayuba : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(4)
         .build()
 

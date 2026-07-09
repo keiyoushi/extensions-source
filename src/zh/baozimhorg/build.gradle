@@ -1,8 +1,0 @@
-ext {
-    extName = 'GoDa'
-    extClass = '.GoDaManhua'
-    themePkg = 'goda'
-    overrideVersionCode = 32
-}
-
-apply from: "$rootDir/common.gradle"

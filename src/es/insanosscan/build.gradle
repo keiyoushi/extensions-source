@@ -1,8 +1,0 @@
-ext {
-    extName = 'InsanosScan'
-    extClass = '.InsanosScan'
-    extVersionCode = 31
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

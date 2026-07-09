@@ -1,8 +1,0 @@
-ext {
-    extName = 'Ikigai Mangas'
-    extClass = '.IkigaiMangas'
-    extVersionCode = 30
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

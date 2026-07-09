@@ -1,5 +1,12 @@
 plugins {
-    id("lib-multisrc")
+    alias(kei.plugins.multisrc)
 }
 
-baseVersionCode = 14
+keiyoushi {
+    baseVersionCode = 15
+    libVersion = "1.4"
+
+    deeplink {
+        path("/reader/..*")
+    }
+}

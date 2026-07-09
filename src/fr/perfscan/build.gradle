@@ -1,9 +1,0 @@
-ext {
-    extName = 'Perf Scan'
-    extClass = '.PerfScan'
-    baseUrl = 'https://perf-scan.xyz'
-    extVersionCode = 31
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

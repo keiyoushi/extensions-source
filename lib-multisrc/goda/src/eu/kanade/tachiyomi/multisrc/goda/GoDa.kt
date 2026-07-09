@@ -17,19 +17,13 @@ import org.jsoup.nodes.Element
 import org.jsoup.nodes.Entities
 import rx.Observable
 
-open class GoDa(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class GoDa : HttpSource() {
 
     override val supportsLatest get() = true
 
     private val enableGenres = true
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
-
-    override val client = network.cloudflareClient
 
     private fun getKey(link: String): String = link.substringAfter("/manga/").removeSuffix("/")
 

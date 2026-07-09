@@ -9,19 +9,18 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.lang.IllegalStateException
 
-class Zazhimi : HttpSource() {
+@Source
+abstract class Zazhimi : HttpSource() {
 
     private val apiUrl = "https://android2026.zazhimi.net/api"
 
-    override val baseUrl = "https://www.zazhimi.net"
-    override val lang = "zh"
-    override val name = "杂志迷"
     override val supportsLatest = false
 
     override fun headersBuilder() = super.headersBuilder().set("User-Agent", "ZaZhiMi_6.0.0")

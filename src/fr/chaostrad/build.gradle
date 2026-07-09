@@ -1,8 +1,0 @@
-ext {
-    extName = 'ChaosTrad'
-    extClass = '.ChaosTrad'
-    extVersionCode = 1
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

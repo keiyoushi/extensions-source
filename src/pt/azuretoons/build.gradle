@@ -1,9 +1,0 @@
-ext {
-    extName = 'Azuretoons'
-    extClass = '.Azuretoons'
-    baseUrl = 'https://azuretoons.com'
-    extVersionCode = 2
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

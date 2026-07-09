@@ -4,25 +4,25 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class SearchResultDto(
+class SearchResultDto(
     val results: List<SearchWrapper>,
 ) {
     val mangas: List<AdditionalInfoDto> get() = results.firstOrNull()?.hits ?: emptyList()
 }
 
 @Serializable
-data class SearchWrapper(
+class SearchWrapper(
     val hits: List<AdditionalInfoDto>,
 )
 
 @Serializable
-data class AdditionalInfoDto(
+class AdditionalInfoDto(
     val id: String,
     val synopsis: String? = null,
     val status: String? = null,
     val genres: List<Genre>? = null,
     @SerialName("mainCoverId")
-    val coverId: String,
+    val coverId: String? = null,
     val titles: List<TitleDto>,
 )
 
@@ -49,13 +49,13 @@ enum class Genre(val portugueseName: String) {
 }
 
 @Serializable
-data class TitleDto(val title: String, val language: String, val priority: Int)
+class TitleDto(val title: String, val language: String, val priority: Int)
 
 @Serializable
-data class ChapterListDto(val chapters: List<ChapterDto>, val totalPages: Int)
+class ChapterListDto(val chapters: List<ChapterDto>, val totalPages: Int)
 
 @Serializable
-data class ChapterDto(
+class ChapterDto(
     val id: String,
     val number: Float,
     val scans: List<ScanDto>,
@@ -64,14 +64,14 @@ data class ChapterDto(
 )
 
 @Serializable
-data class ScanDto(val name: String)
+class ScanDto(val name: String)
 
 @Serializable
-data class MediaChapterDto(
+class MediaChapterDto(
     val id: String,
     val media: ItemId,
     val pages: List<ItemId>,
 )
 
 @Serializable
-data class ItemId(val id: String)
+class ItemId(val id: String)

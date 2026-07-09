@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.comicfuz
 
+import keiyoushi.utils.decodeHex
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
@@ -40,13 +41,5 @@ object ImageInterceptor : Interceptor {
     private fun Response.decode(key: ByteArray, iv: ByteArray) = AES.let {
         it.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(iv))
         body.source().cipherSource(it).buffer().asResponseBody("image/jpeg".toMediaType())
-    }
-
-    private fun String.decodeHex(): ByteArray {
-        check(length % 2 == 0) { "Must have an even length" }
-
-        return chunked(2)
-            .map { it.toInt(16).toByte() }
-            .toByteArray()
     }
 }

@@ -9,11 +9,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 
-class UlasComic : ZeistManga("Ulas Comic", "https://www.ulascomic01.xyz", "id") {
+@Source
+abstract class UlasComic : ZeistManga() {
 
     // ============================== Popular ===============================
     override val popularMangaSelector = "div.serieslist.pop.wpop ul li"

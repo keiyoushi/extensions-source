@@ -1,22 +1,30 @@
 package eu.kanade.tachiyomi.extension.en.madarascans
 
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
+import keiyoushi.utils.getPreferencesLazy
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.getValue
 
-class MadaraScans :
-    MangaThemesia(
-        "Madara Scans",
-        "https://madarascans.com",
-        "en",
-        mangaUrlDirectory = "/series",
-        dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.US),
-    ) {
+@Source
+abstract class MadaraScans :
+    MangaThemesia(),
+    ConfigurableSource {
+    override val mangaUrlDirectory = "/series"
+    override val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.US)
+
+    private val preferences by getPreferencesLazy()
+    private val paidChapterHelper = MangaThemesiaPaidChapterHelper(lockedChapterSelector = ".locked")
+
     // support for both popular/latest tabs and search
     override fun searchMangaSelector() = "div.listupd>div, div.legend-inner"
 
@@ -37,15 +45,22 @@ class MadaraScans :
     override val seriesStatusSelector = "span.status-badge-lux"
     override val seriesThumbnailSelector = ".lh-poster > img"
 
-    // limiting chapters to free
-    override fun chapterListSelector(): String = ".ch-item.free"
+    override fun chapterListSelector(): String = paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
+        ".ch-item",
+        preferences,
+    )
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         val urlElements = element.select("a")
         setUrlWithoutDomain(urlElements.attr("href"))
-        name = element.select(".ch-num").text().ifBlank { urlElements.first()!!.text() }
+        val chapterName = element.select(".ch-num").text().ifBlank { urlElements.firstOrNull()?.text().orEmpty() }
+        name = if (!element.hasClass("free")) "🔒 $chapterName" else chapterName
         val dateElement = element.select(".ch-date")?.text()
         date_upload = dateElement.parseChapterDate()
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)
     }
 
     override fun getFilterList(): FilterList {

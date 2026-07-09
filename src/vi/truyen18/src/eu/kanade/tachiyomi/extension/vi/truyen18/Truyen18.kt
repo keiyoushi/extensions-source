@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.truyen18
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,6 +8,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -23,16 +24,12 @@ import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 
-class Truyen18 : HttpSource() {
-    override val name = "Truyen18"
-
-    override val lang = "vi"
-
-    override val baseUrl = "https://truyen18.co"
+@Source
+abstract class Truyen18 : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(3)
         .build()
 

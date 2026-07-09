@@ -1,0 +1,15 @@
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "Manhua Rush"
+    versionCode = 2
+    contentWarning = ContentWarning.SAFE
+    libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://manhuarush.vercel.app"
+    }
+}

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -17,17 +18,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class ReadAllComics : HttpSource() {
-
-    override val name = "ReadAllComics"
-
-    override val baseUrl = "https://readallcomics.com"
-
-    override val lang = "en"
+@Source
+abstract class ReadAllComics : HttpSource() {
 
     override val supportsLatest = false
-
-    override val client = network.cloudflareClient
 
     // Popular
 

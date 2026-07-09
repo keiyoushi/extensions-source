@@ -5,26 +5,30 @@ import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
+import okhttp3.FormBody
 import okhttp3.OkHttpClient
+import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
-class MHScans :
-    Madara(
-        "MHScans",
-        "https://mh.inventariooculto.com",
-        "es",
-        dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")),
-    ),
+@Source
+abstract class MHScans :
+    Madara(),
     ConfigurableSource {
+    override val dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es"))
+
     override val mangaSubString = "series"
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 3, TimeUnit.SECONDS)
+        .rateLimit(1, 3.seconds)
         .build()
 
     override val useNewChapterEndpoint = true
@@ -41,6 +45,26 @@ class MHScans :
         }
 
         return "$baseSelector:not(.premium)"
+    }
+
+    override fun pageListParse(document: Document): List<Page> {
+        super.pageListParse(document).also {
+            if (it.isNotEmpty()) return it
+        }
+
+        document.selectFirst("form#rk_madara_redirect[method=post]")?.let { form ->
+            val url = form.attr("action")
+            val headers = headersBuilder().set("Referer", document.location()).build()
+            val body = FormBody.Builder()
+            form.select("input").forEach {
+                body.add(it.attr("name"), it.attr("value"))
+            }
+            return pageListParse(client.newCall(POST(url, headers, body.build())).execute().asJsoup())
+        }
+
+        return document.select("div.rk-page-wrap img, img.rk-img").mapIndexed { i, img ->
+            Page(i, imageUrl = img.attr("abs:src").ifEmpty { img.attr("abs:data-src") })
+        }
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

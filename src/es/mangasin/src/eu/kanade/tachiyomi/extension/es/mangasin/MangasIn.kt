@@ -4,36 +4,40 @@ import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.mmrcms.MMRCMS
 import eu.kanade.tachiyomi.multisrc.mmrcms.SuggestionDto
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.lib.synchrony.Deobfuscator
-import kotlinx.serialization.decodeFromString
+import keiyoushi.network.rateLimit
+import keiyoushi.utils.decodeHex
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import java.net.URLDecoder
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
-class MangasIn :
-    MMRCMS(
-        "Mangas.in",
-        "https://m440.in",
-        "es",
-        supportsAdvancedSearch = false,
-        dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
-    ) {
+@Source
+abstract class MangasIn : MMRCMS() {
+
+    override val supportsAdvancedSearch = false
+
+    override val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
+        .rateLimit(1, 1.seconds) { it.host == baseUrlHost }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -44,7 +48,7 @@ class MangasIn :
     override fun latestUpdatesParse(response: Response): MangasPage {
         runCatching { fetchFilterOptions() }
 
-        val data = json.decodeFromString<LatestUpdateResponse>(response.body.string())
+        val data = response.parseAs<LatestUpdateResponse>()
         val manga = data.data.map {
             SManga.create().apply {
                 url = "/$itemPath/${it.slug}"
@@ -76,7 +80,7 @@ class MangasIn :
             return super.searchMangaParse(response)
         }
 
-        searchDirectory = json.decodeFromString<List<SuggestionDto>>(response.body.string())
+        searchDirectory = response.parseAs<List<SuggestionDto>>()
 
         return parseSearchDirectory(1)
     }
@@ -113,7 +117,7 @@ class MangasIn :
         val mangaUrl = document.location().removeSuffix("/")
         val encodeChapterData = CHAPTER_DATA_REGEX.find(document.html())?.value ?: throw Exception("No se pudo encontrar la lista de capítulos")
         val unescapedChapterData = encodeChapterData.unescape()
-        val chapterData = json.decodeFromString<CDT>(unescapedChapterData)
+        val chapterData = unescapedChapterData.parseAs<CDT>()
         val salt = chapterData.s.decodeHex()
 
         val unsaltedCipherText = Base64.decode(chapterData.ct, Base64.DEFAULT)
@@ -126,7 +130,7 @@ class MangasIn :
 
         val unescaped = decrypted.unescapeJava().removeSurrounding("\"").unescape()
 
-        val chapters = json.decodeFromString<List<Chapter>>(unescaped)
+        val chapters = unescaped.parseAs<List<Chapter>>()
 
         return chapters.map {
             SChapter.create().apply {
@@ -136,11 +140,7 @@ class MangasIn :
                     "Capítulo ${it.number}: ${it.name}"
                 }
 
-                date_upload = try {
-                    dateFormat.parse(it.createdAt)!!.time
-                } catch (_: ParseException) {
-                    0L
-                }
+                date_upload = dateFormat.tryParse(it.createdAt)
 
                 setUrlWithoutDomain("$mangaUrl/${it.slug}")
             }
@@ -174,14 +174,6 @@ class MangasIn :
         }
         builder.append(escaped)
         return builder.toString()
-    }
-
-    private fun String.decodeHex(): ByteArray {
-        check(length % 2 == 0) { "Must have an even length" }
-
-        return chunked(2)
-            .map { it.toInt(16).toByte() }
-            .toByteArray()
     }
 }
 

@@ -1,13 +1,18 @@
 package eu.kanade.tachiyomi.extension.en.allanime
 
+import android.annotation.SuppressLint
+import android.app.Application
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,32 +20,38 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.json.float
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
-class AllManga :
+@Source
+abstract class AllManga :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "AllManga"
-
-    override val baseUrl = "https://allmanga.to"
+    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
 
     private val apiUrl = "https://api.allanime.day/api"
 
-    override val lang = "en"
-
-    override val id = 4709139914729853090
-
     override val supportsLatest = true
+
+    override val supportsRelatedMangas = false
 
     private val preferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(1)
+    override val client = network.client.newBuilder()
+        .rateLimit(1) { it.host == apiUrlHost }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -83,6 +94,16 @@ class AllManga :
 
     /* Search */
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val httpUrl = query.toHttpUrl()
+            if (httpUrl.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val id = httpUrl.pathSegments.getOrNull(1)
+                ?: throw Exception("Unsupported url")
+            return fetchSearchManga(page, "$SEARCH_PREFIX$id", filters)
+        }
+
         if (!query.startsWith(SEARCH_PREFIX)) {
             return super.fetchSearchManga(page, query, filters)
         }
@@ -157,20 +178,13 @@ class AllManga :
     }
 
     /* Chapters */
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
-        .asObservableSuccess()
-        .map { response ->
-            chapterListParse(response, manga)
-        }
-
     override fun chapterListRequest(manga: SManga): Request {
         val mangaId = manga.url.split("/")[2]
 
         val payload = GraphQL(
             ChapterListVariables(
-                id = "manga@$mangaId",
-                chapterNumStart = 0f,
-                chapterNumEnd = 9999f,
+                id = mangaId,
+                showId = "manga@$mangaId",
             ),
             CHAPTERS_QUERY,
         )
@@ -180,18 +194,17 @@ class AllManga :
         return POST(apiUrl, headers, requestBody)
     }
 
-    private fun chapterListParse(response: Response, manga: SManga): List<SChapter> {
+    override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<ApiChapterListResponse>()
+        val mangaUrl = "${result.data.manga.mangaId}/${result.data.manga.name.titleToSlug()}"
 
-        val chapters = result.data.chapterList?.sortedByDescending { it.chapterNum.float }
-            ?: return emptyList()
+        val availableChapters = result.data.manga.availableChaptersDetail.sub
+        val chapterDetails = result.data.chapterList.associateBy { it.chapterNum.content }
 
-        val mangaUrl = manga.url.substringAfter("/manga/")
-
-        return chapters.map { it.toSChapter(mangaUrl) }
+        return availableChapters.map { chapterNum ->
+            chapterDetails[chapterNum]!!.toSChapter(mangaUrl)
+        }
     }
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException("Not used")
 
     override fun getChapterUrl(chapter: SChapter): String {
         val chapterUrlParts = chapter.url.split("/")
@@ -201,43 +214,116 @@ class AllManga :
     }
 
     /* Pages */
-    override fun pageListRequest(chapter: SChapter): Request {
-        val chapterUrl = chapter.url.split("/")
-        val mangaId = chapterUrl[2]
-        val chapterNo = chapterUrl[4].split("-")[1]
-
-        val payload = GraphQL(
-            PageListVariables(
-                id = mangaId,
-                chapterNum = chapterNo,
-                translationType = "sub",
-            ),
-            PAGE_QUERY,
-        )
-
-        val requestBody = payload.toJsonRequestBody()
-
-        return POST(apiUrl, headers, requestBody)
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        pageListFromWebView(chapter)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val pageListData = response.parsePageList()
-        val pages = pageListData.pageList?.edges?.get(0) ?: return emptyList()
+    override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
+
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun pageListFromWebView(chapter: SChapter): List<Page> {
+        val document = client.newCall(GET(getChapterUrl(chapter), headers)).execute().asJsoup()
+
+        val handler = Handler(Looper.getMainLooper())
+        val latch = CountDownLatch(1)
+        val jsInterface = JsInterface(latch)
+        val pool = ('a'..'z') + ('A'..'Z')
+        val interfaceName = (1..(10..20).random())
+            .map { pool.random() }
+            .joinToString("")
+        val script = """
+            (function () {
+                const originalParse = JSON.parse;
+                JSON.parse = new Proxy(originalParse, {
+                    apply(target, thisArg, args) {
+                        const result = Reflect.apply(target, thisArg, args);
+                        if (result && result.chapterPages) {
+                            window.$interfaceName.passPayload(args[0]);
+                        }
+                        return result;
+                    }
+                });
+            })();
+        """.trimIndent()
+        var webView: WebView? = null
+
+        handler.post {
+            val view = WebView(Injekt.get<Application>())
+            webView = view
+
+            with(view.settings) {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                blockNetworkImage = true
+                userAgentString = headers["User-Agent"]
+            }
+            view.addJavascriptInterface(jsInterface, interfaceName)
+
+            view.webViewClient = object : WebViewClient() {
+                override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                    super.onPageStarted(view, url, favicon)
+                    view.evaluateJavascript(script) {}
+                }
+            }
+
+            view.loadDataWithBaseURL(getChapterUrl(chapter), document.outerHtml(), "text/html", "utf-8", null)
+        }
+
+        val completed = latch.await(30, TimeUnit.SECONDS)
+        handler.post { webView?.destroy() }
+
+        if (!completed) throw Exception("Timed out waiting for page list")
+
+        val payload = jsInterface.payload ?: throw Exception("Failed to capture page list")
+        val pageListData = payload.parseAs<PageListData>(json).pageList
+            ?: return emptyList()
+
+        val pages = pageListData.edges.firstOrNull {
+            val fullUrlAvailable = it.pictureUrls.randomOrNull()?.url?.matches(urlRegex) == true
+            val serverAvailable = it.serverUrl != null
+
+            fullUrlAvailable || serverAvailable
+        }
+            ?: pageListData.edges.firstOrNull()
+            ?: return emptyList()
 
         val imageDomain = pages.serverUrl?.let { server ->
             if (server.matches(urlRegex)) {
-                server
+                "${server.removeSuffix("/")}/"
             } else {
-                "https://$server"
+                "https://${server.removeSuffix("/")}/"
             }
-        } ?: return emptyList()
+        } ?: "https://ytimgf.youtube-anime.com/"
 
-        return pages.pictureUrls?.mapIndexed { index, image ->
+        return pages.pictureUrls.mapIndexedNotNull { index, image ->
+            image.url ?: return@mapIndexedNotNull null
+
+            val imageUrl = if (image.url.matches(urlRegex)) {
+                image.url
+            } else {
+                imageDomain + image.url.removePrefix("/")
+            }
             Page(
                 index = index,
-                imageUrl = "$imageDomain${image.url}",
+                imageUrl = imageUrl,
             )
-        } ?: emptyList()
+        }
+    }
+
+    private class JsInterface(private val latch: CountDownLatch) {
+        var payload: String? = null
+            private set
+
+        @JavascriptInterface
+        @Suppress("UNUSED")
+        fun passPayload(data: String) {
+            if (payload == null) {
+                payload = data
+                latch.countDown()
+            }
+        }
     }
 
     override fun imageRequest(page: Page): Request {

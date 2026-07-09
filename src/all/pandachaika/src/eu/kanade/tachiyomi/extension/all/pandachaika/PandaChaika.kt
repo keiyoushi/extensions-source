@@ -9,39 +9,59 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import keiyoushi.annotation.Source
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
+import keiyoushi.zip.dataRange
+import keiyoushi.zip.range
+import keiyoushi.zip.readEntry
+import keiyoushi.zip.zipDirectory
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.buffer
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.lang.String.CASE_INSENSITIVE_ORDER
-import java.math.BigInteger
 
-class PandaChaika(
-    override val lang: String = "all",
-    private val searchLang: String = "",
-) : HttpSource() {
+@Source
+abstract class PandaChaika : HttpSource() {
 
-    override val name = "PandaChaika"
-
-    override val baseUrl = "https://panda.chaika.moe"
+    private val searchLang: String
+        get() = when (lang) {
+            "en" -> "english"
+            "zh" -> "chinese"
+            "ko" -> "korean"
+            "es" -> "spanish"
+            "ru" -> "russian"
+            "pt" -> "portuguese"
+            "fr" -> "french"
+            "th" -> "thai"
+            "vi" -> "vietnamese"
+            "ja" -> "japanese"
+            "id" -> "indonesian"
+            "ar" -> "arabic"
+            "uk" -> "ukrainian"
+            "tr" -> "turkish"
+            "cs" -> "czech"
+            "tl" -> "tagalog"
+            "fi" -> "finnish"
+            "jv" -> "javanese"
+            "el" -> "greek"
+            else -> ""
+        }
 
     private val baseSearchUrl = "$baseUrl/search"
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.client
         .newBuilder()
         .addInterceptor(::intercept)
         .build()
-
-    private val json: Json by injectLazy()
 
     private val fakkuRegex = Regex("""(?:https?://)?(?:www\.)?fakku\.net/hentai/""")
     private val ehentaiRegex = Regex("""(?:https?://)?e-hentai\.org/g/""")
@@ -76,57 +96,70 @@ class PandaChaika(
         }
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
-        query.startsWith(PREFIX_ID_SEARCH) -> {
-            val id = query.removePrefix(PREFIX_ID_SEARCH).toInt()
-            client.newCall(GET("$baseUrl/api?archive=$id", headers))
-                .asObservable()
-                .map { response ->
-                    searchMangaByIdParse(response, id)
-                }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            if (url.pathSegments.size <= 2) {
+                throw Exception("Unsupported url")
+            }
+            val id = "${url.pathSegments[1]}/${url.pathSegments[2]}"
+            return fetchSearchManga(page, "$PREFIX_ID_SEARCH$id", filters)
         }
+        return when {
+            query.startsWith(PREFIX_ID_SEARCH) -> {
+                val id = query.removePrefix(PREFIX_ID_SEARCH).toInt()
+                client.newCall(GET("$baseUrl/api?archive=$id", headers))
+                    .asObservable()
+                    .map { response ->
+                        searchMangaByIdParse(response, id)
+                    }
+            }
 
-        query.startsWith(PREFIX_EHEN_ID_SEARCH) -> {
-            val id = query.removePrefix(PREFIX_EHEN_ID_SEARCH).replace(ehentaiRegex, "")
-            val baseLink = "https://e-hentai.org/g/"
-            val fullLink = baseSearchUrl.toHttpUrl().newBuilder().apply {
-                addQueryParameter("qsearch", baseLink + id)
-                addQueryParameter("json", "")
-            }.build()
-            client.newCall(GET(fullLink, headers))
-                .asObservableSuccess()
-                .map {
-                    val archive = it.parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
-                    MangasPage(listOf(archive), false)
-                }
+            query.startsWith(PREFIX_EHEN_ID_SEARCH) -> {
+                val id = query.removePrefix(PREFIX_EHEN_ID_SEARCH).replace(ehentaiRegex, "")
+                val baseLink = "https://e-hentai.org/g/"
+                val fullLink = baseSearchUrl.toHttpUrl().newBuilder().apply {
+                    addQueryParameter("qsearch", baseLink + id)
+                    addQueryParameter("json", "")
+                }.build()
+                client.newCall(GET(fullLink, headers))
+                    .asObservableSuccess()
+                    .map {
+                        val archive = it.parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
+                        MangasPage(listOf(archive), false)
+                    }
+            }
+
+            query.startsWith(PREFIX_FAK_ID_SEARCH) -> {
+                val slug = query.removePrefix(PREFIX_FAK_ID_SEARCH).replace(fakkuRegex, "")
+                val baseLink = "https://www.fakku.net/hentai/"
+                val fullLink = baseSearchUrl.toHttpUrl().newBuilder().apply {
+                    addQueryParameter("qsearch", baseLink + slug)
+                    addQueryParameter("json", "")
+                }.build()
+                client.newCall(GET(fullLink, headers))
+                    .asObservableSuccess()
+                    .map {
+                        val archive = it.parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
+                        MangasPage(listOf(archive), false)
+                    }
+            }
+
+            query.startsWith(PREFIX_SOURCE_SEARCH) -> {
+                val url = query.removePrefix(PREFIX_SOURCE_SEARCH)
+                client.newCall(GET("$baseSearchUrl/?qsearch=$url&json=", headers))
+                    .asObservableSuccess()
+                    .map {
+                        val archive = it.parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
+                        MangasPage(listOf(archive), false)
+                    }
+            }
+
+            else -> super.fetchSearchManga(page, query, filters)
         }
-
-        query.startsWith(PREFIX_FAK_ID_SEARCH) -> {
-            val slug = query.removePrefix(PREFIX_FAK_ID_SEARCH).replace(fakkuRegex, "")
-            val baseLink = "https://www.fakku.net/hentai/"
-            val fullLink = baseSearchUrl.toHttpUrl().newBuilder().apply {
-                addQueryParameter("qsearch", baseLink + slug)
-                addQueryParameter("json", "")
-            }.build()
-            client.newCall(GET(fullLink, headers))
-                .asObservableSuccess()
-                .map {
-                    val archive = it.parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
-                    MangasPage(listOf(archive), false)
-                }
-        }
-
-        query.startsWith(PREFIX_SOURCE_SEARCH) -> {
-            val url = query.removePrefix(PREFIX_SOURCE_SEARCH)
-            client.newCall(GET("$baseSearchUrl/?qsearch=$url&json=", headers))
-                .asObservableSuccess()
-                .map {
-                    val archive = it.parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
-                    MangasPage(listOf(archive), false)
-                }
-        }
-
-        else -> super.fetchSearchManga(page, query, filters)
     }
 
     private fun searchMangaByIdParse(response: Response, id: Int = 0): MangasPage {
@@ -152,7 +185,7 @@ class PandaChaika(
 
         val mangas = library.archives.map(LongArchive::toSManga)
 
-        val hasNextPage = library.has_next
+        val hasNextPage = library.hasNext
 
         return MangasPage(mangas, hasNextPage)
     }
@@ -255,64 +288,50 @@ class PandaChaika(
 
     // Pages
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        fun List<String>.sort() = this.sortedWith(compareBy(CASE_INSENSITIVE_ORDER) { it })
         val url = "$baseUrl${chapter.url}/download/"
-        val (fileType, contentLength) = getZipType(url)
+        val dir = client.zipDirectory(url, headers)
+        val pages = dir.entries.sortedWith(compareBy(CASE_INSENSITIVE_ORDER) { it.name }).mapIndexed { index, entry ->
+            val data = ImageRequest(
+                url,
+                entry.name,
+                entry.localHeaderOffset,
+                entry.compressedSize,
+                entry.method,
+            ).toJsonString()
+            Page(index, imageUrl = "https://127.0.0.1/#$data")
+        }
 
-        val remoteZip = ZipHandler(url, client, headers, fileType, contentLength).populate()
-        val fileListing = remoteZip.files().sort()
-
-        val files = remoteZip.toJson()
-        return Observable.just(
-            fileListing.mapIndexed { index, filename ->
-                Page(index, imageUrl = "https://127.0.0.1/#$filename&$files")
-            },
-        )
-    }
-
-    private fun getZipType(url: String): Pair<String, BigInteger> {
-        val request = Request.Builder()
-            .url(url)
-            .headers(headers)
-            .method("HEAD", null)
-            .build()
-
-        val contentLength = (
-            client.newCall(request).execute().header("content-length")
-                ?: throw Exception("Could not get Content-Length of URL")
-            )
-            .toBigInteger()
-
-        return (if (contentLength > Int.MAX_VALUE.toBigInteger()) "zip64" else "zip") to contentLength
+        return Observable.just(pages)
     }
 
     private fun intercept(chain: Interceptor.Chain): Response {
-        val url = chain.request().url.toString()
-        return if (url.startsWith("https://127.0.0.1/#")) {
-            val fragment = url.toHttpUrl().fragment!!
-            val remoteZip = fragment.substringAfter("&").parseAs<Zip>()
-            val filename = fragment.substringBefore("&")
-
-            val byteArray = remoteZip.fetch(filename, client)
-            var type = filename.substringAfterLast('.').lowercase()
-            type = if (type == "jpg") "jpeg" else type
-
-            Response.Builder().body(byteArray.toResponseBody("image/$type".toMediaType()))
-                .request(chain.request())
-                .protocol(Protocol.HTTP_1_0)
-                .code(200)
-                .message("")
-                .build()
-        } else {
-            chain.proceed(chain.request())
+        val request = chain.request()
+        if (!request.url.toString().startsWith("https://127.0.0.1/#")) {
+            return chain.proceed(request)
         }
+
+        val data = request.url.fragment?.parseAs<ImageRequest>() ?: return chain.proceed(request)
+        val range = dataRange(data.offset, data.compressedSize)
+        val rangeRequest = request.newBuilder()
+            .url(data.url)
+            .range(range)
+            .build()
+
+        val response = chain.proceed(rangeRequest)
+        if (!response.isSuccessful) return response
+        val image = readEntry(response.body.source(), data.compressedSize, data.method).buffer()
+        var type = data.name.substringAfterLast('.').lowercase()
+        type = if (type == "jpg") "jpeg" else type
+
+        return response.newBuilder()
+            .removeHeader("Content-Range")
+            .removeHeader("Content-Length")
+            .code(200)
+            .message("OK")
+            .protocol(Protocol.HTTP_1_1)
+            .body(image.asResponseBody("image/$type".toMediaType()))
+            .build()
     }
-
-    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
-
-    private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
-
-    private fun Zip.toJson(): String = json.encodeToString(this)
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()

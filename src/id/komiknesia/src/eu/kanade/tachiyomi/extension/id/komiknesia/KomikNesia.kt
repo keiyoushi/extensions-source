@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,12 +17,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class KomikNesia : HttpSource() {
+@Source
+abstract class KomikNesia : HttpSource() {
 
-    override val name = "KomikNesia"
-    override val baseUrl = "https://02.komiknesia.asia"
     private val apiUrl = "https://api-be.komiknesia.my.id/api"
-    override val lang = "id"
     override val supportsLatest = true
 
     private var genresList: List<Pair<String, String>> = emptyList()

@@ -1,11 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.goctruyentranh
 
-import android.content.SharedPreferences
-import android.widget.Toast
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,7 +8,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.getPreferences
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -22,29 +18,39 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class GocTruyenTranh :
-    HttpSource(),
-    ConfigurableSource {
-
-    override val lang = "vi"
-
-    private val defaultBaseUrl = "https://goctruyentranh.com"
-
-    override val baseUrl by lazy { getPrefBaseUrl() }
-
-    override val name = "GocTruyenTranh"
+@Source
+abstract class GocTruyenTranh : HttpSource() {
 
     override val supportsLatest = true
 
-    private val searchUrl by lazy { "${getPrefBaseUrl()}/baseapi/comics/filterComic" }
+    private val searchUrl get() = "$baseUrl/baseapi/comics/filterComic"
 
     private val dateFormat = SimpleDateFormat("dd-MM-yyyy HH:mm:ss", Locale.US)
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+
+            if (response.code == 400 && request.url.encodedPath.contains("_next/image")) {
+                val widths = listOf("384", "750", "960", "256", "1200", "1920", "3840", "96")
+                for (width in widths) {
+                    val newUrl = request.url.newBuilder().setQueryParameter("w", width).build()
+                    val retryResponse = chain.proceed(request.newBuilder().url(newUrl).build())
+                    if (retryResponse.isSuccessful) {
+                        response.close()
+                        return@addInterceptor retryResponse
+                    }
+                    retryResponse.close()
+                }
+            }
+            response
+        }
         .rateLimit(3)
         .build()
 
@@ -60,13 +66,7 @@ class GocTruyenTranh :
                 val sel = element.selectFirst("a.line-clamp-2")!!
                 setUrlWithoutDomain(sel.absUrl("href"))
                 title = sel.text()
-                thumbnail_url = element.selectFirst("img")
-                    ?.absUrl("src")
-                    ?.let { url ->
-                        url.toHttpUrlOrNull()
-                            ?.queryParameter("url")
-                            ?: url
-                    }
+                thumbnail_url = getImgUrl(element.selectFirst("img"))
             }
         }
         val hasNextPage = document.selectFirst("nav ul li") != null
@@ -112,13 +112,7 @@ class GocTruyenTranh :
             val blocks = container.select("p")
             if (blocks.isNotEmpty()) blocks.joinToString("\n\n") { it.wholeText().trim() } else container.wholeText().trim()
         }
-        thumbnail_url = document.selectFirst("section aside:first-child img")
-            ?.absUrl("src")
-            ?.let { url ->
-                url.toHttpUrlOrNull()
-                    ?.queryParameter("url")
-                    ?: url
-            }
+        thumbnail_url = getImgUrl(document.selectFirst("section aside:first-child img"))
         status = parseStatus(document.selectFirst("span:contains(Trạng thái:) + b")?.text())
         author = document.selectFirst("span:contains(Tác giả:) + b")?.text()
     }
@@ -176,12 +170,40 @@ class GocTruyenTranh :
         val manga = json.comics.data.map {
             SManga.create().apply {
                 title = it.name
-                thumbnail_url = it.thumbnail
+                thumbnail_url = getThumbnail(it.thumbnail)
                 setUrlWithoutDomain("$baseUrl/" + it.slug)
             }
         }
         val hasNextPage = json.comics.current_page != json.comics.last_page
         return MangasPage(manga, hasNextPage)
+    }
+
+    private fun getImgUrl(element: Element?): String? {
+        val url = element?.absUrl("src")?.takeIf { it.isNotEmpty() }
+            ?: element?.attr("srcset")?.takeIf { it.isNotEmpty() }?.let { srcset ->
+                val firstUrl = srcset.split(',').first().trim().split(' ').first()
+                if (firstUrl.startsWith("http")) firstUrl else "$baseUrl$firstUrl"
+            }
+        return getThumbnail(url)
+    }
+
+    private fun getThumbnail(url: String?): String? {
+        if (url.isNullOrEmpty()) return null
+        val httpUrl = url.toHttpUrlOrNull() ?: return url
+
+        val builder = if (url.contains("_next/image")) {
+            httpUrl.newBuilder()
+        } else {
+            baseUrl.toHttpUrl().newBuilder()
+                .addPathSegment("_next")
+                .addPathSegment("image")
+                .addQueryParameter("url", url)
+        }
+
+        return builder
+            .setQueryParameter("w", "384")
+            .setQueryParameter("q", "75")
+            .build().toString()
     }
 
     override fun getFilterList() = FilterList(
@@ -191,45 +213,4 @@ class GocTruyenTranh :
         SortByList(),
         CountryList(),
     )
-
-    private val preferences: SharedPreferences = getPreferences()
-
-    init {
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != defaultBaseUrl) {
-                preferences.edit()
-                    .putString(BASE_URL_PREF, defaultBaseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
-                    .apply()
-            }
-        }
-    }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            setDefaultValue(defaultBaseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $defaultBaseUrl"
-
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
-                true
-            }
-        }
-        screen.addPreference(baseUrlPref)
-    }
-
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
-
-    companion object {
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng thay đổi."
-        private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_SUMMARY =
-            "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
-    }
 }

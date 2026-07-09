@@ -1,8 +1,0 @@
-ext {
-    extName = 'Hyakuro Translations'
-    extClass = '.Hyakuro'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

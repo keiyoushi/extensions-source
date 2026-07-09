@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -28,19 +29,12 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class RinkoComics :
+@Source
+abstract class RinkoComics :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Rinko Comics"
-
-    override val baseUrl = "https://rinkocomics.com"
-
-    override val lang = "en"
-
     override val supportsLatest = true
-
-    override val client = network.cloudflareClient
 
     private val preferences by getPreferencesLazy()
 
@@ -49,9 +43,25 @@ class RinkoComics :
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request = GET(comicsUrl(page).build(), headers)
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
-    override fun popularMangaParse(response: Response): MangasPage = parseComicsPage(response)
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+
+        val entries = document.select(".comics-flex-pinned a.pinned-comic-card").mapNotNull { card ->
+            val url = card.attr("abs:href").trim()
+            if (url.isBlank()) return@mapNotNull null
+            val title = card.selectFirst(".pinned-comic-title")?.text()?.trim() ?: return@mapNotNull null
+
+            SManga.create().apply {
+                setUrlWithoutDomain(url)
+                this.title = title
+                thumbnail_url = card.selectFirst(".comic-thumbnail img")?.let { imageFromElement(it) }
+            }
+        }
+
+        return MangasPage(entries, false)
+    }
 
     override fun latestUpdatesRequest(page: Int): Request = GET(
         comicsUrl(page)

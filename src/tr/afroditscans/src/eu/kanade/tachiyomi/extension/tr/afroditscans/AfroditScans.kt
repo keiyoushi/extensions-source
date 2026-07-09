@@ -1,13 +1,9 @@
 package eu.kanade.tachiyomi.extension.tr.afroditscans
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import java.text.SimpleDateFormat
-import java.util.Locale
+import eu.kanade.tachiyomi.multisrc.uzaymanga.UzayManga
+import keiyoushi.annotation.Source
 
-class AfroditScans :
-    MangaThemesia(
-        "Afrodit Scans",
-        "https://afroditscans.com",
-        "tr",
-        dateFormat = SimpleDateFormat("MMMM d, yyy", Locale("tr")),
-    )
+@Source
+abstract class AfroditScans : UzayManga() {
+    override val cdnUrl = "https://cdn-a.efsaneler2.can.re"
+}

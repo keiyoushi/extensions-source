@@ -12,6 +12,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -35,15 +37,13 @@ const val DOMAIN = "mangacloud.org"
 const val API_URL = "https://api.$DOMAIN"
 const val CDN_URL = "https://pika.$DOMAIN"
 
-class MangaCloud : HttpSource() {
-    override val name = "MangaCloud"
-    override val lang = "en"
-
-    override val baseUrl = "https://$DOMAIN"
-
+@Source
+abstract class MangaCloud : HttpSource() {
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.client.newBuilder()
+        .rateLimit(1)
+        .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
@@ -138,6 +138,7 @@ class MangaCloud : HttpSource() {
                         fetchingOnlineTags.set(false)
                     }
                 }
+
                 override fun onFailure(call: Call, e: IOException) {
                     Log.e(name, "Failed to fetch tags", e)
                     fetchingOnlineTags.set(false)
@@ -247,11 +248,11 @@ class MangaCloud : HttpSource() {
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parseAs<Data<Manga>>()
+        val data = response.parseAs<Data<Manga>>().data
 
-        return data.data.chapters.map { chapter ->
+        return data.chapters.map { chapter ->
             SChapter.create().apply {
-                url = ChapterUrl(data.data.id, chapter.id).toJsonString()
+                url = ChapterUrl(data.id, chapter.id).toJsonString()
                 name = buildString {
                     append("Chapter ")
                     append(chapter.number.toString().substringBefore(".0"))
@@ -269,7 +270,7 @@ class MangaCloud : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.parseAs<ChapterUrl>().chapterId
 
-        return GET("$API_URL/chapter/$chapterId", headers)
+        return GET("$API_URL/chapter5/$chapterId", headers)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -287,6 +288,11 @@ class MangaCloud : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    private fun generateKey(): String {
+        val timestamp = (System.currentTimeMillis() / 1000).toString().reversed()
+        return timestamp.map { "${(0..9).random()}$it" }.joinToString("")
+    }
 }
 
 private val jsonMediaType = "application/json".toMediaType()

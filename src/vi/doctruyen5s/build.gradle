@@ -1,9 +1,0 @@
-ext {
-    extName = 'DocTruyen5s'
-    extClass = '.DocTruyen5s'
-    themePkg = 'liliana'
-    baseUrl = 'https://manga.io.vn'
-    overrideVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"

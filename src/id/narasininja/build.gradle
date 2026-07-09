@@ -1,9 +1,0 @@
-ext{
-    extName = 'Narasi Ninja'
-    extClass = '.NarasiNinja'
-    baseUrl = 'https://narasininja.net'
-    extVersionCode = 2
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.vi.teamlanhlung
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +9,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
@@ -24,17 +25,12 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class TeamLanhLung : HttpSource() {
-
-    override val name: String = "Team Lạnh Lùng"
-
-    override val baseUrl: String = "https://hongtruyentranh.com"
-
-    override val lang: String = "vi"
+@Source
+abstract class TeamLanhLung : HttpSource() {
 
     override val supportsLatest: Boolean = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
         .build()
 

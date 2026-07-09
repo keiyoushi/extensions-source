@@ -1,8 +1,0 @@
-ext {
-    extName = 'Nexus Toons'
-    extClass = '.NexusToons'
-    extVersionCode = 61
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

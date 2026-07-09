@@ -1,0 +1,271 @@
+package eu.kanade.tachiyomi.extension.all.lunaranime
+
+import android.os.Handler
+import android.os.Looper
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import keiyoushi.utils.applicationContext
+import okhttp3.Interceptor
+import okhttp3.Response
+import java.io.IOException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+
+const val DESTROY_TIMEOUT_MS = 300000L // 5m
+
+class LunarWebViewSigner(
+    private val baseUrl: String,
+    private val apiUrl: String,
+) {
+    private val handler by lazy { Handler(Looper.getMainLooper()) }
+    private var cachedWv: WebView? = null
+    private var destroyWv: Runnable? = null
+    private val bridgeName = "LunarSignerBridge"
+
+    private val globalWebView: WebView
+        get() {
+            destroyWv?.let { handler.removeCallbacks(it) }
+            if (cachedWv == null) {
+                cachedWv = WebView(applicationContext).apply {
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                }
+            }
+            destroyWv = Runnable {
+                cachedWv?.destroy()
+                cachedWv = null
+                destroyWv = null
+            }.also {
+                handler.postDelayed(it, DESTROY_TIMEOUT_MS)
+            }
+            return cachedWv!!
+        }
+
+    private var needsCaptcha = false
+
+    fun dpopInterceptor() = Interceptor { chain ->
+        fun proceed(url: String): Response {
+            var req = chain.request()
+
+            if (needsCaptcha) {
+                val dpop = signUrlWv(req.method, url.substringBefore('?')).orEmpty()
+                if (dpop.isNotEmpty()) {
+                    req = req.newBuilder().addHeader("dpop", dpop).build()
+                }
+            }
+            return chain.proceed(req)
+        }
+
+        val url = chain.request().url.toString()
+
+        if (!url.contains(apiUrl)) return@Interceptor chain.proceed(chain.request())
+
+        val resp = proceed(url)
+
+        if (
+            resp.code == 403 &&
+            resp.peekBody(1024).string().contains("validate", ignoreCase = true)
+        ) {
+            resp.close()
+
+            if (!needsCaptcha) {
+                needsCaptcha = true
+                handler.post { destroyWv?.run() }
+                return@Interceptor proceed(url)
+            }
+            throw IOException("Solve captcha in webview and retry")
+        }
+        resp
+    }
+
+    @Synchronized
+    private fun signUrlWv(method: String, apiUrl: String): String? {
+        val latch = CountDownLatch(1)
+        var result: String? = null
+
+        handler.post {
+            try {
+                val webView = globalWebView
+
+                webView.addJavascriptInterface(
+                    object {
+                        @JavascriptInterface
+                        fun onResult(dpop: String) {
+                            result = dpop
+                            latch.countDown()
+                        }
+                    },
+                    bridgeName,
+                )
+
+                webView.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView, url: String?) {
+                        view.evaluateJavascript(buildJs(method, apiUrl, bridgeName), null)
+                    }
+                }
+
+                webView.loadDataWithBaseURL(baseUrl, " ", "text/html", "utf-8", null)
+            } catch (e: Throwable) {
+                latch.countDown()
+            }
+        }
+
+        if (!latch.await(5000L, TimeUnit.MILLISECONDS)) {
+            return null
+        }
+
+        return result
+    }
+
+    private fun buildJs(method: String, apiUrl: String, bridgeName: String): String = """
+        (function() {
+            function b64url(str) {
+                return btoa(str)
+                    .replace(/\+/g, '-')
+                    .replace(/\//g, '_')
+                    .replace(/=/g, '');
+            }
+
+            function bytes(str) {
+                return new TextEncoder().encode(str);
+            }
+
+            function randJti() {
+                return b64url(String.fromCharCode.apply(
+                    null,
+                    crypto.getRandomValues(new Uint8Array(16))
+                ));
+            }
+
+            function encode(obj) {
+                return b64url(JSON.stringify(obj));
+            }
+
+            function loadKey() {
+                return new Promise((resolve, reject) => {
+                    const req = indexedDB.open("dbinfo");
+                    let db;
+
+                    req.onsuccess = function(e) {
+                        db = e.target.result;
+                        try {
+                            const storeNames = Array.from(db.objectStoreNames);
+                            let found = false;
+                            let checked = 0;
+
+                            for (const storeName of storeNames) {
+                                const tx = db.transaction(storeName, "readonly");
+                                const store = tx.objectStore(storeName);
+
+                                function fallbackScan() {
+                                    const getAllReq = store.getAll();
+                                    getAllReq.onsuccess = function() {
+                                        const items = getAllReq.result || [];
+                                        for (const item of items) {
+                                            if (item && item.privateKey && item.publicJwk) {
+                                                found = true;
+                                                db.close();
+                                                resolve(item);
+                                                return;
+                                            }
+                                        }
+                                        checked++;
+                                        if (checked === storeNames.length && !found) {
+                                            db.close();
+                                            reject();
+                                        }
+                                    };
+                                    getAllReq.onerror = function() {
+                                        checked++;
+                                        if (checked === storeNames.length && !found) {
+                                            db.close();
+                                            reject();
+                                        }
+                                    };
+                                }
+
+                                const metaReq = store.get("sw-cache-meta");
+                                metaReq.onsuccess = function() {
+                                    const meta = metaReq.result;
+                                    let activeId = null;
+                                    if (meta && typeof meta === 'object' && Array.isArray(meta.ids) &&
+                                        typeof meta.sel === 'number' && meta.sel >= 0 && meta.sel < meta.ids.length) {
+                                        activeId = meta.ids[meta.sel];
+                                    }
+                                    if (activeId) {
+                                        const keyReq = store.get(activeId);
+                                        keyReq.onsuccess = function() {
+                                            const keyData = keyReq.result;
+                                            if (keyData && keyData.privateKey && keyData.publicJwk) {
+                                                found = true;
+                                                db.close();
+                                                resolve(keyData);
+                                                return;
+                                            }
+                                            fallbackScan();
+                                        };
+                                        keyReq.onerror = fallbackScan;
+                                    } else {
+                                        fallbackScan();
+                                    }
+                                };
+                                metaReq.onerror = fallbackScan;
+                            }
+
+                            if (storeNames.length === 0) {
+                                db.close();
+                                reject();
+                            }
+                        } catch (err) {
+                            db.close();
+                            reject();
+                        }
+                    };
+
+                    req.onerror = function() {
+                        reject();
+                    };
+                });
+            }
+
+            loadKey().then(async function(keyPair) {
+                if (!window.__cachedKeyPair) {
+                    window.__cachedKeyPair = keyPair;
+                }
+
+                const kp = window.__cachedKeyPair;
+
+                const header = {
+                    typ: "dpop+jwt",
+                    alg: "ES256",
+                    jwk: kp.publicJwk
+                };
+
+                const payload = {
+                    htm: "$method",
+                    htu: "$apiUrl",
+                    iat: Math.floor(Date.now() / 1000),
+                    jti: randJti()
+                };
+
+                const h = encode(header);
+                const p = encode(payload);
+                const input = h + "." + p;
+
+                const sig = await crypto.subtle.sign(
+                    { name: "ECDSA", hash: "SHA-256" },
+                    kp.privateKey,
+                    bytes(input)
+                );
+
+                const s = b64url(String.fromCharCode.apply(null, new Uint8Array(sig)));
+
+                window.$bridgeName.onResult(input + "." + s);
+
+            }).catch(function() {
+                window.$bridgeName.onResult("");
+            });
+        })();
+    """.trimIndent()
+}

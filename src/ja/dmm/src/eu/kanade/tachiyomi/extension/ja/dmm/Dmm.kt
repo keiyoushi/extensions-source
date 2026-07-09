@@ -12,7 +12,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
 import keiyoushi.utils.getPreferencesLazy
@@ -22,21 +24,21 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 
+@Source
 abstract class Dmm :
     HttpSource(),
     ConfigurableSource {
-    protected abstract val domain: String
-    protected abstract val shopName: String
 
-    override val baseUrl get() = "https://$domain"
-    override val lang = "ja"
     override val supportsLatest = true
+
+    private val domain get() = baseUrl.substringAfter("https://")
+    private val shopName get() = if (name == "FANZA") "adult" else "general"
 
     private val apiUrl get() = "$baseUrl/ajax/bff"
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client by lazy {
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .addInterceptor(PublusInterceptor())
             .addNetworkInterceptor(CookieInterceptor(domain, listOf("book_safe_mode_level" to "off", "age_check_done" to "1")))
             .addInterceptor { chain ->
@@ -169,7 +171,7 @@ abstract class Dmm :
     override fun chapterListParse(response: Response): List<SChapter> {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         return response.parseAs<ChapterResponse>().volumeBooks
-            .filter { !hideLocked || !it.isLocked }
+            .filter { !hideLocked || (!it.isLocked || !it.isPreview) }
             .map { it.toSChapter(baseUrl) }
     }
 
@@ -177,15 +179,18 @@ abstract class Dmm :
 
     override fun pageListParse(response: Response): List<Page> {
         val cid = response.request.url.queryParameter("cid")
+        val lin = response.request.url.queryParameter("lin")
         val cUrl = "$baseUrl/viewerapi/auth/".toHttpUrl().newBuilder()
             .addQueryParameter("cid", cid)
-            .build()
+            .apply {
+                if (lin != null) {
+                    addQueryParameter("lin", lin)
+                }
+            }.build()
 
-        val cRequest = GET(cUrl, headers)
-        val cResponse = client.newCall(cRequest).execute()
-        val contentPhp = cResponse.parseAs<CPhpResponse>().url
+        val content = client.newCall(GET(cUrl, headers)).execute().parseAs<PublusContent>()
 
-        return fetchPages(contentPhp, headers, client)
+        return fetchPages(content.url!!, headers, client, content.authInfo?.toAuth())
     }
 
     override fun imageUrlParse(response: Response): String = response.request.url.toString()

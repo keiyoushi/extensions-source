@@ -3,20 +3,20 @@ package eu.kanade.tachiyomi.extension.zh.mangabz
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.unpacker.SubstringExtractor
 import keiyoushi.lib.unpacker.Unpacker
-import keiyoushi.utils.getPreferences
+import keiyoushi.network.rateLimit
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -24,30 +24,29 @@ import org.jsoup.select.Elements
 import org.jsoup.select.Evaluator
 import rx.Observable
 
-class Mangabz :
-    MangabzTheme("Mangabz"),
+@Source
+abstract class Mangabz :
+    MangabzTheme(),
     ConfigurableSource {
 
-    override val baseUrl: String
-    override val client: OkHttpClient
-
-    private val urlSuffix: String
-
-    init {
-        val preferences = getPreferences()
-        val mirror = preferences.mirror
-        baseUrl = when (System.getenv("CI")) {
-            "true" -> MIRRORS.joinToString("#, ") { "https://" + it.domain }
-            else -> "https://" + mirror.domain
+    private val mirror: Mirror
+        get() = when (baseUrl.toHttpUrl().host) {
+            "mangabz.com" -> Mirror("mangabz.com", "bz/", "mangabz_lang")
+            "xmanhua.com" -> Mirror("xmanhua.com", "xm/", "xmanhua_lang")
+            "yymanhua.com" -> Mirror("yymanhua.com", "yy/", "yymanhua_lang")
+            else -> throw Exception("Unsupported url: $baseUrl")
         }
-        urlSuffix = mirror.urlSuffix
 
-        val cookieInterceptor = CookieInterceptor(mirror.domain, mirror.langCookie to preferences.lang)
-        client = network.cloudflareClient.newBuilder()
+    private val preferences by getPreferencesLazy()
+    override val client by lazy {
+        network.client.newBuilder()
+            .addNetworkInterceptor(CookieInterceptor(mirror.domain, mirror.langCookie to preferences.lang))
             .rateLimit(5)
-            .addNetworkInterceptor(cookieInterceptor)
             .build()
     }
+
+    private val urlSuffix: String
+        get() = mirror.urlSuffix
 
     override fun headersBuilder() = Headers.Builder()
         .add("Referer", baseUrl)
@@ -66,6 +65,14 @@ class Mangabz :
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (MIRRORS.none { it.domain == url.host }) {
+                throw Exception("Unsupported url")
+            }
+            val titleId = url.pathSegments[0]
+            return fetchSearchManga(page, "$PREFIX_ID_SEARCH$titleId", filters)
+        }
         if (query.isEmpty()) {
             val ids = parseFilterList(filters)
             if (ids.isEmpty()) return fetchPopularManga(page)

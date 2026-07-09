@@ -1,13 +1,14 @@
 package eu.kanade.tachiyomi.extension.id.shinigami
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -17,25 +18,17 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Shinigami : HttpSource() {
-    // moved from Reaper Scans (id) to Shinigami (id)
-    override val id = 3411809758861089969
-
-    override val name = "Shinigami"
-
-    override val baseUrl = "https://c.shinigami.asia"
-
+@Source
+abstract class Shinigami : HttpSource() {
     private val apiUrl = "https://api.shngm.io"
 
     private val cdnUrl = "https://storage.shngm.id"
-
-    override val lang = "id"
 
     override val supportsLatest = true
 
     private val apiHeaders: Headers by lazy { apiHeadersBuilder().build() }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val headers = request.headers.newBuilder().apply {
@@ -135,6 +128,7 @@ class Shinigami : HttpSource() {
         Pair("Crime", "crime"),
         Pair("Demon", "demon"),
         Pair("Demons", "demons"),
+        Pair("Dra", "dra-genre"),
         Pair("Drama", "drama"),
         Pair("Ecchi", "ecchi"),
         Pair("Fantasy", "fantasy"),
@@ -145,6 +139,9 @@ class Shinigami : HttpSource() {
         Pair("Historical", "historical"),
         Pair("Horror", "horror"),
         Pair("Isekai", "isekai"),
+        Pair("Josei", "josei-genre"),
+        Pair("Latest", "latest"),
+        Pair("Love", "love"),
         Pair("Magic", "magic"),
         Pair("Martial Arts", "martial-arts"),
         Pair("Mature", "mature"),
@@ -166,8 +163,11 @@ class Shinigami : HttpSource() {
         Pair("Smut", "smut"),
         Pair("Sports", "sports"),
         Pair("Supernatural", "supernatural"),
+        Pair("Supranatural", "supranatural"),
         Pair("Thriller", "thriller"),
         Pair("Tragedy", "tragedy"),
+        Pair("Violence", "violence"),
+        Pair("Wuxia", "wuxia"),
     )
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
@@ -200,6 +200,7 @@ class Shinigami : HttpSource() {
     private fun Int.toStatus(): Int = when (this) {
         1 -> SManga.ONGOING
         2 -> SManga.COMPLETED
+        3 -> SManga.ON_HIATUS
         else -> SManga.UNKNOWN
     }
 

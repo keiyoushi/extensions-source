@@ -1,13 +1,14 @@
 package eu.kanade.tachiyomi.extension.id.komikcast
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -15,16 +16,13 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 
-class KomikCast : HttpSource() {
+@Source
+abstract class KomikCast : HttpSource() {
 
-    override val id = 972717448578983812
-    override val name = "Komik Cast"
-    override val baseUrl = "https://v1.komikcast.fit"
-    private val apiUrl = "https://be.komikcast.fit"
-    override val lang = "id"
+    private val apiUrl = "https://be.komikcast.cc"
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
         .build()
 
@@ -79,28 +77,16 @@ class KomikCast : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage = parseSeriesListResponse(response)
 
-    override fun getMangaUrl(manga: SManga): String {
-        val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
-        val slug = path[1]
-        return "$baseUrl/series/$slug"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.getSlug(baseUrl)}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
-        val slug = path[1]
-        return GET("$apiUrl/series/$slug", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/series/${manga.getSlug(baseUrl)}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<SeriesDetailResponse>()
         return result.data.toSManga()
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
-        val slug = path[1]
-        return GET("$apiUrl/series/$slug/chapters", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/series/${manga.getSlug(baseUrl)}/chapters", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<ChapterListResponse>()
@@ -108,25 +94,19 @@ class KomikCast : HttpSource() {
         return result.data.map { it.toSChapter(slug) }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        if (chapter.url.startsWith("/chapter/")) {
-            val slug = chapter.url.substringAfter("/chapter/").substringBefore("-chapter-")
-            val chapterIndex = chapter.url.substringAfter("-chapter-").substringBefore("-bahasa-")
-            return GET("$apiUrl/series/$slug/chapters/$chapterIndex", headers)
-        }
+    override fun getChapterUrl(chapter: SChapter): String {
+        val (slug, chapterIndex) = chapter.getSlugAndIndex(baseUrl)
+        return "$baseUrl/series/$slug/chapter/$chapterIndex"
+    }
 
-        val path = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
-        val slug = path[1]
-        val chapterIndex = path[3]
+    override fun pageListRequest(chapter: SChapter): Request {
+        val (slug, chapterIndex) = chapter.getSlugAndIndex(baseUrl)
         return GET("$apiUrl/series/$slug/chapters/$chapterIndex", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<ChapterDetailResponse>()
-        val images = result.data.data.images ?: emptyList()
-        return images.mapIndexed { index, imageUrl ->
-            Page(index, "", imageUrl)
-        }
+        return result.data.toPageList()
     }
 
     private fun parseSeriesListResponse(response: Response): MangasPage {

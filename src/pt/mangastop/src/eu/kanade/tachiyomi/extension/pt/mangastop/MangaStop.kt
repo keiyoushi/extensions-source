@@ -3,14 +3,15 @@ package eu.kanade.tachiyomi.extension.pt.mangastop
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
@@ -19,16 +20,13 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaStop :
-    MangaThemesia(
-        "Manga Stop",
-        "https://mangastop.net",
-        "pt-BR",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
-    ),
+@Source
+abstract class MangaStop :
+    MangaThemesia(),
     ConfigurableSource {
+    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR"))
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             // For covers

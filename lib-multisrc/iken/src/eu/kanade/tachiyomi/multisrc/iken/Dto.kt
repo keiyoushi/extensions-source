@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.multisrc.iken
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import org.jsoup.Jsoup
@@ -17,19 +18,24 @@ class SearchResponse(
 
 @Serializable
 class Manga(
-    private val id: Int,
+    val id: Int,
     val slug: String,
     private val postTitle: String,
-    val postContent: String? = null,
-    val isNovel: Boolean = false,
+    private val postContent: String? = null,
+    @SerialName("isNovel")
+    private val rawIsNovel: Boolean = false,
     private val featuredImage: String? = null,
     private val alternativeTitles: String? = null,
     private val author: String? = null,
     private val artist: String? = null,
     private val seriesType: String? = null,
     private val seriesStatus: String? = null,
-    val genres: List<Genre> = emptyList(),
+    private val genres: List<Genre> = emptyList(),
 ) {
+
+    val isNovel: Boolean
+        get() = rawIsNovel || seriesType.equals("novel", ignoreCase = true)
+
     fun toSManga() = SManga.create().apply {
         url = "$slug#$id"
         title = postTitle
@@ -39,7 +45,6 @@ class Manga(
         description = getDescription(postContent)
         genre = getGenres()
         status = getStatus()
-        initialized = true
     }
 
     fun getDescription(postContent: String?) = buildString {
@@ -86,9 +91,15 @@ class DescriptionDto(
 class Post<T>(val post: T)
 
 @Serializable
+class RelatedMangaDto(
+    val recommendations: List<Manga>,
+)
+
+@Serializable
 class ChapterListResponse(
     val isNovel: Boolean = false,
     val slug: String? = null,
+    val id: Int? = null,
     val chapters: List<Chapter>,
 )
 

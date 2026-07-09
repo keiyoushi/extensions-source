@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.wolftoon
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,7 +8,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,23 +24,20 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.time.Duration.Companion.seconds
 
-class Wolftoon : HttpSource() {
-
-    override val name = "Wolftoon"
-
-    override val baseUrl = "https://wolftoon.lovable.app"
+@Source
+abstract class Wolftoon : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+    private val supabaseUrlHost by lazy { supabaseUrl.toHttpUrl().host }
 
     private val supabaseUrl = "https://encmakrlmutvsdzpodov.supabase.co"
 
-    override val lang = "pt-BR"
-
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2, 1)
-        .rateLimitHost(supabaseUrl.toHttpUrl(), 2, 1)
-        .addInterceptor(CookieInterceptor(supabaseUrl.toHttpUrl().host, emptyList()))
+    override val client: OkHttpClient = network.client.newBuilder()
+        .addNetworkInterceptor(CookieInterceptor(supabaseUrlHost, emptyList()))
+        .rateLimit(2, 1.seconds) { it.host == baseUrlHost || it.host == supabaseUrlHost }
         .build()
 
     private val scriptUrl: String by lazy {

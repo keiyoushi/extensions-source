@@ -1,0 +1,217 @@
+package eu.kanade.tachiyomi.extension.id.doujindesu
+
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import org.jsoup.parser.Parser
+import java.io.IOException
+import java.util.LinkedHashMap
+
+@Source
+abstract class Doujindesu : HttpSource() {
+
+    override val supportsLatest = true
+    private val apiUrl: String get() = "$baseUrl/api"
+
+    private val decryptor by lazy { Decryptor(apiUrl) }
+
+    private val slugCache = object : LinkedHashMap<String, String>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 30
+    }
+
+    override val client: OkHttpClient by lazy {
+        network.client.newBuilder()
+            .addInterceptor(decryptor.xorInterceptor())
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                val headers = request.headers.newBuilder()
+
+                if (imageDomains.any { url.contains(it) }) {
+                    headers.removeAll("x-app-secret")
+                }
+
+                chain.proceed(request.newBuilder().headers(headers.build()).build())
+            }
+            .build()
+    }
+
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .add("x-app-secret", APP_SECRET)
+        .add("Referer", "$baseUrl/")
+
+    override fun popularMangaRequest(page: Int): Request = searchRequest(page, "rating")
+
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+
+    override fun latestUpdatesRequest(page: Int): Request = searchRequest(page)
+
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
+
+    private fun searchRequest(page: Int, sort: String = "latest_chapter"): Request {
+        val offset = (page - 1) * LIMIT
+        val url = "$apiUrl/manga".toHttpUrl().newBuilder()
+            .addQueryParameter("limit", LIMIT.toString())
+            .addQueryParameter("offset", offset.toString())
+            .addQueryParameter("sort", sort)
+            .fragment(page.toString()) // for parse to know end of pagination
+            .build()
+        return GET(url, headers)
+    }
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        // priority when query exists: usual filter > type filter, otherwise opposite
+        val hasQuery = query.isNotBlank()
+        val agsFilter = filters.firstInstanceOrNull<AuthorGroupSeriesFilter>()
+        val agsValueFilter = filters.firstInstanceOrNull<AuthorGroupSeriesValueFilter>()
+        val agsValue = agsValueFilter?.state?.trim()
+
+        if (!hasQuery && agsFilter != null && agsFilter.state in agsFilter.values.indices) {
+            val selected = agsFilter.values[agsFilter.state]
+            val type = selected.key
+            val cacheKey = "$type:$agsValue"
+
+            if (type.isNotBlank() && !agsValue.isNullOrBlank()) {
+                // Search the input and pick a slug if not cached
+                val slug = slugCache[cacheKey] ?: run {
+                    val url = "$apiUrl/taxonomy/$type/".toHttpUrl().newBuilder()
+                        .addQueryParameter("search", agsValue)
+                        .addQueryParameter("limit", "1")
+                        .build()
+                    val termRes = client.newCall(GET(url, headers)).execute()
+                    termRes.parseAs<TermsResult>().terms.firstOrNull()?.slug
+                        ?: throw IOException("Gagal menemukan: $agsValue")
+                }.also { slugCache[cacheKey] = it }
+
+                val url2 = "$apiUrl/taxonomy/$type/$slug".toHttpUrl().newBuilder()
+                    .addQueryParameter("limit", LIMIT.toString())
+                    .addQueryParameter("page", page.toString())
+                    .build()
+                return GET(url2, headers)
+            } else if (type.isBlank() && !agsValue.isNullOrBlank()) {
+                throw IOException("Pilih tipe filter")
+            }
+        }
+
+        // Usual query search + other filters
+        val builder = searchRequest(page).url.newBuilder()
+
+        if (hasQuery) builder.addQueryParameter("search", query)
+
+        filters.forEach { filter ->
+            when (filter) {
+                is StatusList -> {
+                    if (filter.state in filter.values.indices) {
+                        filter.values[filter.state].key.takeIf { it.isNotBlank() }
+                            ?.let { builder.addQueryParameter("status", it) }
+                    }
+                }
+                is CategoryNames -> {
+                    if (filter.state in filter.values.indices) {
+                        filter.values[filter.state].key.takeIf { it.isNotBlank() }
+                            ?.let { builder.addQueryParameter("type", it) }
+                    }
+                }
+                is OrderBy -> {
+                    if (filter.state in filter.values.indices) {
+                        filter.values[filter.state].key.takeIf { it.isNotBlank() }
+                            ?.let { builder.addQueryParameter("sort", it) }
+                    }
+                }
+                is GenreList -> {
+                    val selected = filter.state.filter { it.state }
+                    if (selected.isNotEmpty()) {
+                        builder.addEncodedQueryParameter("genre", selected.joinToString(",") { it.id.lowercase().replace(" ", "-") })
+                    }
+                }
+                else -> {}
+            }
+        }
+
+        return GET(builder.build(), headers)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val url = response.request.url
+
+        var hasNextPage = false
+
+        val mangas = if (url.pathSegments.contains("manga")) {
+            val total = response.headers["x-total-count"]?.toIntOrNull()
+            val currentPage = url.fragment?.toIntOrNull() ?: 1
+            hasNextPage = total?.let { currentPage * LIMIT < it } ?: true
+            response.parseAs<List<MangaItem>>()
+        } else {
+            val taxonomyDto = response.parseAs<TaxonomyMangas>()
+            hasNextPage = taxonomyDto.pagination.page < taxonomyDto.pagination.totalPages
+            taxonomyDto.mangaList
+        }
+        return MangasPage(mangas.map { it.toSManga() }, hasNextPage)
+    }
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.getSlug()}"
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val slug = manga.getSlug()
+        return GET("$apiUrl/manga/$slug", headers)
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaItem>().toSManga()
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader/${chapter.url}"
+
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val mangaItem = response.parseAs<MangaItem>()
+        val chapters = mangaItem.chapters
+
+        return chapters.mapIndexed { index, chapter ->
+            chapter.toSChapter(isLast = mangaItem.isCompleted() && index == 0)
+        }
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/chapters/${chapter.url}", headers)
+
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageList>().pages.mapIndexed { i, imgUrl ->
+        Page(i, imageUrl = Parser.unescapeEntities(imgUrl, false))
+    }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    override fun getFilterList() = FilterList(
+        Filter.Header("Filter Tipe Diabaikan Saat Menggunakan Pencarian"),
+        AuthorGroupSeriesFilter(authorGroupSeriesOptions),
+        AuthorGroupSeriesValueFilter(),
+        Filter.Separator(),
+        StatusList(statusList),
+        CategoryNames(categoryNames),
+        OrderBy(orderBy),
+        GenreList(getGenreList()),
+    )
+
+    fun SManga.getSlug(): String {
+        val fullUrl = if (url.startsWith("http")) url else "$baseUrl/${url.removePrefix("/")}"
+        return fullUrl.toHttpUrl().pathSegments.last { it.isNotBlank() }
+    }
+
+    companion object {
+        private const val APP_SECRET = "dfdf72051dbfdc7d76889ebd31324e74"
+        private const val LIMIT = 24
+
+        private val imageDomains = listOf("desu.photos", "cdn-static.desu.xxx", "desu.pics", "uploads", "upload")
+    }
+}

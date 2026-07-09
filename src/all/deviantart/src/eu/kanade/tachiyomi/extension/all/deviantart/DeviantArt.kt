@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -21,15 +22,14 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.parser.Parser
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DeviantArt :
+@Source
+abstract class DeviantArt :
     HttpSource(),
     ConfigurableSource {
-    override val name = "DeviantArt"
-    override val baseUrl = "https://www.deviantart.com"
-    override val lang = "all"
     override val supportsLatest = false
 
     private val preferences: SharedPreferences by getPreferencesLazy()
@@ -48,6 +48,19 @@ class DeviantArt :
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
 
     override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val username = url.pathSegments[0]
+            val folderId = url.pathSegments[2]
+            return super.fetchSearchManga(page, "gallery:$username/$folderId", filters)
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val matchGroups = requireNotNull(

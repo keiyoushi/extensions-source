@@ -5,7 +5,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,6 +12,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -27,12 +28,10 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-class KiraKira :
+@Source
+abstract class KiraKira :
     HttpSource(),
     ConfigurableSource {
-    override val name = "KiraKira"
-    override val lang = "vi"
-    override val baseUrl = "https://truyenkira.com"
     override val supportsLatest = true
 
     private val apiUrl = "https://api.${baseUrl.toHttpUrl().host}"
@@ -45,7 +44,7 @@ class KiraKira :
             .build()
     }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(3)
         .build()
 

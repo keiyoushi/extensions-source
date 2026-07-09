@@ -1,9 +1,0 @@
-ext {
-    extName = 'Astral-Manga'
-    extClass = '.AstralManga'
-    baseUrl = 'https://astral-manga.fr'
-    extVersionCode = 47
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

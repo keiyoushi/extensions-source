@@ -1,8 +1,0 @@
-ext {
-    extName = 'Panomic'
-    extClass = '.Panomic'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

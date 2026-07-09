@@ -1,8 +1,0 @@
-ext {
-    extName = 'Luminare Translations'
-    extClass = '.LuminareTranslations'
-    extVersionCode = 2
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

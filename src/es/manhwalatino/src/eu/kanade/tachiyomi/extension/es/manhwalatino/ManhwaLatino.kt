@@ -2,10 +2,10 @@ package eu.kanade.tachiyomi.extension.es.manhwalatino
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -13,33 +13,42 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
-class ManhwaLatino :
-    Madara(
-        "Manhwa-Latino",
-        "https://manhwa-latino.com",
-        "es",
-        SimpleDateFormat("dd/MM/yyyy", Locale("es")),
-    ) {
+@Source
+abstract class ManhwaLatino : Madara() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
         .addInterceptor { chain ->
             val request = chain.request()
-            val headers = request.headers.newBuilder()
-                .removeAll("Accept-Encoding")
-                .build()
-            val response = chain.proceed(request.newBuilder().headers(headers).build())
-            if (response.headers("Content-Type").contains("application/octet-stream") && response.request.url.toString().endsWith(".jpg")) {
-                val orgBody = response.body.source()
-                val newBody = orgBody.asResponseBody("image/jpeg".toMediaType())
-                response.newBuilder()
+
+            // Only modify Accept-Encoding for image requests to preserve Cloudflare fingerprint
+            val isImageRequest = request.url.toString().substringBefore("?").let {
+                it.endsWith(".jpg", true) || it.endsWith(".jpeg", true) ||
+                    it.endsWith(".png", true) || it.endsWith(".webp", true)
+            }
+
+            val newRequest = if (isImageRequest) {
+                request.newBuilder().removeHeader("Accept-Encoding").build()
+            } else {
+                request
+            }
+
+            val response = chain.proceed(newRequest)
+
+            if (isImageRequest && response.header("Content-Type")?.contains("application/octet-stream", true) == true) {
+                val orgBody = response.body
+                val newBody = orgBody.source().asResponseBody("image/jpeg".toMediaType())
+                return@addInterceptor response.newBuilder()
+                    .header("Content-Type", "image/jpeg")
                     .body(newBody)
                     .build()
-            } else {
-                response
             }
+
+            return@addInterceptor response
         }
+        .rateLimit(1, 2.seconds)
         .build()
 
     override val useNewChapterEndpoint = true
@@ -51,6 +60,7 @@ class ManhwaLatino :
     override val pageListParseSelector = "div.page-break img.wp-manga-chapter-img"
 
     private val chapterListNextPageSelector = "div.pagination > span.current + span"
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaUrl = response.request.url
         var document = response.asJsoup()
@@ -63,7 +73,8 @@ class ManhwaLatino :
             val chapterElements = document.select(chapterListSelector())
             if (chapterElements.isEmpty()) break
             chapterList.addAll(chapterElements.map { chapterFromElement(it) })
-            val hasNextPage = document.select(chapterListNextPageSelector).isNotEmpty()
+
+            val hasNextPage = document.selectFirst(chapterListNextPageSelector) != null
             if (hasNextPage) {
                 page++
                 val nextPageUrl = mangaUrl.newBuilder().setQueryParameter("t", page.toString()).build()
@@ -84,7 +95,7 @@ class ManhwaLatino :
                 chapter.url = urlElement.attr("abs:href").let {
                     it.substringBefore("?style=paged") + if (!it.endsWith(chapterUrlSuffix)) chapterUrlSuffix else ""
                 }
-                chapter.name = urlElement.wholeText().substringAfter("\n")
+                chapter.name = urlElement.wholeText().substringAfter("\n").trim()
             }
 
             chapter.date_upload = selectFirst("img:not(.thumb)")?.attr("alt")?.let { parseRelativeDate(it) }

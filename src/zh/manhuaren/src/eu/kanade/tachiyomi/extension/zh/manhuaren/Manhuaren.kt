@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferences
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -40,18 +41,16 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
-import java.util.concurrent.TimeUnit.MINUTES
 import javax.crypto.Cipher
 import kotlin.random.Random
 import kotlin.random.nextUBytes
+import kotlin.time.Duration.Companion.minutes
 
-class Manhuaren :
+@Source
+abstract class Manhuaren :
     HttpSource(),
     ConfigurableSource {
-    override val lang = "zh"
     override val supportsLatest = true
-    override val name = "漫画人"
-    override val baseUrl = "http://mangaapi.manhuaren.com"
 
     private val pageSize = 20
     private val baseHttpUrl = baseUrl.toHttpUrl()
@@ -67,7 +66,7 @@ class Manhuaren :
         const val TOKEN_PREF = "token"
     }
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
         .newBuilder()
         .apply { interceptors().removeAll { it.javaClass.simpleName == "BrotliInterceptor" } }
         .addInterceptor(ErrorResponseInterceptor(baseUrl, preferences))
@@ -303,7 +302,7 @@ class Manhuaren :
         val authorization = fetchToken()
         return myRequest(url, "GET", null).newBuilder()
             .addHeader("Authorization", authorization)
-            .cacheControl(CacheControl.Builder().maxAge(10, MINUTES).build())
+            .cacheControl(CacheControl.Builder().maxAge(10.minutes).build())
             .build()
     }
 

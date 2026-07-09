@@ -2,11 +2,12 @@ package eu.kanade.tachiyomi.extension.pt.huntersscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
@@ -16,18 +17,13 @@ import rx.Observable
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
 
-class HuntersScans :
-    Madara(
-        "Hunters Scan",
-        "https://readhunters.xyz",
-        "pt-BR",
-        SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-    ) {
+@Source
+abstract class HuntersScans : Madara() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
     override val client = super.client.newBuilder()
-        .rateLimit(2)
-        .readTimeout(1, TimeUnit.MINUTES)
+        .readTimeout(1.minutes)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
             if (response.request.url.pathSegments.any { segment -> listOf("logar", "registrar").any { it.equals(segment, true) } }) {
@@ -37,6 +33,7 @@ class HuntersScans :
             response
         }
         .addInterceptor(::imageInterceptor)
+        .rateLimit(2)
         .build()
 
     override val mangaSubString = "comics"

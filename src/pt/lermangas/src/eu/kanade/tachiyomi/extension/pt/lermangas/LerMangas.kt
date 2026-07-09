@@ -1,20 +1,17 @@
 package eu.kanade.tachiyomi.extension.pt.lermangas
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
-class LerMangas :
-    Madara(
-        "Ler Mangas",
-        "https://lermangas.me",
-        "pt-BR",
-        SimpleDateFormat("dd 'de' MMMMM 'de' yyyy", Locale("pt", "BR")),
-    ) {
+@Source
+abstract class LerMangas : Madara() {
+    override val dateFormat = SimpleDateFormat("dd 'de' MMMMM 'de' yyyy", Locale("pt", "BR"))
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(1, 2.seconds)
         .build()
 }

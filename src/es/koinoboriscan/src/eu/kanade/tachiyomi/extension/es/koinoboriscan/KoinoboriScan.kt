@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.es.koinoboriscan
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,6 +10,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Request
@@ -21,16 +22,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import kotlin.math.min
+import kotlin.time.Duration.Companion.seconds
 
-class KoinoboriScan : HttpSource() {
-
-    override val versionId = 3
-
-    override val name = "Koinobori Scan"
-
-    override val lang = "es"
-
-    override val baseUrl = "https://visorkoi.com"
+@Source
+abstract class KoinoboriScan : HttpSource() {
 
     private val apiBaseUrl = "https://api.visorkoi.com"
 
@@ -42,8 +37,8 @@ class KoinoboriScan : HttpSource() {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(2, 1)
+    override val client = network.client.newBuilder()
+        .rateLimit(2, 1.seconds)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

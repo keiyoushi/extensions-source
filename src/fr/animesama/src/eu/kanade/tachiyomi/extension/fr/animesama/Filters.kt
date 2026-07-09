@@ -30,5 +30,5 @@ class GenreFilter(
 ) : CheckBoxGroup(
     "Genres",
     options,
-    "genre[0]",
+    "genre[]",
 )

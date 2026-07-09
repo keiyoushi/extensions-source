@@ -1,8 +1,0 @@
-ext {
-    extName = 'BR Yaoi'
-    extClass = '.BRYaoi'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

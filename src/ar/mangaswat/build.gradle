@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaSwat'
-    extClass = '.MangaSwat'
-    baseUrl = 'https://meshmanga.com'
-    extVersionCode = 60
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

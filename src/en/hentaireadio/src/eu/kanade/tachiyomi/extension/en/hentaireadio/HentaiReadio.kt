@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -16,18 +17,12 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class HentaiReadio : HttpSource() {
-
-    override val name = "HentaiRead.io"
-
-    override val baseUrl = "https://hentairead.io"
-
-    override val lang = "en"
+@Source
+abstract class HentaiReadio : HttpSource() {
 
     override val supportsLatest = true
 
     // Site is behind Cloudflare
-    override val client = network.cloudflareClient
 
     private val dateFormat by lazy {
         SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH)

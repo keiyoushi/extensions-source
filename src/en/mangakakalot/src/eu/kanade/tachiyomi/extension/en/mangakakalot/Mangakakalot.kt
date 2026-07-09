@@ -2,9 +2,10 @@ package eu.kanade.tachiyomi.extension.en.mangakakalot
 
 import eu.kanade.tachiyomi.multisrc.mangabox.MangaBox
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Dispatcher
@@ -16,17 +17,10 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
-class Mangakakalot :
-    MangaBox(
-        "Mangakakalot",
-        arrayOf(
-            "www.mangakakalot.gg",
-            "www.mangakakalove.com",
-        ),
-        "en",
-    ) {
+@Source
+abstract class Mangakakalot : MangaBox() {
 
     /* ================================
      * Slug Utilities
@@ -67,10 +61,10 @@ class Mangakakalot :
 
     override val client: OkHttpClient = super.client.newBuilder()
         .dispatcher(imageHeavyDispatcher)
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .rateLimit(2, 1, TimeUnit.SECONDS)
+        .connectTimeout(30.seconds)
+        .readTimeout(60.seconds)
+        .writeTimeout(30.seconds)
+        .rateLimit(2, 1.seconds)
         .build()
 
     /* ================================

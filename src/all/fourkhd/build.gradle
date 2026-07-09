@@ -1,8 +1,0 @@
-ext {
-    extName = '4KHD'
-    extClass = '.FourKHD'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

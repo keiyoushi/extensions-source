@@ -73,14 +73,15 @@ class ChapterResponse(
 
 @Serializable
 class ChapterData(
-    private val title: String,
+    private val title: String?,
     private val number: Float,
     private val slug: String,
     @SerialName("published_at") private val publishedAt: String?,
 ) {
     fun toSChapter(entrySlug: String) = SChapter.create().apply {
+        val chapterNum = if (number % 1f == 0f) number.toInt() else number
         url = "$entrySlug/$slug"
-        name = title
+        name = title ?: "Chapter $chapterNum"
         chapter_number = number
         date_upload = dateFormat.tryParse(publishedAt)
     }
@@ -104,7 +105,6 @@ class FilterResponse(
     val tags: List<Filters>,
     val authors: List<Filters>,
     val artists: List<Filters>,
-    val types: List<Filters>,
     val statuses: List<Filters>,
     val sorts: List<Filters>,
 )

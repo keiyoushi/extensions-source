@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.damconuong
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,6 +8,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -19,13 +20,11 @@ import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 
-class DamCoNuong : HttpSource() {
-    override val name = "DamCoNuong"
-    override val lang = "vi"
-    override val baseUrl = "https://damconuong.ceo"
+@Source
+abstract class DamCoNuong : HttpSource() {
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(5)
         .build()
 

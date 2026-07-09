@@ -1,8 +1,0 @@
-ext {
-    extName = 'Softkomik'
-    extClass = '.Softkomik'
-    extVersionCode = 11
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,12 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.truyengg
 
-import android.content.SharedPreferences
-import android.widget.Toast
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,7 +9,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.getPreferences
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -25,28 +20,15 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
-class TruyenGG :
-    HttpSource(),
-    ConfigurableSource {
-
-    override val name = "FoxTruyen"
-
-    override val lang = "vi"
-
-    private val defaultBaseUrl = "https://foxtruyen2.com"
+@Source
+abstract class TruyenGG : HttpSource() {
 
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences = getPreferences()
-
-    override val baseUrl by lazy { getPrefBaseUrl() }
-
-    override val id: Long = 1458993267006200127
-
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
+    override val client: OkHttpClient = network.client.newBuilder()
+        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", "$baseUrl/")
@@ -118,19 +100,17 @@ class TruyenGG :
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val document = response.asJsoup()
         title = document.select("h1[itemprop=name]").text()
-        author = document.selectFirst("p:contains(Tác Giả) + p")?.text()
-        genre = document.select("a.clblue").joinToString { it.text() }
-        description = document.select("div.story-detail-info").joinToString {
-            it.wholeText().trim()
-        }
-        thumbnail_url = document.selectFirst(".thumbblock img")?.absUrl("src")
-        status = parseStatus(document.select("p:contains(Trạng Thái) + p").text())
+        author = document.selectFirst("span:contains(Tác Giả) + span")?.text()
+        genre = document.select(".fx-genres a").joinToString { it.text() }
+        description = document.selectFirst("div.fx-synopsis div")?.wholeText()?.trim()
+        thumbnail_url = document.selectFirst(".fx-cover img")?.absUrl("src")
+        status = parseStatus(document.select(".fx-status").text())
     }
 
     private fun parseStatus(status: String?): Int {
-        val ongoingWords = listOf("Đang Cập Nhật", "Đang Tiến Hành")
-        val completedWords = listOf("Hoàn Thành", "Đã Hoàn Thành")
-        val hiatusWords = listOf("Tạm ngưng", "Tạm hoãn")
+        val ongoingWords = listOf("Đang Cập Nhật", "Đang Tiến Hành", "Còn tiếp", "Đang ra")
+        val completedWords = listOf("Hoàn Thành", "Đã Hoàn Thành", "Hoàn")
+        val hiatusWords = listOf("Tạm ngưng", "Tạm hoãn", "Bị drop")
         return when {
             status == null -> SManga.UNKNOWN
             ongoingWords.any { status.contains(it, ignoreCase = true) } -> SManga.ONGOING
@@ -143,11 +123,11 @@ class TruyenGG :
     // Chapters
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select("ul.list_chap > li.item_chap").map { element ->
+        return document.select("ul.fx-chap-list li.fx-chap-item").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
                 name = element.select("a").text()
-                date_upload = dateFormat.tryParse(element.select("span.cl99").text().trim())
+                date_upload = dateFormat.tryParse(element.selectFirst("span.fx-chap-item__date")?.text())
             }
         }
     }
@@ -267,43 +247,4 @@ class TruyenGG :
         Genre("Xuyên Không", "75"),
         Genre("Yuri", "76"),
     )
-
-    // Preferences
-    init {
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != defaultBaseUrl) {
-                preferences.edit()
-                    .putString(BASE_URL_PREF, defaultBaseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
-                    .apply()
-            }
-        }
-    }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            setDefaultValue(defaultBaseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $defaultBaseUrl"
-
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
-                true
-            }
-        }.let(screen::addPreference)
-    }
-
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
-
-    companion object {
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng thay đổi."
-        private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_SUMMARY =
-            "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
-    }
 }

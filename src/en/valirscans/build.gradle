@@ -1,9 +1,0 @@
-ext {
-    extName = 'Valir Scans'
-    extClass = '.ValirScans'
-    baseUrl = 'https://valirscans.org'
-    extVersionCode = 21
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

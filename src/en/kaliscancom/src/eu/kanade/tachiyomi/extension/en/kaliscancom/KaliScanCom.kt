@@ -1,7 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.kaliscancom
 
 import eu.kanade.tachiyomi.multisrc.madtheme.MadTheme
+import keiyoushi.annotation.Source
 
-class KaliScanCom : MadTheme("KaliScan.com", "https://kaliscan.com", "en") {
+@Source
+abstract class KaliScanCom : MadTheme() {
+
     override val useLegacyApi = true
 }

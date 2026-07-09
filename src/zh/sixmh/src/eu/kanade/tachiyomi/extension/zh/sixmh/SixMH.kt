@@ -7,15 +7,16 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
-class SixMH : MCCMSWeb("六漫画", "https://www.liumanhua.com") {
+@Source
+abstract class SixMH : MCCMSWeb() {
     private val paramsRegex = Regex("params = '([A-Za-z0-9+/=]+)'")
-    override val versionId get() = 3
 
     override fun simpleMangaSelector(): String = "div.cy_list_mh ul"
     override fun simpleMangaFromElement(element: Element): SManga = SManga.create().apply {

@@ -2,32 +2,29 @@ package eu.kanade.tachiyomi.extension.ja.rawinu
 
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.rateLimit
 import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-private const val DOMAIN = "rawinu.com"
+@Source
+abstract class RawINU : FMReader() {
 
-class RawINU :
-    FMReader(
-        "RawINU",
-        "https://$DOMAIN",
-        "ja",
-    ) {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .addInterceptor(::ddosChallengeInterceptor)
-        .addNetworkInterceptor(CookieInterceptor(DOMAIN, "smartlink_shown" to "1"))
+        .addNetworkInterceptor(CookieInterceptor(baseUrlHost, "smartlink_shown" to "1"))
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
     private val patternDdosKey = """'([a-f0-9]{32})'""".toRegex()
@@ -51,6 +48,10 @@ class RawINU :
 
     private val apiEndpoint = "$baseUrl/app/manga/controllers"
 
+    override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
+        thumbnail_url = thumbnail_url?.removeSurrounding("'")
+    }
+
     // =========================== Manga Details ============================
     override val infoElementSelector = "div.card-body div.row"
 
@@ -73,7 +74,8 @@ class RawINU :
     }
 
     // =============================== Pages ================================
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val id = document.selectFirst("input[name=chapter]#chapter")!!.attr("value")
         val req = client.newCall(GET("$apiEndpoint/cont.imagesChap.php?cid=$id", headers)).execute()
 

@@ -7,15 +7,14 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class ReadVagabondManga : HttpSource() {
-    override val name = "Read Vagabond Manga"
-    override val baseUrl = "https://readbagabondo.com"
-    override val lang = "en"
+@Source
+abstract class ReadVagabondManga : HttpSource() {
     override val supportsLatest = false
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -48,11 +47,7 @@ class ReadVagabondManga : HttpSource() {
         return (1..chapter.pageCount).map { page ->
             Page(
                 index = page - 1,
-                imageUrl = "https://bucket.readbagabondo.com/volume-%02d/chapter-%03d/page-%03d.png".format(
-                    chapter.volume,
-                    chapter.number,
-                    page,
-                ),
+                imageUrl = "https://pub.moleve.net/chapter-${chapter.number}/page-$page.png",
             )
         }
     }

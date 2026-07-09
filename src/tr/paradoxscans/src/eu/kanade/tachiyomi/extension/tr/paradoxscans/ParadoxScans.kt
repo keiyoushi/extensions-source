@@ -2,16 +2,13 @@ package eu.kanade.tachiyomi.extension.tr.paradoxscans
 
 import eu.kanade.tachiyomi.multisrc.initmanga.InitManga
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Element
 
-class ParadoxScans :
-    InitManga(
-        "Paradox Scans",
-        "https://paradoxscans.com",
-        "tr",
-        latestUrlSlug = "recently-updated",
-        versionId = 1,
-    ) {
+@Source
+abstract class ParadoxScans : InitManga() {
+
+    override val latestUrlSlug = "recently-updated"
 
     override fun popularMangaSelector() = "div.manga-item-grid > div.uk-panel"
 
@@ -24,10 +21,10 @@ class ParadoxScans :
             ?: element.select("h2").text()
             ?: element.select("h3").text()
 
-        setUrlWithoutDomain(linkElement!!.attr("href"))
+        setUrlWithoutDomain(linkElement!!.absUrl("href"))
 
         thumbnail_url = element.selectFirst("img")?.let { img ->
-            img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
+            img.absUrl("data-src").ifEmpty { img.absUrl("src") }
         }
     }
 }

@@ -1,10 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.lagoonscans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class LagoonScans :
-    MangaThemesia(
-        "Lagoon Scans",
-        "https://lagoonscans.com",
-        "en",
-    )
+@Source
+abstract class LagoonScans : MangaThemesia()

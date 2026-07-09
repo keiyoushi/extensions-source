@@ -3,25 +3,23 @@ package eu.kanade.tachiyomi.extension.pt.montetai
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.Request
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
-class MonteTai :
-    Madara(
-        "Monte Tai",
-        "https://montetaiscanlator.xyz",
-        "pt-BR",
-        SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-    ) {
+@Source
+abstract class MonteTai : Madara() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
     override val client = super.client.newBuilder()
-        .rateLimit(3, 1)
+        .rateLimit(3, 1.seconds)
         .build()
 
     override val popularMangaUrlSelector = ".mt-manga-catalog-card__title a"

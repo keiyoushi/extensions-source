@@ -6,6 +6,8 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -13,7 +15,8 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 
-class RitharScans : Keyoapp("RitharScans", "https://ritharscans.com", "en") {
+@Source
+abstract class RitharScans : Keyoapp() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangas = super.popularMangaParse(response).mangas
@@ -37,8 +40,7 @@ class RitharScans : Keyoapp("RitharScans", "https://ritharscans.com", "en") {
             if (query.isNotBlank()) {
                 addQueryParameter("title", query)
             }
-            filters.firstOrNull { it is GenreList }?.also {
-                val filter = it as GenreList
+            filters.firstInstanceOrNull<GenreList>()?.also { filter ->
                 filter.state
                     .filter { it.state }
                     .forEach { genre ->
@@ -67,31 +69,28 @@ class RitharScans : Keyoapp("RitharScans", "https://ritharscans.com", "en") {
     override val typeSelector = "[alt=Type]"
 
     override fun pageListParse(document: Document): List<Page> {
-        val (pages, baseLink) = document.selectFirst("[x-data*=pages]")!!.attr("x-data")
-            .replace(spaces, "")
-            .let {
-                val pages = pagesRegex.find(it)!!.groupValues[1]
-                    .replace("&quot;", "\"")
-                    .parseAs<List<Path>>()
+        val data = document.selectFirst("script[type=\"application/ld+json\"]")!!.data().parseAs<ChapterLD>()
+        val chapterID = data.url.substringAfterLast('/')
+        val seriesID = data.isPartOf.url.substringAfterLast('/')
 
-                val baseLink = linkRegex.find(
-                    it.replace("\"", "'"),
-                )!!.groupValues[1]
-
-                pages to baseLink
-            }
-
-        return pages.mapIndexed { i, img ->
-            Page(i, document.location(), baseLink + img.path)
+        return (1..data.numberOfPages).mapIndexed { i, page ->
+            Page(
+                i,
+                url = document.location(),
+                imageUrl = "$baseUrl/storage/series/webtoon/$seriesID/chapters/$chapterID/${page.toString().padStart(3, '0')}.jpg",
+            )
         }
     }
 }
 
-private val spaces = Regex("\\s")
-private val pagesRegex = Regex("pages:(\\[[^]]+])")
-private val linkRegex = Regex("baseLink:'([^']+)'")
+@Serializable
+internal class ChapterLD(
+    val isPartOf: SeriesLD,
+    val numberOfPages: Int,
+    val url: String,
+)
 
 @Serializable
-class Path(
-    val path: String,
+internal class SeriesLD(
+    val url: String,
 )

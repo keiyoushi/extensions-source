@@ -1,8 +1,0 @@
-ext {
-    extName = 'Corona EX'
-    extClass = '.CoronaExFactory'
-    extVersionCode = 1
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

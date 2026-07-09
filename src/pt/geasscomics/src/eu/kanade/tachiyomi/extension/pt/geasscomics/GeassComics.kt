@@ -9,7 +9,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -18,6 +17,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -38,27 +39,19 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class GeassComics :
+@Source
+abstract class GeassComics :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Geass Comics"
-
-    override val baseUrl = "https://geasscomics.xyz"
-
     private val apiUrl = "https://api.skkyscan.fun"
 
-    override val lang = "pt-BR"
-
     override val supportsLatest = true
-
-    override val versionId: Int = 2
 
     private val preferences by getPreferencesLazy()
 
     override val client: OkHttpClient by lazy {
-        network.cloudflareClient.newBuilder()
-            .rateLimit(2)
+        network.client.newBuilder()
             .addInterceptor { chain ->
                 val request = chain.request()
                 val token = getToken()
@@ -71,6 +64,7 @@ class GeassComics :
                 }
                 chain.proceed(newRequest)
             }
+            .rateLimit(2)
             .build()
     }
 
@@ -105,7 +99,7 @@ class GeassComics :
         val payload = LoginRequest(email, password).toJsonString()
         val requestBody = payload.toRequestBody(JSON_MEDIA_TYPE)
         val request = POST("$apiUrl/api/auth/login", headers, requestBody)
-        val response = network.cloudflareClient.newCall(request).execute()
+        val response = network.client.newCall(request).execute()
         if (!response.isSuccessful) {
             response.close()
             throw Exception("Login failed: ${response.code}")

@@ -1,10 +1,17 @@
 package eu.kanade.tachiyomi.extension.vi.yurigarden
 
+import android.annotation.SuppressLint
+import android.app.Application
+import android.os.Handler
+import android.os.Looper
+import android.webkit.JavascriptInterface
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,56 +19,94 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cryptoaes.CryptoAES
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import java.io.IOException
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
 
-class YuriGarden :
+@Source
+abstract class YuriGarden :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "YuriGarden"
-
-    override val lang = "vi"
-
-    override val baseUrl = "https://yurigarden.com"
+    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
 
     override val supportsLatest = true
 
     private val apiUrl = baseUrl.replace("://", "://api.") + "/api"
 
-    private val dbUrl = baseUrl.replace("://", "://db.")
+    private val baseHost = baseUrl.toHttpUrl().host
+
+    private val apiHost = apiUrlHost
+
+    private val cdnUrl = baseUrl.replace("://", "://cdn.")
 
     private val preferences by getPreferencesLazy()
+
+    private var cachedAuthToken: String? = null
+
+    private var cachedMangaToken: String? = null
+
+    private var cachedMangaTokenServerFn: String? = null
+
+    // Use the WebView's native UA on every OkHttp request so that the cf_clearance
+    // cookie issued during the WebView Cloudflare solve stays valid (Cloudflare binds
+    // the cookie to the exact User-Agent that solved the challenge).
+    // Strip "wv" from User-Agent so Google login works in this source.
+    // Google deny login when User-Agent contains the WebView token.
+    private val webViewUserAgent: String? by lazy {
+        runCatching { WebSettings.getDefaultUserAgent(Injekt.get<Application>()) }
+            .getOrNull()
+            ?.let(::removeWebViewToken)
+            ?.takeIf { it.isNotBlank() }
+    }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
+        .apply { webViewUserAgent?.let { set("user-agent", it) } }
 
-    override val client = network.cloudflareClient.newBuilder()
+    private fun removeWebViewToken(userAgent: String): String = userAgent.replace(WEBVIEW_TOKEN_REGEX, ")")
+
+    override val client = network.client.newBuilder()
+        .addInterceptor(loginRequiredInterceptor())
         .addInterceptor(ImageDescrambler())
-        .rateLimitHost(apiUrl.toHttpUrl(), 15, 1, TimeUnit.MINUTES)
+        .rateLimit(15, 1.minutes) { it.host == apiUrlHost }
         .build()
 
-    private fun apiHeaders() = headersBuilder()
+    private fun apiHeadersBuilder() = headersBuilder()
         .set("Referer", "$baseUrl/")
-        .add("x-app-origin", baseUrl)
+        .add("x-app-origin", "https://yurigarden.com")
         .add("x-custom-lang", "vi")
         .add("Accept", "application/json")
+
+    private fun apiHeaders() = apiHeadersBuilder()
+        .apply {
+            authToken?.let { set("Authorization", "Bearer $it") }
+        }
         .build()
 
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$apiUrl/comics/rank/trending".toHttpUrl().newBuilder()
-            .addQueryParameter("type", "day")
+            .addQueryParameter("viewType", "view")
+            .addQueryParameter("trendingType", "day")
             .addQueryParameter("r18", allowR18.toString())
             .build()
 
@@ -75,7 +120,7 @@ class YuriGarden :
             SManga.create().apply {
                 url = "/comic/${comic.id}"
                 title = comic.title
-                thumbnail_url = comic.image?.toThumbnailUrl()
+                thumbnail_url = comic.image.takeIf(String::isNotBlank)?.toThumbnailUrl()
             }
         }
 
@@ -242,24 +287,40 @@ class YuriGarden :
 
     override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/chapters/pages/${chapterId(chapter)}", apiHeaders())
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
-        .asObservable()
-        .doOnNext { response ->
-            if (response.code == 403) {
-                val body = runCatching { response.peekBody(1024 * 1024).string() }.getOrDefault("")
-                val hasTurnstile = isTurnstileChallenge(response, body)
-                response.close()
-                if (hasTurnstile || hasTurnstileChallenge(chapter)) {
-                    throw Exception(CLOUDFLARE_VERIFY_MESSAGE)
-                }
-                throw Exception("HTTP error 403")
-            }
-            if (!response.isSuccessful) {
-                response.close()
-                throw Exception("HTTP error ${response.code}")
-            }
-        }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable
+        .fromCallable { executePageListRequest(chapter, allowRetry = true) }
         .map(::pageListParse)
+
+    private fun executePageListRequest(chapter: SChapter, allowRetry: Boolean): Response {
+        val request = pageListRequest(chapter)
+        val response = client.newCall(request).execute()
+        if (response.isSuccessful) return response
+
+        if (response.code == 403) {
+            response.close()
+
+            if (allowRetry) {
+                // Load the reader page so Turnstile gets a real browser session, but
+                // wait specifically for the API host's cf_clearance -- the reader page's
+                // JS triggers the API subrequest where the actual challenge for our
+                // OkHttp call lives.
+                CloudflareResolver.resolve(
+                    loadUrl = getChapterUrl(chapter),
+                    cookieUrl = request.url.toString(),
+                )
+                return executePageListRequest(chapter, allowRetry = false)
+            }
+            throw Exception(CLOUDFLARE_VERIFY_MESSAGE)
+        }
+
+        if (response.code == 401) {
+            response.close()
+            throw Exception(LOGIN_REQUIRED_MESSAGE)
+        }
+
+        response.close()
+        throw Exception("HTTP error ${response.code}")
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         val result = decryptIfNeeded(response)
@@ -269,7 +330,7 @@ class YuriGarden :
 
             if (rawUrl.startsWith("comics/") || rawUrl.startsWith("teams/")) {
                 val key = page.key
-                val url = "$dbUrl/storage/v1/object/public/yuri-garden-store/$rawUrl"
+                val url = "$cdnUrl/storage/v1/object/public/yuri-garden-store/$rawUrl"
                     .toHttpUrl().newBuilder().apply {
                         if (!key.isNullOrEmpty()) {
                             fragment("KEY=$key")
@@ -291,8 +352,7 @@ class YuriGarden :
         return if (body.contains("\"encrypted\"")) {
             val encrypted = body.parseAs<EncryptedResponse>()
             if (encrypted.encrypted && !encrypted.data.isNullOrEmpty()) {
-                val decrypted = CryptoAES.decrypt(encrypted.data, AES_PASSWORD)
-                decrypted.parseAs<ChapterDetail>()
+                decryptChapterDetail(encrypted.data)
             } else {
                 body.parseAs<ChapterDetail>()
             }
@@ -301,50 +361,107 @@ class YuriGarden :
         }
     }
 
-    private fun hasTurnstileChallenge(chapter: SChapter): Boolean {
-        val urls = listOfNotNull(resolveReaderUrl(chapter), getChapterUrl(chapter)).distinct()
+    private fun decryptChapterDetail(data: String): ChapterDetail {
+        val token = getMangaToken(forceRefresh = false)
+        return runCatching {
+            CryptoAES.decrypt(data, token).parseAs<ChapterDetail>()
+        }.getOrElse {
+            cachedMangaToken = null
+            val refreshedToken = getMangaToken(forceRefresh = true)
+            CryptoAES.decrypt(data, refreshedToken).parseAs<ChapterDetail>()
+        }
+    }
 
-        return urls.any { url ->
-            runCatching {
-                client.newCall(GET(url, headers)).execute().use { response ->
-                    val body = runCatching { response.body.string() }.getOrDefault("")
-                    isTurnstileChallenge(response, body)
+    @Synchronized
+    private fun getMangaToken(forceRefresh: Boolean): String {
+        if (!forceRefresh) {
+            cachedMangaToken?.let { return it }
+        }
+
+        val headers = headersBuilder()
+            .set("Referer", "$baseUrl/")
+            .set("Accept", "application/json")
+            .set("x-tsr-serverFn", "true")
+            .build()
+
+        val token = client.newCall(GET("$baseUrl/_serverFn/${getMangaTokenServerFn()}", headers))
+            .execute()
+            .use { response ->
+                if (!response.isSuccessful) {
+                    throw IOException("HTTP error ${response.code}")
                 }
-            }.getOrDefault(false)
-        }
+                extractServerFnValue(response.parseAs<ServerFnNode>(), "token")
+            }
+            ?: throw IOException("Không lấy được khóa giải mã chương")
+
+        cachedMangaToken = token
+        return token
     }
 
-    private fun isTurnstileChallenge(response: Response, body: String): Boolean = response.header("cf-mitigated")?.equals("challenge", ignoreCase = true) == true ||
-        hasTurnstileElement(body) ||
-        body.contains("/cdn-cgi/challenge-platform", ignoreCase = true) ||
-        body.contains("Just a moment", ignoreCase = true)
+    @Synchronized
+    private fun getMangaTokenServerFn(): String {
+        cachedMangaTokenServerFn?.let { return it }
 
-    private fun hasTurnstileElement(html: String): Boolean {
-        if (html.isBlank()) return false
+        val html = client.newCall(GET(baseUrl, headers))
+            .execute()
+            .use { response ->
+                if (!response.isSuccessful) {
+                    throw IOException("HTTP error ${response.code}")
+                }
+                response.body.string()
+            }
 
-        val document = Jsoup.parse(html)
-        return document.selectFirst(
-            "div.cf-turnstile, " +
-                "input[name=cf-turnstile-response], " +
-                "iframe[src*=challenges.cloudflare.com], " +
-                "form#challenge-form, " +
-                "#cf-challenge-running, " +
-                "#challenge-stage",
-        ) != null ||
-            html.contains("cf-turnstile", ignoreCase = true) ||
-            html.contains("challenges.cloudflare.com/turnstile", ignoreCase = true)
+        val mainScript = MAIN_SCRIPT_REGEX.find(html)?.groupValues?.get(1)
+            ?: throw IOException("Không tìm thấy bundle chính")
+        val mainScriptUrl = mainScript.toHttpUrlOrNull()?.toString() ?: "$baseUrl$mainScript"
+        val mainScriptBody = client.newCall(GET(mainScriptUrl, headers))
+            .execute()
+            .use { response ->
+                if (!response.isSuccessful) {
+                    throw IOException("HTTP error ${response.code}")
+                }
+                response.body.string()
+            }
+
+        val routeIndex = mainScriptBody.indexOf(CHAPTER_ROUTE_PATH)
+        val searchBody = if (routeIndex > 0) {
+            mainScriptBody.substring(0, routeIndex).takeLast(20_000)
+        } else {
+            mainScriptBody
+        }
+        val serverFn = SERVER_FN_REGEX.findAll(searchBody)
+            .lastOrNull()
+            ?.groupValues
+            ?.get(1)
+            ?: throw IOException("Không tìm thấy khóa server function")
+
+        cachedMangaTokenServerFn = serverFn
+        return serverFn
     }
 
-    private fun resolveReaderUrl(chapter: SChapter): String? = runCatching {
-        val chapterId = chapterId(chapter)
-        client.newCall(GET("$apiUrl/chapters/$chapterId", apiHeaders())).execute().use { response ->
-            if (!response.isSuccessful) return@use null
-
-            val body = response.body.string()
-            val comicId = COMIC_ID_REGEX.find(body)?.groupValues?.getOrNull(1) ?: return@use null
-            "$baseUrl/comic/$comicId/$chapterId"
+    private fun extractServerFnValue(node: ServerFnNode, key: String): String? {
+        val props = node.p ?: return null
+        val index = props.k.indexOf(key)
+        if (index >= 0) {
+            props.v.getOrNull(index)?.s?.jsonPrimitive?.contentOrNull?.let { return it }
         }
-    }.getOrNull()
+
+        return props.v.firstNotNullOfOrNull { extractServerFnValue(it, key) }
+    }
+
+    private fun loginRequiredInterceptor() = Interceptor { chain ->
+        val response = chain.proceed(chain.request())
+        val responseUrl = response.request.url
+        val isApiUnauthorized = response.code == 401 && responseUrl.host == apiHost
+        val isLoginPage = responseUrl.host == baseHost && responseUrl.encodedPath == "/login"
+
+        if (isApiUnauthorized || isLoginPage) {
+            cachedAuthToken = null
+            response.close()
+            throw IOException(LOGIN_REQUIRED_MESSAGE)
+        }
+        response
+    }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
@@ -352,7 +469,20 @@ class YuriGarden :
 
     // disable suggested mangas on Komikku due to heavy rate limit
     override val disableRelatedMangasBySearch = true
-    override val supportsRelatedMangas = false
+
+    override fun relatedMangaListRequest(manga: SManga) = GET("$apiUrl/comics/related/${mangaId(manga)}", apiHeaders())
+
+    override fun relatedMangaListParse(response: Response): List<SManga> {
+        val result = response.parseAs<List<Comic>>()
+
+        return result.map { comic ->
+            SManga.create().apply {
+                url = "/comic/${comic.id}"
+                title = comic.title
+                thumbnail_url = comic.thumbnail?.toThumbnailUrl()
+            }
+        }
+    }
 
     // ============================== Helpers ================================
 
@@ -361,7 +491,7 @@ class YuriGarden :
         return url.queryParameter("page")?.toIntOrNull() ?: 1
     }
 
-    private fun String.toThumbnailUrl(): String = if (startsWith("http")) this else "$dbUrl/storage/v1/object/public/yuri-garden-store/$this"
+    private fun String.toThumbnailUrl(): String = if (startsWith("http")) this else "$cdnUrl/storage/v1/object/public/yuri-garden-store/${trimStart('/')}"
 
     // ============================== Peferences ================================
 
@@ -377,12 +507,145 @@ class YuriGarden :
     private val allowR18: Boolean
         get() = preferences.getBoolean(PREF_SHOW_R18, PREF_SHOW_R18_DEFAULT)
 
+    private val authToken: String?
+        @Synchronized
+        get() = cachedAuthToken
+            ?: getTokenFromWebView()?.also { cachedAuthToken = it }
+
+    private fun getTokenFromWebView(): String? {
+        val authData = readWebViewAuthData() ?: return null
+        val firebaseToken = authData.stsTokenManager?.accessToken?.takeIf { it.isNotBlank() } ?: return null
+        val email = authData.email?.takeIf { it.isNotBlank() } ?: return null
+        val name = authData.displayName?.takeIf { it.isNotBlank() } ?: email.substringBefore("@")
+        val avatar = authData.photoURL.orEmpty()
+
+        val headers = apiHeadersBuilder().build()
+        val body = UserAuthRequest(
+            email = email,
+            name = name,
+            avatar = avatar,
+            token = firebaseToken,
+        ).toJsonRequestBody()
+
+        return runCatching {
+            client.newCall(POST("$apiUrl/users/auth", headers, body)).execute().use { response ->
+                if (!response.isSuccessful) return@use null
+                response.parseAs<UserAuthResponse>().accessToken.takeIf { it.isNotBlank() }
+            }
+        }.getOrNull()
+    }
+
+    @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
+    private fun readWebViewAuthData(): WebViewAuthData? {
+        val handler = Handler(Looper.getMainLooper())
+        val latch = CountDownLatch(1)
+        val bridge = WebViewAuthBridge(latch)
+        val interfaceName = randomJavascriptInterfaceName()
+        val script = buildWebViewAuthScript(interfaceName)
+        var webView: WebView? = null
+
+        handler.post {
+            webView = WebView(Injekt.get<Application>()).apply {
+                with(settings) {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    databaseEnabled = true
+                    blockNetworkImage = true
+                    webViewUserAgent?.let { userAgentString = it }
+                }
+                addJavascriptInterface(bridge, interfaceName)
+                webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        view?.evaluateJavascript(script, null)
+                    }
+                }
+                loadDataWithBaseURL(baseUrl, " ", "text/html", "UTF-8", null)
+            }
+        }
+
+        latch.await(10, TimeUnit.SECONDS)
+
+        handler.post {
+            webView?.removeJavascriptInterface(interfaceName)
+            webView?.destroy()
+        }
+
+        return bridge.payload
+            ?.takeUnless { it == "null" }
+            ?.ifBlank { null }
+            ?.let { runCatching { it.parseAs<WebViewAuthData>() }.getOrNull() }
+    }
+
+    private fun randomJavascriptInterfaceName(): String {
+        val pool = ('a'..'z') + ('A'..'Z')
+        return (1..(10..20).random())
+            .map { pool.random() }
+            .joinToString("")
+    }
+
+    private class WebViewAuthBridge(
+        private val latch: CountDownLatch,
+    ) {
+        @Volatile
+        var payload: String? = null
+
+        @JavascriptInterface
+        fun onAuthData(value: String?) {
+            payload = value
+            latch.countDown()
+        }
+    }
+
     companion object {
         private const val LIMIT = 15
-        private const val AES_PASSWORD = "FYgicJ8oFdIYfgLv"
+        private const val CHAPTER_ROUTE_PATH = "/comic/\$comicId/\$chapterId/"
         private const val CLOUDFLARE_VERIFY_MESSAGE = "Mở webview để xác minh cloudflare cho chương này"
-        private val COMIC_ID_REGEX = """"comic"\s*:\s*\{\s*"id"\s*:\s*(\d+)""".toRegex()
+        private const val LOGIN_REQUIRED_MESSAGE = "Nguồn này cần đăng nhập bằng webview để xem"
         private const val PREF_SHOW_R18 = "pref_show_r18"
         private const val PREF_SHOW_R18_DEFAULT = false
+
+        private val MAIN_SCRIPT_REGEX = Regex("""(?:src|href)="([^"]*/assets/main-[^"]+\.js)"""")
+        private val SERVER_FN_REGEX = Regex(
+            """(?:const|let|var)\s+[A-Za-z_$][\w$]*=Tx\(\{method:"GET"\}\)\.handler\(x4\("([A-Za-z0-9]+)"\)\)""",
+        )
+        private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
+
+        private fun buildWebViewAuthScript(interfaceName: String) = """
+            (() => {
+              const done = (value) => {
+                window.$interfaceName.onAuthData(value ? JSON.stringify(value) : "");
+              };
+              try {
+                const request = indexedDB.open("firebaseLocalStorageDb");
+                request.onerror = () => done(null);
+                request.onsuccess = () => {
+                  const db = request.result;
+                  if (!db.objectStoreNames.contains("firebaseLocalStorage")) {
+                    db.close();
+                    done(null);
+                    return;
+                  }
+                  const transaction = db.transaction("firebaseLocalStorage", "readonly");
+                  const store = transaction.objectStore("firebaseLocalStorage");
+                  const getAll = store.getAll();
+                  getAll.onerror = () => {
+                    db.close();
+                    done(null);
+                  };
+                  getAll.onsuccess = () => {
+                    const rows = getAll.result || [];
+                    const row = rows.find((item) => {
+                      const value = item && item.value;
+                      return value && value.stsTokenManager && value.stsTokenManager.accessToken;
+                    });
+                    db.close();
+                    done(row ? row.value : null);
+                  };
+                };
+              } catch (_err) {
+                done(null);
+              }
+            })();
+        """.trimIndent()
     }
 }

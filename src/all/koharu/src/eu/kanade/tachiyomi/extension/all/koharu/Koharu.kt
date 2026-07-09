@@ -7,7 +7,6 @@ import android.os.Handler
 import android.os.Looper
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -26,7 +25,7 @@ import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.tagsFetched
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -34,6 +33,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,27 +53,20 @@ import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class Koharu(
-    override val lang: String = "all",
-    private val searchLang: String = "",
-) : HttpSource(),
+@Source
+abstract class Koharu :
+    HttpSource(),
     ConfigurableSource {
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val name = "SchaleNetwork"
-
-    override val baseUrl: String
-        get() {
-            val preferenceValue = preferences.getString(PREF_MIRROR, MIRROR_PREF_DEFAULT) ?: MIRROR_PREF_DEFAULT
-            val mirror = preferenceValue.toIntOrNull()?.let { index ->
-                mirrors[index.coerceAtMost(mirrors.lastIndex)]
-            } ?: preferenceValue.takeIf { it in mirrors } ?: MIRROR_PREF_DEFAULT
-
-            return "https://$mirror"
+    private val searchLang: String
+        get() = when (lang) {
+            "en" -> "english"
+            "ja" -> "japanese"
+            "zh" -> "chinese"
+            else -> ""
         }
-
-    override val id = if (lang == "en") 1484902275639232927 else super.id
 
     private val apiUrl = API_DOMAIN
 
@@ -120,11 +114,11 @@ class Koharu(
             .build()
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
         .build()
 
-    private val clearanceClient = network.cloudflareClient.newBuilder()
+    private val clearanceClient = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url
@@ -272,6 +266,12 @@ class Koharu(
     // Search
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
+        query.startsWith("https://") -> {
+            val url = query.toHttpUrl()
+            val id = "${url.pathSegments[1]}/${url.pathSegments[2]}"
+            fetchSearchManga(page, "$PREFIX_ID_KEY_SEARCH$id", filters)
+        }
+
         query.startsWith(PREFIX_ID_KEY_SEARCH) -> {
             val ipk = query.removePrefix(PREFIX_ID_KEY_SEARCH)
             val response = client.newCall(GET("$apiBooksUrl/detail/$ipk", lazyHeaders)).execute()
@@ -451,23 +451,18 @@ class Koharu(
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
+    override fun relatedMangaListRequest(manga: SManga) = POST("$apiBooksUrl/detail/${manga.url}", lazyHeaders)
+
+    override suspend fun fetchRelatedMangaList(manga: SManga) = clearanceClient.newCall(relatedMangaListRequest(manga))
+        .awaitSuccess()
+        .use { response ->
+            val data = response.parseAs<MangaData>()
+            data.similar.map(::getManga)
+        }
+
     // Settings
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = PREF_MIRROR
-            title = "Preferred Mirror"
-            entries = mirrors
-            entryValues = mirrors
-            setDefaultValue(MIRROR_PREF_DEFAULT)
-            summary = "%s"
-
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Restart the app to apply changes", Toast.LENGTH_LONG).show()
-                true
-            }
-        }.also(screen::addPreference)
-
         ListPreference(screen.context).apply {
             key = PREF_IMAGERES
             title = "Image Resolution"
@@ -497,16 +492,7 @@ class Koharu(
 
     companion object {
         const val PREFIX_ID_KEY_SEARCH = "id:"
-        private const val PREF_MIRROR = "pref_mirror"
-        private const val MIRROR_PREF_DEFAULT = "schale.network"
         private const val API_DOMAIN = "https://api.schale.network"
-        private val mirrors = arrayOf(
-            MIRROR_PREF_DEFAULT,
-            "anchira.to",
-            "gehenna.jp",
-            "niyaniya.moe",
-            "shupogaki.moe",
-        )
         private const val PREF_IMAGERES = "pref_image_quality"
         private const val PREF_REM_ADD = "pref_remove_additional"
         private const val PREF_EXCLUDE_TAGS = "pref_exclude_tags"

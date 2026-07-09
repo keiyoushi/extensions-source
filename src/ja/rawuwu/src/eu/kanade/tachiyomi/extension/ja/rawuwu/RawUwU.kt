@@ -11,10 +11,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -22,11 +22,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class RawUwU : HttpSource() {
+@Source
+abstract class RawUwU : HttpSource() {
 
-    override val name = "Raw UwU"
-    override val baseUrl = "https://rawuwu.net"
-    override val lang = "ja"
     override val supportsLatest = true
 
     private val dateFormat by lazy {
@@ -34,8 +32,6 @@ class RawUwU : HttpSource() {
             timeZone = TimeZone.getTimeZone("UTC")
         }
     }
-
-    override val client: OkHttpClient = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")

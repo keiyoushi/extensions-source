@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
@@ -17,10 +18,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class LuminareTranslations : HttpSource() {
-    override val name = "Luminare Translations"
-    override val baseUrl = "https://luminaretranslations.com"
-    override val lang = "en"
+@Source
+abstract class LuminareTranslations : HttpSource() {
     override val supportsLatest = true
 
     private val apiUrl = "$baseUrl/wp-json/yarnovel/v1"
@@ -28,8 +27,6 @@ class LuminareTranslations : HttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-
-    override val client = network.cloudflareClient
 
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter(listOf(Filters("popular", "")))))
 
@@ -43,6 +40,7 @@ class LuminareTranslations : HttpSource() {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("per_page", pageSize.toString())
+            .addQueryParameter("type", "manga")
 
         if (query.isNotBlank()) {
             url.addQueryParameter("search", query)
@@ -71,10 +69,6 @@ class LuminareTranslations : HttpSource() {
             ?.takeIf { it.isNotEmpty() }
             ?.let { url.addQueryParameter("artist", it) }
 
-        filters.firstInstanceOrNull<TypeFilter>()?.selected
-            ?.takeIf { it.isNotEmpty() }
-            ?.let { url.addQueryParameter("type", it) }
-
         filters.firstInstanceOrNull<StatusFilter>()?.selected
             ?.takeIf { it.isNotEmpty() }
             ?.let { url.addQueryParameter("status", it) }
@@ -100,7 +94,7 @@ class LuminareTranslations : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val entrySlug = response.request.url.pathSegments[4]
-        return response.parseAs<ChapterResponse>().data.map { it.toSChapter(entrySlug) }.reversed()
+        return response.parseAs<ChapterResponse>().data.map { it.toSChapter(entrySlug) }.sortedBy { it.chapter_number }.reversed()
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/series/${chapter.url}"
@@ -136,7 +130,6 @@ class LuminareTranslations : HttpSource() {
             FilterList(
                 Filter.Header("Note: Search and active filters are applied together"),
                 SortFilter(data.sorts),
-                TypeFilter(data.types.filter { it.name !in EXCLUDED_TYPES }),
                 StatusFilter(data.statuses),
                 Filter.Separator(),
                 GenreFilter(data.genres),

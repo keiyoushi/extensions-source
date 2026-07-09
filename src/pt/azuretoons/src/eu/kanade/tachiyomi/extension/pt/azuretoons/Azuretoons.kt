@@ -5,7 +5,6 @@ import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,6 +12,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -24,13 +25,11 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import kotlin.jvm.Synchronized
 
-class Azuretoons :
+@Source
+abstract class Azuretoons :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Azuretoons"
-    override val baseUrl = "https://azuretoons.com"
-    override val lang = "pt-BR"
     override val supportsLatest = true
 
     private val apiUrl = "https://azuretoons.com/api"
@@ -39,9 +38,9 @@ class Azuretoons :
     private var tokenExpiryTime: Long = 0L
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(2)
+    override val client = network.client.newBuilder()
         .addInterceptor(::authIntercept)
+        .rateLimit(2)
         .build()
 
     private fun authIntercept(chain: Interceptor.Chain): Response {
@@ -95,7 +94,7 @@ class Azuretoons :
                 password = password,
             ).toJsonString().toRequestBody("application/json".toMediaType())
             val headers = headersBuilder().set("Accept", "application/json").build()
-            val response = network.cloudflareClient.newCall(
+            val response = network.client.newCall(
                 POST("$apiUrl/auth/login", headers, body),
             ).execute()
 

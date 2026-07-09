@@ -1,8 +1,0 @@
-ext {
-    extName = 'DoujinDesu (Unoriginal)'
-    extClass = '.DoujinDesuUnoriginal'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

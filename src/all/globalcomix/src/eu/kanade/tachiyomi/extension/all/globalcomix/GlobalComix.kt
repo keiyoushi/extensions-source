@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.extension.all.globalcomix.dto.MangaDto
 import eu.kanade.tachiyomi.extension.all.globalcomix.dto.MangasDto
 import eu.kanade.tachiyomi.extension.all.globalcomix.dto.UnknownEntity
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -20,7 +19,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
@@ -30,16 +31,35 @@ import kotlinx.serialization.modules.polymorphic
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-abstract class GlobalComix(final override val lang: String, private val extLang: String = lang) :
+@Source
+abstract class GlobalComix :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "GlobalComix"
-    override val baseUrl = WEB_URL
+    // the site's own lang codes for these differ from Tachiyomi's lang codes
+    private val extLang: String
+        get() = when (lang) {
+            "sq" -> "al"
+            "pt-BR" -> "br"
+            "zh-Hans" -> "cn"
+            "cs" -> "cz"
+            "da" -> "dk"
+            "fil" -> "fo"
+            "he" -> "iw"
+            "ja" -> "jp"
+            "ko" -> "kr"
+            "ms" -> "my"
+            "sv" -> "se"
+            "uk" -> "ua"
+            "zh-Hant" -> "zh"
+            else -> lang
+        }
+
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
@@ -115,6 +135,18 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
                 false,
             )
         }
+    }
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val titleId = url.pathSegments[1]
+            return super.fetchSearchManga(page, "$PREFIX_ID_SEARCH$titleId", filters)
+        }
+        return super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {

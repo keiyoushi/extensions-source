@@ -1,205 +1,116 @@
 package eu.kanade.tachiyomi.extension.ko.toonkor
 
-import android.content.SharedPreferences
 import android.util.Base64
-import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import keiyoushi.utils.getPreferencesLazy
-import okhttp3.OkHttpClient
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.tryParse
 import okhttp3.Request
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import java.nio.charset.Charset
+import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Toonkor :
-    ParsedHttpSource(),
-    ConfigurableSource {
-
-    override val name = "Toonkor"
-
-    private val defaultBaseUrl = "https://tkor.dog"
-
-    private val baseUrlPref = "overrideBaseUrl_v${AppInfo.getVersionName()}"
-
-    override val baseUrl by lazy { getPrefBaseUrl() }
-
-    override val lang = "ko"
+@Source
+abstract class Toonkor : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl$WEBTOONS_PATH$ALL_STATUS_PATH$SORT_POPULAR", headers)
 
-    // Popular
-
-    private val webtoonsRequestPath = "/%EC%9B%B9%ED%88%B0"
-
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl + webtoonsRequestPath, headers)
-
-    override fun popularMangaSelector() = "div.section-item-inner"
-
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        element.select("div.section-item-title a").let {
-            title = it.select("h3").text()
-            url = it.attr("href")
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("div.section-item-inner").map { element ->
+            SManga.create().apply {
+                element.select("div.section-item-title a").let {
+                    title = it.select("h3").text()
+                    setUrlWithoutDomain(it.attr("abs:href"))
+                }
+                thumbnail_url = element.select("img").attr("abs:src")
+            }
         }
-        thumbnail_url = element.select("img").attr("abs:src")
+
+        return MangasPage(mangas, false)
     }
 
-    override fun popularMangaNextPageSelector(): String? = null
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl$WEBTOONS_PATH$ALL_STATUS_PATH$SORT_LATEST", headers)
 
-    // Latest
-
-    private val latestRequestModifier = "?fil=%EC%B5%9C%EC%8B%A0"
-
-    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl + webtoonsRequestPath + latestRequestModifier, headers)
-
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-
-    // Search
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val filterList = if (filters.isEmpty()) getFilterList() else filters
+        val filterList = filters.ifEmpty { getFilterList() }
 
-        // Webtoons, Manga, or Hentai
-        val type = filterList.findUriPartFilter<TypeFilter>()
-        // Popular, Latest, or Completed
-        val sort = filterList.findUriPartFilter<SortFilter>()
+        val type = filterList.firstInstanceOrNull<TypeFilter>()
+        val status = filterList.firstInstanceOrNull<StatusFilter>()
+        val sort = filterList.firstInstanceOrNull<SortFilter>()
 
-        // Hentai doesn't have a "completed" sort, ignore it if it's selected (equivalent to returning popular)
         val requestPath = when {
-            query.isNotBlank() -> "/bbs/search.php?sfl=wr_subject%7C%7Cwr_content&stx=$query"
-            type.isSelection("Hentai") && sort.isSelection("Completed") -> type.toUriPart()
-            else -> type.toUriPart() + sort.toUriPart()
+            query.isNotEmpty() -> "/bbs/search.php?sfl=wr_subject%7C%7Cwr_content&stx=$query"
+            else -> "${type?.toUriPart() ?: ""}${status?.toUriPart() ?: ""}${sort?.toUriPart() ?: ""}"
         }
 
         return GET(baseUrl + requestPath, headers)
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
-
-    // Details
-
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        with(document.select("table.bt_view1")) {
-            title = select("td.bt_title").text()
-            author = select("td.bt_label span.bt_data").text()
-            description = select("td.bt_over").text()
-            thumbnail_url = select("td.bt_thumb img").firstOrNull()?.attr("abs:src")
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            with(document.select("table.bt_view1")) {
+                title = select("td.bt_title").text()
+                author = select("td.bt_label span.bt_data").text()
+                description = select("td.bt_over").text()
+                thumbnail_url = select("td.bt_thumb img").firstOrNull()?.attr("abs:src")
+            }
         }
     }
 
-    // Chapters
-
-    override fun chapterListSelector() = "table.web_list tr:has(td.content__title)"
-
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        element.select("td.content__title").let {
-            url = it.attr("data-role")
-            name = it.text()
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("table.web_list tr:has(td.content__title)").map { element ->
+            SChapter.create().apply {
+                element.select("td.content__title").let {
+                    url = it.attr("data-role")
+                    name = it.text()
+                }
+                date_upload = dateFormat.tryParse(element.select("td.episode__index").text())
+            }
         }
-        date_upload = element.select("td.episode__index").text().toDate()
     }
 
-    private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
-
-    private fun String.toDate(): Long = dateFormat.parse(this)?.time ?: 0
-
-    // Pages
-
-    private val pageListRegex = Regex("""src="([^"]*)"""")
-
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val encoded = document.select("script:containsData(toon_img)").firstOrNull()?.data()
-            ?.substringAfter("'")?.substringBefore("'") ?: throw Exception("toon_img script not found")
+            ?.substringAfter("'")?.substringBefore("'") ?: return emptyList()
 
-        val decoded = Base64.decode(encoded, Base64.DEFAULT).toString(Charset.defaultCharset())
+        val decoded = String(Base64.decode(encoded, Base64.DEFAULT))
 
-        return pageListRegex.findAll(decoded).toList().mapIndexed { i, matchResult ->
-            Page(i, "", matchResult.destructured.component1().let { if (it.startsWith("http")) it else baseUrl + it })
-        }
+        return pageListRegex.findAll(decoded).mapIndexed { i, matchResult ->
+            val imageUrl = matchResult.destructured.component1().let { if (it.startsWith("http")) it else baseUrl + it }
+            Page(i, imageUrl = imageUrl)
+        }.toList()
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
-
-    // Filters
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun getFilterList(): FilterList = FilterList(
         Filter.Header("Note: can't combine with text search!"),
         Filter.Separator(),
-        TypeFilter(getTypeList()),
-        SortFilter(getSortList()),
+        TypeFilter(),
+        StatusFilter(),
+        SortFilter(),
     )
-
-    private class TypeFilter(vals: Array<Pair<String, String>>) : UriPartFilter("Type", vals)
-    private class SortFilter(vals: Array<Pair<String, String>>) : UriPartFilter("Sort", vals)
-
-    private fun getTypeList() = arrayOf(
-        Pair("Webtoons", webtoonsRequestPath),
-        Pair("Manga", "/%EB%8B%A8%ED%96%89%EB%B3%B8"),
-        Pair("Hentai", "/%EB%A7%9D%EA%B0%80"),
-    )
-
-    private fun getSortList() = arrayOf(
-        Pair("Popular", ""),
-        Pair("Latest", latestRequestModifier),
-        Pair("Completed", "/%EC%99%84%EA%B2%B0"),
-    )
-
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        fun isSelection(name: String): Boolean = name == vals[state].first
-        fun toUriPart() = vals[state].second
-    }
-
-    private inline fun <reified T> FilterList.findUriPartFilter(): UriPartFilter = this.find { it is T } as UriPartFilter
-
-    // Preferences
-
-    private val preferences: SharedPreferences by getPreferencesLazy()
-
-    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF_TITLE
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            this.setDefaultValue(defaultBaseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $defaultBaseUrl"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val res = preferences.edit().putString(baseUrlPref, newValue as String).commit()
-                    res
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
-            }
-        }
-
-        screen.addPreference(baseUrlPref)
-    }
-
-    private fun getPrefBaseUrl(): String = preferences.getString(baseUrlPref, defaultBaseUrl)!!
 
     companion object {
-        private const val BASE_URL_PREF_TITLE = "Override BaseUrl"
-        private const val BASE_URL_PREF_SUMMARY = "Override default domain with a different one"
+        private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+        private val pageListRegex = Regex("""src="([^"]*)"""")
     }
 }

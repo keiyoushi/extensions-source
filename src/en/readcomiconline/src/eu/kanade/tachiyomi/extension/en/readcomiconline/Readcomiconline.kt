@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.readcomiconline
 
 import android.content.SharedPreferences
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -12,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.UserAgentType
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.firstInstance
@@ -22,25 +25,23 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
+import org.jsoup.nodes.TextNode
+import rx.Observable
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class Readcomiconline :
+@Source
+abstract class Readcomiconline :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "ReadComicOnline"
-
-    override val baseUrl = "https://readcomiconline.li"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 
@@ -51,7 +52,7 @@ class Readcomiconline :
             filterInclude = listOf("chrome"),
         )
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addNetworkInterceptor(::captchaInterceptor).build()
 
     private fun captchaInterceptor(chain: Interceptor.Chain): Response {
@@ -90,6 +91,25 @@ class Readcomiconline :
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("http")) {
+            val url = query.toHttpUrlOrNull()
+            if (url != null &&
+                url.pathSegments.size >= 2 && url.pathSegments[0] == "Comic"
+            ) {
+                val manga = SManga.create().apply {
+                    this.url = "/Comic/${url.pathSegments[1]}"
+                }
+                return fetchMangaDetails(manga).map { details ->
+                    details.url = manga.url
+                    details.initialized = true
+                    MangasPage(listOf(details), false)
+                }
+            }
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
+
     override fun searchMangaRequest(
         page: Int,
         query: String,
@@ -108,7 +128,6 @@ class Readcomiconline :
                 addPathSegment(genreName)
                 if (sortOption != null) addPathSegment(sortOption)
                 addQueryParameter("page", page.toString())
-                if (yearOption != null) addQueryParameter("pubDate", yearOption)
             }.build()
             GET(url, headers)
         } else if (query.isEmpty() && genreList.included.isEmpty() && genreList.excluded.isEmpty() && yearOption == null) {
@@ -153,7 +172,6 @@ class Readcomiconline :
                     addPathSegment(sortOption)
                 }
                 addQueryParameter("page", page.toString())
-                if (yearOption != null) addQueryParameter("pubDate", yearOption)
             }.build()
             GET(url, headers)
         } else {
@@ -184,26 +202,40 @@ class Readcomiconline :
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
+    private val viewsRegex = Regex("Views:\\s*([\\d,]+)")
+
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-        val infoElement = document.select("div.barContent").first()!!
+        val infoElement = document.selectFirst("div.barContent")!!
 
         val manga = SManga.create()
         manga.title = infoElement.selectFirst("a.bigChar")!!.text()
-        manga.artist = infoElement.select("p:has(span:contains(Artist:)) > a").first()?.text()
-        manga.author = infoElement.select("p:has(span:contains(Writer:)) > a").eachText().joinToString()
-        manga.genre = infoElement.select("p:has(span:contains(Genres:)) > *:gt(0)").text()
+        manga.artist = infoElement.select("p:has(span:contains(Artist:)) > a").eachText().summarize()
+        manga.author = infoElement.select("p:has(span:contains(Writer:)) > a").eachText().summarize()
+        manga.genre = infoElement.select("p:has(span:contains(Genres:)) > a").eachText().joinToString()
         manga.description = listOfNotNull(
-            infoElement.select("p:has(span:contains(Summary:)) ~ p").text().takeIf { it.isNotEmpty() },
+            infoElement.select("p:has(span:contains(Summary:)) ~ p")
+                .joinToString("\n\n") { it.textPreserveLineBreaks() }
+                .trim()
+                .takeIf { it.isNotEmpty() },
             infoElement.select("p:has(span:contains(Publisher:))").text().takeIf { it.isNotEmpty() }?.let { "\n$it" },
             infoElement.select("p:has(span:contains(Publication date:))").text().takeIf { it.isNotEmpty() },
-            Regex("Views:\\s*([\\d,]+)").find(infoElement.select("p:has(span:contains(Views:))").text())
+            viewsRegex.find(infoElement.select("p:has(span:contains(Views:))").text())
                 ?.let { "Views: ${it.groupValues[1]}" },
         ).joinToString("\n")
-        manga.status = infoElement.select("p:has(span:contains(Status:))").first()?.text().orEmpty()
+        manga.status = infoElement.selectFirst("p:has(span:contains(Status:))")?.text().orEmpty()
             .let { parseStatus(it) }
-        manga.thumbnail_url = document.select(".rightBox:eq(0) img").first()?.absUrl("src")
+        manga.thumbnail_url = document.selectFirst(".rightBox:eq(0) img")?.absUrl("src")
         return manga
+    }
+
+    private fun List<String>.summarize(): String = if (size > 2) "${first()} & others" else joinToString()
+
+    private fun Element.textPreserveLineBreaks(): String {
+        // Replace <br> with newline text nodes so wholeText() preserves them as line breaks.
+        // .text() would collapse them into spaces.
+        select("br").forEach { it.replaceWith(TextNode("\n")) }
+        return wholeText()
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -228,16 +260,10 @@ class Readcomiconline :
         }
     }
 
-    private val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
+    private val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.ENGLISH)
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val qualitySuffix =
-            if ((qualityPref() != "lq" && serverPref() != "s2") || (qualityPref() == "lq" && serverPref() == "s2")) {
-                "&s=${serverPref()}&quality=${qualityPref()}&readType=1"
-            } else {
-                "&s=${serverPref()}&readType=1"
-            }
-
+        val qualitySuffix = "&s=${serverPref()}&quality=${qualityPref()}&readType=1"
         return GET(baseUrl + chapter.url + qualitySuffix, headers)
     }
 
@@ -291,7 +317,7 @@ class Readcomiconline :
         }
     }
 
-    override fun imageUrlParse(response: Response) = ""
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     private class Status :
         SelectFilter(
@@ -406,58 +432,23 @@ class Readcomiconline :
     )
     // Preferences Code
 
-    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        val remoteConfigPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = IMAGE_REMOTE_CONFIG_PREF
-            title = IMAGE_REMOTE_CONFIG_TITLE
-            summary = IMAGE_REMOTE_CONFIG_SUMMARY
-            setDefaultValue(IMAGE_REMOTE_CONFIG_DEFAULT)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val commitResult =
-                    preferences.edit().putString(IMAGE_REMOTE_CONFIG_PREF, newValue as String)
-                        .commit()
-
-                if (commitResult) {
-                    // Make it null so remoteConfigItem would request for a link again
-                    remoteConfigItem = null
-                }
-
-                commitResult
-            }
-        }
-
-        val qualityPref = androidx.preference.ListPreference(screen.context).apply {
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val qualityPref = ListPreference(screen.context).apply {
             key = QUALITY_PREF
             title = QUALITY_PREF_TITLE
             entries = arrayOf("High Quality", "Low Quality")
             entryValues = arrayOf("hq", "lq")
             summary = "%s"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = this.findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(QUALITY_PREF, entry).commit()
-            }
         }
 
-        val serverPref = androidx.preference.ListPreference(screen.context).apply {
+        val serverPref = ListPreference(screen.context).apply {
             key = SERVER_PREF
             title = SERVER_PREF_TITLE
             entries = arrayOf("Server 1", "Server 2")
             entryValues = arrayOf("", "s2")
             summary = "%s"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = this.findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(SERVER_PREF, entry).commit()
-            }
         }
 
-        screen.addPreference(remoteConfigPref)
         screen.addPreference(qualityPref)
         screen.addPreference(serverPref)
     }
@@ -472,10 +463,7 @@ class Readcomiconline :
                 return field
             }
 
-            val configLink = preferences.getString(
-                IMAGE_REMOTE_CONFIG_PREF,
-                IMAGE_REMOTE_CONFIG_DEFAULT,
-            )?.ifBlank { IMAGE_REMOTE_CONFIG_DEFAULT }?.addBustQuery() ?: return null
+            val configLink = IMAGE_REMOTE_CONFIG_DEFAULT.addBustQuery()
 
             try {
                 val configResponse = client.newCall(GET(configLink)).execute()
@@ -502,10 +490,7 @@ class Readcomiconline :
         private const val QUALITY_PREF = "qualitypref"
         private const val SERVER_PREF_TITLE = "Server Preference"
         private const val SERVER_PREF = "serverpref"
-        private const val IMAGE_REMOTE_CONFIG_TITLE = "Remote Config"
-        private const val IMAGE_REMOTE_CONFIG_SUMMARY = "Remote Config Link"
-        private const val IMAGE_REMOTE_CONFIG_PREF = "imageuseremotelinkpref"
         private const val IMAGE_REMOTE_CONFIG_DEFAULT =
-            "https://raw.githubusercontent.com/keiyoushi/extensions-source/refs/heads/main/src/en/readcomiconline/config.json"
+            "https://raw.githubusercontent.com/keiyoushi/rco-script/refs/heads/main/decrypt.json"
     }
 }

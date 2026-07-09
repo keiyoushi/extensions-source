@@ -3,7 +3,8 @@ package eu.kanade.tachiyomi.extension.en.yakshacomics
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import okhttp3.FormBody
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -11,18 +12,14 @@ import okhttp3.Response
 import java.io.IOException
 import java.security.MessageDigest
 
-class YakshaComics :
-    Madara(
-        "YakshaComics",
-        "https://yakshacomics.com",
-        "en",
-    ) {
+@Source
+abstract class YakshaComics : Madara() {
     override val useNewChapterEndpoint = true
 
     // Adapted from src/en/yakshascans
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1)
         .addInterceptor(::jsChallengeInterceptor)
+        .rateLimit(1)
         .build()
 
     private fun jsChallengeInterceptor(chain: Interceptor.Chain): Response {

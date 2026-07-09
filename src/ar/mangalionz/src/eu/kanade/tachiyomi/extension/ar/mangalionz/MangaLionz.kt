@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.FormBody
@@ -13,13 +14,9 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaLionz :
-    Madara(
-        "MangaLionz",
-        "https://manga-lionz.org",
-        "ar",
-        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("ar")),
-    ) {
+@Source
+abstract class MangaLionz : Madara() {
+    override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("ar"))
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 

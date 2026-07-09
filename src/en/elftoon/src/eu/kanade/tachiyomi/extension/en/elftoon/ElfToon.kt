@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.elftoon
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class ElfToon : MangaThemesia("Elf Toon", "https://elftoon.com", "en") {
+@Source
+abstract class ElfToon : MangaThemesia() {
 
     override fun chapterListSelector() = "#chapterlist li:not(:has(.gem-price-icon))"
 }

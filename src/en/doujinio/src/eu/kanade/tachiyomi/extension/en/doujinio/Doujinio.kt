@@ -2,13 +2,14 @@ package eu.kanade.tachiyomi.extension.en.doujinio
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -18,17 +19,14 @@ import okhttp3.Response
 
 const val LATEST_LIMIT = 20
 
-class Doujinio : HttpSource() {
-    override val name = "Doujin.io - J18"
-
-    override val baseUrl = "https://doujin.io"
-
-    override val lang = "en"
+@Source
+abstract class Doujinio : HttpSource() {
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
+    override val client = network.client.newBuilder()
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
     // Latest

@@ -1,0 +1,16 @@
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "ManhwaZ"
+    versionCode = 37
+    contentWarning = ContentWarning.NSFW
+    libVersion = "1.4"
+    theme = "manhwaz"
+
+    source {
+        lang = "en"
+        baseUrl = "https://manhwaz.com"
+    }
+}

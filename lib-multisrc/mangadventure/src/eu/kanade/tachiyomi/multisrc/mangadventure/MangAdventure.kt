@@ -13,14 +13,11 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
 /** MangAdventure base source. */
-abstract class MangAdventure(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String = "en",
-) : HttpSource() {
+abstract class MangAdventure : HttpSource() {
     /** The site's manga categories. */
     protected open val categories = DEFAULT_CATEGORIES
 
@@ -45,8 +42,6 @@ abstract class MangAdventure(
     /** The JSON parser of the class. */
     private val json by injectLazy<Json>()
 
-    override val versionId = 3
-
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder().set("User-Agent", userAgent)
@@ -54,6 +49,20 @@ abstract class MangAdventure(
     override fun latestUpdatesRequest(page: Int) = GET("$apiUrl/series?page=$page&sort=-latest_upload", headers)
 
     override fun popularMangaRequest(page: Int) = GET("$apiUrl/series?page=$page&sort=-views", headers)
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            if (url.pathSegments.size < 2) {
+                throw Exception("Unsupported url")
+            }
+            return fetchSearchManga(page, SLUG_QUERY + url.pathSegments[1], filters)
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = apiUrl.toHttpUrl().newBuilder().addEncodedPathSegment("series").run {
         if (query.startsWith(SLUG_QUERY)) {

@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.all.taddyink
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -12,26 +11,28 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
-open class TaddyInk(
-    override val lang: String,
-    private val taddyLang: String,
-) : HttpSource(),
+@Source
+abstract class TaddyInk :
+    HttpSource(),
     ConfigurableSource {
 
-    final override val baseUrl = "https://taddy.org"
-    override val name = "Taddy INK (Webtoons)"
+    private val taddyLang = ""
+
     override val supportsLatest = false
 
     override val client: OkHttpClient by lazy {
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .rateLimit(4)
             .build()
     }
@@ -63,6 +64,24 @@ open class TaddyInk(
     }
 
     override fun popularMangaParse(response: Response) = parseManga(response)
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            // pathSegments[1] is the slug used to identify the comic
+            url.pathSegments.getOrNull(1) ?: throw Exception("Unsupported url")
+
+            val manga = SManga.create().apply { this.url = query }
+            return fetchMangaDetails(manga).map {
+                MangasPage(listOf(it.apply { this.url = query }), false)
+            }
+        }
+
+        return super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters

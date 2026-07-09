@@ -1,8 +1,0 @@
-ext {
-    extName = 'Blackout Comics'
-    extClass = '.BlackoutComics'
-    extVersionCode = 8
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

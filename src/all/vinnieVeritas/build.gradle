@@ -1,7 +1,0 @@
-ext {
-    extName = 'Vinne Veritas - CCC'
-    extClass = '.VinnieVeritasFactory'
-    extVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

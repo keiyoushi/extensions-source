@@ -8,107 +8,145 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class MyHentaiGallery : ParsedHttpSource() {
-
-    override val name = "MyHentaiGallery"
-
-    override val baseUrl = "https://myhentaigallery.com"
-
-    override val lang = "en"
+@Source
+abstract class MyHentaiGallery : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient
-
-    // Popular
+    // =============================== Popular ================================
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/views/$page", headers)
 
-    override fun popularMangaSelector() = "div.comic-inner"
+    override fun popularMangaParse(response: Response): MangasPage = parseComicListing(response)
 
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("h2")!!.text()
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-    }
-
-    override fun popularMangaNextPageSelector() = "li.next"
-
-    // Latest
+    // =============================== Latest =================================
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/gpage/$page", headers)
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
+    override fun latestUpdatesParse(response: Response): MangasPage = parseComicListing(response)
 
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+    // =============================== Search =================================
 
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-
-    // Search
-
-    private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/g/$id", headers)
-
-    private fun searchMangaByIdParse(response: Response, id: String): MangasPage {
-        val details = mangaDetailsParse(response)
-        details.url = "/g/$id"
-        return MangasPage(listOf(details), false)
-    }
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_ID_SEARCH)) {
-        val id = query.removePrefix(PREFIX_ID_SEARCH)
-        client.newCall(searchMangaByIdRequest(id))
-            .asObservableSuccess()
-            .map { response -> searchMangaByIdParse(response, id) }
-    } else {
-        super.fetchSearchManga(page, query, filters)
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isNotBlank()) {
-        val url = "$baseUrl/search".toHttpUrl().newBuilder()
-            .addPathSegment(page.toString())
-            .addQueryParameter("query", query)
-            .build()
-        GET(url, headers)
-    } else {
-        val url = "$baseUrl/g/category".toHttpUrl().newBuilder()
-
-        filters.forEach { filter ->
-            when (filter) {
-                is GenreFilter -> {
-                    url.addPathSegment(filter.toUriPart())
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val id = url.pathSegments[2]
+            return fetchSearchManga(page, "$PREFIX_ID_SEARCH$id", filters)
+        }
+        return if (query.startsWith(PREFIX_ID_SEARCH)) {
+            val id = query.removePrefix(PREFIX_ID_SEARCH)
+            client.newCall(GET("$baseUrl/g/$id", headers))
+                .asObservableSuccess()
+                .map { response ->
+                    val details = mangaDetailsParse(response).apply { url = "/g/$id" }
+                    MangasPage(listOf(details), false)
                 }
+        } else {
+            super.fetchSearchManga(page, query, filters)
+        }
+    }
 
-                else -> {}
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        genreSearchRequest(query, page)?.let { return it }
+
+        if (query.isNotBlank()) {
+            val url = "$baseUrl/search".toHttpUrl().newBuilder()
+                .addPathSegment(page.toString())
+                .addQueryParameter("query", query)
+                .build()
+            return GET(url, headers)
+        }
+
+        val filterList = if (filters.isEmpty()) getFilterList() else filters
+        val categoryFilter = filterList.firstInstanceOrNull<GenreFilter>()
+        val sortFilter = filterList.firstInstanceOrNull<SortFilter>()
+        val tagLookupFilter = filterList
+            .filterIsInstance<TagLookupFilter>()
+            .firstOrNull { it.state.isNotBlank() }
+
+        if (tagLookupFilter != null) {
+            val tagId = tagLookupFilter.resolveTagId()
+            return GET("$baseUrl/a/${tagLookupFilter.uriPart}/$tagId/$page", headers)
+        }
+
+        if (categoryFilter != null && categoryFilter.toUriPart().isNotEmpty()) {
+            val catId = categoryFilter.toUriPart()
+            return GET("$baseUrl/g/category/$catId/$page", headers)
+        }
+
+        val sortPath = sortFilter?.toUriPart() ?: "gpage"
+        return GET("$baseUrl/$sortPath/$page", headers)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage = parseComicListing(response)
+
+    // ============================== Filters =================================
+
+    override fun getFilterList() = FilterList(
+        Filter.Header("NOTE: Ignored if using text search!"),
+        Filter.Separator(),
+        SortFilter(),
+        Filter.Separator(),
+        GenreFilter(),
+        Filter.Separator(),
+        Filter.Header("Use one category/artist/parody filter at a time"),
+        Filter.Header("Artists/Parodies accept ID, tag URL, or exact name"),
+        ArtistFilter(),
+        ParodyFilter(),
+    )
+
+    // =========================== Comic Listing ==============================
+
+    private fun parseComicListing(response: Response): MangasPage {
+        val document = response.asJsoup()
+
+        val mangas = document.select("div.comic-inner").map { element ->
+            SManga.create().apply {
+                title = element.selectFirst("h2")!!.text()
+                setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+                thumbnail_url = element.selectFirst("img")?.absUrl("src")?.encodeSpaces()
             }
         }
-        url.addPathSegment("$page")
 
-        GET(url.build(), headers)
+        val hasNextPage = document.selectFirst("li.next") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
+    // =========================== Manga Details ==============================
 
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        val info: Element = document.selectFirst("div.comic-header")!!
+        val categories = info.select("div:containsOwn(categories) a").eachText()
+        val artists = info.select("div:containsOwn(artists) a").eachText()
+        val parodies = info.select("div:containsOwn(parodies) a").eachText()
 
-    // Details
-
-    override fun mangaDetailsParse(document: Document): SManga = document.selectFirst("div.comic-header")!!.let { info ->
-        SManga.create().apply {
+        return SManga.create().apply {
             title = info.selectFirst("h1")!!.text()
-            genre = info.select("div:containsOwn(categories) a").joinToString { it.text() }
-            artist = info.select("div:containsOwn(artists) a").joinToString { it.text() }
-            thumbnail_url = document.selectFirst(".comic-listing .comic-inner img")?.absUrl("src")
+            genre = (
+                categories +
+                    artists.map { "$ARTIST_GENRE_PREFIX$it" } +
+                    parodies.map { "$PARODY_GENRE_PREFIX$it" }
+                ).joinToString()
+            artist = artists.joinToString()
+            thumbnail_url = document.selectFirst(".comic-listing .comic-inner img")?.absUrl("src")?.encodeSpaces()
+            status = SManga.COMPLETED
+            initialized = true
             description = buildString {
                 info.select("div:containsOwn(groups) a")
                     .takeIf { it.isNotEmpty() }
@@ -127,7 +165,7 @@ class MyHentaiGallery : ParsedHttpSource() {
         }
     }
 
-    // Chapters
+    // =========================== Chapter List ===============================
 
     override fun chapterListParse(response: Response): List<SChapter> = listOf(
         SChapter.create().apply {
@@ -136,141 +174,80 @@ class MyHentaiGallery : ParsedHttpSource() {
         },
     )
 
-    override fun chapterListSelector() = throw UnsupportedOperationException()
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
+    // ============================== Page List ===============================
 
-    // Pages
-
-    override fun pageListParse(document: Document): List<Page> = document.select("div.comic-thumb img[src]").mapIndexed { i, img ->
-        val imageUrl = img.absUrl("src").replace("/thumbnail/", "/original/")
-        Page(i, imageUrl = imageUrl)
+    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("div.comic-thumb img[src]").mapIndexed { i, img ->
+        Page(i, imageUrl = img.absUrl("src").replace("/thumbnail/", "/original/").encodeSpaces())
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // Filters
+    // ============================== Helpers =================================
 
-    override fun getFilterList() = FilterList(
-        Filter.Header("NOTE: Ignored if using text search!"),
-        Filter.Separator(),
-        GenreFilter(),
-    )
+    private fun String.encodeSpaces(): String = replace(" ", "%20")
 
-    private class GenreFilter :
-        UriPartFilter(
-            "Category",
-            arrayOf(
-                // copy($$(".catagory-inner > a").map(el => {var id = /\d+$/.exec(el.href.replace())[0]; var name = el.querySelector("h2").innerText; return `Pair("${name}", "${id}"),`;}).join("\n"))
-                Pair("<select>", "---"),
-                Pair("3D Comic", "3"),
-                Pair("Ahegao", "23"),
-                Pair("Anal", "25"),
-                Pair("Animated", "10"),
-                Pair("Asian", "54"),
-                Pair("Ass Expansion", "5"),
-                Pair("Aunt", "6"),
-                Pair("BBW", "7"),
-                Pair("Beastiality", "8"),
-                Pair("Bimbofication", "2049"),
-                Pair("Bisexual", "9"),
-                Pair("Black | Interracial", "20"),
-                Pair("Body Swap", "11"),
-                Pair("Bondage", "12"),
-                Pair("Breast Expansion", "13"),
-                Pair("Brother", "1012"),
-                Pair("Bukkake", "15"),
-                Pair("Catgirl", "1201"),
-                Pair("Cbt", "8133"),
-                Pair("Censored", "5136"),
-                Pair("Cheating", "49"),
-                Pair("Cosplay", "8157"),
-                Pair("Cousin", "17"),
-                Pair("Crossdressing", "43"),
-                Pair("Cuntboy", "8134"),
-                Pair("Dad | Father", "788"),
-                Pair("Daughter", "546"),
-                Pair("Dick Growth", "21"),
-                Pair("Double Penetration", "8135"),
-                Pair("Ebony", "29"),
-                Pair("Elf", "1714"),
-                Pair("Exhibitionism", "1838"),
-                Pair("Family", "2094"),
-                Pair("Femboy | Tomgirl | Sissy", "8136"),
-                Pair("Femdom", "24"),
-                Pair("Foot Fetish", "1873"),
-                Pair("Forced", "18"),
-                Pair("Furry", "14"),
-                Pair("Futanari | Shemale | Dickgirl", "19"),
-                Pair("Futanari X Female", "1951"),
-                Pair("Futanari X Futanari", "1885"),
-                Pair("Futanari X Male", "26"),
-                Pair("Gangbang", "27"),
-                Pair("Gay | Yaoi", "28"),
-                Pair("Gender Bender", "16"),
-                Pair("Giant", "8137"),
-                Pair("Giantess", "452"),
-                Pair("Gilf", "8138"),
-                Pair("Gloryhole", "31"),
-                Pair("Group", "101"),
-                Pair("Hairy Female", "1986"),
-                Pair("Hardcore", "36"),
-                Pair("Harem", "53"),
-                Pair("Inflation | Stomach Bulge", "57"),
-                Pair("Inseki", "1978"),
-                Pair("Kemonomimi", "1875"),
-                Pair("Lactation", "39"),
-                Pair("Lesbian | Yuri | Girls Only", "41"),
-                Pair("Milf", "30"),
-                Pair("Mind Break", "2023"),
-                Pair("Mind Control | Hypnosis", "42"),
-                Pair("Mom | Mother", "56"),
-                Pair("Monster", "8140"),
-                Pair("Monster Girl", "8139"),
-                Pair("Most Popular", "52"),
-                Pair("Muscle Girl", "45"),
-                Pair("Muscle Growth", "46"),
-                Pair("Nephew", "47"),
-                Pair("Niece", "48"),
-                Pair("Nipple Fuck | Nipple Penetration", "8141"),
-                Pair("Pegging", "50"),
-                Pair("Possession", "51"),
-                Pair("Pregnant | Impregnation", "55"),
-                Pair("Public Use", "8142"),
-                Pair("Selfcest", "8143"),
-                Pair("Sister", "58"),
-                Pair("Slave", "8144"),
-                Pair("Smegma", "8145"),
-                Pair("Solo", "1865"),
-                Pair("Solo Futa", "8154"),
-                Pair("Solo Girl", "8146"),
-                Pair("Solo Male", "8147"),
-                Pair("Son", "62"),
-                Pair("Spanking", "38"),
-                Pair("Speechless", "8148"),
-                Pair("Strap-On", "61"),
-                Pair("Stuck In Wall", "8149"),
-                Pair("Superheroes", "59"),
-                Pair("Tentacles", "60"),
-                Pair("Threesome", "40"),
-                Pair("Tickling", "2065"),
-                Pair("Titty Fuck | Paizuri", "8150"),
-                Pair("Tomboy", "8153"),
-                Pair("Transformation", "37"),
-                Pair("Uncle", "63"),
-                Pair("Urination", "64"),
-                Pair("Vanilla | Wholesome", "8151"),
-                Pair("Variant Set", "8152"),
-                Pair("Vore | Unbirth", "65"),
-                Pair("Weight Gain", "66"),
-            ),
-        )
-
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        fun toUriPart() = vals[state].second
+    // Routes a clicked artist/parody genre chip to its tag listing instead of a title search.
+    private fun genreSearchRequest(query: String, page: Int): Request? {
+        val (uriPart, name) = when {
+            query.startsWith(ARTIST_GENRE_PREFIX) -> "artist" to query.removePrefix(ARTIST_GENRE_PREFIX)
+            query.startsWith(PARODY_GENRE_PREFIX) -> "parody" to query.removePrefix(PARODY_GENRE_PREFIX)
+            else -> return null
+        }
+        val id = lookupTagId(uriPart, name)
+            ?: throw Exception("No $uriPart \"$name\" was found.")
+        return GET("$baseUrl/a/$uriPart/$id/$page", headers)
     }
+
+    private fun TagLookupFilter.resolveTagId(): String {
+        val value = state.trim()
+        value.toLongOrNull()?.let { return it.toString() }
+
+        TAG_URL_REGEX.find(value)?.let { match ->
+            val namespace = match.groupValues[1].lowercase()
+            if (namespace != uriPart) {
+                throw Exception("Expected a $uriPart URL, got a $namespace URL")
+            }
+
+            return match.groupValues[2]
+        }
+
+        return lookupTagId(uriPart, value)
+            ?: throw Exception("No $uriPart \"$value\" was found. Use the exact tag name, numeric ID, or full MyHentaiGallery tag URL.")
+    }
+
+    private fun lookupTagId(uriPart: String, name: String): String? {
+        val lookup = tagLookupCache.getOrPut(uriPart) { loadTagLookup(uriPart) }
+        return lookup[name.normalizeTagName()]
+    }
+
+    private fun loadTagLookup(uriPart: String): Map<String, String> {
+        val tagUrlRegex = Regex("""/$uriPart/(\d+)(?:[/?#]|$)""", RegexOption.IGNORE_CASE)
+
+        return client.newCall(GET("$baseUrl/tag/$uriPart", headers)).execute().use { response ->
+            response.asJsoup()
+                .select("a[href*='/$uriPart/']")
+                .mapNotNull { element ->
+                    val id = tagUrlRegex.find(element.attr("href"))?.groupValues?.get(1)
+                        ?: return@mapNotNull null
+                    val name = element.text().normalizeTagName()
+                    if (name.isBlank()) null else name to id
+                }
+                .toMap()
+        }
+    }
+
+    private fun String.normalizeTagName(): String = replace(TAG_COUNT_SUFFIX, "").trim().lowercase().replace(WHITESPACE_REGEX, " ")
 
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
+        private const val ARTIST_GENRE_PREFIX = "Artist: "
+        private const val PARODY_GENRE_PREFIX = "Parody: "
+        private val TAG_URL_REGEX = Regex("""/(artist|parody)/(\d+)(?:[/?#]|$)""", RegexOption.IGNORE_CASE)
+        private val WHITESPACE_REGEX = Regex("""\s+""")
+        private val TAG_COUNT_SUFFIX = Regex("""\s*\(\d+\)\s*$""")
     }
+
+    private val tagLookupCache = mutableMapOf<String, Map<String, String>>()
 }

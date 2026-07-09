@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.baobua
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +9,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -20,14 +21,13 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class BaoBua : HttpSource() {
+@Source
+abstract class BaoBua : HttpSource() {
 
-    override val name = "BaoBua"
-    override val baseUrl = "https://baobua.net"
-    override val lang = "all"
     override val supportsLatest = false
+    override val disableRelatedMangas = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
         .build()
 
@@ -123,8 +123,7 @@ class BaoBua : HttpSource() {
             ?: return pages
 
         val nextDoc = client.newCall(GET(nextPageUrl, headers))
-            .execute()
-            .asJsoup()
+            .execute().use { it.asJsoup() }
 
         val nextPages = recursivePageListParse(nextDoc)
         val offset = pages.size
@@ -141,11 +140,11 @@ class BaoBua : HttpSource() {
 
     // ========================= Helpers =========================
     private fun parseMangasPage(document: Document): MangasPage {
-        val mangas = document.select(".product-item").map { element ->
+        val mangas = document.select(".product-item").mapNotNull { element ->
             SManga.create().apply {
-                val absUrl = element.selectFirst("a")!!.absUrl("href")
+                val absUrl = element.selectFirst("a")?.absUrl("href") ?: return@mapNotNull null
                 url = absUrl.toHttpUrlOrNull()?.encodedPath ?: absUrl
-                title = element.selectFirst(".product-title")?.text() ?: throw Exception("Title is mandatory")
+                title = element.selectFirst(".product-title")?.text() ?: return@mapNotNull null
                 thumbnail_url = element.selectFirst("img.product-imgreal")?.absUrl("src")
                     ?.let { normalizeImageUrl(it) }
                 update_strategy = UpdateStrategy.ONLY_FETCH_ONCE

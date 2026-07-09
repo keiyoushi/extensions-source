@@ -1,160 +1,147 @@
 package keiyoushi.lib.publus
 
-import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 
 /**
- * @param pages The list of pages.
- * @param keys The decryption keys (k1, k2, k3) obtained from the [Decoder].
- * @param contentUrl The content base URL obtained from the source's content API response.
- */
-fun generatePages(
-    pages: List<PublusPage>,
-    keys: List<IntArray>,
-    contentUrl: String,
-): List<Page> {
-    val k1 = keys[0].toList()
-    val k2 = keys[1].toList()
-    val k3 = keys[2].toList()
-
-    return pages.map { p ->
-        val filename = PublusImage.generateFilename(p.filename, keys, p.no)
-        val urlBuilder = (contentUrl + filename).toHttpUrl().newBuilder()
-
-        p.hti?.let { urlBuilder.addQueryParameter("hti", it) }
-        p.cfg?.let { urlBuilder.addQueryParameter("cfg", it) }
-        p.bid?.let { urlBuilder.addQueryParameter("bid", it) }
-        p.uuid?.let { urlBuilder.addQueryParameter("uuid", it) }
-        p.pfCd?.let { urlBuilder.addQueryParameter("pfCd", it) }
-        p.policy?.let { urlBuilder.addQueryParameter("Policy", it) }
-        p.signature?.let { urlBuilder.addQueryParameter("Signature", it) }
-        p.keyPairId?.let { urlBuilder.addQueryParameter("Key-Pair-Id", it) }
-
-        val imgUrl = urlBuilder.build().toString()
-
-        val fragmentData = PublusFragment(
-            file = p.filename,
-            no = p.no,
-            ns = p.ns,
-            ps = p.ps,
-            rs = p.rs,
-            bw = p.blockWidth,
-            bh = p.blockHeight,
-            cw = p.width,
-            ch = p.height,
-            k1 = k1,
-            k2 = k2,
-            k3 = k3,
-            extra = p.extra,
-            s = p.scrambled,
-        )
-
-        val fragmentJson = fragmentData.toJsonString()
-        val fragment = Base64.encodeToString(fragmentJson.toByteArray(), Base64.URL_SAFE or Base64.NO_WRAP)
-
-        Page(p.index, imageUrl = "$imgUrl#$fragment")
-    }
-}
-
-/**
- * Generates pages for a configuration where only images are scrambled and no decryption keys are involved.
- * @param pages The list of pages.
- * @param contentUrl The content base URL obtained from the source's content API response.
- */
-fun generatePagesNoKeys(
-    pages: List<PublusPage>,
-    contentUrl: String,
-): List<Page> = pages.map { p ->
-    val filename = "${p.filename}/${p.no}.jpeg"
-    val urlBuilder = contentUrl.toHttpUrl().newBuilder()
-        .addPathSegments(filename)
-
-    p.hti?.let { urlBuilder.addQueryParameter("hti", it) }
-    p.cfg?.let { urlBuilder.addQueryParameter("cfg", it) }
-    p.bid?.let { urlBuilder.addQueryParameter("bid", it) }
-    p.uuid?.let { urlBuilder.addQueryParameter("uuid", it) }
-    p.pfCd?.let { urlBuilder.addQueryParameter("pfCd", it) }
-    p.policy?.let { urlBuilder.addQueryParameter("Policy", it) }
-    p.signature?.let { urlBuilder.addQueryParameter("Signature", it) }
-    p.keyPairId?.let { urlBuilder.addQueryParameter("Key-Pair-Id", it) }
-
-    val imgUrl = urlBuilder.build().toString()
-
-    val fragmentData = PublusFragment(
-        file = p.filename,
-        no = p.no,
-        extra = p.extra,
-        s = p.scrambled,
-    )
-
-    val fragmentJson = fragmentData.toJsonString()
-    val fragment = Base64.encodeToString(fragmentJson.toByteArray(), Base64.URL_SAFE or Base64.NO_WRAP)
-
-    Page(p.index, imageUrl = "$imgUrl#$fragment")
-}
-
-/**
- * Fetches and parses the page list from a Publus content URL.
- * Automatically detects config pack format.
+ * Fetches and parses the page list from a Publus content URL, handling both
+ * the encrypted config-pack format and a plain configuration JSON.
+ *
  * @param contentUrl The content base URL obtained from the source's content API response.
  * @param headers The [Headers] to use for requests.
  * @param client The [OkHttpClient] to use for requests.
+ * @param auth Optional signed-request parameters appended to the config and image URLs.
+ * @param extra Optional per-page session data, embedded into each page's fragment.
+ * @param hashFilenames when false, image paths use the plain `pageId/no.jpeg` instead of the keyed
+ * hash, for sources that scramble images and encrypt the config but serve images at unhashed paths.
  */
 fun fetchPages(
     contentUrl: String,
     headers: Headers,
     client: OkHttpClient,
+    auth: PublusAuth? = null,
+    extra: Map<String, String>? = null,
+    hashFilenames: Boolean = true,
 ): List<Page> {
-    val configBody = client.newCall(GET(contentUrl + "configuration_pack.json", headers))
+    val configUrl = contentUrl.toHttpUrl().newBuilder()
+        .addPathSegment("configuration_pack.json")
+        .also { auth?.applyTo(it) }
+        .build()
+
+    val root = client.newCall(GET(configUrl, headers))
         .execute()
         .use { it.body.string() }
+        .parseAs<JsonObject>()
 
-    val encodedPack = runCatching { configBody.parseAs<ConfigPack>() }.getOrNull()
-    val rootJson: Map<String, JsonElement>
-    val decoderKeys: List<IntArray>
-
-    if (encodedPack != null) {
-        val result = Decoder(encodedPack.data).decode()
-        rootJson = result.json.parseAs()
-        decoderKeys = result.keys
+    val pack = runCatching { root.parseAs<ConfigPack>() }.getOrNull()
+    val (config, keys) = if (pack != null) {
+        val decoded = Decoder(pack.data).decode()
+        decoded.json.parseAs<JsonObject>() to decoded.keys
     } else {
-        rootJson = configBody.parseAs()
-        decoderKeys = emptyList()
+        root to emptyList()
     }
 
-    val container = (rootJson["configuration"] ?: throw Exception("Configuration not found in decrypted JSON"))
+    val container = (config["configuration"] ?: throw Exception("Configuration not found in decrypted JSON"))
         .parseAs<PublusConfiguration>()
 
-    val pages = container.contents.map { entry ->
-        val pageJson = rootJson[entry.file] ?: throw Exception("Page config not found for ${entry.file}")
-        val details = pageJson.toString().parseAs<PublusPageConfig>().fileLinkInfo.pageLinkInfoList[0].page
+    val pages = container.contents.map {
+        val pageJson = config[it.file] ?: throw Exception("Page config not found for ${it.file}")
+        val page = pageJson.parseAs<PublusPageConfig>().fileLinkInfo.pageLinkInfoList.first().page
 
         PublusPage(
-            index = entry.index,
-            filename = entry.file,
-            no = details.no,
-            ns = details.ns,
-            ps = details.ps,
-            rs = details.rs,
-            blockWidth = details.blockWidth,
-            blockHeight = details.blockHeight,
-            dummyWidth = details.dummyWidth,
-            width = details.size.width,
-            height = details.size.height,
-            scrambled = details.dummyWidth != null,
+            index = it.index,
+            filename = it.file,
+            no = page.no,
+            ns = page.ns,
+            ps = page.ps,
+            rs = page.rs,
+            blockWidth = page.blockWidth,
+            blockHeight = page.blockHeight,
+            width = page.size.width,
+            height = page.size.height,
+            scrambled = page.dummyWidth != null,
         )
     }
 
-    return if (decoderKeys.isNotEmpty()) {
-        generatePages(pages, decoderKeys, contentUrl)
-    } else {
-        generatePagesNoKeys(pages, contentUrl)
+    return buildPages(pages, contentUrl, keys, auth, extra, hashFilenames)
+}
+
+private class PublusPage(
+    val index: Int,
+    val filename: String,
+    val no: Int,
+    val ns: Long,
+    val ps: Long,
+    val rs: Long,
+    val blockWidth: Int,
+    val blockHeight: Int,
+    val width: Int,
+    val height: Int,
+    val scrambled: Boolean,
+)
+
+/**
+ * Builds the final [Page] list, appending signed-request parameters to each image URL and encoding
+ * the per-page unscramble metadata into the URL fragment.
+ *
+ * An empty [keys] list selects the image-scramble-only variant, where the filename
+ * is the plain `pageId/no.jpeg` and the fragment omits the key material.
+ *
+ * @see fetchPages
+ */
+private fun buildPages(
+    pages: List<PublusPage>,
+    contentUrl: String,
+    keys: List<IntArray>,
+    auth: PublusAuth?,
+    extra: Map<String, String>?,
+    hashFilenames: Boolean,
+): List<Page> {
+    val keyLists = keys.takeIf { it.isNotEmpty() }
+        ?.let { Triple(it[0].toList(), it[1].toList(), it[2].toList()) }
+    val filenameKeys = if (hashFilenames) keys else emptyList()
+
+    return pages.map { p ->
+        val filename = PublusImage.generateFilename(p.filename, filenameKeys, p.no)
+        val imageUrl = contentUrl.toHttpUrl().newBuilder()
+            .addPathSegments(filename)
+            .also { auth?.applyTo(it) }
+            .build()
+
+        val fragment = if (keyLists == null) {
+            PublusFragment(
+                file = p.filename,
+                no = p.no,
+                cw = p.width,
+                ch = p.height,
+                extra = extra,
+                s = p.scrambled,
+            )
+        } else {
+            PublusFragment(
+                file = p.filename,
+                no = p.no,
+                ns = p.ns,
+                ps = p.ps,
+                rs = p.rs,
+                bw = p.blockWidth,
+                bh = p.blockHeight,
+                cw = p.width,
+                ch = p.height,
+                k1 = keyLists.first,
+                k2 = keyLists.second,
+                k3 = keyLists.third,
+                extra = extra,
+                s = p.scrambled,
+            )
+        }.toJsonString()
+
+        Page(p.index, imageUrl = "$imageUrl#$fragment")
     }
 }

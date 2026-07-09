@@ -1,7 +1,0 @@
-ext {
-    extName = 'Gunnerkrigg Court'
-    extClass = '.GunnerkriggCourt'
-    extVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

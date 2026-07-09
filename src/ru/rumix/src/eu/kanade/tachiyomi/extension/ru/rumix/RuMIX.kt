@@ -1,16 +1,86 @@
 package eu.kanade.tachiyomi.extension.ru.rumix
 
-import android.widget.Toast
-import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.grouple.GroupLe
 import eu.kanade.tachiyomi.source.model.FilterList
-import keiyoushi.utils.getPreferences
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
+import org.jsoup.nodes.Document
+import java.util.Locale
 
-class RuMIX : GroupLe("RuMIX", "https://rumix.me", "ru") {
+@Source
+abstract class RuMIX : GroupLe() {
 
-    private val preferences = getPreferences()
+    override val isNeedAuth = true
 
-    override val baseUrl by lazy { getPrefBaseUrl() }
+    override fun mangaDetailsParse(document: Document): SManga {
+        val infoElement = document.selectFirst(".expandable")!!
+
+        val rawCategory = infoElement.select("span.elem_category").text()
+        val category = rawCategory.ifEmpty { "manga" }
+        val rawAgeStop = normalizeAgeRating(
+            infoElement.selectFirst(".elem_limitation .element-link")?.text().orEmpty(),
+        )
+
+        val ratingValue = (infoElement.select(".rating-block").attr("data-score").toFloatOrNull() ?: 0f) * 2
+        val ratingValueOver =
+            infoElement.select(".info-icon").attr("data-content").substringBeforeLast("/5</b><br/>").substringAfterLast(": <b>")
+                .replace(",", ".").toFloatOrNull()?.times(2) ?: 0f
+        val ratingVotes = infoElement.select(".col-sm-6 .user-rating meta[itemprop=\"ratingCount\"]").attr("content").ifBlank { "0" }
+
+        val manga = SManga.create()
+        manga.title = document.select(".names > .name").text()
+        manga.author = infoElement.selectFirst("span.elem_author")?.text() ?: infoElement.selectFirst("span.elem_screenwriter")?.text()
+        manga.artist = infoElement.selectFirst("span.elem_illustrator")?.text()
+
+        val rawTags = infoElement.select("a[href*=\"/list/genre/\"], a[href*=\"/list/tag/\"]").map { it.text() }
+
+        manga.genre = listOf(category, rawAgeStop).plus(rawTags)
+            .map { it.lowercase(Locale.ROOT) }
+            .filter { it.isNotEmpty() }
+            .joinToString()
+
+        val altName = infoElement.selectFirst(".another-names")?.text()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { "Альтернативные названия:\n$it\n\n" }
+            .orEmpty()
+
+        val descriptionText = document.select("div#tab-description .manga-description").text()
+        val ratingSummary = if (ratingValue > 0f) {
+            "${ratingToStars(ratingValue)} $ratingValue[$ratingValueOver] (голосов: $ratingVotes)\n"
+        } else {
+            ""
+        }
+        manga.description = ratingSummary + altName + descriptionText
+
+        val pageHtml = document.html().lowercase(Locale.ROOT)
+        val badgesText = infoElement.select("span.badge").joinToString(" ") { it.text().lowercase(Locale.ROOT) }
+        val hasRestrictedBanner =
+            (pageHtml.contains("запрещен") && pageHtml.contains("копирайт")) || (pageHtml.contains("территории рф") && pageHtml.contains("запрещен"))
+
+        manga.status = when {
+            hasRestrictedBanner && document.select("div.chapters").isEmpty() -> SManga.LICENSED
+
+            infoElement.html().contains("<b>Сингл") -> SManga.COMPLETED
+
+            badgesText.contains("продолж") || badgesText.contains("начат") -> SManga.ONGOING
+
+            badgesText.contains("заверш") -> if (badgesText.contains("переведен")) {
+                SManga.COMPLETED
+            } else {
+                SManga.PUBLISHING_FINISHED
+            }
+
+            badgesText.contains("приост") || badgesText.contains("заморож") -> SManga.ON_HIATUS
+
+            else -> SManga.UNKNOWN
+        }
+
+        manga.thumbnail_url = infoElement.selectFirst("img")?.let { img ->
+            img.absUrl("data-full").ifEmpty { img.absUrl("data-original") }.ifEmpty { img.absUrl("src") }
+        }.orEmpty()
+
+        return manga
+    }
 
     override fun getFilterList() = FilterList(
         OrderBy(),
@@ -95,38 +165,4 @@ class RuMIX : GroupLe("RuMIX", "https://rumix.me", "ru") {
         Genre("школа", "el_2127"),
         Genre("этти", "el_2149"),
     )
-
-    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        super.setupPreferenceScreen(screen)
-        EditTextPreference(screen.context).apply {
-            key = DOMAIN_PREF
-            title = DOMAIN_TITLE
-            setDefaultValue(super.baseUrl)
-            dialogTitle = DOMAIN_TITLE
-            dialogMessage = "Default URL:\n\t${super.baseUrl}"
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Для смены домена необходимо перезапустить приложение с полной остановкой.", Toast.LENGTH_LONG).show()
-                true
-            }
-        }.let(screen::addPreference)
-    }
-
-    private fun getPrefBaseUrl(): String = preferences.getString(DOMAIN_PREF, super.baseUrl)!!
-
-    init {
-        preferences.getString(DEFAULT_DOMAIN_PREF, null).let { defaultBaseUrl ->
-            if (defaultBaseUrl != super.baseUrl) {
-                preferences.edit()
-                    .putString(DOMAIN_PREF, super.baseUrl)
-                    .putString(DEFAULT_DOMAIN_PREF, super.baseUrl)
-                    .apply()
-            }
-        }
-    }
-
-    companion object {
-        private const val DOMAIN_PREF = "Домен"
-        private const val DEFAULT_DOMAIN_PREF = "pref_default_domain"
-        private const val DOMAIN_TITLE = "Домен"
-    }
 }

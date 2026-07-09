@@ -1,9 +1,12 @@
 plugins {
-    id("lib-multisrc")
+    alias(kei.plugins.multisrc)
 }
-
-baseVersionCode = 2
 
 dependencies {
     implementation(project(":lib:unpacker"))
+}
+
+keiyoushi {
+    baseVersionCode = 2
+    libVersion = "1.4"
 }

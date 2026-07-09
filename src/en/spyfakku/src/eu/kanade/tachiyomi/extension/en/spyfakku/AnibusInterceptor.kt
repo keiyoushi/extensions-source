@@ -25,10 +25,12 @@ object AnibusInterceptor : Interceptor {
         val response = chain.proceed(request)
 
         return if (request.url.host.contains("airdns")) {
+            // Limited peek size to avoid OOM
             val document = Jsoup.parse(
-                response.peekBody(Long.MAX_VALUE).string(),
+                response.peekBody(1024 * 1024 * 5).string(),
                 request.url.toString(),
             )
+
             if (document.selectFirst("script#anubis_challenge") != null) {
                 response.close()
                 if (!resolveInWebView(request)) {
@@ -76,7 +78,7 @@ object AnibusInterceptor : Interceptor {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     val cookie = cookieManager.getCookie(url)
-                        .split("; ").map { it.split("=", limit = 2) }
+                        ?.split("; ")?.map { it.split("=", limit = 2) } ?: emptyList()
                     val auth = cookie.firstOrNull { it.first().contains("anubis-auth") && it.last().isNotBlank() }
                     if (auth != null) {
                         latch.countDown()

@@ -1,106 +1,240 @@
 package eu.kanade.tachiyomi.extension.all.dragonballmultiverse
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Typeface
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
+import kotlinx.serialization.Serializable
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 import rx.Observable
 
-abstract class DbMultiverse(override val lang: String, private val internalLang: String) : ParsedHttpSource() {
+@Source
+abstract class DbMultiverse : HttpSource() {
 
-    override val name =
-        if (internalLang.endsWith("_PA")) {
-            "Dragon Ball Multiverse Parody"
-        } else {
-            "Dragon Ball Multiverse"
+    private val internalLang: String
+        get() = when (lang) {
+            "en" -> "en"
+            "fr" -> if (name.endsWith("Parody")) "fr_PA" else "fr"
+            "ja" -> "jp"
+            "zh" -> "cn"
+            "es" -> "es"
+            "it" -> "it"
+            "pt" -> "pt"
+            "de" -> "de"
+            "pl" -> "pl"
+            "nl" -> "nl"
+            "tr" -> "tr_TR"
+            "pt-BR" -> "pt_BR"
+            "hu" -> "hu_HU"
+            "ga" -> "ga_ES"
+            "ca" -> "ct_CT"
+            "no" -> "no_NO"
+            "ru" -> "ru_RU"
+            "ro" -> "ro_RO"
+            "eu" -> "eu_EH"
+            "lt" -> "lt_LT"
+            "hr" -> "hr_HR"
+            "ko" -> "kr_KR"
+            "fi" -> "fi_FI"
+            "he" -> "he_HE"
+            "bg" -> "bg_BG"
+            "sv" -> "sv_SE"
+            "el" -> "gr_GR"
+            "es-419" -> "es_CO"
+            "ar" -> "ar_JO"
+            "fil" -> "tl_PI"
+            "la" -> "la_LA"
+            "da" -> "da_DK"
+            "co" -> "co_FR"
+            "br" -> "br_FR"
+            "vec" -> "xx_VE"
+            "lmo" -> "xx_LMO"
+            else -> lang
         }
-    override val baseUrl = "https://www.dragonball-multiverse.com"
+
     override val supportsLatest = false
 
-    override fun chapterFromElement(element: Element): SChapter {
-        val chapter = SChapter.create()
-        val href = element.attr("href")
-        chapter.setUrlWithoutDomain("/$internalLang/$href")
-        chapter.name = "Page " + element.text()
+    override val client = super.client.newBuilder()
+        .addNetworkInterceptor(::drawBalloonsOnImage)
+        .build()
 
-        return chapter
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/$internalLang/read.html", headers)
 
-    override fun chapterListSelector(): String = ".cadrelect.chapter p a[href*=-]"
-
-    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
-
-    override fun pageListParse(document: Document): List<Page> = document.select("#balloonsimg")
-        .let { e ->
-            listOf(
-                if (e.hasAttr("src")) {
-                    Page(1, "", e.attr("abs:src"))
-                } else {
-                    e.attr("style")
-                        .substringAfter("(")
-                        .substringBefore(")")
-                        .let { Page(1, "", baseUrl + it) }
-                },
-            )
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("#dbm-reads .dbm-read").map { element ->
+            SManga.create().apply {
+                title = element.selectFirst("h3")!!.text()
+                setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+                description = element.selectFirst("> div")?.text()
+            }
         }
-
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        // site hosts three titles that can be read by the app
-        return listOf("page", "strip", "namekseijin")
-            .map { createManga(it) }
-            .let { Observable.just(MangasPage(it, hasNextPage = false)) }
-    }
-
-    private fun createManga(type: String) = SManga.create().apply {
-        title = when (type) {
-            "comic" -> "DB Multiverse"
-            "namekseijin" -> "Namekseijin Densetsu"
-            "strip" -> "Minicomic"
-            else -> name
-        }
-        status = SManga.ONGOING
-        url = "/$internalLang/chapters.html?comic=$type"
-        description = "Dragon Ball Multiverse (DBM) is a free online comic, made by a whole team of fans. It's our personal sequel to DBZ."
-        thumbnail_url = "$baseUrl/imgs/read/$type.jpg"
+        return MangasPage(mangas, false)
     }
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = manga.apply {
         initialized = true
     }.let { Observable.just(it) }
 
-    override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
+    protected open val chapterListSelector: String = ".cadrelect.chapter"
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select(chapterListSelector).map {
+            SChapter.create().apply {
+                setUrlWithoutDomain(it.selectFirst("a[href]")!!.attr("abs:href"))
+                name = it.selectFirst("h4")!!.text()
+            }
+        }.reversed()
+    }
 
-    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
+    @Serializable
+    class PageLayout(
+        val scale: Float,
+        val balloons: List<BalloonBox>,
+    )
 
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
+    @Serializable
+    class BalloonBox(
+        val text: String,
+        val left: Float,
+        val top: Float,
+        val width: Float,
+    )
 
-    override fun popularMangaSelector(): String = throw UnsupportedOperationException()
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select(".pageslist a[href]").mapIndexed { index, a ->
+            Page(index, url = a.attr("abs:href"))
+        }
+    }
 
-    override fun popularMangaNextPageSelector(): String? = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String {
+        val document = response.asJsoup()
+        val element = document.selectFirst("#balloonsimg")!!
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
+        val rawImageUrl = when {
+            element.hasAttr("src") -> element.attr("abs:src")
+            element.selectFirst("img") != null -> element.selectFirst("img")!!.attr("abs:src")
+            else -> {
+                val styleUrl = element.attr("style").substringAfter("url(").substringBefore(")")
+                val cleanUrl = styleUrl.removeSurrounding("\"").removeSurrounding("'")
+                if (cleanUrl.startsWith("http")) cleanUrl else baseUrl + cleanUrl
+            }
+        }
 
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
+        val balloons = element.select(".balloon").map { b ->
+            val style = b.attr("style")
 
-    override fun searchMangaNextPageSelector(): String? = throw UnsupportedOperationException()
+            BalloonBox(
+                text = b.text(),
+                left = style.extractCssProp("left"),
+                top = style.extractCssProp("top"),
+                width = style.extractCssProp("width"),
+            )
+        }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+        val pageData = PageLayout(
+            scale = element.attr("style").substringAfter("scale(", "")
+                .substringBefore(")", "")
+                .toFloatOrNull() ?: 1f,
+            balloons = balloons,
+        )
 
-    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
+        return if (balloons.isNotEmpty()) {
+            "$rawImageUrl#${pageData.toJsonString()}"
+        } else {
+            rawImageUrl
+        }
+    }
 
-    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
+    fun String.extractCssProp(prop: String, default: String = "0"): Float = substringAfter("$prop:", default)
+        .substringBefore(";")
+        .filter { it.isDigit() || it == '.' }
+        .toFloatOrNull() ?: 0f
 
-    override fun latestUpdatesNextPageSelector(): String? = throw UnsupportedOperationException()
+    private fun drawBalloonsOnImage(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+
+        if (request.url.fragment.isNullOrEmpty()) {
+            return response
+        }
+
+        val page = request.url.fragment!!.parseAs<PageLayout>()
+
+        val bitmap = response.body.byteStream().use { stream ->
+            BitmapFactory.decodeStream(stream)
+        }
+
+        val mutableBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(mutableBitmap)
+
+        val textPaint = TextPaint().apply {
+            color = Color.BLACK
+            textSize = 14f
+            typeface = Typeface.SANS_SERIF
+            isAntiAlias = true
+        }
+
+        page.balloons.forEach { b ->
+            val x = b.left * page.scale
+            val y = b.top * page.scale
+            val w = (b.width * page.scale).toInt().coerceAtLeast(1)
+
+            val layout = StaticLayout.Builder.obtain(b.text, 0, b.text.length, textPaint, w)
+                .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                .setBreakStrategy(Layout.BREAK_STRATEGY_HIGH_QUALITY)
+                .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_FULL)
+                .build()
+
+            canvas.save()
+            canvas.translate(x, y)
+            layout.draw(canvas)
+            canvas.restore()
+        }
+
+        val buffer = Buffer().apply {
+            mutableBitmap.compress(Bitmap.CompressFormat.JPEG, 95, outputStream())
+        }
+
+        mutableBitmap.recycle()
+
+        return response.newBuilder()
+            .body(buffer.asResponseBody("image/jpeg".toMediaType(), buffer.size))
+            .build()
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
+
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 }

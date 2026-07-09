@@ -1,22 +1,18 @@
 package eu.kanade.tachiyomi.extension.pt.apecomics
 
 import eu.kanade.tachiyomi.multisrc.mangawork.MangaWork
+import keiyoushi.annotation.Source
 
-class Capitoons :
-    MangaWork(
-        name = "Capitoons",
-        baseUrl = "https://capitoons.com",
-        lang = "pt-BR",
-    ) {
-    override val id: Long = 4475020039832513819
+@Source
+abstract class Capitoons : MangaWork() {
 
-    override fun getOrderFilterOptions() = CapitoonsFilters.orderFilterOptions
+    override fun getOrderFilterOptions() = orderFilterOptions
 
-    override fun getStatusFilterOptions() = CapitoonsFilters.statusFilterOptions
+    override fun getStatusFilterOptions() = statusFilterOptions
 
-    override fun getTypeFilterOptions() = CapitoonsFilters.typeFilterOptions
+    override fun getTypeFilterOptions() = typeFilterOptions
 
-    override fun getGenreFilterOptions() = CapitoonsFilters.genreFilterOptions
+    override fun getGenreFilterOptions() = genreFilterOptions
 
-    override fun getYearFilterOptions() = CapitoonsFilters.yearFilterOptions
+    override fun getYearFilterOptions() = yearFilterOptions
 }

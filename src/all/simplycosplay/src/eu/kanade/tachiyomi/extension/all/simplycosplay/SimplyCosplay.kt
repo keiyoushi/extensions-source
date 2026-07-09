@@ -5,7 +5,6 @@ import android.util.Log
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -15,6 +14,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
@@ -28,21 +29,16 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class SimplyCosplay :
+@Source
+abstract class SimplyCosplay :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "Simply Cosplay"
-
-    override val lang = "all"
-
-    override val baseUrl = "https://www.simply-cosplay.com"
 
     private val apiUrl = "https://api.simply-porn.com/v2".toHttpUrl()
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(::tokenIntercept)
         .rateLimit(2)
         .build()
@@ -139,14 +135,27 @@ class SimplyCosplay :
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(SEARCH_PREFIX)) {
-        val url = query.substringAfter(SEARCH_PREFIX)
-        val manga = SManga.create().apply { this.url = url }
-        fetchMangaDetails(manga).map {
-            MangasPage(listOf(it), false)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host !in listOf("simply-cosplay.com", "www.simply-cosplay.com")) {
+                throw Exception("Unsupported url")
+            }
+            if (url.pathSegments.size < 3) {
+                throw Exception("Unsupported url")
+            }
+            val newQuery = "$SEARCH_PREFIX/${url.pathSegments[0]}/new/${url.pathSegments[2]}"
+            return fetchSearchManga(page, newQuery, filters)
         }
-    } else {
-        super.fetchSearchManga(page, query, filters)
+        return if (query.startsWith(SEARCH_PREFIX)) {
+            val url = query.substringAfter(SEARCH_PREFIX)
+            val manga = SManga.create().apply { this.url = url }
+            fetchMangaDetails(manga).map {
+                MangasPage(listOf(it), false)
+            }
+        } else {
+            super.fetchSearchManga(page, query, filters)
+        }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {

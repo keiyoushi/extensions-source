@@ -5,7 +5,6 @@ import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,33 +12,28 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.seconds
 
-class NexusToons :
+@Source
+abstract class NexusToons :
     HttpSource(),
     ConfigurableSource {
-
-    // SpectralScan (pt-BR) -> Nexus Toons (pt-BR)
-    override val id = 5304928452449566995L
-
-    override val lang = "pt-BR"
-
-    override val name = "Nexus Toons"
-
-    override val baseUrl = "https://nx-toons.xyz"
 
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(3, 1)
+    override val client = network.client.newBuilder()
         .addInterceptor(NexusDecrypt.createInterceptor())
+        .rateLimit(3, 1.seconds)
         .build()
 
     private val apiHeaders by lazy {

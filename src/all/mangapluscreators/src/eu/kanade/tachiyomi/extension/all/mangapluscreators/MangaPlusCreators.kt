@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -21,13 +22,10 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaPlusCreators(override val lang: String) : HttpSource() {
+@Source
+abstract class MangaPlusCreators : HttpSource() {
 
-    override val name = "MANGA Plus Creators by SHUEISHA"
-
-    override val baseUrl = "https://mangaplus-creators.jp"
-
-    private val apiUrl = "$baseUrl/api"
+    private val apiUrl get() = "$baseUrl/api"
 
     override val supportsLatest = true
 
@@ -99,6 +97,24 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
 
     // SEARCH Section
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host !in listOf("mangaplus-creators.jp", "medibang.com")) {
+                throw Exception("Unsupported url")
+            }
+            val pathIndex = if (url.host == "medibang.com") 1 else 0
+            val idIndex = pathIndex + 1
+            if (url.pathSegments.size <= idIndex) {
+                throw Exception("Unsupported url")
+            }
+            val newQuery = when (url.pathSegments[pathIndex]) {
+                "episodes" -> PREFIX_EPISODE_ID_SEARCH + url.pathSegments[idIndex]
+                "authors" -> PREFIX_AUTHOR_ID_SEARCH + url.pathSegments[idIndex]
+                "titles" -> PREFIX_TITLE_ID_SEARCH + url.pathSegments[idIndex]
+                else -> throw Exception("Unsupported url")
+            }
+            return fetchSearchManga(page, newQuery, filters)
+        }
         // TODO: HTTPSource::fetchSearchManga is deprecated? super.getSearchManga
         if (query.startsWith(PREFIX_TITLE_ID_SEARCH)) {
             val titleContentId = query.removePrefix(PREFIX_TITLE_ID_SEARCH)

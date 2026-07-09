@@ -6,18 +6,26 @@ import eu.kanade.tachiyomi.multisrc.galleryadults.SearchFlagFilter
 import eu.kanade.tachiyomi.multisrc.galleryadults.SortOrderFilter
 import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class HentaiEra(
-    lang: String = "all",
-    override val mangaLang: String = LANGUAGE_MULTI,
-) : GalleryAdults(
-    "HentaiEra",
-    "https://hentaiera.com",
-    lang = lang,
-) {
+@Source
+abstract class HentaiEra : GalleryAdults() {
+
+    override val mangaLang = when (lang) {
+        "en" -> LANGUAGE_ENGLISH
+        "ja" -> LANGUAGE_JAPANESE
+        "es" -> LANGUAGE_SPANISH
+        "fr" -> LANGUAGE_FRENCH
+        "ko" -> LANGUAGE_KOREAN
+        "de" -> LANGUAGE_GERMAN
+        "ru" -> LANGUAGE_RUSSIAN
+        "all" -> LANGUAGE_MULTI
+        else -> throw IllegalArgumentException("Invalid lang: $lang")
+    }
+
     override val supportsLatest = true
     override val useIntermediateSearch: Boolean = true
     override val supportSpeechless: Boolean = true
@@ -30,8 +38,25 @@ class HentaiEra(
         .removeSuffix("/").substringAfterLast("/")
         .let {
             // Include Speechless in search results
-            if (it == LANGUAGE_SPEECHLESS) mangaLang else it
+            if (it == LANGUAGE_SPEECHLESS) mangaLang else null
         }
+        ?: selectFirst(".g_flag")?.classNames()
+            ?.firstOrNull { it.startsWith("flag-") }
+            ?.substringAfter("flag-")
+            ?.let { langFlags[it] }
+        ?: mangaLang
+
+    private val langFlags by lazy {
+        getLanguageURIs()
+            .associateBy({ it.second }, { it.first })
+            .toMutableMap()
+            .apply {
+                // Keep the existing English flag alias in case the site uses `flag-us`
+                if (!containsKey("us")) {
+                    put("us", LANGUAGE_ENGLISH)
+                }
+            }
+    }
 
     override fun popularMangaRequest(page: Int): Request = if (mangaLang.isBlank()) {
         // Popular browsing for LANGUAGE_MULTI

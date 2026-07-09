@@ -77,7 +77,7 @@ class Entry(
         val entry = this@Entry
         author = entry.author.joinToString()
         val altNames = originName.filter { it.isNotBlank() }
-        val descText = Jsoup.parse(content).select("p").joinToString("\n") { it.wholeText() }
+        val descText = Jsoup.parse(content).select("p").joinToString("\n") { it.wholeText().trim() }
         description = buildString {
             if (altNames.isNotEmpty()) {
                 append("Tên khác: ${altNames.joinToString()}\n\n")

@@ -4,7 +4,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,9 +12,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -30,14 +31,16 @@ import java.net.SocketException
 import java.text.DecimalFormat
 import java.util.Calendar
 
-open class Webtoons(
-    override val lang: String,
-    private val langCode: String = lang,
-    localeForCookie: String = lang,
-) : HttpSource(),
+@Source
+abstract class Webtoons :
+    HttpSource(),
     ConfigurableSource {
-    override val name = "Webtoons.com"
-    override val baseUrl = "https://www.webtoons.com"
+    // Due to lang code getting more specific for zh-Hant
+    private val langCode: String get() = if (lang == "zh-Hant") "zh-hant" else lang
+    private val localeForCookie: String get() = if (lang == "zh-Hant") "zh_TW" else lang
+
+    private val mobileUrlHost by lazy { mobileUrl.toHttpUrl().host }
+
     private val mobileUrl = "https://m.webtoons.com"
     override val supportsLatest = true
 
@@ -48,7 +51,7 @@ open class Webtoons(
         .set("Referer", "$mobileUrl/")
         .build()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addNetworkInterceptor(
             CookieInterceptor(
                 domain = "webtoons.com",
@@ -68,7 +71,7 @@ open class Webtoons(
             }
         }
         .addInterceptor(TextInterceptor())
-        .rateLimitHost(mobileUrl.toHttpUrl(), 1)
+        .rateLimit(1) { it.host == mobileUrlHost }
         .build()
 
     private val preferences by getPreferencesLazy()
@@ -124,6 +127,22 @@ open class Webtoons(
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val titleNo = url.queryParameter("title_no")
+                ?: throw Exception("Unsupported url")
+            val path = url.pathSegments
+            if (path.size < 3) {
+                throw Exception("Unsupported url")
+            }
+            val urlLang = path[0]
+            val type = path[1]
+            return fetchSearchManga(page, "$ID_SEARCH_PREFIX$type:$urlLang:$titleNo", filters)
+        }
+
         if (query.startsWith(ID_SEARCH_PREFIX)) {
             val (_, type, lang, titleNo) = query.split(":", limit = 4)
             val tmpManga = SManga.create().apply {
@@ -379,7 +398,7 @@ open class Webtoons(
             val note = document.select("div.creator_note p.author_text").text()
 
             if (note.isNotEmpty()) {
-                val creator = document.select("div.creator_note a.author_name span").text().trim()
+                val creator = document.select("div.creator_note .author_name span").text().trim()
 
                 pages += Page(
                     pages.size,

@@ -1,10 +1,17 @@
 plugins {
-    id("lib-multisrc")
+    alias(kei.plugins.multisrc)
 }
-
-baseVersionCode = 46
 
 dependencies {
     api(project(":lib:cryptoaes"))
     api(project(":lib:i18n"))
+}
+
+keiyoushi {
+    baseVersionCode = 51
+    libVersion = "1.4"
+
+    deeplink {
+        path("/.*/..*")
+    }
 }

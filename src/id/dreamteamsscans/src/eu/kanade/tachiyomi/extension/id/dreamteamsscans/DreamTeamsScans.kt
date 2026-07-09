@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.id.dreamteamsscans
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,23 +9,20 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class DreamTeamsScans : HttpSource() {
-
-    override val name = "DreamTeams Scans"
-
-    override val baseUrl = "https://dreamteams.space"
-
-    override val lang = "id"
+@Source
+abstract class DreamTeamsScans : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(2)
         .build()
 
@@ -75,13 +71,17 @@ class DreamTeamsScans : HttpSource() {
     // =============================== Search ===============================
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        val slug = when {
-            query.startsWith(PREFIX_ID_SEARCH) -> query.removePrefix(PREFIX_ID_SEARCH)
-            query.startsWith("$baseUrl/comic/") -> query.substringAfter("/comic/").substringBefore("/")
-            else -> null
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val id = url.pathSegments[1]
+            return fetchSearchManga(page, "$PREFIX_ID_SEARCH$id", filters)
         }
 
-        return if (slug != null) {
+        return if (query.startsWith(PREFIX_ID_SEARCH)) {
+            val slug = query.removePrefix(PREFIX_ID_SEARCH)
             client.newCall(GET("$apiBaseUrl/series/comic/$slug", headers))
                 .asObservableSuccess()
                 .map { response ->

@@ -1,14 +1,16 @@
 package eu.kanade.tachiyomi.extension.pt.mangotoons
 
 import eu.kanade.tachiyomi.multisrc.mangotheme.MangoTheme
+import keiyoushi.annotation.Source
 
-class MangoToons : MangoTheme() {
+@Source
+abstract class MangoToons : MangoTheme() {
 
-    override val name = "Mango Toons"
+    override val apiUrl = "https://api.mangotoons.com/api"
 
-    override val baseUrl = "https://mangotoons.com"
-
-    override val lang = "pt-BR"
+    override fun headersBuilder() = super.headersBuilder()
+        .set("User-Agent", "-")
+        .set("sec-fetch-mode", "none")
 
     override val encryptionKey = "abmPisXlFjOLVTnYhbYQTpkWJtOGKwVttzLqstfjRBNVaEtQYG"
 

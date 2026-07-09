@@ -1,0 +1,14 @@
+{
+  "name": "rsc-capture",
+  "private": true,
+  "type": "module",
+  "description": "Regenerates React Flight (RSC) fixtures in ../resources/reactflight for NextJsTest.",
+  "scripts": {
+    "capture": "node --conditions=react-server capture.mjs"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-server-dom-webpack": "^19.0.0"
+  }
+}

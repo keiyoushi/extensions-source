@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
 import keiyoushi.utils.getPreferencesLazy
@@ -22,12 +23,10 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class PashUp :
+@Source
+abstract class PashUp :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Pash Up!"
-    override val baseUrl = "https://pash-up.jp"
-    override val lang = "ja"
     override val supportsLatest = true
 
     private val apiUrl = "$baseUrl/pageapi"
@@ -35,7 +34,7 @@ class PashUp :
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(PublusInterceptor())
         .build()
 

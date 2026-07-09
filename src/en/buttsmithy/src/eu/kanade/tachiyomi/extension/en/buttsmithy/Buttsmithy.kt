@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import okhttp3.OkHttpClient
@@ -22,17 +23,12 @@ import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Buttsmithy : HttpSource() {
-
-    override val name = "Buttsmithy"
-
-    override val baseUrl = "https://incase.buttsmithy.com"
+@Source
+abstract class Buttsmithy : HttpSource() {
 
     // the full version of alfie for some reason has a separate url and isn't accessed like the other comics
     private val baseUrlAlfie = "https://buttsmithy.com"
     private val chapterOverviewBaseUrl = "$baseUrlAlfie/archives/chapter"
-
-    override val lang = "en"
 
     private val inCase = "InCase"
     private val alfieTitle = "Alfie"

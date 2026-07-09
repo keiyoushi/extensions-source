@@ -2,108 +2,105 @@ package eu.kanade.tachiyomi.extension.id.mgkomik
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
+import okhttp3.FormBody
+import okhttp3.Request
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MGKomik :
-    Madara(
-        "MG Komik",
-        "https://id.mgkomik.cc",
-        "id",
-        SimpleDateFormat("dd MMM yy", Locale.US),
-    ) {
+@Source
+abstract class MGKomik : Madara() {
+    override val dateFormat = SimpleDateFormat("dd MMM yy", Locale.US)
+
     override val useLoadMoreRequest = LoadMoreStrategy.Always
-
-    override val useNewChapterEndpoint = false
-
     override val mangaSubString = "komik"
-
-    override fun headersBuilder() = super.headersBuilder().apply {
-        add("Sec-Fetch-Dest", "document")
-        add("Sec-Fetch-Mode", "navigate")
-        add("Sec-Fetch-Site", "same-origin")
-        add("Upgrade-Insecure-Requests", "1")
-        add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
-    }
-
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val headers = request.headers.newBuilder().apply {
-                removeAll("X-Requested-With")
-            }.build()
-
-            chain.proceed(request.newBuilder().headers(headers).build())
-        }
-        .rateLimit(9, 2)
-        .build()
-
-    // ================================== Popular ======================================
-
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        element.select("div.item-thumb a").let {
-            setUrlWithoutDomain(it.attr("abs:href"))
-            title = it.attr("title")
-            thumbnail_url = it.select("img").attr("abs:src")
-        }
-    }
-
-    // ================================ Chapters ================================
-
     override val chapterUrlSuffix = ""
 
-    // ================================ Filters ================================
+    override fun headersBuilder() = super.headersBuilder().apply {
+        set("Sec-CH-UA-Model", "\"\"")
+    }
+
+    override val client = network.client.newBuilder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val path = request.url.encodedPath
+            val isAjax = path.contains("admin-ajax.php") ||
+                path.contains("wp-json") ||
+                path.endsWith("/ajax/chapters")
+            if (isAjax) {
+                chain.proceed(
+                    request.newBuilder()
+                        .header("X-Requested-With", "XMLHttpRequest")
+                        .header("Sec-Fetch-Dest", "empty")
+                        .header("Sec-Fetch-Mode", "cors")
+                        .header("Sec-Fetch-Site", "same-origin")
+                        .header("Origin", baseUrl)
+                        .header("Priority", "u=1, i")
+                        .removeHeader("Sec-Fetch-User")
+                        .removeHeader("Upgrade-Insecure-Requests")
+                        .build(),
+                )
+            } else {
+                chain.proceed(request)
+            }
+        }
+        .rateLimit(3)
+        .build()
+
+    override fun popularMangaRequest(page: Int): Request {
+        val url = "$baseUrl/$mangaSubString${if (page > 1) "/page/$page/" else "/"}?m_orderby=trending"
+        return GET(url, headers)
+    }
+
+    override val mangaDetailsSelectorDescription = "div.description-summary div.summary__content p"
+
+    override fun parseGenres(document: Document): List<Genre> = document.select("div.checkbox-group div.checkbox")
+        .mapNotNull { cb ->
+            val label = cb.selectFirst("label")?.text() ?: return@mapNotNull null
+            val value = cb.selectFirst("input[type=checkbox]")?.`val`() ?: return@mapNotNull null
+            if (value.matches(Regex("""^\d+[kKmM]?$"""))) return@mapNotNull null
+            Genre(label, value)
+        }
+
+    // PROJECT FILTER
+    class ProjectFilter : Filter.CheckBox(" Project Only", false)
 
     override fun getFilterList(): FilterList {
         launchIO { fetchGenres() }
-
-        val filters = super.getFilterList().list.toMutableList()
-
-        filters += if (genresList.isNotEmpty()) {
-            listOf(
-                Filter.Separator(),
-                GenreContentFilter(
-                    title = intl["genre_filter_title"],
-                    options = genresList.map { it.name to it.id },
-                ),
-            )
-        } else {
-            listOf(
-                Filter.Separator(),
-                Filter.Header(intl["genre_missing_warning"]),
-            )
-        }
-
-        return FilterList(filters)
+        val base = super.getFilterList().list.toMutableList()
+        base.add(0, ProjectFilter())
+        base.add(1, Filter.Separator())
+        return FilterList(base)
     }
 
-    private class GenreContentFilter(title: String, options: List<Pair<String, String>>) :
-        UriPartFilter(
-            title,
-            options.toTypedArray(),
-        )
+    override fun searchLoadMoreRequest(page: Int, query: String, filters: FilterList): Request {
+        val projectChecked = filters.filterIsInstance<ProjectFilter>().firstOrNull()?.state == true
+        if (!projectChecked) return super.searchLoadMoreRequest(page, query, filters)
 
-    override fun genresRequest() = GET("$baseUrl/$mangaSubString", headers)
-
-    override fun parseGenres(document: Document): List<Genre> {
-        val genres = mutableListOf<Genre>()
-        genres += Genre("All", "")
-        genres += document.select(".row.genres li a").map { a ->
-            Genre(a.text(), a.absUrl("href"))
+        val taxQueryIdx = filters.count { filter ->
+            when (filter) {
+                is AuthorFilter -> filter.state.isNotBlank()
+                is ArtistFilter -> filter.state.isNotBlank()
+                is YearFilter -> filter.state.isNotBlank()
+                is GenreList -> filter.state.any { it.state }
+                else -> false
+            }
         }
-        return genres
-    }
 
-    // =============================== Utilities ==============================
+        val superRequest = super.searchLoadMoreRequest(page, query, filters)
+        val oldBody = superRequest.body as FormBody
 
-    private fun randomString(length: Int): String {
-        val charPool = ('a'..'z') + ('A'..'Z') + ('.')
-        return List(length) { charPool.random() }.joinToString("")
+        val newBody = FormBody.Builder().apply {
+            for (i in 0 until oldBody.size) add(oldBody.name(i), oldBody.value(i))
+            add("vars[tax_query][$taxQueryIdx][taxonomy]", "wp-manga-tag")
+            add("vars[tax_query][$taxQueryIdx][field]", "slug")
+            add("vars[tax_query][$taxQueryIdx][terms][0]", "project")
+        }.build()
+
+        return superRequest.newBuilder().post(newBody).build()
     }
 }

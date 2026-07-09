@@ -1,9 +1,12 @@
 plugins {
-    id("lib-multisrc")
+    alias(kei.plugins.multisrc)
 }
-
-baseVersionCode = 1
 
 dependencies {
     api(project(":lib:cookieinterceptor"))
+}
+
+keiyoushi {
+    baseVersionCode = 2
+    libVersion = "1.4"
 }

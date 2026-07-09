@@ -11,21 +11,15 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 
-@ExperimentalStdlibApi
-open class EroMuse(override val name: String, override val baseUrl: String) : HttpSource() {
-
-    override val lang = "en"
+abstract class EroMuse : HttpSource() {
 
     override val supportsLatest = true
-
-    override val client: OkHttpClient = network.cloudflareClient
 
     /**
      * Browse, search, and latest all run through an ArrayDeque of requests that acts as a stack we push and pop to/from

@@ -1,18 +1,21 @@
 package eu.kanade.tachiyomi.extension.pt.manhastro
 
 import android.app.Application
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.Cache
 import okhttp3.CacheControl
 import okhttp3.OkHttpClient
@@ -20,41 +23,38 @@ import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import uy.kohesive.injekt.injectLazy
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
-class Manhastro : HttpSource() {
-
-    override val name = "Manhastro"
-
-    override val baseUrl = "https://manhastro.net"
+@Source
+abstract class Manhastro :
+    HttpSource(),
+    ConfigurableSource {
 
     private val apiUrl = "https://api2.manhastro.net"
 
-    override val lang = "pt-BR"
-
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
+    private val preferences by getPreferencesLazy()
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(2)
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+    override val client: OkHttpClient = network.client.newBuilder()
+        .connectTimeout(30.seconds)
+        .readTimeout(30.seconds)
         .apply {
             val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
             if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
         }
+        .rateLimit(2)
         .build()
 
     private val dataClient = client.newBuilder()
         .cache(
             Cache(
                 directory = File(Injekt.get<Application>().externalCacheDir, "network_cache_${name.lowercase()}"),
-                maxSize = 10L * 1024 * 1024, // 10 MiB
+                maxSize = 20L * 1024 * 1024, // 20 MiB
             ),
         )
         .addNetworkInterceptor { chain ->
@@ -119,9 +119,8 @@ class Manhastro : HttpSource() {
         val selectedTypes = typeFilter?.state?.filter { it.state }?.map { it.value } ?: emptyList()
         if (selectedTypes.isNotEmpty()) {
             mangas = mangas.filter { manga ->
-                val mangaGenres = parseGenres(manga.generos)
                 selectedTypes.any { type ->
-                    mangaGenres.any { it.equals(type, ignoreCase = true) }
+                    manga.generos.any { it.equals(type, ignoreCase = true) }
                 }
             }
         }
@@ -129,9 +128,8 @@ class Manhastro : HttpSource() {
         val selectedGenres = genreFilter?.state?.filter { it.state }?.map { it.value } ?: emptyList()
         if (selectedGenres.isNotEmpty()) {
             mangas = mangas.filter { manga ->
-                val mangaGenres = parseGenres(manga.generos)
                 selectedGenres.all { genre ->
-                    mangaGenres.any { it.equals(genre, ignoreCase = true) }
+                    manga.generos.any { it.equals(genre, ignoreCase = true) }
                 }
             }
         }
@@ -145,22 +143,12 @@ class Manhastro : HttpSource() {
             else -> mangas
         }
 
-        MangasPage(mangas.map { it.toSManga() }, false)
+        val start = (page - 1) * PER_PAGE
+        val end = minOf(start + PER_PAGE, mangas.size)
+
+        val sliced = mangas.subList(start, end)
+        MangasPage(sliced.map { it.toSManga() }, end < mangas.size)
     }!!
-
-    private fun parseGenres(generos: String?): List<String> {
-        if (generos.isNullOrBlank()) return emptyList()
-
-        return try {
-            json.decodeFromString<List<String>>(generos)
-        } catch (_: Exception) {
-            if (generos.contains(",")) {
-                generos.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-            } else {
-                listOf(generos.trim()).filter { it.isNotEmpty() }
-            }
-        }
-    }
 
     private fun String.normalize(): String = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
         .replace(Regex("[\\p{InCombiningDiacriticalMarks}]"), "")
@@ -242,7 +230,7 @@ class Manhastro : HttpSource() {
         val request = GET(
             "$apiUrl/dados",
             headers,
-            CacheControl.Builder().maxStale(30, TimeUnit.MINUTES).build(),
+            CacheControl.Builder().maxStale(30.minutes).build(),
         )
         val response = dataClient.newCall(request).execute()
         return response.parseAs<ApiResponse<List<MangaDto>>>(transform = ::cleanJsonResponse).data
@@ -255,14 +243,33 @@ class Manhastro : HttpSource() {
 
     private fun MangaDto.toSManga() = SManga.create().apply {
         url = "/manga/$mangaId"
-        title = displayTitle
+        title = if (useEnglishTitle) {
+            titulo.takeIf { it.isNotBlank() } ?: displayTitle
+        } else {
+            displayTitle
+        }
         description = displayDescription
-        genre = parseGenres(generos).joinToString()
+        genre = generos.joinToString()
         thumbnail_url = thumbnailUrl
         status = SManga.UNKNOWN
     }
 
+    private val useEnglishTitle: Boolean
+        get() =
+            preferences.getBoolean(ENGLISH_TITLE_PREF, false)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = ENGLISH_TITLE_PREF
+            title = "Títulos em inglês"
+            summary = "Use títulos em inglês como principal quando disponível. (Requer ativar \"Atualizar os títulos dos mangás da biblioteca para corresponder à fonte\" em \"Avançado\")"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
     companion object {
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
+        private const val ENGLISH_TITLE_PREF = "englishTitlePref"
+        private const val PER_PAGE = 30
     }
 }

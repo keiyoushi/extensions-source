@@ -1,8 +1,0 @@
-ext {
-    extName = 'HentaiRead.io'
-    extClass = '.HentaiReadio'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,0 +1,17 @@
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "MangaEsp"
+    versionCode = 1
+    contentWarning = ContentWarning.SAFE
+    libVersion = "1.4"
+    theme = "mangathemesia"
+
+    source {
+        lang = "es"
+        baseUrl = "https://mangaesp.topmanhuas.org"
+        versionId = 2
+    }
+}

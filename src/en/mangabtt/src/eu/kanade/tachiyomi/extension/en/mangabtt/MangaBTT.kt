@@ -2,32 +2,31 @@ package eu.kanade.tachiyomi.extension.en.mangabtt
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
+import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import org.jsoup.nodes.Document
+import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.util.Calendar
 
-class MangaBTT : ParsedHttpSource() {
-
-    override val name = "MangaBTT"
-
-    override val baseUrl = "https://manhwabtt.cc"
-
-    override val lang = "en"
+@Source
+abstract class MangaBTT : HttpSource() {
 
     override val supportsLatest = true
 
     override val client by lazy {
-        network.cloudflareClient.newBuilder()
+        network.client.newBuilder()
             .rateLimit(2)
             .build()
     }
@@ -47,11 +46,7 @@ class MangaBTT : ParsedHttpSource() {
         ),
     )
 
-    override fun popularMangaSelector(): String = searchMangaSelector()
-
-    override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
-
-    override fun popularMangaNextPageSelector(): String = searchMangaNextPageSelector()
+    override fun popularMangaParse(response: Response) = mangaListParse(response)
 
     // =============================== Latest ===============================
 
@@ -65,11 +60,7 @@ class MangaBTT : ParsedHttpSource() {
         ),
     )
 
-    override fun latestUpdatesSelector(): String = searchMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector(): String = searchMangaNextPageSelector()
+    override fun latestUpdatesParse(response: Response) = mangaListParse(response)
 
     // =============================== Search ===============================
 
@@ -95,17 +86,22 @@ class MangaBTT : ParsedHttpSource() {
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaSelector(): String = ".items > .row > .item"
+    override fun searchMangaParse(response: Response) = mangaListParse(response)
 
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        thumbnail_url = element.selectFirst(".image img")?.imgAttr()
-        element.selectFirst("figcaption h3 a")!!.run {
-            title = text()
-            setUrlWithoutDomain(attr("abs:href"))
+    private fun mangaListParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(".items > .row > .item").map { element ->
+            SManga.create().apply {
+                thumbnail_url = element.selectFirst(".image img")?.imgAttr()
+                element.selectFirst("figcaption h3 a")!!.run {
+                    title = text()
+                    setUrlWithoutDomain(attr("abs:href"))
+                }
+            }
         }
+        val hasNextPage = document.selectFirst("ul.pagination > li.active + li:not(.disabled)") != null
+        return MangasPage(mangas, hasNextPage)
     }
-
-    override fun searchMangaNextPageSelector(): String = "ul.pagination > li.active + li:not(.disabled)"
 
     // =============================== Filters ==============================
 
@@ -119,17 +115,20 @@ class MangaBTT : ParsedHttpSource() {
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h1.title-detail")!!.text()
-        description = document.selectFirst(".detail-content p")?.text()
-            ?.substringAfter("comic site. The Summary is ")
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            title = document.selectFirst("h1.title-detail")!!.text()
+            description = document.selectFirst(".detail-content p")?.text()
+                ?.substringAfter("comic site. The Summary is ")
 
-        document.selectFirst(".detail-info")?.run {
-            thumbnail_url = selectFirst("img")?.imgAttr()
-            status = selectFirst(".status p:not(.name)").parseStatus()
-            genre = select(".kind a").joinToString(", ") { it.text() }
-            author = selectFirst(".author p:not(.name)")?.text()?.takeUnless {
-                it.equals("updating", true)
+            document.selectFirst(".detail-info")?.run {
+                thumbnail_url = selectFirst("img")?.imgAttr()
+                status = selectFirst(".status p:not(.name)").parseStatus()
+                genre = select(".kind a").joinToString(", ") { it.text() }
+                author = selectFirst(".author p:not(.name)")?.text()?.takeUnless {
+                    it.equals("updating", true)
+                }
             }
         }
     }
@@ -163,15 +162,18 @@ class MangaBTT : ParsedHttpSource() {
         return POST("$baseUrl/Story/ListChapterByStoryID", postHeaders, postBody)
     }
 
-    override fun chapterListSelector() = "ul > li:not(.heading)"
-
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        element.selectFirst(".col-xs-4")?.also {
-            date_upload = it.text().parseRelativeDate()
-        }
-        element.selectFirst("a")!!.run {
-            name = text()
-            setUrlWithoutDomain(attr("abs:href"))
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("ul > li:not(.heading)").map { element ->
+            SChapter.create().apply {
+                element.selectFirst(".col-xs-4")?.also {
+                    date_upload = it.text().parseRelativeDate()
+                }
+                element.selectFirst("a")!!.run {
+                    name = text()
+                    setUrlWithoutDomain(attr("abs:href"))
+                }
+            }
         }
     }
 
@@ -232,14 +234,17 @@ class MangaBTT : ParsedHttpSource() {
 
     // =============================== Pages ================================
 
-    override fun pageListParse(document: Document): List<Page> = document.select(".reading-detail > .page-chapter").map { page ->
-        val img = page.selectFirst("img[data-index]")!!
-        val index = img.attr("data-index").toInt()
-        val url = img.imgAttr()
-        Page(index, imageUrl = url)
-    }.sortedBy { it.index }
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select(".reading-detail > .page-chapter").map { page ->
+            val img = page.selectFirst("img[data-index]")!!
+            val index = img.attr("data-index").toInt()
+            val url = img.imgAttr()
+            Page(index, imageUrl = url)
+        }.sortedBy { it.index }
+    }
 
-    override fun imageUrlParse(document: Document) = ""
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val imgHeaders = headersBuilder().apply {

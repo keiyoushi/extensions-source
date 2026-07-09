@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.cycomi
 
+import keiyoushi.utils.rc4
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
@@ -19,37 +20,14 @@ class ImageInterceptor : Interceptor {
             return response
         }
 
-        val encrypted = response.body.bytes()
-        val decrypted = decrypt(encrypted, key)
+        val decrypted = rc4(key.toByteArray(), response.body.bytes())
         val buffer = Buffer().write(decrypted)
-
         return response.newBuilder()
-            .body(buffer.asResponseBody("image/jpeg".toMediaType(), buffer.size))
+            .body(buffer.asResponseBody(MEDIA_TYPE, buffer.size))
             .build()
     }
 
-    private fun decrypt(encrypted: ByteArray, passphrase: String): ByteArray {
-        val key = IntArray(256) { it }
-        var indexSwap = 0
-        for (index in 0 until 256) {
-            indexSwap = (indexSwap + key[index] + passphrase[index % passphrase.length].code) % 256
-            val temp = key[index]
-            key[index] = key[indexSwap]
-            key[indexSwap] = temp
-        }
-
-        val decrypted = ByteArray(encrypted.size)
-        var i = 0
-        var j = 0
-        for (index in encrypted.indices) {
-            i = (i + 1) % 256
-            j = (j + key[i]) % 256
-            val temp = key[i]
-            key[i] = key[j]
-            key[j] = temp
-            val xor = key[(key[i] + key[j]) % 256]
-            decrypted[index] = (encrypted[index].toInt() xor xor).toByte()
-        }
-        return decrypted
+    companion object {
+        private val MEDIA_TYPE = "image/jpeg".toMediaType()
     }
 }

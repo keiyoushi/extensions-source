@@ -1,7 +1,0 @@
-ext {
-    extName = 'keenspot'
-    extClass = '.KeenspotFactory'
-    extVersionCode = 3
-}
-
-apply from: "$rootDir/common.gradle"

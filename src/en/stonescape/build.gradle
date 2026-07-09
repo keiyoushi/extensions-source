@@ -1,8 +1,0 @@
-ext {
-    extName = 'StoneScape'
-    extClass = '.StoneScape'
-    extVersionCode = 48
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

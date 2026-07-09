@@ -22,7 +22,6 @@ import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -30,19 +29,16 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.concurrent.thread
 
-abstract class HeanCms(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-    protected val apiUrl: String = baseUrl.replace("://", "://api."),
-) : HttpSource(),
+abstract class HeanCms :
+    HttpSource(),
     ConfigurableSource {
+
+    protected open val apiUrl: String
+        get() = baseUrl.replace("://", "://api.")
 
     protected val preferences: SharedPreferences by getPreferencesLazy()
 
     override val supportsLatest = true
-
-    override val client: OkHttpClient = network.cloudflareClient
 
     protected open val useNewQueryEndpoint = false
 
@@ -134,11 +130,13 @@ abstract class HeanCms(
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
+    protected open val latestSortBy = "desc"
+
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/query".toHttpUrl().newBuilder()
             .addQueryParameter("query_string", "")
             .addQueryParameter(if (useNewQueryEndpoint) "status" else "series_status", "All")
-            .addQueryParameter("order", "desc")
+            .addQueryParameter("order", latestSortBy)
             .addQueryParameter("orderBy", "latest")
             .addQueryParameter("series_type", "Comic")
             .addQueryParameter("page", page.toString())
@@ -152,6 +150,16 @@ abstract class HeanCms(
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val slug = url.pathSegments.getOrNull(1)
+                ?: throw Exception("Unsupported url")
+            return fetchSearchManga(page, "$SEARCH_PREFIX$slug", filters)
+        }
+
         if (!query.startsWith(SEARCH_PREFIX)) {
             return super.fetchSearchManga(page, query, filters)
         }

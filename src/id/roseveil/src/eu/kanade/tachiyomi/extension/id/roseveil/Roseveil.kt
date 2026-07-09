@@ -1,13 +1,14 @@
 package eu.kanade.tachiyomi.extension.id.roseveil
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -19,22 +20,14 @@ import java.text.DecimalFormatSymbols
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Roseveil : HttpSource() {
-
-    // URL path change (/manga/ -> /comic/)
-    override val versionId = 2
-
-    override val name = "Roseveil"
-
-    override val baseUrl = "https://roseveil.org"
+@Source
+abstract class Roseveil : HttpSource() {
 
     private val apiUrl = "https://api.roseveil.org/api"
 
-    override val lang = "id"
-
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(2)
         .build()
 

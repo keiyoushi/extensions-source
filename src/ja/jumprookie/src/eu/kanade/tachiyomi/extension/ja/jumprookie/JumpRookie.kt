@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -16,10 +17,8 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
-class JumpRookie : HttpSource() {
-    override val name = "Jump Rookie!"
-    override val baseUrl = "https://rookie.shonenjump.com"
-    override val lang = "ja"
+@Source
+abstract class JumpRookie : HttpSource() {
     override val supportsLatest = true
 
     private var nextPageKey: String? = null

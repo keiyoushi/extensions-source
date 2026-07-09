@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -18,16 +19,16 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
-class ComicKFan : HttpSource() {
+@Source
+abstract class ComicKFan : HttpSource() {
 
-    override val name = "ComicK Fanmade"
-    override val baseUrl = "https://comickfan.com"
-    override val lang = "en"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.ROOT)
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.ROOT).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -170,6 +171,6 @@ class ComicKFan : HttpSource() {
         name = "Chapter $chapter"
         scanlator = groupNames.joinToString()
         chapter.toFloatOrNull()?.also { chapter_number = it }
-        date_upload = dateFormat.tryParse(publishedAt ?: createdAt)
+        date_upload = dateFormat.tryParse(createdAt ?: publishedAt)
     }
 }

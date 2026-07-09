@@ -1,0 +1,16 @@
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "Ota Scans"
+    versionCode = 3
+    contentWarning = ContentWarning.NSFW
+    libVersion = "1.4"
+    theme = "madara"
+
+    source {
+        lang = "id"
+        baseUrl = "https://yurilabs.my.id"
+    }
+}

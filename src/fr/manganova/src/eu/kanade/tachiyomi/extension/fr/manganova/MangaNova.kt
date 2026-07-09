@@ -9,19 +9,19 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import java.net.URI
 
-class MangaNova : HttpSource() {
+@Source
+abstract class MangaNova : HttpSource() {
 
-    override val name = "MangaNova"
-    override val baseUrl = "https://www.manga-nova.com"
     val api = "https://api.manga-nova.com"
-    override val lang = "fr"
     override val supportsLatest = true
 
     private val webViewCookieManager: CookieManager by lazy { CookieManager.getInstance() }
@@ -61,6 +61,18 @@ class MangaNova : HttpSource() {
     }
 
     // Search
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val slug = url.pathSegments[1]
+            return fetchSearchManga(page, "SLUG:$slug", filters)
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = if (query.isNotBlank()) {
             "$api/catalogue/#$query"

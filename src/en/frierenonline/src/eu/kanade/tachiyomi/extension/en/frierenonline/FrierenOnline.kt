@@ -5,15 +5,12 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import org.jsoup.nodes.Document
 
-class FrierenOnline :
-    Madara(
-        "Frieren Online",
-        "https://www.frieren.online",
-        "en",
-    ) {
+@Source
+abstract class FrierenOnline : Madara() {
     override val supportsLatest = false
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 

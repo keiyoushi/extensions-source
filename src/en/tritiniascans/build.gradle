@@ -1,9 +1,0 @@
-ext {
-    extName = 'TritiniaScans'
-    extClass = '.TritiniaScans'
-    themePkg = 'madara'
-    baseUrl = 'https://tritinia.org'
-    overrideVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"

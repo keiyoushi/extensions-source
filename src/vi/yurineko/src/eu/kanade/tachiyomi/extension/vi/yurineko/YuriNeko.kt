@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.yurineko
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,6 +8,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl
@@ -21,19 +22,18 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.Instant
 import java.util.Base64
-import java.util.concurrent.TimeUnit
 
-class YuriNeko : HttpSource() {
-    override val name = "YuriNeko"
-    override val lang = "vi"
-    override val baseUrl = "https://yurinekoz.com"
+@Source
+abstract class YuriNeko : HttpSource() {
     override val supportsLatest = true
+
     private val apiUrl = "https://api.${baseUrl.toHttpUrl().host}"
     private val cdnUrl = "https://cdn.${baseUrl.toHttpUrl().host}"
     private val webApiUrl = "$baseUrl/api/v1"
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimitHost(apiUrl.toHttpUrl(), 20, 1, TimeUnit.MINUTES)
+    override val client = network.client.newBuilder()
+        .addInterceptor(ImageDecryptor::interceptor)
+        .rateLimit(3)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -262,6 +262,17 @@ class YuriNeko : HttpSource() {
             ?: normalizeChapterImageUrl(value)
     }
 
+    override fun imageRequest(page: Page): Request {
+        val imageUrl = page.imageUrl!!
+        val xIk = ImageDecryptor.extractKey(imageUrl)
+
+        val imageHeaders = headersBuilder().apply {
+            xIk?.let { add("x-ik", it) }
+        }.build()
+
+        return GET(imageUrl, imageHeaders)
+    }
+
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private fun cdnImageUrl(path: String?): String? {
@@ -288,6 +299,9 @@ class YuriNeko : HttpSource() {
             resolved.startsWith("/chapters/") || resolved.startsWith("chapters/") -> {
                 cdnImageUrl(resolved)
             }
+            resolved.startsWith("/api/img") -> {
+                "$baseUrl$resolved"
+            }
             else -> null
         }
     }
@@ -305,6 +319,7 @@ class YuriNeko : HttpSource() {
         }.getOrNull() ?: return null
 
         return decoded.substringBefore('|')
+            .takeIf { it.startsWith("http") || it.startsWith("/chapters/") || it.startsWith("chapters/") }
     }
 
     private fun resolveMangaId(response: Response): String = response.request.url.mangaIdOrNull()
@@ -327,9 +342,18 @@ class YuriNeko : HttpSource() {
 
     // =============================== Related ================================
 
-    // disable suggested mangas on Komikku due to heavy rate limit
-    override val disableRelatedMangasBySearch = true
-    override val supportsRelatedMangas = false
+    override fun relatedMangaListRequest(manga: SManga): Request {
+        val mangaId = "$baseUrl${manga.url}"
+            .toHttpUrl()
+            .mangaIdOrNull()
+            ?: throw IllegalArgumentException("Không tìm thấy manga id từ URL: ${manga.url}")
+        return GET("$apiUrl/mangas/$mangaId/related", headers)
+    }
+
+    override fun relatedMangaListParse(response: Response): List<SManga> {
+        val related = response.parseAs<List<MangaDto>>()
+        return related.map(::mangaFromDto)
+    }
 
     companion object {
         private const val POPULAR_LIMIT = 10
@@ -341,7 +365,7 @@ class YuriNeko : HttpSource() {
         private val UUID_REGEX = Regex(UUID_PATTERN, RegexOption.IGNORE_CASE)
         private val MANGA_PATH_ID_REGEX = Regex("/manga/($UUID_PATTERN)", RegexOption.IGNORE_CASE)
         private val CHAPTER_NUMBER_REGEX = Regex("""\d+(?:\.\d+)?""")
-        private val CHAPTER_PAGE_URL_REGEX = Regex("""(?:/api/img\?[^"'\\\s]+|/?chapters/[^"'\\\s]+)""")
+        private val CHAPTER_PAGE_URL_REGEX = Regex("""(?:/api/img\?[^"'\s]+|/?chapters/[^"'\\\s]+)""")
         private val CHAPTER_IMAGE_PATH_REGEX = Regex("""(?:^|/)chapters/""")
     }
 }

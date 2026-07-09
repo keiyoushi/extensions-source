@@ -2,12 +2,13 @@ package eu.kanade.tachiyomi.extension.en.comicasura
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -15,13 +16,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ComicAsura :
-    MangaThemesia(
-        "Comic Asura",
-        "https://comicasura.net",
-        "en",
-        dateFormat = SimpleDateFormat("MMMM d yyyy", Locale.US),
-    ) {
+@Source
+abstract class ComicAsura : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("MMMM d yyyy", Locale.US)
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
@@ -70,6 +67,8 @@ class ComicAsura :
         title = element.select("img").attr("title")
         setUrlWithoutDomain(element.absUrl("href"))
     }
+
+    override fun searchMangaNextPageSelector() = "a:has(img[alt=Next])"
 
     override val seriesDetailsSelector = """.bg-\[\#222222\]:has(h1)"""
     override val seriesTitleSelector = ".comic-title-content"

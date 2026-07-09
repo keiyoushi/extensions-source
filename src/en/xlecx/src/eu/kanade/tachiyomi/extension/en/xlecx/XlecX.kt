@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -18,17 +19,15 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class XlecX : HttpSource() {
-    override val name = "XlecX"
-    override val baseUrl = "https://xlecx.one"
-    override val lang = "en"
+@Source
+abstract class XlecX : HttpSource() {
     override val supportsLatest = true
 
     // TODO: filters
     // TODO: description - text, other `subInfoLinks`s, JSON-LD,
     // TODO: deep link via UrlActivity
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
             if (response.code == 403 && response.header("Content-Type")?.contains("text/html") == true) {

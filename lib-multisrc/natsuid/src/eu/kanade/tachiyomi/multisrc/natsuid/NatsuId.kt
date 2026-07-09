@@ -39,18 +39,15 @@ import java.util.Locale
 import kotlin.random.Random
 
 // https://themesinfo.com/natsu_id-theme-wordpress-c8x1c Wordpress Theme Author "Dzul Qurnain"
-abstract class NatsuId(
-    override val name: String,
-    override val lang: String,
-    override val baseUrl: String,
-    val dateFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US),
-) : HttpSource() {
+abstract class NatsuId : HttpSource() {
+
+    protected open val dateFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
 
     override val supportsLatest: Boolean = true
 
     protected open fun OkHttpClient.Builder.customizeClient(): OkHttpClient.Builder = this
 
-    final override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    final override val client: OkHttpClient = network.client.newBuilder()
         .customizeClient()
         // fix disk cache
         .apply {
@@ -97,7 +94,8 @@ abstract class NatsuId(
             }
             addFormDataPart("author", "[]")
             addFormDataPart("artist", "[]")
-            addFormDataPart("project", "0")
+            val isProject = filters.firstInstanceOrNull<ProjectFilter>()
+            addFormDataPart("project", if (isProject?.state == true) "1" else "0")
             filters.firstInstanceOrNull<TypeFilter>()?.checked.orEmpty().also {
                 addFormDataPart("type", it.toJsonString())
             }
@@ -147,6 +145,7 @@ abstract class NatsuId(
             SortFilter(),
             TypeFilter(),
             StatusFilter(),
+            ProjectFilter(),
         )
 
         val url = "$baseUrl/wp-json/wp/v2/genre?per_page=100&page=1&orderby=count&order=desc"

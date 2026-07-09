@@ -1,7 +1,0 @@
-ext {
-    extName = 'Megatokyo'
-    extClass = '.Megatokyo'
-    extVersionCode = 3
-}
-
-apply from: "$rootDir/common.gradle"

@@ -10,22 +10,17 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SManga.Companion.COMPLETED
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MomonGA : HttpSource() {
-    override val lang = "ja"
-    override val name = "momon:GA"
+@Source
+abstract class MomonGA : HttpSource() {
     override val supportsLatest = false
-
-    override val baseUrl = "https://momon-ga.com"
-
-    override val client: OkHttpClient = network.cloudflareClient
 
     // Chapters
 

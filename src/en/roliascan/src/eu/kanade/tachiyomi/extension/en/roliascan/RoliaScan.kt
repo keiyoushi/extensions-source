@@ -12,11 +12,15 @@ import eu.kanade.tachiyomi.multisrc.mangataro.YearFilter
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
+import okhttp3.Request
 import rx.Observable
 
-class RoliaScan : MangaTaro("Rolia Scan", "https://roliascan.com", "en") {
+@Source
+abstract class RoliaScan : MangaTaro() {
 
     // ========================== Search =========================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
@@ -32,6 +36,12 @@ class RoliaScan : MangaTaro("Rolia Scan", "https://roliascan.com", "en") {
     // Aggregate results from multiple API pages so
     // the user always gets a full page of results.
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = fetchMultiplePages(page) { searchMangaRequest(it, "", SortFilter.latest) }
+
+    // ========================== Pages ==========================
+    override fun pageListRequest(chapter: SChapter): Request {
+        if (chapter.url.endsWith("/")) throw Exception("Refresh Manga to update information about chapters")
+        return super.pageListRequest(chapter)
+    }
 
     // ========================= Filters =========================
     override fun getFilterList() = FilterList(

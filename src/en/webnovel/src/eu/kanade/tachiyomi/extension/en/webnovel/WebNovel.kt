@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
@@ -23,13 +24,8 @@ import java.io.IOException
 import java.util.Calendar
 import java.util.Date
 
-class WebNovel : HttpSource() {
-
-    override val name = "WebNovel"
-
-    override val baseUrl = "https://www.webnovel.com"
-
-    override val id = 4081135203808920563
+@Source
+abstract class WebNovel : HttpSource() {
 
     private val baseApiUrl = "$baseUrl$BASE_API_ENDPOINT"
 
@@ -37,11 +33,9 @@ class WebNovel : HttpSource() {
 
     private val baseCdnUrl = baseUrl.replace("www", "comic-image")
 
-    override val lang = "en"
-
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.client
         .newBuilder()
         .addNetworkInterceptor(::csrfTokenInterceptor)
         .addNetworkInterceptor(::expiredImageUrlInterceptor)

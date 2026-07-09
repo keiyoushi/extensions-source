@@ -19,6 +19,11 @@ internal fun buildThumbnailUrl(cdnUrl: String, path: String): String {
 }
 
 @Serializable
+class SecureDto(
+    @SerialName("_v_secure") val vSecure: String,
+)
+
+@Serializable
 data class MangaListResponse(
     val data: List<MangaDto>,
     val pagination: PaginationDto,
@@ -122,11 +127,4 @@ data class LatestMangaDto(
 data class ChapterPagesResponse(
     val id: Int,
     val pages: List<String>,
-)
-
-// ========================= Auth =========================
-
-@Serializable
-data class LoginResponse(
-    val token: String,
 )

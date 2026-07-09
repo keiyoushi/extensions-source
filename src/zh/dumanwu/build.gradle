@@ -1,9 +1,0 @@
-ext {
-    extName = 'Dumanwu'
-    extClass = '.Dumanwu'
-    themePkg = 'mmlook'
-    baseUrl = 'https://m.dumanwu1.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

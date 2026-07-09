@@ -6,12 +6,13 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import rx.Observable
 
-@ExperimentalStdlibApi
-class Erofus : EroMuse("Erofus", "https://www.erofus.com") {
+@Source
+abstract class Erofus : EroMuse() {
 
     override val albumSelector = "a.a-click"
     override val topLevelPathSegment = "comics"

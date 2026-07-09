@@ -1,0 +1,16 @@
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "ManhwaManhua"
+    versionCode = 0
+    contentWarning = ContentWarning.NSFW
+    libVersion = "1.4"
+    theme = "madara"
+
+    source {
+        lang = "en"
+        baseUrl = "https://manhwamanhua.com"
+    }
+}

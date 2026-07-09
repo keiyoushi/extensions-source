@@ -8,19 +8,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import java.net.URLDecoder
 import java.util.Calendar
 
-class RawXZ : HttpSource() {
-    override val name = "RawZO"
-    override val baseUrl = "https://rawzo.net"
-    override val lang = "ja"
+@Source
+abstract class RawXZ : HttpSource() {
     override val supportsLatest = true
-
-    override val id = 7950551186567193810L
 
     // Popular Manga
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga/page/$page/?orderby=views", headers)
@@ -31,7 +27,7 @@ class RawXZ : HttpSource() {
         val mangas = document.select(".manga-card").map { element ->
             SManga.create().apply {
                 title = element.selectFirst(".manga-card-title")!!.text()
-                setUrlWithoutDomain(element.selectFirst("a.manga-card-thumb")!!.attr("href"))
+                setUrlWithoutDomain(element.selectFirst("a.manga-card-thumb")!!.absUrl("href"))
                 thumbnail_url = element.selectFirst(".manga-card-thumb img")?.absUrl("src")
             }
         }
@@ -94,7 +90,7 @@ class RawXZ : HttpSource() {
             SChapter.create().apply {
                 val link = element.selectFirst(".md-chapter-name a")!!
                 name = link.ownText()
-                setUrlWithoutDomain(link.attr("href"))
+                setUrlWithoutDomain(link.absUrl("href"))
                 date_upload = parseRelativeDate(element.selectFirst(".md-chapter-time")?.text())
             }
         }
@@ -112,16 +108,21 @@ class RawXZ : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        return document.select(".reader-page img").mapIndexed { idx, image ->
-            val url = image.absUrl("src")
-            val imageUrl = if (url.contains("img-proxy.php?url=")) {
-                URLDecoder.decode(url.substringAfter("img-proxy.php?url="), "UTF-8")
-            } else {
-                url
-            }
-
-            Page(idx, imageUrl = imageUrl)
+        return document.select(".reader-page img").mapIndexed { index, img ->
+            Page(
+                index = index,
+                imageUrl = toProxyUrl(img.absUrl("src")),
+            )
         }
+    }
+
+    private fun toProxyUrl(url: String): String {
+        if (url.isBlank() || url.contains("img-proxy.php?url=")) return url
+
+        return baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("wp-content/themes/manga-theme-MangaVerse/img-proxy.php")
+            addQueryParameter("url", url)
+        }.build().toString()
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()

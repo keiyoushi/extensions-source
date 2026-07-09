@@ -1,5 +1,8 @@
 plugins {
-    id("lib-multisrc")
+    alias(kei.plugins.multisrc)
 }
 
-baseVersionCode = 1
+keiyoushi {
+    baseVersionCode = 2
+    libVersion = "1.4"
+}

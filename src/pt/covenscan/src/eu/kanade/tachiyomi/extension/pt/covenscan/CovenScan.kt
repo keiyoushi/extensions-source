@@ -1,19 +1,16 @@
 package eu.kanade.tachiyomi.extension.pt.covenscan
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
-class CovenScan :
-    Madara(
-        "Coven Scan",
-        "https://covendasbruxonas.com",
-        "pt-BR",
-    ) {
+@Source
+abstract class CovenScan : Madara() {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(1, 2.seconds)
         .build()
 
     override val useNewChapterEndpoint = true

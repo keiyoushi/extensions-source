@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.en.webcomics
 
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -12,24 +11,21 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class Webcomics :
+@Source
+abstract class Webcomics :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Webcomics"
-
-    override val baseUrl = "https://webcomicsapp.com"
-
     private val apiUrl = "https://popeye.${baseUrl.substringAfterLast("/")}/api"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 
@@ -37,8 +33,7 @@ class Webcomics :
         .setRandomUserAgent()
         .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(3)
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             if (request.isSearchRequest()) {
@@ -55,13 +50,14 @@ class Webcomics :
             }
             chain.proceed(request)
         }
+        .rateLimit(3)
         .build()
 
     private fun Request.isSearchRequest(): Boolean = url.pathSegments.contains("search") || url.pathSegments.count { segment -> segment == "All" } == 1
 
     private var userAgentList: UserAgentList? = null
 
-    private fun getDesktopUA(): UserAgentList = userAgentList ?: network.cloudflareClient.newCall(GET(UA_DB_URL))
+    private fun getDesktopUA(): UserAgentList = userAgentList ?: network.client.newCall(GET(UA_DB_URL))
         .execute().parseAs<UserAgentList>().also {
             userAgentList = it
         }

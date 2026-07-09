@@ -2,13 +2,14 @@ package eu.kanade.tachiyomi.extension.pt.taosect
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
@@ -23,20 +24,15 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
-class TaoSect : HttpSource() {
-
-    override val name = "Tao Sect"
-
-    override val baseUrl = "https://taosect.com"
-
-    override val lang = "pt-BR"
+@Source
+abstract class TaoSect : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+    override val client: OkHttpClient = network.client.newBuilder()
+        .rateLimit(1, 2.seconds)
         .build()
 
     private val json: Json by injectLazy()
@@ -135,6 +131,18 @@ class TaoSect : HttpSource() {
         val projectList = projectsResult.map(::popularMangaFromObject)
 
         return MangasPage(projectList, hasNextPage)
+    }
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            if (url.host != baseUrl.toHttpUrl().host) {
+                throw Exception("Unsupported url")
+            }
+            val projectSlug = url.pathSegments[1]
+            return fetchSearchManga(page, "$SLUG_PREFIX_SEARCH$projectSlug", filters)
+        }
+        return super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {

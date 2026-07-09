@@ -8,7 +8,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -17,6 +16,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -37,16 +38,14 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.security.MessageDigest
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
-class Zaimanhua :
+@Source
+abstract class Zaimanhua :
     HttpSource(),
     ConfigurableSource {
-    override val lang = "zh"
     override val supportsLatest = true
 
-    override val name = "再漫画"
-    override val baseUrl = "https://manhua.zaimanhua.com"
     private val mobileBaseUrl = "https://m.zaimanhua.com"
     private val apiUrl = "https://v4api.zaimanhua.com/app/v1"
     private val accountApiUrl = "https://account-api.zaimanhua.com/v1"
@@ -59,11 +58,11 @@ class Zaimanhua :
 
     private val preferences: SharedPreferences = getPreferences()
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(5)
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::authIntercept)
         .addInterceptor(::imageRetryInterceptor)
         .addInterceptor(CommentsInterceptor)
+        .rateLimit(5)
         .build()
 
     private fun authIntercept(chain: Interceptor.Chain): Response {
@@ -347,7 +346,7 @@ class Zaimanhua :
     private fun chapterCommentsUrl(comicId: String, chapterId: String) = "$apiUrl/viewpoint/list?comicId=$comicId&chapterId=$chapterId"
 
     companion object {
-        val USE_CACHE = CacheControl.Builder().maxStale(170, TimeUnit.SECONDS).build()
+        val USE_CACHE = CacheControl.Builder().maxStale(170.seconds).build()
         const val USERNAME_PREF = "USERNAME"
         const val PASSWORD_PREF = "PASSWORD"
         const val TOKEN_PREF = "TOKEN"

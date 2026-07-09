@@ -1,0 +1,16 @@
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "Point Zero Toons"
+    versionCode = 2
+    contentWarning = ContentWarning.SAFE
+    libVersion = "1.4"
+    theme = "mangathemesia"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://kitsuneyako.com"
+    }
+}

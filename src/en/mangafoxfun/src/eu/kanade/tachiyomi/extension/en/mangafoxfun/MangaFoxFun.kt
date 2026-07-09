@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.mangafoxfun
 
 import eu.kanade.tachiyomi.multisrc.mangahub.MangaHub
+import keiyoushi.annotation.Source
 
-class MangaFoxFun : MangaHub("MangaFox.fun", "https://mangafox.fun", "en", "mf01")
+@Source
+abstract class MangaFoxFun : MangaHub() {
+    override val mangaSource = "mf01"
+}

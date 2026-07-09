@@ -1,36 +1,33 @@
 package eu.kanade.tachiyomi.extension.pt.universohentai
 
 import eu.kanade.tachiyomi.multisrc.gattsu.Gattsu
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
-class UniversoHentai :
-    Gattsu(
-        "Universo Hentai",
-        "https://universohentai.com",
-        "pt-BR",
-    ) {
+@Source
+abstract class UniversoHentai : Gattsu() {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(1, 2.seconds)
         .build()
 
     override fun latestUpdatesSelector() = "div.meio div.videos div.video a[href^=$baseUrl]:not(:has(span.selo-hd))"
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("span.video-titulo")!!.text().trim()
+        title = element.selectFirst("span.video-titulo")!!.text()
         thumbnail_url = element.selectFirst("img.wp-post-image")!!.attr("src")
         setUrlWithoutDomain(element.attr("href"))
     }
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val document = response.asJsoup()
         val postBox = document.selectFirst(chapterListSelector())!!
 
         title = postBox.select("h1.post-titulo").first()!!.text()

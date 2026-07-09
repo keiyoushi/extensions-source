@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -19,16 +20,12 @@ import okhttp3.Response
 import java.io.IOException
 import java.net.URLDecoder
 
-class Yabai : HttpSource() {
-    override val name = "Yabai"
-
-    override val baseUrl = "https://yabai.si"
-
-    override val lang = "all"
+@Source
+abstract class Yabai : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor(::tokenInterceptor)
         .build()
 
@@ -84,7 +81,7 @@ class Yabai : HttpSource() {
 
     @Synchronized
     private fun updateTokens() {
-        // We do a normal GET to baseUrl (without X-Requested-With) so that cloudflareClient
+        // We do a normal GET to baseUrl (without X-Requested-With) so that client
         // can successfully handle the DDOS-Guard challenge via WebView if needed.
         val request = GET(baseUrl, headers)
         val response = client.newCall(request).execute()

@@ -1,30 +1,36 @@
 package eu.kanade.tachiyomi.extension.id.westmanga
 
+import android.os.Handler
+import android.os.Looper
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-class WestManga : HttpSource() {
-    override val name = "West Manga"
-    override val baseUrl = "https://westmanga.tv"
-    private val apiUrl = "https://data.westmanga.tv"
-    override val lang = "id"
-    override val id = 8883916630998758688
+@Source
+abstract class WestManga : HttpSource() {
+    private val apiUrl = "https://data.mantweh.online"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    private var genres: List<Pair<String, String>> = emptyList()
+    private var genresFetchJob: Boolean = false
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
@@ -38,9 +44,7 @@ class WestManga : HttpSource() {
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("api")
-            addPathSegment("contents")
+        val url = "$apiUrl/api/contents".toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
                 addQueryParameter("q", query)
             }
@@ -55,146 +59,67 @@ class WestManga : HttpSource() {
         return apiRequest(url)
     }
 
-    override fun getFilterList(): FilterList = FilterList(
-        SortFilter(),
-        StatusFilter(),
-        CountryFilter(),
-        ColorFilter(),
-        GenreFilter(),
-    )
-
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.parseAs<PaginatedData<BrowseManga>>()
+        val entries = data.data.map { it.toSManga() }
+        return MangasPage(entries, data.paginator.hasNextPage())
+    }
 
-        val entries = data.data.map {
-            SManga.create().apply {
-                // old urls compatibility
-                setUrlWithoutDomain(
-                    baseUrl.toHttpUrl().newBuilder()
-                        .addPathSegment("manga")
-                        .addPathSegment(it.slug)
-                        .addPathSegment("")
-                        .toString(),
-                )
-                title = it.title
-                thumbnail_url = it.cover
-            }
+    override fun getFilterList(): FilterList {
+        fetchGenres()
+
+        val filters = mutableListOf<Filter<*>>(
+            SortFilter(),
+            StatusFilter(),
+            CountryFilter(),
+            ColorFilter(),
+        )
+
+        if (genres.isEmpty()) {
+            filters.add(Filter.Header("Klik pada 'Atur ulang' untuk memuat ulang genre"))
+        } else {
+            filters.add(GenreFilter(genres))
         }
 
-        return MangasPage(entries, data.paginator.hasNextPage())
+        return FilterList(filters)
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
-        assert(path.size == 3) { "Migrate from $name to $name" }
+        require(path.size == 3) { "Migrate from $name to $name" }
         val slug = path[1]
 
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("api")
-            .addPathSegment("comic")
-            .addPathSegment(slug)
-            .build()
-
-        return apiRequest(url)
+        return apiRequest("$apiUrl/api/comic/$slug".toHttpUrl())
     }
 
     override fun getMangaUrl(manga: SManga): String {
         val slug = "$baseUrl${manga.url}".toHttpUrl().pathSegments[1]
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("comic")
-            .addPathSegment(slug)
-            .build()
-
-        return url.toString()
+        return "$baseUrl/comic/$slug"
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.parseAs<Data<Manga>>().data
-
-        return SManga.create().apply {
-            // old urls compatibility
-            setUrlWithoutDomain(
-                baseUrl.toHttpUrl().newBuilder()
-                    .addPathSegment("manga")
-                    .addPathSegment(data.slug)
-                    .addPathSegment("")
-                    .toString(),
-            )
-            title = data.title
-            thumbnail_url = data.cover
-            author = data.author
-            status = when (data.status) {
-                "ongoing" -> SManga.ONGOING
-                "completed" -> SManga.COMPLETED
-                "hiatus" -> SManga.ON_HIATUS
-                else -> SManga.UNKNOWN
-            }
-            genre = buildList {
-                when (data.country) {
-                    "JP" -> add("Manga")
-                    "CN" -> add("Manhua")
-                    "KR" -> add("Manhwa")
-                }
-                if (data.color == true) {
-                    add("Colored")
-                }
-                data.genres.forEach { add(it.name) }
-            }.joinToString()
-            description = buildString {
-                data.synopsis?.let {
-                    append(
-                        Jsoup.parseBodyFragment(it).wholeText().trim(),
-                    )
-                }
-                data.alternativeName?.let {
-                    append("\n\n")
-                    append("Alternative Name: ")
-                    append(it.trim())
-                }
-            }
-        }
+        return data.toSManga(baseUrl)
     }
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.parseAs<Data<Manga>>().data
-
-        return data.chapters.map {
-            SChapter.create().apply {
-                setUrlWithoutDomain(
-                    baseUrl.toHttpUrl().newBuilder()
-                        .addPathSegment(it.slug)
-                        .addPathSegment("")
-                        .toString(),
-                )
-                name = "Chapter ${it.number}"
-                date_upload = it.updatedAt.time * 1000
-            }
-        }
+        return data.chapters.map { it.toSChapter() }
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
         val path = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
-        assert(path.size == 2) { "Refresh Chapter List" }
-        val slug = path[0]
+        require(path.isNotEmpty()) { "Refresh Chapter List" }
+        val slug = path.first()
 
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("api")
-            .addPathSegment("v")
-            .addPathSegment(slug)
-            .build()
-
-        return apiRequest(url)
+        return apiRequest("$apiUrl/api/v/$slug".toHttpUrl())
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val slug = "$baseUrl${chapter.url}".toHttpUrl().pathSegments[0]
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("view")
-            .addPathSegment(slug)
-
-        return url.toString()
+        val slug = "$baseUrl${chapter.url}".toHttpUrl().pathSegments.first()
+        return "$baseUrl/view/$slug"
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -205,7 +130,66 @@ class WestManga : HttpSource() {
         }
     }
 
-    private fun apiRequest(url: HttpUrl): Request {
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    private fun fetchGenres() {
+        if (genres.isNotEmpty() || genresFetchJob) return
+        genresFetchJob = true
+
+        val url = "$apiUrl/api/contents/genres".toHttpUrl()
+        val request = apiRequest(url, true)
+        client.newCall(request).enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                genresFetchJob = false
+            }
+
+            override fun onResponse(call: okhttp3.Call, response: Response) {
+                response.use { res ->
+                    runCatching {
+                        if (res.isSuccessful) {
+                            val apiGenres = res.parseAs<Data<List<ApiGenre>>>().data
+                            genres = apiGenres.map { it.name to it.id.toString() }
+                        }
+                    }.onFailure {
+                        genresFetchJob = false
+                    }
+                }
+            }
+        })
+    }
+
+    private var tokenCache: String? = null
+
+    val bearerToken: String?
+        get() {
+            if (tokenCache != null) return tokenCache
+
+            val handler = Handler(Looper.getMainLooper())
+            val latch = CountDownLatch(1)
+
+            handler.post {
+                val webview = WebView(applicationContext)
+                with(webview.settings) {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                }
+
+                webview.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        view?.evaluateJavascript("localStorage.getItem('access_token')") {
+                            tokenCache = it.takeIf { it != "null" }?.trim('"') ?: "" // don't check again
+                            latch.countDown()
+                            webview.destroy()
+                        }
+                    }
+                }
+                webview.loadDataWithBaseURL(baseUrl, " ", "text/html", "utf-8", null)
+            }
+            latch.await(8, TimeUnit.SECONDS)
+            return tokenCache
+        }
+
+    private fun apiRequest(url: HttpUrl, isGenre: Boolean = false): Request {
         val timestamp = (System.currentTimeMillis() / 1000).toString()
         val message = "wm-api-request"
         val key = timestamp + "GET" + url.encodedPath + ACCESS_KEY + SECRET_KEY
@@ -215,16 +199,17 @@ class WestManga : HttpSource() {
         val hash = mac.doFinal(message.toByteArray(Charsets.UTF_8))
         val signature = hash.joinToString("") { "%02x".format(it) }
 
-        val apiHeaders = headersBuilder()
-            .set("x-wm-request-time", timestamp)
-            .set("x-wm-accses-key", ACCESS_KEY)
-            .set("x-wm-request-signature", signature)
-            .build()
+        val apiHeaders = headersBuilder().apply {
+            if (!isGenre) {
+                bearerToken?.takeUnless { it.isEmpty() }?.let { set("Authorization", "Bearer $it") }
+            }
+            set("x-wm-request-time", timestamp)
+            set("x-wm-accses-key", ACCESS_KEY)
+            set("x-wm-request-signature", signature)
+        }.build()
 
         return GET(url, apiHeaders)
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
 
 private const val ACCESS_KEY = "WM_WEB_FRONT_END"

@@ -13,7 +13,6 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -22,6 +21,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
@@ -36,41 +37,55 @@ import uy.kohesive.injekt.api.get
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class GocTruyenTranhVui :
+@Source
+abstract class GocTruyenTranhVui :
     HttpSource(),
     ConfigurableSource {
-    override val lang = "vi"
 
-    override val baseUrl = "https://goctruyentranhvui22.com"
-
-    override val name = "Goc Truyen Tranh Vui"
-
-    private val apiUrl = "$baseUrl/api/v2"
+    private val apiUrl get() = "$baseUrl/api/v2"
 
     override val supportsLatest: Boolean = true
 
     private val preferences: SharedPreferences = getPreferences()
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+        .apply {
+            build()["user-agent"]?.let { userAgent ->
+                set("user-agent", removeWebViewToken(userAgent))
+            }
+        }
+
+    private fun removeWebViewToken(userAgent: String): String = userAgent.replace(WEBVIEW_TOKEN_REGEX, ")")
 
     private val xhrHeaders by lazy {
         headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")
+            .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
+            .add("Accept-Language", "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7")
+            .add("Cache-Control", "max-age=0")
+            .add("Sec-Ch-Ua-Mobile", "?1")
+            .add("Sec-Ch-Ua-Platform", "\"Android\"")
+            .add("Sec-Fetch-Dest", "document")
+            .add("Sec-Fetch-Mode", "navigate")
+            .add("Sec-Fetch-Site", "same-origin")
+            .add("Sec-Fetch-User", "?1")
+            .add("Upgrade-Insecure-Requests", "1")
             .build()
     }
 
-    override fun popularMangaRequest(page: Int): Request = GET(
-        apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("home/filter")
-            addQueryParameter("p", (page - 1).toString())
-            addQueryParameter("value", "recommend")
-        }.build(),
-        xhrHeaders,
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
+        page,
+        "",
+        FilterList(
+            SortByList(getSortByList()).apply {
+                state[0].state = true
+            },
+        ),
     )
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -90,6 +105,30 @@ class GocTruyenTranhVui :
     )
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrl()
+            val baseHost = baseUrl.toHttpUrl().host
+            if (url.host != baseHost) {
+                throw Exception("Tên miền không được hỗ trợ")
+            }
+
+            if (url.pathSegments.size >= 2 && url.pathSegments[0] == "truyen") {
+                // Note: Fetching manga details directly for Deep Links is a temporary workaround
+                // because the website currently restricts browsing/searching.
+                // This allows users to access specific manga via URL as a temporary support measure.
+                return client.newCall(GET(query, headers))
+                    .asObservableSuccess()
+                    .map { response ->
+                        val manga = mangaDetailsParse(response)
+                        MangasPage(listOf(manga), false)
+                    }
+            }
+            return Observable.just(MangasPage(emptyList(), false))
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/truyen/${manga.url.substringAfter(':')}"
 
@@ -139,6 +178,17 @@ class GocTruyenTranhVui :
         status = parseStatus(document.selectFirst(".mb-1:contains(Trạng thái:) span")?.text())
         author = document.selectFirst(".mb-1:contains(Tác giả:) span")?.text()
         description = document.select(".v-card-text").joinToString { it.wholeText().trim() }
+
+        // Extract ID and slug for internal use (especially for Deep Links)
+        val script = document.select("script").firstOrNull { it.data().contains("const comic = {") }?.data()
+        val id = script?.let { COMIC_ID_REGEX.find(it)?.groupValues?.get(1) }
+            ?: document.selectFirst("#comic-id-comment")?.attr("value")
+        val nameEn = script?.let { COMIC_NAME_EN_REGEX.find(it)?.groupValues?.get(1) }
+            ?: response.request.url.pathSegments.getOrNull(1)
+
+        if (id != null && nameEn != null) {
+            this.url = "$id:$nameEn"
+        }
     }
 
     private fun parseStatus(status: String?) = when {
@@ -280,5 +330,8 @@ class GocTruyenTranhVui :
     companion object {
         private const val CUSTOM_TOKEN = "custom_token"
         private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng token mới nhập."
+        private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
+        private val COMIC_ID_REGEX = Regex("""id:\s*"([^"]+)"""")
+        private val COMIC_NAME_EN_REGEX = Regex("""nameEn:\s*`([^`]+)`""")
     }
 }

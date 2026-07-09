@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.utils.decodeHex
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -21,17 +23,12 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.experimental.xor
 
-class KadoComi : HttpSource() {
-
-    override val name = "カドコミ" // KadoComi, formerly Comic Walker
-
-    override val baseUrl = "https://comic-walker.com"
+@Source
+abstract class KadoComi : HttpSource() {
 
     private val apiUrl = "https://comic-walker.com/api"
 
     private val cdnUrl = "https://cdn.comic-walker.com"
-
-    override val lang = "ja"
 
     override val supportsLatest = true
 
@@ -54,7 +51,7 @@ class KadoComi : HttpSource() {
         }
     }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addNetworkInterceptor(imageDescrambler)
         .build()
 
@@ -233,15 +230,6 @@ class KadoComi : HttpSource() {
     private fun getWorkCode(manga: SManga): String = manga.url.substringAfterLast("/")
 
     private fun getThumbnailUrl(work: KadoComiWork): String = work.bookCover ?: work.thumbnail
-
-    // https://stackoverflow.com/a/66614516
-    private fun String.decodeHex(): ByteArray {
-        check(length % 2 == 0) { "Must have an even length" }
-
-        return chunked(2)
-            .map { it.toInt(16).toByte() }
-            .toByteArray()
-    }
 
     private fun descrambleImage(imageByteArray: ByteArray, hashByteArray: ByteArray): ByteArray = imageByteArray.mapIndexed { idx, byte ->
         byte xor hashByteArray[idx % hashByteArray.size]

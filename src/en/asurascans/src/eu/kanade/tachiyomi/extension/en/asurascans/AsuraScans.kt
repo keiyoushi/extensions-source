@@ -8,7 +8,6 @@ import android.graphics.Rect
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -17,6 +16,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -40,20 +41,17 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
+import okio.IOException
 import org.jsoup.nodes.Document
 import java.util.Collections
+import kotlin.time.Duration.Companion.seconds
 
-class AsuraScans :
+@Source
+abstract class AsuraScans :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Asura Scans"
-
-    override val baseUrl = "https://asurascans.com"
-
     private val apiUrl = "https://api.asurascans.com/api"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 
@@ -86,21 +84,27 @@ class AsuraScans :
         }
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addNetworkInterceptor(::scrambledImageInterceptor)
-        .rateLimit(2, 2)
+        .rateLimit(2, 2.seconds) { !it.encodedPath.contains("/covers/") }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
+    // ============================== Popular ==============================
+
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter(defaultSort = "popular")))
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
+    // ============================== Latest ===============================
+
     override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter(defaultSort = "latest")))
 
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
+
+    // ============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
@@ -129,13 +133,7 @@ class AsuraScans :
         return MangasPage(mangas, result.meta!!.hasMore)
     }
 
-    override fun getFilterList(): FilterList = FilterList(
-        SortFilter(),
-        StatusFilter(),
-        TypeFilter(),
-        GenresFilter(),
-        MinChaptersFilter(),
-    )
+    // ============================== Details ==============================
 
     override fun getMangaUrl(manga: SManga): String {
         val match = OLD_FORMAT_MANGA_REGEX.find(manga.url)?.groupValues?.get(2)
@@ -154,15 +152,19 @@ class AsuraScans :
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val json = response.body.string()
-        val mangaData = run {
-            val wrapper = json.parseAs<DataDto<MangaDetailsDto>>()
-            wrapper.data ?: json.parseAs<MangaDetailsDto>()
+        val jsonElement = response.parseAs<JsonElement>()
+        val mangaData = if (jsonElement is JsonObject && "data" in jsonElement) {
+            jsonElement.parseAs<DataDto<MangaDetailsDto>>().data!!
+        } else {
+            jsonElement.parseAs<MangaDetailsDto>()
         }
+
         slugMap[mangaData.series.slug] = "$baseUrl${mangaData.series.publicUrl}".toHttpUrl().pathSegments.last()
         slugMap.persist()
         return mangaData.series.toSMangaDetails()
     }
+
+    // ============================= Chapters ==============================
 
     override fun getChapterUrl(chapter: SChapter): String {
         val mangaSlug = chapter.url.substringAfter("/series/").substringBefore("/")
@@ -188,6 +190,8 @@ class AsuraScans :
             .map { it.toSChapter() }
     }
 
+    // =============================== Pages ===============================
+
     override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), headers)
 
     override fun pageListParse(response: Response): List<Page> {
@@ -201,9 +205,10 @@ class AsuraScans :
         if (pages.isEmpty()) {
             val accessToken = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
                 .find { it.name == "access_token" }?.value
-                ?: throw Exception("This chapter is locked. Wait for free unlock, or unlock it using tokens or a subscription in WebView.")
+                ?: return emptyList()
+
             val pageToken = document.selectFirst("script:containsData(pageToken)")
-                ?.data()?.let { pageTokenRegex.find(it)?.groupValues?.get(1) }
+                ?.data()?.let { PAGE_TOKEN_REGEX.find(it)?.groupValues?.get(1) }
                 ?: "asura-reader-2026"
 
             val mangaSlug = response.request.url.pathSegments[1]
@@ -215,21 +220,22 @@ class AsuraScans :
                 .build()
 
             pages = try {
-                client.newCall(GET(url, headers)).execute()
-                    .parseAs<PremiumPageListDto>().data.chapter.pages
+                client.newCall(GET(url, headers)).execute().use { premiumResponse ->
+                    premiumResponse.parseAs<PremiumPageListDto>().data.chapter.pages
+                }
             } catch (_: Exception) {
                 emptyList()
             }
         }
 
         if (pages.isEmpty()) {
-            throw Exception("This chapter is locked. Wait for free unlock, or unlock it using tokens or a subscription in WebView.")
+            return emptyList()
         }
 
         return pages.mapIndexed { index, pageDto ->
-            val url = if (pageDto.tiles.orEmpty().isNotEmpty()) {
+            val url = if (!pageDto.tiles.isNullOrEmpty()) {
                 val data = PageData(
-                    pageDto.tiles!!,
+                    pageDto.tiles,
                     pageDto.tileCols ?: 4,
                     pageDto.tileRows ?: 5,
                 )
@@ -244,7 +250,19 @@ class AsuraScans :
         }
     }
 
-    val pageTokenRegex = Regex("""pageToken\*=\*"([^"]+)"""")
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    // ============================== Filters ==============================
+
+    override fun getFilterList(): FilterList = FilterList(
+        SortFilter(),
+        StatusFilter(),
+        TypeFilter(),
+        GenresFilter(),
+        MinChaptersFilter(),
+    )
+
+    // ============================= Utilities =============================
 
     private fun scrambledImageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -254,7 +272,9 @@ class AsuraScans :
         if (!fragment.startsWith("{")) return response
 
         val pageData = fragment.parseAs<PageData>()
-        val source = BitmapFactory.decodeStream(response.body.byteStream())
+        val source = response.use {
+            BitmapFactory.decodeStream(it.body.byteStream())
+        } ?: throw IOException("Failed to decode image")
 
         val tileW = source.width / pageData.tileCols
         val tileH = source.height / pageData.tileRows
@@ -327,8 +347,6 @@ class AsuraScans :
         else -> this
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
     private val slugMap: MutableMap<String, String> =
         Collections.synchronizedMap(preferences.getString(SLUG_MAP, "{}")!!.parseAs())
 
@@ -355,5 +373,6 @@ class AsuraScans :
         private val OLD_FORMAT_MANGA_REGEX = """^/manga/(\d+-)?([^/]+)/?$""".toRegex()
         private const val PREF_HIDE_PREMIUM_CHAPTERS = "pref_hide_premium_chapters"
         private const val SLUG_MAP = "slug_map_v2"
+        private val PAGE_TOKEN_REGEX = Regex("""pageToken\*=\*"([^"]+)"""")
     }
 }

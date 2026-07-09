@@ -18,7 +18,6 @@ import eu.kanade.tachiyomi.extension.all.hdoujin.Entries.Entry
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -27,6 +26,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import getFilters
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.jsonInstance
 import kotlinx.serialization.decodeFromString
@@ -39,13 +40,20 @@ import uy.kohesive.injekt.injectLazy
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class HDoujin(
-    override val lang: String,
-    private val siteLang: String = lang,
-) : HttpSource(),
+@Source
+abstract class HDoujin :
+    HttpSource(),
     ConfigurableSource {
 
-    override val name = "HDoujin"
+    private val siteLang: String
+        get() = when (lang) {
+            "en" -> "english"
+            "es" -> "spanish"
+            "ja" -> "japanese"
+            "ko" -> "korean"
+            "zh" -> "chinese"
+            else -> lang
+        }
 
     override val supportsLatest = true
     private val preferences = getPreferences()
@@ -87,9 +95,8 @@ class HDoujin(
         return ""
     }
 
-    override val baseUrl: String = "https://hdoujin.org"
-    private val baseApiUrl: String = "https://api.hdoujin.org"
-    private val bookApiUrl: String = "$baseApiUrl/books"
+    private val baseApiUrl: String get() = "https://api." + baseUrl.removePrefix("https://")
+    private val bookApiUrl: String get() = "$baseApiUrl/books"
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
@@ -126,7 +133,7 @@ class HDoujin(
         latch.await(10, TimeUnit.SECONDS)
         return _clearance
     }
-    private val clearanceClient = network.cloudflareClient.newBuilder()
+    private val clearanceClient = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url

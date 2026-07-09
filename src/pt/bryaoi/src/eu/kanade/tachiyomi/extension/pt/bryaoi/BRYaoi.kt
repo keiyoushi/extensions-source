@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.bryaoi
 
-import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,24 +8,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.parseAs
-import kotlinx.serialization.Serializable
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Element
 
-class BRYaoi : HttpSource() {
-
-    override val name = "BR Yaoi"
-
-    override val baseUrl = "https://bryaoi.com"
-
-    override val lang = "pt-BR"
+@Source
+abstract class BRYaoi : HttpSource() {
 
     override val supportsLatest = false
-
-    override val client = network.cloudflareClient
 
     // ====================== Popular ===============================
 
@@ -86,26 +76,9 @@ class BRYaoi : HttpSource() {
 
     // ====================== Pages ================================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val script = document.select("script[type*=javascript]:not([defer])")
-            .map(Element::data)
-            .firstOrNull { it.contains("imageArray") }
-            ?: return emptyList()
-
-        val json = QuickJs.create().use {
-            it.evaluate("$script; imageArray")
-        } as String
-
-        return json.parseAs<PageDto>().images.mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = imageUrl)
-        }
+    override fun pageListParse(response: Response): List<Page> = response.asJsoup().select("#images_all img").mapIndexed { index, element ->
+        Page(index, imageUrl = element.absUrl("src"))
     }
 
-    override fun imageUrlParse(response: Response) = ""
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }
-
-@Serializable
-class PageDto(
-    val images: List<String>,
-)
