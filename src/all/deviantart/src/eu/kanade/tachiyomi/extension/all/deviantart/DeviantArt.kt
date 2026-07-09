@@ -143,18 +143,26 @@ abstract class DeviantArt :
             val path = parsed.encodedPath
             if (!seen.add(path)) return@forEach
 
-            val name = link.selectFirst("img[alt]")?.attr("alt")?.takeIf { it.isNotBlank() }
+            val name = link.ownText().takeIf { it.isNotBlank() }
                 ?: link.selectFirst("[title]")?.attr("title")?.takeIf { it.isNotBlank() }
-                ?: link.ownText().takeIf { it.isNotBlank() }
                 ?: segs.last().replace("-", " ")
 
+            val isAll = folderId == "all" || name.equals("all", ignoreCase = true)
             val title = when {
-                folderId == "all" || name.equals("all", ignoreCase = true) -> "All"
+                isAll -> "All"
                 segs.last() == "featured" -> name.ifBlank { "Featured" }
                 else -> name
             }
+            val displayTitle = if (
+                preferences.artistInTitle == ArtistInTitle.ALWAYS.name ||
+                (preferences.artistInTitle == ArtistInTitle.ONLY_ALL_GALLERIES.name && isAll)
+            ) {
+                "$realUser - $title"
+            } else {
+                title
+            }
 
-            folders += createGalleryManga(realUser, title, path)
+            folders += createGalleryManga(realUser, displayTitle, path)
         }
 
         if (page <= 1 && folders.isEmpty()) {
@@ -170,11 +178,18 @@ abstract class DeviantArt :
         return MangasPage(folders.subList(start, end), end < folders.size)
     }
 
-    private fun resolveUsername(doc: Document, fallback: String): String = doc.selectFirst("a[href*=/gallery/]")?.let { link ->
-        var href = link.attr("href").trim()
-        if (href.startsWith("/")) href = "https://www.deviantart.com$href"
-        href.toHttpUrl().pathSegments[0]
-    } ?: fallback
+    private fun resolveUsername(doc: Document, fallback: String): String {
+        val loweredFallback = fallback.lowercase()
+        return doc.select("a[href*=/gallery/]").firstOrNull { link ->
+            var href = link.attr("href").trim()
+            if (href.startsWith("/")) href = "https://www.deviantart.com$href"
+            href.toHttpUrl().pathSegments[0].lowercase() == loweredFallback
+        }?.let { link ->
+            var href = link.attr("href").trim()
+            if (href.startsWith("/")) href = "https://www.deviantart.com$href"
+            href.toHttpUrl().pathSegments[0]
+        } ?: fallback
+    }
 
     private fun createGalleryManga(user: String, title: String, url: String) = SManga.create().apply {
         this.url = url
@@ -208,15 +223,17 @@ abstract class DeviantArt :
     override fun mangaDetailsParse(response: Response): SManga {
         val doc = response.asJsoup()
         val gallery = doc.selectFirst("#sub-folder-gallery")
-        val galleryName = gallery?.selectFirst("._2vMZg + ._2vMZg")?.text()?.substringBeforeLast(" ")
-            ?: gallery?.selectFirst("[aria-haspopup=listbox] > div")?.ownText()
+        val rawName = gallery?.selectFirst("[aria-haspopup=listbox] > div")?.ownText()
+            ?.replace(Regex("^.+'s\\s"), "")
+            ?: gallery?.selectFirst("._2vMZg + ._2vMZg")?.text()?.substringBeforeLast(" ")
             ?: throw Exception("Could not find gallery name")
+        val galleryName = rawName.replace(Regex("\\s*-\\s*front page\\s*$", RegexOption.IGNORE_CASE), "")
         val artistInTitle = (preferences.artistInTitle == ArtistInTitle.ALWAYS.name) ||
             ((preferences.artistInTitle == ArtistInTitle.ONLY_ALL_GALLERIES.name) && galleryName == "All")
 
         return SManga.create().apply {
             setUrlWithoutDomain(response.request.url.toString())
-            author = resolveUsername(doc, url.toHttpUrl().pathSegments[0])
+            author = resolveUsername(doc, response.request.url.pathSegments[0])
             title = if (artistInTitle) "$author - $galleryName" else galleryName
             description = gallery?.selectFirst(".legacy-journal")?.wholeText()
             thumbnail_url = gallery?.selectFirst("img[property=contentUrl]")?.absUrl("src")
