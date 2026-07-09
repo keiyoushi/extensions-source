@@ -356,7 +356,7 @@ abstract class DeviantArt :
             title = "Cookies (JSON)"
             summary = "Paste the cookies.json array exported from your browser here.\n" +
                 "To export: DevTools → Application → Cookies → export as JSON.\n" +
-                "The extension reads name & value from each entry automatically."
+                "After saving, go to Filter and enable \"Use cookie to login\"."
             setDefaultValue("")
             setOnBindEditTextListener {
                 it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
