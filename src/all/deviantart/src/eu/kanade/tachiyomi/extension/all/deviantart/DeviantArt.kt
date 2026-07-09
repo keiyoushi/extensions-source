@@ -122,67 +122,81 @@ abstract class DeviantArt :
         val document = response.asJsoup()
         val lowered = username.lowercase()
         val mangas = mutableListOf<SManga>()
-
-        // Strategy: find ALL links that point to /{user}/gallery/{folderId}/{slug}
-        // DeviantArt pages can use absolute URLs (leafybush7 case) or relative paths.
-        // We normalise to the path-only form for deduplication.
-        val allLinks = document.select("a[href*=/gallery/]")
         val seen = mutableSetOf<String>()
+
+        // Strategy: find ALL links that point to /{user}/gallery/{folderId}[/{slug}]
+        // DeviantArt pages use absolute URLs like https://www.deviantart.com/user/gallery/id/slug
+        // or relative /user/gallery/id/slug.  The "All" folder is /user/gallery/all (3 segments,
+        // no separate folderId) and must be handled too.
+        val allLinks = document.select("a[href*=/gallery/]")
 
         allLinks.forEach { link ->
             var href = link.attr("href").trim()
-            // Normalise to absolute URL then extract the path
             if (href.startsWith("/")) href = "$baseUrl$href"
-            val parsed = href.toHttpUrl()
+
+            val parsed = try {
+                href.toHttpUrl()
+            } catch (_: Exception) {
+                return@forEach
+            }
             val segments = parsed.pathSegments
 
-            // Must match pattern: /{username}/gallery/{folderId}/{slug}
-            if (segments.size < 4) return@forEach
+            // Pattern: /{username}/gallery/{folderId}[/{slug}]
+            //  3 segments: /user/gallery/all  (All folder)
+            //  4 segments: /user/gallery/12345/featured
+            if (segments.size < 3 || segments.size > 5) return@forEach
             if (segments[0].lowercase() != lowered) return@forEach
             if (segments[1] != "gallery") return@forEach
 
-            val path = parsed.encodedPath // /username/gallery/12345/slug
+            // Skip pagination like /user/gallery?page=2
+            val folderId = segments.getOrNull(2) ?: return@forEach
+            if (folderId.isEmpty()) return@forEach
+
+            val path = parsed.encodedPath // /username/gallery/12345/slug or /username/gallery/all
 
             if (!seen.add(path)) return@forEach
 
-            val name = link.selectFirst("[title]")?.attr("title")
-                ?: link.selectFirst("img")?.attr("alt")
+            // Name: prefer img alt / title attributes, fallback to link text
+            val name = link.selectFirst("img[alt]")?.attr("alt")
+                ?.takeIf { it.isNotBlank() }
+                ?: link.selectFirst("[title]")?.attr("title")
                     ?.takeIf { it.isNotBlank() }
                 ?: link.ownText().trim()
                     .takeIf { it.isNotBlank() }
                 ?: link.text().trim()
                     .takeIf { it.isNotBlank() }
-                ?: segments.last()
+                ?: segments.last().replace("-", " ")
 
-            val folderName = when {
-                segments.last() == "all" -> "All"
-                segments.last() == "featured" -> "Featured"
-                else -> segments.last().replace("-", " ")
+            val title = when {
+                folderId == "all" -> "All"
+                name.equals("all", ignoreCase = true) -> "All"
+                segments.last() == "featured" -> name.ifBlank { "Featured" }
+                else -> name
             }
+
+            // Normalise: /username/gallery/12345/slug → username/gallery/12345/slug
+            val url = path.removePrefix("/")
 
             mangas.add(
                 SManga.create().apply {
-                    url = path.removePrefix("/")
-                    title = name.ifBlank { folderName }
+                    this.url = url
+                    this.title = title.ifBlank { folderId }
                     author = username
                     thumbnail_url = link.selectFirst("img")?.absUrl("src")
                 },
             )
         }
 
-        if (mangas.isNotEmpty()) {
-            return MangasPage(mangas, false)
+        // If nothing was found (user has no sub-folders), still return "All"
+        if (mangas.isEmpty()) {
+            mangas.add(
+                SManga.create().apply {
+                    url = "$username/gallery/all"
+                    title = "All"
+                    author = username
+                },
+            )
         }
-
-        // Fallback: user with no sub-folders (e.g. empty gallery).
-        // Still allow adding the "All" gallery so the user can at least browse it.
-        mangas.add(
-            SManga.create().apply {
-                url = "$username/gallery/all"
-                title = "All"
-                author = username
-            },
-        )
 
         return MangasPage(mangas, false)
     }
