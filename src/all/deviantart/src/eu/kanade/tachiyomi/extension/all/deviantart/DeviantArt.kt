@@ -104,21 +104,40 @@ abstract class DeviantArt :
             val folderId = url.pathSegments[2]
             return super.fetchSearchManga(page, "gallery:$username/$folderId", filters)
         }
-        // Plain username → list all galleries
+        // Plain username → list all galleries (with pagination)
         if (query.matches(Regex("""^[\w-]+$"""))) {
-            return fetchUsernameGalleries(query)
+            return fetchUsernameGalleries(page, query)
         }
         return super.fetchSearchManga(page, query, filters)
     }
 
-    private fun fetchUsernameGalleries(username: String): Observable<MangasPage> = Observable.fromCallable {
-        val request = GET("$baseUrl/$username/gallery", headers)
+    private fun fetchUsernameGalleries(page: Int, username: String): Observable<MangasPage> = Observable.fromCallable {
+        var requestUrl = "$baseUrl/$username/gallery/all"
+        if (page > 1) {
+            requestUrl = "$baseUrl/$username/gallery?page=$page"
+        }
+
+        // page 1 → fetch /gallery?page=1 to extract folder list + check for more pages
+        val url = if (page <= 1) {
+            "$baseUrl/$username/gallery"
+        } else {
+            "$baseUrl/$username/gallery?page=$page"
+        }
+
+        val request = GET(url, headers)
         val response = client.newCall(request).execute()
-        usernameGalleryParse(response, username)
+
+        if (page <= 1) {
+            // First page: return folder list instead of individual deviations
+            usernameGalleryParse(response, username, page)
+        } else {
+            // Subsequent pages: return more folders if any (rare, but possible)
+            usernameGalleryParse(response, username, page)
+        }
     }
 
     // Parse the gallery listing page to extract all folder links
-    private fun usernameGalleryParse(response: Response, username: String): MangasPage {
+    private fun usernameGalleryParse(response: Response, username: String, page: Int = 1): MangasPage {
         val document = response.asJsoup()
         val lowered = username.lowercase()
         val mangas = mutableListOf<SManga>()
@@ -187,9 +206,8 @@ abstract class DeviantArt :
             )
         }
 
-        // If nothing was found (no sub-folders OR the page had no gallery links at
-        // all), still expose "All" so the user can browse the top-level gallery.
-        if (mangas.isEmpty()) {
+        // If nothing was found and this is page 1, still expose "All".
+        if (page <= 1 && mangas.isEmpty()) {
             mangas.add(
                 SManga.create().apply {
                     url = "$username/gallery/all"
@@ -210,6 +228,11 @@ abstract class DeviantArt :
                     author = username
                 },
             )
+        }
+
+        // Return empty pages after page 1 if we found nothing new (indicates end).
+        if (page > 1) {
+            return MangasPage(emptyList(), false)
         }
 
         return MangasPage(mangas, false)
