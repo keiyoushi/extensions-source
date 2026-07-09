@@ -35,6 +35,7 @@ abstract class Viz :
     private val preferences by getPreferencesLazy()
     private val servicePath get() = if (name.contains("Shonen Jump")) "shonenjump" else "vizmanga"
     private val searchPath get() = if (name.contains("Shonen Jump")) "SjChapterSeries" else "VmChapterSeries"
+    private val subscriber get() = if (name.contains("Shonen Jump")) "is_sj_subscriber" else "is_vm_subscriber"
 
     private var loggedIn: Boolean? = null
 
@@ -161,11 +162,14 @@ abstract class Viz :
             }
         }
 
+        val isSubscriber = checkIfIsLoggedIn()
+
         return elements.mapNotNull {
             val urlStr = it.absUrl("data-target-url")
             if (urlStr.isBlank()) return@mapNotNull null
 
-            val isLocked = urlStr.startsWith("javascript")
+            val isMarkupLocked = urlStr.startsWith("javascript")
+            val isLocked = isMarkupLocked && !isSubscriber
             if (hideLocked && isLocked) return@mapNotNull null
 
             val lock = if (isLocked) "🔒 " else ""
@@ -180,7 +184,7 @@ abstract class Viz :
                 }
 
                 chapter_number = name.substringAfter("Ch. ").substringBefore(':').trim().toFloatOrNull() ?: -1F
-                val cleanUrl = if (isLocked) urlStr.substringAfter(",'").substringBeforeLast("'") else urlStr
+                val cleanUrl = if (isMarkupLocked) urlStr.substringAfter(",'").substringBeforeLast("'") else urlStr
                 val absoluteUrl = if (cleanUrl.startsWith("http")) cleanUrl else "$baseUrl$cleanUrl"
                 val paths = absoluteUrl.toHttpUrl().pathSegments
                 url = "${paths[3]}#${paths[1]}"
@@ -247,14 +251,21 @@ abstract class Viz :
         return GET(pageUrl, newHeaders, CacheControl.FORCE_NETWORK)
     }
 
-    private fun checkIfIsLoggedIn() {
+    private val subcription = Regex("""var $subscriber\s*=\s*(true|false)""")
+
+    private fun checkIfIsLoggedIn(): Boolean {
         val loginCheckRequest = GET("$baseUrl/account/refresh_login_links", headers)
-        try {
+        return try {
             val document = network.client.newCall(loginCheckRequest).execute().asJsoup()
             loggedIn = document.selectFirst("div#o_account-links-content")
                 ?.attr("logged_in")?.toBoolean() ?: false
+
+            document.selectFirst("script:containsData($subscriber)")?.data()
+                ?.let { subcription.find(it) }
+                ?.groupValues?.get(1)?.toBoolean() ?: false
         } catch (_: Exception) {
             loggedIn = false
+            false
         }
     }
 
