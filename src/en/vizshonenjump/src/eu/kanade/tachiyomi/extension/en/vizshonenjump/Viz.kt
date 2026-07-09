@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.obj
 import keiyoushi.utils.parseAs
@@ -28,7 +27,6 @@ import rx.Observable
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
-import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Viz :
@@ -52,7 +50,6 @@ abstract class Viz :
             }
             response
         }
-        .rateLimit(1, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -116,7 +113,7 @@ abstract class Viz :
             .addQueryParameter("search", query)
             .addQueryParameter("category", searchPath)
             .build()
-        return GET(url, headers)
+        return GET(url, headers, CacheControl.FORCE_NETWORK)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -210,30 +207,45 @@ abstract class Viz :
             .toInt()
 
         checkIfIsLoggedIn()
+        val chapterId = response.request.url.pathSegments.last()
+        val hasAccess = client.newCall(pageUrlRequest(chapterId, "0")).execute().parseAs<Dto>().ok
+        if (hasAccess == 0) {
+            throw Exception("Log in via WebView and subscribe to the website's service.")
+        }
+
+        return (0..pageCount).map {
+            Page(it, "$baseUrl/$chapterId#$it")
+        }
+    }
+
+    override fun imageUrlRequest(page: Page): Request {
+        val parts = page.url.toHttpUrl()
+        val chapterId = parts.pathSegments.first()
+        val index = parts.fragment!!
+        return pageUrlRequest(chapterId, index)
+    }
+
+    override fun imageUrlParse(response: Response): String {
+        val result = response.parseAs<Dto>()
+        return "${result.data.obj.values.first().string}#scramble"
+    }
+
+    // ============================= Utilities =============================
+
+    private fun pageUrlRequest(chapterId: String, index: String): Request {
         val login = if (loggedIn == true) "active" else "false"
         val newHeaders = headersBuilder()
             .set("X-Client-Login", login)
             .build()
 
-        val chapterId = response.request.url.pathSegments.last()
-        val pages = (0..pageCount).joinToString(",")
         val pageUrl = "$baseUrl/manga/get_manga_url".toHttpUrl().newBuilder()
             .addQueryParameter("device_id", "3")
             .addQueryParameter("manga_id", chapterId)
-            .addQueryParameter("pages", pages)
+            .addQueryParameter("pages", index)
             .build()
 
-        val result = client.newCall(GET(pageUrl, newHeaders, CacheControl.FORCE_NETWORK)).execute().parseAs<Dto>()
-        if (result.ok == 0) {
-            throw Exception("Log in via WebView and subscribe to the website's service.")
-        }
-
-        return result.data.obj.toSortedMap(compareBy { it.toInt() }).map { (index, image) ->
-            Page(index.toInt(), imageUrl = "${image.string}#scramble")
-        }
+        return GET(pageUrl, newHeaders, CacheControl.FORCE_NETWORK)
     }
-
-    // ============================= Utilities =============================
 
     private fun checkIfIsLoggedIn() {
         val loginCheckRequest = GET("$baseUrl/account/refresh_login_links", headers)
@@ -253,8 +265,6 @@ abstract class Viz :
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private val DATE_FORMATTER = SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH)
