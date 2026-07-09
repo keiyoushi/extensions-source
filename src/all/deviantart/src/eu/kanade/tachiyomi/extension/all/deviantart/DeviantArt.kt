@@ -101,12 +101,15 @@ abstract class DeviantArt :
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
             if (url.host != baseUrl.toHttpUrl().host) throw Exception("Unsupported URL")
-            // Sub-gallery: pick the deepest numeric folderId from the URL path
-            // e.g. /leafybush7/gallery/98917122/halloweens → use 98917122
             val username = url.pathSegments[0]
             val folderId = url.pathSegments.lastOrNull { it.all(Char::isDigit) }
                 ?: url.pathSegments.getOrNull(2).orEmpty()
-            return super.fetchSearchManga(page, "gallery:$username/$folderId", filters)
+            // Preserve sub-gallery slug through to mangaDetailsParse
+            // e.g. /leafybush7/gallery/98917131/halloween-2024 → slug=halloween-2024
+            val slug = url.pathSegments.lastOrNull()
+                ?.takeUnless { it.all(Char::isDigit) || it == "all" || it == "featured" || it == "gallery" }
+            val q = if (slug != null) "sub:$username/$folderId/$slug" else "gallery:$username/$folderId"
+            return super.fetchSearchManga(page, q, filters)
         }
         // Plain username → list gallery folders
         if (query.matches(USERNAME_RE)) return fetchUsernameGalleries(page, query)
@@ -207,6 +210,13 @@ abstract class DeviantArt :
         preferences.edit().putBoolean(COOKIE_LOGIN_PREF, cookieEnabled).apply()
         if (cookieEnabled) seedCookiesIfEnabled()
 
+        // sub: prefix preserves the slug for mangaDetailsParse fallback
+        // e.g. sub:leafybush7/98917131/halloween-2024
+        val sub = SUB_RE.matchEntire(query)
+        if (sub != null) {
+            val (username, folderId, slug) = sub.destructured
+            return GET("$baseUrl/$username/gallery/$folderId/$slug", headers)
+        }
         val (username, folderId) = requireNotNull(
             GALLERY_RE.matchEntire(query)?.destructured,
         ) { SEARCH_HINT }
@@ -421,6 +431,7 @@ abstract class DeviantArt :
         private const val SEARCH_HINT = "Use: gallery:{username}[/{folderId}] or a plain username, or paste a URL"
         private val USERNAME_RE = Regex("""^[\w-]+$""")
         private val GALLERY_RE = Regex("""gallery:([\w-]+)(?:/(\d+))?""")
+        private val SUB_RE = Regex("""sub:([\w-]+)/(\d+)/(.+)""")
 
         private const val COOKIE_LOGIN_PREF = "cookie_login_enabled"
         private const val COOKIE_JSON_PREF = "cookie_json"
