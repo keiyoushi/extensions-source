@@ -4,13 +4,13 @@ plugins {
 
 keiyoushi {
     name = "Yaoihub"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
 
     source {
         lang = "en"
-        baseUrl = "https://yaoihub.net"
+        baseUrl = "https://yaoihub.org"
     }
 }

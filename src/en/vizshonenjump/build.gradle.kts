@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "VIZ"
-    versionCode = 26
+    versionCode = 27
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
@@ -18,15 +18,20 @@ keiyoushi {
         name = "VIZ Shonen Jump"
         lang = "en"
         baseUrl = "https://www.viz.com"
+        versionId = 2
     }
 
     source {
         name = "VIZ Manga"
         lang = "en"
         baseUrl = "https://www.viz.com"
+        versionId = 2
     }
 }
 
 dependencies {
-    implementation("com.drewnoakes:metadata-extractor:2.18.0")
+    implementation("de.stefan-oltmann:kim:0.32.0") {
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-serialization-core")
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-serialization-json")
+    }
 }
