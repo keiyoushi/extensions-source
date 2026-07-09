@@ -7,7 +7,7 @@ import org.gradle.api.provider.Property
 import java.io.Serializable
 import javax.inject.Inject
 
-val VALID_LIB_VERSIONS = listOf("1.4")
+val VALID_LIB_VERSIONS = listOf("1.4", "1.6")
 
 data class DeeplinkFilter(
     val hosts: List<String>,
