@@ -228,7 +228,7 @@ abstract class Viz :
             throw Exception("Log in via WebView and subscribe to the website's service.")
         }
 
-        return result.data.obj.toSortedMap().map { (index, image) ->
+        return result.data.obj.toSortedMap(compareBy { it.toInt() }).map { (index, image) ->
             Page(index.toInt(), imageUrl = "${image.string}#scramble")
         }
     }
