@@ -120,68 +120,71 @@ abstract class DeviantArt :
     // Parse the gallery listing page to extract all folder links
     private fun usernameGalleryParse(response: Response, username: String): MangasPage {
         val document = response.asJsoup()
-        // The gallery folder section is inside [aria-controls="folder-dropdown"] or a div
-        // containing links like /{username}/gallery/{folderId}/{slug}
-        val folderSection = document.selectFirst("#sub-folder-gallery")
-            ?: document.selectFirst("[role=navigation]")
-
+        val lowered = username.lowercase()
         val mangas = mutableListOf<SManga>()
 
-        if (folderSection != null) {
-            // Collect folder links from the sub-folder gallery section
-            val folderLinks = folderSection.select("a[href*=/gallery/]")
-            val seen = mutableSetOf<String>()
+        // Strategy: find ALL links that point to /{user}/gallery/{folderId}/{slug}
+        // DeviantArt pages can use absolute URLs (leafybush7 case) or relative paths.
+        // We normalise to the path-only form for deduplication.
+        val allLinks = document.select("a[href*=/gallery/]")
+        val seen = mutableSetOf<String>()
 
-            folderLinks.forEach { link ->
-                val href = link.attr("href")
-                val name = link.selectFirst("[title]")?.attr("title")
-                    ?: link.selectFirst("img")?.attr("alt")
-                    ?: link.ownText()
-                    ?: link.text()
-                val countText = link.selectFirst(":containsOwn(deviations)")?.text()
-                    ?: link.parent()?.selectFirst(":containsOwn(deviations)")?.text()
-                    ?: ""
+        allLinks.forEach { link ->
+            var href = link.attr("href").trim()
+            // Normalise to absolute URL then extract the path
+            if (href.startsWith("/")) href = "$baseUrl$href"
+            val parsed = href.toHttpUrl()
+            val segments = parsed.pathSegments
 
-                if (href.isBlank() || !seen.add(href)) return@forEach
+            // Must match pattern: /{username}/gallery/{folderId}/{slug}
+            if (segments.size < 4) return@forEach
+            if (segments[0].lowercase() != lowered) return@forEach
+            if (segments[1] != "gallery") return@forEach
 
-                mangas.add(
-                    SManga.create().apply {
-                        url = href.removePrefix("$baseUrl/")
-                        title = name.ifBlank { href.substringAfterLast("/") }
-                        author = username
-                        description = countText
-                        thumbnail_url = link.selectFirst("img")?.absUrl("src")
-                    },
-                )
+            val path = parsed.encodedPath // /username/gallery/12345/slug
+
+            if (!seen.add(path)) return@forEach
+
+            val name = link.selectFirst("[title]")?.attr("title")
+                ?: link.selectFirst("img")?.attr("alt")
+                    ?.takeIf { it.isNotBlank() }
+                ?: link.ownText().trim()
+                    .takeIf { it.isNotBlank() }
+                ?: link.text().trim()
+                    .takeIf { it.isNotBlank() }
+                ?: segments.last()
+
+            val folderName = when {
+                segments.last() == "all" -> "All"
+                segments.last() == "featured" -> "Featured"
+                else -> segments.last().replace("-", " ")
             }
+
+            mangas.add(
+                SManga.create().apply {
+                    url = path.removePrefix("/")
+                    title = name.ifBlank { folderName }
+                    author = username
+                    thumbnail_url = link.selectFirst("img")?.absUrl("src")
+                },
+            )
         }
 
-        // Fallback: if no structured folder section found, try finding all gallery
-        // links from the dropdown/listbox
-        if (mangas.isEmpty()) {
-            document.select("a[href*=/gallery/]").forEach { link ->
-                val href = link.attr("href")
-                if (href.isBlank()) return@forEach
-                val pathSegments = href.toHttpUrl().pathSegments
-                if (pathSegments.size < 3) return@forEach
-                if (pathSegments[0] != username) return@forEach
-
-                mangas.add(
-                    SManga.create().apply {
-                        url = href.removePrefix("$baseUrl/")
-                        title = link.ownText().ifBlank { pathSegments.last() }
-                        author = username
-                        thumbnail_url = link.selectFirst("img")?.absUrl("src")
-                    },
-                )
-            }
+        if (mangas.isNotEmpty()) {
+            return MangasPage(mangas, false)
         }
 
-        if (mangas.isEmpty()) {
-            throw Exception("No galleries found for user '$username'")
-        }
+        // Fallback: user with no sub-folders (e.g. empty gallery).
+        // Still allow adding the "All" gallery so the user can at least browse it.
+        mangas.add(
+            SManga.create().apply {
+                url = "$username/gallery/all"
+                title = "All"
+                author = username
+            },
+        )
 
-        return MangasPage(mangas.distinctBy { it.url }, false)
+        return MangasPage(mangas, false)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
