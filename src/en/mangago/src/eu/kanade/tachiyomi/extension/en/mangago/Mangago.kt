@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
+import android.util.Log
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -29,6 +30,7 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.Response
@@ -36,6 +38,7 @@ import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.asResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -54,6 +57,9 @@ abstract class Mangago :
     private val domain = "mangago.me"
 
     // Chapter reader mirror; "/chapter/..." paths 404 on the main domain.
+    // Chapter lists are also fetched from here: the main domain randomly
+    // alternates between two chapter URL formats with unrelated ids, while
+    // the mirror consistently serves "/chapter/<mangaId>/<chapterId>/".
     private val readerDomain = "www.mangago.zone"
 
     override val supportsLatest = true
@@ -83,7 +89,7 @@ abstract class Mangago :
                 .build()
         }
         .addNetworkInterceptor(CookieInterceptor(domain, "_m_superu" to "1"))
-        .rateLimit(1) { it.host == baseUrlHost }
+        .rateLimit(1) { it.host == baseUrlHost || it.host == readerDomain }
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().apply {
@@ -211,6 +217,29 @@ abstract class Mangago :
 
     // ============================= Chapters ==============================
 
+    override fun chapterListRequest(manga: SManga): Request = GET("https://$readerDomain${manga.url}", headers)
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
+        Log.i("MEOW", "fetchChapterList: ${manga.url}")
+        val mirrorResponse = client.newCall(chapterListRequest(manga)).execute()
+
+        // Titles absent from the reader mirror 404 there; fetch those from
+        // the main domain, which links them in the stable read-manga format.
+        val response = if (mirrorResponse.code == 404) {
+            mirrorResponse.close()
+            client.newCall(GET("$baseUrl${manga.url}", headers)).execute()
+        } else {
+            mirrorResponse
+        }
+
+        if (!response.isSuccessful) {
+            response.close()
+            throw Exception("HTTP error ${response.code}")
+        }
+
+        chapterListParse(response)
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         return document.select("table#chapter_table > tbody > tr, table.uk-table > tbody > tr")
@@ -218,18 +247,18 @@ abstract class Mangago :
                 SChapter.create().apply {
                     val link = element.select("a.chico")
                     val urlOriginal = link.attr("abs:href")
-                    val isExternal = urlOriginal.startsWith("http") && !urlOriginal.contains(baseUrlHost)
+                    val httpUrl = urlOriginal.toHttpUrlOrNull()
 
-                    // The site rotates chapter links between mirror domains
-                    // (e.g. mangago.zone, youhim.me) on every page load. Store only
-                    // the path so the chapter URL stays stable across refreshes,
-                    // otherwise the app treats chapters as new entries and read
-                    // state is lost for unnumbered chapters such as "Special."
-                    // Retain external links as absolute URLs, strip domain otherwise.
-                    if (isExternal) {
-                        url = urlOriginal
-                    } else {
-                        setUrlWithoutDomain(urlOriginal)
+                    // Reader links rotate between mirror hosts but keep a
+                    // stable path. Store only the path so rotated links don't
+                    // register as new chapters (resetting read state); the
+                    // host is restored by pageListRequest/getChapterUrl.
+                    // Truly external links stay absolute.
+                    when {
+                        httpUrl == null -> url = urlOriginal
+                        httpUrl.pathSegments.firstOrNull() == "chapter" -> url = httpUrl.encodedPath
+                        httpUrl.host.endsWith(domain) -> setUrlWithoutDomain(urlOriginal)
+                        else -> url = urlOriginal
                     }
 
                     name = link.text()
