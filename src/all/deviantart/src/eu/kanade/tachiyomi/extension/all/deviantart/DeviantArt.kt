@@ -189,36 +189,34 @@ abstract class DeviantArt :
             )
         }
 
-        // If nothing was found and this is page 1, still expose "All".
+        // If nothing was found and this is page 1, still expose "All"
         if (page <= 1 && mangas.isEmpty()) {
             mangas.add(
-                SManga.create().apply {
-                    url = "$username/gallery/all"
-                    title = "All"
-                    author = username
-                },
+                createGalleryManga(username, "All", "$username/gallery/all"),
             )
         }
 
         // Ensure "All" is always present even when other folders were found.
         // Some DA pages don't link /gallery/all explicitly in the folder list.
         if (mangas.none { it.url.endsWith("/all") }) {
-            mangas.add(
-                0,
-                SManga.create().apply {
-                    url = "$username/gallery/all"
-                    title = "All"
-                    author = username
-                },
-            )
+            mangas.add(0, createGalleryManga(username, "All", "$username/gallery/all"))
         }
 
-        // Return empty pages after page 1 if we found nothing new (indicates end).
-        if (page > 1) {
+        // Paginate: split into pages of at most 10 folders.
+        // Page 1 skips the need for pagination if total count is manageable.
+        val start = (page - 1).coerceAtLeast(0) * 10
+        val end = minOf(start + 10, mangas.size)
+        if (start >= mangas.size && page > 1) {
             return MangasPage(emptyList(), false)
         }
+        val hasMore = end < mangas.size
+        return MangasPage(mangas.subList(start, end), hasMore)
+    }
 
-        return MangasPage(mangas, false)
+    private fun createGalleryManga(username: String, title: String, url: String) = SManga.create().apply {
+        this.url = url
+        this.title = title
+        author = username
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
