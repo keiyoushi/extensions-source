@@ -38,6 +38,17 @@ abstract class Viz :
     private val subscriber get() = if (name.contains("Shonen Jump")) "is_sj_subscriber" else "is_vm_subscriber"
 
     private var loggedIn: Boolean? = null
+    private var subscriberCache: Boolean? = null
+    private var subscriberCacheTime = 0L
+
+    private fun isSubscriber(): Boolean {
+        val now = System.currentTimeMillis()
+        if (subscriberCache == null || now - subscriberCacheTime > SUBSCRIBER_CACHE_MS) {
+            subscriberCache = checkIfIsLoggedIn()
+            subscriberCacheTime = now
+        }
+        return subscriberCache!!
+    }
 
     override val supportsLatest = true
 
@@ -162,7 +173,7 @@ abstract class Viz :
             }
         }
 
-        val isSubscriber = checkIfIsLoggedIn()
+        val isSubscriber = isSubscriber()
 
         return elements.mapNotNull {
             val urlStr = it.absUrl("data-target-url")
@@ -281,5 +292,6 @@ abstract class Viz :
         private val DATE_FORMATTER = SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH)
         private const val PREFIX_URL_SEARCH = "url:"
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+        private const val SUBSCRIBER_CACHE_MS = 3600000L // 1 hour
     }
 }
