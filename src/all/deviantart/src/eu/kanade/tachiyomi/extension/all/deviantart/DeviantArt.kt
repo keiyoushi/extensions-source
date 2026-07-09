@@ -327,30 +327,34 @@ abstract class DeviantArt :
             val imageUrl = document.selectFirst("img[fetchpriority=high]")?.absUrl("src")
             listOf(Page(0, imageUrl = imageUrl))
         } else {
-            // Multi-image: upgrade thumb → large "fit", fall back to stripping /v1/
+            // Multi-image: strip /v1/ transform to get raw image (with token)
             buttons.mapIndexed { i, button ->
                 val thumbSrc = button.selectFirst("img")?.absUrl("src")
-                val imageUrl = upgradeThumbUrl(thumbSrc)
-                    ?: resolveFullImageUrl(thumbSrc)
+                val imageUrl = resolveFullImageUrl(thumbSrc)
                 Page(i, imageUrl = imageUrl)
             }
         }
     }
 
-    // Thumbnail → large display URL using "fit" (preserves aspect ratio inside
-    // 1600×1600 bounds). "fit" keeps the token's image.operations scope valid.
-    // Returns null if the URL has no /v1/fit/ transform (not a thumb).
-    private fun upgradeThumbUrl(src: String?): String? {
+    // Upgrade a gallery thumbnail URL, stripping the /v1/ transformation so the
+    // CDN serves the raw image.  Works when the multi-image token covers
+    // file.download (common for the second+ image in a set).
+    //
+    // If the page renders an image.operations token (fit / fill / …) we keep that
+    // transform but scale it up; if it renders a file.download token we strip the
+    // transform entirely.
+    private fun resolveFullImageUrl(src: String?): String? {
         if (src == null) return null
-        if (!src.contains("/v1/fit/")) return null
-        return src.replace(
-            Regex("""/v1/fit/w_\d+,h_\d+,q_\d+"""),
-            "/v1/fit/w_1600,h_1600,q_80",
-        )
+        return if (src.contains("/v1/fit/")) {
+            src.replace(
+                Regex("""/v1/fit/w_\d+,h_\d+,q_\d+"""),
+                "/v1/fit/w_1600,h_1600,q_80",
+            )
+        } else {
+            // No /v1/fit/ — probably a raw PNG with a file.download token
+            src.replaceFirst(Regex("""/v1(/.*)?(?=\?)"""), "")
+        }
     }
-
-    // Fallback: strip /v1/... entirely (works for file.download tokens on raw PNGs).
-    private fun resolveFullImageUrl(src: String?): String? = src?.replaceFirst(Regex("""/v1(/.*)?(?=\?)"""), "")
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
