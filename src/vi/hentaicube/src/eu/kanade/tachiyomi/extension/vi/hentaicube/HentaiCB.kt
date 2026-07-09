@@ -189,6 +189,7 @@ abstract class HentaiCB : Madara() {
 
         // Step 2: Paginate images using token-based pagination
         val allImages = mutableListOf<String>()
+        var policyTxn: String? = null
 
         while (!token.isNullOrEmpty()) {
             val pagesUrl = baseUrl.toHttpUrl().newBuilder()
@@ -211,17 +212,21 @@ abstract class HentaiCB : Madara() {
 
             allImages += pages.items
 
+            // Update session if server returns a new one
             pages.session?.let { session = it }
 
+            // Handle protocol_policy.action (matches masr-reader.js behavior)
             when (pages.protocolPolicy?.action) {
                 "refresh_challenge" -> {
-                    challenge = fetchChallenge(referer, cookies, session)
+                    policyTxn = pages.protocolPolicy?.transaction
+                    challenge = fetchChallenge(referer, cookies, session, policyTxn)
                     token = challenge.token
                     session = challenge.session
                     continue
                 }
                 "done" -> break
                 else -> {
+                    // "continue" — use next_token
                     token = if (pages.done) null else pages.nextToken
                 }
             }
@@ -232,12 +237,20 @@ abstract class HentaiCB : Madara() {
         }
     }
 
-    private fun fetchChallenge(referer: String, cookies: String, fromSession: String? = null): ChallengeResponse {
+    private fun fetchChallenge(
+        referer: String,
+        cookies: String,
+        fromSession: String? = null,
+        policyTxn: String? = null,
+    ): ChallengeResponse {
         val urlBuilder = baseUrl.toHttpUrl().newBuilder()
             .addPathSegments("wp-json/manga-reader/v1/challenge")
 
         if (fromSession != null) {
             urlBuilder.addQueryParameter("from_session", fromSession)
+        }
+        if (policyTxn != null) {
+            urlBuilder.addQueryParameter("policy_txn", policyTxn)
         }
 
         val challengeRequest = Request.Builder()
