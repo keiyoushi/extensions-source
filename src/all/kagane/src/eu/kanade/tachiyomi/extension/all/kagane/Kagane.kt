@@ -68,7 +68,11 @@ abstract class Kagane :
             return chain.proceed(request)
         }
 
-        val chapterId = url.pathSegments[4]
+        val chapterId = if (url.pathSegments[4] == "datasaver") {
+            url.pathSegments[5]
+        } else {
+            url.pathSegments[4]
+        }
 
         var response = chain.proceed(
             request.newBuilder()
@@ -373,10 +377,12 @@ abstract class Kagane :
 
         val pages = pageList.map { page ->
             val pageUrl = "$cacheUrl/api/v2/books/page".toHttpUrl().newBuilder().apply {
+                if (preferences.dataSaver) {
+                    addPathSegment("datasaver")
+                }
                 addPathSegment(chapterId)
                 addPathSegment("${page.pageUuid}.${page.ext ?: "jxl"}")
                 addQueryParameter("token", accessToken)
-                addQueryParameter("is_datasaver", preferences.dataSaver.toString())
             }.build().toString()
 
             Page(page.pageNumber, url = pageUrl, imageUrl = pageUrl)
@@ -412,10 +418,9 @@ abstract class Kagane :
     private fun getChallengeResponse(chapterId: String): ChallengeDto {
         val integrityToken = getIntegrityToken()
 
-        val challengeUrl =
-            "$apiUrl/api/v2/books/$chapterId".toHttpUrl().newBuilder()
-                .addQueryParameter("is_datasaver", preferences.dataSaver.toString())
-                .build()
+        val challengeUrl = "$apiUrl/api/v2/books/$chapterId".toHttpUrl().newBuilder()
+            .addQueryParameter("is_datasaver", preferences.dataSaver.toString())
+            .build()
 
         val challengeBody = "{}".toRequestBody("application/json".toMediaType())
 
