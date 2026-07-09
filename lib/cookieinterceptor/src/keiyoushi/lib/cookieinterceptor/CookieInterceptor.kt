@@ -20,11 +20,7 @@ class CookieInterceptor(
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        if (!request.url.host.equals(domain, ignoreCase = true) &&
-            !request.url.host.endsWith(".$domain")
-        ) {
-            return chain.proceed(request)
-        }
+        if (!request.url.host.endsWith(domain)) return chain.proceed(request)
 
         val cookieList = request.header("Cookie")?.split("; ") ?: emptyList()
 
@@ -59,9 +55,6 @@ class CookieInterceptor(
     private fun setCookie(url: String, value: String) {
         try {
             cookieManager.setCookie(url, value)
-        } catch (_: Exception) {
-            // CookieManager rejects values with special chars — fall back to header-only injection.
-            // The intercept method above still puts them on the wire directly.
-        }
+        } catch (_: Exception) { }
     }
 }
