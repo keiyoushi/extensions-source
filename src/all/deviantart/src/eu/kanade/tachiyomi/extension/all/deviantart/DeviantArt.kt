@@ -177,7 +177,7 @@ abstract class DeviantArt :
             }
 
             // Normalise: /username/gallery/12345/slug → username/gallery/12345/slug
-            val url = path.removePrefix("/")
+            val url = path // keep leading / so getMangaUrl(baseUrl + "/..." works)
 
             mangas.add(
                 SManga.create().apply {
@@ -192,14 +192,14 @@ abstract class DeviantArt :
         // If nothing was found and this is page 1, still expose "All"
         if (page <= 1 && mangas.isEmpty()) {
             mangas.add(
-                createGalleryManga(username, "All", "$username/gallery/all"),
+                createGalleryManga(username, "All", "/$username/gallery/all"),
             )
         }
 
         // Ensure "All" is always present even when other folders were found.
         // Some DA pages don't link /gallery/all explicitly in the folder list.
         if (mangas.none { it.url.endsWith("/all") }) {
-            mangas.add(0, createGalleryManga(username, "All", "$username/gallery/all"))
+            mangas.add(0, createGalleryManga(username, "All", "/$username/gallery/all"))
         }
 
         // Paginate: split into pages of at most 10 folders.
