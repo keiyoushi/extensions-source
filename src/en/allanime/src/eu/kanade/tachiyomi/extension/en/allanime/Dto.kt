@@ -161,3 +161,13 @@ class Servers(
 class PageUrl(
     val url: String?,
 )
+
+@Serializable
+class PageApiResponse(
+    val data: PageApiData? = null,
+)
+
+@Serializable
+class PageApiData(
+    val tobeparsed: String? = null,
+)

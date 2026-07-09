@@ -54,6 +54,8 @@ abstract class AllManga :
         .rateLimit(1) { it.host == apiUrlHost }
         .build()
 
+    private val pageSigner by lazy { PageSigner(client, headers) }
+
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
@@ -215,12 +217,24 @@ abstract class AllManga :
 
     /* Pages */
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
-        pageListFromWebView(chapter)
+        pageListFromApi(chapter).ifEmpty { pageListFromWebView(chapter) }
     }
 
     override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+
+    private fun pageListFromApi(chapter: SChapter): List<Page> {
+        val chapterUrlParts = chapter.url.split("/")
+        val mangaId = chapterUrlParts[2]
+        val chapterString = chapterUrlParts[4].removePrefix("chapter-").removeSuffix("-sub")
+
+        val pageList = runCatching {
+            pageSigner.getPageList(mangaId, chapterString, "sub")?.pageList
+        }.getOrNull() ?: return emptyList()
+
+        return pageList.toPages()
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun pageListFromWebView(chapter: SChapter): List<Page> {
@@ -280,24 +294,28 @@ abstract class AllManga :
         val pageListData = payload.parseAs<PageListData>(json).pageList
             ?: return emptyList()
 
-        val pages = pageListData.edges.firstOrNull {
+        return pageListData.toPages()
+    }
+
+    private fun Edges<Servers>.toPages(): List<Page> {
+        val server = edges.firstOrNull {
             val fullUrlAvailable = it.pictureUrls.randomOrNull()?.url?.matches(urlRegex) == true
             val serverAvailable = it.serverUrl != null
 
             fullUrlAvailable || serverAvailable
         }
-            ?: pageListData.edges.firstOrNull()
+            ?: edges.firstOrNull()
             ?: return emptyList()
 
-        val imageDomain = pages.serverUrl?.let { server ->
-            if (server.matches(urlRegex)) {
-                "${server.removeSuffix("/")}/"
+        val imageDomain = server.serverUrl?.let {
+            if (it.matches(urlRegex)) {
+                "${it.removeSuffix("/")}/"
             } else {
-                "https://${server.removeSuffix("/")}/"
+                "https://${it.removeSuffix("/")}/"
             }
         } ?: "https://ytimgf.youtube-anime.com/"
 
-        return pages.pictureUrls.mapIndexedNotNull { index, image ->
+        return server.pictureUrls.mapIndexedNotNull { index, image ->
             image.url ?: return@mapIndexedNotNull null
 
             val imageUrl = if (image.url.matches(urlRegex)) {

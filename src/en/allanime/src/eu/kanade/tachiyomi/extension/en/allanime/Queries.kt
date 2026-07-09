@@ -89,3 +89,30 @@ const val CHAPTERS_QUERY: String = $$"""
         }
     }
 """
+
+const val PAGE_LIST_QUERY: String = $$"""
+    query (
+        $mangaId: String!
+        $translationType: VaildTranslationTypeMangaEnumType!
+        $chapterString: String!
+        $limit: Int!
+        $offset: Int
+    ) {
+        chapterPages(
+            mangaId: $mangaId
+            translationType: $translationType
+            chapterString: $chapterString
+            limit: $limit
+            offset: $offset
+        ) {
+            edges {
+                pictureUrlHead
+                pictureUrls
+            }
+            manga {
+                _id
+                countryOfOrigin
+            }
+        }
+    }
+"""
