@@ -6,13 +6,13 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
-import android.util.Log
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -30,7 +30,6 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.Response
@@ -219,26 +218,12 @@ abstract class Mangago :
 
     override fun chapterListRequest(manga: SManga): Request = GET("https://$readerDomain${manga.url}", headers)
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
-        Log.i("MEOW", "fetchChapterList: ${manga.url}")
-        val mirrorResponse = client.newCall(chapterListRequest(manga)).execute()
-
-        // Titles absent from the reader mirror 404 there; fetch those from
-        // the main domain, which links them in the stable read-manga format.
-        val response = if (mirrorResponse.code == 404) {
-            mirrorResponse.close()
-            client.newCall(GET("$baseUrl${manga.url}", headers)).execute()
-        } else {
-            mirrorResponse
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = client.newCall(chapterListRequest(manga))
+        .asObservableSuccess()
+        .onErrorResumeNext {
+            client.newCall(GET("$baseUrl${manga.url}", headers)).asObservableSuccess()
         }
-
-        if (!response.isSuccessful) {
-            response.close()
-            throw Exception("HTTP error ${response.code}")
-        }
-
-        chapterListParse(response)
-    }
+        .map(::chapterListParse)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -247,7 +232,7 @@ abstract class Mangago :
                 SChapter.create().apply {
                     val link = element.select("a.chico")
                     val urlOriginal = link.attr("abs:href")
-                    val httpUrl = urlOriginal.toHttpUrlOrNull()
+                    val httpUrl = urlOriginal.toHttpUrl()
 
                     // Reader links rotate between mirror hosts but keep a
                     // stable path. Store only the path so rotated links don't
@@ -255,7 +240,6 @@ abstract class Mangago :
                     // host is restored by pageListRequest/getChapterUrl.
                     // Truly external links stay absolute.
                     when {
-                        httpUrl == null -> url = urlOriginal
                         httpUrl.pathSegments.firstOrNull() == "chapter" -> url = httpUrl.encodedPath
                         httpUrl.host.endsWith(domain) -> setUrlWithoutDomain(urlOriginal)
                         else -> url = urlOriginal
