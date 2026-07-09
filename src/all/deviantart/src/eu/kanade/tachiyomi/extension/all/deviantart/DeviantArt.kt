@@ -34,28 +34,38 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+// DeviantArt source for Mihon.
+//
+// = Search
+//
+//   gallery:{username}[/{folderId}]    Browse a single gallery folder
+//   {plain-username}                   List all gallery folders for a user
+//   https://www.deviantart.com/...     Paste a full gallery URL
+//
+// = Login (cookie-based)
+//
+//   1. Fill in cookie values in Settings (auth, auth_secure, userinfo, …)
+//   2. Open Filter → check "Use cookie to login" → Apply
+//   3. The extension seeds Android's CookieManager, which OkHttp picks up
+//      via JavaNetCookieJar.
+//
+//   DeviantArt uses Cloudflare + PerimeterX so WebView login doesn't work;
+//   cookies must be copied from a browser session.
+
 @Source
 abstract class DeviantArt :
     HttpSource(),
     ConfigurableSource {
-    override val supportsLatest = false
 
+    override val supportsLatest = false
     private val preferences: SharedPreferences by getPreferencesLazy()
+
+    // ── HTTP client ──────────────────────────────────────────────────────
 
     override fun headersBuilder() = Headers.Builder().apply {
         add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0")
     }
 
-    private val backendBaseUrl = "https://backend.deviantart.com"
-    private fun backendBuilder() = backendBaseUrl.toHttpUrl().newBuilder()
-
-    private val dateFormat by lazy {
-        SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH)
-    }
-
-    // Use JavaNetCookieJar so OkHttp reads/writes cookies via Android's CookieManager.
-    // This allows Set-Cookie response headers to be stored and sent back automatically,
-    // supporting token rotation.
     private val cookieManager by lazy { CookieManager.getInstance() }
 
     override val client: OkHttpClient by lazy {
@@ -64,7 +74,8 @@ abstract class DeviantArt :
             .build()
     }
 
-    // Seed cookies into CookieManager when the user enables login via the filter.
+    // ── Cookie login ─────────────────────────────────────────────────────
+
     private fun seedCookiesIfEnabled() {
         if (!preferences.cookieLoginEnabled) return
         val url = "https://$DOMAIN/"
@@ -77,161 +88,118 @@ abstract class DeviantArt :
             "pxcts" to preferences.pxctsCookie,
             "g_state" to preferences.gStateCookie,
             "td" to preferences.tdCookie,
-        ).filter { it.second.isNotBlank() }.forEach { (key, value) ->
-            cookieManager.setCookie(url, "$key=$value; Domain=$DOMAIN; Path=/")
+        ).filter { it.second.isNotBlank() }.forEach { (k, v) ->
+            cookieManager.setCookie(url, "$k=$v; Domain=$DOMAIN; Path=/")
         }
     }
 
-    // ============================== Filter ==============================
+    // ── Filter ───────────────────────────────────────────────────────────
 
     class CookieLoginFilter : Filter.CheckBox("Use cookie to login")
 
-    override fun getFilterList(): FilterList = FilterList(CookieLoginFilter())
+    override fun getFilterList() = FilterList(CookieLoginFilter())
 
-    // ============================== Popular / Search =====================
+    // ══════════════════════════════════════════════════════════════════════
+    // SEARCH
+    // ══════════════════════════════════════════════════════════════════════
 
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException(SEARCH_HINT)
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException(SEARCH_HINT)
 
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        // Paste a full URL
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
-            }
+            if (url.host != baseUrl.toHttpUrl().host) throw Exception("Unsupported URL")
             val username = url.pathSegments[0]
             val folderId = url.pathSegments[2]
             return super.fetchSearchManga(page, "gallery:$username/$folderId", filters)
         }
-        // Plain username → list all galleries (with pagination)
-        if (query.matches(Regex("""^[\w-]+$"""))) {
-            return fetchUsernameGalleries(page, query)
-        }
+        // Plain username → list gallery folders
+        if (query.matches(USERNAME_RE)) return fetchUsernameGalleries(page, query)
         return super.fetchSearchManga(page, query, filters)
     }
 
-    private fun fetchUsernameGalleries(page: Int, username: String): Observable<MangasPage> = Observable.fromCallable {
-        val url = "$baseUrl/$username/gallery${if (page > 1) "?page=$page" else ""}"
+    // ── Username → folder list ──────────────────────────────────────────
 
-        val request = GET(url, headers)
-        val response = client.newCall(request).execute()
-        usernameGalleryParse(response, username, page)
+    private fun fetchUsernameGalleries(page: Int, username: String) = Observable.fromCallable {
+        val url = "$baseUrl/$username/gallery${if (page > 1) "?page=$page" else ""}"
+        val response = client.newCall(GET(url, headers)).execute()
+        parseFolderList(response, username, page)
     }
 
-    // Parse the gallery listing page to extract all folder links
-    private fun usernameGalleryParse(response: Response, username: String, page: Int = 1): MangasPage {
-        val document = response.asJsoup()
+    private fun parseFolderList(response: Response, username: String, page: Int): MangasPage {
+        val doc = response.asJsoup()
         val lowered = username.lowercase()
-        val mangas = mutableListOf<SManga>()
+        val folders = mutableListOf<SManga>()
         val seen = mutableSetOf<String>()
 
-        // Strategy: find ALL links that point to /{user}/gallery/{folderId}[/{slug}]
-        // DeviantArt pages use absolute URLs like https://www.deviantart.com/user/gallery/id/slug
-        // or relative /user/gallery/id/slug.  The "All" folder is /user/gallery/all (3 segments,
-        // no separate folderId) and must be handled too.
-        val allLinks = document.select("a[href*=/gallery/]")
-
-        allLinks.forEach { link ->
+        doc.select("a[href*=/gallery/]").forEach { link ->
             var href = link.attr("href").trim()
             if (href.startsWith("/")) href = "$baseUrl$href"
-
             val parsed = try {
                 href.toHttpUrl()
             } catch (_: Exception) {
                 return@forEach
             }
-            val segments = parsed.pathSegments
-
-            // Pattern: /{username}/gallery/{folderId}[/{slug}]
-            //  3 segments: /user/gallery/all  (All folder)
-            //  4 segments: /user/gallery/12345/featured
-            if (segments.size < 3 || segments.size > 5) return@forEach
-            if (segments[0].lowercase() != lowered) return@forEach
-            if (segments[1] != "gallery") return@forEach
-
-            // Skip pagination like /user/gallery?page=2
-            val folderId = segments.getOrNull(2) ?: return@forEach
+            val segs = parsed.pathSegments
+            if (segs.size < 3 || segs.size > 5) return@forEach
+            if (segs[0].lowercase() != lowered) return@forEach
+            if (segs[1] != "gallery") return@forEach
+            val folderId = segs.getOrNull(2) ?: return@forEach
             if (folderId.isEmpty()) return@forEach
-
-            val path = parsed.encodedPath // /username/gallery/12345/slug or /username/gallery/all
-
+            val path = parsed.encodedPath
             if (!seen.add(path)) return@forEach
 
-            // Name: prefer img alt / title attributes, fallback to link text
-            val name = link.selectFirst("img[alt]")?.attr("alt")
-                ?.takeIf { it.isNotBlank() }
-                ?: link.selectFirst("[title]")?.attr("title")
-                    ?.takeIf { it.isNotBlank() }
-                ?: link.ownText().trim()
-                    .takeIf { it.isNotBlank() }
-                ?: link.text().trim()
-                    .takeIf { it.isNotBlank() }
-                ?: segments.last().replace("-", " ")
+            val name = link.selectFirst("img[alt]")?.attr("alt")?.takeIf { it.isNotBlank() }
+                ?: link.selectFirst("[title]")?.attr("title")?.takeIf { it.isNotBlank() }
+                ?: link.ownText().trim().takeIf { it.isNotBlank() }
+                ?: link.text().trim().takeIf { it.isNotBlank() }
+                ?: segs.last().replace("-", " ")
 
             val title = when {
-                folderId == "all" -> "All"
-                name.equals("all", ignoreCase = true) -> "All"
-                segments.last() == "featured" -> name.ifBlank { "Featured" }
+                folderId == "all" || name.equals("all", ignoreCase = true) -> "All"
+                segs.last() == "featured" -> name.ifBlank { "Featured" }
                 else -> name
             }
 
-            // Normalise: /username/gallery/12345/slug → username/gallery/12345/slug
-            val url = path // keep leading / so getMangaUrl(baseUrl + "/..." works)
-
-            mangas.add(
-                SManga.create().apply {
-                    this.url = url
-                    this.title = title.ifBlank { folderId }
-                    author = username
-                    thumbnail_url = link.selectFirst("img")?.absUrl("src")
-                },
-            )
+            folders += createGalleryManga(username, title, path)
         }
 
-        // If nothing was found and this is page 1, still expose "All"
-        if (page <= 1 && mangas.isEmpty()) {
-            mangas.add(
-                createGalleryManga(username, "All", "/$username/gallery/all"),
-            )
+        if (page <= 1 && folders.isEmpty()) {
+            folders += createGalleryManga(username, "All", "/$username/gallery/all")
+        }
+        if (folders.none { it.url.endsWith("/all") }) {
+            folders.add(0, createGalleryManga(username, "All", "/$username/gallery/all"))
         }
 
-        // Ensure "All" is always present even when other folders were found.
-        // Some DA pages don't link /gallery/all explicitly in the folder list.
-        if (mangas.none { it.url.endsWith("/all") }) {
-            mangas.add(0, createGalleryManga(username, "All", "/$username/gallery/all"))
-        }
-
-        // Paginate: split into pages of at most 10 folders.
-        // Page 1 skips the need for pagination if total count is manageable.
-        val start = (page - 1).coerceAtLeast(0) * 10
-        val end = minOf(start + 10, mangas.size)
-        if (start >= mangas.size && page > 1) {
-            return MangasPage(emptyList(), false)
-        }
-        val hasMore = end < mangas.size
-        return MangasPage(mangas.subList(start, end), hasMore)
+        val start = (page - 1) * 10
+        val end = minOf(start + 10, folders.size)
+        if (start >= folders.size && page > 1) return MangasPage(emptyList(), false)
+        return MangasPage(folders.subList(start, end), end < folders.size)
     }
 
-    private fun createGalleryManga(username: String, title: String, url: String) = SManga.create().apply {
+    private fun createGalleryManga(user: String, title: String, url: String) = SManga.create().apply {
         this.url = url
         this.title = title
-        author = username
+        author = user
     }
 
+    // ── Search → single gallery ────────────────────────────────────────
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        // Check cookie login filter
         val cookieEnabled = (filters.firstOrNull { it is CookieLoginFilter } as? CookieLoginFilter)?.state
             ?: preferences.cookieLoginEnabled
         preferences.edit().putBoolean(COOKIE_LOGIN_PREF, cookieEnabled).apply()
         if (cookieEnabled) seedCookiesIfEnabled()
 
-        val matchGroups = requireNotNull(
-            Regex("""gallery:([\w-]+)(?:/(\d+))?""").matchEntire(query)?.groupValues,
-        ) { SEARCH_FORMAT_MSG }
-        val username = matchGroups[1]
-        val folderId = matchGroups[2].ifEmpty { "all" }
-        return GET("$baseUrl/$username/gallery/$folderId", headers)
+        val (username, folderId) = requireNotNull(
+            GALLERY_RE.matchEntire(query)?.destructured,
+        ) { SEARCH_HINT }
+        return GET("$baseUrl/$username/gallery/${folderId.ifEmpty { "all" }}", headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -239,71 +207,61 @@ abstract class DeviantArt :
         return MangasPage(listOf(manga), false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    // ============================== Details =============================
+    // ══════════════════════════════════════════════════════════════════════
+    // MANGA DETAILS
+    // ══════════════════════════════════════════════════════════════════════
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        val gallery = document.selectFirst("#sub-folder-gallery")
-
-        // If manga is sub-gallery then use sub-gallery name, else use gallery name
+        val doc = response.asJsoup()
+        val gallery = doc.selectFirst("#sub-folder-gallery")
         val galleryName = gallery?.selectFirst("._2vMZg + ._2vMZg")?.text()?.substringBeforeLast(" ")
             ?: gallery?.selectFirst("[aria-haspopup=listbox] > div")!!.ownText()
         val artistInTitle = (preferences.artistInTitle == ArtistInTitle.ALWAYS.name) ||
-            ((preferences.artistInTitle == ArtistInTitle.ONLY_ALL_GALLERIES.name) && (galleryName == "All"))
+            ((preferences.artistInTitle == ArtistInTitle.ONLY_ALL_GALLERIES.name) && galleryName == "All")
 
         return SManga.create().apply {
             setUrlWithoutDomain(response.request.url.toString())
-            author = document.title().substringBefore(" ")
-            title = when {
-                artistInTitle -> "$author - $galleryName"
-                else -> galleryName
-            }
+            author = doc.title().substringBefore(" ")
+            title = if (artistInTitle) "$author - $galleryName" else galleryName
             description = gallery?.selectFirst(".legacy-journal")?.wholeText()
             thumbnail_url = gallery?.selectFirst("img[property=contentUrl]")?.absUrl("src")
         }
     }
 
-    // ============================== Chapters ============================
+    // ══════════════════════════════════════════════════════════════════════
+    // CHAPTERS (RSS feed)
+    // ══════════════════════════════════════════════════════════════════════
+
+    private val backendBaseUrl = "https://backend.deviantart.com"
+    private fun backendBuilder() = backendBaseUrl.toHttpUrl().newBuilder()
+    private val dateFormat by lazy { SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH) }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val pathSegments = getMangaUrl(manga).toHttpUrl().pathSegments
-        val username = pathSegments[0]
-        val query = when (val folderId = pathSegments[2]) {
-            "all" -> "gallery:$username"
-            else -> "gallery:$username/$folderId"
+        val segs = getMangaUrl(manga).toHttpUrl().pathSegments
+        val username = segs[0]
+        val query = if (segs[2] == "all") {
+            "gallery:$username"
+        } else {
+            "gallery:$username/${segs[2]}"
         }
-
-        val url = backendBuilder()
-            .addPathSegment("rss.xml")
-            .addQueryParameter("q", query)
-            .build()
-
-        return GET(url, headers)
+        return GET(
+            backendBuilder().addPathSegment("rss.xml").addQueryParameter("q", query).build(),
+            headers,
+        )
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoupXml()
-        val chapterList = parseToChapterList(document).toMutableList()
-        var nextUrl = document.selectFirst("[rel=next]")?.absUrl("href")
-
+        val chapters = parseChapters(response.asJsoupXml()).toMutableList()
+        var nextUrl = response.asJsoupXml().selectFirst("[rel=next]")?.absUrl("href")
         while (nextUrl != null) {
-            val newRequest = GET(nextUrl, headers)
-            val newResponse = client.newCall(newRequest).execute()
-            val newDocument = newResponse.asJsoupXml()
-            val newChapterList = parseToChapterList(newDocument)
-            chapterList.addAll(newChapterList)
-
-            nextUrl = newDocument.selectFirst("[rel=next]")?.absUrl("href")
+            val r = client.newCall(GET(nextUrl, headers)).execute()
+            chapters += parseChapters(r.asJsoupXml())
+            nextUrl = r.asJsoupXml().selectFirst("[rel=next]")?.absUrl("href")
         }
-
-        return chapterList.also(::orderChapterList).toList()
+        return chapters.also(::orderChapters)
     }
 
-    private fun parseToChapterList(document: Document): List<SChapter> = document.select("item").map {
+    private fun parseChapters(doc: Document) = doc.select("item").map {
         SChapter.create().apply {
             setUrlWithoutDomain(it.selectFirst("link")!!.text())
             name = it.selectFirst("title")!!.text()
@@ -312,28 +270,24 @@ abstract class DeviantArt :
         }
     }
 
-    private fun orderChapterList(chapterList: MutableList<SChapter>) {
-        if (chapterList.first().date_upload < chapterList.last().date_upload) {
-            chapterList.reverse()
-        }
-        chapterList.forEachIndexed { i, chapter ->
-            chapter.chapter_number = chapterList.size - i.toFloat()
-        }
+    private fun orderChapters(list: MutableList<SChapter>) {
+        if (list.first().date_upload < list.last().date_upload) list.reverse()
+        list.forEachIndexed { i, ch -> ch.chapter_number = list.size - i.toFloat() }
     }
 
-    // ============================== Pages ===============================
+    // ══════════════════════════════════════════════════════════════════════
+    // PAGES
+    // ══════════════════════════════════════════════════════════════════════
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val buttons = document.selectFirst("[draggable=false]")?.children()
+        val doc = response.asJsoup()
+        val buttons = doc.selectFirst("[draggable=false]")?.children()
         return if (buttons == null) {
-            // Single-image deviation: keep the large display URL as-is
-            val imageUrl = document.selectFirst("img[fetchpriority=high]")?.absUrl("src")
-            listOf(Page(0, imageUrl = imageUrl))
+            // Single-image: keep the large display URL as-is
+            listOf(Page(0, imageUrl = doc.selectFirst("img[fetchpriority=high]")?.absUrl("src")))
         } else {
-            // Multi-image: each file page has its own per-file large image URL.
-            // Set page.url to the deviation page with ?file=N so Mihon fetches
-            // that page, calls imageUrlParse, then downloads the image it finds.
+            // Multi-image: fetch each file page individually so we get the
+            // per-file large display URL that DeviantArt renders for that image.
             buttons.mapIndexed { i, button ->
                 val fileUrl = button.attr("abs:href").ifBlank {
                     button.selectFirst("a")?.attr("abs:href").orEmpty()
@@ -345,122 +299,60 @@ abstract class DeviantArt :
         }
     }
 
-    // For multi-image pages: fetch the individual ?file=N page and extract the
-    // large display img src (same logic as the single-image path).
+    // Fetch ?file=N page → extract the large img src
     override fun imageUrlParse(response: Response): String = response.asJsoup()
         .selectFirst("img[fetchpriority=high]")?.absUrl("src")
-        ?: throw Exception("Failed to extract image URL from ${response.request.url}")
+        ?: throw Exception("No image found on ${response.request.url}")
 
-    // WixMP CDN checks Referer to prevent hotlinking; must impersonate a page visit
+    // Download with Referer to satisfy WixMP CDN hotlink protection
     override fun imageRequest(page: Page): Request {
         val referer = "$baseUrl/"
         return GET(page.imageUrl!!, headersBuilder().add("Referer", referer).build())
     }
 
+    // ── Helpers ─────────────────────────────────────────────────────────
+
     private fun Response.asJsoupXml(): Document = Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())
 
-    // ============================== Preferences =========================
+    // ══════════════════════════════════════════════════════════════════════
+    // PREFERENCES
+    // ══════════════════════════════════════════════════════════════════════
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        // Artist in title preference
-        val artistInTitlePref = ListPreference(screen.context).apply {
-            key = ArtistInTitle.PREF_KEY
-            title = "Artist name in manga title"
-            entries = ArtistInTitle.values().map { it.text }.toTypedArray()
-            entryValues = ArtistInTitle.values().map { it.name }.toTypedArray()
-            summary = "Current: %s\n\n" +
-                "Changing this preference will not automatically apply to manga in Library " +
-                "and History, so refresh all DeviantArt manga and/or clear database in Settings " +
-                "> Advanced after doing so."
-            setDefaultValue(ArtistInTitle.defaultValue.name)
+        screen.addPreference(
+            ListPreference(screen.context).apply {
+                key = ArtistInTitle.PREF_KEY
+                title = "Artist name in manga title"
+                entries = ArtistInTitle.values().map { it.text }.toTypedArray()
+                entryValues = ArtistInTitle.values().map { it.name }.toTypedArray()
+                summary = "Current: %s\n\n" +
+                    "Changing this preference will not automatically apply to manga in " +
+                    "Library and History. Refresh DeviantArt manga and/or clear database " +
+                    "in Settings > Advanced after changing."
+                setDefaultValue(ArtistInTitle.defaultValue.name)
+            },
+        )
+
+        // Cookie fields — fill in values from browser dev tools, then enable
+        // login via Filter → "Use cookie to login"
+        for ((key, title, summary) in COOKIE_FIELDS) {
+            screen.addPreference(
+                EditTextPreference(screen.context).apply {
+                    this.key = key
+                    this.title = title
+                    this.summary = summary
+                    setDefaultValue("")
+                    setOnBindEditTextListener {
+                        it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                    }
+                },
+            )
         }
-        screen.addPreference(artistInTitlePref)
-
-        // Cookie-based authentication section.
-        // Cookies are stored here but NOT applied automatically — the user must
-        // open the Filter pane and check "Use cookie to login" to activate them.
-        // This allows CookieManager to manage cookies (including key rotation from
-        // Set-Cookie response headers) instead of injecting raw header values.
-        EditTextPreference(screen.context).apply {
-            key = COOKIE_PREF_AUTH
-            title = "auth cookie"
-            summary = "The 'auth' cookie value from deviantart.com"
-            setDefaultValue("")
-            setOnBindEditTextListener {
-                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            }
-        }.also(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
-            key = COOKIE_PREF_AUTH_SECURE
-            title = "auth_secure cookie"
-            summary = "The 'auth_secure' cookie value from deviantart.com"
-            setDefaultValue("")
-            setOnBindEditTextListener {
-                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            }
-        }.also(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
-            key = COOKIE_PREF_USERINFO
-            title = "userinfo cookie"
-            summary = "The 'userinfo' cookie value from deviantart.com"
-            setDefaultValue("")
-            setOnBindEditTextListener {
-                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            }
-        }.also(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
-            key = COOKIE_PREF_PX
-            title = "_px cookie"
-            summary = "The '_px' cookie (PerimeterX/DDoS protection)"
-            setDefaultValue("")
-            setOnBindEditTextListener {
-                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            }
-        }.also(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
-            key = COOKIE_PREF_PXVID
-            title = "_pxvid cookie"
-            summary = "The '_pxvid' cookie (PerimeterX visitor ID)"
-            setDefaultValue("")
-            setOnBindEditTextListener {
-                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            }
-        }.also(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
-            key = COOKIE_PREF_PXCTS
-            title = "pxcts cookie"
-            summary = "The 'pxcts' cookie (PerimeterX token)"
-            setDefaultValue("")
-            setOnBindEditTextListener {
-                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            }
-        }.also(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
-            key = COOKIE_PREF_GSTATE
-            title = "g_state cookie"
-            summary = "The 'g_state' cookie (Google sign-in state)"
-            setDefaultValue("")
-            setOnBindEditTextListener {
-                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            }
-        }.also(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
-            key = COOKIE_PREF_TD
-            title = "td cookie"
-            summary = "The 'td' cookie (device/screen info)"
-            setDefaultValue("")
-            setOnBindEditTextListener {
-                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            }
-        }.also(screen::addPreference)
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // DATA
+    // ══════════════════════════════════════════════════════════════════════
 
     private enum class ArtistInTitle(val text: String) {
         NEVER("Never"),
@@ -474,69 +366,61 @@ abstract class DeviantArt :
         }
     }
 
-    // ============================== SharedPrefs accessors ===============
+    // ── SharedPreferences accessors ──────────────────────────────────────
 
-    private val SharedPreferences.artistInTitle
-        get() = getString(ArtistInTitle.PREF_KEY, ArtistInTitle.defaultValue.name)
-
-    val SharedPreferences.cookieLoginEnabled
-        get() = getBoolean(COOKIE_LOGIN_PREF, false)
-
-    private val SharedPreferences.authCookie
-        get() = getString(COOKIE_PREF_AUTH, "") ?: ""
-
-    private val SharedPreferences.authSecureCookie
-        get() = getString(COOKIE_PREF_AUTH_SECURE, "") ?: ""
-
-    private val SharedPreferences.userinfoCookie
-        get() = getString(COOKIE_PREF_USERINFO, "") ?: ""
-
-    private val SharedPreferences.pxCookie
-        get() = getString(COOKIE_PREF_PX, "") ?: ""
-
-    private val SharedPreferences.pxvidCookie
-        get() = getString(COOKIE_PREF_PXVID, "") ?: ""
-
-    private val SharedPreferences.pxctsCookie
-        get() = getString(COOKIE_PREF_PXCTS, "") ?: ""
-
-    private val SharedPreferences.gStateCookie
-        get() = getString(COOKIE_PREF_GSTATE, "") ?: ""
-
-    private val SharedPreferences.tdCookie
-        get() = getString(COOKIE_PREF_TD, "") ?: ""
+    private val SharedPreferences.artistInTitle get() = getString(ArtistInTitle.PREF_KEY, ArtistInTitle.defaultValue.name)
+    val SharedPreferences.cookieLoginEnabled get() = getBoolean(COOKIE_LOGIN_PREF, false)
+    private val SharedPreferences.authCookie get() = getString(COOKIE_AUTH, "") ?: ""
+    private val SharedPreferences.authSecureCookie get() = getString(COOKIE_AUTH_SECURE, "") ?: ""
+    private val SharedPreferences.userinfoCookie get() = getString(COOKIE_USERINFO, "") ?: ""
+    private val SharedPreferences.pxCookie get() = getString(COOKIE_PX, "") ?: ""
+    private val SharedPreferences.pxvidCookie get() = getString(COOKIE_PXVID, "") ?: ""
+    private val SharedPreferences.pxctsCookie get() = getString(COOKIE_PXCTS, "") ?: ""
+    private val SharedPreferences.gStateCookie get() = getString(COOKIE_GSTATE, "") ?: ""
+    private val SharedPreferences.tdCookie get() = getString(COOKIE_TD, "") ?: ""
 
     companion object {
-        private const val SEARCH_FORMAT_MSG = "Please enter a query in the format of gallery:{username} or gallery:{username}/{folderId}"
         const val DOMAIN = "deviantart.com"
+        private const val SEARCH_HINT = "Use: gallery:{username}[/{folderId}] or a plain username, or paste a URL"
+        private val USERNAME_RE = Regex("""^[\w-]+$""")
+        private val GALLERY_RE = Regex("""gallery:([\w-]+)(?:/(\d+))?""")
 
-        // Cookie preference keys
-        private const val COOKIE_PREF_AUTH = "cookie_auth"
-        private const val COOKIE_PREF_AUTH_SECURE = "cookie_auth_secure"
-        private const val COOKIE_PREF_USERINFO = "cookie_userinfo"
-        private const val COOKIE_PREF_PX = "cookie_px"
-        private const val COOKIE_PREF_PXVID = "cookie_pxvid"
-        private const val COOKIE_PREF_PXCTS = "cookie_pxcts"
-        private const val COOKIE_PREF_GSTATE = "cookie_gstate"
-        private const val COOKIE_PREF_TD = "cookie_td"
         private const val COOKIE_LOGIN_PREF = "cookie_login_enabled"
+        private const val COOKIE_AUTH = "cookie_auth"
+        private const val COOKIE_AUTH_SECURE = "cookie_auth_secure"
+        private const val COOKIE_USERINFO = "cookie_userinfo"
+        private const val COOKIE_PX = "cookie_px"
+        private const val COOKIE_PXVID = "cookie_pxvid"
+        private const val COOKIE_PXCTS = "cookie_pxcts"
+        private const val COOKIE_GSTATE = "cookie_gstate"
+        private const val COOKIE_TD = "cookie_td"
+
+        private val COOKIE_FIELDS = listOf(
+            Triple(COOKIE_AUTH, "auth cookie", "Required for logged-in browsing"),
+            Triple(COOKIE_AUTH_SECURE, "auth_secure cookie", "Required for logged-in browsing"),
+            Triple(COOKIE_USERINFO, "userinfo cookie", "Required for logged-in browsing"),
+            Triple(COOKIE_PX, "_px cookie", "Optional: PerimeterX / DDoS protection"),
+            Triple(COOKIE_PXVID, "_pxvid cookie", "Optional: PerimeterX visitor ID"),
+            Triple(COOKIE_PXCTS, "pxcts cookie", "Optional: PerimeterX token"),
+            Triple(COOKIE_GSTATE, "g_state cookie", "Optional: Google sign-in state"),
+            Triple(COOKIE_TD, "td cookie", "Optional: device / screen info"),
+        )
     }
 }
 
-// Bridges Android's CookieManager (which OkHttp doesn't use natively) into OkHttp's
-// CookieJar interface.  This means:
-// - Outgoing requests pick up cookies stored by CookieManager.
-// - Incoming Set-Cookie headers are persisted into CookieManager automatically.
-// Used so that cookie-based login (including token rotation) works end-to-end.
-private class JavaNetCookieJar(private val cookieManager: CookieManager) : CookieJar {
+// ═════════════════════════════════════════════════════════════════════════
+// JavaNetCookieJar
+// ═════════════════════════════════════════════════════════════════════════
+// Bridges Android's CookieManager into OkHttp so that Set-Cookie responses
+// are persisted and sent back automatically (enabling token rotation).
+
+private class JavaNetCookieJar(private val cm: CookieManager) : CookieJar {
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-        cookies.forEach { cookie ->
-            cookieManager.setCookie(url.toString(), cookie.toString())
-        }
+        cookies.forEach { cm.setCookie(url.toString(), it.toString()) }
     }
 
     override fun loadForRequest(url: HttpUrl): List<Cookie> {
-        val cookieHeader = cookieManager.getCookie(url.toString()) ?: return emptyList()
-        return cookieHeader.split("; ").mapNotNull { Cookie.parse(url, it) }
+        val header = cm.getCookie(url.toString()) ?: return emptyList()
+        return header.split("; ").mapNotNull { Cookie.parse(url, it) }
     }
 }
