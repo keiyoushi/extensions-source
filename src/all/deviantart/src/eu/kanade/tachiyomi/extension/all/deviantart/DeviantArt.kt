@@ -187,9 +187,23 @@ abstract class DeviantArt :
             )
         }
 
-        // If nothing was found (user has no sub-folders), still return "All"
+        // If nothing was found (no sub-folders OR the page had no gallery links at
+        // all), still expose "All" so the user can browse the top-level gallery.
         if (mangas.isEmpty()) {
             mangas.add(
+                SManga.create().apply {
+                    url = "$username/gallery/all"
+                    title = "All"
+                    author = username
+                },
+            )
+        }
+
+        // Ensure "All" is always present even when other folders were found.
+        // Some DA pages don't link /gallery/all explicitly in the folder list.
+        if (mangas.none { it.url.endsWith("/all") }) {
+            mangas.add(
+                0,
                 SManga.create().apply {
                     url = "$username/gallery/all"
                     title = "All"
