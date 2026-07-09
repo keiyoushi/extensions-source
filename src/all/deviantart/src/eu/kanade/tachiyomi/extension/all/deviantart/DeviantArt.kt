@@ -209,7 +209,7 @@ abstract class DeviantArt :
 
         return SManga.create().apply {
             setUrlWithoutDomain(response.request.url.toString())
-            author = doc.title().substringBefore(" ")
+            author = url.toHttpUrl().pathSegments[0]
             title = if (artistInTitle) "$author - $galleryName" else galleryName
             description = gallery?.selectFirst(".legacy-journal")?.wholeText()
             thumbnail_url = gallery?.selectFirst("img[property=contentUrl]")?.absUrl("src")
