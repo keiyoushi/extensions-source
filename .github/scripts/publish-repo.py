@@ -33,8 +33,8 @@ REPO_ICON_DIR = REPO_DIR / "icon"
 REPO_APK_DIR.mkdir(parents=True, exist_ok=True)
 REPO_ICON_DIR.mkdir(parents=True, exist_ok=True)
 
-APK_BASE_URL = "https://raw.githubusercontent.com/keiyoushi/extensions/refs/heads/repo/apk"
-ICON_BASE_URL = "https://raw.githubusercontent.com/keiyoushi/extensions/refs/heads/repo/icon"
+APK_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions@repo/apk"
+ICON_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions@repo/icon"
 
 to_delete: list[str] = json.loads(sys.argv[1])
 

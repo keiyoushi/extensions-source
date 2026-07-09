@@ -21,4 +21,5 @@ class PagesResponse(
 @Serializable
 class ProtocolPolicy(
     val action: String = "continue",
+    val transaction: String? = null,
 )
