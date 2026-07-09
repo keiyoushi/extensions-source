@@ -83,9 +83,13 @@ abstract class DeviantArt :
 
     // ── Filter ───────────────────────────────────────────────────────────
 
-    class CookieLoginFilter : Filter.CheckBox("Use cookie to login")
+    class CookieLoginFilter(state: Boolean = false) :
+        Filter.CheckBox(
+            "Use cookie to login\nCookie login should only need to be done once — untick after use.",
+            state,
+        )
 
-    override fun getFilterList() = FilterList(CookieLoginFilter())
+    override fun getFilterList() = FilterList(CookieLoginFilter(preferences.cookieLoginEnabled))
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException(SEARCH_HINT)
     override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException(SEARCH_HINT)
@@ -206,7 +210,11 @@ abstract class DeviantArt :
         val cookieEnabled = (filters.firstOrNull { it is CookieLoginFilter } as? CookieLoginFilter)?.state
             ?: preferences.cookieLoginEnabled
         preferences.edit().putBoolean(COOKIE_LOGIN_PREF, cookieEnabled).apply()
-        if (cookieEnabled) seedCookiesIfEnabled()
+        if (cookieEnabled) {
+            seedCookiesIfEnabled()
+            // One-shot: uncheck after use so it doesn't stay on permanently
+            preferences.edit().putBoolean(COOKIE_LOGIN_PREF, false).apply()
+        }
 
         // sub: prefix preserves the slug for mangaDetailsParse fallback
         // e.g. sub:leafybush7/98917131/halloween-2024
