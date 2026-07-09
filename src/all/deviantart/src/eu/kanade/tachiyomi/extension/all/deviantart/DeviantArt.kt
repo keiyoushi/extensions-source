@@ -34,23 +34,9 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-// DeviantArt source for Mihon.
-//
-// = Search
-//
-//   gallery:{username}[/{folderId}]    Browse a single gallery folder
-//   {plain-username}                   List all gallery folders for a user
-//   https://www.deviantart.com/...     Paste a full gallery URL
-//
-// = Login (cookie-based)
-//
-//   1. Fill in cookie values in Settings (auth, auth_secure, userinfo, …)
-//   2. Open Filter → check "Use cookie to login" → Apply
-//   3. The extension seeds Android's CookieManager, which OkHttp picks up
-//      via JavaNetCookieJar.
-//
-//   DeviantArt uses Cloudflare + PerimeterX so WebView login doesn't work;
-//   cookies must be copied from a browser session.
+// Search: gallery:{username}[/{folderId}] | {username} | full gallery URL
+// Cookie login: paste browser-exported cookies.json in Settings, enable in Filter.
+// DeviantArt uses Cloudflare + PerimeterX so WebView login doesn't work.
 
 @Source
 abstract class DeviantArt :
@@ -87,11 +73,9 @@ abstract class DeviantArt :
         }
     }
 
-    // Parse a browser-exported cookies.json array into [(name, value)] pairs.
+    // Parse browser-exported cookies.json into name-value pairs.
     private fun parseCookieJson(raw: String): List<Pair<String, String>> {
         val result = mutableListOf<Pair<String, String>>()
-        // Simple manual parser to avoid kotlinx.serialization dependency.
-        // Matches {"name":"X","value":"Y"} pairs.
         val entryRe = Regex("""\{[^}]*"name"\s*:\s*"([^"]+)"[^}]*"value"\s*:\s*"([^"]+)"[^}]*\}""")
         for (m in entryRe.findAll(raw)) result += m.groupValues[1] to m.groupValues[2]
         return result
@@ -160,8 +144,7 @@ abstract class DeviantArt :
 
             val name = link.selectFirst("img[alt]")?.attr("alt")?.takeIf { it.isNotBlank() }
                 ?: link.selectFirst("[title]")?.attr("title")?.takeIf { it.isNotBlank() }
-                ?: link.ownText().trim().takeIf { it.isNotBlank() }
-                ?: link.text().trim().takeIf { it.isNotBlank() }
+                ?: link.ownText().takeIf { it.isNotBlank() }
                 ?: segs.last().replace("-", " ")
 
             val title = when {
@@ -219,7 +202,8 @@ abstract class DeviantArt :
         val doc = response.asJsoup()
         val gallery = doc.selectFirst("#sub-folder-gallery")
         val galleryName = gallery?.selectFirst("._2vMZg + ._2vMZg")?.text()?.substringBeforeLast(" ")
-            ?: gallery?.selectFirst("[aria-haspopup=listbox] > div")!!.ownText()
+            ?: gallery?.selectFirst("[aria-haspopup=listbox] > div")?.ownText()
+            ?: throw Exception("Could not find gallery name")
         val artistInTitle = (preferences.artistInTitle == ArtistInTitle.ALWAYS.name) ||
             ((preferences.artistInTitle == ArtistInTitle.ONLY_ALL_GALLERIES.name) && galleryName == "All")
 
@@ -290,32 +274,24 @@ abstract class DeviantArt :
         val doc = response.asJsoup()
         val buttons = doc.selectFirst("[draggable=false]")?.children()
         return if (buttons == null) {
-            // Single-image: keep the large display URL as-is
             listOf(Page(0, imageUrl = doc.selectFirst("img[fetchpriority=high]")?.absUrl("src")))
         } else {
-            // Multi-image: use the image URLs from the embedded JSON state.
-            // The page body has window.__INITIAL_STATE__ with per-media tokenized URLs.
             extractMultiImageUrls(doc, response.request.url.toString())
         }
     }
 
-    // Extract per-file image URLs from __INITIAL_STATE__ JSON.
-    // Falls back to per-page fetch if JSON parsing fails.
     private fun extractMultiImageUrls(doc: Document, pageUrl: String): List<Page> {
         val script = doc.select("script").firstOrNull {
             it.data().contains("__INITIAL_STATE__")
         }?.data() ?: return legacyMultiImagePages(doc, pageUrl)
 
-        // The JSON blob looks like: window.__INITIAL_STATE__ = JSON.parse("...");
         val jsonStr = Regex("""JSON\.parse\("(.+)"\)""").find(script)?.groupValues?.getOrNull(1)
             ?.replace("\\\"", "\"")?.replace("\\\\", "\\")
             ?: return legacyMultiImagePages(doc, pageUrl)
 
-        // Find all wixmp image URLs inside the JSON blob
         val urls = Regex("""https://images-wixmp-[^"\\]+""").findAll(jsonStr)
         val pages = urls.mapIndexed { i, match ->
             val url = match.value
-            // Prefer large versions: /v1/fill/ or strip /v1/ transform
             val largeUrl = if (url.contains("/v1/fit/")) {
                 url.replace(Regex("""/v1/fit/w_\d+,h_\d+,q_\d+"""), "/v1/fit/w_1600,h_1600,q_80")
             } else {
@@ -327,30 +303,24 @@ abstract class DeviantArt :
         return pages.ifEmpty { legacyMultiImagePages(doc, pageUrl) }
     }
 
-    // Fallback: fetch each ?file=N page individually
     private fun legacyMultiImagePages(doc: Document, pageUrl: String): List<Page> {
         val buttons = doc.selectFirst("[draggable=false]")?.children() ?: return emptyList()
         return buttons.mapIndexed { i, button ->
             val fileUrl = button.attr("abs:href").ifBlank {
-                button.selectFirst("a")?.attr("abs:href").orEmpty()
-            }.ifBlank {
                 "$pageUrl?file=${i + 1}"
             }
             Page(i, url = fileUrl)
         }
     }
 
-    // Fetch ?file=N page → extract the large img src.
-    // file=2+ pages may not have fetchpriority=high; fall back to wixmp images.
     override fun imageUrlParse(response: Response): String {
         val doc = response.asJsoup()
         return doc.selectFirst("img[fetchpriority=high]")?.absUrl("src")
             ?: doc.select("img[src*=wixmp]").firstOrNull()?.absUrl("src")
-            ?: doc.select("img[src]").firstOrNull()?.absUrl("src")
             ?: throw Exception("No image found on ${response.request.url}")
     }
 
-    // Download with Referer to satisfy WixMP CDN hotlink protection
+    // WixMP CDN requires Referer header
     override fun imageRequest(page: Page): Request {
         val referer = "$baseUrl/"
         return GET(page.imageUrl!!, headersBuilder().add("Referer", referer).build())
@@ -379,9 +349,8 @@ abstract class DeviantArt :
             },
         )
 
-        // Cookie JSON input — paste the browser-exported cookies.json array here.
-        // The extension parses name/value pairs and seeds CookieManager when
-        // "Use cookie to login" filter is enabled.
+        // Cookie JSON: paste browser-exported cookies.json array.
+        // Pairs are parsed and seeded into CookieManager when filter is enabled.
         EditTextPreference(screen.context).apply {
             key = COOKIE_JSON_PREF
             title = "Cookies (JSON)"
@@ -428,11 +397,7 @@ abstract class DeviantArt :
     }
 }
 
-// ═════════════════════════════════════════════════════════════════════════
-// JavaNetCookieJar
-// ═════════════════════════════════════════════════════════════════════════
-// Bridges Android's CookieManager into OkHttp so that Set-Cookie responses
-// are persisted and sent back automatically (enabling token rotation).
+// Bridges Android CookieManager into OkHttp so Set-Cookie responses persist.
 
 private class JavaNetCookieJar(private val cm: CookieManager) : CookieJar {
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {

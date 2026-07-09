@@ -19,7 +19,3 @@ keiyoushi {
         path("/..*/gallery/..*")
     }
 }
-
-dependencies {
-    implementation(project(":lib:cookieinterceptor"))
-}
