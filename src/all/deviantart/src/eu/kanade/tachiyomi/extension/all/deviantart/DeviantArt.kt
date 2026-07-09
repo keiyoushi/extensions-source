@@ -1,10 +1,14 @@
 package eu.kanade.tachiyomi.extension.all.deviantart
 
 import android.content.SharedPreferences
+import android.text.InputType
+import android.webkit.CookieManager
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -15,8 +19,12 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
+import okhttp3.Cookie
+import okhttp3.CookieJar
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -45,6 +53,43 @@ abstract class DeviantArt :
         SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH)
     }
 
+    // Use JavaNetCookieJar so OkHttp reads/writes cookies via Android's CookieManager.
+    // This allows Set-Cookie response headers to be stored and sent back automatically,
+    // supporting token rotation.
+    private val cookieManager by lazy { CookieManager.getInstance() }
+
+    override val client: OkHttpClient by lazy {
+        network.client.newBuilder()
+            .cookieJar(JavaNetCookieJar(cookieManager))
+            .build()
+    }
+
+    // Seed cookies into CookieManager when the user enables login via the filter.
+    private fun seedCookiesIfEnabled() {
+        if (!preferences.cookieLoginEnabled) return
+        val url = "https://$DOMAIN/"
+        listOfNotNull(
+            "auth" to preferences.authCookie,
+            "auth_secure" to preferences.authSecureCookie,
+            "userinfo" to preferences.userinfoCookie,
+            "_px" to preferences.pxCookie,
+            "_pxvid" to preferences.pxvidCookie,
+            "pxcts" to preferences.pxctsCookie,
+            "g_state" to preferences.gStateCookie,
+            "td" to preferences.tdCookie,
+        ).filter { it.second.isNotBlank() }.forEach { (key, value) ->
+            cookieManager.setCookie(url, "$key=$value; Domain=$DOMAIN; Path=/")
+        }
+    }
+
+    // ============================== Filter ==============================
+
+    class CookieLoginFilter : Filter.CheckBox("Use cookie to login")
+
+    override fun getFilterList(): FilterList = FilterList(CookieLoginFilter())
+
+    // ============================== Popular / Search =====================
+
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
 
     override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
@@ -63,6 +108,12 @@ abstract class DeviantArt :
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        // Check cookie login filter
+        val cookieEnabled = (filters.firstOrNull { it is CookieLoginFilter } as? CookieLoginFilter)?.state
+            ?: preferences.cookieLoginEnabled
+        preferences.edit().putBoolean(COOKIE_LOGIN_PREF, cookieEnabled).apply()
+        if (cookieEnabled) seedCookiesIfEnabled()
+
         val matchGroups = requireNotNull(
             Regex("""gallery:([\w-]+)(?:/(\d+))?""").matchEntire(query)?.groupValues,
         ) { SEARCH_FORMAT_MSG }
@@ -79,6 +130,8 @@ abstract class DeviantArt :
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
     override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    // ============================== Details =============================
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -101,6 +154,8 @@ abstract class DeviantArt :
             thumbnail_url = gallery?.selectFirst("img[property=contentUrl]")?.absUrl("src")
         }
     }
+
+    // ============================== Chapters ============================
 
     override fun chapterListRequest(manga: SManga): Request {
         val pathSegments = getMangaUrl(manga).toHttpUrl().pathSegments
@@ -146,9 +201,6 @@ abstract class DeviantArt :
     }
 
     private fun orderChapterList(chapterList: MutableList<SChapter>) {
-        // In Mihon's updates tab, chapters are ordered by source instead
-        // of chapter number, so to avoid updates being shown in reverse,
-        // disregard source order and order chronologically instead
         if (chapterList.first().date_upload < chapterList.last().date_upload) {
             chapterList.reverse()
         }
@@ -157,28 +209,46 @@ abstract class DeviantArt :
         }
     }
 
+    // ============================== Pages ===============================
+
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val buttons = document.selectFirst("[draggable=false]")?.children()
         return if (buttons == null) {
+            // Single-image deviation: keep the large display URL as-is
             val imageUrl = document.selectFirst("img[fetchpriority=high]")?.absUrl("src")
             listOf(Page(0, imageUrl = imageUrl))
         } else {
+            // Multi-image deviation: strip /v1/ transform to get the raw image file.
+            // The JWT token is preserved in the query string — WixMP CDN validates
+            // the token against the file path, not the transform.
             buttons.mapIndexed { i, button ->
-                // Remove everything past "/v1/" to get original instead of thumbnail
-                // But need to preserve the query parameter where the token is
-                val imageUrl = button.selectFirst("img")?.absUrl("src")
-                    ?.replaceFirst(Regex("""/v1(/.*)?(?=\?)"""), "")
+                val thumbSrc = button.selectFirst("img")?.absUrl("src")
+                val imageUrl = resolveFullImageUrl(thumbSrc)
                 Page(i, imageUrl = imageUrl)
             }
         }
     }
 
+    // Strip /v1/... transform to request the raw image (no size constraint).
+    // The token query parameter is preserved — WixMP authorizes the raw path
+    // as long as Referer is present.
+    private fun resolveFullImageUrl(src: String?): String? = src?.replaceFirst(Regex("""/v1(/.*)?(?=\?)"""), "")
+
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    // WixMP CDN checks Referer to prevent hotlinking; must impersonate a page visit
+    override fun imageRequest(page: Page): Request {
+        val referer = "$baseUrl/"
+        return GET(page.imageUrl!!, headersBuilder().add("Referer", referer).build())
+    }
 
     private fun Response.asJsoupXml(): Document = Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())
 
+    // ============================== Preferences =========================
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        // Artist in title preference
         val artistInTitlePref = ListPreference(screen.context).apply {
             key = ArtistInTitle.PREF_KEY
             title = "Artist name in manga title"
@@ -190,8 +260,92 @@ abstract class DeviantArt :
                 "> Advanced after doing so."
             setDefaultValue(ArtistInTitle.defaultValue.name)
         }
-
         screen.addPreference(artistInTitlePref)
+
+        // Cookie-based authentication section.
+        // Cookies are stored here but NOT applied automatically — the user must
+        // open the Filter pane and check "Use cookie to login" to activate them.
+        // This allows CookieManager to manage cookies (including key rotation from
+        // Set-Cookie response headers) instead of injecting raw header values.
+        EditTextPreference(screen.context).apply {
+            key = COOKIE_PREF_AUTH
+            title = "auth cookie"
+            summary = "The 'auth' cookie value from deviantart.com"
+            setDefaultValue("")
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+        }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = COOKIE_PREF_AUTH_SECURE
+            title = "auth_secure cookie"
+            summary = "The 'auth_secure' cookie value from deviantart.com"
+            setDefaultValue("")
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+        }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = COOKIE_PREF_USERINFO
+            title = "userinfo cookie"
+            summary = "The 'userinfo' cookie value from deviantart.com"
+            setDefaultValue("")
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+        }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = COOKIE_PREF_PX
+            title = "_px cookie"
+            summary = "The '_px' cookie (PerimeterX/DDoS protection)"
+            setDefaultValue("")
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+        }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = COOKIE_PREF_PXVID
+            title = "_pxvid cookie"
+            summary = "The '_pxvid' cookie (PerimeterX visitor ID)"
+            setDefaultValue("")
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+        }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = COOKIE_PREF_PXCTS
+            title = "pxcts cookie"
+            summary = "The 'pxcts' cookie (PerimeterX token)"
+            setDefaultValue("")
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+        }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = COOKIE_PREF_GSTATE
+            title = "g_state cookie"
+            summary = "The 'g_state' cookie (Google sign-in state)"
+            setDefaultValue("")
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+        }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = COOKIE_PREF_TD
+            title = "td cookie"
+            summary = "The 'td' cookie (device/screen info)"
+            setDefaultValue("")
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+        }.also(screen::addPreference)
     }
 
     private enum class ArtistInTitle(val text: String) {
@@ -206,10 +360,69 @@ abstract class DeviantArt :
         }
     }
 
+    // ============================== SharedPrefs accessors ===============
+
     private val SharedPreferences.artistInTitle
         get() = getString(ArtistInTitle.PREF_KEY, ArtistInTitle.defaultValue.name)
 
+    val SharedPreferences.cookieLoginEnabled
+        get() = getBoolean(COOKIE_LOGIN_PREF, false)
+
+    private val SharedPreferences.authCookie
+        get() = getString(COOKIE_PREF_AUTH, "") ?: ""
+
+    private val SharedPreferences.authSecureCookie
+        get() = getString(COOKIE_PREF_AUTH_SECURE, "") ?: ""
+
+    private val SharedPreferences.userinfoCookie
+        get() = getString(COOKIE_PREF_USERINFO, "") ?: ""
+
+    private val SharedPreferences.pxCookie
+        get() = getString(COOKIE_PREF_PX, "") ?: ""
+
+    private val SharedPreferences.pxvidCookie
+        get() = getString(COOKIE_PREF_PXVID, "") ?: ""
+
+    private val SharedPreferences.pxctsCookie
+        get() = getString(COOKIE_PREF_PXCTS, "") ?: ""
+
+    private val SharedPreferences.gStateCookie
+        get() = getString(COOKIE_PREF_GSTATE, "") ?: ""
+
+    private val SharedPreferences.tdCookie
+        get() = getString(COOKIE_PREF_TD, "") ?: ""
+
     companion object {
         private const val SEARCH_FORMAT_MSG = "Please enter a query in the format of gallery:{username} or gallery:{username}/{folderId}"
+        const val DOMAIN = "deviantart.com"
+
+        // Cookie preference keys
+        private const val COOKIE_PREF_AUTH = "cookie_auth"
+        private const val COOKIE_PREF_AUTH_SECURE = "cookie_auth_secure"
+        private const val COOKIE_PREF_USERINFO = "cookie_userinfo"
+        private const val COOKIE_PREF_PX = "cookie_px"
+        private const val COOKIE_PREF_PXVID = "cookie_pxvid"
+        private const val COOKIE_PREF_PXCTS = "cookie_pxcts"
+        private const val COOKIE_PREF_GSTATE = "cookie_gstate"
+        private const val COOKIE_PREF_TD = "cookie_td"
+        private const val COOKIE_LOGIN_PREF = "cookie_login_enabled"
+    }
+}
+
+// Bridges Android's CookieManager (which OkHttp doesn't use natively) into OkHttp's
+// CookieJar interface.  This means:
+// - Outgoing requests pick up cookies stored by CookieManager.
+// - Incoming Set-Cookie headers are persisted into CookieManager automatically.
+// Used so that cookie-based login (including token rotation) works end-to-end.
+private class JavaNetCookieJar(private val cookieManager: CookieManager) : CookieJar {
+    override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+        cookies.forEach { cookie ->
+            cookieManager.setCookie(url.toString(), cookie.toString())
+        }
+    }
+
+    override fun loadForRequest(url: HttpUrl): List<Cookie> {
+        val cookieHeader = cookieManager.getCookie(url.toString()) ?: return emptyList()
+        return cookieHeader.split("; ").mapNotNull { Cookie.parse(url, it) }
     }
 }

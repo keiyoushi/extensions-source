@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "DeviantArt"
-    versionCode = 10
+    versionCode = 20
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
@@ -18,4 +18,8 @@ keiyoushi {
         host("deviantart.com")
         path("/..*/gallery/..*")
     }
+}
+
+dependencies {
+    implementation(project(":lib:cookieinterceptor"))
 }
