@@ -251,12 +251,15 @@ abstract class DeviantArt :
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chapters = parseChapters(response.asJsoupXml()).toMutableList()
-        var nextUrl = response.asJsoupXml().selectFirst("[rel=next]")?.absUrl("href")
+        val doc = response.asJsoupXml()
+        val chapters = parseChapters(doc).toMutableList()
+        var nextUrl = doc.selectFirst("[rel=next]")?.absUrl("href")
         while (nextUrl != null) {
             val r = client.newCall(GET(nextUrl, headers)).execute()
-            chapters += parseChapters(r.asJsoupXml())
-            nextUrl = r.asJsoupXml().selectFirst("[rel=next]")?.absUrl("href")
+            val rDoc = r.asJsoupXml()
+            r.close() // close the response body to avoid leaks
+            chapters += parseChapters(rDoc)
+            nextUrl = rDoc.selectFirst("[rel=next]")?.absUrl("href")
         }
         return chapters.also(::orderChapters)
     }
@@ -299,10 +302,15 @@ abstract class DeviantArt :
         }
     }
 
-    // Fetch ?file=N page → extract the large img src
-    override fun imageUrlParse(response: Response): String = response.asJsoup()
-        .selectFirst("img[fetchpriority=high]")?.absUrl("src")
-        ?: throw Exception("No image found on ${response.request.url}")
+    // Fetch ?file=N page → extract the large img src.
+    // file=2+ pages may not have fetchpriority=high; fall back to wixmp images.
+    override fun imageUrlParse(response: Response): String {
+        val doc = response.asJsoup()
+        return doc.selectFirst("img[fetchpriority=high]")?.absUrl("src")
+            ?: doc.select("img[src*=wixmp]").firstOrNull()?.absUrl("src")
+            ?: doc.select("img[src]").firstOrNull()?.absUrl("src")
+            ?: throw Exception("No image found on ${response.request.url}")
+    }
 
     // Download with Referer to satisfy WixMP CDN hotlink protection
     override fun imageRequest(page: Page): Request {
