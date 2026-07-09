@@ -112,28 +112,11 @@ abstract class DeviantArt :
     }
 
     private fun fetchUsernameGalleries(page: Int, username: String): Observable<MangasPage> = Observable.fromCallable {
-        var requestUrl = "$baseUrl/$username/gallery/all"
-        if (page > 1) {
-            requestUrl = "$baseUrl/$username/gallery?page=$page"
-        }
-
-        // page 1 → fetch /gallery?page=1 to extract folder list + check for more pages
-        val url = if (page <= 1) {
-            "$baseUrl/$username/gallery"
-        } else {
-            "$baseUrl/$username/gallery?page=$page"
-        }
+        val url = "$baseUrl/$username/gallery${if (page > 1) "?page=$page" else ""}"
 
         val request = GET(url, headers)
         val response = client.newCall(request).execute()
-
-        if (page <= 1) {
-            // First page: return folder list instead of individual deviations
-            usernameGalleryParse(response, username, page)
-        } else {
-            // Subsequent pages: return more folders if any (rare, but possible)
-            usernameGalleryParse(response, username, page)
-        }
+        usernameGalleryParse(response, username, page)
     }
 
     // Parse the gallery listing page to extract all folder links
