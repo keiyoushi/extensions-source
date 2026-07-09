@@ -9,6 +9,7 @@ keiyoushi {
     libVersion = "1.4"
 
     source {
+        versionId = 2
         lang = "tr"
         baseUrl {
             custom("https://mangadusleri.mom")
