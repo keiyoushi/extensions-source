@@ -303,7 +303,14 @@ abstract class DeviantArt :
 
     private fun orderChapters(list: MutableList<SChapter>) {
         if (list.first().date_upload < list.last().date_upload) list.reverse()
-        list.forEachIndexed { i, ch -> ch.chapter_number = list.size - i.toFloat() }
+        list.forEachIndexed { i, ch ->
+            ch.chapter_number = list.size - i.toFloat()
+            // In Mihon's updates tab, chapters are ordered by source instead
+            // of chapter number, so to avoid updates being shown in reverse,
+            // disregard source order and order chronologically instead.
+            // DeviantArt's RSS feed returns items in reverse chronological
+            // order, so we reverse them to make the latest chapter appear first.
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════
