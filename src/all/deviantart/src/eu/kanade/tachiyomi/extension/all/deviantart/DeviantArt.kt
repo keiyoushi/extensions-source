@@ -226,12 +226,12 @@ abstract class DeviantArt :
         val doc = response.asJsoup()
         val gallery = doc.selectFirst("#sub-folder-gallery")
         val requestUrl = response.request.url
-        val folderSlug = requestUrl.pathSegments.lastOrNull()
-            ?.takeUnless { it.all(Char::isDigit) || it == "all" || it == "featured" }
         val rawName = gallery?.selectFirst("[aria-haspopup=listbox] > div")?.ownText()
             ?.replace(Regex("^.+'s\\s"), "")
             ?: gallery?.selectFirst("._2vMZg + ._2vMZg")?.text()?.substringBeforeLast(" ")
-            ?: folderSlug
+            ?: gallery?.selectFirst("> div:nth-child(1) > div:nth-child(3)")?.text()?.substringBeforeLast(" ")
+            ?: requestUrl.pathSegments.lastOrNull()
+                ?.takeUnless { it.all(Char::isDigit) || it == "all" || it == "featured" }
             ?: throw Exception("Could not find gallery name")
         val galleryName = rawName.replace(Regex("\\s*-\\s*front page\\s*$", RegexOption.IGNORE_CASE), "")
         val artistInTitle = (preferences.artistInTitle == ArtistInTitle.ALWAYS.name) ||
