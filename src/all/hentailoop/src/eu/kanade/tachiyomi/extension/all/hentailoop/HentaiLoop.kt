@@ -11,12 +11,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -27,30 +27,17 @@ import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-private const val DOMAIN = "hentailoop.com"
-
-class HentaiLoop : HttpSource() {
-    override val name = "HentaiLoop"
-    override val lang = "all"
+@Source
+abstract class HentaiLoop : HttpSource() {
     override val supportsLatest = true
 
-    @Volatile
-    private var captchaRequired = false
-    override val baseUrl get() = if (captchaRequired) {
-        "https://$DOMAIN/manga-service/advanced-search/"
-    } else {
-        "https://$DOMAIN"
-    }
-
-    override val client = network.cloudflareClient
+    override val client = network.client
 
     override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "https://$DOMAIN/")
+        .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = HttpUrl.Builder().apply {
-            scheme("https")
-            host(DOMAIN)
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("manga")
             if (page > 1) {
                 addPathSegment("page")
@@ -79,9 +66,7 @@ class HentaiLoop : HttpSource() {
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = HttpUrl.Builder().apply {
-            scheme("https")
-            host(DOMAIN)
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("manga")
             if (page > 1) {
                 addPathSegment("page")
@@ -148,7 +133,7 @@ class HentaiLoop : HttpSource() {
 
     private fun deepLink(url: String): Observable<MangasPage> {
         val httpUrl = url.toHttpUrl()
-        if (httpUrl.host == DOMAIN && httpUrl.pathSegments[0] == "manga" && httpUrl.pathSegments.size > 1) {
+        if (httpUrl.host == baseUrl.toHttpUrl().host && httpUrl.pathSegments[0] == "manga" && httpUrl.pathSegments.size > 1) {
             val tmpManga = SManga.create().apply {
                 this@apply.url = httpUrl.pathSegments[1]
             }
@@ -166,7 +151,7 @@ class HentaiLoop : HttpSource() {
             .add("subAction", "search")
             .add("query", query.trim())
             .build()
-        val url = "https://$DOMAIN/wp-admin/admin-ajax.php"
+        val url = "$baseUrl/wp-admin/admin-ajax.php"
         val headers = headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")
             .build()
@@ -188,9 +173,7 @@ class HentaiLoop : HttpSource() {
     }
 
     private fun getMangaList(directory: String, slug: String?, filters: FilterList, page: Int): Observable<MangasPage> {
-        val url = HttpUrl.Builder().apply {
-            scheme("https")
-            host(DOMAIN)
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment(directory)
             if (slug != null) {
                 addPathSegment(slug)
@@ -336,17 +319,14 @@ class HentaiLoop : HttpSource() {
             .set("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        return POST("https://$DOMAIN/wp-admin/admin-ajax.php", headers, body)
+        return POST("$baseUrl/wp-admin/admin-ajax.php", headers, body)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.parseAs<Data<AdvancedSearchResponse>>()
 
         if (!data.success && data.data.message?.contains("captcha", ignoreCase = true) == true) {
-            captchaRequired = true
-            throw Exception("Captcha Required! Open WebView and click views button")
-        } else {
-            captchaRequired = false
+            throw Exception("Captcha Required! Open advanced search in WebView and solve the captcha")
         }
 
         val mangas = data.data.posts.map {
@@ -366,9 +346,7 @@ class HentaiLoop : HttpSource() {
     override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
 
     override fun getMangaUrl(manga: SManga): String {
-        val url = HttpUrl.Builder().apply {
-            scheme("https")
-            host(DOMAIN)
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("manga")
             addPathSegment(manga.url)
             addPathSegment("")
@@ -426,6 +404,8 @@ class HentaiLoop : HttpSource() {
         }
     }
 
+    override val disableRelatedMangasBySearch get() = true
+
     override fun relatedMangaListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun relatedMangaListParse(response: Response): List<SManga> {
@@ -460,9 +440,7 @@ class HentaiLoop : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), headers)
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val url = HttpUrl.Builder().apply {
-            scheme("https")
-            host(DOMAIN)
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("manga")
             addPathSegment(chapter.url)
             addPathSegment("read")
