@@ -121,7 +121,8 @@ abstract class DeviantArt :
 
     private fun parseFolderList(response: Response, username: String, page: Int): MangasPage {
         val doc = response.asJsoup()
-        val lowered = username.lowercase()
+        val realUser = resolveUsername(doc, username)
+        val lowered = realUser.lowercase()
         val folders = mutableListOf<SManga>()
         val seen = mutableSetOf<String>()
 
@@ -153,14 +154,14 @@ abstract class DeviantArt :
                 else -> name
             }
 
-            folders += createGalleryManga(username, title, path)
+            folders += createGalleryManga(realUser, title, path)
         }
 
         if (page <= 1 && folders.isEmpty()) {
-            folders += createGalleryManga(username, "All", "/$username/gallery/all")
+            folders += createGalleryManga(realUser, "All", "/$realUser/gallery/all")
         }
         if (folders.none { it.url.endsWith("/all") }) {
-            folders.add(0, createGalleryManga(username, "All", "/$username/gallery/all"))
+            folders.add(0, createGalleryManga(realUser, "All", "/$realUser/gallery/all"))
         }
 
         val start = (page - 1) * 10
@@ -168,6 +169,12 @@ abstract class DeviantArt :
         if (start >= folders.size && page > 1) return MangasPage(emptyList(), false)
         return MangasPage(folders.subList(start, end), end < folders.size)
     }
+
+    private fun resolveUsername(doc: Document, fallback: String): String = doc.selectFirst("a[href*=/gallery/]")?.let { link ->
+        var href = link.attr("href").trim()
+        if (href.startsWith("/")) href = "https://www.deviantart.com$href"
+        href.toHttpUrl().pathSegments[0]
+    } ?: fallback
 
     private fun createGalleryManga(user: String, title: String, url: String) = SManga.create().apply {
         this.url = url
@@ -209,7 +216,7 @@ abstract class DeviantArt :
 
         return SManga.create().apply {
             setUrlWithoutDomain(response.request.url.toString())
-            author = url.toHttpUrl().pathSegments[0]
+            author = resolveUsername(doc, url.toHttpUrl().pathSegments[0])
             title = if (artistInTitle) "$author - $galleryName" else galleryName
             description = gallery?.selectFirst(".legacy-journal")?.wholeText()
             thumbnail_url = gallery?.selectFirst("img[property=contentUrl]")?.absUrl("src")
