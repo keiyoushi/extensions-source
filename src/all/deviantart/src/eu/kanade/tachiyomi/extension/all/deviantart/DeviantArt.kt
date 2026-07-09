@@ -181,11 +181,15 @@ abstract class DeviantArt :
 
     private fun resolveUsername(doc: Document, fallback: String): String {
         val loweredFallback = fallback.lowercase()
-        // Try the profile header <h1> first (preserves correct casing)
-        doc.selectFirst("h1 a[href*=\"/$loweredFallback\"]")?.text()?.takeIf { it.isNotBlank() }?.let { return it }
-        // Fallback: find any user link matching the fallback username
+        // Try h1 header containing a link with the correct display name
+        doc.selectFirst("h1 a[href*=\"/$loweredFallback\"]")?.ownText()?.takeIf { it.isNotBlank() }?.let { return it }
+        // Try any link whose href matches and whose display text equals the href username (lowercase)
         doc.select("a[href*=\"/$loweredFallback\"]").firstOrNull { link ->
-            link.text().lowercase() == loweredFallback
+            link.ownText().lowercase() == loweredFallback
+        }?.ownText()?.takeIf { it.isNotBlank() }?.let { return it }
+        // Fallback: use the text of any user-specific link whose text matches
+        doc.select("a.user-link, a[href*=\"/$loweredFallback\"][href*=user]").firstOrNull { link ->
+            link.text().equals(fallback, ignoreCase = true)
         }?.text()?.takeIf { it.isNotBlank() }?.let { return it }
         return fallback
     }
