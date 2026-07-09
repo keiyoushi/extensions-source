@@ -78,19 +78,23 @@ abstract class DeviantArt :
 
     private fun seedCookiesIfEnabled() {
         if (!preferences.cookieLoginEnabled) return
+        val json = preferences.cookieJsonRaw
+        if (json.isBlank()) return
+        val cookies = parseCookieJson(json)
         val url = "https://$DOMAIN/"
-        listOfNotNull(
-            "auth" to preferences.authCookie,
-            "auth_secure" to preferences.authSecureCookie,
-            "userinfo" to preferences.userinfoCookie,
-            "_px" to preferences.pxCookie,
-            "_pxvid" to preferences.pxvidCookie,
-            "pxcts" to preferences.pxctsCookie,
-            "g_state" to preferences.gStateCookie,
-            "td" to preferences.tdCookie,
-        ).filter { it.second.isNotBlank() }.forEach { (k, v) ->
+        cookies.forEach { (k, v) ->
             cookieManager.setCookie(url, "$k=$v; Domain=$DOMAIN; Path=/")
         }
+    }
+
+    // Parse a browser-exported cookies.json array into [(name, value)] pairs.
+    private fun parseCookieJson(raw: String): List<Pair<String, String>> {
+        val result = mutableListOf<Pair<String, String>>()
+        // Simple manual parser to avoid kotlinx.serialization dependency.
+        // Matches {"name":"X","value":"Y"} pairs.
+        val entryRe = Regex("""\{[^}]*"name"\s*:\s*"([^"]+)"[^}]*"value"\s*:\s*"([^"]+)"[^}]*\}""")
+        for (m in entryRe.findAll(raw)) result += m.groupValues[1] to m.groupValues[2]
+        return result
     }
 
     // ── Filter ───────────────────────────────────────────────────────────
@@ -375,21 +379,20 @@ abstract class DeviantArt :
             },
         )
 
-        // Cookie fields — fill in values from browser dev tools, then enable
-        // login via Filter → "Use cookie to login"
-        for ((key, title, summary) in COOKIE_FIELDS) {
-            screen.addPreference(
-                EditTextPreference(screen.context).apply {
-                    this.key = key
-                    this.title = title
-                    this.summary = summary
-                    setDefaultValue("")
-                    setOnBindEditTextListener {
-                        it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-                    }
-                },
-            )
-        }
+        // Cookie JSON input — paste the browser-exported cookies.json array here.
+        // The extension parses name/value pairs and seeds CookieManager when
+        // "Use cookie to login" filter is enabled.
+        EditTextPreference(screen.context).apply {
+            key = COOKIE_JSON_PREF
+            title = "Cookies (JSON)"
+            summary = "Paste the cookies.json array exported from your browser here.\n" +
+                "To export: DevTools → Application → Cookies → export as JSON.\n" +
+                "The extension reads name & value from each entry automatically."
+            setDefaultValue("")
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+        }.also(screen::addPreference)
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -412,14 +415,7 @@ abstract class DeviantArt :
 
     private val SharedPreferences.artistInTitle get() = getString(ArtistInTitle.PREF_KEY, ArtistInTitle.defaultValue.name)
     val SharedPreferences.cookieLoginEnabled get() = getBoolean(COOKIE_LOGIN_PREF, false)
-    private val SharedPreferences.authCookie get() = getString(COOKIE_AUTH, "") ?: ""
-    private val SharedPreferences.authSecureCookie get() = getString(COOKIE_AUTH_SECURE, "") ?: ""
-    private val SharedPreferences.userinfoCookie get() = getString(COOKIE_USERINFO, "") ?: ""
-    private val SharedPreferences.pxCookie get() = getString(COOKIE_PX, "") ?: ""
-    private val SharedPreferences.pxvidCookie get() = getString(COOKIE_PXVID, "") ?: ""
-    private val SharedPreferences.pxctsCookie get() = getString(COOKIE_PXCTS, "") ?: ""
-    private val SharedPreferences.gStateCookie get() = getString(COOKIE_GSTATE, "") ?: ""
-    private val SharedPreferences.tdCookie get() = getString(COOKIE_TD, "") ?: ""
+    private val SharedPreferences.cookieJsonRaw get() = getString(COOKIE_JSON_PREF, "") ?: ""
 
     companion object {
         const val DOMAIN = "deviantart.com"
@@ -428,25 +424,7 @@ abstract class DeviantArt :
         private val GALLERY_RE = Regex("""gallery:([\w-]+)(?:/(\d+))?""")
 
         private const val COOKIE_LOGIN_PREF = "cookie_login_enabled"
-        private const val COOKIE_AUTH = "cookie_auth"
-        private const val COOKIE_AUTH_SECURE = "cookie_auth_secure"
-        private const val COOKIE_USERINFO = "cookie_userinfo"
-        private const val COOKIE_PX = "cookie_px"
-        private const val COOKIE_PXVID = "cookie_pxvid"
-        private const val COOKIE_PXCTS = "cookie_pxcts"
-        private const val COOKIE_GSTATE = "cookie_gstate"
-        private const val COOKIE_TD = "cookie_td"
-
-        private val COOKIE_FIELDS = listOf(
-            Triple(COOKIE_AUTH, "auth cookie", "Required for logged-in browsing"),
-            Triple(COOKIE_AUTH_SECURE, "auth_secure cookie", "Required for logged-in browsing"),
-            Triple(COOKIE_USERINFO, "userinfo cookie", "Required for logged-in browsing"),
-            Triple(COOKIE_PX, "_px cookie", "Optional: PerimeterX / DDoS protection"),
-            Triple(COOKIE_PXVID, "_pxvid cookie", "Optional: PerimeterX visitor ID"),
-            Triple(COOKIE_PXCTS, "pxcts cookie", "Optional: PerimeterX token"),
-            Triple(COOKIE_GSTATE, "g_state cookie", "Optional: Google sign-in state"),
-            Triple(COOKIE_TD, "td cookie", "Optional: device / screen info"),
-        )
+        private const val COOKIE_JSON_PREF = "cookie_json"
     }
 }
 
