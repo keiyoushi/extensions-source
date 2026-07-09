@@ -300,7 +300,6 @@ abstract class DeviantArt :
     }
 
     private fun orderChapters(list: MutableList<SChapter>) {
-        list.reverse()
         list.forEachIndexed { i, ch -> ch.chapter_number = list.size - i.toFloat() }
     }
 
