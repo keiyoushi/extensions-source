@@ -104,7 +104,84 @@ abstract class DeviantArt :
             val folderId = url.pathSegments[2]
             return super.fetchSearchManga(page, "gallery:$username/$folderId", filters)
         }
+        // Plain username → list all galleries
+        if (query.matches(Regex("""^[\w-]+$"""))) {
+            return fetchUsernameGalleries(query)
+        }
         return super.fetchSearchManga(page, query, filters)
+    }
+
+    private fun fetchUsernameGalleries(username: String): Observable<MangasPage> = Observable.fromCallable {
+        val request = GET("$baseUrl/$username/gallery", headers)
+        val response = client.newCall(request).execute()
+        usernameGalleryParse(response, username)
+    }
+
+    // Parse the gallery listing page to extract all folder links
+    private fun usernameGalleryParse(response: Response, username: String): MangasPage {
+        val document = response.asJsoup()
+        // The gallery folder section is inside [aria-controls="folder-dropdown"] or a div
+        // containing links like /{username}/gallery/{folderId}/{slug}
+        val folderSection = document.selectFirst("#sub-folder-gallery")
+            ?: document.selectFirst("[role=navigation]")
+
+        val mangas = mutableListOf<SManga>()
+
+        if (folderSection != null) {
+            // Collect folder links from the sub-folder gallery section
+            val folderLinks = folderSection.select("a[href*=/gallery/]")
+            val seen = mutableSetOf<String>()
+
+            folderLinks.forEach { link ->
+                val href = link.attr("href")
+                val name = link.selectFirst("[title]")?.attr("title")
+                    ?: link.selectFirst("img")?.attr("alt")
+                    ?: link.ownText()
+                    ?: link.text()
+                val countText = link.selectFirst(":containsOwn(deviations)")?.text()
+                    ?: link.parent()?.selectFirst(":containsOwn(deviations)")?.text()
+                    ?: ""
+
+                if (href.isBlank() || !seen.add(href)) return@forEach
+
+                mangas.add(
+                    SManga.create().apply {
+                        url = href.removePrefix("$baseUrl/")
+                        title = name.ifBlank { href.substringAfterLast("/") }
+                        author = username
+                        description = countText
+                        thumbnail_url = link.selectFirst("img")?.absUrl("src")
+                    },
+                )
+            }
+        }
+
+        // Fallback: if no structured folder section found, try finding all gallery
+        // links from the dropdown/listbox
+        if (mangas.isEmpty()) {
+            document.select("a[href*=/gallery/]").forEach { link ->
+                val href = link.attr("href")
+                if (href.isBlank()) return@forEach
+                val pathSegments = href.toHttpUrl().pathSegments
+                if (pathSegments.size < 3) return@forEach
+                if (pathSegments[0] != username) return@forEach
+
+                mangas.add(
+                    SManga.create().apply {
+                        url = href.removePrefix("$baseUrl/")
+                        title = link.ownText().ifBlank { pathSegments.last() }
+                        author = username
+                        thumbnail_url = link.selectFirst("img")?.absUrl("src")
+                    },
+                )
+            }
+        }
+
+        if (mangas.isEmpty()) {
+            throw Exception("No galleries found for user '$username'")
+        }
+
+        return MangasPage(mangas.distinctBy { it.url }, false)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -219,20 +296,29 @@ abstract class DeviantArt :
             val imageUrl = document.selectFirst("img[fetchpriority=high]")?.absUrl("src")
             listOf(Page(0, imageUrl = imageUrl))
         } else {
-            // Multi-image deviation: strip /v1/ transform to get the raw image file.
-            // The JWT token is preserved in the query string — WixMP CDN validates
-            // the token against the file path, not the transform.
+            // Multi-image: upgrade thumb → large "fit", fall back to stripping /v1/
             buttons.mapIndexed { i, button ->
                 val thumbSrc = button.selectFirst("img")?.absUrl("src")
-                val imageUrl = resolveFullImageUrl(thumbSrc)
+                val imageUrl = upgradeThumbUrl(thumbSrc)
+                    ?: resolveFullImageUrl(thumbSrc)
                 Page(i, imageUrl = imageUrl)
             }
         }
     }
 
-    // Strip /v1/... transform to request the raw image (no size constraint).
-    // The token query parameter is preserved — WixMP authorizes the raw path
-    // as long as Referer is present.
+    // Thumbnail → large display URL using "fit" (preserves aspect ratio inside
+    // 1600×1600 bounds). "fit" keeps the token's image.operations scope valid.
+    // Returns null if the URL has no /v1/fit/ transform (not a thumb).
+    private fun upgradeThumbUrl(src: String?): String? {
+        if (src == null) return null
+        if (!src.contains("/v1/fit/")) return null
+        return src.replace(
+            Regex("""/v1/fit/w_\d+,h_\d+,q_\d+"""),
+            "/v1/fit/w_1600,h_1600,q_80",
+        )
+    }
+
+    // Fallback: strip /v1/... entirely (works for file.download tokens on raw PNGs).
     private fun resolveFullImageUrl(src: String?): String? = src?.replaceFirst(Regex("""/v1(/.*)?(?=\?)"""), "")
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
