@@ -289,16 +289,50 @@ abstract class DeviantArt :
             // Single-image: keep the large display URL as-is
             listOf(Page(0, imageUrl = doc.selectFirst("img[fetchpriority=high]")?.absUrl("src")))
         } else {
-            // Multi-image: fetch each file page individually so we get the
-            // per-file large display URL that DeviantArt renders for that image.
-            buttons.mapIndexed { i, button ->
-                val fileUrl = button.attr("abs:href").ifBlank {
-                    button.selectFirst("a")?.attr("abs:href").orEmpty()
-                }.ifBlank {
-                    "${response.request.url}?file=${i + 1}"
-                }
-                Page(i, url = fileUrl)
+            // Multi-image: use the image URLs from the embedded JSON state.
+            // The page body has window.__INITIAL_STATE__ with per-media tokenized URLs.
+            extractMultiImageUrls(doc, response.request.url.toString())
+        }
+    }
+
+    // Extract per-file image URLs from __INITIAL_STATE__ JSON.
+    // Falls back to per-page fetch if JSON parsing fails.
+    private fun extractMultiImageUrls(doc: Document, pageUrl: String): List<Page> {
+        val script = doc.select("script").firstOrNull {
+            it.data().contains("__INITIAL_STATE__")
+        }?.data() ?: return legacyMultiImagePages(doc, pageUrl)
+
+        // The JSON blob looks like: window.__INITIAL_STATE__ = JSON.parse("...");
+        val jsonStr = Regex("""JSON\.parse\("(.+)"\)""").find(script)?.groupValues?.getOrNull(1)
+            ?.replace("\\\"", "\"")?.replace("\\\\", "\\")
+            ?: return legacyMultiImagePages(doc, pageUrl)
+
+        // Find all wixmp image URLs inside the JSON blob
+        val urls = Regex("""https://images-wixmp-[^"\\]+""").findAll(jsonStr)
+        val pages = urls.mapIndexed { i, match ->
+            val url = match.value
+            // Prefer large versions: /v1/fill/ or strip /v1/ transform
+            val largeUrl = if (url.contains("/v1/fit/")) {
+                url.replace(Regex("""/v1/fit/w_\d+,h_\d+,q_\d+"""), "/v1/fit/w_1600,h_1600,q_80")
+            } else {
+                url.replaceFirst(Regex("""/v1(/.*)?(?=\?)"""), "")
             }
+            Page(i, imageUrl = largeUrl)
+        }.toList()
+
+        return pages.ifEmpty { legacyMultiImagePages(doc, pageUrl) }
+    }
+
+    // Fallback: fetch each ?file=N page individually
+    private fun legacyMultiImagePages(doc: Document, pageUrl: String): List<Page> {
+        val buttons = doc.selectFirst("[draggable=false]")?.children() ?: return emptyList()
+        return buttons.mapIndexed { i, button ->
+            val fileUrl = button.attr("abs:href").ifBlank {
+                button.selectFirst("a")?.attr("abs:href").orEmpty()
+            }.ifBlank {
+                "$pageUrl?file=${i + 1}"
+            }
+            Page(i, url = fileUrl)
         }
     }
 
