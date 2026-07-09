@@ -16,13 +16,17 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import java.io.IOException
 import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -453,9 +457,36 @@ abstract class HentaiLoop : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
+        countViews(document)
+
         return document.select(".gallery-item > dt > img").mapIndexed { index, img ->
             Page(index, imageUrl = img.imgAttr())
         }
+    }
+
+    private fun countViews(document: Document) {
+        val postId = document.selectFirst("body[class*=postid-]")
+            ?.classNames()
+            ?.firstOrNull { it.startsWith("postid-") }
+            ?.substringAfter("postid-")
+            ?: return
+
+        val body = FormBody.Builder()
+            .add("action", "addview")
+            .add("postID", postId)
+            .build()
+
+        val headers = headersBuilder()
+            .set("X-Requested-With", "XMLHttpRequest")
+            .build()
+
+        client.newCall(POST("$baseUrl/wp-admin/admin-ajax.php", headers, body))
+            .enqueue(
+                object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {}
+                    override fun onResponse(call: Call, response: Response) = response.close()
+                },
+            )
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
