@@ -267,7 +267,7 @@ abstract class MangaFire :
 
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_SHOW_AS_VOLUMES
-            title = "Prefer Chapters as Volumes"
+            title = "Prefer Volume Release"
             summary = SUMMARY_MSG
             setDefaultValue(false)
         }.also(screen::addPreference)
