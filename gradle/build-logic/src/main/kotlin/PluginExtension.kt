@@ -1,4 +1,5 @@
 import com.android.build.api.artifact.ScopedArtifact
+import com.android.build.api.artifact.SingleArtifact
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import com.android.build.api.variant.ScopedArtifacts
@@ -212,6 +213,8 @@ class PluginExtension : Plugin<Project> {
                     libraryClasspath.from(externalLibs, bootClasspath)
                     keepRuleFiles.from(proguardRules)
                     applicationId.set(variant.applicationId)
+                    @Suppress("UnstableApiUsage")
+                    manifestFile.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
                     r8Classpath.from(r8Configuration)
                     val jarName = versionNameProvider.map { "tachiyomi-$applicationIdSuffix-v$it.jar" }
                     outputJar.set(layout.buildDirectory.file(jarName.map { "outputs/jar/${variant.name}/$it" }))

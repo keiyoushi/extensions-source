@@ -7,12 +7,16 @@ import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Classpath
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
+import java.util.jar.JarEntry
+import java.util.jar.JarFile
+import java.util.jar.JarOutputStream
 import javax.inject.Inject
 
 @CacheableTask
@@ -29,6 +33,11 @@ abstract class ShrinkExtensionJarTask : DefaultTask() {
 
     @get:Input
     abstract val applicationId: Property<String>
+
+    /** Merged manifest, embedded at the jar root. */
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val manifestFile: RegularFileProperty
 
     @get:Classpath
     abstract val r8Classpath: ConfigurableFileCollection
@@ -48,9 +57,10 @@ abstract class ShrinkExtensionJarTask : DefaultTask() {
             writeText("-keep class ${applicationId.get()}.ExtensionGenerated { <init>(); }\n")
         }
 
+        val shrunk = temporaryDir.resolve("shrunk.jar")
         val args = buildList {
             add("--classfile")
-            add("--output"); add(out.absolutePath)
+            add("--output"); add(shrunk.absolutePath)
             libraryClasspath.files.forEach { add("--lib"); add(it.absolutePath) }
             keepRuleFiles.files.forEach { add("--pg-conf"); add(it.absolutePath) }
             add("--pg-conf"); add(keepRules.absolutePath)
@@ -61,6 +71,19 @@ abstract class ShrinkExtensionJarTask : DefaultTask() {
             classpath = r8Classpath
             mainClass.set("com.android.tools.r8.R8")
             setArgs(args)
+        }
+
+        JarOutputStream(out.outputStream().buffered()).use { jar ->
+            jar.putNextEntry(JarEntry("AndroidManifest.xml"))
+            manifestFile.get().asFile.inputStream().use { it.copyTo(jar) }
+            jar.closeEntry()
+            JarFile(shrunk).use { source ->
+                source.entries().asSequence().filter { !it.isDirectory }.forEach { entry ->
+                    jar.putNextEntry(JarEntry(entry.name))
+                    source.getInputStream(entry).use { it.copyTo(jar) }
+                    jar.closeEntry()
+                }
+            }
         }
     }
 }
