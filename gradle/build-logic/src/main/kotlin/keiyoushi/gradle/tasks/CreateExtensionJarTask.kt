@@ -2,7 +2,10 @@ package keiyoushi.gradle.tasks
 
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.Directory
+import org.gradle.api.file.RegularFile
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Classpath
@@ -14,14 +17,18 @@ import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
+import java.util.jar.JarEntry
 import java.util.jar.JarFile
 import java.util.jar.JarOutputStream
 import javax.inject.Inject
 
 @CacheableTask
-abstract class ShrinkExtensionJarTask : DefaultTask() {
+abstract class CreateExtensionJarTask : DefaultTask() {
     @get:Classpath
-    abstract val inputJar: RegularFileProperty
+    abstract val jars: ListProperty<RegularFile>
+
+    @get:Classpath
+    abstract val dirs: ListProperty<Directory>
 
     @get:Classpath
     abstract val libraryClasspath: ConfigurableFileCollection
@@ -47,12 +54,39 @@ abstract class ShrinkExtensionJarTask : DefaultTask() {
     abstract val execOps: ExecOperations
 
     @TaskAction
-    fun shrink() {
+    fun create() {
         val out = outputJar.get().asFile
         out.parentFile.mkdirs()
 
         val keepRules = temporaryDir.resolve("keep.pro").apply {
             writeText("-keep class ${applicationId.get()}.ExtensionGenerated { <init>(); }\n")
+        }
+
+        val program = temporaryDir.resolve("program.jar")
+        val written = HashSet<String>()
+        JarOutputStream(program.outputStream().buffered()).use { jar ->
+            dirs.get().forEach { dir ->
+                val root = dir.asFile
+                root.walkTopDown().filter { it.isFile }.forEach { file ->
+                    val name = file.relativeTo(root).invariantSeparatorsPath
+                    if (written.add(name)) {
+                        jar.putNextEntry(JarEntry(name))
+                        file.inputStream().use { it.copyTo(jar) }
+                        jar.closeEntry()
+                    }
+                }
+            }
+            jars.get().forEach { regularFile ->
+                JarFile(regularFile.asFile).use { source ->
+                    source.entries().asSequence()
+                        .filter { !it.isDirectory && written.add(it.name) }
+                        .forEach { entry ->
+                            jar.putNextEntry(JarEntry(entry.name))
+                            source.getInputStream(entry).use { it.copyTo(jar) }
+                            jar.closeEntry()
+                        }
+                }
+            }
         }
 
         val shrunk = temporaryDir.resolve("shrunk.jar")
@@ -62,7 +96,7 @@ abstract class ShrinkExtensionJarTask : DefaultTask() {
             libraryClasspath.files.forEach { add("--lib"); add(it.absolutePath) }
             keepRuleFiles.files.forEach { add("--pg-conf"); add(it.absolutePath) }
             add("--pg-conf"); add(keepRules.absolutePath)
-            add(inputJar.get().asFile.absolutePath)
+            add(program.absolutePath)
         }
 
         execOps.javaexec {
@@ -85,3 +119,8 @@ abstract class ShrinkExtensionJarTask : DefaultTask() {
         }
     }
 }
+
+// Fixed entry time for reproducible jars (1980-02-01, the value Gradle uses for archives).
+private const val FIXED_JAR_TIME = 320054400000L
+
+internal fun fixedTimeEntry(name: String): JarEntry = JarEntry(name).apply { time = FIXED_JAR_TIME }

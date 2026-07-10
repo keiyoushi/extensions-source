@@ -21,8 +21,7 @@ import keiyoushi.gradle.extensions.plugins
 import keiyoushi.gradle.tasks.GenerateExtensionManifestTask
 import keiyoushi.gradle.tasks.GenerateKeepRulesTask
 import keiyoushi.gradle.tasks.GenerateSourceInfoTask
-import keiyoushi.gradle.tasks.PackageExtensionJarTask
-import keiyoushi.gradle.tasks.ShrinkExtensionJarTask
+import keiyoushi.gradle.tasks.CreateExtensionJarTask
 import keiyoushi.gradle.tasks.SignExtensionJarTask
 import keiyoushi.gradle.utils.assertWithoutFlag
 import kotlinx.serialization.Serializable
@@ -193,37 +192,32 @@ class PluginExtension : Plugin<Project> {
                 }
 
                 if (variant.buildType == "release") {
-                    val jarTask = tasks.register<PackageExtensionJarTask>("package${variantName}ExtensionJar") {
-                        outputJar.set(layout.buildDirectory.file("intermediates/extension_jar/${variant.name}/classes.jar"))
-                    }
-
-                    @Suppress("UnstableApiUsage")
-                    variant.artifacts.forScope(ScopedArtifacts.Scope.ALL)
-                        .use(jarTask)
-                        .toGet(
-                            ScopedArtifact.CLASSES,
-                            PackageExtensionJarTask::jars,
-                            PackageExtensionJarTask::dirs,
-                        )
-
                     @Suppress("UnstableApiUsage")
                     val externalLibs = variant.compileClasspath.filter { file ->
                         projectBuildDirs.none { file.startsWith(it) }
                     }
 
-                    val shrinkTask = tasks.register<ShrinkExtensionJarTask>("shrink${variantName}ExtensionJar") {
-                        inputJar.set(jarTask.flatMap { it.outputJar })
+                    val createTask = tasks.register<CreateExtensionJarTask>("create${variantName}ExtensionJar") {
                         libraryClasspath.from(externalLibs, bootClasspath)
                         keepRuleFiles.from(proguardRules)
                         applicationId.set(variant.applicationId)
                         @Suppress("UnstableApiUsage")
                         manifestFile.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
                         r8Classpath.from(r8Configuration)
-                        outputJar.set(layout.buildDirectory.file("intermediates/extension_jar/${variant.name}/shrunk.jar"))
+                        outputJar.set(layout.buildDirectory.file("intermediates/extension_jar/${variant.name}/unsigned.jar"))
                     }
 
+                    @Suppress("UnstableApiUsage")
+                    variant.artifacts.forScope(ScopedArtifacts.Scope.ALL)
+                        .use(createTask)
+                        .toGet(
+                            ScopedArtifact.CLASSES,
+                            CreateExtensionJarTask::jars,
+                            CreateExtensionJarTask::dirs,
+                        )
+
                     val signTask = tasks.register<SignExtensionJarTask>("sign${variantName}ExtensionJar") {
-                        inputJar.set(shrinkTask.flatMap { it.outputJar })
+                        inputJar.set(createTask.flatMap { it.outputJar })
                         signingConfig.storeFile?.let { keystore.from(it) }
                         storePassword.set(signingConfig.storePassword.orEmpty())
                         keyAlias.set(signingConfig.keyAlias.orEmpty())
