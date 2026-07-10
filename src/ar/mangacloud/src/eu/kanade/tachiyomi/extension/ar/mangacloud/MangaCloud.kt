@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.mangacloud
 
-import eu.kanade.tachiyomi.extension.ar.mangacloud.FirestoreParser.FirestoreListResponse
 import eu.kanade.tachiyomi.extension.ar.mangacloud.FirestoreParser.FirestoreMangaData
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
