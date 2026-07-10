@@ -1235,7 +1235,11 @@ override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Ob
                     initialized = true
                 }
                 return fetchMangaDetails(manga)
-                    .map { MangasPage(listOf(it), false) }
+                    .map {
+                        it.url = manga.url
+                        it.initialized = true
+                        MangasPage(listOf(it), false)
+                    }
             }
 
             throw Exception("Unsupported url")
