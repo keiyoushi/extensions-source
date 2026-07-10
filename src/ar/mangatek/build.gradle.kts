@@ -10,6 +10,6 @@ keiyoushi {
 
     source {
         lang = "ar"
-        baseUrl = "https://mangatek.com/"
+        baseUrl = "https://mangatek.com"
     }
 }
