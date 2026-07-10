@@ -84,10 +84,12 @@ abstract class MangaPoisk : HttpSource() {
                 setUrlWithoutDomain(urlElement.attr("href"))
 
                 title = if (isSearch) {
-                    element.selectFirst("div.post-description p.card-title")?.text()?.substringBefore("/") ?: element.selectFirst("a > h2.entry-title")?.text()?.substringBefore("/") ?: ""
+                    element.selectFirst("div.post-description p.card-title")?.text()
+                        ?: element.selectFirst("a > h2.entry-title")?.text()
+                        ?: ""
                 } else {
-                    urlElement.attr("title").substringBefore("/")
-                }
+                    urlElement.attr("title")
+                }.substringBefore("/")
             }
         }
 
