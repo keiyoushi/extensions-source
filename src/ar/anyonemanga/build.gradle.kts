@@ -11,6 +11,6 @@ keiyoushi {
 
     source {
         lang = "ar"
-        baseUrl = "https://anyonemanga.com"
+        baseUrl = "https://procomic.pro/"
     }
 }
