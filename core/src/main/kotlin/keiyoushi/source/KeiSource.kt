@@ -304,7 +304,7 @@ abstract class KeiSource : HttpSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate
 
-    private val updatesInFlight = ConcurrentHashMap.newKeySet<String>()
+    private val updatesInFlight = ConcurrentHashMap<String, Boolean>()
 
     final override suspend fun getMangaUpdate(
         manga: SManga,
@@ -314,10 +314,15 @@ abstract class KeiSource : HttpSource() {
     ): SMangaUpdate {
         check(fetchDetails || fetchChapters) { "getMangaUpdate called with nothing to fetch (fetchDetails=false, fetchChapters=false)" }
 
-        check(updatesInFlight.add(manga.url)) { "getMangaUpdate must not be called concurrently for same manga" }
+        check(updatesInFlight.putIfAbsent(manga.url, true) == true) { "getMangaUpdate must not be called concurrently for same manga" }
 
         try {
-            return fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters)
+            val update = fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters)
+
+            return SMangaUpdate(
+                manga = update.manga.apply { initialized = true },
+                chapters = update.chapters,
+            )
         } finally {
             updatesInFlight.remove(manga.url)
         }
