@@ -1,12 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.deviantart
 
 import android.content.SharedPreferences
-import android.webkit.CookieManager
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -17,14 +15,9 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
-import okhttp3.Cookie
-import okhttp3.CookieJar
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -34,8 +27,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 // Search: gallery:{username}[/{folderId}] | {username} | full gallery URL
-// Cookie login: paste browser-exported cookies.json in Filter, then enable the checkbox.
-// DeviantArt uses Cloudflare + PerimeterX so WebView login doesn't work.
+// Cookie login: (currently disabled — see commented code)
 
 @Source
 abstract class DeviantArt :
@@ -47,27 +39,18 @@ abstract class DeviantArt :
 
     // ── HTTP client ──────────────────────────────────────────────────────
 
-    // Strip "wv" from User-Agent so Google login (used by DeviantArt) works.
-    // Google denies login when the User-Agent contains the WebView token.
-    override fun headersBuilder() = super.headersBuilder()
-        .apply {
-            build()["user-agent"]?.let { userAgent ->
-                set("user-agent", removeWebViewToken(userAgent))
-            }
-        }
+    // private val cookieManager by lazy { CookieManager.getInstance() }
 
-    private fun removeWebViewToken(userAgent: String): String = userAgent.replace(WEBVIEW_TOKEN_REGEX, ")")
+    // override val client: OkHttpClient by lazy {
+    //     network.client.newBuilder()
+    //         .cookieJar(WebViewCookieJar(cookieManager))
+    //         .build()
+    // }
 
-    private val cookieManager by lazy { CookieManager.getInstance() }
-
-    override val client: OkHttpClient by lazy {
-        network.client.newBuilder()
-            .cookieJar(WebViewCookieJar(cookieManager))
-            .build()
-    }
-
-    // ── Cookie login ─────────────────────────────────────────────────────
-
+    // ══════════════════════════════════════════════════════════════════════
+    // COOKIE LOGIN (currently disabled)
+    // ══════════════════════════════════════════════════════════════════════
+    /*
     private fun seedCookies(json: String) {
         val cookies = parseCookieJson(json)
         val url = "https://$DOMAIN/"
@@ -76,17 +59,12 @@ abstract class DeviantArt :
         }
     }
 
-    // Parse browser-exported cookies.json into name-value pairs.
-    // Uses org.json for robust parsing; keeps only cookies whose domain
-    // matches deviantart.com (or a subdomain) and defaults path to "/".
     private fun parseCookieJson(raw: String): List<Pair<String, String>> {
         val result = mutableListOf<Pair<String, String>>()
         val trimmed = raw.trim()
         val jsonArray = if (trimmed.startsWith("[")) {
             JSONArray(trimmed)
         } else {
-            // Some exports wrap the array inside an object or have leading text.
-            // Try to find the first '[' … last ']' as a fallback.
             val start = trimmed.indexOf('[')
             val end = trimmed.lastIndexOf(']')
             if (start == -1 || end <= start) return result
@@ -95,8 +73,6 @@ abstract class DeviantArt :
         for (i in 0 until jsonArray.length()) {
             val obj = jsonArray.getJSONObject(i)
             val domain = obj.optString("domain", "")
-            // The standard export field is "domain" (leading dot), but some
-            // tools use "Domain" (capitalised).
             val domainClean = domain.removePrefix(".")
             if (!isDeviantArtDomain(domainClean)) continue
             val name = obj.optString("name", "")
@@ -108,8 +84,6 @@ abstract class DeviantArt :
     }
 
     private fun isDeviantArtDomain(domain: String): Boolean = domain == DOMAIN || domain.endsWith(".$DOMAIN")
-
-    // ── Filter ───────────────────────────────────────────────────────────
 
     class CookieJsonFilter(value: String = "") :
         Filter.Text(
@@ -124,11 +98,11 @@ abstract class DeviantArt :
                 "Warning: Cookie import equals session hijacking risk; treat like a password.",
             state,
         )
+     */
 
-    override fun getFilterList(): FilterList = FilterList(
-        CookieJsonFilter(),
-        CookieLoginFilter(),
-    )
+    // ── Filter ───────────────────────────────────────────────────────────
+
+    override fun getFilterList(): FilterList = FilterList() // CookieJsonFilter(), CookieLoginFilter()
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException(SEARCH_HINT)
     override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException(SEARCH_HINT)
@@ -255,15 +229,13 @@ abstract class DeviantArt :
     // ── Search → single gallery ────────────────────────────────────────
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        // If the user enabled cookie login, seed cookies from the JSON text
-        // filter, then clear both the text and checkbox so they only apply once.
-        val loginFilter = filters.firstOrNull { it is CookieLoginFilter } as? CookieLoginFilter
-        val jsonFilter = filters.firstOrNull { it is CookieJsonFilter } as? CookieJsonFilter
-        if (loginFilter != null && loginFilter.state && jsonFilter != null && jsonFilter.state.isNotBlank()) {
-            seedCookies(jsonFilter.state)
-            loginFilter.state = false
-            jsonFilter.state = ""
-        }
+        // val loginFilter = filters.firstOrNull { it is CookieLoginFilter } as? CookieLoginFilter
+        // val jsonFilter = filters.firstOrNull { it is CookieJsonFilter } as? CookieJsonFilter
+        // if (loginFilter != null && loginFilter.state && jsonFilter != null && jsonFilter.state.isNotBlank()) {
+        //     seedCookies(jsonFilter.state)
+        //     loginFilter.state = false
+        //     jsonFilter.state = ""
+        // }
 
         // sub: prefix preserves the slug for mangaDetailsParse fallback
         // e.g. sub:username7/98917131/halloween-2024
@@ -505,16 +477,16 @@ abstract class DeviantArt :
 
     companion object {
         const val DOMAIN = "deviantart.com"
-        private const val SEARCH_HINT = "Search by gallery:{username} or gallery:{username}/{folderId}, or an username, or paste gallery URL\nUse filter to login."
+        private const val SEARCH_HINT = "Search by gallery:{username} or gallery:{username}/{folderId}, or an username, or paste gallery URL"
         private val USERNAME_RE = Regex("""^[\w-]+$""")
         private val GALLERY_RE = Regex("""gallery:([\w-]+)(?:/(\d+))?""")
         private val SUB_RE = Regex("""sub:([\w-]+)/(\d+)/(.+)""")
-        private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
+        // private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
     }
 }
 
 // Bridges Android CookieManager into OkHttp so Set-Cookie responses persist.
-
+/*
 private class WebViewCookieJar(private val cm: CookieManager) : CookieJar {
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
         cookies.forEach { cm.setCookie(url.toString(), it.toString()) }
@@ -525,3 +497,4 @@ private class WebViewCookieJar(private val cm: CookieManager) : CookieJar {
         return header.split("; ").mapNotNull { Cookie.parse(url, it) }
     }
 }
+*/
