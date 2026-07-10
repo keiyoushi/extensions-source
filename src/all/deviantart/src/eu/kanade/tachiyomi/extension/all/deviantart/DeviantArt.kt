@@ -39,6 +39,17 @@ abstract class DeviantArt :
 
     // ── HTTP client ──────────────────────────────────────────────────────
 
+    // Strip "wv" from User-Agent so Google login works in this source.
+    // Google denies login when the User-Agent contains the WebView token.
+    override fun headersBuilder() = super.headersBuilder()
+        .apply {
+            build()["user-agent"]?.let { userAgent ->
+                set("user-agent", removeWebViewToken(userAgent))
+            }
+        }
+
+    private fun removeWebViewToken(userAgent: String): String = userAgent.replace(WEBVIEW_TOKEN_REGEX, ")")
+
     // private val cookieManager by lazy { CookieManager.getInstance() }
 
     // override val client: OkHttpClient by lazy {
@@ -481,7 +492,7 @@ abstract class DeviantArt :
         private val USERNAME_RE = Regex("""^[\w-]+$""")
         private val GALLERY_RE = Regex("""gallery:([\w-]+)(?:/(\d+))?""")
         private val SUB_RE = Regex("""sub:([\w-]+)/(\d+)/(.+)""")
-        // private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
+        private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
     }
 }
 
