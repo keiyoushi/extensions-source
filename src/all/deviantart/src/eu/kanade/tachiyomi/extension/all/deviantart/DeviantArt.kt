@@ -19,7 +19,6 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.Cookie
 import okhttp3.CookieJar
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -47,10 +46,6 @@ abstract class DeviantArt :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     // ── HTTP client ──────────────────────────────────────────────────────
-
-    override fun headersBuilder() = Headers.Builder().apply {
-        add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0")
-    }
 
     private val cookieManager by lazy { CookieManager.getInstance() }
 
@@ -107,14 +102,16 @@ abstract class DeviantArt :
 
     class CookieJsonFilter(value: String = "") :
         Filter.Text(
-            "Cookies (JSON)\nPaste the cookies.json array exported from your browser.\n" +
-                "DevTools → Application → Cookies → export as JSON.",
+            "Cookies (JSON)\nFirst, login to your DeviantArt account in a real browser,\n" +
+                "then paste the cookies.json array exported from that browser.",
             value,
         )
 
     class CookieLoginFilter(state: Boolean = false) :
         Filter.CheckBox(
-            "Use cookie to login\nEnable after pasting cookies above.",
+            "Use cookie to login\nEnable after pasting cookies above. " +
+                "Will auto-clear after use.\n" +
+                "Warning: Cookie import equals session hijacking risk; treat like a password.",
             state,
         )
 
@@ -137,7 +134,7 @@ abstract class DeviantArt :
             val folderId = url.pathSegments.lastOrNull { it.all(Char::isDigit) }
                 ?: url.pathSegments.getOrNull(2).orEmpty()
             // Preserve sub-gallery slug through to mangaDetailsParse
-            // e.g. /leafybush7/gallery/98917131/halloween-2024 → slug=halloween-2024
+            // e.g. /username7/gallery/12345678/halloween-2024 → slug=halloween-2024
             val slug = url.pathSegments.lastOrNull()
                 ?.takeUnless { it.all(Char::isDigit) || it == "all" || it == "featured" || it == "gallery" }
             val q = if (slug != null) "sub:$username/$folderId/$slug" else "gallery:$username/$folderId"
@@ -153,7 +150,7 @@ abstract class DeviantArt :
     private fun fetchUsernameGalleries(page: Int, username: String) = Observable.fromCallable {
         val url = "$baseUrl/$username/gallery${if (page > 1) "?page=$page" else ""}"
         val response = client.newCall(GET(url, headers)).execute()
-        parseFolderList(response, username, page)
+        response.use { parseFolderList(it, username, page) }
     }
 
     private fun parseFolderList(response: Response, username: String, page: Int): MangasPage {
@@ -164,8 +161,7 @@ abstract class DeviantArt :
         val seen = mutableSetOf<String>()
 
         doc.select("a[href*=/gallery/]").forEach { link ->
-            var href = link.attr("href").trim()
-            if (href.startsWith("/")) href = "$baseUrl$href"
+            val href = link.absUrl("href")
             val parsed = try {
                 href.toHttpUrl()
             } catch (_: Exception) {
@@ -229,7 +225,7 @@ abstract class DeviantArt :
         }?.text()?.takeIf { it.isNotBlank() }?.let { return it }
         // Last resort: extract the lowercase username from the document's own URL.
         // DeviantArt URLs always use the canonical lowercase username as the first
-        // path segment, e.g. /leafybush7/gallery/...
+        // path segment, e.g. /username7/gallery/...
         val docLocation = doc.location()
         if (docLocation.isNotBlank()) {
             try {
@@ -260,7 +256,7 @@ abstract class DeviantArt :
         }
 
         // sub: prefix preserves the slug for mangaDetailsParse fallback
-        // e.g. sub:leafybush7/98917131/halloween-2024
+        // e.g. sub:username7/98917131/halloween-2024
         val sub = SUB_RE.matchEntire(query)
         if (sub != null) {
             val (username, folderId, slug) = sub.destructured
@@ -499,7 +495,7 @@ abstract class DeviantArt :
 
     companion object {
         const val DOMAIN = "deviantart.com"
-        private const val SEARCH_HINT = "Use: gallery:{username}[/{folderId}] or a plain username, or paste a URL"
+        private const val SEARCH_HINT = "Search by gallery:{username} or gallery:{username}/{folderId} or an username, or paste a gallery URL"
         private val USERNAME_RE = Regex("""^[\w-]+$""")
         private val GALLERY_RE = Regex("""gallery:([\w-]+)(?:/(\d+))?""")
         private val SUB_RE = Regex("""sub:([\w-]+)/(\d+)/(.+)""")
