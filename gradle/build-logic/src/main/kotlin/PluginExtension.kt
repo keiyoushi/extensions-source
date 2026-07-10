@@ -1,5 +1,7 @@
+import com.android.build.api.artifact.ScopedArtifact
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
+import com.android.build.api.variant.ScopedArtifacts
 import com.android.build.gradle.tasks.PackageAndroidArtifact
 import com.google.devtools.ksp.gradle.KspExtension
 import keiyoushi.gradle.extensions.BaseUrlSpec
@@ -18,6 +20,8 @@ import keiyoushi.gradle.extensions.plugins
 import keiyoushi.gradle.tasks.GenerateExtensionManifestTask
 import keiyoushi.gradle.tasks.GenerateKeepRulesTask
 import keiyoushi.gradle.tasks.GenerateSourceInfoTask
+import keiyoushi.gradle.tasks.PackageExtensionJarTask
+import keiyoushi.gradle.tasks.ShrinkExtensionJarTask
 import keiyoushi.gradle.utils.assertWithoutFlag
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -152,7 +156,19 @@ class PluginExtension : Plugin<Project> {
             this.outputFile.set(layout.buildDirectory.file("keiyoushi-source-info.json"))
         }
 
+        val jarTasksByVariant = mutableMapOf<String, org.gradle.api.tasks.TaskProvider<*>>()
+
+        val r8Configuration = configurations.create("r8") {
+            isCanBeConsumed = false
+        }
+        dependencies { add("r8", libs.r8) }
+
+        val proguardRules = rootProject.file("common/proguard-rules.pro")
+        val projectBuildDirs = rootProject.allprojects.map { it.layout.buildDirectory.get().asFile }
+
         androidComponents {
+            val bootClasspath = sdkComponents.bootClasspath
+
             onVariants { variant ->
                 val variantName = variant.name.replaceFirstChar { it.uppercase() }
 
@@ -172,6 +188,36 @@ class PluginExtension : Plugin<Project> {
                     output.versionCode.set(versionCodeProvider)
                     output.versionName.set(versionNameProvider)
                 }
+
+                val jarTask = tasks.register<PackageExtensionJarTask>("package${variantName}ExtensionJar") {
+                    outputJar.set(layout.buildDirectory.file("intermediates/extension_jar/${variant.name}/classes.jar"))
+                }
+
+                @Suppress("UnstableApiUsage")
+                variant.artifacts.forScope(ScopedArtifacts.Scope.ALL)
+                    .use(jarTask)
+                    .toGet(
+                        ScopedArtifact.CLASSES,
+                        PackageExtensionJarTask::jars,
+                        PackageExtensionJarTask::dirs,
+                    )
+
+                @Suppress("UnstableApiUsage")
+                val externalLibs = variant.compileClasspath.filter { file ->
+                    projectBuildDirs.none { file.startsWith(it) }
+                }
+
+                val shrinkTask = tasks.register<ShrinkExtensionJarTask>("shrink${variantName}ExtensionJar") {
+                    inputJar.set(jarTask.flatMap { it.outputJar })
+                    libraryClasspath.from(externalLibs, bootClasspath)
+                    keepRuleFiles.from(proguardRules)
+                    applicationId.set(variant.applicationId)
+                    r8Classpath.from(r8Configuration)
+                    val jarName = versionNameProvider.map { "tachiyomi-$applicationIdSuffix-v$it.jar" }
+                    outputJar.set(layout.buildDirectory.file(jarName.map { "outputs/jar/${variant.name}/$it" }))
+                }
+
+                jarTasksByVariant[variantName] = shrinkTask
             }
         }
 
@@ -236,6 +282,10 @@ class PluginExtension : Plugin<Project> {
             val sourceInfoJson = Json.encodeToString(extensionInfo)
             sourceInfoTask.configure { content.set(sourceInfoJson) }
             tasks.named("assembleRelease").configure { dependsOn(sourceInfoTask) }
+
+            jarTasksByVariant.forEach { (variantName, jarTask) ->
+                tasks.named("assemble$variantName").configure { dependsOn(jarTask) }
+            }
 
             tasks.withType<PackageAndroidArtifact>().configureEach {
                 createdBy.set("")
