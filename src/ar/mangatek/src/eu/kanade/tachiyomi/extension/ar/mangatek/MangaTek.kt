@@ -135,22 +135,16 @@ abstract class MangaTek :
         }
     }
 
-    // Page
+    // Page - معدّل للانتظار على ترجمات AI
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         
-        // محاولة الحصول على الصفحات مع الانتظار لتحميل الترجمات المولّدة بـ AI
-        val pages = getPages(document)
+        // الانتظار لاكتمال ترجمات AI
+        Thread.sleep(SpeechBubblePainterInterceptor.AI_TRANSLATION_WAIT_MS)
         
-        // إذا كانت الصفحات فارغة أو الترجمات لم تُحمل بعد، حاول مرة أخرى بعد تأخير
-        val finalPages = if (pages.isEmpty()) {
-            Thread.sleep(2000) // انتظر ثانيتين
-            getPages(response.asJsoup())
-        } else {
-            pages
-        }
+        val pages = getPages(document)
 
-        return finalPages.mapIndexed { index, page ->
+        return pages.mapIndexed { index, page ->
             val imageUrl = when {
                 page.hasSpeechBubbles() -> "${page.imageUrl}${page.bubbles.toJsonString().toFragment()}"
                 else -> page.imageUrl
@@ -239,4 +233,4 @@ abstract class MangaTek :
         private const val DEFAULT_FONT_SIZE = "28"
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale("ar"))
     }
-}
+    }
