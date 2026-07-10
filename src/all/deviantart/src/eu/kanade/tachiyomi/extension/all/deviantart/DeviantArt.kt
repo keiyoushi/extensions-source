@@ -103,14 +103,13 @@ abstract class DeviantArt :
     class CookieJsonFilter(value: String = "") :
         Filter.Text(
             "Cookies (JSON)\nFirst, login to your DeviantArt account in a real browser,\n" +
-                "then paste the cookies.json array exported from that browser.",
+                "Then paste the cookies.json array exported from that browser.",
             value,
         )
 
     class CookieLoginFilter(state: Boolean = false) :
         Filter.CheckBox(
-            "Use cookie to login\nEnable after pasting cookies above. " +
-                "Will auto-clear after use.\n" +
+            "Use cookie to login\nEnable after pasting cookies above. Use this cookie only once." +
                 "Warning: Cookie import equals session hijacking risk; treat like a password.",
             state,
         )
@@ -495,7 +494,7 @@ abstract class DeviantArt :
 
     companion object {
         const val DOMAIN = "deviantart.com"
-        private const val SEARCH_HINT = "Search by gallery:{username} or gallery:{username}/{folderId} or an username, or paste a gallery URL"
+        private const val SEARCH_HINT = "Search by gallery:{username} or gallery:{username}/{folderId}, or an username, or paste gallery URL\nUse filter to login."
         private val USERNAME_RE = Regex("""^[\w-]+$""")
         private val GALLERY_RE = Regex("""gallery:([\w-]+)(?:/(\d+))?""")
         private val SUB_RE = Regex("""sub:([\w-]+)/(\d+)/(.+)""")
