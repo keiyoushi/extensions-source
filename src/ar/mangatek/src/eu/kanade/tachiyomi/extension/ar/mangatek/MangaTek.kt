@@ -138,9 +138,19 @@ abstract class MangaTek :
     // Page
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
+        
+        // محاولة الحصول على الصفحات مع الانتظار لتحميل الترجمات المولّدة بـ AI
         val pages = getPages(document)
+        
+        // إذا كانت الصفحات فارغة أو الترجمات لم تُحمل بعد، حاول مرة أخرى بعد تأخير
+        val finalPages = if (pages.isEmpty()) {
+            Thread.sleep(2000) // انتظر ثانيتين
+            getPages(response.asJsoup())
+        } else {
+            pages
+        }
 
-        return pages.mapIndexed { index, page ->
+        return finalPages.mapIndexed { index, page ->
             val imageUrl = when {
                 page.hasSpeechBubbles() -> "${page.imageUrl}${page.bubbles.toJsonString().toFragment()}"
                 else -> page.imageUrl
