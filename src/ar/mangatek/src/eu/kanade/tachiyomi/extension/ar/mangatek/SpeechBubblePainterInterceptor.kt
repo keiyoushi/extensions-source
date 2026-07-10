@@ -26,14 +26,13 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val url = request.url.toString()
-
         if (PAGE_REGEX.containsMatchIn(url).not()) {
             return chain.proceed(request)
         }
 
         val speechBubbles = request.url.fragment?.parseAs<List<Bubble>>()
             ?: emptyList()
-
+            
         val imageRequest = request.newBuilder()
             .url(url)
             .build()
@@ -58,7 +57,6 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
             val pxWidth = (speechBubble.width / 100f) * imageWidth
             val pxHeight = (speechBubble.height / 100f) * imageHeight
             val pxCenterY = pxY + (pxHeight / 2f)
-
             val textPaint = createTextPaint(fontSize)
             val bubble = createBubble(pxHeight, pxWidth, speechBubble, textPaint)
             val finalY = getYAxis(pxY, pxHeight, pxCenterY, textPaint, bubble)
@@ -66,7 +64,6 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
         }
 
         val output = ByteArrayOutputStream()
-
         val ext = url.substringBefore("#")
             .substringAfterLast(".")
             .lowercase()
@@ -79,7 +76,6 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
         bitmap.compress(format, 100, output)
 
         val responseBody = output.toByteArray().toResponseBody(mediaType)
-
         return response.newBuilder()
             .body(responseBody)
             .build()
@@ -123,13 +119,11 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
 
         textPaint.color = Color.BLACK
         textPaint.bgColor = Color.WHITE
-
         return bubble
     }
 
     private fun createBubbleLayout(pxWidth: Float, dialog: Bubble, textPaint: TextPaint): StaticLayout {
         val text = dialog.text.cleanUp()
-
         return StaticLayout.Builder.obtain(text, 0, text.length, textPaint, pxWidth.toInt()).apply {
             setAlignment(Layout.Alignment.ALIGN_CENTER)
             setIncludePad(true)
@@ -141,7 +135,6 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
     }
 
     private fun String.cleanUp(): String = Jsoup.parse(this).text()
-
     private fun Canvas.draw(textPaint: TextPaint, layout: StaticLayout, angle: Float, x: Float, y: Float) {
         save()
         translate(x, y)
@@ -159,13 +152,10 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
     private fun Canvas.drawTextOutline(textPaint: TextPaint, layout: StaticLayout) {
         val foregroundColor = textPaint.color
         val style = textPaint.style
-
         textPaint.strokeWidth = 5F
         textPaint.color = textPaint.bgColor
         textPaint.style = Paint.Style.FILL_AND_STROKE
-
         layout.draw(this)
-
         textPaint.color = foregroundColor
         textPaint.style = style
     }
