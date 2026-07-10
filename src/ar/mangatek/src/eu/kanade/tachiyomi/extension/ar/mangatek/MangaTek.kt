@@ -40,7 +40,6 @@ abstract class MangaTek :
     private var translationWaitTime: Int
         get() = preferences.getString(TRANSLATION_WAIT_PREF, DEFAULT_TRANSLATION_WAIT)!!.toInt()
         set(value) = preferences.edit().putString(TRANSLATION_WAIT_PREF, value.toString()).apply()
-   
         override val client by lazy {
         network.client.newBuilder()
             .addInterceptor(SpeechBubblePainterInterceptor(fontSize))
@@ -133,14 +132,14 @@ abstract class MangaTek :
     // Page - مع نظام إعادة محاولة ذكية
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        
+    
         // الانتظار الأولي على ترجمات AI (مع إمكانية التخصيص من الإعدادات)
         Thread.sleep(translationWaitTime.toLong())
         
         // محاولة استخراج الصفحات مع إعادة محاولة تلقائية
         var pages = getPages(document)
         var retries = 0
-        
+    
         while (pages.isEmpty() && retries < SpeechBubblePainterInterceptor.MAX_TRANSLATION_RETRIES) {
             Thread.sleep(SpeechBubblePainterInterceptor.RETRY_DELAY_MS)
             pages = getPages(document)
