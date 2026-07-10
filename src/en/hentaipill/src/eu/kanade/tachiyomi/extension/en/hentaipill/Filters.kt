@@ -15,7 +15,8 @@ open class UriPartFilter(
     displayName,
     vals.map { it.first }.toTypedArray(),
 ) {
-    fun toUriPart() = vals[state].second}
+    fun toUriPart() = vals[state].second
+}
 
 class CategoryFilter :
     UriPartFilter(
