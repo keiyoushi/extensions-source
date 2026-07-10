@@ -12,6 +12,8 @@ import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import org.json.JSONObject
 
 @Source
 abstract class MangaCloud : HttpSource() {
@@ -112,7 +114,48 @@ abstract class MangaCloud : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> = FirestoreParser.parseChapters(response)
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val allChapters = mutableListOf<SChapter>()
+        var nextPageToken: String? = null
+        var currentResponse = response
+
+        do {
+            // قراءة محتوى الاستجابة الحالية كـ JSON
+            val jsonString = currentResponse.body?.string() ?: break
+            val json = JSONObject(jsonString)
+
+            // إعادة بناء استجابة جديدة بنفس المحتوى لتمريرها إلى FirestoreParser.parseChapters
+            val newResponse = currentResponse.newBuilder()
+                .body(jsonString.toResponseBody(null))
+                .build()
+            val chapters = FirestoreParser.parseChapters(newResponse)
+            allChapters.addAll(chapters)
+
+            // استخراج nextPageToken من JSON
+            nextPageToken = json.optString("nextPageToken").takeIf { it.isNotEmpty() }
+
+            if (nextPageToken != null) {
+                // استخراج mangaId من مسار الطلب الأصلي
+                val pathSegments = currentResponse.request.url.pathSegments
+                val chaptersIndex = pathSegments.indexOf("chapters")
+                if (chaptersIndex < 1) break
+                val mangaId = pathSegments[chaptersIndex - 1]
+
+                // بناء طلب الصفحة التالية
+                val urlBuilder = "$FIRESTORE_URL/$mangaId/chapters".toHttpUrl().newBuilder()
+                    .addQueryParameter("pageSize", "1000")
+                    .addQueryParameter("key", API_KEY)
+                    .addQueryParameter("orderBy", "index")
+                    .addQueryParameter("pageToken", nextPageToken)
+
+                val newRequest = GET(urlBuilder.build(), headers)
+                currentResponse = client.newCall(newRequest).execute()
+            }
+
+        } while (nextPageToken != null && currentResponse.isSuccessful)
+
+        return allChapters
+    }
 
     override fun pageListRequest(chapter: SChapter): Request {
         val url = "${FIRESTORE_URL}/${chapter.url}?key=$API_KEY".toHttpUrl()
