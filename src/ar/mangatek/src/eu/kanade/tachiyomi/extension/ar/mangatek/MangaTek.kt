@@ -204,11 +204,6 @@ abstract class MangaTek :
                 // البحث عن الفقاعات النصية (الترجمات)
                 val overlays = element.select(".text-overlay")
                 
-                // إذا لم توجد فقاعات، نرجع الصورة بدون ترجمة
-                if (overlays.isEmpty()) {
-                    return@mapNotNull PageDTO(imageUrl, emptyList())
-                }
-                
                 // استخراج بيانات الفقاعات
                 val bubbles = overlays.mapNotNull { overlay ->
                     try {
@@ -292,7 +287,7 @@ abstract class MangaTek :
         }.also(screen::addPreference)
 
         // خيار وقت الانتظار الأولي على ترجمات AI
-        val waitTimes = arrayOf("5000", "10000", "15000", "20000", "25000", "30000")
+        val waitTimes = arrayOf("10000", "15000", "20000", "25000", "30000", "40000")
         ListPreference(screen.context).apply {
             key = TRANSLATION_WAIT_PREF
             title = "AI Translation Wait Time (Initial)"
@@ -394,13 +389,13 @@ abstract class MangaTek :
         private const val DEFAULT_FONT_SIZE = "28"
         
         private const val TRANSLATION_WAIT_PREF = "translationWaitPref"
-        private const val DEFAULT_TRANSLATION_WAIT = "20000" // 20 ثانية افتراضياً
+        private const val DEFAULT_TRANSLATION_WAIT = "30000" // 30 ثانية افتراضياً
         
         private const val MAX_RETRIES_PREF = "maxRetriesPref"
         private const val DEFAULT_MAX_RETRIES = "5" // 5 محاولات افتراضياً
         
         private const val RETRY_DELAY_PREF = "retryDelayPref"
-        private const val DEFAULT_RETRY_DELAY = "3000" // 3 ثواني بين كل محاولة
+        private const val DEFAULT_RETRY_DELAY = "10000" // 10 ثواني بين كل محاولة
         
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale("ar"))
     }
