@@ -175,10 +175,10 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
     companion object {
         const val SCALED_DENSITY = 0.75f // 1px = 0.75pt
         val mediaType = "image/png".toMediaType()
-        
+
         // الانتظار على ترجمات AI - تم زيادته إلى 20 ثانية
         const val AI_TRANSLATION_WAIT_MS = 20000L
-        
+
         // محاولات إعادة التحقق من الترجمات
         const val MAX_TRANSLATION_RETRIES = 3
         const val RETRY_DELAY_MS = 3000L

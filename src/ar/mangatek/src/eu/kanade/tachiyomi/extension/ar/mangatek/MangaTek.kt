@@ -90,7 +90,7 @@ abstract class MangaTek :
 
         return GET(url, headers)
     }
-    
+
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // Details
@@ -142,14 +142,14 @@ abstract class MangaTek :
     // Page - مع نظام إعادة محاولة ذكية
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        
+
         // الانتظار الأولي على ترجمات AI (مع إمكانية التخصيص من الإعدادات)
         Thread.sleep(translationWaitTime.toLong())
-        
+
         // محاولة استخراج الصفحات مع إعادة محاولة تلقائية
         var pages = getPages(document)
         var retries = 0
-        
+
         while (pages.isEmpty() && retries < SpeechBubblePainterInterceptor.MAX_TRANSLATION_RETRIES) {
             Thread.sleep(SpeechBubblePainterInterceptor.RETRY_DELAY_MS)
             pages = getPages(document)
