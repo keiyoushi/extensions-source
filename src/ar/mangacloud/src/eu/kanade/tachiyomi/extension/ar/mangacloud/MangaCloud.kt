@@ -105,7 +105,6 @@ abstract class MangaCloud : HttpSource() {
             }
         } while (nextPageToken != null && currentResponse.isSuccessful)
 
-        // استخراج الخصائص باستخدام الانعكاس
         val filtered = allItems.filter { data ->
             val smanga = try {
                 data::class.members.find { it.name == "smanga" }?.call(data) as? SManga
