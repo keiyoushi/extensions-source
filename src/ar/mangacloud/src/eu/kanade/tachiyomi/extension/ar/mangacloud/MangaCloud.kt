@@ -108,16 +108,24 @@ abstract class MangaCloud : HttpSource() {
         val filtered = allItems.filter { data ->
             val smanga = try {
                 data::class.members.find { it.name == "smanga" }?.call(data) as? SManga
-            } catch (_: Exception) { null }
+            } catch (_: Exception) {
+                null
+            }
             val genres = try {
                 (data::class.members.find { it.name == "genres" }?.call(data) as? List<*>)?.mapNotNull { it.toString() } ?: emptyList()
-            } catch (_: Exception) { emptyList() }
+            } catch (_: Exception) {
+                emptyList()
+            }
             val altTitles = try {
                 (data::class.members.find { it.name == "altTitles" }?.call(data) as? List<*>)?.mapNotNull { it.toString() } ?: emptyList()
-            } catch (_: Exception) { emptyList() }
+            } catch (_: Exception) {
+                emptyList()
+            }
             val statusString = try {
                 data::class.members.find { it.name == "statusString" }?.call(data) as? String ?: ""
-            } catch (_: Exception) { "" }
+            } catch (_: Exception) {
+                ""
+            }
 
             if (smanga == null) return@filter false
 
@@ -146,7 +154,9 @@ abstract class MangaCloud : HttpSource() {
         val mangas = filtered.mapNotNull { data ->
             try {
                 data::class.members.find { it.name == "smanga" }?.call(data) as? SManga
-            } catch (_: Exception) { null }
+            } catch (_: Exception) {
+                null
+            }
         }
 
         return MangasPage(mangas, false)
