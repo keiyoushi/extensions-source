@@ -76,21 +76,18 @@ abstract class MangaCloud : HttpSource() {
         val genre = currentGenreFilter
         val status = currentStatusFilter
 
-        val allItems = mutableListOf<FirestoreParser.FirestoreMangaData>()
+        val allItems = mutableListOf<Any>()
         var nextPageToken: String? = null
         var currentResponse = response
 
         do {
             val jsonString = currentResponse.body?.string() ?: break
-            val json = JSONObject(jsonString)
-
             val newResponse = currentResponse.newBuilder()
                 .body(jsonString.toResponseBody(null))
                 .build()
-            val parsed: FirestoreParser.FirestoreListResponse = FirestoreParser.parseList(newResponse)
+            val parsed = FirestoreParser.parseList(newResponse)
             allItems.addAll(parsed.mangas)
-
-            nextPageToken = json.optString("nextPageToken").takeIf { it.isNotEmpty() }
+            nextPageToken = parsed.nextPageToken
 
             if (nextPageToken != null) {
                 val urlBuilder = FIRESTORE_URL.toHttpUrl().newBuilder()
@@ -108,30 +105,52 @@ abstract class MangaCloud : HttpSource() {
             }
         } while (nextPageToken != null && currentResponse.isSuccessful)
 
+        // استخراج الخصائص باستخدام الانعكاس
         val filtered = allItems.filter { data ->
+            val smanga = try {
+                data::class.members.find { it.name == "smanga" }?.call(data) as? SManga
+            } catch (_: Exception) { null }
+            val genres = try {
+                (data::class.members.find { it.name == "genres" }?.call(data) as? List<*>)?.mapNotNull { it.toString() } ?: emptyList()
+            } catch (_: Exception) { emptyList() }
+            val altTitles = try {
+                (data::class.members.find { it.name == "altTitles" }?.call(data) as? List<*>)?.mapNotNull { it.toString() } ?: emptyList()
+            } catch (_: Exception) { emptyList() }
+            val statusString = try {
+                data::class.members.find { it.name == "statusString" }?.call(data) as? String ?: ""
+            } catch (_: Exception) { "" }
+
+            if (smanga == null) return@filter false
+
             val matchesQuery = if (query.isNotBlank()) {
                 val q = query.lowercase()
-                data.smanga.title.lowercase().contains(q) ||
-                    data.altTitles.any { it.lowercase().contains(q) } ||
-                    data.genres.any { it.lowercase().contains(q) } ||
-                    data.smanga.description?.lowercase()?.contains(q) == true
+                smanga.title.lowercase().contains(q) ||
+                    altTitles.any { it.lowercase().contains(q) } ||
+                    genres.any { it.lowercase().contains(q) } ||
+                    smanga.description?.lowercase()?.contains(q) == true
             } else {
                 true
             }
             val matchesGenre = if (genre.isNotBlank()) {
-                data.genres.any { it.lowercase().contains(genre.lowercase()) }
+                genres.any { it.lowercase().contains(genre.lowercase()) }
             } else {
                 true
             }
             val matchesStatus = if (status.isNotBlank()) {
-                data.statusString == status
+                statusString == status
             } else {
                 true
             }
             matchesQuery && matchesGenre && matchesStatus
         }
 
-        return MangasPage(filtered.map { it.smanga }, false)
+        val mangas = filtered.mapNotNull { data ->
+            try {
+                data::class.members.find { it.name == "smanga" }?.call(data) as? SManga
+            } catch (_: Exception) { null }
+        }
+
+        return MangasPage(mangas, false)
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
