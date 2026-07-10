@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.mangacloud
 
-import eu.kanade.tachiyomi.extension.ar.mangacloud.FirestoreParser.FirestoreListResponse
-import eu.kanade.tachiyomi.extension.ar.mangacloud.FirestoreParser.FirestoreMangaData
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -78,7 +76,7 @@ abstract class MangaCloud : HttpSource() {
         val genre = currentGenreFilter
         val status = currentStatusFilter
 
-        val allItems = mutableListOf<FirestoreMangaData>()
+        val allItems = mutableListOf<FirestoreParser.FirestoreMangaData>()
         var nextPageToken: String? = null
         var currentResponse = response
 
@@ -89,7 +87,7 @@ abstract class MangaCloud : HttpSource() {
             val newResponse = currentResponse.newBuilder()
                 .body(jsonString.toResponseBody(null))
                 .build()
-            val parsed: FirestoreListResponse = FirestoreParser.parseList(newResponse)
+            val parsed: FirestoreParser.FirestoreListResponse = FirestoreParser.parseList(newResponse)
             allItems.addAll(parsed.mangas)
 
             nextPageToken = json.optString("nextPageToken").takeIf { it.isNotEmpty() }
