@@ -82,7 +82,7 @@ abstract class MangaTek :
 
         return GET(url, headers)
     }
-    
+
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // Details
@@ -139,7 +139,7 @@ abstract class MangaTek :
         var retries = 0
 
         while (pages.isEmpty() && retries < SpeechBubblePainterInterceptor.MAX_TRANSLATION_RETRIES) {
-           Thread.sleep(SpeechBubblePainterInterceptor.RETRY_DELAY_MS)
+            Thread.sleep(SpeechBubblePainterInterceptor.RETRY_DELAY_MS)
             pages = getPages(document)
             retries++
         }
