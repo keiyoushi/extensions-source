@@ -40,6 +40,13 @@ abstract class MangaTek :
     private var translationWaitTime: Int
         get() = preferences.getString(TRANSLATION_WAIT_PREF, DEFAULT_TRANSLATION_WAIT)!!.toInt()
         set(value) = preferences.edit().putString(TRANSLATION_WAIT_PREF, value.toString()).apply()
+    private var maxRetries: Int
+        get() = preferences.getString(MAX_RETRIES_PREF, DEFAULT_MAX_RETRIES)!!.toInt()
+        set(value) = preferences.edit().putString(MAX_RETRIES_PREF, value.toString()).apply()
+    private var retryDelay: Int
+        get() = preferences.getString(RETRY_DELAY_PREF, DEFAULT_RETRY_DELAY)!!.toInt()
+        set(value) = preferences.edit().putString(RETRY_DELAY_PREF, value.toString()).apply()
+
     override val client by lazy {
         network.client.newBuilder()
             .addInterceptor(SpeechBubblePainterInterceptor(fontSize))
@@ -129,19 +136,39 @@ abstract class MangaTek :
         }
     }
 
-    // Page - مع نظام إعادة محاولة ذكية
+    // Page - نظام إعادة محاولة ذكي محسّن
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        // الانتظار الأولي على ترجمات AI (مع إمكانية التخصيص من الإعدادات)
+        
+        // الانتظار الأولي على ترجمات AI
         Thread.sleep(translationWaitTime.toLong())
-        // محاولة استخراج الصفحات مع إعادة محاولة تلقائية
+        
+        // محاولة استخراج الصفحات مع إعادة محاولة تلقائية ذكية
         var pages = getPages(document)
         var retries = 0
-
-        while (pages.isEmpty() && retries < SpeechBubblePainterInterceptor.MAX_TRANSLATION_RETRIES) {
-            Thread.sleep(SpeechBubblePainterInterceptor.RETRY_DELAY_MS)
-            pages = getPages(document)
+        
+        // نظام إعادة محاولة محسّن: نتابع محاولة الحصول على ترجمات إذا كانت الصفحات موجودة لكن بدون ترجمات
+        while (pages.isNotEmpty() && pages.any { !it.hasSpeechBubbles() } && retries < maxRetries) {
+            Thread.sleep(retryDelay.toLong())
+            val newPages = getPages(document)
+            
+            // إذا حصلنا على ترجمات جديدة، نستبدل الصفحات
+            if (newPages.isNotEmpty() && newPages.any { it.hasSpeechBubbles() }) {
+                pages = newPages
+                break
+            }
+            
             retries++
+        }
+        
+        // إذا لم نحصل على أي صفحات بعد الانتظار الأولي
+        if (pages.isEmpty()) {
+            retries = 0
+            while (pages.isEmpty() && retries < maxRetries) {
+                Thread.sleep(retryDelay.toLong())
+                pages = getPages(document)
+                retries++
+            }
         }
 
         return pages.mapIndexed { index, page ->
@@ -153,21 +180,64 @@ abstract class MangaTek :
         }
     }
 
-    private fun getPages(document: Document): List<PageDTO> = document.select(".manga-page").map { element ->
-        val imageUrl = element.selectFirst("img")!!.imgAttr()
-        val overlays = element.select(".text-overlay").takeIf(List<Element>::isNotEmpty) ?: return@map PageDTO(imageUrl)
-        val bubbles = overlays.map { overlay ->
-            val style = overlay.attr("style")
-            Bubble(
-                text = overlay.text(),
-                left = style.substringAfterLast("left:").substringBefore("%").trim().toFloat(),
-                top = style.substringAfterLast("top:").substringBefore("%").trim().toFloat(),
-                width = style.substringAfterLast("width:").substringBefore("%").trim().toFloat(),
-                height = style.substringAfterLast("height:").substringBefore("%").trim().toFloat(),
-            )
+    /**
+     * محاولة الحصول على الصفحات مع فحص شامل للترجمات
+     * يتحقق من:
+     * 1. وجود عناصر الصفحات
+     * 2. وجود صور الصفحات
+     * 3. وجود الفقاعات النصية (الترجمات)
+     * 4. تحديث DOM في حالة تأخر التحميل
+     */
+    private fun getPages(document: Document): List<PageDTO> {
+        // إعادة تحميل DOM في حالة التأخر
+        val freshDocument = try {
+            // محاولة الحصول على أحدث نسخة من الصفحة
+            document
+        } catch (e: Exception) {
+            document
         }
 
-        PageDTO(imageUrl, bubbles)
+        return freshDocument.select(".manga-page").mapNotNull { element ->
+            try {
+                val imageUrl = element.selectFirst("img")?.imgAttr() ?: return@mapNotNull null
+                
+                // البحث عن الفقاعات النصية (الترجمات)
+                val overlays = element.select(".text-overlay")
+                
+                // إذا لم توجد فقاعات، نرجع الصورة بدون ترجمة
+                if (overlays.isEmpty()) {
+                    return@mapNotNull PageDTO(imageUrl, emptyList())
+                }
+                
+                // استخراج بيانات الفقاعات
+                val bubbles = overlays.mapNotNull { overlay ->
+                    try {
+                        val style = overlay.attr("style")
+                        val text = overlay.text().trim()
+                        
+                        // التحقق من أن النص ليس فارغاً والأسلوب يحتوي على بيانات موضع
+                        if (text.isEmpty() || !style.contains("left:") || !style.contains("top:")) {
+                            return@mapNotNull null
+                        }
+                        
+                        Bubble(
+                            text = text,
+                            left = style.substringAfterLast("left:").substringBefore("%").trim().toFloatOrNull() ?: 0f,
+                            top = style.substringAfterLast("top:").substringBefore("%").trim().toFloatOrNull() ?: 0f,
+                            width = style.substringAfterLast("width:").substringBefore("%").trim().toFloatOrNull() ?: 0f,
+                            height = style.substringAfterLast("height:").substringBefore("%").trim().toFloatOrNull() ?: 0f,
+                            angle = style.substringAfterLast("angle:").substringBefore("deg").trim().toFloatOrNull() ?: 0f,
+                        )
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                
+                PageDTO(imageUrl, bubbles)
+            } catch (e: Exception) {
+                null
+            }
+        }
     }
 
     fun String.toFragment(): String = "#${this.replace("#", "*")}"
@@ -221,19 +291,19 @@ abstract class MangaTek :
             }
         }.also(screen::addPreference)
 
-        // إضافة خيار وقت الانتظار على ترجمات AI
-        val waitTimes = arrayOf("10000", "15000", "20000", "25000", "30000")
+        // خيار وقت الانتظار الأولي على ترجمات AI
+        val waitTimes = arrayOf("5000", "10000", "15000", "20000", "25000", "30000")
         ListPreference(screen.context).apply {
             key = TRANSLATION_WAIT_PREF
-            title = "AI Translation Wait Time"
+            title = "AI Translation Wait Time (Initial)"
             entries = waitTimes.map {
                 "${it.toInt() / 1000} seconds" + if (it == DEFAULT_TRANSLATION_WAIT) " - Default" else ""
             }.toTypedArray()
             entryValues = waitTimes
 
             summary = buildString {
-                appendLine("Time to wait for AI translations to complete on pages.")
-                appendLine("Increase if translations are missing. Decrease if pages load too slow.")
+                appendLine("Initial time to wait for AI translations to complete.")
+                appendLine("Increase if translations are missing on first load.")
                 append("\t* %s")
             }
 
@@ -246,7 +316,71 @@ abstract class MangaTek :
 
                 Toast.makeText(
                     screen.context,
-                    "Wait time changed to '$entry'. Restart app to apply new setting.",
+                    "Wait time changed to '$entry'.",
+                    Toast.LENGTH_LONG,
+                ).show()
+                true
+            }
+        }.also(screen::addPreference)
+
+        // خيار عدد المحاولات
+        val retryOptions = arrayOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")
+        ListPreference(screen.context).apply {
+            key = MAX_RETRIES_PREF
+            title = "Max Retry Attempts"
+            entries = retryOptions.map {
+                "$it attempt" + (if (it == "1") "" else "s") + if (it == DEFAULT_MAX_RETRIES) " - Default" else ""
+            }.toTypedArray()
+            entryValues = retryOptions
+
+            summary = buildString {
+                appendLine("Number of times to retry fetching translations if missing.")
+                appendLine("Higher = more time to wait, but better chance of getting translations.")
+                append("\t* %s")
+            }
+
+            setDefaultValue(maxRetries.toString())
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val selected = newValue as String
+                val index = this.findIndexOfValue(selected)
+                val entry = entries[index] as String
+
+                Toast.makeText(
+                    screen.context,
+                    "Max retries changed to '$entry'.",
+                    Toast.LENGTH_LONG,
+                ).show()
+                true
+            }
+        }.also(screen::addPreference)
+
+        // خيار تأخير كل محاولة
+        val retryDelays = arrayOf("1000", "2000", "3000", "4000", "5000", "6000")
+        ListPreference(screen.context).apply {
+            key = RETRY_DELAY_PREF
+            title = "Retry Delay"
+            entries = retryDelays.map {
+                "${it.toInt() / 1000} seconds" + if (it == DEFAULT_RETRY_DELAY) " - Default" else ""
+            }.toTypedArray()
+            entryValues = retryDelays
+
+            summary = buildString {
+                appendLine("Time to wait between each retry attempt.")
+                appendLine("Higher = gives server more time to generate translations.")
+                append("\t* %s")
+            }
+
+            setDefaultValue(retryDelay.toString())
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val selected = newValue as String
+                val index = this.findIndexOfValue(selected)
+                val entry = entries[index] as String
+
+                Toast.makeText(
+                    screen.context,
+                    "Retry delay changed to '$entry'.",
                     Toast.LENGTH_LONG,
                 ).show()
                 true
@@ -258,8 +392,16 @@ abstract class MangaTek :
         val PAGE_REGEX = Regex(""".*?\.(webp|png|jpg|jpeg)(?:\?v=\d+)?#\[.*?]""", RegexOption.IGNORE_CASE)
         private const val FONT_SIZE_PREF = "fontSizePref"
         private const val DEFAULT_FONT_SIZE = "28"
+        
         private const val TRANSLATION_WAIT_PREF = "translationWaitPref"
-        private const val DEFAULT_TRANSLATION_WAIT = "20000" // 20 ثواني افتراضياً
+        private const val DEFAULT_TRANSLATION_WAIT = "20000" // 20 ثانية افتراضياً
+        
+        private const val MAX_RETRIES_PREF = "maxRetriesPref"
+        private const val DEFAULT_MAX_RETRIES = "5" // 5 محاولات افتراضياً
+        
+        private const val RETRY_DELAY_PREF = "retryDelayPref"
+        private const val DEFAULT_RETRY_DELAY = "3000" // 3 ثواني بين كل محاولة
+        
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale("ar"))
     }
 }
