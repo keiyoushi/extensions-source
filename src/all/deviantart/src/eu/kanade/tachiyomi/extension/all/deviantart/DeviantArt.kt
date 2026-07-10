@@ -1,9 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.deviantart
 
 import android.content.SharedPreferences
-import android.text.InputType
 import android.webkit.CookieManager
-import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -27,6 +25,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.json.JSONArray
+import org.json.JSONObject
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.parser.Parser
@@ -35,7 +35,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 // Search: gallery:{username}[/{folderId}] | {username} | full gallery URL
-// Cookie login: paste browser-exported cookies.json in Settings, enable in Filter.
+// Cookie login: paste browser-exported cookies.json in Filter, then enable the checkbox.
 // DeviantArt uses Cloudflare + PerimeterX so WebView login doesn't work.
 
 @Source
@@ -56,16 +56,13 @@ abstract class DeviantArt :
 
     override val client: OkHttpClient by lazy {
         network.client.newBuilder()
-            .cookieJar(JavaNetCookieJar(cookieManager))
+            .cookieJar(WebViewCookieJar(cookieManager))
             .build()
     }
 
     // ── Cookie login ─────────────────────────────────────────────────────
 
-    private fun seedCookiesIfEnabled() {
-        if (!preferences.cookieLoginEnabled) return
-        val json = preferences.cookieJsonRaw
-        if (json.isBlank()) return
+    private fun seedCookies(json: String) {
         val cookies = parseCookieJson(json)
         val url = "https://$DOMAIN/"
         cookies.forEach { (k, v) ->
@@ -74,22 +71,57 @@ abstract class DeviantArt :
     }
 
     // Parse browser-exported cookies.json into name-value pairs.
+    // Uses org.json for robust parsing; keeps only cookies whose domain
+    // matches deviantart.com (or a subdomain) and defaults path to "/".
     private fun parseCookieJson(raw: String): List<Pair<String, String>> {
         val result = mutableListOf<Pair<String, String>>()
-        val entryRe = Regex("""\{[^}]*"name"\s*:\s*"([^"]+)"[^}]*"value"\s*:\s*"([^"]+)"[^}]*\}""")
-        for (m in entryRe.findAll(raw)) result += m.groupValues[1] to m.groupValues[2]
+        val trimmed = raw.trim()
+        val jsonArray = if (trimmed.startsWith("[")) {
+            JSONArray(trimmed)
+        } else {
+            // Some exports wrap the array inside an object or have leading text.
+            // Try to find the first '[' … last ']' as a fallback.
+            val start = trimmed.indexOf('[')
+            val end = trimmed.lastIndexOf(']')
+            if (start == -1 || end <= start) return result
+            JSONArray(trimmed.substring(start, end + 1))
+        }
+        for (i in 0 until jsonArray.length()) {
+            val obj = jsonArray.getJSONObject(i)
+            val domain = obj.optString("domain", "")
+            // The standard export field is "domain" (leading dot), but some
+            // tools use "Domain" (capitalised).
+            val domainClean = domain.removePrefix(".")
+            if (!isDeviantArtDomain(domainClean)) continue
+            val name = obj.optString("name", "")
+            val value = obj.optString("value", "")
+            if (name.isEmpty()) continue
+            result += name to value
+        }
         return result
     }
 
+    private fun isDeviantArtDomain(domain: String): Boolean = domain == DOMAIN || domain.endsWith(".$DOMAIN")
+
     // ── Filter ───────────────────────────────────────────────────────────
+
+    class CookieJsonFilter(value: String = "") :
+        Filter.Text(
+            "Cookies (JSON)\nPaste the cookies.json array exported from your browser.\n" +
+                "DevTools → Application → Cookies → export as JSON.",
+            value,
+        )
 
     class CookieLoginFilter(state: Boolean = false) :
         Filter.CheckBox(
-            "Use cookie to login\nCookie login should only need to be done once — untick after use.",
+            "Use cookie to login\nEnable after pasting cookies above.",
             state,
         )
 
-    override fun getFilterList() = FilterList(CookieLoginFilter(preferences.cookieLoginEnabled))
+    override fun getFilterList(): FilterList = FilterList(
+        CookieJsonFilter(),
+        CookieLoginFilter(),
+    )
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException(SEARCH_HINT)
     override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException(SEARCH_HINT)
@@ -195,6 +227,16 @@ abstract class DeviantArt :
         doc.select("a.user-link, a[href*=\"/$loweredFallback\"][href*=user]").firstOrNull { link ->
             link.text().equals(fallback, ignoreCase = true)
         }?.text()?.takeIf { it.isNotBlank() }?.let { return it }
+        // Last resort: extract the lowercase username from the document's own URL.
+        // DeviantArt URLs always use the canonical lowercase username as the first
+        // path segment, e.g. /leafybush7/gallery/...
+        val docLocation = doc.location()
+        if (docLocation.isNotBlank()) {
+            try {
+                val pathSeg = docLocation.toHttpUrl().pathSegments.getOrNull(0)
+                if (!pathSeg.isNullOrBlank()) return pathSeg.lowercase()
+            } catch (_: Exception) {}
+        }
         return fallback
     }
 
@@ -207,13 +249,14 @@ abstract class DeviantArt :
     // ── Search → single gallery ────────────────────────────────────────
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val cookieEnabled = (filters.firstOrNull { it is CookieLoginFilter } as? CookieLoginFilter)?.state
-            ?: preferences.cookieLoginEnabled
-        preferences.edit().putBoolean(COOKIE_LOGIN_PREF, cookieEnabled).apply()
-        if (cookieEnabled) {
-            seedCookiesIfEnabled()
-            // One-shot: uncheck after use so it doesn't stay on permanently
-            preferences.edit().putBoolean(COOKIE_LOGIN_PREF, false).apply()
+        // If the user enabled cookie login, seed cookies from the JSON text
+        // filter, then clear both the text and checkbox so they only apply once.
+        val loginFilter = filters.firstOrNull { it is CookieLoginFilter } as? CookieLoginFilter
+        val jsonFilter = filters.firstOrNull { it is CookieJsonFilter } as? CookieJsonFilter
+        if (loginFilter != null && loginFilter.state && jsonFilter != null && jsonFilter.state.isNotBlank()) {
+            seedCookies(jsonFilter.state)
+            loginFilter.state = false
+            jsonFilter.state = ""
         }
 
         // sub: prefix preserves the slug for mangaDetailsParse fallback
@@ -290,8 +333,7 @@ abstract class DeviantArt :
         var nextUrl = doc.selectFirst("[rel=next]")?.absUrl("href")
         while (nextUrl != null) {
             val r = client.newCall(GET(nextUrl, headers)).execute()
-            val rDoc = r.asJsoupXml()
-            r.close() // close the response body to avoid leaks
+            val rDoc = r.use { it.asJsoupXml() }
             chapters += parseChapters(rDoc)
             nextUrl = rDoc.selectFirst("[rel=next]")?.absUrl("href")
         }
@@ -330,22 +372,56 @@ abstract class DeviantArt :
             it.data().contains("__INITIAL_STATE__")
         }?.data() ?: return legacyMultiImagePages(doc, pageUrl)
 
-        val jsonStr = Regex("""JSON\.parse\("(.+)"\)""").find(script)?.groupValues?.getOrNull(1)
-            ?.replace("\\\"", "\"")?.replace("\\\\", "\\")
+        // Extract the JSON string passed to JSON.parse() — use non-greedy
+        // matching (.+?) so multiple calls in the same script don't overlap.
+        val jsonStr = Regex("""JSON\.parse\("(.+?)"\)""").find(script)?.groupValues?.getOrNull(1)
+            ?.replace("\\\"", "\"")
+            ?.replace("\\\\", "\\")
             ?: return legacyMultiImagePages(doc, pageUrl)
 
-        val urls = Regex("""https://images-wixmp-[^"\\]+""").findAll(jsonStr)
-        val pages = urls.mapIndexed { i, match ->
-            val url = match.value
-            val largeUrl = if (url.contains("/v1/fit/")) {
-                url.replace(Regex("""/v1/fit/w_\d+,h_\d+,q_\d+"""), "/v1/fit/w_1600,h_1600,q_80")
-            } else {
-                url.replaceFirst(Regex("""/v1(/.*)?(?=\?)"""), "")
-            }
-            Page(i, imageUrl = largeUrl)
-        }.toList()
-
+        // Prefer decoding the __INITIAL_STATE__ JSON object when available.
+        val pages = tryParseInitialStateImages(jsonStr, pageUrl)
+            ?: extractImageUrlsFallback(jsonStr)
         return pages.ifEmpty { legacyMultiImagePages(doc, pageUrl) }
+    }
+
+    // Attempt to parse the decoded string as JSON and walk known paths for image URLs.
+    private fun tryParseInitialStateImages(json: String, pageUrl: String): List<Page>? {
+        return try {
+            val root = JSONObject(json)
+            val entities = root.optJSONObject("@@entities") ?: return null
+            // DeviantArt nests deviation objects keyed by deviationId; each may
+            // carry a media token with token[], each holding a url.
+            val deviationIds = entities.names() ?: return null
+            val urls = mutableListOf<String>()
+            for (i in 0 until deviationIds.length()) {
+                val entity = entities.optJSONObject(deviationIds.getString(i)) ?: continue
+                val media = entity.optJSONObject("media") ?: continue
+                val tokens = media.optJSONArray("token") ?: continue
+                for (j in 0 until tokens.length()) {
+                    val url = tokens.optString(j, "")
+                    if (url.startsWith("https://images-wixmp-")) urls += url
+                }
+            }
+            if (urls.isEmpty()) return null
+            urls.mapIndexed { idx, url -> Page(idx, imageUrl = upgradeWixmpUrl(url)) }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    // Fallback: regex-scan the decoded JSON string for WixMP image URLs.
+    private fun extractImageUrlsFallback(json: String): List<Page> {
+        val urls = Regex("""https://images-wixmp-[^"\\]+""").findAll(json)
+        return urls.mapIndexed { i, match ->
+            Page(i, imageUrl = upgradeWixmpUrl(match.value))
+        }.toList()
+    }
+
+    private fun upgradeWixmpUrl(url: String): String = if (url.contains("/v1/fit/")) {
+        url.replace(Regex("""/v1/fit/w_\d+,h_\d+,q_\d+"""), "/v1/fit/w_1600,h_1600,q_80")
+    } else {
+        url.replaceFirst(Regex("""/v1(/.*)?(?=\?)"""), "")
     }
 
     private fun legacyMultiImagePages(doc: Document, pageUrl: String): List<Page> {
@@ -373,7 +449,13 @@ abstract class DeviantArt :
 
     // ── Helpers ─────────────────────────────────────────────────────────
 
-    private fun Response.asJsoupXml(): Document = Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())
+    // Use peekBody so the Response body is not consumed — the caller
+    // (or the framework) retains ownership and can close the Response.
+    private fun Response.asJsoupXml(): Document = Jsoup.parse(
+        peekBody(Long.MAX_VALUE).string(),
+        request.url.toString(),
+        Parser.xmlParser(),
+    )
 
     // ══════════════════════════════════════════════════════════════════════
     // PREFERENCES
@@ -393,20 +475,6 @@ abstract class DeviantArt :
                 setDefaultValue(ArtistInTitle.defaultValue.name)
             },
         )
-
-        // Cookie JSON: paste browser-exported cookies.json array.
-        // Pairs are parsed and seeded into CookieManager when filter is enabled.
-        EditTextPreference(screen.context).apply {
-            key = COOKIE_JSON_PREF
-            title = "Cookies (JSON)"
-            summary = "Paste the cookies.json array exported from your browser here.\n" +
-                "To export: DevTools → Application → Cookies → export as JSON.\n" +
-                "After saving, go to Filter and enable \"Use cookie to login\"."
-            setDefaultValue("")
-            setOnBindEditTextListener {
-                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            }
-        }.also(screen::addPreference)
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -428,8 +496,6 @@ abstract class DeviantArt :
     // ── SharedPreferences accessors ──────────────────────────────────────
 
     private val SharedPreferences.artistInTitle get() = getString(ArtistInTitle.PREF_KEY, ArtistInTitle.defaultValue.name)
-    val SharedPreferences.cookieLoginEnabled get() = getBoolean(COOKIE_LOGIN_PREF, false)
-    private val SharedPreferences.cookieJsonRaw get() = getString(COOKIE_JSON_PREF, "") ?: ""
 
     companion object {
         const val DOMAIN = "deviantart.com"
@@ -437,15 +503,12 @@ abstract class DeviantArt :
         private val USERNAME_RE = Regex("""^[\w-]+$""")
         private val GALLERY_RE = Regex("""gallery:([\w-]+)(?:/(\d+))?""")
         private val SUB_RE = Regex("""sub:([\w-]+)/(\d+)/(.+)""")
-
-        private const val COOKIE_LOGIN_PREF = "cookie_login_enabled"
-        private const val COOKIE_JSON_PREF = "cookie_json"
     }
 }
 
 // Bridges Android CookieManager into OkHttp so Set-Cookie responses persist.
 
-private class JavaNetCookieJar(private val cm: CookieManager) : CookieJar {
+private class WebViewCookieJar(private val cm: CookieManager) : CookieJar {
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
         cookies.forEach { cm.setCookie(url.toString(), it.toString()) }
     }
