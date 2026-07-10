@@ -34,16 +34,14 @@ import java.util.Locale
 abstract class MangaTek :
     HttpSource(),
     ConfigurableSource {
-
     private var fontSize: Int
         get() = preferences.getString(FONT_SIZE_PREF, DEFAULT_FONT_SIZE)!!.toInt()
         set(value) = preferences.edit().putString(FONT_SIZE_PREF, value.toString()).apply()
-
     private var translationWaitTime: Int
         get() = preferences.getString(TRANSLATION_WAIT_PREF, DEFAULT_TRANSLATION_WAIT)!!.toInt()
         set(value) = preferences.edit().putString(TRANSLATION_WAIT_PREF, value.toString()).apply()
-
-    override val client by lazy {
+   
+        override val client by lazy {
         network.client.newBuilder()
             .addInterceptor(SpeechBubblePainterInterceptor(fontSize))
             .rateLimit(3)
@@ -54,15 +52,12 @@ abstract class MangaTek :
         .add("Referer", "$baseUrl/")
 
     private val preferences: SharedPreferences by getPreferencesLazy()
-
     override val supportsLatest = true
 
     // Popular
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga-list?sort=views&page=$page", headers)
-
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-
         val mangas = document.select(".flex-grow .grid a").map { element ->
             SManga.create().apply {
                 title = element.select("h3").attr("title")
@@ -72,13 +67,11 @@ abstract class MangaTek :
         }
 
         val hasNextPage = document.selectFirst("nav a[aria-disabled=false] .fa-chevron-left") != null
-
         return MangasPage(mangas, hasNextPage)
     }
 
     // Latest
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manga-list?page=$page", headers)
-
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // Search
@@ -96,7 +89,6 @@ abstract class MangaTek :
     // Details
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-
         return SManga.create().apply {
             title = document.selectFirst("h1")!!.text()
             description = document.selectFirst("p.text-base")?.text()
@@ -122,7 +114,6 @@ abstract class MangaTek :
     // Chapters
     override fun chapterListParse(response: Response): List<SChapter> {
         val seriesSlug = response.request.url.toString().substringAfterLast("/")
-
         val props = response.asJsoup()
             .selectFirst("astro-island[component-url*=MangaChaptersLoader]")
             ?.attr("props") ?: return emptyList()
@@ -168,7 +159,6 @@ abstract class MangaTek :
     private fun getPages(document: Document): List<PageDTO> = document.select(".manga-page").map { element ->
         val imageUrl = element.selectFirst("img")!!.imgAttr()
         val overlays = element.select(".text-overlay").takeIf(List<Element>::isNotEmpty) ?: return@map PageDTO(imageUrl)
-
         val bubbles = overlays.map { overlay ->
             val style = overlay.attr("style")
             Bubble(
@@ -184,9 +174,7 @@ abstract class MangaTek :
     }
 
     fun String.toFragment(): String = "#${this.replace("#", "*")}"
-
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     private fun Element.imgAttr(): String = when {
         hasAttr("data-src") -> attr("abs:data-src")
         hasAttr("data-url") -> attr("abs:data-url")
@@ -227,13 +215,11 @@ abstract class MangaTek :
                 val selected = newValue as String
                 val index = this.findIndexOfValue(selected)
                 val entry = entries[index] as String
-
                 Toast.makeText(
                     screen.context,
                     "Font size changed to '$entry'. Restart app to apply new setting.",
                     Toast.LENGTH_LONG,
                 ).show()
-
                 true
             }
         }.also(screen::addPreference)
@@ -266,7 +252,6 @@ abstract class MangaTek :
                     "Wait time changed to '$entry'. Restart app to apply new setting.",
                     Toast.LENGTH_LONG,
                 ).show()
-
                 true
             }
         }.also(screen::addPreference)
