@@ -120,28 +120,23 @@ abstract class MangaCloud : HttpSource() {
         var currentResponse = response
 
         do {
-            // قراءة محتوى الاستجابة الحالية كـ JSON
             val jsonString = currentResponse.body?.string() ?: break
             val json = JSONObject(jsonString)
 
-            // إعادة بناء استجابة جديدة بنفس المحتوى لتمريرها إلى FirestoreParser.parseChapters
             val newResponse = currentResponse.newBuilder()
                 .body(jsonString.toResponseBody(null))
                 .build()
             val chapters = FirestoreParser.parseChapters(newResponse)
             allChapters.addAll(chapters)
 
-            // استخراج nextPageToken من JSON
             nextPageToken = json.optString("nextPageToken").takeIf { it.isNotEmpty() }
 
             if (nextPageToken != null) {
-                // استخراج mangaId من مسار الطلب الأصلي
                 val pathSegments = currentResponse.request.url.pathSegments
                 val chaptersIndex = pathSegments.indexOf("chapters")
                 if (chaptersIndex < 1) break
                 val mangaId = pathSegments[chaptersIndex - 1]
 
-                // بناء طلب الصفحة التالية
                 val urlBuilder = "$FIRESTORE_URL/$mangaId/chapters".toHttpUrl().newBuilder()
                     .addQueryParameter("pageSize", "1000")
                     .addQueryParameter("key", API_KEY)
@@ -151,7 +146,6 @@ abstract class MangaCloud : HttpSource() {
                 val newRequest = GET(urlBuilder.build(), headers)
                 currentResponse = client.newCall(newRequest).execute()
             }
-
         } while (nextPageToken != null && currentResponse.isSuccessful)
 
         return allChapters
