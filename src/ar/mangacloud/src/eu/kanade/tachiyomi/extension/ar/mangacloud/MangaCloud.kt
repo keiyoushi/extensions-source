@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.ar.mangacloud
 
+import eu.kanade.tachiyomi.extension.ar.mangacloud.FirestoreParser.FirestoreListResponse
+import eu.kanade.tachiyomi.extension.ar.mangacloud.FirestoreParser.FirestoreMangaData
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,10 +16,6 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.json.JSONObject
-
-// استيراد الفئات الداخلية من FirestoreParser (يفترض وجودها)
-import eu.kanade.tachiyomi.extension.ar.mangacloud.FirestoreParser.FirestoreMangaData
-import eu.kanade.tachiyomi.extension.ar.mangacloud.FirestoreParser.FirestoreListResponse
 
 @Source
 abstract class MangaCloud : HttpSource() {
