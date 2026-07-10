@@ -53,7 +53,11 @@ abstract class HentaiPill : HttpSource() {
                         setUrlWithoutDomain(url.toString())
                         initialized = true
                     }
-                    return fetchMangaDetails(manga).map { MangasPage(listOf(it), false) }
+                    return fetchMangaDetails(manga).map {
+                        it.url = manga.url
+                        it.initialized = true
+                        MangasPage(listOf(it), false)
+                    }
                 }
 
                 throw Exception("Unsupported url")
