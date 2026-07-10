@@ -11,6 +11,5 @@ keiyoushi {
     source {
         lang = "ar"
         baseUrl = "https://mangacloud.online"
-        id = 4294967295
     }
 }
