@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.network.rateLimit
 import keiyoushi.utils.get
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
@@ -23,7 +22,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
-import kotlin.time.Duration.Companion.seconds
 
 abstract class Hiper : HttpSource() {
 
@@ -50,7 +48,6 @@ abstract class Hiper : HttpSource() {
                 response
             }
         }
-        .rateLimit(3, 1.seconds)
         .build()
 
     // ============================ Popular ====================================
