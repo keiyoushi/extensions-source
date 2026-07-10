@@ -13,6 +13,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -27,12 +28,15 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -172,7 +176,16 @@ abstract class AllManga :
         return result.data.manga.toSManga()
     }
 
+    @Volatile
+    private var mangaUrl: String? = null
+
     override fun getMangaUrl(manga: SManga): String {
+        // Manually solve interaction CF captcha
+        if (mangaUrl != null) {
+            val chapterUrl = mangaUrl!!
+            mangaUrl = null
+            return chapterUrl
+        }
         val mangaId = manga.url.split("/")[2]
         return "$baseUrl/manga/$mangaId"
     }
@@ -215,7 +228,20 @@ abstract class AllManga :
 
     /* Pages */
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
-        pageListFromWebView(chapter)
+        val chapterUrl = getChapterUrl(chapter)
+
+        try {
+            val response = runBlocking {
+                client.newCall(GET(chapterUrl, headers)).awaitSuccess()
+            }
+            pageListFromWebView(response.asJsoup())
+        } catch (e: Exception) {
+            if (e.message?.lowercase()?.contains("failed to bypass") == true) {
+                mangaUrl = chapterUrl
+                throw IOException("Solve Captcha in Webview and Retry")
+            }
+            throw e
+        }
     }
 
     override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
@@ -223,9 +249,7 @@ abstract class AllManga :
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun pageListFromWebView(chapter: SChapter): List<Page> {
-        val document = client.newCall(GET(getChapterUrl(chapter), headers)).execute().asJsoup()
-
+    private fun pageListFromWebView(document: Document): List<Page> {
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
         val jsInterface = JsInterface(latch)
@@ -268,7 +292,7 @@ abstract class AllManga :
                 }
             }
 
-            view.loadDataWithBaseURL(getChapterUrl(chapter), document.outerHtml(), "text/html", "utf-8", null)
+            view.loadDataWithBaseURL(document.location(), document.outerHtml(), "text/html", "utf-8", null)
         }
 
         val completed = latch.await(30, TimeUnit.SECONDS)
