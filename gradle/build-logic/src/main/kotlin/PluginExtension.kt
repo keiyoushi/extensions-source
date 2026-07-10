@@ -224,10 +224,11 @@ class PluginExtension : Plugin<Project> {
 
                     val signTask = tasks.register<SignExtensionJarTask>("sign${variantName}ExtensionJar") {
                         inputJar.set(shrinkTask.flatMap { it.outputJar })
-                        signingConfig.storeFile?.let { keystore.set(it) }
+                        signingConfig.storeFile?.let { keystore.from(it) }
                         storePassword.set(signingConfig.storePassword.orEmpty())
                         keyAlias.set(signingConfig.keyAlias.orEmpty())
                         keyPassword.set(signingConfig.keyPassword.orEmpty())
+                        minSdkVersion.set(kei.versions.android.sdk.min.map { it.toInt() })
                         val jarName = versionNameProvider.map { "tachiyomi-$applicationIdSuffix-v$it.jar" }
                         outputJar.set(layout.buildDirectory.file(jarName.map { "outputs/jar/${variant.name}/$it" }))
                     }

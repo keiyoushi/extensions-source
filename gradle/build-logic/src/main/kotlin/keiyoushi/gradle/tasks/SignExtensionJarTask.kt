@@ -1,10 +1,14 @@
 package keiyoushi.gradle.tasks
 
 import com.android.apksig.ApkSigner
+import com.android.apksig.KeyConfig
 import org.gradle.api.DefaultTask
+import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
@@ -22,14 +26,24 @@ abstract class SignExtensionJarTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val inputJar: RegularFileProperty
 
-    @get:Internal
-    abstract val keystore: RegularFileProperty
+    /**
+     * Keystore, tracked by content so switching signing identity re-triggers signing.
+     * Modelled as a collection (not @InputFile) so a not-yet-created keystore is tolerated
+     * rather than failing the build — a missing key just yields an unsigned jar.
+     */
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val keystore: ConfigurableFileCollection
 
+    @get:Input
+    abstract val keyAlias: Property<String>
+
+    @get:Input
+    abstract val minSdkVersion: Property<Int>
+
+    // Passwords are @Internal: kept out of the build fingerprint; the keystore content covers re-runs.
     @get:Internal
     abstract val storePassword: Property<String>
-
-    @get:Internal
-    abstract val keyAlias: Property<String>
 
     @get:Internal
     abstract val keyPassword: Property<String>
@@ -43,8 +57,8 @@ abstract class SignExtensionJarTask : DefaultTask() {
         val out = outputJar.get().asFile
         out.parentFile.mkdirs()
 
-        val ks = keystore.asFile.orNull
-        if (ks == null || !ks.exists()) {
+        val ks = keystore.files.firstOrNull()?.takeIf { it.exists() }
+        if (ks == null) {
             logger.lifecycle("No keystore available — writing unsigned jar: ${out.name}")
             input.copyTo(out, overwrite = true)
             return
@@ -52,17 +66,20 @@ abstract class SignExtensionJarTask : DefaultTask() {
 
         val keyStore = loadKeyStore(ks, storePassword.get().toCharArray())
         val alias = keyAlias.get()
-        val key = keyStore.getKey(alias, keyPassword.get().toCharArray()) as PrivateKey
-        val certs = keyStore.getCertificateChain(alias).map { it as X509Certificate }
+        val key = keyStore.getKey(alias, keyPassword.get().toCharArray()) as? PrivateKey
+            ?: error("Keystore ${ks.name} has no private key for alias '$alias'")
+        val certs = (keyStore.getCertificateChain(alias) ?: error("Alias '$alias' has no certificate chain"))
+            .map { it as X509Certificate }
 
-        val signerConfig = ApkSigner.SignerConfig.Builder("CERT", key, certs, true).build()
+        // deterministicDsaSigning = true keeps DSA/ECDSA signatures reproducible too (RSA already is).
+        val signerConfig = ApkSigner.SignerConfig.Builder("CERT", KeyConfig.Jca(key), certs, true).build()
         ApkSigner.Builder(listOf(signerConfig))
             .setInputApk(input)
             .setOutputApk(out)
             .setV1SigningEnabled(true)
             .setV2SigningEnabled(false)
             .setV3SigningEnabled(false)
-            .setMinSdkVersion(21)
+            .setMinSdkVersion(minSdkVersion.get())
             .build()
             .sign()
     }
