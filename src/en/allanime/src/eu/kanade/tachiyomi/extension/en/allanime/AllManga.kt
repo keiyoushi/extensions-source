@@ -13,7 +13,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -28,7 +27,6 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -55,6 +53,7 @@ abstract class AllManga :
     private val preferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
+        .apply { interceptors().removeAll { it.javaClass.simpleName == "CloudflareInterceptor" } }
         .rateLimit(1) { it.host == apiUrlHost }
         .build()
 
@@ -180,7 +179,7 @@ abstract class AllManga :
     private var mangaUrl: String? = null
 
     override fun getMangaUrl(manga: SManga): String {
-        // Manually solve interaction CF captcha
+        // to solve interactive CF manually for the chapter
         if (mangaUrl != null) {
             val chapterUrl = mangaUrl!!
             mangaUrl = null
@@ -230,17 +229,12 @@ abstract class AllManga :
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
         val chapterUrl = getChapterUrl(chapter)
 
-        try {
-            val response = runBlocking {
-                client.newCall(GET(chapterUrl, headers)).awaitSuccess()
-            }
-            pageListFromWebView(response.asJsoup())
-        } catch (e: Exception) {
-            if (e.message?.lowercase()?.contains("failed to bypass") == true) {
+        client.newCall(GET(chapterUrl, headers)).execute().use { response ->
+            if (response.code == 403 || response.code == 503) {
                 mangaUrl = chapterUrl
                 throw IOException("Solve Captcha in Webview and Retry")
             }
-            throw e
+            pageListFromWebView(response.asJsoup())
         }
     }
 
