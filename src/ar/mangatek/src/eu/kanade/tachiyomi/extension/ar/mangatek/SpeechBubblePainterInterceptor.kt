@@ -32,7 +32,7 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
 
         val speechBubbles = request.url.fragment?.parseAs<List<Bubble>>()
             ?: emptyList()
-            
+        
         val imageRequest = request.newBuilder()
             .url(url)
             .build()
@@ -165,7 +165,7 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
     companion object {
         const val SCALED_DENSITY = 0.75f // 1px = 0.75pt
         val mediaType = "image/png".toMediaType()
-        
+    
         // الانتظار على ترجمات AI - تم زيادته إلى 20 ثانية
         const val AI_TRANSLATION_WAIT_MS = 20000L
         
