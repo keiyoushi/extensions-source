@@ -15,6 +15,10 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.json.JSONObject
 
+// استيراد الفئات الداخلية من FirestoreParser (يفترض وجودها)
+import eu.kanade.tachiyomi.extension.ar.mangacloud.FirestoreParser.FirestoreMangaData
+import eu.kanade.tachiyomi.extension.ar.mangacloud.FirestoreParser.FirestoreListResponse
+
 @Source
 abstract class MangaCloud : HttpSource() {
 
@@ -53,13 +57,11 @@ abstract class MangaCloud : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        // حفظ الفلاتر للاستخدام في التحليل
         currentSearchQuery = query
         currentSortFilter = filters.firstInstanceOrNull<SortFilter>()?.selected.orEmpty()
         currentGenreFilter = filters.firstInstanceOrNull<GenreFilter>()?.selected.orEmpty()
         currentStatusFilter = filters.firstInstanceOrNull<StatusFilter>()?.selected.orEmpty()
 
-        // بناء الطلب الأساسي (الصفحة الأولى)
         val url = FIRESTORE_URL.toHttpUrl().newBuilder()
             .addQueryParameter("pageSize", "300")
             .addQueryParameter("key", API_KEY)
@@ -68,7 +70,6 @@ abstract class MangaCloud : HttpSource() {
                     "new" -> addQueryParameter("orderBy", "createdAt desc")
                     "updated" -> addQueryParameter("orderBy", "updatedAt desc")
                 }
-                // لا نضيف pageToken هنا، سنتعامل معها في parse
             }
             .build()
         return GET(url, headers)
@@ -79,19 +80,15 @@ abstract class MangaCloud : HttpSource() {
         val genre = currentGenreFilter
         val status = currentStatusFilter
 
-        // جلب جميع الصفحات بشكل متكرر
+        // جلب جميع الصفحات باستخدام FirestoreMangaData
         val allItems = mutableListOf<FirestoreMangaData>()
         var nextPageToken: String? = null
         var currentResponse = response
 
         do {
-            // قراءة JSON من الاستجابة الحالية
             val jsonString = currentResponse.body?.string() ?: break
             val json = JSONObject(jsonString)
 
-            // تحليل البيانات باستخدام FirestoreParser (نفترض أنه يعطي قائمة من FirestoreMangaData)
-            // لكن parseList يعيد كائن يحتوي على mangas و nextPageToken
-            // سنعيد استخدام parseList مع استجابة جديدة
             val newResponse = currentResponse.newBuilder()
                 .body(jsonString.toResponseBody(null))
                 .build()
@@ -101,7 +98,6 @@ abstract class MangaCloud : HttpSource() {
             nextPageToken = json.optString("nextPageToken").takeIf { it.isNotEmpty() }
 
             if (nextPageToken != null) {
-                // بناء طلب الصفحة التالية مع pageToken
                 val urlBuilder = FIRESTORE_URL.toHttpUrl().newBuilder()
                     .addQueryParameter("pageSize", "300")
                     .addQueryParameter("key", API_KEY)
@@ -117,7 +113,7 @@ abstract class MangaCloud : HttpSource() {
             }
         } while (nextPageToken != null && currentResponse.isSuccessful)
 
-        // الآن نقوم بالتصفية على جميع العناصر التي تم جلبها
+        // التصفية على جميع العناصر المجلوبة
         val filtered = allItems.filter { data ->
             val matchesQuery = if (query.isNotBlank()) {
                 val q = query.lowercase()
@@ -141,7 +137,6 @@ abstract class MangaCloud : HttpSource() {
             matchesQuery && matchesGenre && matchesStatus
         }
 
-        // نعيد النتائج مع hasNextPage = false لأننا جلبنا الكل
         return MangasPage(filtered.map { it.smanga }, false)
     }
 
@@ -253,7 +248,6 @@ abstract class MangaCloud : HttpSource() {
 
         private val genreList = arrayOf(
             Pair("الكل", ""),
-            // جميع التصنيفات (مرتبة أبجدياً، بدون تكرار)
             Pair("إدارة المناطق", "إدارة المناطق"),
             Pair("إعادة احياء", "إعادة احياء"),
             Pair("إعادة بحث", "إعادة بحث"),
