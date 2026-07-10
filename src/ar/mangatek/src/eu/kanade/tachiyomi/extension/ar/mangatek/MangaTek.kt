@@ -39,6 +39,10 @@ abstract class MangaTek :
         get() = preferences.getString(FONT_SIZE_PREF, DEFAULT_FONT_SIZE)!!.toInt()
         set(value) = preferences.edit().putString(FONT_SIZE_PREF, value.toString()).apply()
 
+    private var translationWaitTime: Int
+        get() = preferences.getString(TRANSLATION_WAIT_PREF, DEFAULT_TRANSLATION_WAIT)!!.toInt()
+        set(value) = preferences.edit().putString(TRANSLATION_WAIT_PREF, value.toString()).apply()
+
     override val client by lazy {
         network.client.newBuilder()
             .addInterceptor(SpeechBubblePainterInterceptor(fontSize))
@@ -135,14 +139,22 @@ abstract class MangaTek :
         }
     }
 
-    // Page - معدّل للانتظار على ترجمات AI
+    // Page - مع نظام إعادة محاولة ذكية
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         
-        // الانتظار لاكتمال ترجمات AI
-        Thread.sleep(SpeechBubblePainterInterceptor.AI_TRANSLATION_WAIT_MS)
+        // الانتظار الأولي على ترجمات AI (مع إمكانية التخصيص من الإعدادات)
+        Thread.sleep(translationWaitTime.toLong())
         
-        val pages = getPages(document)
+        // محاولة استخراج الصفحات مع إعادة محاولة تلقائية
+        var pages = getPages(document)
+        var retries = 0
+        
+        while (pages.isEmpty() && retries < SpeechBubblePainterInterceptor.MAX_TRANSLATION_RETRIES) {
+            Thread.sleep(SpeechBubblePainterInterceptor.RETRY_DELAY_MS)
+            pages = getPages(document)
+            retries++
+        }
 
         return pages.mapIndexed { index, page ->
             val imageUrl = when {
@@ -185,7 +197,7 @@ abstract class MangaTek :
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val sizes = arrayOf(
+        val fontSizes = arrayOf(
             "12", "13", "14",
             "15", "16", "18",
             "20", "21", "22",
@@ -199,10 +211,10 @@ abstract class MangaTek :
         ListPreference(screen.context).apply {
             key = FONT_SIZE_PREF
             title = "Font size"
-            entries = sizes.map {
+            entries = fontSizes.map {
                 "${it}pt" + if (it == DEFAULT_FONT_SIZE) " - Default" else ""
             }.toTypedArray()
-            entryValues = sizes
+            entryValues = fontSizes
 
             summary = buildString {
                 appendLine("Font changes will not be applied to downloaded or cached chapters. ")
@@ -225,12 +237,47 @@ abstract class MangaTek :
                 true
             }
         }.also(screen::addPreference)
+
+        // إضافة خيار وقت الانتظار على ترجمات AI
+        val waitTimes = arrayOf("10000", "15000", "20000", "25000", "30000")
+        ListPreference(screen.context).apply {
+            key = TRANSLATION_WAIT_PREF
+            title = "AI Translation Wait Time"
+            entries = waitTimes.map {
+                "${it.toInt() / 1000} seconds" + if (it == DEFAULT_TRANSLATION_WAIT) " - Default" else ""
+            }.toTypedArray()
+            entryValues = waitTimes
+
+            summary = buildString {
+                appendLine("Time to wait for AI translations to complete on pages.")
+                appendLine("Increase if translations are missing. Decrease if pages load too slow.")
+                append("\t* %s")
+            }
+
+            setDefaultValue(translationWaitTime.toString())
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val selected = newValue as String
+                val index = this.findIndexOfValue(selected)
+                val entry = entries[index] as String
+
+                Toast.makeText(
+                    screen.context,
+                    "Wait time changed to '$entry'. Restart app to apply new setting.",
+                    Toast.LENGTH_LONG,
+                ).show()
+
+                true
+            }
+        }.also(screen::addPreference)
     }
 
     companion object {
         val PAGE_REGEX = Regex(""".*?\.(webp|png|jpg|jpeg)(?:\?v=\d+)?#\[.*?]""", RegexOption.IGNORE_CASE)
         private const val FONT_SIZE_PREF = "fontSizePref"
         private const val DEFAULT_FONT_SIZE = "28"
+        private const val TRANSLATION_WAIT_PREF = "translationWaitPref"
+        private const val DEFAULT_TRANSLATION_WAIT = "20000" // 20 ثواني افتراضياً
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale("ar"))
     }
-    }
+}
