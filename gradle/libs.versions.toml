@@ -49,6 +49,9 @@ tachiyomi-lib-v16 = { module = "com.github.keiyoushi:extensions-lib", version = 
 # Required by Kotlin 2.x compiler to resolve type-use annotations (e.g. org.jspecify.annotations.Nullable) used in Jsoup's API signatures
 jspecify = { module = "org.jspecify:jspecify", version = "1.0.0" }
 
+# app provides it as transitive dependency of okhttp-zstd
+zstd-kmp-okio = { module = "com.squareup.zstd:zstd-kmp-okio", version = "0.4.0" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "android-gradle" }
 android-library = { id = "com.android.library", version.ref = "android-gradle" }
@@ -59,4 +62,4 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 
 [bundles]
-common = ["kotlin-stdlib", "coroutines-core", "coroutines-android", "injekt-core", "rxjava", "kotlin-protobuf", "kotlin-json", "kotlin-json-okio", "jsoup", "jspecify", "okhttp", "okhttp-brotli", "okhttp-zstd", "quickjs"]
+common = ["kotlin-stdlib", "coroutines-core", "coroutines-android", "injekt-core", "rxjava", "kotlin-protobuf", "kotlin-json", "kotlin-json-okio", "jsoup", "jspecify", "okhttp", "okhttp-brotli", "okhttp-zstd", "zstd-kmp-okio", "quickjs"]

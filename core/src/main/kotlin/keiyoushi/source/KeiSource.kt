@@ -1,6 +1,8 @@
 package keiyoushi.source
 
 import android.util.Log
+import com.squareup.zstd.okio.zstdCompress
+import com.squareup.zstd.okio.zstdDecompress
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -29,8 +31,6 @@ import okhttp3.Response
 import okhttp3.brotli.Brotli
 import okhttp3.brotli.BrotliInterceptor
 import okhttp3.zstd.Zstd
-import okio.GzipSink
-import okio.GzipSource
 import okio.buffer
 import okio.sink
 import okio.source
@@ -157,7 +157,7 @@ abstract class KeiSource : HttpSource() {
         applicationContext.cacheDir.resolve("source_$id").apply { mkdirs() }
     }
     private val filterCacheFile: File by lazy {
-        filterCacheDir.resolve("filters.json.gz")
+        filterCacheDir.resolve("filters.json.zst")
     }
 
     /**
@@ -233,7 +233,7 @@ abstract class KeiSource : HttpSource() {
         val isFresh = age <= 3.days.inWholeMilliseconds
 
         val data = try {
-            GzipSource(file.source()).buffer().use { source ->
+            file.source().zstdDecompress().buffer().use { source ->
                 jsonInstance.decodeFromBufferedSource(JsonElement.serializer(), source)
             }
         } catch (_: Exception) {
@@ -248,7 +248,7 @@ abstract class KeiSource : HttpSource() {
         val tmpFile = File.createTempFile("filters", ".tmp", filterCacheDir)
 
         try {
-            GzipSink(tmpFile.sink()).buffer().use { sink ->
+            tmpFile.sink().zstdCompress().buffer().use { sink ->
                 jsonInstance.encodeToBufferedSink(JsonElement.serializer(), data, sink)
             }
 
