@@ -86,7 +86,7 @@ abstract class MangaTek :
 
         return GET(url, headers)
     }
-
+    
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // Details
