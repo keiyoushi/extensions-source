@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.mangacloud
 
-import eu.kanade.tachiyomi.extension.ar.mangacloud.FirestoreParser
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -36,6 +35,9 @@ abstract class MangaCloud : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         val json = FirestoreParser.parseList(response)
         lastPageToken = json.nextPageToken
+        if (allMangasCache.isEmpty()) {
+            allMangasCache.addAll(json.mangas)
+        }
         return MangasPage(json.mangas.map { it.smanga }, json.nextPageToken != null)
     }
 
@@ -58,7 +60,6 @@ abstract class MangaCloud : HttpSource() {
         currentSortFilter = filters.firstInstanceOrNull<SortFilter>()?.selected.orEmpty()
         currentGenreFilter = filters.firstInstanceOrNull<GenreFilter>()?.selected.orEmpty()
         currentStatusFilter = filters.firstInstanceOrNull<StatusFilter>()?.selected.orEmpty()
-
         val url = FIRESTORE_URL.toHttpUrl().newBuilder()
             .addQueryParameter("pageSize", "300")
             .addQueryParameter("key", API_KEY)
@@ -76,37 +77,28 @@ abstract class MangaCloud : HttpSource() {
         val query = currentSearchQuery.trim()
         val genre = currentGenreFilter
         val status = currentStatusFilter
+        val json = FirestoreParser.parseList(response)
+        val allMangas = json.mangas.toMutableList()
 
-        val allItems = mutableListOf<FirestoreParser.FirestoreMangaData>()
-        var nextPageToken: String? = null
-        var currentResponse = response
+        if (allMangasCache.isEmpty()) {
+            allMangasCache.addAll(json.mangas)
+        }
 
-        do {
-            val jsonString = currentResponse.body?.string() ?: break
-            val newResponse = currentResponse.newBuilder()
-                .body(jsonString.toResponseBody(null))
+        var nextPageToken = json.nextPageToken
+        while (nextPageToken != null) {
+            val url = FIRESTORE_URL.toHttpUrl().newBuilder()
+                .addQueryParameter("pageSize", "300")
+                .addQueryParameter("key", API_KEY)
+                .addQueryParameter("pageToken", nextPageToken)
                 .build()
-            val parsed = FirestoreParser.parseList(newResponse)
-            allItems.addAll(parsed.mangas)
-            nextPageToken = parsed.nextPageToken
+            val nextResponse = client.newCall(GET(url, headers)).execute()
+            val nextJson = FirestoreParser.parseList(nextResponse)
+            allMangas.addAll(nextJson.mangas)
+            allMangasCache.addAll(nextJson.mangas)
+            nextPageToken = nextJson.nextPageToken
+        }
 
-            if (nextPageToken != null) {
-                val urlBuilder = FIRESTORE_URL.toHttpUrl().newBuilder()
-                    .addQueryParameter("pageSize", "300")
-                    .addQueryParameter("key", API_KEY)
-                    .addQueryParameter("pageToken", nextPageToken)
-                    .apply {
-                        when (currentSortFilter) {
-                            "new" -> addQueryParameter("orderBy", "createdAt desc")
-                            "updated" -> addQueryParameter("orderBy", "updatedAt desc")
-                        }
-                    }
-                val newRequest = GET(urlBuilder.build(), headers)
-                currentResponse = client.newCall(newRequest).execute()
-            }
-        } while (nextPageToken != null && currentResponse.isSuccessful)
-
-        val filtered = allItems.filter { data ->
+        val filtered = allMangas.filter { data ->
             val matchesQuery = if (query.isNotBlank()) {
                 val q = query.lowercase()
                 data.smanga.title.lowercase().contains(q) ||
@@ -128,7 +120,6 @@ abstract class MangaCloud : HttpSource() {
             }
             matchesQuery && matchesGenre && matchesStatus
         }
-
         return MangasPage(filtered.map { it.smanga }, false)
     }
 
@@ -220,6 +211,7 @@ abstract class MangaCloud : HttpSource() {
     private var currentSortFilter: String = ""
     private var currentGenreFilter: String = ""
     private var currentStatusFilter: String = ""
+    private val allMangasCache = mutableListOf<MangaData>()
 
     companion object {
         private const val API_KEY = "AIzaSyAvdmgz_r_d89Eo8JBs9vAjUAJR451bMYU"
@@ -240,6 +232,7 @@ abstract class MangaCloud : HttpSource() {
 
         private val genreList = arrayOf(
             Pair("الكل", ""),
+            // التصنيفات الأصلية + الجديدة (مرتبة أبجدياً، بدون تكرار)
             Pair("إدارة المناطق", "إدارة المناطق"),
             Pair("إعادة احياء", "إعادة احياء"),
             Pair("إعادة بحث", "إعادة بحث"),
