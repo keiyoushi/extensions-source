@@ -169,16 +169,8 @@ abstract class MangaFire :
                 val response = client.newCall(GET(url, headers)).execute()
                 val data = response.parseAs<ApiResponse<ChapterDto>>()
 
-                // Prefer Official chapters, unless none exists then fallback
-                val hasOfficial = showOnlyOfficial &&
-                    data.items.any { it.type.equals("official", ignoreCase = true) }
-
-                val setScanlator = !showOnlyOfficial || !hasOfficial
-
-                val items = data.items.filter {
-                    !showOnlyOfficial || !hasOfficial || it.type.equals("official", ignoreCase = true)
-                }.forEach { ch ->
-                    chapters.add(ch.toSChapter(manga.url, langCode, setScanlator))
+                data.items.forEach { ch ->
+                    chapters.add(ch.toSChapter(manga.url, langCode))
                 }
 
                 lastPage = data.meta?.lastPage ?: 1
@@ -251,20 +243,10 @@ abstract class MangaFire :
 
     // ========================= Preferences =========================
 
-    private val showOnlyOfficial: Boolean
-        get() = preferences.getBoolean(PREF_SHOW_ONLY_OFFICIAL, true)
-
     private val showAsVolumes: Boolean
         get() = preferences.getBoolean(PREF_SHOW_AS_VOLUMES, false)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_SHOW_ONLY_OFFICIAL
-            title = "Prefer Official Chapters"
-            summary = SUMMARY_MSG
-            setDefaultValue(true)
-        }.also(screen::addPreference)
-
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_SHOW_AS_VOLUMES
             title = "Prefer Volume Release"
@@ -274,7 +256,6 @@ abstract class MangaFire :
     }
 
     companion object {
-        private const val PREF_SHOW_ONLY_OFFICIAL = "show_only_official"
         private const val PREF_SHOW_AS_VOLUMES = "show_as_volumes"
         private const val SUMMARY_MSG = "Requires Chapter List Refresh to Apply"
     }

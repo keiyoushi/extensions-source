@@ -114,7 +114,7 @@ class ChapterDto(
     private val createdAt: Long? = null,
     val type: String? = null,
 ) {
-    fun toSChapter(mangaUrl: String, langCode: String, setScanlator: Boolean): SChapter = SChapter.create().apply {
+    fun toSChapter(mangaUrl: String, langCode: String): SChapter = SChapter.create().apply {
         url = "$mangaUrl/$id-chapter-${number.toString().removeSuffix(".0")}-$langCode"
         chapter_number = number
         name = buildString {
@@ -125,7 +125,7 @@ class ChapterDto(
                 append(this@ChapterDto.name)
             }
         }
-        scanlator = if (setScanlator) type else null
+        scanlator = type ?: "Unknown"
         date_upload = createdAt?.times(1000L) ?: 0L
     }
 }
