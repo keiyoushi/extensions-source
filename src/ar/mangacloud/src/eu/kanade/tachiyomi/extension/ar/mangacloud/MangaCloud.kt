@@ -148,6 +148,9 @@ abstract class MangaCloud : HttpSource() {
             }
         } while (nextPageToken != null && currentResponse.isSuccessful)
 
+        // ترتيب الفصول تنازلياً (الأحدث أولاً) حسب رقم الفصل
+        allChapters.sortByDescending { it.chapter_number?.toFloatOrNull() ?: 0f }
+
         return allChapters
     }
 
