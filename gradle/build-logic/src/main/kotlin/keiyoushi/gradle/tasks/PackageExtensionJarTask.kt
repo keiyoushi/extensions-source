@@ -36,7 +36,7 @@ abstract class PackageExtensionJarTask : DefaultTask() {
                 root.walkTopDown().filter { it.isFile }.forEach { file ->
                     val name = file.relativeTo(root).invariantSeparatorsPath
                     if (written.add(name)) {
-                        jar.putNextEntry(JarEntry(name))
+                        jar.putNextEntry(fixedTimeEntry(name))
                         file.inputStream().use { it.copyTo(jar) }
                         jar.closeEntry()
                     }
@@ -47,7 +47,7 @@ abstract class PackageExtensionJarTask : DefaultTask() {
                     source.entries().asSequence()
                         .filter { !it.isDirectory && written.add(it.name) }
                         .forEach { entry ->
-                            jar.putNextEntry(JarEntry(entry.name))
+                            jar.putNextEntry(fixedTimeEntry(entry.name))
                             source.getInputStream(entry).use { it.copyTo(jar) }
                             jar.closeEntry()
                         }
@@ -56,3 +56,8 @@ abstract class PackageExtensionJarTask : DefaultTask() {
         }
     }
 }
+
+// Fixed entry time for reproducible jars (1980-02-01, the value Gradle uses for archives).
+private const val FIXED_JAR_TIME = 320054400000L
+
+internal fun fixedTimeEntry(name: String): JarEntry = JarEntry(name).apply { time = FIXED_JAR_TIME }

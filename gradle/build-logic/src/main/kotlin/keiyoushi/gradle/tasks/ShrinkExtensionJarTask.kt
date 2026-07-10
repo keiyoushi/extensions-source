@@ -14,7 +14,6 @@ import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
-import java.util.jar.JarEntry
 import java.util.jar.JarFile
 import java.util.jar.JarOutputStream
 import javax.inject.Inject
@@ -34,7 +33,6 @@ abstract class ShrinkExtensionJarTask : DefaultTask() {
     @get:Input
     abstract val applicationId: Property<String>
 
-    /** Merged manifest, embedded at the jar root. */
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val manifestFile: RegularFileProperty
@@ -74,12 +72,12 @@ abstract class ShrinkExtensionJarTask : DefaultTask() {
         }
 
         JarOutputStream(out.outputStream().buffered()).use { jar ->
-            jar.putNextEntry(JarEntry("AndroidManifest.xml"))
+            jar.putNextEntry(fixedTimeEntry("AndroidManifest.xml"))
             manifestFile.get().asFile.inputStream().use { it.copyTo(jar) }
             jar.closeEntry()
             JarFile(shrunk).use { source ->
                 source.entries().asSequence().filter { !it.isDirectory }.forEach { entry ->
-                    jar.putNextEntry(JarEntry(entry.name))
+                    jar.putNextEntry(fixedTimeEntry(entry.name))
                     source.getInputStream(entry).use { it.copyTo(jar) }
                     jar.closeEntry()
                 }

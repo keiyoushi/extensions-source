@@ -23,6 +23,7 @@ import keiyoushi.gradle.tasks.GenerateKeepRulesTask
 import keiyoushi.gradle.tasks.GenerateSourceInfoTask
 import keiyoushi.gradle.tasks.PackageExtensionJarTask
 import keiyoushi.gradle.tasks.ShrinkExtensionJarTask
+import keiyoushi.gradle.tasks.SignExtensionJarTask
 import keiyoushi.gradle.utils.assertWithoutFlag
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -165,6 +166,9 @@ class PluginExtension : Plugin<Project> {
         val proguardRules = rootProject.file("common/proguard-rules.pro")
         val projectBuildDirs = rootProject.allprojects.map { it.layout.buildDirectory.get().asFile }
 
+        val signingConfig = extensions.getByType(ApplicationExtension::class.java).signingConfigs
+            .getByName(if (rootProject.file("signingkey.jks").exists()) "release" else "debug")
+
         androidComponents {
             val bootClasspath = sdkComponents.bootClasspath
 
@@ -215,12 +219,21 @@ class PluginExtension : Plugin<Project> {
                         @Suppress("UnstableApiUsage")
                         manifestFile.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
                         r8Classpath.from(r8Configuration)
+                        outputJar.set(layout.buildDirectory.file("intermediates/extension_jar/${variant.name}/shrunk.jar"))
+                    }
+
+                    val signTask = tasks.register<SignExtensionJarTask>("sign${variantName}ExtensionJar") {
+                        inputJar.set(shrinkTask.flatMap { it.outputJar })
+                        signingConfig.storeFile?.let { keystore.set(it) }
+                        storePassword.set(signingConfig.storePassword.orEmpty())
+                        keyAlias.set(signingConfig.keyAlias.orEmpty())
+                        keyPassword.set(signingConfig.keyPassword.orEmpty())
                         val jarName = versionNameProvider.map { "tachiyomi-$applicationIdSuffix-v$it.jar" }
                         outputJar.set(layout.buildDirectory.file(jarName.map { "outputs/jar/${variant.name}/$it" }))
                     }
 
                     tasks.matching { it.name == "assemble$variantName" }
-                        .configureEach { dependsOn(shrinkTask) }
+                        .configureEach { dependsOn(signTask) }
                 }
             }
         }
