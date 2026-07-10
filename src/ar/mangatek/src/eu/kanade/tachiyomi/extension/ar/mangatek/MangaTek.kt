@@ -86,7 +86,7 @@ abstract class MangaTek :
 
         return GET(url, headers)
     }
-
+    
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // Details
@@ -135,9 +135,13 @@ abstract class MangaTek :
         }
     }
 
-    // Page
+    // Page - معدّل للانتظار على ترجمات AI
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
+        
+        // الانتظار لاكتمال ترجمات AI
+        Thread.sleep(SpeechBubblePainterInterceptor.AI_TRANSLATION_WAIT_MS)
+        
         val pages = getPages(document)
 
         return pages.mapIndexed { index, page ->
@@ -229,4 +233,4 @@ abstract class MangaTek :
         private const val DEFAULT_FONT_SIZE = "28"
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale("ar"))
     }
-}
+    }
