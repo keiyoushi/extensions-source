@@ -19,11 +19,10 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.Jsoup
 import java.io.ByteArrayOutputStream
-import java.util.concurrent.TimeUnit
-import kotlin.math.min
+import kotlin.math.max
 
 @RequiresApi(Build.VERSION_CODES.O)
-class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
+class SpeechBubblePainterInterceptor(val fontSize: Int, val enableDarkMode: Boolean = false) : Interceptor {
 
     private val startTime = System.currentTimeMillis()
 
@@ -34,6 +33,8 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
             return chain.proceed(request)
         }
 
+        PerformanceMonitor.startTimer()
+        
         val speechBubbles = request.url.fragment?.parseAs<List<Bubble>>()
             ?: emptyList()
 
@@ -44,6 +45,7 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
         val response = chain.proceed(imageRequest)
 
         if (response.isSuccessful.not()) {
+            LoggerService.warning("Failed to load image: ${response.code}")
             return response
         }
 
@@ -56,7 +58,7 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
             val imageWidth = bitmap.width.toFloat()
             val imageHeight = bitmap.height.toFloat()
 
-            // معالجة الفقاعات مع الذكاء الاصطناعي لكشف الترجمات
+            // معالجة الفقاعات مع الذكاء الاصطناعي
             if (speechBubbles.isNotEmpty()) {
                 drawSpeechBubbles(
                     canvas,
@@ -65,6 +67,7 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
                     imageHeight,
                     fontSize
                 )
+                PerformanceMonitor.recordTiming("drawSpeechBubbles")
             }
 
             val output = ByteArrayOutputStream()
@@ -80,11 +83,12 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
             bitmap.compress(format, 100, output)
 
             val responseBody = output.toByteArray().toResponseBody(mediaType)
+            LoggerService.info("Image processed successfully with ${speechBubbles.size} bubbles")
             return response.newBuilder()
                 .body(responseBody)
                 .build()
         } catch (e: Exception) {
-            // في حالة الخطأ، نرجع الصورة الأصلية
+            LoggerService.error("Error processing image", e)
             return response
         }
     }
@@ -99,11 +103,16 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
         imageHeight: Float,
         fontSize: Int
     ) {
-        speechBubbles.forEach { speechBubble ->
+        var processedCount = 0
+        var failedCount = 0
+
+        speechBubbles.forEachIndexed { index, speechBubble ->
             try {
                 // تصفية الفقاعات الفارغة أو غير الصحيحة
                 if (!isValidBubble(speechBubble)) {
-                    return@forEach
+                    failedCount++
+                    LoggerService.warning("Invalid bubble at index $index")
+                    return@forEachIndexed
                 }
 
                 val pxX = (speechBubble.left / 100f) * imageWidth
@@ -112,40 +121,73 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
                 val pxHeight = (speechBubble.height / 100f) * imageHeight
                 val pxCenterY = pxY + (pxHeight / 2f)
 
+                // كشف نوع الفقاعة والاتجاه تلقائياً
+                val detectedType = speechBubble.type.takeIf { it != "normal" } ?: speechBubble.detectBubbleType()
+                val detectedDirection = speechBubble.direction ?: speechBubble.detectDirection()
+
                 // معالجة ذكية للنص: تنظيف وتحسين الترجمة
-                val cleanText = processTranslationText(speechBubble.text)
-                if (cleanText.isEmpty()) {
-                    return@forEach
+                var cleanText = processTranslationText(speechBubble.text)
+                
+                // التحقق من الذاكرة المؤقتة
+                val cacheKey = "${speechBubble.text.hashCode()}_$detectedType"
+                val cachedText = TranslationCache.get(cacheKey)
+                if (cachedText != null) {
+                    cleanText = cachedText
+                    LoggerService.info("Using cached translation for bubble $index")
                 }
 
-                val textPaint = createTextPaint(fontSize)
+                if (cleanText.isEmpty()) {
+                    failedCount++
+                    return@forEachIndexed
+                }
+
+                // حفظ في الذاكرة المؤقتة
+                TranslationCache.put(cacheKey, cleanText)
+
+                val textPaint = createTextPaint(fontSize, speechBubble.getTextColor(), detectedType)
+                val bgColor = speechBubble.getBackgroundColor()
+
                 val bubble = createBubbleWithIntelligentSizing(
                     pxHeight,
                     pxWidth,
                     cleanText,
                     speechBubble.angle,
-                    textPaint
+                    textPaint,
+                    detectedType
                 )
 
                 val finalY = getYAxis(pxY, pxHeight, pxCenterY, textPaint, bubble)
-                
+
                 // رسم خلفية الفقاعة
-                drawBubbleBackground(canvas, pxX, finalY, bubble, speechBubble.angle, pxWidth, pxHeight)
-                
+                drawBubbleBackground(
+                    canvas,
+                    pxX,
+                    finalY,
+                    bubble,
+                    speechBubble.angle,
+                    pxWidth,
+                    pxHeight,
+                    bgColor
+                )
+
                 // رسم النص
                 canvas.draw(textPaint, bubble, speechBubble.angle, pxX, finalY)
+                
+                processedCount++
+                LoggerService.info("Processed bubble $index: type=$detectedType, direction=$detectedDirection")
             } catch (e: Exception) {
-                // تجاهل الفقاعات التي تسبب أخطاء
+                failedCount++
+                LoggerService.error("Error processing bubble at index $index", e, index)
             }
         }
+
+        // تحديث الإحصائيات
+        TranslationCache.updateStats(processedCount, failedCount, 0)
+        LoggerService.info("Completed: $processedCount processed, $failedCount failed out of ${speechBubbles.size} total")
     }
 
     /**
      * التحقق من صحة الفقاعة
-     * معايير الصحة:
-     * - وجود نص غير فارغ
-     * - أبعاد صحيحة (width و height > 0)
-     * - إحداثيات منطقية
      */
     private fun isValidBubble(bubble: Bubble): Boolean {
         return bubble.text.isNotBlank() &&
@@ -159,28 +201,27 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
 
     /**
      * معالجة ذكية للنص مع الترجمة
-     * تقوم بـ:
-     * 1. تنظيف HTML والعلامات
-     * 2. إزالة المسافات الزائدة
-     * 3. كشف اللغة والنصوص المختلطة
-     * 4. تحسين الترجمة
      */
     private fun processTranslationText(text: String): String {
         return try {
             // تنظيف HTML
             var cleanText = Jsoup.parse(text).text().trim()
-            
-            // إزالة المسافات الزائدة والأسطر الفارغة
+
+            // إزالة المسافات الزائدة
             cleanText = cleanText.replace(Regex("\\s+"), " ").trim()
-            
-            // إزالة الترجمات المكررة (مثل [نص مكرر])
+
+            // إزالة الترجمات المكررة
             cleanText = removeDuplicateTranslations(cleanText)
-            
-            // كشف وتحسين الترجمة الضعيفة
+
+            // تطبيق تصحيحات من القاموس
+            cleanText = TranslationDictionary.correct(cleanText)
+
+            // تحسين الترجمة الضعيفة
             cleanText = improveWeakTranslations(cleanText)
-            
+
             cleanText
         } catch (e: Exception) {
+            LoggerService.error("Error processing text", e)
             text.trim()
         }
     }
@@ -190,13 +231,11 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
      */
     private fun removeDuplicateTranslations(text: String): String {
         val parts = text.split(Regex("\\s*\\[|\\]\\s*"))
-        
+
         return if (parts.size > 1) {
-            // إذا كان هناك نص داخل أقواس، ننظر إلى كلا الجزأين
             val mainText = parts[0].trim()
             val alternativeText = if (parts.size > 1) parts[1].trim() else ""
-            
-            // اختيار أطول نص أو الأكثر اكتمالاً
+
             if (alternativeText.length > mainText.length) alternativeText else mainText
         } else {
             text
@@ -204,34 +243,19 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
     }
 
     /**
-     * تحسين الترجمات الضعيفة أو الناقصة
-     * يكتشف الأخطاء الشائعة ويصححها
+     * تحسين الترجمات الضعيفة
      */
     private fun improveWeakTranslations(text: String): String {
         var improved = text
-        
-        // تصحيح الأخطاء الإملائية الشائعة
-        val corrections = mapOf(
-            "ا الـ" to "ال",
-            "  " to " ",
-            "؟؟" to "؟",
-            "!!!" to "!",
-            "،،" to "،",
-        )
-        
-        for ((wrong, correct) in corrections) {
-            improved = improved.replace(wrong, correct)
-        }
-        
-        // إذا كان النص قصيراً جداً (أقل من 3 أحرف)، قد يكون ناقصاً
-        // لكن نبقيه كما هو لأنه قد يكون كلمة قصيرة فعلاً
-        
+
+        // إزالة علامات الترقيم الزائدة
+        improved = improved.replace(Regex("([!?،।؛])\\1+"), "$1")
+
         return improved.trim()
     }
 
     /**
-     * إنشاء فقاعة مع تحجيم ذكي للنص
-     * يحسب حجم الخط الأمثل بناءً على مساحة الفقاعة
+     * إنشاء فقاعة مع تحجيم ذكي
      */
     private fun createBubbleWithIntelligentSizing(
         pxHeight: Float,
@@ -239,14 +263,15 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
         text: String,
         angle: Float,
         textPaint: TextPaint,
+        bubbleType: String
     ): StaticLayout {
         var optimalTextSize = textPaint.textSize
         var bubble = createBubbleLayout(pxWidth, text, textPaint)
-        
+
         val maxAttempts = 20
         var attempts = 0
-        
-        // تقليل حجم الخط تدريجياً حتى يناسب الفقاعة
+
+        // تقليل حجم الخط تدريجياً
         while (bubble.height > pxHeight && attempts < maxAttempts) {
             optimalTextSize -= 0.5f
             optimalTextSize = maxOf(optimalTextSize, MIN_FONT_SIZE)
@@ -254,11 +279,10 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
             bubble = createBubbleLayout(pxWidth, text, textPaint)
             attempts++
         }
-        
+
         // استعادة الإعدادات الجمالية
-        textPaint.color = Color.BLACK
         textPaint.bgColor = Color.WHITE
-        
+
         return bubble
     }
 
@@ -274,7 +298,7 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
     }
 
     /**
-     * رسم خلفية الفقاعة (Optional - لتحسين المظهر)
+     * رسم خلفية الفقاعة مع تأثيرات
      */
     private fun drawBubbleBackground(
         canvas: Canvas,
@@ -283,52 +307,86 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
         layout: StaticLayout,
         angle: Float,
         width: Float,
-        height: Float
+        height: Float,
+        bgColor: Int
     ) {
         try {
             canvas.save()
             canvas.translate(x, y)
             canvas.rotate(angle)
-            
-            val paint = Paint().apply {
-                color = Color.WHITE
-                alpha = 220 // شبه شفاف
+
+            // رسم الخلفية الرئيسية
+            val fillPaint = Paint().apply {
+                color = bgColor
+                alpha = 240
                 style = Paint.Style.FILL
             }
-            
-            val padding = 8f
-            canvas.drawRect(
+
+            val padding = 10f
+            canvas.drawRoundRect(
                 -padding,
                 -padding,
                 width + padding,
                 height + padding,
-                paint
+                8f,
+                8f,
+                fillPaint
             )
-            
-            // رسم حد للفقاعة
-            paint.color = Color.BLACK
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = 2f
-            canvas.drawRect(
+
+            // رسم ظل
+            val shadowPaint = Paint().apply {
+                color = Color.BLACK
+                alpha = 50
+                style = Paint.Style.FILL
+            }
+
+            canvas.drawRoundRect(
+                -padding + 2,
+                -padding + 2,
+                width + padding + 2,
+                height + padding + 2,
+                8f,
+                8f,
+                shadowPaint
+            )
+
+            // رسم الحد
+            val borderPaint = Paint().apply {
+                color = Color.BLACK
+                style = Paint.Style.STROKE
+                strokeWidth = 2.5f
+            }
+
+            canvas.drawRoundRect(
                 -padding,
                 -padding,
                 width + padding,
                 height + padding,
-                paint
+                8f,
+                8f,
+                borderPaint
             )
-            
+
             canvas.restore()
         } catch (e: Exception) {
-            // تجاهل الأخطاء في رسم الخلفية
+            LoggerService.warning("Error drawing bubble background: ${e.message}")
         }
     }
 
-    private fun createTextPaint(fontSize: Int): TextPaint {
+    private fun createTextPaint(fontSize: Int, textColor: Int, bubbleType: String): TextPaint {
         val defaultTextSize = fontSize.pt
         return TextPaint().apply {
-            color = Color.BLACK
+            color = textColor
             textSize = defaultTextSize
             isAntiAlias = true
+            // تكبير الخط قليلاً للصرخات
+            if (bubbleType == "shout") {
+                textSize = defaultTextSize * 1.1f
+                typeface = android.graphics.Typeface.create(
+                    android.graphics.Typeface.DEFAULT,
+                    android.graphics.Typeface.BOLD
+                )
+            }
         }
     }
 
@@ -365,7 +423,7 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
         val foregroundColor = textPaint.color
         val style = textPaint.style
         textPaint.strokeWidth = 5F
-        textPaint.color = textPaint.bgColor
+        textPaint.color = Color.WHITE
         textPaint.style = Paint.Style.FILL_AND_STROKE
         layout.draw(this)
         textPaint.color = foregroundColor
@@ -375,15 +433,13 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
     private val Int.pt: Float get() = this / SCALED_DENSITY
 
     companion object {
-        const val SCALED_DENSITY = 0.75f // 1px = 0.75pt
-        const val MIN_FONT_SIZE = 6f // أصغر حجم خط
+        const val SCALED_DENSITY = 0.75f
+        const val MIN_FONT_SIZE = 6f
         val mediaType = "image/png".toMediaType()
 
-        // الانتظار على ترجمات AI - حتى دقيقة واحدة
-        const val AI_TRANSLATION_WAIT_MS = 60000L // 60 ثانية (دقيقة واحدة)
-
-        // محاولات إعادة التحقق من الترجمات
+        // الانتظار على ترجمات AI
+        const val AI_TRANSLATION_WAIT_MS = 60000L
         const val MAX_TRANSLATION_RETRIES = 10
-        const val RETRY_DELAY_MS = 5000L // 5 ثواني بين كل محاولة
+        const val RETRY_DELAY_MS = 5000L
     }
 }
