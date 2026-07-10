@@ -41,12 +41,12 @@ class DetailsResponse(
     private val chapters: List<ChapterDto>,
 ) {
     fun toSManga(useEnglish: Boolean) = manga.toSManga(useEnglish)
-    fun toSChapterList(dateFormat: SimpleDateFormat) = chapters.map { it.toSChapter(dateFormat) }
+    fun toSChapterList(dateFormat: SimpleDateFormat) = chapters.map { it.toSChapter(dateFormat, manga.slug) }
 }
 
 @Serializable
 class MangaDetailsDto(
-    private val slug: String,
+    val slug: String,
     @SerialName("english_title") private val englishTitle: String?,
     @SerialName("japanese_title") private val japaneseTitle: String?,
     private val title: String,
@@ -93,8 +93,8 @@ class ChapterDto(
     private val source: String?,
     @SerialName("published_at") private val publishedAt: String?,
 ) {
-    fun toSChapter(dateFormat: SimpleDateFormat) = SChapter.create().apply {
-        url = id.toString()
+    fun toSChapter(dateFormat: SimpleDateFormat, mangaSlug: String) = SChapter.create().apply {
+        url = "$mangaSlug/$id"
 
         val chStr = chapterNumber?.toFloatOrNull()?.toString()?.removeSuffix(".0")?.let { "Ch. $it" }
         val volStr = volume?.let { "Vol. $it" }

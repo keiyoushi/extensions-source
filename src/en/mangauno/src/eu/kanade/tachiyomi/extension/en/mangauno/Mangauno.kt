@@ -106,7 +106,10 @@ abstract class Mangauno :
         return data.toSChapterList(dateFormat)
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/chapter/${chapter.url}", headers)
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterId = chapter.url.substringAfterLast("/")
+        return GET("$apiUrl/chapter/$chapterId", headers)
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         val data = response.parseAs<PageListResponse>()
@@ -119,7 +122,7 @@ abstract class Mangauno :
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/m/${manga.url}"
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/r/${chapter.url}"
 
     private fun fetchFilters() {
         fetchFiltersStatus = FetchFilterStatus.FETCHING
