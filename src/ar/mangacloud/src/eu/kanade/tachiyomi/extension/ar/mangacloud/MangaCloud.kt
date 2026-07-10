@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ar.mangacloud
 
+import eu.kanade.tachiyomi.extension.ar.mangacloud.FirestoreParser.FirestoreListResponse
 import eu.kanade.tachiyomi.extension.ar.mangacloud.FirestoreParser.FirestoreMangaData
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -77,7 +78,6 @@ abstract class MangaCloud : HttpSource() {
         val genre = currentGenreFilter
         val status = currentStatusFilter
 
-        // جلب جميع الصفحات باستخدام FirestoreMangaData
         val allItems = mutableListOf<FirestoreMangaData>()
         var nextPageToken: String? = null
         var currentResponse = response
@@ -110,7 +110,6 @@ abstract class MangaCloud : HttpSource() {
             }
         } while (nextPageToken != null && currentResponse.isSuccessful)
 
-        // التصفية على جميع العناصر المجلوبة
         val filtered = allItems.filter { data ->
             val matchesQuery = if (query.isNotBlank()) {
                 val q = query.lowercase()
