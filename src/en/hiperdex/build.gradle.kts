@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "Hiperdex"
-    versionCode = 30
+    versionCode = 80
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "hiper"

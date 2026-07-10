@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "HipercooL"
-    versionCode = 56
+    versionCode = 55
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "hiper"
