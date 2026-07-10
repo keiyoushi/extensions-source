@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.get
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
@@ -22,6 +23,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
+import kotlin.time.Duration.Companion.seconds
 
 abstract class Hiper : HttpSource() {
 
@@ -31,6 +33,25 @@ abstract class Hiper : HttpSource() {
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("Referer", "$baseUrl/")
+
+    private val acceptHeaders = headersBuilder()
+        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+        .build()
+
+    override val client = network.client.newBuilder()
+        .addInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            // Fetch baseUrl with accept headers which then populates a cookie
+            if (response.code == 401) {
+                response.close()
+                network.client.newCall(GET(baseUrl, acceptHeaders)).execute().close()
+                chain.proceed(chain.request())
+            } else {
+                response
+            }
+        }
+        .rateLimit(3, 1.seconds)
+        .build()
 
     // ============================ Popular ====================================
 
