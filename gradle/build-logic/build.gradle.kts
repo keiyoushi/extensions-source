@@ -46,23 +46,23 @@ gradlePlugin {
     plugins {
         register("android-base") {
             id = kei.plugins.android.base.get().pluginId
-            implementationClass = "PluginAndroidBase"
+            implementationClass = "AndroidBasePlugin"
         }
         register("extension") {
             id = kei.plugins.extension.get().pluginId
-            implementationClass = "PluginExtension"
+            implementationClass = "ExtensionPlugin"
         }
         register("library") {
             id = kei.plugins.library.get().pluginId
-            implementationClass = "PluginLibrary"
-        }
-        register("multisrc") {
-            id = kei.plugins.multisrc.get().pluginId
-            implementationClass = "PluginMultiSrc"
+            implementationClass = "LibraryPlugin"
         }
         register("spotless") {
             id = kei.plugins.spotless.get().pluginId
-            implementationClass = "PluginSpotless"
+            implementationClass = "SpotlessPlugin"
+        }
+        register("theme") {
+            id = kei.plugins.multisrc.get().pluginId
+            implementationClass = "ThemePlugin"
         }
     }
 }

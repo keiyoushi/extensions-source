@@ -1,10 +1,12 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Mangago"
-    versionCode = 35
+    versionCode = 36
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
