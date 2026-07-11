@@ -5,7 +5,7 @@ plugins {
 keiyoushi {
     name = "MangaTaro"
     versionCode = 10
-    contentWarning = ContentWarning.SAFE
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangataro"
 

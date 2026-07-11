@@ -5,7 +5,7 @@ plugins {
 keiyoushi {
     name = "Manga Ball"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     listOf(
