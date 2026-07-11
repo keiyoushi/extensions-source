@@ -1,20 +1,20 @@
 import com.android.build.api.dsl.LibraryExtension
-import keiyoushi.gradle.extensions.KeiyoushiMultisrcExtension
-import keiyoushi.gradle.extensions.VALID_LIB_VERSIONS
-import keiyoushi.gradle.extensions.alias
-import keiyoushi.gradle.extensions.compileOnly
-import keiyoushi.gradle.extensions.implementation
-import keiyoushi.gradle.extensions.kei
-import keiyoushi.gradle.extensions.libs
-import keiyoushi.gradle.extensions.plugins
-import keiyoushi.gradle.utils.assertWithoutFlag
+import io.github.keiyoushi.gradle.api.dsl.KeiyoushiThemeExtension
+import io.github.keiyoushi.gradle.internal.VALID_LIB_VERSIONS
+import io.github.keiyoushi.gradle.internal.extensions.alias
+import io.github.keiyoushi.gradle.internal.extensions.compileOnly
+import io.github.keiyoushi.gradle.internal.extensions.implementation
+import io.github.keiyoushi.gradle.internal.extensions.kei
+import io.github.keiyoushi.gradle.internal.extensions.libs
+import io.github.keiyoushi.gradle.internal.extensions.plugins
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
+import org.gradle.kotlin.dsl.create
 import org.gradle.kotlin.dsl.dependencies
 
 @Suppress("UNUSED")
-class PluginMultiSrc : Plugin<Project> {
+class ThemePlugin : Plugin<Project> {
     override fun apply(target: Project): Unit = with(target) {
         plugins {
             alias(libs.plugins.android.library)
@@ -24,7 +24,7 @@ class PluginMultiSrc : Plugin<Project> {
             alias(kei.plugins.spotless)
         }
 
-        val keiyoushi = extensions.create("keiyoushi", KeiyoushiMultisrcExtension::class.java)
+        val keiyoushi = extensions.create<KeiyoushiThemeExtension>("keiyoushi")
 
         android {
             namespace = "eu.kanade.tachiyomi.multisrc.${project.name}"
@@ -49,7 +49,7 @@ class PluginMultiSrc : Plugin<Project> {
 
         afterEvaluate {
             val libVersionValue = keiyoushi.libVersion.get()
-            assertWithoutFlag(libVersionValue in VALID_LIB_VERSIONS) {
+            check(libVersionValue in VALID_LIB_VERSIONS) {
                 "libVersion $libVersionValue is not supported. Supported versions: $VALID_LIB_VERSIONS"
             }
         }
