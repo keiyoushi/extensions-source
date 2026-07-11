@@ -10,7 +10,6 @@ import io.github.keiyoushi.gradle.internal.ExtensionMetadata
 import io.github.keiyoushi.gradle.internal.ResolvedSource
 import io.github.keiyoushi.gradle.internal.SourceMetadata
 import io.github.keiyoushi.gradle.internal.VALID_LIB_VERSIONS
-import io.github.keiyoushi.gradle.internal.assertWithoutFlag
 import io.github.keiyoushi.gradle.internal.extensions.alias
 import io.github.keiyoushi.gradle.internal.extensions.compileOnly
 import io.github.keiyoushi.gradle.internal.extensions.implementation
@@ -118,14 +117,14 @@ class ExtensionPlugin : Plugin<Project> {
         val versionCodeProvider = themeExtension.flatMap { themeKeiyoushi ->
             val themeLib = themeKeiyoushi.libVersion.get()
             val extLib = keiyoushi.libVersion.get()
-            assertWithoutFlag(themeLib == extLib) {
+            check(themeLib == extLib) {
                 "Multisrc libVersion ($themeLib) and extension libVersion ($extLib) must match."
             }
             themeKeiyoushi.baseVersionCode.zip(keiyoushi.versionCode) { base, ext -> base + ext }
         }.orElse(keiyoushi.versionCode)
 
         val versionNameProvider = keiyoushi.libVersion.flatMap { libVersion ->
-            assertWithoutFlag(libVersion in VALID_LIB_VERSIONS) {
+            check(libVersion in VALID_LIB_VERSIONS) {
                 "libVersion $libVersion is not supported. Supported versions: $VALID_LIB_VERSIONS"
             }
             versionCodeProvider.map { "$libVersion.$it" }

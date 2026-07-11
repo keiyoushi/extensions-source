@@ -1,7 +1,6 @@
 import com.android.build.api.dsl.LibraryExtension
 import io.github.keiyoushi.gradle.api.dsl.KeiyoushiThemeExtension
 import io.github.keiyoushi.gradle.internal.VALID_LIB_VERSIONS
-import io.github.keiyoushi.gradle.internal.assertWithoutFlag
 import io.github.keiyoushi.gradle.internal.extensions.alias
 import io.github.keiyoushi.gradle.internal.extensions.compileOnly
 import io.github.keiyoushi.gradle.internal.extensions.implementation
@@ -50,7 +49,7 @@ class ThemePlugin : Plugin<Project> {
 
         afterEvaluate {
             val libVersionValue = keiyoushi.libVersion.get()
-            assertWithoutFlag(libVersionValue in VALID_LIB_VERSIONS) {
+            check(libVersionValue in VALID_LIB_VERSIONS) {
                 "libVersion $libVersionValue is not supported. Supported versions: $VALID_LIB_VERSIONS"
             }
         }
