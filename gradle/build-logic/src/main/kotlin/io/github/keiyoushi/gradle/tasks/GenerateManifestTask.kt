@@ -1,7 +1,7 @@
-package keiyoushi.gradle.tasks
+package io.github.keiyoushi.gradle.tasks
 
-import ContentWarning
-import keiyoushi.gradle.extensions.DeeplinkFilter
+import io.github.keiyoushi.gradle.api.ContentWarning
+import io.github.keiyoushi.gradle.api.DeeplinkFilter
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
@@ -12,7 +12,7 @@ import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 
 @CacheableTask
-abstract class GenerateExtensionManifestTask : DefaultTask() {
+abstract class GenerateManifestTask : DefaultTask() {
     @get:Input
     abstract val filters: ListProperty<DeeplinkFilter>
 

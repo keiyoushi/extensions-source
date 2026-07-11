@@ -1,17 +1,16 @@
 import com.diffplug.gradle.spotless.SpotlessExtension
 import com.diffplug.spotless.FormatterFunc
 import com.diffplug.spotless.FormatterStep
-import keiyoushi.gradle.extensions.alias
-import keiyoushi.gradle.extensions.libs
-import keiyoushi.gradle.extensions.plugins
+import io.github.keiyoushi.gradle.internal.extensions.alias
+import io.github.keiyoushi.gradle.internal.extensions.libs
+import io.github.keiyoushi.gradle.internal.extensions.plugins
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
-import org.gradle.kotlin.dsl.invoke
 import java.io.Serializable
 
 @Suppress("UNUSED")
-class PluginSpotless : Plugin<Project> {
+class SpotlessPlugin : Plugin<Project> {
     override fun apply(target: Project): Unit = with(target) {
         plugins {
             alias(libs.plugins.spotless)
@@ -30,7 +29,7 @@ class PluginSpotless : Plugin<Project> {
                     )
                 trimTrailingWhitespace()
                 endWithNewline()
-                addStep(RandomUACheck.create())
+                addStep(RandomUAChecker.toFormatterStep())
             }
 
             java {
@@ -56,28 +55,29 @@ class PluginSpotless : Plugin<Project> {
     }
 }
 
-private object RandomUACheck {
-    fun create(): FormatterStep = FormatterStep.create(
-        "randomua-requires-getMangaUrl",
-        State(),
-        State::toFormatter,
-    )
-
-    private class State : Serializable {
-        fun toFormatter() = FormatterFunc { content ->
-            if ("package keiyoushi.lib.randomua" !in content &&
-                "keiyoushi.lib.randomua" in content &&
-                "override fun getMangaUrl(" !in content
-            ) {
-                throw AssertionError(
-                    "usage of :lib:randomua requires override of getMangaUrl()",
-                )
-            }
-            content
-        }
-    }
-}
-
 private fun Project.spotless(block: SpotlessExtension.() -> Unit) {
     extensions.configure(block)
+}
+
+private class RandomUAChecker : Serializable {
+
+    fun getFormatter() = FormatterFunc { content ->
+        if ("package keiyoushi.lib.randomua" !in content &&
+            "keiyoushi.lib.randomua" in content &&
+            "override fun getMangaUrl(" !in content
+        ) {
+            throw AssertionError(
+                "usage of :lib:randomua requires override of getMangaUrl()",
+            )
+        }
+        content
+    }
+
+    companion object {
+        fun toFormatterStep(): FormatterStep = FormatterStep.create(
+            "randomua-requires-getMangaUrl",
+            RandomUAChecker(),
+            RandomUAChecker::getFormatter,
+        )
+    }
 }

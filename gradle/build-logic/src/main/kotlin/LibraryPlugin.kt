@@ -1,17 +1,17 @@
 import com.android.build.api.dsl.LibraryExtension
-import keiyoushi.gradle.extensions.alias
-import keiyoushi.gradle.extensions.compileOnly
-import keiyoushi.gradle.extensions.implementation
-import keiyoushi.gradle.extensions.kei
-import keiyoushi.gradle.extensions.libs
-import keiyoushi.gradle.extensions.plugins
+import io.github.keiyoushi.gradle.internal.extensions.alias
+import io.github.keiyoushi.gradle.internal.extensions.compileOnly
+import io.github.keiyoushi.gradle.internal.extensions.implementation
+import io.github.keiyoushi.gradle.internal.extensions.kei
+import io.github.keiyoushi.gradle.internal.extensions.libs
+import io.github.keiyoushi.gradle.internal.extensions.plugins
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.dependencies
 
 @Suppress("UNUSED")
-class PluginLibrary : Plugin<Project> {
+class LibraryPlugin : Plugin<Project> {
     override fun apply(target: Project): Unit = with(target) {
         plugins {
             alias(libs.plugins.android.library)
