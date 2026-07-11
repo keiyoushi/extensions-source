@@ -15,6 +15,7 @@ keiyoushi {
     }
 
     deeplink {
+        host("mkissa.to")
         host("allmanga.to")
         path("/manga/..*")
         path("/read/..*")
