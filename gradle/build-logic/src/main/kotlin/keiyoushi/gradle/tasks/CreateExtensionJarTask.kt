@@ -3,13 +3,12 @@ package keiyoushi.gradle.tasks
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.Directory
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFile
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
-import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Classpath
-import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.OutputFile
@@ -22,6 +21,7 @@ import java.util.jar.JarFile
 import java.util.jar.JarOutputStream
 import javax.inject.Inject
 
+/** Builds the extension jar: merges the ALL-scope classes, shrinks with R8, embeds the manifest. */
 @CacheableTask
 abstract class CreateExtensionJarTask : DefaultTask() {
     @get:Classpath
@@ -33,16 +33,19 @@ abstract class CreateExtensionJarTask : DefaultTask() {
     @get:Classpath
     abstract val libraryClasspath: ConfigurableFileCollection
 
-    @get:InputFiles
+    /** The merged R8 config R8 emitted for the APK (outputs/mapping/…/configuration.txt). */
+    @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
-    abstract val keepRuleFiles: ConfigurableFileCollection
-
-    @get:Input
-    abstract val applicationId: Property<String>
+    abstract val r8ConfigFile: RegularFileProperty
 
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val manifestFile: RegularFileProperty
+
+    /** Built APK dir; its `res/`, `assets/` and `resources.arsc` are copied into the jar verbatim. */
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val apkDir: DirectoryProperty
 
     @get:Classpath
     abstract val r8Classpath: ConfigurableFileCollection
@@ -58,10 +61,7 @@ abstract class CreateExtensionJarTask : DefaultTask() {
         val out = outputJar.get().asFile
         out.parentFile.mkdirs()
 
-        val keepRules = temporaryDir.resolve("keep.pro").apply {
-            writeText("-keep class ${applicationId.get()}.ExtensionGenerated { <init>(); }\n")
-        }
-
+        // R8's CLI takes archives, not loose class directories, so merge the ALL-scope classes first.
         val program = temporaryDir.resolve("program.jar")
         val written = HashSet<String>()
         JarOutputStream(program.outputStream().buffered()).use { jar ->
@@ -94,8 +94,8 @@ abstract class CreateExtensionJarTask : DefaultTask() {
             add("--classfile")
             add("--output"); add(shrunk.absolutePath)
             libraryClasspath.files.forEach { add("--lib"); add(it.absolutePath) }
-            keepRuleFiles.files.forEach { add("--pg-conf"); add(it.absolutePath) }
-            add("--pg-conf"); add(keepRules.absolutePath)
+            // The exact merged rule set the APK's R8 used — keeps the jar in lockstep with the APK.
+            add("--pg-conf"); add(r8ConfigFile.get().asFile.absolutePath)
             add(program.absolutePath)
         }
 
@@ -104,6 +104,8 @@ abstract class CreateExtensionJarTask : DefaultTask() {
             mainClass.set("com.android.tools.r8.R8")
             setArgs(args)
         }
+
+        val apk = apkDir.get().asFile.walkTopDown().first { it.extension == "apk" }
 
         JarOutputStream(out.outputStream().buffered()).use { jar ->
             jar.putNextEntry(fixedTimeEntry("AndroidManifest.xml"))
@@ -115,6 +117,18 @@ abstract class CreateExtensionJarTask : DefaultTask() {
                     source.getInputStream(entry).use { it.copyTo(jar) }
                     jar.closeEntry()
                 }
+            }
+
+            // Copy res/, assets/ and resources.arsc from the built APK, verbatim.
+            JarFile(apk).use { source ->
+                source.entries().asSequence()
+                    .filter { !it.isDirectory && (it.name.startsWith("res/") || it.name.startsWith("assets/") || it.name == "resources.arsc") }
+                    .sortedBy { it.name }
+                    .forEach { entry ->
+                        jar.putNextEntry(fixedTimeEntry(entry.name))
+                        source.getInputStream(entry).use { it.copyTo(jar) }
+                        jar.closeEntry()
+                    }
             }
         }
     }

@@ -49,6 +49,7 @@ class PluginExtension : Plugin<Project> {
 
         val keiyoushi = extensions.create("keiyoushi", KeiyoushiExtension::class.java)
         val applicationIdSuffix = "${project.parent?.name}.${project.name}"
+        val projectProguardRules = project.file("proguard-rules.pro")
 
         android {
             namespace = "eu.kanade.tachiyomi.extension"
@@ -93,6 +94,9 @@ class PluginExtension : Plugin<Project> {
                     }
                     isMinifyEnabled = true
                     proguardFiles(rootProject.file("common/proguard-rules.pro"))
+                    if (projectProguardRules.exists()) {
+                        proguardFiles(projectProguardRules)
+                    }
                     @Suppress("UnstableApiUsage")
                     vcsInfo.include = false
                 }
@@ -162,7 +166,6 @@ class PluginExtension : Plugin<Project> {
         }
         dependencies { add("r8", libs.r8) }
 
-        val proguardRules = rootProject.file("common/proguard-rules.pro")
         val projectBuildDirs = rootProject.allprojects.map { it.layout.buildDirectory.get().asFile }
 
         val signingConfig = extensions.getByType(ApplicationExtension::class.java).signingConfigs
@@ -199,10 +202,12 @@ class PluginExtension : Plugin<Project> {
 
                     val createTask = tasks.register<CreateExtensionJarTask>("create${variantName}ExtensionJar") {
                         libraryClasspath.from(externalLibs, bootClasspath)
-                        keepRuleFiles.from(proguardRules)
-                        applicationId.set(variant.applicationId)
+                        // The full merged R8 config the APK's own R8 emitted (all rules, already combined).
+                        r8ConfigFile.set(layout.buildDirectory.file("outputs/mapping/${variant.name}/configuration.txt"))
                         @Suppress("UnstableApiUsage")
                         manifestFile.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+                        @Suppress("UnstableApiUsage")
+                        apkDir.set(variant.artifacts.get(SingleArtifact.APK))
                         r8Classpath.from(r8Configuration)
                         outputJar.set(layout.buildDirectory.file("intermediates/extension_jar/${variant.name}/unsigned.jar"))
                     }
