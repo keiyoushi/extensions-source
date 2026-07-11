@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "MiMi"
     versionCode = 6
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
+    contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
     source {

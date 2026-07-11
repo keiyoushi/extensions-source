@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "TruyenVN"
     versionCode = 17
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
+    contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
 

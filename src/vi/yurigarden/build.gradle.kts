@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "YuriGarden"
     versionCode = 9
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {
