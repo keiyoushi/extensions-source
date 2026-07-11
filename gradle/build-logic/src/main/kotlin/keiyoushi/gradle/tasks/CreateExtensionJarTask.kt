@@ -160,6 +160,6 @@ abstract class CreateExtensionJarTask : DefaultTask() {
     }
 }
 
-// keiyoushi's birthday:  Jan 6, 2024 
+// keiyoushi's birthday:  Jan 6, 2024
 private const val FIXED_JAR_TIME = 1704499200000L
 internal fun fixedTimeEntry(name: String): JarEntry = JarEntry(name).apply { time = FIXED_JAR_TIME }
