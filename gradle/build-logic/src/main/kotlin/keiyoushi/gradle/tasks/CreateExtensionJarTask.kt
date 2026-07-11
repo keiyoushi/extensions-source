@@ -106,8 +106,6 @@ abstract class CreateExtensionJarTask : DefaultTask() {
             sanitizedRules.add("-dontwarn **")
             // don't print the aforementioned warnings
             sanitizedRules.add("-dontnote **")
-            // dump mapping file
-            sanitizedRules.add("-dump ${temporaryDir.resolve("proguard-dump.txt").absolutePath}")
 
             writeText(sanitizedRules.joinToString("\n"))
         }
