@@ -62,12 +62,16 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
     with info_file.open(encoding="utf-8") as f:
         info = json.load(f)
     package_name = info["packageName"]
-    apk = next((info_file.parent / "outputs/apk/release").glob("*.apk"))
+    apk = next((info_file.parent / "outputs/apk/release").glob("*.apk"), None)
+    if apk is None:
+        raise FileNotFoundError(f"{package_name}: no release apk found under {info_file.parent}")
 
     apk_name = apk.name.replace("-release.apk", ".apk")
     (REPO_APK_DIR / apk_name).write_bytes(apk.read_bytes())
 
-    jar = next((info_file.parent / "outputs/jar/release").glob("*.jar"))
+    jar = next((info_file.parent / "outputs/jar/release").glob("*.jar"), None)
+    if jar is None:
+        raise FileNotFoundError(f"{package_name}: no release jar found under {info_file.parent}")
     (REPO_JAR_DIR / jar.name).write_bytes(jar.read_bytes())
 
     badging = subprocess.check_output(

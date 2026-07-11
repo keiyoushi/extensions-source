@@ -163,6 +163,7 @@ class ExtensionPlugin : Plugin<Project> {
 
         val proguardConfiguration = configurations.create("proguard") {
             isCanBeConsumed = false
+            isCanBeResolved = true
         }
         dependencies { add("proguard", libs.proguard) }
 

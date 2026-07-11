@@ -9,8 +9,8 @@ import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Classpath
+import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.InputFile
-import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
@@ -40,7 +40,7 @@ abstract class CreateExtensionJarTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val manifestFile: RegularFileProperty
 
-    @get:InputFiles
+    @get:InputDirectory
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val apkDir: DirectoryProperty
 
@@ -64,29 +64,43 @@ abstract class CreateExtensionJarTask : DefaultTask() {
                 JarFile(file).use { jf ->
                     jf.entries().asSequence().forEach { libraryEntries.add(it.name) }
                 }
-            }
+            }.onFailure { logger.warn("Could not read library jar ${file.name}: ${it.message}") }
         }
 
         val program = temporaryDir.resolve("program.jar")
         val written = HashSet<String>()
+        var excludedClassCount = 0
+        fun logExcludedClass(name: String) {
+            if (name.endsWith(".class")) {
+                excludedClassCount++
+                logger.info("Excluding $name from jar: also present on the library classpath")
+            }
+        }
 
         JarOutputStream(program.outputStream().buffered()).use { jar ->
             dirs.get().forEach { dir ->
                 val root = dir.asFile
-                root.walkTopDown().filter { it.isFile }.forEach { file ->
-                    val name = file.relativeTo(root).invariantSeparatorsPath
-                    if (name !in libraryEntries && written.add(name)) {
-                        jar.putNextEntry(fixedTimeEntry(name))
-                        file.inputStream().use { it.copyTo(jar) }
-                        jar.closeEntry()
+                root.walkTopDown().filter { it.isFile }
+                    .map { it to it.relativeTo(root).invariantSeparatorsPath }
+                    .sortedBy { (_, name) -> name }
+                    .forEach { (file, name) ->
+                        if (name in libraryEntries) {
+                            logExcludedClass(name)
+                        } else if (written.add(name)) {
+                            jar.putNextEntry(fixedTimeEntry(name))
+                            file.inputStream().use { it.copyTo(jar) }
+                            jar.closeEntry()
+                        }
                     }
-                }
             }
 
             jars.get().forEach { regularFile ->
                 JarFile(regularFile.asFile).use { source ->
                     source.entries().asSequence()
-                        .filter { !it.isDirectory && it.name !in libraryEntries && written.add(it.name) }
+                        .filter { !it.isDirectory }
+                        .sortedBy { it.name }
+                        .onEach { if (it.name in libraryEntries) logExcludedClass(it.name) }
+                        .filter { it.name !in libraryEntries && written.add(it.name) }
                         .forEach { entry ->
                             jar.putNextEntry(fixedTimeEntry(entry.name))
                             source.getInputStream(entry).use { it.copyTo(jar) }
@@ -94,6 +108,12 @@ abstract class CreateExtensionJarTask : DefaultTask() {
                         }
                 }
             }
+        }
+
+        if (excludedClassCount > 0) {
+            logger.lifecycle(
+                "$path: excluded $excludedClassCount class(es) also present on the library classpath (rerun with --info for the full list)",
+            )
         }
 
         val shrunk = temporaryDir.resolve("shrunk.jar")
@@ -137,7 +157,7 @@ abstract class CreateExtensionJarTask : DefaultTask() {
             jar.closeEntry()
 
             JarFile(shrunk).use { source ->
-                source.entries().asSequence().filter { !it.isDirectory }.forEach { entry ->
+                source.entries().asSequence().filter { !it.isDirectory }.sortedBy { it.name }.forEach { entry ->
                     jar.putNextEntry(fixedTimeEntry(entry.name))
                     source.getInputStream(entry).use { it.copyTo(jar) }
                     jar.closeEntry()
