@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.en.mangauno
 import eu.kanade.tachiyomi.extension.en.mangauno.Mangauno.Companion.IMG_API_URL
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -70,8 +71,8 @@ class MangaDetailsDto(
         author = this@MangaDetailsDto.author?.replace(" & ", ", ")
         artist = this@MangaDetailsDto.artist?.replace(" & ", ", ")
 
-        val parsedGenres = genres?.trim('[', ']')?.split(',')?.map { it.trim('"', ' ') } ?: emptyList()
-        val parsedTags = tags?.trim('[', ']')?.split(',')?.map { it.trim('"', ' ') } ?: emptyList()
+        val parsedGenres = genres?.parseAs<List<String>>() ?: emptyList()
+        val parsedTags = tags?.parseAs<List<String>>() ?: emptyList()
         genre = (parsedGenres + parsedTags).filter { it.isNotEmpty() }.joinToString()
 
         this.status = when (this@MangaDetailsDto.status?.lowercase()) {
