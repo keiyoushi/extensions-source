@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Usagi"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
+    contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "grouple"
 
