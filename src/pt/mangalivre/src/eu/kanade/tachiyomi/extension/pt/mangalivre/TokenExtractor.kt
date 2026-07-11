@@ -68,24 +68,31 @@ object TokenExtractor {
                     view.evaluateJavascript(
                         """
                         (function() {
+                            const _std = new Set([
+                                'accept', 'accept-language', 'accept-encoding', 'content-type',
+                                'content-length', 'authorization', 'user-agent', 'referer', 'origin',
+                                'cookie', 'cache-control', 'pragma', 'connection', 'host', 'dnt',
+                                'x-csrf-token', 'x-requested-with', 'priority', 'sec-fetch-dest',
+                                'sec-fetch-mode', 'sec-fetch-site', 'sec-ch-ua', 'sec-ch-ua-mobile',
+                                'sec-ch-ua-platform',
+                            ]);
+                            const _report = function(k, v) {
+                                if (k && v && !_std.has(String(k).toLowerCase()) && String(v).length < 60) {
+                                    TokenBridge.onToken(k, v);
+                                }
+                            };
                             const _fetch = window.fetch;
                             window.fetch = function(input, init) {
                                 const headers = (init && init.headers) ? init.headers : {};
                                 const entries = headers instanceof Headers
                                     ? [...headers.entries()]
                                     : Object.entries(headers);
-                                for (const [k, v] of entries) {
-                                    if (k.toLowerCase().startsWith('x-tly') || k.toLowerCase().startsWith('x-toon')) {
-                                        TokenBridge.onToken(k, v);
-                                    }
-                                }
+                                for (const [k, v] of entries) { _report(k, v); }
                                 return _fetch.apply(this, arguments);
                             };
                             const _xhr = XMLHttpRequest.prototype.setRequestHeader;
                             XMLHttpRequest.prototype.setRequestHeader = function(k, v) {
-                                if (k.toLowerCase().startsWith('x-tly') || k.toLowerCase().startsWith('x-toon')) {
-                                    TokenBridge.onToken(k, v);
-                                }
+                                _report(k, v);
                                 return _xhr.apply(this, arguments);
                             };
                         })();
