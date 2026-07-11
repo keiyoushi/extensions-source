@@ -58,6 +58,7 @@ class MangaDto(
         description = parseDescription()
         genre = genres?.joinToString { it.name }
         status = parseStatus()
+        url = "/series/$slug"
     }
 
     fun parseDescription(): String = buildString {

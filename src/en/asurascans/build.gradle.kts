@@ -6,12 +6,17 @@ plugins {
 
 keiyoushi {
     name = "Asura Scans"
-    versionCode = 63
+    versionCode = 64
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
     source {
         lang = "en"
         baseUrl = "https://asurascans.com"
+    }
+
+    deeplink {
+        host("asurascans.com")
+        path("/comics/..*")
     }
 }
