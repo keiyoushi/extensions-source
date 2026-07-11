@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Lunar Manga"
     versionCode = 12
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     val languages = listOf(

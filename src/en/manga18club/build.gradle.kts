@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Manga18.Club"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
+    contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "manga18"
 
