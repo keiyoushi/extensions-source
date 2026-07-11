@@ -21,7 +21,6 @@ import java.util.jar.JarFile
 import java.util.jar.JarOutputStream
 import javax.inject.Inject
 
-/** Builds the extension jar: merges the ALL-scope classes, shrinks with R8, embeds the manifest. */
 @CacheableTask
 abstract class CreateExtensionJarTask : DefaultTask() {
     @get:Classpath
@@ -33,7 +32,6 @@ abstract class CreateExtensionJarTask : DefaultTask() {
     @get:Classpath
     abstract val libraryClasspath: ConfigurableFileCollection
 
-    /** The merged R8 config R8 emitted for the APK (outputs/mapping/…/configuration.txt). */
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val r8ConfigFile: RegularFileProperty
@@ -42,7 +40,6 @@ abstract class CreateExtensionJarTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val manifestFile: RegularFileProperty
 
-    /** Built APK dir; its `res/`, `assets/` and `resources.arsc` are copied into the jar verbatim. */
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val apkDir: DirectoryProperty
@@ -61,7 +58,13 @@ abstract class CreateExtensionJarTask : DefaultTask() {
         val out = outputJar.get().asFile
         out.parentFile.mkdirs()
 
-        // R8's CLI takes archives, not loose class directories, so merge the ALL-scope classes first.
+        val libraryEntries = HashSet<String>()
+        libraryClasspath.files.forEach { file ->
+            if (file.isFile) {
+                runCatching { JarFile(file).use { jf -> jf.entries().asSequence().forEach { libraryEntries.add(it.name) } } }
+            }
+        }
+
         val program = temporaryDir.resolve("program.jar")
         val written = HashSet<String>()
         JarOutputStream(program.outputStream().buffered()).use { jar ->
@@ -69,7 +72,7 @@ abstract class CreateExtensionJarTask : DefaultTask() {
                 val root = dir.asFile
                 root.walkTopDown().filter { it.isFile }.forEach { file ->
                     val name = file.relativeTo(root).invariantSeparatorsPath
-                    if (written.add(name)) {
+                    if (name !in libraryEntries && written.add(name)) {
                         jar.putNextEntry(JarEntry(name))
                         file.inputStream().use { it.copyTo(jar) }
                         jar.closeEntry()
@@ -79,7 +82,7 @@ abstract class CreateExtensionJarTask : DefaultTask() {
             jars.get().forEach { regularFile ->
                 JarFile(regularFile.asFile).use { source ->
                     source.entries().asSequence()
-                        .filter { !it.isDirectory && written.add(it.name) }
+                        .filter { !it.isDirectory && it.name !in libraryEntries && written.add(it.name) }
                         .forEach { entry ->
                             jar.putNextEntry(JarEntry(entry.name))
                             source.getInputStream(entry).use { it.copyTo(jar) }
@@ -94,7 +97,6 @@ abstract class CreateExtensionJarTask : DefaultTask() {
             add("--classfile")
             add("--output"); add(shrunk.absolutePath)
             libraryClasspath.files.forEach { add("--lib"); add(it.absolutePath) }
-            // The exact merged rule set the APK's R8 used — keeps the jar in lockstep with the APK.
             add("--pg-conf"); add(r8ConfigFile.get().asFile.absolutePath)
             add(program.absolutePath)
         }
@@ -119,7 +121,7 @@ abstract class CreateExtensionJarTask : DefaultTask() {
                 }
             }
 
-            // Copy res/, assets/ and resources.arsc from the built APK, verbatim.
+            // Copy res/, assets/ and resources.arsc from the built APK.
             JarFile(apk).use { source ->
                 source.entries().asSequence()
                     .filter { !it.isDirectory && (it.name.startsWith("res/") || it.name.startsWith("assets/") || it.name == "resources.arsc") }

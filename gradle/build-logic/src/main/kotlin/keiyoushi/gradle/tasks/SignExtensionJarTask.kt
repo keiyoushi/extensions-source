@@ -26,11 +26,6 @@ abstract class SignExtensionJarTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val inputJar: RegularFileProperty
 
-    /**
-     * Keystore, tracked by content so switching signing identity re-triggers signing.
-     * Modelled as a collection (not @InputFile) so a not-yet-created keystore is tolerated
-     * rather than failing the build — a missing key just yields an unsigned jar.
-     */
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val keystore: ConfigurableFileCollection
@@ -41,7 +36,6 @@ abstract class SignExtensionJarTask : DefaultTask() {
     @get:Input
     abstract val minSdkVersion: Property<Int>
 
-    // Passwords are @Internal: kept out of the build fingerprint; the keystore content covers re-runs.
     @get:Internal
     abstract val storePassword: Property<String>
 
@@ -71,7 +65,6 @@ abstract class SignExtensionJarTask : DefaultTask() {
         val certs = (keyStore.getCertificateChain(alias) ?: error("Alias '$alias' has no certificate chain"))
             .map { it as X509Certificate }
 
-        // deterministicDsaSigning = true keeps DSA/ECDSA signatures reproducible too (RSA already is).
         val signerConfig = ApkSigner.SignerConfig.Builder("CERT", KeyConfig.Jca(key), certs, true).build()
         ApkSigner.Builder(listOf(signerConfig))
             .setInputApk(input)

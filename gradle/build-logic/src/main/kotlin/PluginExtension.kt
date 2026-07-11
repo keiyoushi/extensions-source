@@ -29,6 +29,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE
 import org.gradle.api.plugins.BasePluginExtension
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.dependencies
@@ -166,7 +167,11 @@ class PluginExtension : Plugin<Project> {
         }
         dependencies { add("r8", libs.r8) }
 
-        val projectBuildDirs = rootProject.allprojects.map { it.layout.buildDirectory.get().asFile }
+        val providedClasspath = configurations.create("extensionProvidedClasspath") {
+            isCanBeConsumed = false
+            isCanBeResolved = true
+            extendsFrom(configurations.getByName("compileOnly"))
+        }
 
         val signingConfig = extensions.getByType(ApplicationExtension::class.java).signingConfigs
             .getByName(if (rootProject.file("signingkey.jks").exists()) "release" else "debug")
@@ -195,14 +200,12 @@ class PluginExtension : Plugin<Project> {
                 }
 
                 if (variant.buildType == "release") {
-                    @Suppress("UnstableApiUsage")
-                    val externalLibs = variant.compileClasspath.filter { file ->
-                        projectBuildDirs.none { file.startsWith(it) }
-                    }
+                    val externalLibs = providedClasspath.incoming.artifactView {
+                        attributes.attribute(ARTIFACT_TYPE_ATTRIBUTE, "android-classes-jar")
+                    }.files
 
                     val createTask = tasks.register<CreateExtensionJarTask>("create${variantName}ExtensionJar") {
                         libraryClasspath.from(externalLibs, bootClasspath)
-                        // The full merged R8 config the APK's own R8 emitted (all rules, already combined).
                         r8ConfigFile.set(layout.buildDirectory.file("outputs/mapping/${variant.name}/configuration.txt"))
                         @Suppress("UnstableApiUsage")
                         manifestFile.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
