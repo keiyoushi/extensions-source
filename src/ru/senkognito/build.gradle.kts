@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Senkognito"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
+    contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "senkuro"
 
