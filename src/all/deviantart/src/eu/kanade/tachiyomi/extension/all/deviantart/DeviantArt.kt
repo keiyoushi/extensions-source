@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.all.deviantart
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -34,9 +35,22 @@ abstract class DeviantArt :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override fun headersBuilder() = Headers.Builder().apply {
-        add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0")
+    // Strip "wv" from User-Agent so Google login works in this source.
+    // Google deny login when User-Agent contains the WebView token.
+    override fun headersBuilder() = if (preferences.loginAssist) {
+        super.headersBuilder()
+            .apply {
+                build()["user-agent"]?.let { userAgent ->
+                    set("user-agent", removeWebViewToken(userAgent))
+                }
+            }
+    } else {
+        Headers.Builder().apply {
+            add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0")
+        }
     }
+
+    private fun removeWebViewToken(userAgent: String): String = userAgent.replace(WEBVIEW_TOKEN_REGEX, ")")
 
     private val backendBaseUrl = "https://backend.deviantart.com"
     private fun backendBuilder() = backendBaseUrl.toHttpUrl().newBuilder()
@@ -179,6 +193,16 @@ abstract class DeviantArt :
     private fun Response.asJsoupXml(): Document = Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = LOGIN_ASSIST_PREF
+            title = "Login assist"
+            summary = "Enables Multi-way login in WebView by stripping the \"wv\" token from the " +
+                "default User-Agent header. Switch on and login in the Webview\n\n" +
+                "When disabled, a generic windows Firefox User-Agent is used for all requests.\n\n"+
+                "Note: After switching, please restart the App. If this extension stop working, please disable the switch after login."
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+
         val artistInTitlePref = ListPreference(screen.context).apply {
             key = ArtistInTitle.PREF_KEY
             title = "Artist name in manga title"
@@ -209,7 +233,12 @@ abstract class DeviantArt :
     private val SharedPreferences.artistInTitle
         get() = getString(ArtistInTitle.PREF_KEY, ArtistInTitle.defaultValue.name)
 
+    private val SharedPreferences.loginAssist: Boolean
+        get() = getBoolean(LOGIN_ASSIST_PREF, false)
+
     companion object {
         private const val SEARCH_FORMAT_MSG = "Please enter a query in the format of gallery:{username} or gallery:{username}/{folderId}"
+        private const val LOGIN_ASSIST_PREF = "loginAssistPref"
+        private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
     }
 }
