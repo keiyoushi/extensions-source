@@ -1,4 +1,4 @@
-package keiyoushi.gradle.tasks
+package io.github.keiyoushi.gradle.tasks
 
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty

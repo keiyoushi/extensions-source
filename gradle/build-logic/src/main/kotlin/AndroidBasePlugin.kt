@@ -2,15 +2,15 @@ import com.android.build.api.dsl.ApplicationDefaultConfig
 import com.android.build.api.dsl.CommonExtension
 import com.android.build.api.dsl.DefaultConfig
 import com.android.build.api.dsl.LibraryDefaultConfig
-import keiyoushi.gradle.configurations.configureKotlin
-import keiyoushi.gradle.extensions.kei
-import keiyoushi.gradle.extensions.spotlessTaskName
+import io.github.keiyoushi.gradle.internal.configurations.configureKotlin
+import io.github.keiyoushi.gradle.internal.extensions.kei
+import io.github.keiyoushi.gradle.internal.extensions.spotlessTaskName
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
 
 @Suppress("UNUSED")
-class PluginAndroidBase : Plugin<Project> {
+class AndroidBasePlugin : Plugin<Project> {
     override fun apply(target: Project): Unit = with(target) {
         configureKotlin()
 
