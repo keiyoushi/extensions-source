@@ -77,17 +77,15 @@ abstract class MangaPoisk : HttpSource() {
         val hasNextPage = if (isSearch) {
             document.selectFirst("ul.pagination li a[aria-label*=Вперёд]:not([aria-disabled=true])") != null
         } else {
-            document.selectFirst("div.container > div:last-child ul li:contains(Вперёд) a") != null
+            document.selectFirst("ul li:contains(Вперёд) a") != null
         }
 
         val mangas = document.select(selector).mapNotNull { element ->
             val urlElement = if (isSearch) element.selectFirst("a.card-about") else element.selectFirst("a")
             if (urlElement == null) return@mapNotNull null
             val titleParsed = if (isSearch) {
-                element.selectFirst("div.post-description p.card-title")?.text()
-                    ?.takeIf { it.isNotBlank() }
-                    ?: element.selectFirst("a > h2.entry-title")?.text()
-                        ?.takeIf { it.isNotBlank() }
+                element.selectFirst("div.post-description p.card-title")?.text()?.takeIf { it.isNotBlank() }
+                    ?: element.selectFirst("a > h2.entry-title")?.text()?.takeIf { it.isNotBlank() }
                     ?: return@mapNotNull null
             } else {
                 urlElement.attr("title").takeIf { it.isNotBlank() }
