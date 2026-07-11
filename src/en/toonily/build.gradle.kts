@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "Toonily"
-    versionCode = 14
+    versionCode = 15
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
