@@ -74,7 +74,11 @@ abstract class MangaPoisk : HttpSource() {
         val document = response.asJsoup()
         val isSearch = response.request.url.queryParameter("q") != null
         val selector = if (isSearch) "article.card" else ".manga-card"
-        val hasNextPage = document.selectFirst("ul.pagination li a[aria-label*=Вперёд]:not([aria-disabled=true])") != null
+        val hasNextPage = if (isSearch) {
+            document.selectFirst("ul.pagination li a[aria-label*=Вперёд]:not([aria-disabled=true])") != null
+        } else {
+            document.selectFirst("div.container > div:last-child ul li:contains(Вперёд) a") != null
+        }
 
         val mangas = document.select(selector).mapNotNull { element ->
             val urlElement = if (isSearch) element.selectFirst("a.card-about") else element.selectFirst("a")
