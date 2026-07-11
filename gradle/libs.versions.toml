@@ -18,6 +18,8 @@ serialization = "1.7.3"
 
 [libraries]
 android-gradle = { module = "com.android.tools.build:gradle", version.ref = "android-gradle" }
+apksig = { module = "com.android.tools.build:apksig", version.ref = "android-gradle" }
+proguard = { module = "com.guardsquare:proguard-base", version = "7.9.1" }
 junit = { module = "junit:junit", version.ref = "junit" }
 kotlin-gradle = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin-gradle" }
 ksp-api = { module = "com.google.devtools.ksp:symbol-processing-api", version.ref = "ksp" }

@@ -1,10 +1,12 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Asura Scans"
-    versionCode = 62
+    versionCode = 63
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 

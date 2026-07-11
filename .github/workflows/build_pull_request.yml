@@ -74,5 +74,7 @@ jobs:
         if: "github.repository == 'keiyoushi/extensions-source'"
         with:
           name: "individual-apks-${{ matrix.chunk.number }}"
-          path: "**/*.apk"
+          path: |
+            **/build/outputs/apk/release/*.apk
+            **/build/outputs/jar/release/*.jar
           retention-days: 1
