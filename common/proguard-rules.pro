@@ -1,6 +1,5 @@
 #-dontobfuscate
 -dontoptimize
--dontpreverify
 
 ## Partially based on https://android.googlesource.com/platform/tools/base/+/refs/heads/mirror-goog-studio-main/build-system/gradle-core/src/main/resources/com/android/build/gradle/proguard-common.txt
 
@@ -49,4 +48,4 @@
 }
 
 -if @kotlinx.serialization.Serializable class **
--keep,allowshrinking,allowoptimization,allowobfuscation,allowaccessmodification class <1>
+-keep,allowshrinking,allowoptimization,allowobfuscation class <1>

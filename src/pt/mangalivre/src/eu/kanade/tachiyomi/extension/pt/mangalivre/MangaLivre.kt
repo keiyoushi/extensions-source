@@ -268,7 +268,17 @@ abstract class MangaLivre :
 
     private fun decodeCharCodes(js: String): List<String> = CHARCODE_REGEX.findAll(js)
         .mapNotNull { match ->
-            val codes = match.groupValues[1].split(",").mapNotNull { it.toIntOrNull() }
+            val op = match.groupValues[2]
+            val k = match.groupValues[3].toIntOrNull() ?: 0
+            val codes = match.groupValues[1].split(",").mapNotNull { it.toIntOrNull() }.map { n ->
+                when (op) {
+                    "-" -> n - k
+                    "+" -> n + k
+                    "*" -> n * k
+                    "^" -> n xor k
+                    else -> n
+                }
+            }
             if (codes.isNotEmpty() && codes.all { it in 32..126 }) {
                 codes.map { it.toChar() }.joinToString("")
             } else {
@@ -313,7 +323,7 @@ abstract class MangaLivre :
         private val STANDARD_HEADERS = setOf("content-type", "accept", "accept-language", "authorization", "x-csrf-token")
         private val HEADER_NAME_REGEX = Regex("[A-Za-z][\\w.-]{1,40}")
         private val ASSET_REGEX = Regex("/assets/[\\w-]+\\.js")
-        private val CHARCODE_REGEX = Regex("\\[(\\d{1,3}(?:,\\d{1,3}){2,60})\\]")
+        private val CHARCODE_REGEX = Regex("\\[([\\d,]{5,240})\\][^\\[]{0,60}?fromCharCode\\([a-z]+(?:([-+*^])(\\d{1,4}))?\\)")
         private val ATOB_REGEX = Regex("atob\\(\"([A-Za-z0-9+/=]{1,80})\"\\)")
     }
 }

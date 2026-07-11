@@ -1,16 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Raw18"
-    versionCode = 6
+    versionCode = 7
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "wpcomics"
 
     source {
         lang = "ja"
-        baseUrl = "https://raw18.cool"
+        baseUrl {
+            custom("https://raw18.vip")
+        }
     }
 }
