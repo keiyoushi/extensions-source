@@ -158,10 +158,10 @@ class PluginExtension : Plugin<Project> {
             this.outputFile.set(layout.buildDirectory.file("keiyoushi-source-info.json"))
         }
 
-        val r8Configuration = configurations.create("r8") {
+        val proguardConfiguration = configurations.create("proguard") {
             isCanBeConsumed = false
         }
-        dependencies { add("r8", libs.r8) }
+        dependencies { add("proguard", libs.proguard) }
 
         val providedClasspath = configurations.create("extensionProvidedClasspath") {
             isCanBeConsumed = false
@@ -202,12 +202,12 @@ class PluginExtension : Plugin<Project> {
 
                     val createTask = tasks.register<CreateExtensionJarTask>("create${variantName}ExtensionJar") {
                         libraryClasspath.from(externalLibs, bootClasspath)
-                        r8ConfigFile.set(layout.buildDirectory.file("outputs/mapping/${variant.name}/configuration.txt"))
+                        proguardConfigFile.set(layout.buildDirectory.file("outputs/mapping/${variant.name}/configuration.txt"))
                         @Suppress("UnstableApiUsage")
                         manifestFile.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
                         @Suppress("UnstableApiUsage")
                         apkDir.set(variant.artifacts.get(SingleArtifact.APK))
-                        r8Classpath.from(r8Configuration)
+                        proguardClasspath.from(proguardConfiguration)
                         outputJar.set(layout.buildDirectory.file("intermediates/extension_jar/${variant.name}/unsigned.jar"))
                     }
 

@@ -49,4 +49,4 @@
 }
 
 -if @kotlinx.serialization.Serializable class **
--keep,allowshrinking,allowoptimization,allowobfuscation,allowaccessmodification class <1>
+-keep,allowshrinking,allowoptimization,allowobfuscation class <1>

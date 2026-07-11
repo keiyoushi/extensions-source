@@ -4,7 +4,6 @@ coroutines = "1.10.2"
 junit = "4.13.2"
 kotlin-gradle = "2.3.21"
 ksp = "2.3.9"
-r8 = "9.1.31"
 kotlinpoet = "2.1.0"
 ktlint = "1.8.0"
 spotless = "8.5.0"
@@ -20,7 +19,7 @@ serialization = "1.7.3"
 [libraries]
 android-gradle = { module = "com.android.tools.build:gradle", version.ref = "android-gradle" }
 apksig = { module = "com.android.tools.build:apksig", version.ref = "android-gradle" }
-r8 = { module = "com.android.tools:r8", version.ref = "r8" }
+proguard = { module = "com.guardsquare:proguard-base", version = "7.9.1" }
 junit = { module = "junit:junit", version.ref = "junit" }
 kotlin-gradle = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin-gradle" }
 ksp-api = { module = "com.google.devtools.ksp:symbol-processing-api", version.ref = "ksp" }

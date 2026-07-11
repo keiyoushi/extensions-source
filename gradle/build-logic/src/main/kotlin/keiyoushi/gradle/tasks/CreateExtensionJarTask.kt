@@ -34,7 +34,7 @@ abstract class CreateExtensionJarTask : DefaultTask() {
 
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
-    abstract val r8ConfigFile: RegularFileProperty
+    abstract val proguardConfigFile: RegularFileProperty
 
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
@@ -45,7 +45,7 @@ abstract class CreateExtensionJarTask : DefaultTask() {
     abstract val apkDir: DirectoryProperty
 
     @get:Classpath
-    abstract val r8Classpath: ConfigurableFileCollection
+    abstract val proguardClasspath: ConfigurableFileCollection
 
     @get:OutputFile
     abstract val outputJar: RegularFileProperty
@@ -59,32 +59,36 @@ abstract class CreateExtensionJarTask : DefaultTask() {
         out.parentFile.mkdirs()
 
         val libraryEntries = HashSet<String>()
-        libraryClasspath.files.forEach { file ->
-            if (file.isFile) {
-                runCatching { JarFile(file).use { jf -> jf.entries().asSequence().forEach { libraryEntries.add(it.name) } } }
+        libraryClasspath.files.filter { it.isFile }.forEach { file ->
+            runCatching {
+                JarFile(file).use { jf ->
+                    jf.entries().asSequence().forEach { libraryEntries.add(it.name) }
+                }
             }
         }
 
         val program = temporaryDir.resolve("program.jar")
         val written = HashSet<String>()
+
         JarOutputStream(program.outputStream().buffered()).use { jar ->
             dirs.get().forEach { dir ->
                 val root = dir.asFile
                 root.walkTopDown().filter { it.isFile }.forEach { file ->
                     val name = file.relativeTo(root).invariantSeparatorsPath
                     if (name !in libraryEntries && written.add(name)) {
-                        jar.putNextEntry(JarEntry(name))
+                        jar.putNextEntry(fixedTimeEntry(name))
                         file.inputStream().use { it.copyTo(jar) }
                         jar.closeEntry()
                     }
                 }
             }
+
             jars.get().forEach { regularFile ->
                 JarFile(regularFile.asFile).use { source ->
                     source.entries().asSequence()
                         .filter { !it.isDirectory && it.name !in libraryEntries && written.add(it.name) }
                         .forEach { entry ->
-                            jar.putNextEntry(JarEntry(entry.name))
+                            jar.putNextEntry(fixedTimeEntry(entry.name))
                             source.getInputStream(entry).use { it.copyTo(jar) }
                             jar.closeEntry()
                         }
@@ -93,22 +97,37 @@ abstract class CreateExtensionJarTask : DefaultTask() {
         }
 
         val shrunk = temporaryDir.resolve("shrunk.jar")
+
+        val modifiedProguardConfigFile = temporaryDir.resolve("sanitized-proguard-configuration.txt").apply {
+            val sanitizedRules = proguardConfigFile.get().asFile
+                .readLines().toMutableList()
+
+            // make it forgiving like r8
+            sanitizedRules.add("-dontwarn **")
+            // don't print the aforementioned warnings
+            sanitizedRules.add("-dontnote **")
+            // dump mapping file
+            sanitizedRules.add("-dump ${temporaryDir.resolve("proguard-dump.txt").absolutePath}")
+
+            writeText(sanitizedRules.joinToString("\n"))
+        }
+
         val args = buildList {
-            add("--classfile")
-            add("--output")
+            add("-injars")
+            add(program.absolutePath)
+            add("-outjars")
             add(shrunk.absolutePath)
             libraryClasspath.files.forEach {
-                add("--lib")
+                add("-libraryjars")
                 add(it.absolutePath)
             }
-            add("--pg-conf")
-            add(r8ConfigFile.get().asFile.absolutePath)
-            add(program.absolutePath)
+            add("-include")
+            add(modifiedProguardConfigFile.absolutePath)
         }
 
         execOps.javaexec {
-            classpath = r8Classpath
-            mainClass.set("com.android.tools.r8.R8")
+            classpath = proguardClasspath
+            mainClass.set("proguard.ProGuard")
             setArgs(args)
         }
 
@@ -118,6 +137,7 @@ abstract class CreateExtensionJarTask : DefaultTask() {
             jar.putNextEntry(fixedTimeEntry("AndroidManifest.xml"))
             manifestFile.get().asFile.inputStream().use { it.copyTo(jar) }
             jar.closeEntry()
+
             JarFile(shrunk).use { source ->
                 source.entries().asSequence().filter { !it.isDirectory }.forEach { entry ->
                     jar.putNextEntry(fixedTimeEntry(entry.name))
@@ -126,7 +146,6 @@ abstract class CreateExtensionJarTask : DefaultTask() {
                 }
             }
 
-            // Copy res/, assets/ and resources.arsc from the built APK.
             JarFile(apk).use { source ->
                 source.entries().asSequence()
                     .filter { !it.isDirectory && (it.name.startsWith("res/") || it.name.startsWith("assets/") || it.name == "resources.arsc") }
@@ -141,7 +160,5 @@ abstract class CreateExtensionJarTask : DefaultTask() {
     }
 }
 
-// Fixed entry time for reproducible jars (1980-02-01, the value Gradle uses for archives).
 private const val FIXED_JAR_TIME = 320054400000L
-
 internal fun fixedTimeEntry(name: String): JarEntry = JarEntry(name).apply { time = FIXED_JAR_TIME }
