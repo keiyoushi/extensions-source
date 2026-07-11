@@ -86,7 +86,7 @@ abstract class MangaPoisk : HttpSource() {
                 title = if (isSearch) {
                     element.selectFirst("div.post-description p.card-title")?.text()
                         ?: element.selectFirst("a > h2.entry-title")?.text()
-                        ?: ""
+                        ?: throw Exception("Не удалось распознать название манги")
                 } else {
                     urlElement.attr("title")
                 }.substringBefore("/")
