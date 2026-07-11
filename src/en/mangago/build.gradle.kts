@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "Mangago"
-    versionCode = 35
+    versionCode = 36
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
