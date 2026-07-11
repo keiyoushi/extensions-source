@@ -90,7 +90,8 @@ abstract class MangaPoisk : HttpSource() {
                             ?.takeIf { it.isNotBlank() }
                         ?: return@mapNotNull null
                 } else {
-                    urlElement.attr("title")
+                    urlElement.attr("title").takeIf { it.isNotBlank() }
+                        ?: return@mapNotNull null
                 }.substringBefore("/")
             }
         }
