@@ -15,13 +15,14 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import okhttp3.Response
+import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class Hiperdex :
     Hiper(),
     ConfigurableSource {
-    override val client = network.client.newBuilder()
-        .rateLimit(2)
+    override val client = super.client.newBuilder()
+        .rateLimit(999999, 1.minutes)
         .build()
 
     private val preferences = getPreferences()

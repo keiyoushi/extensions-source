@@ -6,7 +6,7 @@ import keiyoushi.network.rateLimit
 
 @Source
 abstract class Hipercool : Hiper() {
-    override val client = network.client.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
 }
