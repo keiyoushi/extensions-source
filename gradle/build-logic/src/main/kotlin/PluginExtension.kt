@@ -18,10 +18,10 @@ import keiyoushi.gradle.extensions.kei
 import keiyoushi.gradle.extensions.ksp
 import keiyoushi.gradle.extensions.libs
 import keiyoushi.gradle.extensions.plugins
+import keiyoushi.gradle.tasks.CreateExtensionJarTask
 import keiyoushi.gradle.tasks.GenerateExtensionManifestTask
 import keiyoushi.gradle.tasks.GenerateKeepRulesTask
 import keiyoushi.gradle.tasks.GenerateSourceInfoTask
-import keiyoushi.gradle.tasks.CreateExtensionJarTask
 import keiyoushi.gradle.tasks.SignExtensionJarTask
 import keiyoushi.gradle.utils.assertWithoutFlag
 import kotlinx.serialization.Serializable

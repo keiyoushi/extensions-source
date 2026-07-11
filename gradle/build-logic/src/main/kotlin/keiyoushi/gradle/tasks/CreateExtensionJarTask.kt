@@ -95,9 +95,14 @@ abstract class CreateExtensionJarTask : DefaultTask() {
         val shrunk = temporaryDir.resolve("shrunk.jar")
         val args = buildList {
             add("--classfile")
-            add("--output"); add(shrunk.absolutePath)
-            libraryClasspath.files.forEach { add("--lib"); add(it.absolutePath) }
-            add("--pg-conf"); add(r8ConfigFile.get().asFile.absolutePath)
+            add("--output")
+            add(shrunk.absolutePath)
+            libraryClasspath.files.forEach {
+                add("--lib")
+                add(it.absolutePath)
+            }
+            add("--pg-conf")
+            add(r8ConfigFile.get().asFile.absolutePath)
             add(program.absolutePath)
         }
 
