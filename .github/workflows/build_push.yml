@@ -91,7 +91,8 @@ jobs:
         with:
           name: "individual-apks-${{ matrix.chunk.number }}"
           path: |
-            **/*.apk
+            **/build/outputs/apk/release/*.apk
+            **/build/outputs/jar/release/*.jar
             **/build/keiyoushi-source-info.json
           retention-days: 1
 

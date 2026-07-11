@@ -36,6 +36,11 @@ class MangaDto(
     private val author: String? = null,
     private val artist: String? = null,
     private val description: String? = null,
+    private val rating: Double? = null,
+    @SerialName("popularity_rank")
+    private val popularityRank: Int? = null,
+    @SerialName("alt_titles")
+    private val altTitles: List<String>? = null,
     private val genres: List<GenreDto>? = null,
     private val status: String? = null,
 ) {
@@ -50,9 +55,30 @@ class MangaDto(
         thumbnail_url = cover
         author = this@MangaDto.author
         artist = this@MangaDto.artist
-        description = this@MangaDto.description?.let { Jsoup.parseBodyFragment(it) }?.text()
+        description = parseDescription()
         genre = genres?.joinToString { it.name }
         status = parseStatus()
+    }
+
+    fun parseDescription(): String = buildString {
+        val plainDescription = description?.let { Jsoup.parseBodyFragment(it).text() }
+        plainDescription?.let(::append)
+
+        rating?.let {
+            if (isNotEmpty()) append("\n\n")
+            append("Rating: %.2f".format(it))
+        }
+
+        popularityRank?.let {
+            if (isNotEmpty()) append("\n\n")
+            append("Rank: #$it")
+        }
+
+        if (!altTitles.isNullOrEmpty()) {
+            if (isNotEmpty()) append("\n\n")
+            append("Alternative Titles:\n")
+            altTitles.joinTo(this, "\n") { "- $it" }
+        }
     }
 
     fun parseStatus() = when (status?.lowercase()) {
