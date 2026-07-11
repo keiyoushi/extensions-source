@@ -181,9 +181,7 @@ abstract class AllManga :
     override fun getMangaUrl(manga: SManga): String {
         // to solve interactive CF manually for the chapter
         if (mangaUrl != null) {
-            val chapterUrl = mangaUrl!!
-            mangaUrl = null
-            return chapterUrl
+            return mangaUrl!!
         }
         val mangaId = manga.url.split("/")[2]
         return "$baseUrl/manga/$mangaId"
@@ -232,8 +230,9 @@ abstract class AllManga :
         client.newCall(GET(chapterUrl, headers)).execute().use { response ->
             if (response.code == 403 || response.code == 503) {
                 mangaUrl = chapterUrl
-                throw IOException("Solve Captcha in Webview and Retry")
+                throw IOException("Solve captcha in WebView and retry")
             }
+            mangaUrl = null
             pageListFromWebView(response.asJsoup())
         }
     }
