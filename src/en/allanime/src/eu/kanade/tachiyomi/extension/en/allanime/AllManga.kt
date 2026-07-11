@@ -42,9 +42,10 @@ import java.util.concurrent.TimeUnit
 abstract class AllManga :
     HttpSource(),
     ConfigurableSource {
-    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
 
     private val apiUrl = "https://api.allanime.day/api"
+
+    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
 
     override val supportsLatest = true
 
@@ -52,8 +53,34 @@ abstract class AllManga :
 
     private val preferences by getPreferencesLazy()
 
+    private val retryRegex = Regex("""in (\d+) second""", RegexOption.IGNORE_CASE)
+
     override val client = network.client.newBuilder()
         .apply { interceptors().removeAll { it.javaClass.simpleName == "CloudflareInterceptor" } }
+        .addInterceptor { chain ->
+            val request = chain.request()
+
+            if (request.url.host != apiUrlHost) return@addInterceptor chain.proceed(request)
+
+            var lastResponse: Response? = null
+
+            for (attempt in 0..5) {
+                val response = chain.proceed(request)
+                lastResponse = response
+
+                val retryAfter = retryRegex.find(response.peekBody(1024).string())
+                    ?.groupValues?.get(1)?.toLongOrNull()
+
+                if (retryAfter == null) return@addInterceptor response
+
+                if (attempt < 5) {
+                    response.close()
+                    Thread.sleep(retryAfter * 1000)
+                }
+            }
+
+            return@addInterceptor lastResponse!!
+        }
         .rateLimit(1) { it.host == apiUrlHost }
         .build()
 
