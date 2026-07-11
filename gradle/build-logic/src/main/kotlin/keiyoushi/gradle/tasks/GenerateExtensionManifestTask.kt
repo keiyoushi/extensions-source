@@ -40,6 +40,8 @@ abstract class GenerateExtensionManifestTask : DefaultTask() {
             ContentWarning.SAFE -> "0"
             ContentWarning.MIXED -> "1"
             ContentWarning.NSFW -> "2"
+            // ContentWarning.LEGACY_NSFW_OR_MIXED is temporary
+            ContentWarning.LEGACY_NSFW_OR_MIXED -> "2"
         }
         val out = outputFile.get().asFile
         out.parentFile.mkdirs()

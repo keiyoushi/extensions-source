@@ -223,6 +223,9 @@ class PluginExtension : Plugin<Project> {
                     mirrorUrls = source.baseUrl.mirrors.map { it.url },
                 )
             }
+            // ContentWarning.LEGACY_NSFW_OR_MIXED is temporary
+            val contentWarning = keiyoushi.contentWarning.get()
+                .let { if (it == ContentWarning.LEGACY_NSFW_OR_MIXED) ContentWarning.NSFW else it }
             val extensionInfo = ExtensionInfoData(
                 packageName = packageName,
                 name = extName,
@@ -230,7 +233,7 @@ class PluginExtension : Plugin<Project> {
                 versionName = versionNameProvider.get(),
                 extensionLib = keiyoushi.libVersion.get(),
                 // Proto ContentWarning: UNSPECIFIED=0, SAFE=1, MIXED=2, NSFW=3 (enum ordinal + 1).
-                contentWarning = keiyoushi.contentWarning.get().ordinal + 1,
+                contentWarning = contentWarning.ordinal + 1,
                 sources = sourceInfos,
             )
             val sourceInfoJson = Json.encodeToString(extensionInfo)
