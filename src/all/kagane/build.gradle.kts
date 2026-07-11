@@ -4,7 +4,7 @@ plugins {
 
 keiyoushi {
     name = "Kagane"
-    versionCode = 26
+    versionCode = 27
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 

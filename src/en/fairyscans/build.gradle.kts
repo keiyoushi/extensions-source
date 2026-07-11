@@ -4,12 +4,12 @@ plugins {
 
 keiyoushi {
     name = "Fairy Scans"
-    versionCode = 33
+    versionCode = 34
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
     source {
         lang = "en"
-        baseUrl = "https://fairyscans.com"
+        baseUrl = "https://fairyscans.org"
     }
 }
