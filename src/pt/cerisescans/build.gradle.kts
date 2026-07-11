@@ -5,7 +5,7 @@ plugins {
 keiyoushi {
     name = "Cerise Scan"
     versionCode = 11
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.LEGACY_NSFW_OR_MIXED
     libVersion = "1.4"
     theme = "madara"
 

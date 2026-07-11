@@ -5,7 +5,7 @@ plugins {
 keiyoushi {
     name = "Simply Hentai"
     versionCode = 8
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.LEGACY_NSFW_OR_MIXED
     libVersion = "1.4"
 
     listOf("en", "ja", "zh", "ko", "es", "ru", "fr", "de", "it", "pl").forEach {

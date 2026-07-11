@@ -5,7 +5,7 @@ plugins {
 keiyoushi {
     name = "MikoRoku"
     versionCode = 6
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.LEGACY_NSFW_OR_MIXED
     libVersion = "1.4"
     theme = "zeistmanga"
 

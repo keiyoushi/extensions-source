@@ -5,7 +5,7 @@ plugins {
 keiyoushi {
     name = "Brasil Hentai"
     versionCode = 5
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.LEGACY_NSFW_OR_MIXED
     libVersion = "1.4"
 
     source {

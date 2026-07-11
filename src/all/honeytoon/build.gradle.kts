@@ -5,7 +5,7 @@ plugins {
 keiyoushi {
     name = "Honeytoon"
     versionCode = 2
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.LEGACY_NSFW_OR_MIXED
     libVersion = "1.4"
 
     listOf("de", "en", "es", "fr", "it", "pt-BR").forEach {

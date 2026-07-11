@@ -5,7 +5,7 @@ plugins {
 keiyoushi {
     name = "Luscious"
     versionCode = 32
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.LEGACY_NSFW_OR_MIXED
     libVersion = "1.4"
 
     listOf("en", "ja", "es", "it", "de", "fr", "zh", "ko", "other", "th", "all", "pt-BR").forEach {
