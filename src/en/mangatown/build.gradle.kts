@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Mangatown"
     versionCode = 10
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {
