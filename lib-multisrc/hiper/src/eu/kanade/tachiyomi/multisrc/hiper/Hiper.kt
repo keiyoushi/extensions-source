@@ -248,7 +248,21 @@ abstract class Hiper : HttpSource() {
             .addQueryParameter("input", input.toString())
             .build()
 
-        return GET(url, headers)
+        val newHeaders = headers.newBuilder().apply {
+            add("cookie", "__st=08fc7856f8d997ca38f029edc76d80a44ff8dc85b72bb8ca9b016f82a66ab72b; zone-cap-5528822=1%3B1783766937")
+            set("referer", "https://hiperdex.tv/manga/infidelity-101-uncensored/1")
+            add("accept", "*/*")
+            add("accept-language", "en-US,en;q=0.9,vi;q=0.8")
+            add("priority", "u=1, i")
+            add("sec-ch-ua", "\"Not;A=Brand\";v=\"8\", \"Chromium\";v=\"150\", \"Microsoft Edge\";v=\"150\"")
+            add("sec-ch-ua-mobile", "?0")
+            add("sec-ch-ua-platform", "\"macOS\"")
+            add("sec-fetch-dest", "empty")
+            add("sec-fetch-mode", "cors")
+            add("sec-fetch-site", "same-origin")
+            add("x-hpx-nexus", "hpx-block-f91")
+        }.build()
+        return GET(url, newHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
