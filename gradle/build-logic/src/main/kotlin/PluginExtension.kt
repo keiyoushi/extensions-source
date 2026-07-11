@@ -50,7 +50,6 @@ class PluginExtension : Plugin<Project> {
 
         val keiyoushi = extensions.create("keiyoushi", KeiyoushiExtension::class.java)
         val applicationIdSuffix = "${project.parent?.name}.${project.name}"
-        val projectProguardRules = project.file("proguard-rules.pro")
 
         android {
             namespace = "eu.kanade.tachiyomi.extension"
@@ -95,9 +94,6 @@ class PluginExtension : Plugin<Project> {
                     }
                     isMinifyEnabled = true
                     proguardFiles(rootProject.file("common/proguard-rules.pro"))
-                    if (projectProguardRules.exists()) {
-                        proguardFiles(projectProguardRules)
-                    }
                     @Suppress("UnstableApiUsage")
                     vcsInfo.include = false
                 }
