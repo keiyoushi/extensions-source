@@ -5,7 +5,7 @@ plugins {
 keiyoushi {
     name = "Art Lapsa"
     versionCode = 5
-    contentWarning = ContentWarning.SAFE
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "keyoapp"
 
