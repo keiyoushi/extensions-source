@@ -198,7 +198,7 @@ abstract class DeviantArt :
             title = "Login assist"
             summary = "Enables Multi-way login in WebView by stripping the \"wv\" token from the " +
                 "default User-Agent header. Switch on and login in the Webview\n\n" +
-                "When disabled, a generic windows Firefox User-Agent is used for all requests.\n\n"+
+                "When disabled, a generic windows Firefox User-Agent is used for all requests.\n\n" +
                 "Note: After switching, please restart the App. If this extension stop working, please disable the switch after login."
             setDefaultValue(false)
         }.also(screen::addPreference)
