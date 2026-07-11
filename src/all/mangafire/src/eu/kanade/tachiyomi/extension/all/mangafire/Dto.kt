@@ -85,11 +85,34 @@ class PosterDto(val small: String? = null, val medium: String? = null, val large
 class EntityDto(val title: String)
 
 @Serializable
+class VolumeDto(
+    private val id: Int,
+    private val number: Int,
+    private val name: String? = null,
+    private val chapterCount: Int,
+    val language: String,
+) {
+    fun toSChapter(mangaUrl: String): SChapter = SChapter.create().apply {
+        url = "$mangaUrl/volume/$id"
+        chapter_number = number.toFloat()
+        name = buildString {
+            append("Vol. $number")
+            if (!this@VolumeDto.name.isNullOrBlank()) {
+                append(" - ")
+                append(this@VolumeDto.name)
+            }
+        }
+        scanlator = "$chapterCount chapters"
+    }
+}
+
+@Serializable
 class ChapterDto(
     private val id: Int,
     private val number: Float,
     private val name: String? = null,
     private val createdAt: Long? = null,
+    val type: String? = null,
 ) {
     fun toSChapter(mangaUrl: String, langCode: String): SChapter = SChapter.create().apply {
         url = "$mangaUrl/$id-chapter-${number.toString().removeSuffix(".0")}-$langCode"
@@ -102,6 +125,7 @@ class ChapterDto(
                 append(this@ChapterDto.name)
             }
         }
+        scanlator = type ?: "Unknown"
         date_upload = createdAt?.times(1000L) ?: 0L
     }
 }
