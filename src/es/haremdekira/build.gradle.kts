@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Harem de Kira"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
 

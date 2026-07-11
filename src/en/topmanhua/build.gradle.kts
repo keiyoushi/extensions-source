@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Top Manhua"
     versionCode = 7
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
 

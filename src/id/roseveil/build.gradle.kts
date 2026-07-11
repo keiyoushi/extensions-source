@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Roseveil"
     versionCode = 47
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

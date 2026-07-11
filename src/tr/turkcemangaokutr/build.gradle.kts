@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Turkce Manga Oku TR"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
     theme = "madara"
 

@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Yaoi Fan Club"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "zeistmanga"
 

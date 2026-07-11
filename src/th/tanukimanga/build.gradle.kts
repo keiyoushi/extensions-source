@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Tanuki-Manga"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
 
