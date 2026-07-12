@@ -20,7 +20,11 @@ import okhttp3.Response
 abstract class Hiperdex :
     Hiper(),
     ConfigurableSource {
-    override val client = network.client.newBuilder()
+
+    override fun headersBuilder() = super.headersBuilder()
+        .set("x-svc-gate", "f5pabmx7sdek")
+
+    override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
 
