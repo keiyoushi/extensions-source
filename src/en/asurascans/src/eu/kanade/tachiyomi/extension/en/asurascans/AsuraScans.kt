@@ -34,6 +34,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -43,6 +44,7 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import okio.IOException
 import org.jsoup.nodes.Document
+import rx.Observable
 import java.util.Collections
 import kotlin.time.Duration.Companion.seconds
 
@@ -106,6 +108,25 @@ abstract class AsuraScans :
 
     // ============================== Search ===============================
 
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("http")) {
+            val url = query.toHttpUrlOrNull()
+            if (url != null && url.host == baseUrl.toHttpUrl().host) {
+                val slug = getMangaSlug(url.encodedPath)
+                val manga = SManga.create().apply {
+                    this.url = "/series/$slug"
+                }
+
+                return fetchMangaDetails(manga).map {
+                    it.initialized = true
+                    MangasPage(listOf(it), false)
+                }
+            }
+        }
+
+        return super.fetchSearchManga(page, query, filters)
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
 
@@ -136,27 +157,26 @@ abstract class AsuraScans :
     // ============================== Details ==============================
 
     override fun getMangaUrl(manga: SManga): String {
-        val match = OLD_FORMAT_MANGA_REGEX.find(manga.url)?.groupValues?.get(2)
-        val slug = match ?: manga.url.substringAfter("/series/").substringBefore("/")
+        val slug = getMangaSlug(manga.url)
         val randomSlug = slugMap[slug] ?: slug
 
         return "$baseUrl/comics/$randomSlug"
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val match = OLD_FORMAT_MANGA_REGEX.find(manga.url)?.groupValues?.get(2)
-        val slug = match ?: manga.url.substringAfter("/series/").substringBefore("/")
+        val slug = getMangaSlug(manga.url)
         val randomSlug = slugMap[slug] ?: slug
 
         return GET("$apiUrl/series/$randomSlug", headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val jsonElement = response.parseAs<JsonElement>()
-        val mangaData = if (jsonElement is JsonObject && "data" in jsonElement) {
-            jsonElement.parseAs<DataDto<MangaDetailsDto>>().data!!
+    override fun mangaDetailsParse(response: Response): SManga = parseMangaDetails(response.parseAs<JsonElement>())
+
+    private fun parseMangaDetails(json: JsonElement): SManga {
+        val mangaData = if (json is JsonObject && "data" in json) {
+            json.parseAs<DataDto<MangaDetailsDto>>().data!!
         } else {
-            jsonElement.parseAs<MangaDetailsDto>()
+            json.parseAs<MangaDetailsDto>()
         }
 
         slugMap[mangaData.series.slug] = "$baseUrl${mangaData.series.publicUrl}".toHttpUrl().pathSegments.last()
@@ -167,7 +187,7 @@ abstract class AsuraScans :
     // ============================= Chapters ==============================
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val mangaSlug = chapter.url.substringAfter("/series/").substringBefore("/")
+        val mangaSlug = getMangaSlug(chapter.url)
         val randomSlug = slugMap[mangaSlug] ?: mangaSlug
         val number = chapter.url.substringAfter("/chapter/")
 
@@ -175,8 +195,7 @@ abstract class AsuraScans :
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val match = OLD_FORMAT_MANGA_REGEX.find(manga.url)?.groupValues?.get(2)
-        val slug = match ?: manga.url.substringAfter("/series/").substringBefore("/")
+        val slug = getMangaSlug(manga.url)
         val randomSlug = slugMap[slug] ?: slug
         return GET("$baseUrl/comics/$randomSlug", headers)
     }
@@ -263,6 +282,13 @@ abstract class AsuraScans :
     )
 
     // ============================= Utilities =============================
+
+    private fun getMangaSlug(url: String): String = when {
+        url.contains("/series/") -> url.substringAfter("/series/").substringBefore("/")
+        url.contains("/comics/") -> url.substringAfter("/comics/").substringBefore("/")
+        url.contains("/manga/") -> OLD_FORMAT_MANGA_REGEX.find(url)?.groupValues?.get(2) ?: url.substringAfter("/manga/").substringBefore("/")
+        else -> url.trim('/')
+    }
 
     private fun scrambledImageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()

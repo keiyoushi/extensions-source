@@ -14,4 +14,9 @@ keiyoushi {
         lang = "en"
         baseUrl = "https://asurascans.com"
     }
+
+    deeplink {
+        host("asurascans.com")
+        path("/comics/..*")
+    }
 }
