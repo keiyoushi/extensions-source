@@ -44,6 +44,7 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import okio.IOException
 import org.jsoup.nodes.Document
+import rx.Observable
 import java.util.Collections
 import kotlin.time.Duration.Companion.seconds
 
@@ -107,15 +108,26 @@ abstract class AsuraScans :
 
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("http")) {
             val url = query.toHttpUrlOrNull()
             if (url != null && url.host == baseUrl.toHttpUrl().host) {
                 val slug = getMangaSlug(url.encodedPath)
-                return GET("$apiUrl/series/$slug", headers)
+                val manga = SManga.create().apply {
+                    this.url = "/series/$slug"
+                }
+
+                return fetchMangaDetails(manga).map {
+                    it.initialized = true
+                    MangasPage(listOf(it), false)
+                }
             }
         }
 
+        return super.fetchSearchManga(page, query, filters)
+    }
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
 
         url.addQueryParameter("offset", ((page - 1) * PER_PAGE_LIMIT).toString())
@@ -133,16 +145,7 @@ abstract class AsuraScans :
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val json = response.parseAs<JsonElement>()
-
-        if (json is JsonObject && (json["data"] is JsonObject || json["series"] != null)) {
-            val manga = parseMangaDetails(json).apply {
-                initialized = true
-            }
-            return MangasPage(listOf(manga), false)
-        }
-
-        val result = json.parseAs<DataDto<List<MangaDto>>>()
+        val result = response.parseAs<DataDto<List<MangaDto>>>()
         val mangas = result.data.orEmpty().map { it.toSManga() }
         result.data.orEmpty().forEach {
             slugMap[it.slug] = "$baseUrl${it.publicUrl}".toHttpUrl().pathSegments.last()
