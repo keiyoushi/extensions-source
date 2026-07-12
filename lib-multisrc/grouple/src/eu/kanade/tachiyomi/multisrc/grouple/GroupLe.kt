@@ -453,7 +453,7 @@ abstract class GroupLe :
 
     // ============================= Utilities =============================
     private fun authGuard(document: Document) {
-        if (document.select(".user-avatar").isEmpty() && isNeedAuth) {
+        if (document.select(".user-avatar, .navbar-user-avatar").isEmpty() && isNeedAuth) {
             throw Exception("Для просмотра контента необходима авторизация через WebView\uD83C\uDF0E")
         }
     }
