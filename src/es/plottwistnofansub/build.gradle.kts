@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Plot Twist No Fansub"
     versionCode = 15
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Maid Scan"
     versionCode = 51
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "greenshit"
 

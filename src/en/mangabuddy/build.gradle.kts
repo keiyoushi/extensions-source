@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "MangaK"
     versionCode = 30
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

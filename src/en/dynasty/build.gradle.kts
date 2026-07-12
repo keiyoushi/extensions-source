@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Dynasty Scans"
     versionCode = 31
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "6Manhua"
     versionCode = 8
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
     theme = "mccms"
 

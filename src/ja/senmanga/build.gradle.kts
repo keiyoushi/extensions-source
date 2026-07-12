@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Sen Manga"
     versionCode = 8
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

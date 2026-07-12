@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Sodsaime"
     versionCode = 2
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
 

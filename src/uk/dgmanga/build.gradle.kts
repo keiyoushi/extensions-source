@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "DGManga"
     versionCode = 2
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

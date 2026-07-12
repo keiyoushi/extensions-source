@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Manga Can"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
 
