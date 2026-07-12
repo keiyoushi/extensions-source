@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "RawZO"
     versionCode = 51
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

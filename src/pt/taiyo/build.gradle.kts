@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Taiyō"
     versionCode = 11
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

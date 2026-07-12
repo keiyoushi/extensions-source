@@ -1,5 +1,11 @@
 package eu.kanade.tachiyomi.multisrc.hiper
 
+import android.os.Handler
+import android.os.Looper
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -8,12 +14,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.get
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
@@ -21,7 +30,10 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import java.io.IOException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 abstract class Hiper : HttpSource() {
 
@@ -36,9 +48,22 @@ abstract class Hiper : HttpSource() {
         .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
         .build()
 
+    private val handler by lazy { Handler(Looper.getMainLooper()) }
+
+    private var wvHeaders: Headers? = null
+
     override val client = network.client.newBuilder()
         .addInterceptor { chain ->
-            val response = chain.proceed(chain.request())
+            var request = chain.request()
+
+            wvHeaders?.let {
+                request = request.newBuilder()
+                    .headers(it)
+                    .build()
+            }
+
+            val response = chain.proceed(request)
+
             // Fetch baseUrl with accept headers which then populates a cookie
             if (response.code == 401) {
                 response.close()
@@ -158,6 +183,8 @@ abstract class Hiper : HttpSource() {
 
     // ============================ Chapters ==================================
 
+    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBefore('#') + "/" + chapter.url.substringAfterLast('/')
+
     override fun chapterListRequest(manga: SManga): Request {
         val mangaId = manga.url.substringAfterLast("#").toLongOrNull()
             ?: throw IOException("Migrate from $name to $name")
@@ -251,11 +278,83 @@ abstract class Hiper : HttpSource() {
         return GET(url, headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val element = response.parseAs<List<JsonElement>>().last()
-        val pages = element["result"]["data"]["json"]?.parseAs<List<PageDto>>() ?: return emptyList()
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+        val chapterUrl = getChapterUrl(chapter)
+
+        val request = pageListRequest(chapter)
+        val response = client.newCall(request).execute()
+        val resJson = parsePages(response)
+
+        resJson?.takeIf { it.isNotEmpty() } ?: run {
+            fetchHeadersWv(chapterUrl)
+
+            wvHeaders?.let {
+                val response = client.newCall(request).execute()
+                parsePages(response) ?: emptyList()
+            } ?: error("Failed to get headers")
+        }
+    }
+
+    private fun parsePages(response: Response): List<Page>? {
+        val elements = response.parseAs<List<JsonElement>>()
+
+        for (element in elements) {
+            if ("error" in element.jsonObject) {
+                return null
+            }
+        }
+
+        val lastElement = elements.last()
+        val pages = lastElement["result"]["data"]["json"]?.parseAs<List<PageDto>>() ?: return emptyList()
         return pages.map(PageDto::toPage)
     }
+
+    @Synchronized
+    fun fetchHeadersWv(url: String) {
+        val latch = CountDownLatch(1)
+        var webView: WebView? = null
+        val doc = client.newCall(GET(url, headers)).execute().asJsoup()
+
+        handler.post {
+            val wv = WebView(applicationContext).also { webView = it }
+
+            wv.settings.javaScriptEnabled = true
+            wv.settings.domStorageEnabled = true
+            wv.settings.loadsImagesAutomatically = false
+            wv.settings.blockNetworkImage = true
+            wv.settings.userAgentString = headers["user-agent"]
+
+            wv.webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(
+                    view: WebView,
+                    request: WebResourceRequest,
+                ): WebResourceResponse? {
+                    val url = request.url.toString()
+                    if (url.startsWith("$baseUrl/api")) {
+                        val allHeaders = request.requestHeaders
+                        if (allHeaders.isNotEmpty()) {
+                            wvHeaders = Headers.Builder().apply {
+                                allHeaders.forEach { (key, value) ->
+                                    if (headers.get(key) == null) {
+                                        add(key, value)
+                                    }
+                                }
+                            }.build()
+                        }
+                        latch.countDown()
+                        return null
+                    }
+                    return super.shouldInterceptRequest(view, request)
+                }
+            }
+            wv.loadDataWithBaseURL(doc.location(), doc.outerHtml(), "text/html", "utf-8", null)
+        }
+
+        latch.await(15, TimeUnit.SECONDS)
+        handler.post { webView?.destroy() }
+    }
+
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 

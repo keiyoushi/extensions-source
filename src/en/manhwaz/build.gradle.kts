@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "ManhwaZ"
     versionCode = 37
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "manhwaz"
 

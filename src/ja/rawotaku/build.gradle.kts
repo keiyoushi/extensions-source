@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Raw Otaku"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangareader"
 

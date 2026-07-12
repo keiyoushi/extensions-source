@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "KissLove"
     versionCode = 19
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

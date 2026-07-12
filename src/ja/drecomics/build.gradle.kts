@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "DreComi+"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
 
     source {

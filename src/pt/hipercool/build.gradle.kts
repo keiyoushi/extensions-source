@@ -14,7 +14,9 @@ keiyoushi {
     source {
         name = "Hipercool"
         lang = "pt-BR"
-        baseUrl = "https://lerhentais.com"
+        baseUrl {
+            custom("https://lerhentais.com")
+        }
         id = 2379514871370953957
     }
 }

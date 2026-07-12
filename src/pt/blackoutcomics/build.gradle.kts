@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Blackout Comics"
     versionCode = 10
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
 
     source {

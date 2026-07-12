@@ -12,20 +12,13 @@ abstract class MaidScan : GreenShit() {
 
     override val defaultGenreId = "4"
 
-    override fun getGeneroFilterOptions(): Array<Pair<String, String>> = arrayOf(
-        Pair("Todos", ""),
-        Pair("Novel", "6"),
-        Pair("Shoujo / Romances", "4"),
-        Pair("Yaoi", "7"),
-    )
-
-    override fun getFormatoFilterOptions(): Array<Pair<String, String>> = arrayOf(
+    override val formatsList = arrayOf(
         Pair("Todos", ""),
         Pair("Manhwa", "16"),
         Pair("Novel", "17"),
     )
 
-    override fun getStatusFilterOptions(): Array<Pair<String, String>> = arrayOf(
+    override val statusList = arrayOf(
         Pair("Todos", ""),
         Pair("Cancelado", "13"),
         Pair("Completo", "12"),
@@ -33,5 +26,5 @@ abstract class MaidScan : GreenShit() {
         Pair("Hiato", "11"),
     )
 
-    override fun getTagsFilterOptions() = emptyList<TagCheckBox>()
+    override val tagsList = emptyArray<Pair<String, String>>()
 }

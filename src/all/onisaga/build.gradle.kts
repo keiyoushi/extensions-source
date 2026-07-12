@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "OniSaga"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     listOf("all", "en", "fr", "ja", "pt-BR", "pt", "es-419", "es").forEach {

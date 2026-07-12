@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Luna Pieces"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
 

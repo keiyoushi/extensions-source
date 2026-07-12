@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "18Manhua"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "goda"
 
