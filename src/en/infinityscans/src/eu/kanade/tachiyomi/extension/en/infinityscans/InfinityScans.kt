@@ -27,7 +27,7 @@ abstract class InfinityScans : HttpSource() {
     private val cdnHost = "cv.infinityscans.org"
     private val pageCdnHost = "ch.infinityscans.org"
 
-    private val slugHash = "cf675243bcc3"
+    private var slugHash = "8f7a9fc97197"
 
     override val supportsLatest = true
 
