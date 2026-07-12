@@ -13,9 +13,9 @@ abstract class VioletScans : MangaThemesia() {
 
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
         val altNames = document.selectFirst(".alternative .desktop-titles")?.text()
-            ?.split(Regex("""\s*[|/]\s*"""))
+            ?.split(ALT_NAME_SEPARATOR)
             ?.map { it.trim() }
-            ?.filter { it.isNotBlank() }
+            ?.filter { it.isNotEmpty() }
 
         if (!altNames.isNullOrEmpty()) {
             val baseDescription = description.orEmpty()
@@ -30,5 +30,9 @@ abstract class VioletScans : MangaThemesia() {
                 altNames.joinTo(this, "\n") { "- $it" }
             }
         }
+    }
+
+    companion object {
+        private val ALT_NAME_SEPARATOR = Regex("""[|/]""")
     }
 }
