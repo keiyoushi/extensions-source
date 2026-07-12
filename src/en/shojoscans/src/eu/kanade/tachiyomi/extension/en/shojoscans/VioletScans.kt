@@ -13,7 +13,7 @@ abstract class VioletScans : MangaThemesia() {
 
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
         val altNames = document.selectFirst(".alternative .desktop-titles")?.text()
-            ?.split(" | ")
+            ?.split(Regex("""\s*[|/]\s*"""))
             ?.map { it.trim() }
             ?.filter { it.isNotBlank() }
 
