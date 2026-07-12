@@ -15,5 +15,6 @@ abstract class AryaScans : Madara() {
 
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
         author = null
+        artist = null
     }
 }
