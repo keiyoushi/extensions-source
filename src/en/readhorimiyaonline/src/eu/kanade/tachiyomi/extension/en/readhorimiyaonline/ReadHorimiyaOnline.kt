@@ -96,31 +96,3 @@ abstract class ReadHorimiyaOnline : HttpSource() {
         initialized = true
     }
 }
-    override fun chapterListRequest(manga: SManga): Request = Request.Builder().url(baseUrl).headers(headers).build()
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val doc = response.asJsoup()
-        return doc.select("#Chapters_List ul li ul li a").map { element ->
-            SChapter.create().apply {
-                name = element.text()
-                url = element.absUrl("href")
-                date_upload = 0L
-            }
-        }
-    }
-
-    // Page List
-    override fun pageListRequest(chapter: SChapter): Request = Request.Builder().url(chapter.url).headers(headers).build()
-
-    override fun pageListParse(response: Response): List<Page> {
-        val doc = response.asJsoup()
-        return doc.select("div.separator a > img").mapIndexed { index, img ->
-            val imageUrl = img.attr("data-lazy-src").takeIf { it.isNotEmpty() }
-                ?: img.absUrl("src")
-            Page(index, imageUrl = imageUrl)
-        }
-    }
-
-    // Image URL – unused because pageListParse sets imageUrl directly
-    override fun imageUrlParse(response: Response): String = ""
-}
