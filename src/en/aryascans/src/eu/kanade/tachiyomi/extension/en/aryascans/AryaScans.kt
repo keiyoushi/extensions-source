@@ -11,7 +11,7 @@ abstract class AryaScans : Madara() {
 
     override val popularMangaUrlSelector = "${super.popularMangaUrlSelector}:not([href=New]):not([target=_self])"
 
-    override val altNameSelector = ""
+    override val altNameSelector = "noSelector"
 
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
         author = null
