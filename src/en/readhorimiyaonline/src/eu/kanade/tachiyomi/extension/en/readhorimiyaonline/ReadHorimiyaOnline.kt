@@ -19,7 +19,7 @@ abstract class ReadHorimiyaOnline : HttpSource() {
 
     override val supportsLatest = false
 
-    // Popular Manga
+    // Popular
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -30,18 +30,14 @@ abstract class ReadHorimiyaOnline : HttpSource() {
     // Latest
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException("No latest updates")
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException("No latest updates")
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        GET(baseUrl, headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(baseUrl, headers)
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException("Search not supported")
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException("Search not supported")
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> =
-        throw UnsupportedOperationException("Search not supported")
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw UnsupportedOperationException("Search not supported")
 
     override fun getFilterList(): FilterList = FilterList()
 
@@ -79,8 +75,7 @@ abstract class ReadHorimiyaOnline : HttpSource() {
     }
 
     // Image URL
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException("Image URL parsing not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Image URL parsing not used")
 
     // Private helper to avoid duplication
     private fun parseManga(doc: Document): SManga = SManga.create().apply {
