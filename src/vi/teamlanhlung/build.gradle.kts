@@ -14,7 +14,7 @@ keiyoushi {
         name = "Team Lạnh Lùng"
         lang = "vi"
         baseUrl {
-            custom("https://icecoldcore.com")
+            custom("https://lanhhome.casa")
         }
     }
 }
