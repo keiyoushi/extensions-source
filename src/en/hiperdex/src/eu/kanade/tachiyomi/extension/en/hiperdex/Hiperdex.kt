@@ -6,7 +6,11 @@ import keiyoushi.network.rateLimit
 
 @Source
 abstract class Hiperdex : Hiper() {
-    override val client = network.client.newBuilder()
-        .rateLimit(2)
+
+    override fun headersBuilder() = super.headersBuilder()
+        .set("x-hpx-nexus", "hpx-block-f91")
+
+    override val client = super.client.newBuilder()
+        .rateLimit(3)
         .build()
 }
