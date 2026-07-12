@@ -37,6 +37,20 @@ private val status = listOf(
     "Hiatus" to "Hiatus",
 )
 
+class VolumesFilter :
+    Filter.Select<String>(
+        name = "Volumes",
+        values = volumeOptions.map { it.first }.toTypedArray(),
+    ) {
+    val selected get() = volumeOptions[state].second
+}
+
+private val volumeOptions = listOf(
+    "Any" to "",
+    "Has Volumes" to "with",
+    "No Volumes" to "without",
+)
+
 class TypeCheckBox(name: String, val value: String) : Filter.CheckBox(name)
 
 class TypeFilter :

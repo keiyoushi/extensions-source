@@ -60,7 +60,7 @@ abstract class Mangadotnet :
 
     override val client = network.client.newBuilder().build()
 
-    // ============================== Setup ===============================
+    // =============================== Setup ===============================
     private val preferences = getPreferences {
         val oldChapterKey = "pref_fetch_volume"
         if (contains(oldChapterKey)) {
@@ -138,13 +138,11 @@ abstract class Mangadotnet :
         return this
     }
 
-    // ============================== Popular ==============================
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/view-all/${popularModePref()}.data".toHttpUrl().newBuilder().apply {
+    // ========================= Popular & Latest ==========================
+    private fun viewAllRequest(mode: String, page: Int): Request {
+        val url = "$baseUrl/view-all/$mode.data".toHttpUrl().newBuilder().apply {
             addAdultParam()
-            if (page > 1) {
-                addQueryParameter("page", page.toString())
-            }
+            if (page > 1) addQueryParameter("page", page.toString())
             excludedGenresPref().forEach { genre ->
                 addQueryParameter("genre", "-$genre")
             }
@@ -161,7 +159,7 @@ abstract class Mangadotnet :
         return GET(url, headers)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun parseViewAllResponse(response: Response): MangasPage {
         val data = response.decodeRscAs<Data<ViewAllData>>().data
         updateGenres(data.allGenres.ifEmpty { data.data.allGenres }, adultModePref() != "none")
 
@@ -171,32 +169,38 @@ abstract class Mangadotnet :
         )
     }
 
-    // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/view-all/${latestModePref()}.data".toHttpUrl().newBuilder().apply {
-            addAdultParam()
-            if (page > 1) {
-                addQueryParameter("page", page.toString())
-            }
-            excludedGenresPref().forEach { genre ->
-                addQueryParameter("genre", "-$genre")
-            }
-            excludedDemographicsPref().forEach { demo ->
-                addQueryParameter("genre", "-$demo")
-            }
-            addQueryParameter("_routes", "pages/ViewAllPage")
-            includedTypes().forEach { origin ->
-                addQueryParameter("origin", origin)
-            }
-            browseStatusPref()?.also { addQueryParameter("status", it) }
-        }.build()
+    // ============================== Popular ==============================
+    override fun popularMangaRequest(page: Int): Request {
+        val mode = popularModePref()
 
-        return GET(url, headers)
+        if (mode == "bookmarks") {
+            if (!isLoggedIn()) {
+                throw Exception("Login through WebView to view bookmarks")
+            }
+            val url = "$baseUrl/bookmark.data".toHttpUrl().newBuilder().apply {
+                if (page > 1) addQueryParameter("page", page.toString())
+                addQueryParameter("_routes", "pages/BookmarksPage")
+            }.build()
+            return GET(url, headers)
+        }
+
+        return viewAllRequest(mode, page)
     }
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+    override fun popularMangaParse(response: Response): MangasPage {
+        if (popularModePref() == "bookmarks") {
+            return parseBookmarksResponse(response)
+        }
 
-    // =============================== Search ===============================
+        return parseViewAllResponse(response)
+    }
+
+    // ============================== Latest ===============================
+    override fun latestUpdatesRequest(page: Int): Request = viewAllRequest(latestModePref(), page)
+
+    override fun latestUpdatesParse(response: Response) = parseViewAllResponse(response)
+
+    // ============================== Search ===============================
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("\u200B\u200B")) {
             val name = query.removePrefix("\u200B\u200B")
@@ -214,7 +218,7 @@ abstract class Mangadotnet :
                 url != null &&
                 (url.host == baseUrl.toHttpUrl().host) &&
                 url.pathSize > 1 &&
-                (url.pathSegments[0] in listOf("manga", "chapter"))
+                (url.pathSegments[0] in listOf("manga", "chapter", "volume"))
             ) {
                 return if (url.pathSegments[0] == "manga") {
                     val manga = SManga.create().apply {
@@ -226,8 +230,8 @@ abstract class Mangadotnet :
                     val chapter = SChapter.create().apply {
                         this.url = ChapterUrl(
                             id = url.pathSegments[1],
-                            source = url.queryParameter("source") ?: "user",
-                            isVolume = url.queryParameter("mode") == "volume",
+                            source = if (url.pathSegments[0] == "volume") "user" else (url.queryParameter("source") ?: "user"),
+                            isVolume = url.pathSegments[0] == "volume",
                         ).toJsonString()
                     }
 
@@ -253,7 +257,6 @@ abstract class Mangadotnet :
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/search.data".toHttpUrl().newBuilder().apply {
-            addAdultParam()
             if (query.isNotBlank()) {
                 addQueryParameter("search", query)
             }
@@ -271,6 +274,10 @@ abstract class Mangadotnet :
 
             filters.firstInstanceOrNull<StatusFilter>()?.selected?.also {
                 addQueryParameter("status", it)
+            }
+
+            filters.firstInstanceOrNull<VolumesFilter>()?.selected?.takeIf { it.isNotBlank() }?.also {
+                addQueryParameter("volumes", it)
             }
 
             filters.firstInstanceOrNull<TypeFilter>()?.checked?.also { checked ->
@@ -326,6 +333,7 @@ abstract class Mangadotnet :
         val filters = mutableListOf(
             SortFilter(),
             StatusFilter(),
+            VolumesFilter(),
             TypeFilter(),
             DemographicFilter(excludedDemographicsPref()),
             AuthorFilter(),
@@ -337,13 +345,13 @@ abstract class Mangadotnet :
         val tagList = getTagList()
 
         if (genreList != null) {
-            filters.add(4, GenreFilter(genreList, excludedGenresPref()))
+            filters.add(5, GenreFilter(genreList, excludedGenresPref()))
         } else {
-            filters.add(4, Filter.Separator())
-            filters.add(5, Filter.Header("Press 'reset' to load genres"))
+            filters.add(5, Filter.Separator())
+            filters.add(6, Filter.Header("Press 'reset' to load genres"))
         }
 
-        val tagIndex = if (genreList != null) 5 else 6
+        val tagIndex = if (genreList != null) 6 else 7
         if (tagList != null) {
             var currentTagIndex = tagIndex
 
@@ -403,9 +411,12 @@ abstract class Mangadotnet :
     override fun relatedMangaListParse(response: Response): List<SManga> {
         val data = response.decodeRscAs<Data<RelatedData>>().data
 
+        val forYouItems = fetchForYouItems()
+
         return buildList {
             data.relationsData?.relations?.values?.forEach(::addAll)
             addAll(data.suggestions)
+            addAll(forYouItems)
         }.map { it.toSManga(baseUrl) }
     }
 
@@ -424,8 +435,9 @@ abstract class Mangadotnet :
             }
             val volumes = async {
                 if (mode != "chapters") {
-                    val response = client.newCall(GET("$baseUrl/api/manga/${manga.url}/volumes", headers)).await()
+                    val response = client.newCall(GET("$baseUrl/api/manga/${manga.url}/volumes?lang=en", headers)).await()
                     response.parseAs<List<Volume>>()
+                        .filter { it.language == null || it.language == "en" }
                         .map { volume ->
                             SChapter.create().apply {
                                 url = ChapterUrl(volume.id.toString(), volume.source, true).toJsonString()
@@ -506,6 +518,7 @@ abstract class Mangadotnet :
     private suspend fun fetchChaptersList(manga: SManga): List<SChapter> {
         val response = client.newCall(chapterListRequest(manga)).await()
         return response.parseAs<List<Chapter>>()
+            .filter { it.language == null || it.language == "en" }
             .map { chapter ->
                 SChapter.create().apply {
                     url = ChapterUrl(chapter.id.toString(), chapter.source, false).toJsonString()
@@ -540,14 +553,15 @@ abstract class Mangadotnet :
     override fun getChapterUrl(chapter: SChapter): String {
         val chapterUrl = chapter.url.parseAs<ChapterUrl>()
 
+        if (chapterUrl.isVolume) {
+            return "$baseUrl/volume/${chapterUrl.id}"
+        }
+
         return baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("chapter")
             addPathSegment(chapterUrl.id)
-            if (chapterUrl.isVolume || chapterUrl.source == "user") {
+            if (chapterUrl.source == "user") {
                 addQueryParameter("source", "user")
-            }
-            if (chapterUrl.isVolume) {
-                addQueryParameter("mode", "volume")
             }
         }.build().toString()
     }
@@ -591,7 +605,7 @@ abstract class Mangadotnet :
             )
     }
 
-    // =========================== Preferences =============================
+    // ============================ Preferences ============================
     private fun adultModePref(): String = preferences.getString(NSFW_MODE, "none")!!
 
     private fun chapterModePref() = preferences.getString(CHAPTER_MODE, "chapters")!!
@@ -625,7 +639,7 @@ abstract class Mangadotnet :
 
     private fun showTagsPref() = preferences.getBoolean(SHOW_TAGS_PREF, true)
 
-    // =========================== Genre Cache =============================
+    // ============================ Genre Cache ============================
     private val genreCacheNormalFile: File by lazy {
         applicationContext.cacheDir.resolve("source_$id/genres_normal.json")
     }
@@ -677,7 +691,7 @@ abstract class Mangadotnet :
         }
     }
 
-    // ============================ Tag Cache ==============================
+    // ============================= Tag Cache =============================
     private val tagCacheFile: File by lazy {
         applicationContext.cacheDir.resolve("source_$id/tags.json")
     }
@@ -714,6 +728,104 @@ abstract class Mangadotnet :
         }
     }
 
+    // =========================== For You Cache ===========================
+    @Volatile
+    private var forYouMemoryCache: List<BrowseManga>? = null
+
+    private val forYouCacheFile: File by lazy {
+        applicationContext.cacheDir.resolve("source_$id/for_you.json")
+    }
+
+    private fun getCachedForYou(): List<BrowseManga>? = genresLock.withLock {
+        runCatching { forYouCacheFile.readText().parseAs<List<BrowseManga>>() }.getOrNull()
+    }
+
+    private fun updateForYouCache(items: List<BrowseManga>) {
+        if (items.isEmpty()) return
+        if (!genresLock.tryLock()) return
+        try {
+            val current = runCatching {
+                if (forYouCacheFile.exists()) forYouCacheFile.readText().parseAs<List<BrowseManga>>() else null
+            }.getOrNull()
+
+            if (items.map { it.id } != current?.map { it.id }) {
+                forYouCacheFile.parentFile?.mkdirs()
+                forYouCacheFile.writeText(items.toJsonString())
+            }
+        } finally {
+            genresLock.unlock()
+        }
+    }
+
+    private fun fetchForYouItems(): List<BrowseManga> {
+        forYouMemoryCache?.let { return it }
+
+        return runCatching {
+            val forYouUrl = "$baseUrl/api/manga/for-you".toHttpUrl().newBuilder().apply {
+                addAdultParam()
+                addQueryParameter("limit", "100")
+            }.build()
+            client.newCall(GET(forYouUrl, headers)).execute().use { response ->
+                val items = response.parseAs<ForYouResponse>().items
+                forYouMemoryCache = items
+                updateForYouCache(items)
+                items
+            }
+        }.getOrElse {
+            getCachedForYou()?.also { forYouMemoryCache = it } ?: emptyList()
+        }
+    }
+
+    // ============================= Bookmarks =============================
+    private fun parseBookmarksResponse(response: Response): MangasPage = try {
+        val flat = response.parseAs<JsonArray>()
+        val decoded = decodeRsc(flat)
+            ?: throw Exception("Login through WebView to view bookmarks")
+        val routeContent = decoded.jsonObject["pages/BookmarksPage"]
+            ?: throw Exception("Login through WebView to view bookmarks")
+
+        val container = findRscObjectContaining(routeContent, "entries")
+        val hideAdultCovers = adultModePref() == "none"
+
+        val data = container?.parseAs<BookmarksData>() ?: BookmarksData()
+        val entries = data.entries
+
+        if (entries.isEmpty() && !isLoggedIn()) {
+            throw Exception("Login through WebView to view bookmarks")
+        }
+
+        MangasPage(
+            entries.map { it.toSManga(baseUrl, hideAdultCovers) },
+            data.hasNextPage(),
+        )
+    } catch (e: Exception) {
+        if (e.message == "Login through WebView to view bookmarks") throw e
+        throw Exception("Login through WebView to view bookmarks")
+    }
+
+    private fun findRscObjectContaining(element: JsonElement, fieldName: String): JsonObject? {
+        when (element) {
+            is JsonObject -> {
+                if (fieldName in element) return element
+                for (value in element.values) {
+                    findRscObjectContaining(value, fieldName)?.let { return it }
+                }
+            }
+            is JsonArray -> {
+                for (item in element) {
+                    findRscObjectContaining(item, fieldName)?.let { return it }
+                }
+            }
+            else -> {}
+        }
+        return null
+    }
+
+    private fun isLoggedIn(): Boolean {
+        val cookies = android.webkit.CookieManager.getInstance().getCookie(baseUrl) ?: return false
+        return cookies.contains("ory_kratos_session=")
+    }
+
     // ============================= Settings ==============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val mode = adultModePref()
@@ -734,10 +846,10 @@ abstract class Mangadotnet :
         val popularModePref = ListPreference(screen.context).apply {
             key = POPULAR_MODE_PREF
             title = "Popular Mode"
-            entries = arrayOf("Most Tracked", "Top Rated")
-            entryValues = arrayOf("most-tracked", "top-rated")
+            entries = arrayOf("Most Tracked", "Top Rated", "Bookmarks")
+            entryValues = arrayOf("most-tracked", "top-rated", "bookmarks")
             setDefaultValue("most-tracked")
-            summary = "%s"
+            summary = "%s\nNote: 'Bookmarks' will override Popular to show your website bookmarks."
         }
         screen.addPreference(popularModePref)
 
@@ -853,7 +965,7 @@ abstract class Mangadotnet :
         }
     }
 
-    // ========================= RSC Decoder ===============================
+    // ============================ RSC Decoder ============================
     private inline fun <reified T> Response.decodeRscAs(): T {
         val flat = parseAs<JsonArray>()
         val decoded = decodeRsc(flat)
@@ -889,7 +1001,7 @@ abstract class Mangadotnet :
         return resolve(0)
     }
 
-    // ========================== Unsupported ==============================
+    // ============================ Unsupported ============================
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
