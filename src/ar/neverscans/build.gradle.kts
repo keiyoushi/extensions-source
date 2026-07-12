@@ -5,14 +5,13 @@ plugins {
 }
 
 keiyoushi {
-    name = "MangaSpark"
-    versionCode = 7
+    name = "NeverScans"
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
-    theme = "madara"
 
     source {
         lang = "ar"
-        baseUrl = "https://manga-spark.net"
+        baseUrl = "https://neverscans.com"
     }
 }
