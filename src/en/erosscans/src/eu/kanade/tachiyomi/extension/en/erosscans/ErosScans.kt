@@ -21,7 +21,7 @@ abstract class ErosScans : MangaThemesia() {
         val altNames = document.selectFirst(seriesAltNameSelector)?.ownText()
             ?.split(" • ")
             ?.map { it.trim() }
-            ?.filter { it.isNotBlank() }
+            ?.filter { it.isNotEmpty() }
 
         if (!altNames.isNullOrEmpty()) {
             val baseDescription = description.orEmpty()
