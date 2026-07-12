@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Tsundoku Traduções"
     versionCode = 10
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
 

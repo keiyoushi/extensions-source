@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Comic Fury"
     versionCode = 8
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     val comicFuryUrl = "https://comicfury.com"

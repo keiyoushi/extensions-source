@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "ToonGod"
     versionCode = 5
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
 

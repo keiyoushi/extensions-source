@@ -29,11 +29,14 @@ ARTIFACTS_DIR = Path.home() / "apk-artifacts"
 # The checked-out `repo` branch we publish into (the working directory).
 REPO_DIR = Path.cwd()
 REPO_APK_DIR = REPO_DIR / "apk"
+REPO_JAR_DIR = REPO_DIR / "jar"
 REPO_ICON_DIR = REPO_DIR / "icon"
 REPO_APK_DIR.mkdir(parents=True, exist_ok=True)
+REPO_JAR_DIR.mkdir(parents=True, exist_ok=True)
 REPO_ICON_DIR.mkdir(parents=True, exist_ok=True)
 
 APK_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions@repo/apk"
+JAR_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions@repo/jar"
 ICON_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions@repo/icon"
 
 to_delete: list[str] = json.loads(sys.argv[1])
@@ -41,6 +44,9 @@ to_delete: list[str] = json.loads(sys.argv[1])
 # Drop apks/icons for modules that were deleted or rebuilt (rebuilt ones are re-added below).
 for module in to_delete:
     for file in REPO_APK_DIR.glob(f"tachiyomi-{module}-v*.*.*.apk"):
+        print(f"removing {file.name}")
+        file.unlink(missing_ok=True)
+    for file in REPO_JAR_DIR.glob(f"tachiyomi-{module}-v*.*.*.jar"):
         print(f"removing {file.name}")
         file.unlink(missing_ok=True)
     for file in REPO_ICON_DIR.glob(f"eu.kanade.tachiyomi.extension.{module}.png"):
@@ -56,10 +62,17 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
     with info_file.open(encoding="utf-8") as f:
         info = json.load(f)
     package_name = info["packageName"]
-    apk = next((info_file.parent / "outputs/apk/release").glob("*.apk"))
+    apk = next((info_file.parent / "outputs/apk/release").glob("*.apk"), None)
+    if apk is None:
+        raise FileNotFoundError(f"{package_name}: no release apk found under {info_file.parent}")
 
     apk_name = apk.name.replace("-release.apk", ".apk")
     (REPO_APK_DIR / apk_name).write_bytes(apk.read_bytes())
+
+    jar = next((info_file.parent / "outputs/jar/release").glob("*.jar"), None)
+    if jar is None:
+        raise FileNotFoundError(f"{package_name}: no release jar found under {info_file.parent}")
+    (REPO_JAR_DIR / jar.name).write_bytes(jar.read_bytes())
 
     badging = subprocess.check_output(
         [aapt(), "dump", "--include-meta-data", "badging", apk]
@@ -78,6 +91,7 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
             packageName=package_name,
             resources=index_pb2.Resources(
                 apkUrl=f"{APK_BASE_URL}/{apk_name}",
+                jarUrl=f"{JAR_BASE_URL}/{jar.name}",
                 iconUrl=f"{ICON_BASE_URL}/{package_name}.png",
             ),
             extensionLib=info["extensionLib"],

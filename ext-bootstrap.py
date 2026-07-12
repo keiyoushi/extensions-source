@@ -122,6 +122,7 @@ if __name__ == "__main__":
     print(f"Created extension directory: '{ext_dir}'")
 
     with open(ext_dir / "build.gradle.kts", "w") as f:
+        f.write("import io.github.keiyoushi.gradle.api.ContentWarning\n\n")
         f.write("plugins {\n")
         f.write("\talias(kei.plugins.extension)\n")
         f.write("}\n\n")

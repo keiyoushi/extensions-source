@@ -5,9 +5,9 @@ plugins {
 }
 
 keiyoushi {
-    name = "YaoiLib"
-    versionCode = 5
-    contentWarning = ContentWarning.NSFW
+    name = "SlashLib"
+    versionCode = 6
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "libgroup"
 
@@ -16,5 +16,6 @@ keiyoushi {
             custom("https://slashlib.me")
         }
         lang = "ru"
+        id = 2730544188738947015L
     }
 }

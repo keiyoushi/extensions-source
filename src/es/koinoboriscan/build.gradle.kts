@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Koinobori Scan"
     versionCode = 40
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
 
     source {
