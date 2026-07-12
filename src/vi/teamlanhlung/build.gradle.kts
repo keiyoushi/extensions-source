@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Team Lanh Lung"
-    versionCode = 33
+    versionCode = 34
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
