@@ -12,7 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -21,13 +21,16 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
+
 @Source
 abstract class InfinityScans : HttpSource() {
 
     private val cdnHost = "cv.infinityscans.org"
     private val pageCdnHost = "ch.infinityscans.org"
 
-    private val slugHash = "cf675243bcc3"
+    private var slugHash = "8f7a9fc97197"
+
+    private val hashRegex = Regex("NEXT_REDIRECT.*https.+?-(\\w+);")
 
     override val supportsLatest = true
 
@@ -131,8 +134,23 @@ abstract class InfinityScans : HttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/comic/${manga.url}-$slugHash", rscHeaders)
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val dto = response.extractNextJs<MangaDetailsDto>()!!
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(mangaDetailsRequest(manga)).asObservableSuccess()
+        .flatMap { res ->
+            val resHtml = res.body.string()
+            runCatching { parseMangaDetails(resHtml) }
+                .fold(
+                    onSuccess = { details -> Observable.just(details) },
+                    onFailure = {
+                        // Get the new slugHash from nextJs redirect
+                        slugHash = hashRegex.find(resHtml)?.groupValues?.get(1)!!
+                        client.newCall(mangaDetailsRequest(manga)).asObservableSuccess()
+                            .map { parseMangaDetails(it.body.string()) }
+                    },
+                )
+        }
+
+    private fun parseMangaDetails(responseHtml: String): SManga {
+        val dto = responseHtml.extractNextJsRsc<MangaDetailsDto>()!!
 
         return SManga.create().apply {
             description = buildString {
@@ -154,6 +172,8 @@ abstract class InfinityScans : HttpSource() {
             status = dto.status.parseStatus()
         }
     }
+
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
     // ============================= Chapters ==============================
 
