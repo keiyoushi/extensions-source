@@ -58,26 +58,32 @@ class MangaDto(
         description = parseDescription()
         genre = genres?.joinToString { it.name }
         status = parseStatus()
+        url = "/series/$slug"
     }
 
     fun parseDescription(): String = buildString {
         val plainDescription = description?.let { Jsoup.parseBodyFragment(it).text() }
         plainDescription?.let(::append)
 
-        rating?.let {
-            if (isNotEmpty()) append("\n\n")
-            append("Rating: %.2f".format(it))
-        }
-
         popularityRank?.let {
             if (isNotEmpty()) append("\n\n")
             append("Rank: #$it")
         }
 
-        if (!altTitles.isNullOrEmpty()) {
+        rating?.let {
+            if (isNotEmpty()) append("\n\n")
+            append("Rating: %.2f".format(it))
+        }
+
+        val cleanAltTitles = altTitles
+            ?.flatMap { it.split(" • ") }
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() }
+
+        if (!cleanAltTitles.isNullOrEmpty()) {
             if (isNotEmpty()) append("\n\n")
             append("Alternative Titles:\n")
-            altTitles.joinTo(this, "\n") { "- $it" }
+            cleanAltTitles.joinTo(this, "\n") { "- $it" }
         }
     }
 

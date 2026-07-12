@@ -319,6 +319,8 @@ Your extension code must be placed in the package `eu.kanade.tachiyomi.extension
 Extensions' `build.gradle.kts` should look like this:
 
 ```kotlin
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }

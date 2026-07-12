@@ -14,6 +14,8 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -182,19 +184,29 @@ abstract class HentaiCB : Madara() {
 
         val referer = chapterUrl
 
-        // Step 1: Get initial token + session from challenge endpoint
-        var challenge = fetchChallenge(referer, cookies)
-        var token: String? = challenge.token
-        var session = challenge.session
+        // Step 1: Fetch chapter HTML to extract MASR2 token from data-masr2-token attribute
+        val chapterRequest = Request.Builder()
+            .url(chapterUrl)
+            .header("Cookie", cookies)
+            .build()
+        val chapterResponse = client.newCall(chapterRequest).execute()
+        val document = chapterResponse.asJsoup()
+        val masr2Token = document.selectFirst("#manga-secure-reader")
+            ?.attr("data-masr2-token")
+            ?: throw Exception("MASR2 token not found")
 
-        // Step 2: Paginate images using token-based pagination
+        // Step 2: Generate a client ID (hex string like the JS reader does)
+        val clientId = generateClientId()
+
+        // Step 3: Paginate images using MASR2 v2 protocol
+        var token: String? = masr2Token
         val allImages = mutableListOf<String>()
-        var policyTxn: String? = null
 
         while (!token.isNullOrEmpty()) {
             val pagesUrl = baseUrl.toHttpUrl().newBuilder()
-                .addPathSegments("wp-json/manga-reader/v1/pages")
+                .addPathSegments("wp-json/manga-reader/v2/pages")
                 .addQueryParameter("token", token)
+                .addQueryParameter("cid", clientId)
                 .build()
 
             val pagesRequest = Request.Builder()
@@ -202,7 +214,6 @@ abstract class HentaiCB : Madara() {
                 .header("Accept", "application/json")
                 .header("Referer", referer)
                 .header("Cookie", cookies)
-                .header("X-MASR-Session", session)
                 .build()
 
             val pagesResponse = client.newCall(pagesRequest).execute()
@@ -212,24 +223,7 @@ abstract class HentaiCB : Madara() {
 
             allImages += pages.items
 
-            // Update session if server returns a new one
-            pages.session?.let { session = it }
-
-            // Handle protocol_policy.action (matches masr-reader.js behavior)
-            when (pages.protocolPolicy?.action) {
-                "refresh_challenge" -> {
-                    policyTxn = pages.protocolPolicy?.transaction
-                    challenge = fetchChallenge(referer, cookies, session, policyTxn)
-                    token = challenge.token
-                    session = challenge.session
-                    continue
-                }
-                "done" -> break
-                else -> {
-                    // "continue" — use next_token
-                    token = if (pages.done) null else pages.nextToken
-                }
-            }
+            token = if (pages.done) null else pages.nextToken
         }
 
         return allImages.mapIndexed { i, imageUrl ->
@@ -237,30 +231,11 @@ abstract class HentaiCB : Madara() {
         }
     }
 
-    private fun fetchChallenge(
-        referer: String,
-        cookies: String,
-        fromSession: String? = null,
-        policyTxn: String? = null,
-    ): ChallengeResponse {
-        val urlBuilder = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("wp-json/manga-reader/v1/challenge")
-
-        if (fromSession != null) {
-            urlBuilder.addQueryParameter("from_session", fromSession)
-        }
-        if (policyTxn != null) {
-            urlBuilder.addQueryParameter("policy_txn", policyTxn)
-        }
-
-        val challengeRequest = Request.Builder()
-            .url(urlBuilder.build())
-            .header("Accept", "application/json")
-            .header("Referer", referer)
-            .header("Cookie", cookies)
-            .build()
-
-        return client.newCall(challengeRequest).execute().parseAs()
+    private fun generateClientId(): String {
+        val random = java.security.SecureRandom()
+        val bytes = ByteArray(16)
+        random.nextBytes(bytes)
+        return bytes.joinToString("") { "%02x".format(it) }
     }
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
@@ -269,3 +244,14 @@ abstract class HentaiCB : Madara() {
         private const val BASE_URL_PREF = "overrideBaseUrl"
     }
 }
+
+@Serializable
+private class PagesResponse(
+    val items: List<String>,
+    val done: Boolean,
+    val protocol: Int = 0,
+    val cursor: Int = 0,
+    @SerialName("next_cursor") val nextCursor: Int = 0,
+    val count: Int = 0,
+    @SerialName("next_token") val nextToken: String? = null,
+)

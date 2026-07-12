@@ -27,6 +27,8 @@ abstract class Toonily : Madara() {
     override val sendViewCount = false
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
+    override val mangaDetailsSelectorDescription: String = "div.content-area div.summary__content"
+
     override fun searchMangaSelector() = "div.page-item-detail.manga"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = super.searchMangaRequest(

@@ -242,12 +242,11 @@ abstract class MangaLivre :
 
     private fun scrapeStaticCandidates(): List<ClientToken> = try {
         val js = fetchBundle()
-        val names = (decodeCharCodes(js) + decodeAtob(js))
-            .filter(::isHeaderCandidate)
-            .distinct()
-            .take(MAX_POOL)
+        val pool = (decodeAlphabet(js) + decodeCharCodes(js) + decodeAtob(js) + decodeLiterals(js)).distinct()
+        val names = pool.filter { NAME_REGEX.matches(it) && it.lowercase() !in STANDARD_HEADERS }.take(MAX_POOL)
+        val values = pool.filter { VALUE_REGEX.matches(it) && it.any(Char::isDigit) }.take(MAX_POOL)
         names
-            .flatMap { name -> names.mapNotNull { value -> if (name != value) ClientToken(name, value) else null } }
+            .flatMap { name -> values.mapNotNull { value -> if (name != value) ClientToken(name, value) else null } }
             .sortedByDescending { score(it.value) }
             .take(MAX_CANDIDATES)
     } catch (_: Exception) {
@@ -268,7 +267,17 @@ abstract class MangaLivre :
 
     private fun decodeCharCodes(js: String): List<String> = CHARCODE_REGEX.findAll(js)
         .mapNotNull { match ->
-            val codes = match.groupValues[1].split(",").mapNotNull { it.toIntOrNull() }
+            val op = match.groupValues[2]
+            val k = match.groupValues[3].toIntOrNull() ?: 0
+            val codes = match.groupValues[1].split(",").mapNotNull { it.toIntOrNull() }.map { n ->
+                when (op) {
+                    "-" -> n - k
+                    "+" -> n + k
+                    "*" -> n * k
+                    "^" -> n xor k
+                    else -> n
+                }
+            }
             if (codes.isNotEmpty() && codes.all { it in 32..126 }) {
                 codes.map { it.toChar() }.joinToString("")
             } else {
@@ -281,7 +290,23 @@ abstract class MangaLivre :
         .mapNotNull { it.groupValues[1].decodeBase64()?.utf8() }
         .toList()
 
-    private fun isHeaderCandidate(s: String): Boolean = s.matches(HEADER_NAME_REGEX) && '-' in s && s.lowercase() !in STANDARD_HEADERS
+    // Novo mecanismo do site: [indices].map(i => alfabeto[i]).join(""), com o alfabeto num literal.
+    private fun decodeAlphabet(js: String): List<String> {
+        val alphabets = ALPHABET_REGEX.findAll(js).map { it.groupValues[1] }.filter { '-' in it }.distinct().toList()
+        if (alphabets.isEmpty()) return emptyList()
+        return INDEX_REGEX.findAll(js).flatMap { match ->
+            val indices = match.groupValues[1].split(",").mapNotNull { it.toIntOrNull() }
+            alphabets.mapNotNull { alpha ->
+                if (indices.isNotEmpty() && indices.all { it < alpha.length }) {
+                    indices.map { alpha[it] }.joinToString("")
+                } else {
+                    null
+                }
+            }
+        }.toList()
+    }
+
+    private fun decodeLiterals(js: String): List<String> = LITERAL_REGEX.findAll(js).map { it.groupValues[1] }.toList()
 
     private fun score(value: String): Int = (if (value.any { it.isDigit() }) 200 else 0) + (MAX_VALUE_LEN - value.length).coerceAtLeast(0)
 
@@ -309,11 +334,15 @@ abstract class MangaLivre :
         private const val MAX_VALUE_LEN = 40
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
-        private val DEFAULT_TOKEN = ClientToken("x-tly-nexus", "c77-block-q")
-        private val STANDARD_HEADERS = setOf("content-type", "accept", "accept-language", "authorization", "x-csrf-token")
-        private val HEADER_NAME_REGEX = Regex("[A-Za-z][\\w.-]{1,40}")
+        private val DEFAULT_TOKEN = ClientToken("x-tly-sigma", "w99-enigma-z")
+        private val STANDARD_HEADERS = setOf("x-csrf-token", "x-requested-with", "x-toonlivre-authenticated-user")
         private val ASSET_REGEX = Regex("/assets/[\\w-]+\\.js")
-        private val CHARCODE_REGEX = Regex("\\[(\\d{1,3}(?:,\\d{1,3}){2,60})\\]")
+        private val NAME_REGEX = Regex("(x|app)-[a-z]{2,}(-[a-z]{2,})*")
+        private val VALUE_REGEX = Regex("[a-z0-9]{2,5}-[a-z0-9]{2,14}(-[a-z])?")
+        private val ALPHABET_REGEX = Regex("\"([a-z0-9][a-z0-9-]{24,45})\"")
+        private val INDEX_REGEX = Regex("\\[(\\d{1,2}(?:,\\d{1,2}){3,60})\\]\\.map\\(\\w+=>[\\w\$]{1,3}\\[\\w+\\]\\)")
+        private val LITERAL_REGEX = Regex("\"([a-z0-9][a-z0-9-]{3,40})\"")
+        private val CHARCODE_REGEX = Regex("\\[([\\d,]{5,240})\\][^\\[]{0,60}?fromCharCode\\([a-z]+(?:([-+*^])(\\d{1,4}))?\\)")
         private val ATOB_REGEX = Regex("atob\\(\"([A-Za-z0-9+/=]{1,80})\"\\)")
     }
 }

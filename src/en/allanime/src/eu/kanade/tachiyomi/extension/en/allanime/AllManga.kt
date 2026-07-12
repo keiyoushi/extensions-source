@@ -30,9 +30,11 @@ import keiyoushi.utils.toJsonRequestBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -40,9 +42,10 @@ import java.util.concurrent.TimeUnit
 abstract class AllManga :
     HttpSource(),
     ConfigurableSource {
-    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
 
     private val apiUrl = "https://api.allanime.day/api"
+
+    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
 
     override val supportsLatest = true
 
@@ -50,7 +53,34 @@ abstract class AllManga :
 
     private val preferences by getPreferencesLazy()
 
+    private val retryRegex = Regex("""in (\d+) second""", RegexOption.IGNORE_CASE)
+
     override val client = network.client.newBuilder()
+        .apply { interceptors().removeAll { it.javaClass.simpleName == "CloudflareInterceptor" } }
+        .addInterceptor { chain ->
+            val request = chain.request()
+
+            if (request.url.host != apiUrlHost) return@addInterceptor chain.proceed(request)
+
+            var lastResponse: Response? = null
+
+            for (attempt in 0..5) {
+                val response = chain.proceed(request)
+                lastResponse = response
+
+                val retryAfter = retryRegex.find(response.peekBody(1024).string())
+                    ?.groupValues?.get(1)?.toLongOrNull()
+
+                if (retryAfter == null) return@addInterceptor response
+
+                if (attempt < 5) {
+                    response.close()
+                    Thread.sleep(retryAfter * 1000)
+                }
+            }
+
+            return@addInterceptor lastResponse!!
+        }
         .rateLimit(1) { it.host == apiUrlHost }
         .build()
 
@@ -172,7 +202,14 @@ abstract class AllManga :
         return result.data.manga.toSManga()
     }
 
+    @Volatile
+    private var mangaUrl: String? = null
+
     override fun getMangaUrl(manga: SManga): String {
+        // to solve interactive CF manually for the chapter
+        if (mangaUrl != null) {
+            return mangaUrl!!
+        }
         val mangaId = manga.url.split("/")[2]
         return "$baseUrl/manga/$mangaId"
     }
@@ -215,7 +252,16 @@ abstract class AllManga :
 
     /* Pages */
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
-        pageListFromWebView(chapter)
+        val chapterUrl = getChapterUrl(chapter)
+
+        client.newCall(GET(chapterUrl, headers)).execute().use { response ->
+            if (response.code == 403 || response.code == 503) {
+                mangaUrl = chapterUrl
+                throw IOException("Solve captcha in WebView and retry")
+            }
+            mangaUrl = null
+            pageListFromWebView(response.asJsoup())
+        }
     }
 
     override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
@@ -223,9 +269,7 @@ abstract class AllManga :
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun pageListFromWebView(chapter: SChapter): List<Page> {
-        val document = client.newCall(GET(getChapterUrl(chapter), headers)).execute().asJsoup()
-
+    private fun pageListFromWebView(document: Document): List<Page> {
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
         val jsInterface = JsInterface(latch)
@@ -268,7 +312,7 @@ abstract class AllManga :
                 }
             }
 
-            view.loadDataWithBaseURL(getChapterUrl(chapter), document.outerHtml(), "text/html", "utf-8", null)
+            view.loadDataWithBaseURL(document.location(), document.outerHtml(), "text/html", "utf-8", null)
         }
 
         val completed = latch.await(30, TimeUnit.SECONDS)
