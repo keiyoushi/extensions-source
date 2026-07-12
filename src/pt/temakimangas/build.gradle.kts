@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Temaki mangás"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
     theme = "zeistmanga"
 

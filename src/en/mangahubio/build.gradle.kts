@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "MangaHub"
     versionCode = 10
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangahub"
 

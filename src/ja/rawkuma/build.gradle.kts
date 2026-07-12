@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Rawkuma"
     versionCode = 35
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "natsuid"
 

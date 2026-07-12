@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "KomikIndo.co"
     versionCode = 6
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
     theme = "mangathemesia"
 

@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Manga Flix"
     versionCode = 4
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

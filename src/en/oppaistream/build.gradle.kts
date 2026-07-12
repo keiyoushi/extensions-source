@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Oppai Stream"
     versionCode = 5
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

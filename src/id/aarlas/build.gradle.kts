@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Aarlas"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "zeistmanga"
 

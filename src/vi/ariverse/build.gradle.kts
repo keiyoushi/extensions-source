@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Ariverse"
     versionCode = 53
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

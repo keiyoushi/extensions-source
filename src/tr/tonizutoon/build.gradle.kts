@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "TonizuToon"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
 

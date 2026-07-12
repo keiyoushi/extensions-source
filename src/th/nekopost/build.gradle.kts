@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Nekopost"
     versionCode = 15
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {
