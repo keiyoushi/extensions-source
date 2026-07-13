@@ -122,10 +122,18 @@ abstract class KomikNesia : HttpSource() {
     // Pages
     // ===============================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/chapters/slug/${chapter.url}", headers)
+    override fun pageListRequest(chapter: SChapter): Request {
+        if (chapter.name.startsWith("🔒")) {
+            throw java.io.IOException("Chapter terbaru dapat dibaca setelah login melalui WebView, atau tunggu hingga 2 jam dari rilis untuk membaca tanpa login.")
+        }
+        return GET("$apiUrl/chapters/slug/${chapter.url}", headers)
+    }
 
     override fun pageListParse(response: Response): List<Page> {
         val payload = response.parseAs<PayloadDto<PageListDto>>()
+        if (payload.data.images.isEmpty()) {
+            throw java.io.IOException("Chapter terbaru dapat dibaca setelah login melalui WebView, atau tunggu hingga 2 jam dari rilis untuk membaca tanpa login.")
+        }
         return payload.data.images.mapIndexed { idx, img ->
             Page(idx, imageUrl = img)
         }

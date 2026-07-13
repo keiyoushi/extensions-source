@@ -69,12 +69,16 @@ class ChapterDto(
     private val slug: String,
     @SerialName("created_at")
     private val createdAt: DateDto? = null,
+    @SerialName("scheduled_release_at")
+    private val scheduledReleaseAt: DateDto? = null,
 ) {
     fun toSChapter() = SChapter.create().apply {
         url = slug
-        name = title
+        val releaseTime = (scheduledReleaseAt?.time ?: createdAt?.time ?: 0L) * 1000L
+        val isLocked = releaseTime > 0L && (System.currentTimeMillis() - releaseTime < 2 * 60 * 60 * 1000L)
+        name = if (isLocked) "🔒 $title" else title
         chapter_number = number.toFloatOrNull() ?: -1f
-        date_upload = (createdAt?.time ?: 0L) * 1000L
+        date_upload = releaseTime
     }
 }
 
