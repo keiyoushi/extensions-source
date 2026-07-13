@@ -22,11 +22,13 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.json.JSONObject
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import kotlin.time.Duration.Companion.seconds
 
 class TMOHentai :
     HttpSource(),
@@ -51,7 +53,7 @@ class TMOHentai :
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::cloudflareInterceptor)
-        .rateLimit(10)
+        .rateLimit(1, 2.seconds)
         .build()
 
     /**
@@ -63,7 +65,7 @@ class TMOHentai :
         val request = chain.request()
         val response = chain.proceed(request)
 
-        if (response.code == 403 && response.header("cf-ray") != null) {
+        if (isCloudflareChallenge(response)) {
             response.close()
             // Resolve against the base URL; cf_clearance covers the whole domain.
             CloudflareResolver.resolve(
@@ -75,6 +77,11 @@ class TMOHentai :
         }
 
         return response
+    }
+
+    private fun isCloudflareChallenge(response: Response): Boolean {
+        if (response.header("cf-ray") == null) return false
+        return response.code == 403 || response.code == 404 || response.code == 503
     }
 
     override fun headersBuilder() = super.headersBuilder().apply {
@@ -231,12 +238,22 @@ class TMOHentai :
             url.addQueryParameter("title", searchQuery)
             url.addQueryParameter("content", contentType)
             selectedGenres.forEach { id -> url.addQueryParameter("tags[]", id) }
-            url.addQueryParameter("page", page.toString())
-            GET(url.build(), headers)
+            if (page > 1) {
+                url.addQueryParameter("page", page.toString())
+            }
+            GET(
+                url.build(),
+                headers.newBuilder()
+                    .add("X-Requested-With", "XMLHttpRequest")
+                    .add("Accept", "application/json, text/javascript, */*; q=0.01")
+                    .build(),
+            )
         } else {
             // /biblioteca is for sort-only browsing (no tag/text filter).
             val url = "$baseUrl/biblioteca".toHttpUrl().newBuilder()
-            url.addQueryParameter("page", page.toString())
+            if (page > 1) {
+                url.addQueryParameter("page", page.toString())
+            }
             if (sortItem.isNotEmpty()) {
                 url.addQueryParameter("order_item", sortItem)
                 url.addQueryParameter("order_dir", sortDir)
@@ -246,7 +263,7 @@ class TMOHentai :
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = response.asSearchDocument()
         val url = response.request.url
 
         // Popular range (top_today / top_weekly / top_monthly) — no pagination.
@@ -262,8 +279,13 @@ class TMOHentai :
             return MangasPage(mangas, false)
         }
 
-        val mangas = document.select("a.manga-card").map { popularMangaFromElement(it) }
-        val hasNextPage = document.selectFirst(".pagination a[rel=next], .pagination a:contains(»), a.page-link:contains(»)") != null
+        val searchResultsPanel = document.selectFirst("#latest-contents-panel, #latest-results-container, #library-grid")
+        val mangas = searchResultsPanel
+            ?.select("a.manga-card")
+            ?.map { popularMangaFromElement(it) }
+            .orEmpty()
+        val hasNextPage = searchResultsPanel
+            ?.selectFirst(".pagination a[rel=next], .pagination a:contains(»), a.page-link:contains(»)") != null
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -297,6 +319,16 @@ class TMOHentai :
             .map { response ->
                 searchMangaParse(response)
             }
+    }
+
+    private fun Response.asSearchDocument(): Document {
+        val contentType = header("Content-Type").orEmpty()
+        if (contentType.contains("application/json", ignoreCase = true)) {
+            val html = JSONObject(body?.string().orEmpty()).optString("html")
+            return org.jsoup.Jsoup.parse(html)
+        }
+
+        return asJsoup()
     }
 
     private class Genre(name: String, val id: String) : Filter.CheckBox(name)

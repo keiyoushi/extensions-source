@@ -89,7 +89,12 @@ class ZonaTmoOrg : HttpSource() {
         // Handle homepage tab lists
         if (path == "/" || path.isEmpty()) {
             val tab = requestUrl.queryParameter("tab") ?: "populars"
-            val selector = if (tab == "trending") "#pills-trending a[href*=/library/]" else "#pills-populars a[href*=/library/]"
+            val selector = when (tab) {
+                "trending" -> "#pills-trending a[href*=/library/]"
+                "weekly" -> "#pills-weekly a[href*=/library/]"
+                "monthly" -> "#pills-monthly a[href*=/library/]"
+                else -> "#pills-populars a[href*=/library/]"
+            }
             val elements = document.select(selector)
             val mangas = elements.map { mangaFromElement(it) }
             return MangasPage(mangas, false)
@@ -250,8 +255,8 @@ class ZonaTmoOrg : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst("h1, h2.title")?.text() ?: ""
-            description = document.selectFirst(".description, .sinopsis")?.text()
+            title = (document.selectFirst("h1.element-title") ?: document.selectFirst("h2.title") ?: document.selectFirst("h1:not(.book-type)") ?: document.selectFirst("h1"))?.text()?.trim() ?: ""
+            description = document.selectFirst("p.element-description, #manga-synopsis, .element-description, .description, .sinopsis")?.text()?.trim()
             thumbnail_url = document.selectFirst(".book-thumbnail img, .thumb img")?.absUrl("src")
             author = document.select(".author a").joinToString { it.text() }
             genre = document.select(".genres a, .badge-primary").joinToString { it.text() }

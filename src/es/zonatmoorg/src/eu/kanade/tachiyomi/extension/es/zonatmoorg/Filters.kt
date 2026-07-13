@@ -113,6 +113,8 @@ val HOME_TABS = arrayOf(
     "Todo (Biblioteca)" to "",
     "Populares (Portada)" to "populars",
     "Trending (Portada)" to "trending",
+    "Top Semanal (Portada)" to "weekly",
+    "Top Mensual (Portada)" to "monthly",
 )
 
 class HomeTabFilter :
