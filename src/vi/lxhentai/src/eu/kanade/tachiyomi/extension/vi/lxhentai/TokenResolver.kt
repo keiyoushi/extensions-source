@@ -179,18 +179,25 @@ object TokenResolver {
         }
 
         fun pageFinished() {
+            pollForCompletion()
+        }
+
+        private fun pollForCompletion() {
             handler.postDelayed({
-                complete()
-            }, 1500)
+                if (tryComplete()) return@postDelayed
+                pollForCompletion()
+            }, 1000)
         }
 
         @Synchronized
-        private fun complete() {
-            if (payload != null) return
+        private fun tryComplete(): Boolean {
+            if (payload != null) return true
             if (imageUrls.isNotEmpty() && latestToken.isNotEmpty()) {
                 payload = Result(latestToken, imageUrls.toList())
                 signal.release()
+                return true
             }
+            return false
         }
 
         fun await(timeout: Long, unit: TimeUnit): Boolean {
