@@ -39,3 +39,7 @@ internal fun DependencyHandlerScope.compileOnly(dependencyNotation: ProjectDepen
 internal fun DependencyHandlerScope.ksp(dependencyNotation: ProjectDependency) {
     add("ksp", dependencyNotation)
 }
+
+internal fun DependencyHandlerScope.coreLibraryDesugaring(dependencyNotation: Provider<MinimalExternalModuleDependency>) {
+    add("coreLibraryDesugaring", dependencyNotation)
+}

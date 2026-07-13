@@ -10,10 +10,12 @@ ktlint = "1.8.0"
 spotless = "8.8.0"
 tapmoc = "0.4.2"
 okhttp = "5.4.0"
+desugar-jdk-libs = "2.1.5"
 
 [libraries]
 android-gradle = { module = "com.android.tools.build:gradle", version.ref = "android-gradle" }
 apksig = { module = "com.android.tools.build:apksig", version.ref = "android-gradle" }
+desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugar-jdk-libs" }
 proguard = { module = "com.guardsquare:proguard-base", version = "7.9.1" }
 junit = { module = "junit:junit", version.ref = "junit" }
 kotlin-gradle = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin-gradle" }

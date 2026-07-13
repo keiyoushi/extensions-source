@@ -1,13 +1,17 @@
 import com.android.build.api.dsl.ApplicationDefaultConfig
 import com.android.build.api.dsl.CommonExtension
+import com.android.build.api.dsl.CompileOptions
 import com.android.build.api.dsl.DefaultConfig
 import com.android.build.api.dsl.LibraryDefaultConfig
 import io.github.keiyoushi.gradle.internal.configurations.configureKotlin
+import io.github.keiyoushi.gradle.internal.extensions.coreLibraryDesugaring
 import io.github.keiyoushi.gradle.internal.extensions.kei
+import io.github.keiyoushi.gradle.internal.extensions.libs
 import io.github.keiyoushi.gradle.internal.extensions.spotlessTaskName
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
+import org.gradle.kotlin.dsl.dependencies
 
 @Suppress("UNUSED")
 class AndroidBasePlugin : Plugin<Project> {
@@ -31,6 +35,14 @@ class AndroidBasePlugin : Plugin<Project> {
                     }
                 }
             }
+
+            compileOptions {
+                isCoreLibraryDesugaringEnabled = true
+            }
+        }
+
+        dependencies {
+            coreLibraryDesugaring(libs.desugar.jdk.libs)
         }
 
         tasks.getByName("preBuild").dependsOn(spotlessTaskName())
@@ -43,4 +55,8 @@ private fun Project.android(block: CommonExtension.() -> Unit) {
 
 private fun CommonExtension.defaultConfig(block: DefaultConfig.() -> Unit) {
     defaultConfig.apply(block)
+}
+
+private fun CommonExtension.compileOptions(block: CompileOptions.() -> Unit) {
+    compileOptions.apply(block)
 }
