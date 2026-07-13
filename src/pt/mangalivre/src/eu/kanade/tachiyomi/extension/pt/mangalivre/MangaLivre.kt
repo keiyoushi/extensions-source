@@ -209,7 +209,7 @@ abstract class MangaLivre :
 
         val token = currentToken()
         val response = chain.proceed(request.withClientHeader(token))
-        if (response.code != 403 || !response.isOfficialAppError()) {
+        if (!response.requiresTokenRetry()) {
             return response
         }
 
@@ -217,7 +217,7 @@ abstract class MangaLivre :
         for (candidate in scrapeStaticCandidates()) {
             if (candidate == token) continue
             val retry = chain.proceed(request.withClientHeader(candidate))
-            if (retry.code != 403 || !retry.isOfficialAppError()) {
+            if (!retry.requiresTokenRetry()) {
                 cachedToken = candidate
                 return retry
             }
@@ -225,7 +225,7 @@ abstract class MangaLivre :
         }
         extractTokenViaWebView()?.let { webViewToken ->
             val retry = chain.proceed(request.withClientHeader(webViewToken))
-            if (retry.code != 403 || !retry.isOfficialAppError()) {
+            if (!retry.requiresTokenRetry()) {
                 cachedToken = webViewToken
                 return retry
             }
@@ -242,7 +242,7 @@ abstract class MangaLivre :
 
     private fun scrapeStaticCandidates(): List<ClientToken> = try {
         val js = fetchBundle()
-        val pool = (decodeAlphabet(js) + decodeCharCodes(js) + decodeAtob(js) + decodeLiterals(js)).distinct()
+        val pool = (decodeChunkedAtob(js) + decodeAlphabet(js) + decodeCharCodes(js) + decodeAtob(js) + decodeLiterals(js)).distinct()
         val names = pool.filter { NAME_REGEX.matches(it) && it.lowercase() !in STANDARD_HEADERS }.take(MAX_POOL)
         val values = pool.filter { VALUE_REGEX.matches(it) && it.any(Char::isDigit) }.take(MAX_POOL)
         names
@@ -254,16 +254,36 @@ abstract class MangaLivre :
     }
 
     private fun fetchBundle(): String {
-        val html = scrapeClient.newCall(GET("$baseUrl/", headers)).execute()
+        val documentHeaders = headers.newBuilder()
+            .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+            .set("Sec-Fetch-Dest", "document")
+            .set("Sec-Fetch-Mode", "navigate")
+            .set("Sec-Fetch-Site", "none")
+            .set("Upgrade-Insecure-Requests", "1")
+            .build()
+        val scriptHeaders = headers.newBuilder()
+            .set("Accept", "*/*")
+            .set("Sec-Fetch-Dest", "script")
+            .build()
+        val html = scrapeClient.newCall(GET("$baseUrl/", documentHeaders)).execute()
             .use { if (it.isSuccessful) it.body.string() else "" }
         val assets = ASSET_REGEX.findAll(html).map { it.value }.distinct().toList()
         return buildString {
             assets.take(MAX_ASSETS).forEach { path ->
-                scrapeClient.newCall(GET("$baseUrl$path", headers)).execute()
+                scrapeClient.newCall(GET("$baseUrl$path", scriptHeaders)).execute()
                     .use { if (it.isSuccessful) append(it.body.string()) }
             }
         }
     }
+
+    private fun decodeChunkedAtob(js: String): List<String> = CHUNKED_ATOB_REGEX.findAll(js)
+        .mapNotNull { match ->
+            CHUNK_REGEX.findAll(match.groupValues[1])
+                .joinToString("") { it.groupValues[1] }
+                .decodeBase64()
+                ?.utf8()
+        }
+        .toList()
 
     private fun decodeCharCodes(js: String): List<String> = CHARCODE_REGEX.findAll(js)
         .mapNotNull { match ->
@@ -323,6 +343,9 @@ abstract class MangaLivre :
         false
     }
 
+    private fun Response.requiresTokenRetry(): Boolean = (code == 403 && isOfficialAppError()) ||
+        (isRedirect && request.url.resolve(header("Location").orEmpty())?.host != baseUrlHost)
+
     private data class ClientToken(val header: String, val value: String)
 
     companion object {
@@ -334,7 +357,7 @@ abstract class MangaLivre :
         private const val MAX_VALUE_LEN = 40
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
-        private val DEFAULT_TOKEN = ClientToken("x-tly-sigma", "w99-enigma-z")
+        private val DEFAULT_TOKEN = ClientToken("x-tly-omega", "y00-decoy-w")
         private val STANDARD_HEADERS = setOf("x-csrf-token", "x-requested-with", "x-toonlivre-authenticated-user")
         private val ASSET_REGEX = Regex("/assets/[\\w-]+\\.js")
         private val NAME_REGEX = Regex("(x|app)-[a-z]{2,}(-[a-z]{2,})*")
@@ -344,5 +367,7 @@ abstract class MangaLivre :
         private val LITERAL_REGEX = Regex("\"([a-z0-9][a-z0-9-]{3,40})\"")
         private val CHARCODE_REGEX = Regex("\\[([\\d,]{5,240})\\][^\\[]{0,60}?fromCharCode\\([a-z]+(?:([-+*^])(\\d{1,4}))?\\)")
         private val ATOB_REGEX = Regex("atob\\(\"([A-Za-z0-9+/=]{1,80})\"\\)")
+        private val CHUNKED_ATOB_REGEX = Regex("atob\\(\\[((?:\"[A-Za-z0-9+/=]+\",?)+)]")
+        private val CHUNK_REGEX = Regex("\"([A-Za-z0-9+/=]+)\"")
     }
 }
