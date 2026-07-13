@@ -39,7 +39,7 @@ REPO_JAR_DIR.mkdir(parents=True, exist_ok=True)
 REPO_ICON_DIR.mkdir(parents=True, exist_ok=True)
 
 APK_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions@repo/apk"
-JAR_BASE_URL = "https://cdn.statically.io/gh/keiyoushi/extensions@repo/jar"
+JAR_BASE_URL = "https://raw.githubusercontent.com/keiyoushi/extensions/repo/jar"
 ICON_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions@repo/icon"
 
 to_delete: list[str] = json.loads(sys.argv[1])
