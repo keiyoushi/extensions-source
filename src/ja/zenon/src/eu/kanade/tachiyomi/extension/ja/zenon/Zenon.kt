@@ -23,14 +23,6 @@ abstract class Zenon : GigaViewer() {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
 
-    override val searchMangaSelector: String = "ul.search-series-list > li"
-
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst(".series-title")!!.text()
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-    }
-
     override fun getCollections(): List<Collection> = listOf(
         Collection("読切作品", "oneshot"),
         Collection("漫画賞", "newcomer"),
