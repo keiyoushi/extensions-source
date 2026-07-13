@@ -11,8 +11,6 @@ import org.jsoup.nodes.Element
 abstract class Zenon : GigaViewer() {
     override val supportsLatest: Boolean = false
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series", headers)
-
     override val popularMangaSelector: String = ".series-item"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
