@@ -216,36 +216,10 @@ abstract class LxHentai : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val chapterUrl = response.request.url.toString()
-        val document = response.asJsoup()
-
-        // Try parse the encrypted payload + action_token
-        val localImageUrls: List<String> = runCatching {
-            val html = document.outerHtml()
-            val actionToken = ACTION_TOKEN_REGEX.find(html)?.groupValues?.get(1) ?: return@runCatching emptyList()
-            val encryptedPayload = ENCRYPTED_IMAGES_REGEX.find(html)?.groupValues?.get(1) ?: return@runCatching emptyList()
-            val encryptedRows = ENCRYPTED_IMAGE_ROW_REGEX.findAll(encryptedPayload)
-                .mapNotNull { row: MatchResult ->
-                    row.groupValues.getOrNull(1)
-                        ?.split(',')
-                        ?.mapNotNull { it.toIntOrNull() }
-                        ?.takeIf { it.isNotEmpty() }
-                }
-                .toList()
-            document.select("#image-container[data-idx]")
-                .asSequence()
-                .mapNotNull { element: Element -> element.attr("data-idx").toIntOrNull() }
-                .distinct()
-                .sorted()
-                .mapNotNull { idx: Int -> encryptedRows.getOrNull(idx) }
-                .map { codes: List<Int> -> decodeImageUrl(codes, actionToken) }
-                .filter { it.isNotBlank() }
-                .toList()
-        }.getOrDefault(emptyList())
 
         val webViewData = TokenResolver.resolve(chapterUrl)
 
         val imageUrls = webViewData.srcs.filter { it.isNotBlank() }
-            .ifEmpty { localImageUrls }
 
         if (imageUrls.isEmpty()) {
             throw Exception("Không tìm thấy dữ liệu ảnh")
@@ -261,15 +235,6 @@ abstract class LxHentai : HttpSource() {
         val (chapterUrl, actionToken) = decodePageMetadata(page.url)
         val imageUrl = page.imageUrl ?: throw Exception("Không tìm thấy URL ảnh")
         return GET(imageUrl, imageHeaders(chapterUrl, actionToken))
-    }
-
-    private fun decodeImageUrl(codes: List<Int>, actionToken: String): String {
-        val result = StringBuilder(codes.size)
-        codes.forEachIndexed { index, code ->
-            val keyCode = actionToken[index % actionToken.length].code
-            result.append((code xor keyCode).toChar())
-        }
-        return result.toString()
     }
 
     private fun imageHeaders(chapterUrl: String, actionToken: String) = super.headersBuilder()
@@ -307,9 +272,6 @@ abstract class LxHentai : HttpSource() {
         const val PREFIX_ID_SEARCH = "id:"
 
         private val BACKGROUND_URL_REGEX = Regex("""background-image:\s*url\(['"]?([^'")]+)""", RegexOption.IGNORE_CASE)
-        private val ACTION_TOKEN_REGEX = Regex("""<meta\s+name=["']action_token["']\s+content=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-        private val ENCRYPTED_IMAGES_REGEX = Regex("""var\s+_u\s*=\s*(\[\[.*?]]);""", RegexOption.DOT_MATCHES_ALL)
-        private val ENCRYPTED_IMAGE_ROW_REGEX = Regex("""\[(\d+(?:,\d+)*)]""")
 
         private val DATE_TIME_FORMAT by lazy {
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.ROOT).apply {
