@@ -1,10 +1,8 @@
 package eu.kanade.tachiyomi.extension.ja.zenon
 
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import okhttp3.Request
 import org.jsoup.nodes.Element
 
 @Source
