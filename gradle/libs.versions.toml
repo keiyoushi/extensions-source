@@ -9,10 +9,7 @@ ktlint = "1.8.0"
 spotless = "8.8.0"
 tapmoc = "0.4.2"
 okhttp = "5.4.0"
-
-# https://youtrack.jetbrains.com/projects/KT/issues/KT-84952
-# noinspection NewerVersionAvailable
-serialization = "1.7.3"
+serialization = "1.11.0"
 
 [libraries]
 android-gradle = { module = "com.android.tools.build:gradle", version.ref = "android-gradle" }
