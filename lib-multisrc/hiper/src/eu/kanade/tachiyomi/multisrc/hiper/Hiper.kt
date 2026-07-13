@@ -333,11 +333,9 @@ abstract class Hiper : HttpSource() {
                     if (url.startsWith("$baseUrl/api")) {
                         val allHeaders = request.requestHeaders
                         if (allHeaders.isNotEmpty()) {
-                            wvHeaders = Headers.Builder().apply {
+                            wvHeaders = headers.newBuilder().apply {
                                 allHeaders.forEach { (key, value) ->
-                                    if (headers.get(key) == null) {
-                                        add(key, value)
-                                    }
+                                    headers.get(key) ?: add(key, value)
                                 }
                             }.build()
                         }
