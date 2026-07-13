@@ -19,7 +19,7 @@
                 <data android:host="zonatmo.org" />
                 <data android:host="www.zonatmo.org" />
 
-                <data android:pathPattern="/manga/..*" />
+                <data android:pathPattern="/library/..*" />
             </intent-filter>
         </activity>
     </application>

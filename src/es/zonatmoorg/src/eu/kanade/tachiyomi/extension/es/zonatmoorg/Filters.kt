@@ -3,103 +3,136 @@ package eu.kanade.tachiyomi.extension.es.zonatmoorg
 import eu.kanade.tachiyomi.source.model.Filter
 
 val GENRES = arrayOf(
-    "Acción" to "2",
-    "Animación" to "6198",
-    "Apocalíptico" to "861",
-    "Artes Marciales" to "26",
-    "Aventura" to "3",
-    "Boys Love" to "103",
-    "Ciberpunk" to "356",
-    "Ciencia Ficción" to "21",
+    "Acción" to "1",
+    "Aventura" to "2",
     "Comedia" to "4",
-    "Crimen" to "41",
-    "Demonios" to "88",
-    "Deporte" to "37",
-    "Drama" to "15",
-    "Ecchi" to "32",
-    "Extranjero" to "1168",
-    "Familia" to "1027",
     "Fantasia" to "5",
-    "Girls Love" to "22",
-    "Gore" to "181",
-    "Guerra" to "1109",
-    "Género Bender" to "183",
+    "Magia" to "6",
+    "Sobrenatural" to "7",
     "Harem" to "8",
+    "Drama" to "15",
+    "Romance" to "16",
+    "Ciencia Ficción" to "21",
+    "Girls Love" to "22",
+    "Vida Escolar" to "23",
+    "Artes Marciales" to "41",
+    "Tragedia" to "46",
+    "Apocalíptico" to "47",
+    "Thriller" to "49",
+    "Reencarnación" to "60",
     "Historia" to "81",
     "Horror" to "82",
-    "Magia" to "6",
-    "Mecha" to "144",
-    "Militar" to "342",
-    "Misterio" to "40",
-    "Musica" to "403",
-    "Niños" to "219",
-    "Oeste" to "141",
-    "Parodia" to "820",
+    "Demonios" to "88",
+    "Samurái" to "99",
+    "Boys Love" to "103",
     "Policiaco" to "111",
-    "Psicológico" to "36",
+    "Supervivencia" to "112",
+    "Superpoderes" to "116",
+    "Oeste" to "141",
+    "Mecha" to "144",
     "Realidad" to "147",
+    "Gore" to "181",
+    "Género Bender" to "183",
+    "Niños" to "219",
+    "Novela" to "214",
+    "Vampiros" to "345",
+    "Militar" to "342",
+    "Ciberpunk" to "356",
+    "Musica" to "403",
+    "Telenovela" to "470",
+    "Guerra" to "1109",
+    "Extranjero" to "1168",
+    "Familia" to "1027",
     "Realidad Virtual" to "27",
     "Recuentos de la vida" to "33",
-    "Reencarnación" to "60",
-    "Romance" to "16",
-    "Samurái" to "99",
-    "Sobrenatural" to "7",
-    "Superpoderes" to "116",
-    "Supervivencia" to "112",
-    "Telenovela" to "470",
-    "Thriller" to "49",
-    "Tragedia" to "46",
+    "Animación" to "6198",
+    "Parodia" to "820",
     "Traps" to "1464",
-    "Vampiros" to "345",
-    "Vida Escolar" to "23",
+    "Ecchi" to "32",
+    "Crimen" to "41",
 )
 
 class GenreFilter :
-    Filter.Group<CheckBoxFilter>(
+    Filter.Group<TriStateFilter>(
         "Géneros",
-        GENRES.map { CheckBoxFilter(it.first, it.second) },
+        GENRES.map { TriStateFilter(it.first, it.second) },
     )
 
+class TriStateFilter(name: String, val value: String) : Filter.TriState(name)
+
 val STATUSES = arrayOf(
-    "Publicándose" to "12",
-    "Finalizado" to "19",
-    "Pausado" to "174",
-    "Cancelado" to "198",
+    "Cualquiera" to "",
+    "Publicándose" to "ongoing",
+    "Finalizado" to "completed",
+    "Terminado" to "ended",
+    "Pausado" to "hiatus",
+    "Cancelado" to "cancelled",
 )
 
 class StatusFilter :
-    Filter.Group<CheckBoxFilter>(
+    Filter.Select<String>(
         "Estado",
-        STATUSES.map { CheckBoxFilter(it.first, it.second) },
+        STATUSES.map { it.first }.toTypedArray(),
     )
 
 val TYPES = arrayOf(
-    "Doujinshi" to "207",
-    "Manga" to "14",
-    "Manhua" to "31",
-    "Manhwa" to "87",
-    "Novela" to "214",
-    "OEL" to "976",
-    "One shot" to "12312",
+    "Cualquiera" to "",
+    "Manga" to "manga",
+    "Manhua" to "manhua",
+    "Manhwa" to "manhwa",
+    "Webtoon" to "webtoon",
+    "Novela" to "novel",
+    "Comic" to "comic",
+    "One shot" to "one_shot",
+    "Doujinshi" to "doujinshi",
+    "OEL" to "oel",
 )
 
 class TypeFilter :
-    Filter.Group<CheckBoxFilter>(
+    Filter.Select<String>(
         "Tipo",
-        TYPES.map { CheckBoxFilter(it.first, it.second) },
+        TYPES.map { it.first }.toTypedArray(),
     )
 
-val SORT_OPTIONS = arrayOf(
-    "Popularidad (mes)" to "month",
-    "Popularidad (semana)" to "week",
-    "Popularidad (total)" to "total",
-    "Más recientes" to "",
+val DEMOGRAPHIES = arrayOf(
+    "Cualquiera" to "",
+    "Seinen" to "seinen",
+    "Shoujo" to "shoujo",
+    "Shounen" to "shounen",
+    "Josei" to "josei",
+    "Kodomo" to "kodomo",
+)
+
+class DemographyFilter :
+    Filter.Select<String>(
+        "Demografía",
+        DEMOGRAPHIES.map { it.first }.toTypedArray(),
+    )
+
+val HOME_TABS = arrayOf(
+    "Todo (Biblioteca)" to "",
+    "Populares (Portada)" to "populars",
+    "Trending (Portada)" to "trending",
+)
+
+class HomeTabFilter :
+    Filter.Select<String>(
+        "Pestaña de portada (Solo página 1)",
+        HOME_TABS.map { it.first }.toTypedArray(),
+    )
+
+val SORT_COLUMNS = arrayOf(
+    "Popularidad" to "likes_count",
+    "Alfabético" to "alphabetically",
+    "Valoración" to "score",
+    "Más recientes" to "creation",
+    "Fecha estreno" to "release_date",
+    "Capítulos" to "num_chapters",
 )
 
 class SortFilter :
-    Filter.Select<String>(
-        "Ordenar populares por",
-        SORT_OPTIONS.map { it.first }.toTypedArray(),
+    Filter.Sort(
+        "Ordenar por",
+        SORT_COLUMNS.map { it.first }.toTypedArray(),
+        Selection(0, false),
     )
-
-class CheckBoxFilter(name: String, val value: String) : Filter.CheckBox(name)

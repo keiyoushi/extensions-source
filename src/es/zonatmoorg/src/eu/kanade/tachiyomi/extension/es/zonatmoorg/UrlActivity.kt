@@ -12,12 +12,11 @@ class UrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size >= 2 && pathSegments[0] == "manga") {
-            val mangaSlug = pathSegments[1]
+        val path = intent?.data?.path
+        if (!path.isNullOrEmpty() && (path.contains("/library/") || path.contains("/manga/"))) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${ZonaTmoOrg.PREFIX_SLUG_SEARCH}$mangaSlug")
+                putExtra("query", "${ZonaTmoOrg.PREFIX_SLUG_SEARCH}$path")
                 putExtra("filter", packageName)
             }
             try {
