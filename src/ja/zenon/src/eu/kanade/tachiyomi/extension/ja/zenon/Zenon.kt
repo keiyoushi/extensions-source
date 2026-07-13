@@ -23,6 +23,8 @@ abstract class Zenon : GigaViewer() {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
 
+    override val searchMangaNextPageSelector = "a.pager-next"
+
     override fun getCollections(): List<Collection> = listOf(
         Collection("読切作品", "oneshot"),
         Collection("漫画賞", "newcomer"),
