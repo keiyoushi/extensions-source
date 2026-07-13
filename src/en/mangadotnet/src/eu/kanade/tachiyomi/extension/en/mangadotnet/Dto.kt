@@ -53,9 +53,9 @@ class ViewAllData(
 
 @Serializable
 class BrowseManga(
-    val id: Int,
     @SerialName("manga_id")
-    private val mangaId: Int? = null,
+    @JsonNames("id")
+    val id: Int,
     private val title: String,
     private val photo: String? = null,
     @SerialName("is_blurworthy")
@@ -68,7 +68,7 @@ class BrowseManga(
         }
 
     fun toSManga(baseUrl: String, hideAdultCovers: Boolean = false) = SManga.create().apply {
-        url = (mangaId ?: id).toString()
+        url = id.toString()
         title = this@BrowseManga.title
 
         thumbnail_url = if (isAdult && hideAdultCovers) {

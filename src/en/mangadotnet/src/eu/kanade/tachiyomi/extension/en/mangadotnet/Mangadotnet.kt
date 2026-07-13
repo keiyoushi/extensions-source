@@ -105,10 +105,6 @@ abstract class Mangadotnet :
                 .putStringSet(EXCLUDE_GENRE_ADULT_PREF, adultExcluded - demographics)
                 .apply()
         }
-
-        if (getString(POPULAR_MODE_PREF, null) == "trending") {
-            edit().putString(POPULAR_MODE_PREF, "most-tracked").apply()
-        }
     }
 
     private val officialPriorityPatterns = listOf(
@@ -170,33 +166,12 @@ abstract class Mangadotnet :
     }
 
     // ============================== Popular ==============================
-    override fun popularMangaRequest(page: Int): Request {
-        val mode = popularModePref()
+    override fun popularMangaRequest(page: Int) = viewAllRequest("most-tracked", page)
 
-        if (mode == "bookmarks") {
-            if (!isLoggedIn()) {
-                throw Exception("Login through WebView to view bookmarks")
-            }
-            val url = "$baseUrl/bookmark.data".toHttpUrl().newBuilder().apply {
-                if (page > 1) addQueryParameter("page", page.toString())
-                addQueryParameter("_routes", "pages/BookmarksPage")
-            }.build()
-            return GET(url, headers)
-        }
-
-        return viewAllRequest(mode, page)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        if (popularModePref() == "bookmarks") {
-            return parseBookmarksResponse(response)
-        }
-
-        return parseViewAllResponse(response)
-    }
+    override fun popularMangaParse(response: Response) = parseViewAllResponse(response)
 
     // ============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request = viewAllRequest(latestModePref(), page)
+    override fun latestUpdatesRequest(page: Int): Request = viewAllRequest("latest-updates", page)
 
     override fun latestUpdatesParse(response: Response) = parseViewAllResponse(response)
 
@@ -250,6 +225,25 @@ abstract class Mangadotnet :
             }
 
             throw Exception("Unsupported url")
+        }
+
+        val browseMode = filters.firstInstanceOrNull<BrowseFilter>()?.selected?.takeIf { it.isNotBlank() }
+        if (browseMode != null && query.isBlank()) {
+            return if (browseMode == "bookmarks") {
+                if (!isLoggedIn()) {
+                    throw Exception("Login through WebView to view bookmarks")
+                }
+                val request = GET(
+                    "$baseUrl/bookmark.data".toHttpUrl().newBuilder().apply {
+                        if (page > 1) addQueryParameter("page", page.toString())
+                        addQueryParameter("_routes", "pages/BookmarksPage")
+                    }.build(),
+                    headers,
+                )
+                client.newCall(request).asObservableSuccess().map { parseBookmarksResponse(it) }
+            } else {
+                client.newCall(viewAllRequest(browseMode, page)).asObservableSuccess().map { parseViewAllResponse(it) }
+            }
         }
 
         return super.fetchSearchManga(page, query, filters)
@@ -306,7 +300,7 @@ abstract class Mangadotnet :
                 }
             }
 
-            filters.filterIsInstance<TagFilter>().forEach { filter ->
+            filters.findTagFilters().forEach { filter ->
                 filter.included.forEach { tag ->
                     addQueryParameter("tag", tag)
                 }
@@ -331,13 +325,12 @@ abstract class Mangadotnet :
 
     override fun getFilterList(): FilterList {
         val filters = mutableListOf(
+            BrowseFilter(),
             SortFilter(),
             StatusFilter(),
             VolumesFilter(),
             TypeFilter(),
             DemographicFilter(excludedDemographicsPref()),
-            AuthorFilter(),
-            ArtistFilter(),
         )
 
         val isAdult = adultModePref().let { it == "1" || it == "both" }
@@ -345,43 +338,57 @@ abstract class Mangadotnet :
         val tagList = getTagList()
 
         if (genreList != null) {
-            filters.add(5, GenreFilter(genreList, excludedGenresPref()))
+            filters.add(GenreFilter(genreList, excludedGenresPref()))
         } else {
-            filters.add(5, Filter.Separator())
-            filters.add(6, Filter.Header("Press 'reset' to load genres"))
+            filters.add(Filter.Separator())
+            filters.add(Filter.Header("Press 'reset' to load genres"))
         }
 
-        val tagIndex = if (genreList != null) 6 else 7
         if (tagList != null) {
-            var currentTagIndex = tagIndex
+            val tagFilters = mutableListOf<TagFilter>()
 
             val otherTags = tagList.filter { it.first().lowercaseChar() !in 'a'..'z' }
             if (otherTags.isNotEmpty()) {
-                filters.add(currentTagIndex++, TagFilter("Tags (0-9 / Misc)", otherTags))
+                tagFilters.add(TagFilter("0-9 / Misc", otherTags))
             }
 
             val chunks = listOf(
-                "Tags (A-C)" to 'a'..'c',
-                "Tags (D-H)" to 'd'..'h',
-                "Tags (I-L)" to 'i'..'l',
-                "Tags (M-O)" to 'm'..'o',
-                "Tags (P-S)" to 'p'..'s',
-                "Tags (T-V)" to 't'..'v',
-                "Tags (W-Z)" to 'w'..'z',
+                "A-C" to 'a'..'c',
+                "D-H" to 'd'..'h',
+                "I-L" to 'i'..'l',
+                "M-O" to 'm'..'o',
+                "P-S" to 'p'..'s',
+                "T-V" to 't'..'v',
+                "W-Z" to 'w'..'z',
             )
 
             chunks.forEach { (name, range) ->
                 val chunkTags = tagList.filter { it.first().lowercaseChar() in range }
                 if (chunkTags.isNotEmpty()) {
-                    filters.add(currentTagIndex++, TagFilter(name, chunkTags))
+                    tagFilters.add(TagFilter(name, chunkTags))
                 }
             }
+
+            if (tagFilters.isNotEmpty()) {
+                filters.add(TagsGroupFilter(tagFilters.toList()))
+            }
         } else {
-            filters.add(tagIndex, Filter.Separator())
-            filters.add(tagIndex + 1, Filter.Header("Press 'reset' to load tags"))
+            filters.add(Filter.Separator())
+            filters.add(Filter.Header("Press 'reset' to load tags"))
         }
 
+        filters.add(AuthorFilter())
+        filters.add(ArtistFilter())
+
         return FilterList(filters)
+    }
+
+    private fun FilterList.findTagFilters(): List<TagFilter> = flatMap { filter ->
+        when (filter) {
+            is TagFilter -> listOf(filter)
+            is Filter.Group<*> -> filter.state.filterIsInstance<TagFilter>()
+            else -> emptyList()
+        }
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -609,10 +616,6 @@ abstract class Mangadotnet :
     private fun adultModePref(): String = preferences.getString(NSFW_MODE, "none")!!
 
     private fun chapterModePref() = preferences.getString(CHAPTER_MODE, "chapters")!!
-
-    private fun popularModePref() = preferences.getString(POPULAR_MODE_PREF, "most-tracked")!!
-
-    private fun latestModePref() = preferences.getString(LATEST_MODE_PREF, "latest-updates")!!
 
     private fun excludedDemographicsPref(): Set<String> = preferences.getStringSet(EXCLUDE_DEMOGRAPHIC_PREF, emptySet())!!
 
@@ -843,26 +846,6 @@ abstract class Mangadotnet :
         }
         screen.addPreference(nsfwPref)
 
-        val popularModePref = ListPreference(screen.context).apply {
-            key = POPULAR_MODE_PREF
-            title = "Popular Mode"
-            entries = arrayOf("Most Tracked", "Top Rated", "Bookmarks")
-            entryValues = arrayOf("most-tracked", "top-rated", "bookmarks")
-            setDefaultValue("most-tracked")
-            summary = "%s\nNote: 'Bookmarks' will override Popular to show your website bookmarks."
-        }
-        screen.addPreference(popularModePref)
-
-        val latestModePref = ListPreference(screen.context).apply {
-            key = LATEST_MODE_PREF
-            title = "Latest Mode"
-            entries = arrayOf("Latest Updates", "Recently Added")
-            entryValues = arrayOf("latest-updates", "recently-added")
-            setDefaultValue("latest-updates")
-            summary = "%s"
-        }
-        screen.addPreference(latestModePref)
-
         val browseTypePref = MultiSelectListPreference(screen.context).apply {
             key = BROWSE_TYPE_PREF
             title = "Type Blacklist"
@@ -1008,8 +991,6 @@ abstract class Mangadotnet :
 
 private const val NSFW_MODE = "pref_nsfw_mode"
 private const val CHAPTER_MODE = "pref_chapter_mode"
-private const val POPULAR_MODE_PREF = "pref_popular_mode"
-private const val LATEST_MODE_PREF = "pref_latest_mode"
 private const val EXCLUDE_GENRE_PREF = "pref_exclude_genre"
 private const val EXCLUDE_GENRE_ADULT_PREF = "pref_exclude_genre_adult"
 private const val BROWSE_TYPE_PREF = "pref_browse_type"

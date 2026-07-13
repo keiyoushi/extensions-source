@@ -2,6 +2,23 @@ package eu.kanade.tachiyomi.extension.en.mangadotnet
 
 import eu.kanade.tachiyomi.source.model.Filter
 
+class BrowseFilter :
+    Filter.Select<String>(
+        name = "Browse",
+        values = browseOptions.map { it.first }.toTypedArray(),
+    ) {
+    val selected get() = browseOptions[state].second
+}
+
+private val browseOptions = listOf(
+    "None" to "",
+    "Most Tracked" to "most-tracked",
+    "Top Rated" to "top-rated",
+    "Latest Updates" to "latest-updates",
+    "Recently Added" to "recently-added",
+    "Bookmarks" to "bookmarks",
+)
+
 class SortFilter :
     Filter.Sort(
         name = "Sort",
@@ -95,6 +112,10 @@ class GenreFilter(genreValues: List<String>, excluded: Set<String>) :
     val included get() = state.filter { it.isIncluded() }.map { it.value }
     val excluded get() = state.filter { it.isExcluded() }.map { it.value }
 }
+
+class TagsGroupFilter(
+    state: List<TagFilter>,
+) : Filter.Group<TagFilter>("Tags", state)
 
 class TagFilter(name: String, tagValues: List<String>, excluded: Set<String> = emptySet()) :
     Filter.Group<TriStateFilter>(
