@@ -11,7 +11,7 @@ import org.jsoup.nodes.Element
 abstract class Zenon : GigaViewer() {
     override val supportsLatest: Boolean = false
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series/zenyon", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series", headers)
 
     override val popularMangaSelector: String = ".series-item"
 
@@ -23,7 +23,7 @@ abstract class Zenon : GigaViewer() {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
 
-    override val searchMangaSelector: String = "ul.series-list > li"
+    override val searchMangaSelector: String = "ul.search-series-list > li"
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst(".series-title")!!.text()
@@ -32,9 +32,6 @@ abstract class Zenon : GigaViewer() {
     }
 
     override fun getCollections(): List<Collection> = listOf(
-        Collection("コミックぜにょん", "zenyon"),
-        Collection("月刊コミックゼノン", "zenon"),
-        Collection("コミックタタン", "tatan"),
         Collection("読切作品", "oneshot"),
         Collection("漫画賞", "newcomer"),
     )
