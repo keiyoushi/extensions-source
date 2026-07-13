@@ -23,6 +23,9 @@ abstract class KomikNesia : HttpSource() {
     private val apiUrl = "https://api-be.komiknesia.my.id/api"
     override val supportsLatest = true
 
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+
     private var genresList: List<Pair<String, String>> = emptyList()
     private var genresFetched: Boolean = false
     private var fetchGenresAttempts: Int = 0
