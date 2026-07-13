@@ -202,14 +202,7 @@ abstract class AllManga :
         return result.data.manga.toSManga()
     }
 
-    @Volatile
-    private var mangaUrl: String? = null
-
     override fun getMangaUrl(manga: SManga): String {
-        // to solve interactive CF manually for the chapter
-        if (mangaUrl != null) {
-            return mangaUrl!!
-        }
         val mangaId = manga.url.split("/")[2]
         return "$baseUrl/manga/$mangaId"
     }
@@ -253,14 +246,13 @@ abstract class AllManga :
     /* Pages */
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
         val chapterUrl = getChapterUrl(chapter)
+        val mangaUrl = chapterUrl.substringBeforeLast('/')
 
-        client.newCall(GET(chapterUrl, headers)).execute().use { response ->
+        client.newCall(GET(mangaUrl, headers)).execute().use { response ->
             if (response.code == 403 || response.code == 503) {
-                mangaUrl = chapterUrl
                 throw IOException("Solve captcha in WebView and retry")
             }
-            mangaUrl = null
-            pageListFromWebView(response.asJsoup())
+            pageListFromWebView(response.asJsoup(), chapterUrl.replace(baseUrl, ""))
         }
     }
 
@@ -269,7 +261,7 @@ abstract class AllManga :
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun pageListFromWebView(document: Document): List<Page> {
+    private fun pageListFromWebView(document: Document, chapterUrl: String): List<Page> {
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
         val jsInterface = JsInterface(latch)
@@ -289,8 +281,33 @@ abstract class AllManga :
                         return result;
                     }
                 });
+
+                function triggerChapterNav() {
+                    const a = document.createElement('a');
+                    a.href = a.dataset.href = '$chapterUrl';
+                    document.body.append(a);
+                    a.click();
+                }
+
+               let checkAttempts = 0;
+               const maxAttempts = 300; // 15 seconds
+
+               function check() {
+                   if (document.querySelector('[data-href]')) {
+                       // trigger early when SPA nav ready
+                       triggerChapterNav();
+                   } else if (checkAttempts < maxAttempts) {
+                       checkAttempts++;
+                       setTimeout(check, 50);
+                   } else {
+                       // trigger anyway
+                       triggerChapterNav();
+                   }
+               }
+               check();
             })();
         """.trimIndent()
+
         var webView: WebView? = null
 
         handler.post {
@@ -315,7 +332,7 @@ abstract class AllManga :
             view.loadDataWithBaseURL(document.location(), document.outerHtml(), "text/html", "utf-8", null)
         }
 
-        val completed = latch.await(30, TimeUnit.SECONDS)
+        val completed = latch.await(20, TimeUnit.SECONDS)
         handler.post { webView?.destroy() }
 
         if (!completed) throw Exception("Timed out waiting for page list")
