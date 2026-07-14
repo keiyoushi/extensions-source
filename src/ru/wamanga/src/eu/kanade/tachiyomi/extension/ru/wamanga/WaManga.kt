@@ -9,8 +9,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -320,8 +320,7 @@ abstract class WaManga : HttpSource() {
 
     private fun parseSvelteKit(response: Response): Pair<JsonArray, JsonArray>? {
         return try {
-            val text = response.body.string()
-            val json = Json.parseToJsonElement(text).jsonObject
+            val json = response.parseAs<JsonObject>()
             val nodes = json["nodes"]?.jsonArray ?: return null
             val dataNode = nodes.firstOrNull { node ->
                 node is JsonObject && (node["type"] as? JsonPrimitive)?.content == "data"

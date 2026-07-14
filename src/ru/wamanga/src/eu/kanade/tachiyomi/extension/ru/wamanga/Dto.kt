@@ -1,17 +1,46 @@
 package eu.kanade.tachiyomi.extension.ru.wamanga
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.decodeFromJsonElement
+
+private val json = Json { ignoreUnknownKeys = true }
+
+/**
+ * A "node" entry in SvelteKit's `__data.json` `nodes` array.
+ * `type == "skip"` marks an entry with no data, `type == "data"` wraps the
+ * actual payload; anything else is returned as-is by [resolveNodeRef].
+ */
+@Serializable
+private data class SvelteNode(
+    val type: String? = null,
+    val data: JsonElement? = null,
+)
+
+/**
+ * An entry in the `data` array. `type == "string"` is an inline value,
+ * `type == "ref"` points back into [SvelteNode.data] via [resolveNodeRef].
+ */
+@Serializable
+private data class SvelteItem(
+    val type: String? = null,
+    val value: JsonElement? = null,
+)
 
 internal fun resolveNodeRef(nodes: JsonArray, ref: Int): JsonElement? {
     if (ref < 0 || ref >= nodes.size) return null
     val node = nodes[ref]
-    return when {
-        node is JsonObject && (node["type"] as? JsonPrimitive)?.content == "skip" -> null
-        node is JsonObject && (node["type"] as? JsonPrimitive)?.content == "data" -> node["data"]
+    if (node !is JsonObject) return node
+    val svelteNode = runCatching { json.decodeFromJsonElement<SvelteNode>(node) }.getOrNull()
+        ?: return node
+    return when (svelteNode.type) {
+        "skip" -> null
+        "data" -> svelteNode.data
         else -> node
     }
 }
@@ -21,10 +50,12 @@ internal fun resolveValue(data: JsonArray, nodes: JsonArray, ref: Int?): JsonEle
     if (ref < 0 || ref >= data.size) return null
     val item = data[ref]
     if (item !is JsonObject) return item
-    return when ((item["type"] as? JsonPrimitive)?.content) {
-        "string" -> item["value"]
+    val svelteItem = runCatching { json.decodeFromJsonElement<SvelteItem>(item) }.getOrNull()
+        ?: return item
+    return when (svelteItem.type) {
+        "string" -> svelteItem.value
         "ref" -> {
-            val valueRef = item["value"]?.toRef() ?: return item
+            val valueRef = svelteItem.value?.toRef() ?: return item
             resolveNodeRef(nodes, valueRef)
         }
 
