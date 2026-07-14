@@ -1,5 +1,5 @@
 #-dontobfuscate
--dontoptimize
+#-dontoptimize
 
 ## Partially based on https://android.googlesource.com/platform/tools/base/+/refs/heads/mirror-goog-studio-main/build-system/gradle-core/src/main/resources/com/android/build/gradle/proguard-common.txt
 
