@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Flame Comics"
-    versionCode = 49
+    versionCode = 50
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
