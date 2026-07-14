@@ -186,10 +186,25 @@ abstract class Mangago :
                 description = info.selectFirst(".manga_summary")?.let { summary: Element ->
                     summary.selectFirst("font")?.remove()
                     summary.text()
-                }
+                }?.takeIf { !it.equals("not found...", ignoreCase = true) }
+
                 info.select(".manga_info li, .manga_right tr").forEach { el ->
                     when (el.selectFirst("b, label")?.text()?.lowercase()) {
-                        "alternative:" -> description = listOfNotNull(description, el.text()).joinToString("\n\n")
+                        "alternative:" -> {
+                            val labelText = el.selectFirst("b, label")?.text().orEmpty()
+                            val raw = el.text().removePrefix(labelText).trim()
+                            val altNames = parseAltNames(raw)
+
+                            if (altNames.isNotEmpty()) {
+                                description = buildString {
+                                    append(description.orEmpty())
+                                    if (isNotEmpty()) append("\n\n")
+                                    append(ALT_NAME_PREFIX)
+                                    append("\n")
+                                    altNames.joinTo(this, "\n") { "- $it" }
+                                }
+                            }
+                        }
 
                         "status:" -> status = when (el.selectFirst("span")?.text()?.lowercase()) {
                             "ongoing" -> SManga.ONGOING
@@ -204,6 +219,21 @@ abstract class Mangago :
                 }
             }
         }
+    }
+
+    private fun parseAltNames(raw: String): List<String> {
+        val separator = if (ALT_NAME_SLASH_SEMICOLON_REGEX.containsMatchIn(raw)) {
+            ALT_NAME_SLASH_SEMICOLON_REGEX
+        } else {
+            ALT_NAME_COMMA_REGEX
+        }
+
+        return raw.split(separator)
+            .map { it.trim() }
+            .filter {
+                it.isNotEmpty() &&
+                    !it.equals("None", ignoreCase = true)
+            }
     }
 
     private fun mangaFromElement(element: Element): SManga? = SManga.create().apply {
@@ -610,5 +640,8 @@ abstract class Mangago :
     companion object {
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
         private const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua_"
+        private const val ALT_NAME_PREFIX = "Alternative Names:"
+        private val ALT_NAME_SLASH_SEMICOLON_REGEX = Regex("[/;]")
+        private val ALT_NAME_COMMA_REGEX = Regex(",")
     }
 }
