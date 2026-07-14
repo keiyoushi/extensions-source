@@ -3,7 +3,6 @@ package keiyoushi.utils
 import android.annotation.SuppressLint
 import android.content.res.Resources
 import android.graphics.Bitmap
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -32,9 +31,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Call
-import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
@@ -65,7 +62,7 @@ class WebViewTimeoutException internal constructor(
  *
  * Threading: page/navigation hooks and [poll] run on the main thread; [interceptRequest]
  * and [jsBridge] handlers run on WebView background threads. An exception thrown from any
- * callback fails the run via [fail].
+ * callback fails the run via [reject].
  */
 @SuppressLint("SetJavaScriptEnabled")
 class WebViewScope<T> internal constructor(
@@ -80,11 +77,9 @@ class WebViewScope<T> internal constructor(
     @Volatile
     internal var interceptHook: ((WebResourceRequest) -> WebResourceResponse?)? = null
 
-    /** Set once the run is tearing down; guards against late calls into a dead WebView. */
     @Volatile
     internal var destroyed = false
 
-    /** Set when the render process died; tells [WebViewSession] not to reuse this WebView. */
     @Volatile
     internal var renderDead = false
 
@@ -92,19 +87,17 @@ class WebViewScope<T> internal constructor(
     private val mainHandler = Handler(Looper.getMainLooper())
 
     /** Completes [runWebView] with [value]. First completion wins; later calls are no-ops. */
-    fun resume(value: T) {
+    fun resolve(value: T) {
         deferred.complete(value)
     }
 
     /** Completes [runWebView] by throwing [error]. No-op if already completed. */
-    fun fail(error: Throwable) {
+    fun reject(error: Throwable) {
         deferred.completeExceptionally(error)
     }
 
-    // WebSettings passthroughs.
     var javaScriptEnabled: Boolean by setting({ javaScriptEnabled }, { javaScriptEnabled = it })
     var domStorageEnabled: Boolean by setting({ domStorageEnabled }, { domStorageEnabled = it })
-    var databaseEnabled: Boolean by setting({ databaseEnabled }, { databaseEnabled = it })
     var blockImages: Boolean by setting({ blockNetworkImage }, { blockNetworkImage = it })
     var useWideViewPort: Boolean by setting({ useWideViewPort }, { useWideViewPort = it })
     var loadWithOverviewMode: Boolean by setting({ loadWithOverviewMode }, { loadWithOverviewMode = it })
@@ -116,7 +109,7 @@ class WebViewScope<T> internal constructor(
             try {
                 block(url)
             } catch (t: Throwable) {
-                fail(t)
+                reject(t)
             }
         }
     }
@@ -130,7 +123,7 @@ class WebViewScope<T> internal constructor(
             try {
                 block(url)
             } catch (t: Throwable) {
-                fail(t)
+                reject(t)
             }
         }
     }
@@ -141,7 +134,7 @@ class WebViewScope<T> internal constructor(
             try {
                 block(request, error)
             } catch (t: Throwable) {
-                fail(t)
+                reject(t)
             }
         }
     }
@@ -156,7 +149,7 @@ class WebViewScope<T> internal constructor(
             try {
                 block(request)
             } catch (t: Throwable) {
-                fail(t)
+                reject(t)
                 null
             }
         }
@@ -164,7 +157,7 @@ class WebViewScope<T> internal constructor(
 
     /**
      * Exposes `window.$name.post(message)` to the page, invoking [handler] with the message.
-     * Must be called before [loadUrl]/[loadData]; interfaces added afterwards are not visible
+     * Must be called before [loadUrl]/[loadData]; interfaces added afterward are not visible
      * to the already-loaded page.
      */
     fun jsBridge(name: String, handler: (String) -> Unit) {
@@ -177,7 +170,7 @@ class WebViewScope<T> internal constructor(
                     try {
                         handler(message)
                     } catch (t: Throwable) {
-                        fail(t)
+                        reject(t)
                     }
                 }
             },
@@ -192,7 +185,7 @@ class WebViewScope<T> internal constructor(
     }
 
     /** Loads [html] as the page content, with [baseUrl] as its origin. Can only be called once per scope. */
-    fun loadData(html: String, baseUrl: String? = null, mimeType: String = "text/html") {
+    fun loadData(baseUrl: String, html: String, mimeType: String = "text/html") {
         markLoaded()
         webView.loadDataWithBaseURL(baseUrl, html, mimeType, "UTF-8", null)
     }
@@ -208,7 +201,7 @@ class WebViewScope<T> internal constructor(
                     try {
                         callback(value)
                     } catch (t: Throwable) {
-                        fail(t)
+                        reject(t)
                     }
                 }
             }
@@ -224,7 +217,7 @@ class WebViewScope<T> internal constructor(
     }
 
     /**
-     * Repeats [block] on the main thread every [interval] until [resume]/[fail] is called or
+     * Repeats [block] on the main thread every [interval] until [resolve]/[reject] is called or
      * the scope is destroyed. The first run happens after one [interval], not immediately.
      */
     fun poll(interval: Duration = 500.milliseconds, block: () -> Unit) {
@@ -234,7 +227,7 @@ class WebViewScope<T> internal constructor(
                 try {
                     block()
                 } catch (t: Throwable) {
-                    fail(t)
+                    reject(t)
                     return
                 }
                 if (!destroyed && !deferred.isCompleted) {
@@ -257,7 +250,6 @@ class WebViewScope<T> internal constructor(
         }
     }
 
-    /** Property delegate backed by a [WebSettings] field. */
     private fun <V> setting(
         get: WebSettings.() -> V,
         set: WebSettings.(V) -> Unit,
@@ -270,7 +262,6 @@ class WebViewScope<T> internal constructor(
     }
 }
 
-/** Forwards WebViewClient callbacks to the owning [WebViewScope]'s hooks. */
 private class ScopeWebViewClient(
     private val scope: WebViewScope<*>,
 ) : WebViewClient() {
@@ -311,15 +302,11 @@ private class ScopeWebViewClient(
     ): Boolean {
         scope.destroyed = true
         scope.renderDead = true
-        // didCrash() requires API 26; below that, report as "killed".
-        val didCrash = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && detail?.didCrash() == true
-        scope.fail(RenderProcessGoneException(didCrash))
-        // Claim the crash as handled so the system doesn't kill the app process.
+        scope.reject(RenderProcessGoneException(detail?.didCrash() == true))
         return true
     }
 }
 
-/** Forwards WebView console output to logcat under tag "KeiyoushiWebView". */
 private class LoggingWebChromeClient : WebChromeClient() {
     override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
         val priority = when (consoleMessage.messageLevel()) {
@@ -354,7 +341,6 @@ class WebViewSession(private val idleTimeout: Duration = 30.seconds) {
         return webView ?: WebView(applicationContext).also { webView = it }
     }
 
-    /** Parks the WebView for reuse, or destroys it immediately if [dead]. */
     internal fun release(dead: Boolean) {
         val current = webView ?: return
         if (dead) {
@@ -362,7 +348,6 @@ class WebViewSession(private val idleTimeout: Duration = 30.seconds) {
             webView = null
             return
         }
-        // Detach clients and park on about:blank so stray callbacks can't fire while idle.
         current.webViewClient = WebViewClient()
         current.webChromeClient = null
         current.loadUrl("about:blank")
@@ -388,20 +373,15 @@ class WebViewSession(private val idleTimeout: Duration = 30.seconds) {
 
 @SuppressLint("SetJavaScriptEnabled")
 private fun setupWebView(webView: WebView) {
-    // Reset every scope-exposed setting to a known default, so a pooled WebView doesn't
-    // leak the previous run's configuration into this one.
     webView.settings.apply {
         javaScriptEnabled = true
         domStorageEnabled = true
-        databaseEnabled = false
         blockNetworkImage = false
         useWideViewPort = false
         loadWithOverviewMode = false
-        userAgentString = null // resets to the system default UA
+        userAgentString = null
     }
 
-    // Give the off-screen WebView real screen dimensions; some pages (JS challenges,
-    // lazy-loading scripts) check viewport size and misbehave at 0x0.
     runCatching {
         val metrics = Resources.getSystem().displayMetrics
         webView.layoutParams = ViewGroup.LayoutParams(metrics.widthPixels, metrics.heightPixels)
@@ -414,7 +394,7 @@ private fun setupWebView(webView: WebView) {
 }
 
 /**
- * Runs a WebView with [configure], suspending until it calls `resume`/`fail` or [timeout]
+ * Runs a WebView with [configure], suspending until it calls `resolve`/`reject` or [timeout]
  * elapses. Pass [session] to reuse a WebView across calls instead of spinning up a new one.
  * The WebView is torn down (or returned to [session]) whether this returns, throws, or is
  * canceled.
@@ -448,7 +428,6 @@ suspend fun <T> runWebView(
             scope.destroyed = true
             webView.stopLoading()
             if (session != null) {
-                // Strip this run's JS bridges so they don't leak into the next pooled run.
                 scope.bridgeNames.forEach(webView::removeJavascriptInterface)
                 session.release(dead = scope.renderDead)
             } else {
@@ -480,8 +459,6 @@ fun <T> runWebViewBlocking(
             val watcher = launch {
                 while (isActive) {
                     if (call.isCanceled()) {
-                        // Cancel the whole runBlocking scope; cancelling only this watcher
-                        // coroutine would not propagate to the runWebView call below.
                         this@runBlocking.cancel("OkHttp call was canceled")
                         break
                     }
@@ -503,12 +480,11 @@ fun <T> runWebViewBlocking(
  * Reads [key] from `localStorage` after loading [url], or null if unset. Loads an empty
  * page with [url] as its origin, so [url] itself is never fetched over the network.
  */
-suspend fun getLocalStorage(url: String, key: String): String? = runWebView(timeout = 3.seconds) {
+suspend fun getLocalStorage(url: String, key: String): String? = runWebView(timeout = 10.seconds) {
     onPageFinished {
-        // JSONObject.quote produces a valid JS string literal for arbitrary keys.
-        evaluateJs("localStorage.getItem(${JSONObject.quote(key)})") { value ->
-            resume(value.parseAs<String?>())
+        evaluateJs("localStorage.getItem(${key.toJsonString()})") { value ->
+            resolve(value.parseAs<String?>())
         }
     }
-    loadData("", url)
+    loadData(url, "")
 }
