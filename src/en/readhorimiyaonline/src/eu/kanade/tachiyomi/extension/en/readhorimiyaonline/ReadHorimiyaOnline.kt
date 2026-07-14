@@ -57,13 +57,13 @@ abstract class ReadHorimiyaOnline : HttpSource() {
         return doc.select("#Chapters_List ul li ul li a").map { element ->
             SChapter.create().apply {
                 name = element.text()
-                url = element.absUrl("href")
+                setUrlWithoutDomain(element.absUrl("href"))
             }
         }
     }
 
     // Page List
-    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
+    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val doc = response.asJsoup()
@@ -85,8 +85,8 @@ abstract class ReadHorimiyaOnline : HttpSource() {
             ?.let { img ->
                 img.attr("data-lazy-src").takeIf { it.isNotEmpty() }
                     ?: img.absUrl("src")
-            } ?: ""
-        description = doc.selectFirst("p")?.text() ?: ""
+            }
+        description = doc.selectFirst("p")?.text()
         status = SManga.UNKNOWN
         initialized = true
     }
