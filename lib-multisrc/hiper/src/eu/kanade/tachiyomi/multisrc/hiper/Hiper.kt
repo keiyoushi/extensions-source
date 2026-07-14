@@ -147,11 +147,7 @@ abstract class Hiper : HttpSource() {
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url
-            .substringAfterLast("$mangaPath/")
-            .substringBefore("#")
-            .takeIf(String::isNotBlank)
-            ?: throw IOException("Migrate from $name to $name")
+        val slug = manga.url.getSlug()
 
         val input = buildJsonObject {
             putJsonObject("0") {
@@ -183,7 +179,10 @@ abstract class Hiper : HttpSource() {
 
     // ============================ Chapters ==================================
 
-    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBefore('#') + "/" + chapter.url.substringAfterLast('/')
+    override fun getChapterUrl(chapter: SChapter): String {
+        val slug = chapter.url.getSlug()
+        return "$baseUrl/$mangaPath/$slug/${chapter.getNumber()}".removeSuffix(".0")
+    }
 
     override fun chapterListRequest(manga: SManga): Request {
         val mangaId = manga.url.substringAfterLast("#").toLongOrNull()
@@ -237,11 +236,7 @@ abstract class Hiper : HttpSource() {
     // ============================ Pages =====================================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val slug = chapter.url
-            .substringAfterLast("$mangaPath/")
-            .substringBefore("#")
-            .takeIf(String::isNotBlank)
-            ?: throw IOException("Migrate from $name to $name")
+        val slug = chapter.url.getSlug()
 
         val input = buildJsonObject {
             putJsonObject("0") {
@@ -260,7 +255,7 @@ abstract class Hiper : HttpSource() {
             putJsonObject("2") {
                 putJsonObject("json") {
                     put("seriesSlug", slug)
-                    put("chapterNumber", chapter.chapter_number)
+                    put("chapterNumber", chapter.getNumber())
                 }
             }
             putJsonObject("3") {
@@ -333,11 +328,9 @@ abstract class Hiper : HttpSource() {
                     if (url.startsWith("$baseUrl/api")) {
                         val allHeaders = request.requestHeaders
                         if (allHeaders.isNotEmpty()) {
-                            wvHeaders = Headers.Builder().apply {
+                            wvHeaders = headers.newBuilder().apply {
                                 allHeaders.forEach { (key, value) ->
-                                    if (headers.get(key) == null) {
-                                        add(key, value)
-                                    }
+                                    headers.get(key) ?: add(key, value)
                                 }
                             }.build()
                         }
@@ -362,5 +355,21 @@ abstract class Hiper : HttpSource() {
 
     open class OrderByFilter(displayName: String, private val vals: Array<Pair<String, String>>, state: Int = 0) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
         fun selected() = vals[state].second
+    }
+
+    // Old (New)
+    // manga: /manga/<slug|(#ID)>
+    // chapter: /manga/slug(#ID)/<chapter-XX|(XX.X)>
+
+    fun String.getSlug() = this.substringAfterLast("$mangaPath/")
+        .substringBefore("/")
+        .substringBefore("#")
+        .takeIf(String::isNotBlank)
+        ?: throw IOException("Migrate from $name to $name")
+
+    fun SChapter.getNumber() = if (chapter_number > 0) {
+        chapter_number
+    } else {
+        url.trim('/').substringAfterLast("/").substringAfter("-").toFloatOrNull() ?: 1f
     }
 }
