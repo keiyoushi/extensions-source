@@ -5,8 +5,6 @@ import android.icu.text.Collator
 import android.icu.text.Normalizer2
 import android.icu.text.RuleBasedCollator
 import android.icu.text.StringSearch
-import android.os.Build
-import androidx.annotation.RequiresApi
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.HttpUrl
@@ -19,7 +17,6 @@ private inline val INFO: Nothing get() = error("INFO")
 private typealias IsWord = Boolean
 
 @Suppress("MemberVisibilityCanBePrivate")
-@RequiresApi(Build.VERSION_CODES.N)
 class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID, BookTitle>) {
 
     data class WordsData(val words: List<String>, val extra: List<String>, val wordRanges: List<IntRange>)

@@ -1,12 +1,10 @@
 package keiyoushi.lib.textinterceptor
 
-import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Typeface
 import android.net.Uri
-import android.os.Build
 import android.text.Html
 import android.text.Layout
 import android.text.StaticLayout
@@ -110,13 +108,7 @@ class TextInterceptor : Interceptor {
             .build()
     }
 
-    @SuppressLint("ObsoleteSdkInt")
-    private fun textFixer(htmlString: String): String = if (Build.VERSION.SDK_INT >= 24) {
-        Html.fromHtml(htmlString, Html.FROM_HTML_MODE_LEGACY).toString()
-    } else {
-        @Suppress("DEPRECATION")
-        Html.fromHtml(htmlString).toString()
-    }
+    private fun textFixer(htmlString: String): String = Html.fromHtml(htmlString, Html.FROM_HTML_MODE_LEGACY).toString()
 
     @Suppress("SameParameterValue")
     private fun StaticLayout.draw(canvas: Canvas, x: Float, y: Float) {

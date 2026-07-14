@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.idolgravureprincessdate
 
-import android.os.Build
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -41,11 +40,7 @@ abstract class IdolGravureprincessDate : HttpSource() {
     private val json: Json by injectLazy()
 
     private val dateFormat by lazy {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.getDefault())
-        } else {
-            SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        }
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.getDefault())
     }
 
     override fun popularMangaRequest(page: Int) = GET(apiUrlBuilder(page).build(), headers)
