@@ -5,7 +5,6 @@ import android.app.Application
 import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
-import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.preference.PreferenceScreen
@@ -64,22 +63,16 @@ abstract class YuriGarden :
 
     private var cachedMangaTokenServerFn: String? = null
 
-    // Use the WebView's native UA on every OkHttp request so that the cf_clearance
-    // cookie issued during the WebView Cloudflare solve stays valid (Cloudflare binds
-    // the cookie to the exact User-Agent that solved the challenge).
     // Strip "wv" from User-Agent so Google login works in this source.
     // Google deny login when User-Agent contains the WebView token.
-    private val webViewUserAgent: String? by lazy {
-        runCatching { WebSettings.getDefaultUserAgent(Injekt.get<Application>()) }
-            .getOrNull()
-            ?.let(::removeWebViewToken)
-            ?.takeIf { it.isNotBlank() }
-    }
-
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
-        .apply { webViewUserAgent?.let { set("user-agent", it) } }
+        .apply {
+            build()["user-agent"]?.let { userAgent ->
+                set("user-agent", removeWebViewToken(userAgent))
+            }
+        }
 
     private fun removeWebViewToken(userAgent: String): String = userAgent.replace(WEBVIEW_TOKEN_REGEX, ")")
 
@@ -159,6 +152,31 @@ abstract class YuriGarden :
     }
 
     // ============================== Search ================================
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val url = query.toHttpUrlOrNull()
+            if (url != null && url.host == baseHost) {
+                val segments = url.pathSegments
+                val comicIndex = segments.indexOf("comic")
+                if (comicIndex != -1 && comicIndex + 1 < segments.size) {
+                    val id = segments[comicIndex + 1]
+                    val manga = SManga.create().apply {
+                        this.url = "/comic/$id"
+                        initialized = true
+                    }
+                    return fetchMangaDetails(manga)
+                        .map {
+                            it.url = manga.url
+                            it.initialized = true
+                            MangasPage(listOf(it), false)
+                        }
+                }
+                throw Exception("Unsupported URL")
+            }
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/comics".toHttpUrl().newBuilder().apply {
@@ -288,37 +306,20 @@ abstract class YuriGarden :
     override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/chapters/pages/${chapterId(chapter)}", apiHeaders())
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable
-        .fromCallable { executePageListRequest(chapter, allowRetry = true) }
+        .fromCallable { executePageListRequest(chapter) }
         .map(::pageListParse)
 
-    private fun executePageListRequest(chapter: SChapter, allowRetry: Boolean): Response {
+    private fun executePageListRequest(chapter: SChapter): Response {
         val request = pageListRequest(chapter)
         val response = client.newCall(request).execute()
         if (response.isSuccessful) return response
 
-        if (response.code == 403) {
-            response.close()
-
-            if (allowRetry) {
-                // Load the reader page so Turnstile gets a real browser session, but
-                // wait specifically for the API host's cf_clearance -- the reader page's
-                // JS triggers the API subrequest where the actual challenge for our
-                // OkHttp call lives.
-                CloudflareResolver.resolve(
-                    loadUrl = getChapterUrl(chapter),
-                    cookieUrl = request.url.toString(),
-                )
-                return executePageListRequest(chapter, allowRetry = false)
-            }
-            throw Exception(CLOUDFLARE_VERIFY_MESSAGE)
-        }
+        response.close()
 
         if (response.code == 401) {
-            response.close()
             throw Exception(LOGIN_REQUIRED_MESSAGE)
         }
 
-        response.close()
         throw Exception("HTTP error ${response.code}")
     }
 
@@ -336,7 +337,6 @@ abstract class YuriGarden :
                             fragment("KEY=$key")
                         }
                     }.build().toString()
-
                 Page(index, imageUrl = url)
             } else {
                 val url = rawUrl.toHttpUrlOrNull()?.toString() ?: rawUrl
@@ -348,7 +348,6 @@ abstract class YuriGarden :
     private fun decryptIfNeeded(response: Response): ChapterDetail {
         val body = response.body.string()
 
-        // Check if the response is encrypted
         return if (body.contains("\"encrypted\"")) {
             val encrypted = body.parseAs<EncryptedResponse>()
             if (encrypted.encrypted && !encrypted.data.isNullOrEmpty()) {
@@ -507,6 +506,8 @@ abstract class YuriGarden :
     private val allowR18: Boolean
         get() = preferences.getBoolean(PREF_SHOW_R18, PREF_SHOW_R18_DEFAULT)
 
+    // ============================= Utilities ==============================
+
     private val authToken: String?
         @Synchronized
         get() = cachedAuthToken
@@ -549,9 +550,8 @@ abstract class YuriGarden :
                 with(settings) {
                     javaScriptEnabled = true
                     domStorageEnabled = true
-                    databaseEnabled = true
                     blockNetworkImage = true
-                    webViewUserAgent?.let { userAgentString = it }
+                    userAgentString = removeWebViewToken(userAgentString)
                 }
                 addJavascriptInterface(bridge, interfaceName)
                 webViewClient = object : WebViewClient() {
@@ -599,14 +599,13 @@ abstract class YuriGarden :
     companion object {
         private const val LIMIT = 15
         private const val CHAPTER_ROUTE_PATH = "/comic/\$comicId/\$chapterId/"
-        private const val CLOUDFLARE_VERIFY_MESSAGE = "Mở webview để xác minh cloudflare cho chương này"
         private const val LOGIN_REQUIRED_MESSAGE = "Nguồn này cần đăng nhập bằng webview để xem"
         private const val PREF_SHOW_R18 = "pref_show_r18"
         private const val PREF_SHOW_R18_DEFAULT = false
 
         private val MAIN_SCRIPT_REGEX = Regex("""(?:src|href)="([^"]*/assets/main-[^"]+\.js)"""")
         private val SERVER_FN_REGEX = Regex(
-            """(?:const|let|var)\s+[A-Za-z_$][\w$]*=Tx\(\{method:"GET"\}\)\.handler\(x4\("([A-Za-z0-9]+)"\)\)""",
+            """(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*[A-Za-z_$][\w$]*\(\{method:"GET"\}\)\.handler\([A-Za-z_$][\w$]*\("([A-Za-z0-9]+)"\)\)""",
         )
         private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
 

@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Hyakuro Translations"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

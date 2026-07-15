@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Top Truyen"
-    versionCode = 31
+    versionCode = 32
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "wpcomics"
@@ -14,7 +14,7 @@ keiyoushi {
     source {
         lang = "vi"
         baseUrl {
-            custom("https://www.toptruyenzone6.com")
+            custom("https://www.toptruyenzone7.com")
         }
     }
 }

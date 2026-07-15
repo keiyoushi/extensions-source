@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Yomu Mangás"
     versionCode = 5
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
 
     source {

@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "YKMH"
     versionCode = 18
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "sinmh"
 

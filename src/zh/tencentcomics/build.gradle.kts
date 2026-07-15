@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Tencent Comics (ac.qq.com)"
     versionCode = 10
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

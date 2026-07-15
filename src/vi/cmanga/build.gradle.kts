@@ -6,14 +6,14 @@ plugins {
 
 keiyoushi {
     name = "CManga"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
     source {
         lang = "vi"
         baseUrl {
-            custom("https://cmangax17.com")
+            custom("https://cmangax18.com")
         }
     }
 }
