@@ -167,9 +167,12 @@ abstract class KeiSource : HttpSource() {
     protected open val supportsFilterFetching: Boolean get() = false
 
     /**
-     * Don't implement
+     * Text shown as a filter header hint while filters are unavailable
+     * (see [supportsFilterFetching]). Sources generated from an abstract
+     * `@Source` class get a localized value filled in by the DSL; concrete
+     * sources just use this default unless they override it themselves.
      */
-    protected abstract val filterFetchHint: String
+    protected open val filterFetchHint: String get() = "Tap 'Reset' to load filters"
 
     /**
      * Fetches filter data from the network.

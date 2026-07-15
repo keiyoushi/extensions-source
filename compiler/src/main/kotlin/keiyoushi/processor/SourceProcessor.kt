@@ -218,7 +218,7 @@ class SourceProcessor(
             .toSet()
 
         if (isConcrete) {
-            validateConcreteSource(node, sources, overridden, ctorParams, isKeiSource)
+            validateConcreteSource(node, sources, overridden, ctorParams)
         }
 
         val createSourcesCode = CodeBlock.builder()
@@ -227,7 +227,7 @@ class SourceProcessor(
             .apply {
                 for ((index, source) in sources.withIndex()) {
                     if (isConcrete) {
-                        add("%L,\n", buildConcreteSource(annotatedClass, source, ctorParams, isKeiSource))
+                        add("%L,\n", buildConcreteSource(annotatedClass, source, ctorParams))
                     } else {
                         add(
                             "%L,\n",
@@ -261,7 +261,6 @@ class SourceProcessor(
         sources: List<SourceDef>,
         overridden: Set<String>,
         ctorParams: Set<String>,
-        isKeiSource: Boolean,
     ) {
         val className = node.simpleName.asString()
 
@@ -277,14 +276,6 @@ class SourceProcessor(
             logger.error(
                 "A concrete @Source class ($className) must declare `override val lang` and " +
                     "`override val id` as primary constructor parameters.",
-                node,
-            )
-        }
-
-        if (isKeiSource && "filterFetchHint" !in ctorParams) {
-            logger.error(
-                "A concrete @Source class ($className) deriving from KeiSource must declare " +
-                    "`override val filterFetchHint` as a primary constructor parameter (the DSL fills it per language).",
                 node,
             )
         }
@@ -310,7 +301,6 @@ class SourceProcessor(
         annotatedClass: ClassName,
         source: SourceDef,
         ctorParams: Set<String>,
-        isKeiSource: Boolean,
     ): CodeBlock = buildCodeBlock {
         add("%T(\n", annotatedClass)
         indent()
@@ -318,7 +308,6 @@ class SourceProcessor(
         if ("lang" in ctorParams) add("lang = %S,\n", source.lang)
         if ("id" in ctorParams) add("id = %LL,\n", source.id)
         if ("baseUrl" in ctorParams) add("baseUrl = %S,\n", source.baseUrl.defaultUrl)
-        if (isKeiSource && "filterFetchHint" in ctorParams) add("filterFetchHint = %S,\n", stringsForLang(source.lang).filterFetchHint)
         unindent()
         add(")")
     }
