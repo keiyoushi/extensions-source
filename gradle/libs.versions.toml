@@ -1,6 +1,6 @@
 [versions]
 android-gradle = "9.2.1"
-coroutines = "1.11.0"
+coroutines = "1.10.2"
 serialization = "1.7.3"
 junit = "4.13.2"
 kotlin-gradle = "2.4.0"
