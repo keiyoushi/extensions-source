@@ -4,12 +4,25 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.jsonInstance
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Response
+
+@Serializable
+data class FirestoreListResponse(
+    val documents: List<FirestoreDocument>? = null,
+    val nextPageToken: String? = null,
+)
+
+@Serializable
+data class FirestoreDocument(
+    val name: String? = null,
+    val fields: JsonObject? = null,
+)
 
 data class MangaData(
     val smanga: SManga,
@@ -26,24 +39,20 @@ data class MangaListResult(
 object FirestoreParser {
 
     fun parseList(response: Response): MangaListResult {
-        val json = jsonInstance.parseToJsonElement(response.body.string()).jsonObject
-        val documents = json["documents"]?.jsonArray ?: return MangaListResult(emptyList(), null)
-        val mangas = documents.mapNotNull { doc ->
-            val fields = doc.jsonObject["fields"]?.jsonObject ?: return@mapNotNull null
-            val mangaId = doc.jsonObject["name"]?.jsonPrimitive?.contentOrNull?.substringAfterLast("/") ?: return@mapNotNull null
-            val altTitles = fields.stringArray("alternativeTitles")
-            val genres = fields.stringArray("genres")
-            val statusStr = fields.string("status")
+        val result = jsonInstance.decodeFromString<FirestoreListResponse>(response.body.string())
+        val mangas = result.documents?.mapNotNull { doc ->
+            val fields = doc.fields ?: return@mapNotNull null
+            val mangaId = doc.name?.substringAfterLast("/") ?: return@mapNotNull null
             MangaData(
                 smanga = SManga.create().apply {
-                    url = "/manga/$mangaId"
+                    url = mangaId
                     title = fields.string("title")
                     thumbnail_url = fields.string("coverImage")
                     description = fields.string("description")
                     author = fields.string("author")
                     artist = fields.string("artist")
-                    genre = genres.joinToString(", ")
-                    status = when (statusStr) {
+                    genre = fields.stringArray("genres").joinToString(", ")
+                    status = when (fields.string("status")) {
                         "مستمر" -> SManga.ONGOING
                         "مكتمل" -> SManga.COMPLETED
                         "متروك", "متروكة" -> SManga.ON_HIATUS
@@ -51,25 +60,24 @@ object FirestoreParser {
                         else -> SManga.UNKNOWN
                     }
                 },
-                altTitles = altTitles,
-                genres = genres,
-                statusString = when (statusStr) {
+                altTitles = fields.stringArray("alternativeTitles"),
+                genres = fields.stringArray("genres"),
+                statusString = when (fields.string("status")) {
                     "مستمر" -> "ongoing"
                     "مكتمل" -> "completed"
                     else -> ""
                 },
             )
-        }
-        val nextPageToken = json["nextPageToken"]?.jsonPrimitive?.contentOrNull
-        return MangaListResult(mangas, nextPageToken)
+        } ?: emptyList()
+        return MangaListResult(mangas, result.nextPageToken)
     }
 
     fun parseDetails(response: Response): SManga {
-        val json = jsonInstance.parseToJsonElement(response.body.string()).jsonObject
-        val fields = json["fields"]?.jsonObject ?: return SManga.create()
-        val mangaId = json["name"]?.jsonPrimitive?.contentOrNull?.substringAfterLast("/") ?: ""
+        val doc = jsonInstance.decodeFromString<FirestoreDocument>(response.body.string())
+        val fields = doc.fields ?: return SManga.create()
+        val mangaId = doc.name?.substringAfterLast("/") ?: ""
         return SManga.create().apply {
-            url = "/manga/$mangaId"
+            url = mangaId
             title = fields.string("title")
             thumbnail_url = fields.string("coverImage")
             description = fields.string("description")
@@ -86,11 +94,9 @@ object FirestoreParser {
     }
 
     fun parseChapters(response: Response): List<SChapter> {
-        val json = jsonInstance.parseToJsonElement(response.body.string()).jsonObject
-        val documents = json["documents"]?.jsonArray ?: return emptyList()
-        return documents.mapNotNull { doc ->
-            val fields = doc.jsonObject["fields"]?.jsonObject ?: return@mapNotNull null
-            val docName = doc.jsonObject["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+        val result = jsonInstance.decodeFromString<FirestoreListResponse>(response.body.string())
+        return result.documents?.mapNotNull { doc ->
+            val docName = doc.name ?: return@mapNotNull null
             val chapterNum = docName.substringAfterLast("/")
             val num = chapterNum.toIntOrNull() ?: 0
             SChapter.create().apply {
@@ -98,13 +104,14 @@ object FirestoreParser {
                 name = "الفصل $num"
                 chapter_number = num.toFloat()
             }
-        }.sortedByDescending { it.chapter_number }
+        }?.sortedByDescending { it.chapter_number } ?: emptyList()
     }
 
     fun parsePages(response: Response): List<Page> {
-        val json = jsonInstance.parseToJsonElement(response.body.string()).jsonObject
-        val fields = json["fields"]?.jsonObject ?: return emptyList()
-        val pagesArray = fields["pages"]?.jsonObject?.get("arrayValue")?.jsonObject?.get("values")?.jsonArray ?: return emptyList()
+        val doc = jsonInstance.decodeFromString<FirestoreDocument>(response.body.string())
+        val fields = doc.fields ?: return emptyList()
+        val pagesArray = fields["pages"]?.jsonObject?.get("arrayValue")?.jsonObject
+            ?.get("values")?.jsonArray ?: return emptyList()
         return pagesArray.mapIndexed { index, value ->
             Page(index, imageUrl = value.jsonObject["stringValue"]?.jsonPrimitive?.contentOrNull ?: "")
         }
