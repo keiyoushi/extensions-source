@@ -12,7 +12,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.network.CacheControlInterceptor
+import keiyoushi.network.RateLimitInterceptor
 import keiyoushi.utils.applicationContext
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.jsonInstance
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -66,40 +68,66 @@ abstract class KeiSource : HttpSource() {
 
     final override val client: OkHttpClient by lazy {
         network.client.newBuilder().apply {
-            val interceptors = interceptors()
+            with(interceptors()) {
+                check(
+                    this.any { it.javaClass.simpleName == "UncaughtExceptionInterceptor" },
+                ) {
+                    "UncaughtExceptionInterceptor must be present in default client"
+                }
 
-            check(
-                interceptors.any { it.javaClass.simpleName == "UncaughtExceptionInterceptor" },
-            ) {
-                "UncaughtExceptionInterceptor must be present in default client"
+                check(
+                    this.any { it.javaClass.simpleName == "UserAgentInterceptor" },
+                ) {
+                    "UserAgentInterceptor must be present in default client"
+                }
+
+                check(
+                    this.any { it.javaClass.simpleName == "CloudflareInterceptor" },
+                ) {
+                    "CloudflareInterceptor must be present in default client"
+                }
             }
 
-            check(
-                interceptors.any { it.javaClass.simpleName == "UserAgentInterceptor" },
-            ) {
-                "UserAgentInterceptor must be present in default client"
-            }
+            with(networkInterceptors()) {
+                check(
+                    this.none { it.javaClass.simpleName == "IgnoreGzipInterceptor" },
+                ) {
+                    "IgnoreGzipInterceptor must not be present in default client"
+                }
 
-            val networkInterceptors = networkInterceptors()
-
-            check(
-                networkInterceptors.none { it.javaClass.simpleName == "IgnoreGzipInterceptor" },
-            ) {
-                "IgnoreGzipInterceptor must not be present in default client"
-            }
-
-            check(
-                networkInterceptors.none { it is BrotliInterceptor },
-            ) {
-                "BrotliInterceptor must not be present in default client"
+                check(
+                    this.none { it is BrotliInterceptor },
+                ) {
+                    "BrotliInterceptor must not be present in default client"
+                }
             }
 
             configureClient()
 
-            addNetworkInterceptor(CacheControlInterceptor())
+            // cf interceptor below source specific interceptors
+            interceptors().apply {
+                // some sources remove the cf interceptor, so do nullable check
+                val cloudflareInterceptor = firstOrNull { it.javaClass.simpleName == "CloudflareInterceptor" }
+                if (cloudflareInterceptor != null) {
+                    remove(cloudflareInterceptor)
+                    add(cloudflareInterceptor)
+                }
+            }
 
             // last application interceptor
             addInterceptor(CompressionInterceptor(Brotli, Gzip, Zstd))
+
+            // allow caching when server doesn't explicitly say anything
+            addNetworkInterceptor(CacheControlInterceptor())
+
+            // keep the source's rate limiter as the last network interceptor
+            networkInterceptors().apply {
+                val rateLimiter = firstInstanceOrNull<RateLimitInterceptor>()
+                if (rateLimiter != null) {
+                    remove(rateLimiter)
+                    add(rateLimiter)
+                }
+            }
         }.build()
     }
 
