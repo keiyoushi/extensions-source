@@ -1,13 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "92Manhua"
-    className = "JiuerManhua"
-    versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    versionCode = 1
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "sinmh"
-    baseUrl = "http://www.92mh.com"
+
+    source {
+        name = "92漫画"
+        lang = "zh"
+        baseUrl = "http://www.92mh.com"
+    }
 }

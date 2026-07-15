@@ -3,10 +3,12 @@ package eu.kanade.tachiyomi.extension.en.allporncomic
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
-class AllPornComic : Madara("AllPornComic", "https://allporncomic.com", "en") {
+@Source
+abstract class AllPornComic : Madara() {
     override val mangaSubString = "porncomic"
 
     // Related Manga

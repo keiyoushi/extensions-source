@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "ManhuaUS"
-    className = "ManhuaUS"
     versionCode = 5
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://manhuaus.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://manhuaus.com"
+    }
 }

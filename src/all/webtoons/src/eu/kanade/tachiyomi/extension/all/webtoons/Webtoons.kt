@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
@@ -30,16 +31,16 @@ import java.net.SocketException
 import java.text.DecimalFormat
 import java.util.Calendar
 
-open class Webtoons(
-    override val lang: String,
-    private val langCode: String = lang,
-    localeForCookie: String = lang,
-) : HttpSource(),
+@Source
+abstract class Webtoons :
+    HttpSource(),
     ConfigurableSource {
+    // Due to lang code getting more specific for zh-Hant
+    private val langCode: String get() = if (lang == "zh-Hant") "zh-hant" else lang
+    private val localeForCookie: String get() = if (lang == "zh-Hant") "zh_TW" else lang
+
     private val mobileUrlHost by lazy { mobileUrl.toHttpUrl().host }
 
-    override val name = "Webtoons.com"
-    override val baseUrl = "https://www.webtoons.com"
     private val mobileUrl = "https://m.webtoons.com"
     override val supportsLatest = true
 
@@ -284,6 +285,9 @@ open class Webtoons(
             addPathSegment(titleId)
             addPathSegment("episodes")
             addQueryParameter("pageSize", "99999")
+            if (type == "canvas") {
+                addQueryParameter("readingLanguageCode", langCode)
+            }
         }.build()
 
         return GET(url, mobileHeaders)

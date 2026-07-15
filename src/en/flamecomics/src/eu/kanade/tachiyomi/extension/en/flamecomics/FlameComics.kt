@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -28,12 +29,9 @@ import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
 import kotlin.time.Duration.Companion.seconds
 
-class FlameComics : HttpSource() {
-    override val name = "Flame Comics"
-    override val lang = "en"
+@Source
+abstract class FlameComics : HttpSource() {
     override val supportsLatest = true
-    override val versionId: Int = 2
-    override val baseUrl = "https://flamecomics.xyz"
     private val cdn = "https://cdn.flamecomics.xyz"
 
     private val json: Json by injectLazy()
@@ -177,8 +175,22 @@ class FlameComics : HttpSource() {
             json.decodeFromString<MangaDetailsResponseData>(response.body.string()).pageProps.series
         title = seriesData.title
         thumbnail_url = thumbnailUrl(seriesData)
-        description = seriesData.description
+
+        val synopsis = seriesData.description
             ?.let { Jsoup.parseBodyFragment(it).wholeText() }
+            .orEmpty()
+        val altNames = seriesData.altTitles.orEmpty()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+
+        description = buildString {
+            append(synopsis)
+            if (altNames.isNotEmpty()) {
+                if (isNotEmpty()) append("\n\n")
+                append(ALT_NAME)
+                altNames.forEach { name -> append("\n- $name") }
+            }
+        }.takeIf { it.isNotEmpty() }
 
         genre = seriesData.tags?.let { tags ->
             (listOf(seriesData.type) + tags).joinToString()
@@ -364,5 +376,6 @@ class FlameComics : HttpSource() {
         private const val COMPOSED_SUFFIX = "?comp"
         private val MEDIA_TYPE = "image/png".toMediaType()
         private const val THUMBNAIL_FRAGMENT = "thumbnail"
+        private const val ALT_NAME = "Alternative Names:"
     }
 }

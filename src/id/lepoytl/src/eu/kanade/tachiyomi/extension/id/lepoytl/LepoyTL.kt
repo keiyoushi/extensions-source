@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.id.lepoytl
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
+import keiyoushi.annotation.Source
 
-class LepoyTL : ZeistManga("LepoyTL", "https://www.lepoytl.my.id", "id") {
+@Source
+abstract class LepoyTL : ZeistManga() {
 
     override val popularMangaSelector = "div.PopularPosts div.grid > article"
     override val popularMangaSelectorTitle = "h3 > a"

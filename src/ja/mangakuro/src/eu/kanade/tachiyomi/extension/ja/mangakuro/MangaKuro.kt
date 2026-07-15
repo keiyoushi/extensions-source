@@ -8,17 +8,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class MangaKuro : HttpSource() {
-
-    override val name = "MangaKuro"
-
-    override val baseUrl = "https://mangakuro.net"
-
-    override val lang = "ja"
+@Source
+abstract class MangaKuro : HttpSource() {
 
     override val supportsLatest = true
 

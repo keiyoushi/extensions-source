@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.en.firescans
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.decodeHex
@@ -13,9 +14,9 @@ import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import kotlin.time.Duration.Companion.seconds
 
-class Firescans : Madara("Firescans", "https://firescans.xyz", "en") {
+@Source
+abstract class Firescans : Madara() {
 
-    override val id: Long = 5761461704760730187
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(20, 5.seconds)
         .build()

@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Young Animal"
-    className = "YoungAnimal"
     versionCode = 0
-    contentWarning = ContentWarning.SAFE
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "comiciviewer"
-    baseUrl = "https://younganimal.com"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://younganimal.com"
+    }
 }

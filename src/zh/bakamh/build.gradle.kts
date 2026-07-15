@@ -1,15 +1,23 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Baka Manhua"
-    className = "Bakamh"
-    versionCode = 9
+    versionCode = 10
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://bakamh.com"
+
+    source {
+        name = "巴卡漫画"
+        lang = "zh"
+        baseUrl {
+            custom("https://bakamh.com")
+        }
+    }
 }
 
 dependencies {

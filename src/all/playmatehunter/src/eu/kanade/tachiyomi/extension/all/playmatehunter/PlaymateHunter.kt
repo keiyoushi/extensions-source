@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.playmatehunter
 
 import eu.kanade.tachiyomi.multisrc.masonry.Masonry
+import keiyoushi.annotation.Source
 
-class PlaymateHunter : Masonry("Playmate Hunter", "https://pmatehunter.com", "all")
+@Source
+abstract class PlaymateHunter : Masonry()

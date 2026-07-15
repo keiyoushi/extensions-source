@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
@@ -16,12 +17,10 @@ import okhttp3.Request
 import okhttp3.Response
 import kotlin.time.Duration.Companion.seconds
 
-class CodeArc : HttpSource() {
+@Source
+abstract class CodeArc : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
-    override val name = "Code Arc Mangas"
-    override val baseUrl = "https://mangas.codearctraducciones.com"
-    override val lang = "es"
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()

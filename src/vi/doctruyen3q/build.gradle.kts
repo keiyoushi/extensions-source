@@ -1,13 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "DocTruyen3Q"
-    className = "DocTruyen3Q"
-    versionCode = 26
-    contentWarning = ContentWarning.NSFW
+    versionCode = 28
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "wpcomics"
-    baseUrl = "https://doctruyen3qhub1.com"
+
+    source {
+        lang = "vi"
+        baseUrl {
+            custom("https://doctruyen3qhub3.com")
+        }
+    }
 }

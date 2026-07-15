@@ -1,18 +1,16 @@
 package eu.kanade.tachiyomi.extension.pt.hipercool
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.hiper.Hiper
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import okhttp3.OkHttpClient
-import kotlin.time.Duration.Companion.seconds
 
-class Hipercool : Madara("HipercooL", "https://hiper.cool", "pt-BR") {
+@Source
+abstract class Hipercool : Hiper() {
 
-    // Migrated from a custom CMS to Madara.
-    override val versionId = 2
+    override fun headersBuilder() = super.headersBuilder()
+        .set("x-flux-node", "G2ZsDdWhUwdU82Vw")
 
-    override val chapterUrlSuffix = ""
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2.seconds)
+    override val client = super.client.newBuilder()
+        .rateLimit(3)
         .build()
 }

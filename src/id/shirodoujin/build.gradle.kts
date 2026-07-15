@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
-    name = "ShiroDoujin"
-    className = "Shirodoujin"
+    name = "Shiro Doujin"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "zmanga"
-    baseUrl = "https://shirodoujin.com"
+
+    source {
+        lang = "id"
+        baseUrl = "https://shirodoujin.com"
+    }
 }

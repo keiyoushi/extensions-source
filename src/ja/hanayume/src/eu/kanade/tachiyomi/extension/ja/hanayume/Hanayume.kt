@@ -1,11 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.hanayume
 
-import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewerAlt
+import eu.kanade.tachiyomi.multisrc.comiciviewer.ComiciViewer
+import keiyoushi.annotation.Source
 
-class Hanayume :
-    ComiciViewerAlt(
-        "Hana To Yume+",
-        "https://hanayume.com",
-        "ja",
-        "https://hanayume.com/api",
-    )
+@Source
+abstract class Hanayume : ComiciViewer()

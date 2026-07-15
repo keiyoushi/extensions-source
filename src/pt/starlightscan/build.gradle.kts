@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Starlight Scan"
-    className = "StarlightScan"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://starligthscan.com"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://starligthscan.com"
+    }
 }

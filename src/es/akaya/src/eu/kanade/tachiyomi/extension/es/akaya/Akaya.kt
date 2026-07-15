@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -23,14 +24,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class Akaya : HttpSource() {
+@Source
+abstract class Akaya : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val name = "AKAYA"
-
-    override val baseUrl = "https://akaya.io"
-
-    override val lang = "es"
 
     override val supportsLatest = true
 

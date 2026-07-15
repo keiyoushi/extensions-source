@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -20,13 +21,8 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import kotlin.time.Duration.Companion.seconds
 
-class UniComics : HttpSource() {
-
-    override val name = "UniComics"
-
-    override val baseUrl = "https://unicomics.ru"
-
-    override val lang = "ru"
+@Source
+abstract class UniComics : HttpSource() {
 
     override val supportsLatest = true
 

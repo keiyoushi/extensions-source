@@ -18,12 +18,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-abstract class ZManga(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US),
-) : HttpSource() {
+abstract class ZManga : HttpSource() {
+
+    protected open val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
 
     override val supportsLatest = true
 
@@ -135,7 +132,9 @@ abstract class ZManga(
     override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
 
     open fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        thumbnail_url = document.select("div.series-thumb img").attr("abs:src")
+        val thumb = document.select("div.series-thumb img")
+        thumbnail_url = thumb.attr("data-lazy-src").takeIf { it.isNotBlank() }
+            ?: thumb.attr("abs:src")
         author = document.select(".series-infolist li:contains(Author) span").text()
         artist = document.select(".series-infolist li:contains(Artist) span").text()
         status = parseStatus(document.select(".series-infoz .status").firstOrNull()?.ownText())
@@ -187,8 +186,10 @@ abstract class ZManga(
 
     override fun pageListParse(response: Response): List<Page> = pageListParse(response.asJsoup())
 
-    open fun pageListParse(document: Document): List<Page> = document.select("div.reader-area img").mapIndexed { i, img ->
-        Page(i, imageUrl = img.attr("abs:src"))
+    open fun pageListParse(document: Document): List<Page> = document.select("div.reader-area img:not(noscript img)").mapIndexed { i, img ->
+        val imgUrl = img.attr("data-lazy-src").takeIf { it.isNotBlank() }
+            ?: img.attr("abs:src")
+        Page(i, imageUrl = imgUrl)
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()

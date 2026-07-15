@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -16,13 +17,8 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class DreamTeamsScans : HttpSource() {
-
-    override val name = "DreamTeams Scans"
-
-    override val baseUrl = "https://dreamteams.space"
-
-    override val lang = "id"
+@Source
+abstract class DreamTeamsScans : HttpSource() {
 
     override val supportsLatest = true
 

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -18,13 +19,8 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ScantradUnion : HttpSource() {
-
-    override val name = "Scantrad Union"
-
-    override val baseUrl = "https://scantrad-union.com"
-
-    override val lang = "fr"
+@Source
+abstract class ScantradUnion : HttpSource() {
 
     override val supportsLatest = true
 

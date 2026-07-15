@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.id.sektekomik
 
 import eu.kanade.tachiyomi.multisrc.colorlibanime.ColorlibAnime
+import keiyoushi.annotation.Source
 
-class SekteKomik : ColorlibAnime("Sekte Komik", "https://sektekomik.xyz", "id")
+@Source
+abstract class SekteKomik : ColorlibAnime()

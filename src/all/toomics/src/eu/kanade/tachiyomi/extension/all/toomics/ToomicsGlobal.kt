@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
@@ -21,18 +22,32 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.net.URLDecoder
 import java.text.SimpleDateFormat
+import java.util.Locale
 import kotlin.time.Duration.Companion.minutes
 
-abstract class ToomicsGlobal(
-    private val siteLang: String,
-    private val dateFormat: SimpleDateFormat,
-    override val lang: String = siteLang,
-    displayName: String = "",
-) : HttpSource() {
+@Source
+abstract class ToomicsGlobal : HttpSource() {
 
-    override val name = "Toomics (Only free chapters)" + (if (displayName.isNotEmpty()) " ($displayName)" else "")
+    private val siteLang: String
+        get() = when (lang) {
+            "zh-Hans" -> "sc"
+            "zh-Hant" -> "tc"
+            "es-419" -> "mx"
+            "pt-BR" -> "por"
+            else -> lang
+        }
 
-    override val baseUrl = "https://global.toomics.com"
+    private val dateFormat: SimpleDateFormat = when (lang) {
+        "zh-Hans" -> SimpleDateFormat("yyyy.MM.dd", Locale.SIMPLIFIED_CHINESE)
+        "zh-Hant" -> SimpleDateFormat("yyyy.MM.dd", Locale.TRADITIONAL_CHINESE)
+        "es-419" -> SimpleDateFormat("d MMM, yyyy", Locale("es", "419"))
+        "es" -> SimpleDateFormat("d MMM, yyyy", Locale("es", "419"))
+        "it" -> SimpleDateFormat("d MMM, yyyy", Locale.ITALIAN)
+        "de" -> SimpleDateFormat("d. MMM yyyy", Locale.GERMAN)
+        "fr" -> SimpleDateFormat("dd MMM. yyyy", Locale.ENGLISH)
+        "pt-BR" -> SimpleDateFormat("d 'de' MMM 'de' yyyy", Locale("pt", "BR"))
+        else -> SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
+    }
 
     override val supportsLatest = true
 

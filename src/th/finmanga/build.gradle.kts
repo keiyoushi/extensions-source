@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Fin Manga"
-    className = "FinManga"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://www.fin-manga.com"
+
+    source {
+        lang = "th"
+        baseUrl = "https://www.fin-manga.com"
+    }
 }

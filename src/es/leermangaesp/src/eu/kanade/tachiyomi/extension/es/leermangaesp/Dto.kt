@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.es.leermangaesp
 
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl
 
 @Serializable
 class MangaListDto(
@@ -25,7 +26,7 @@ class HomeGridMangaDto(
     val fecha_publicacion: String? = null,
 )
 
-fun MangaDto.toSManga(): SManga? {
+fun MangaDto.toSManga(imageBaseUrl: HttpUrl): SManga? {
     if (titulo.isBlank()) return null
 
     return SManga.create().apply {
@@ -35,7 +36,7 @@ fun MangaDto.toSManga(): SManga? {
             ?.removePrefix("/")
             ?.takeIf(String::isNotBlank)
             ?.let { relPath ->
-                LeerMangaEsp.IMAGE_BASE_URL.newBuilder()
+                imageBaseUrl.newBuilder()
                     .addPathSegments(relPath)
                     .build()
                     .toString()
@@ -43,7 +44,7 @@ fun MangaDto.toSManga(): SManga? {
     }
 }
 
-fun HomeGridMangaDto.toSManga(): SManga? {
+fun HomeGridMangaDto.toSManga(imageBaseUrl: HttpUrl): SManga? {
     if (titulo.isBlank()) return null
 
     return SManga.create().apply {
@@ -53,7 +54,7 @@ fun HomeGridMangaDto.toSManga(): SManga? {
             ?.removePrefix("/")
             ?.takeIf(String::isNotBlank)
             ?.let { relPath ->
-                LeerMangaEsp.IMAGE_BASE_URL.newBuilder()
+                imageBaseUrl.newBuilder()
                     .addPathSegments(relPath)
                     .build()
                     .toString()

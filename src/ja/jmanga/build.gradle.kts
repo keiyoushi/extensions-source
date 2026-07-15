@@ -1,13 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Jmanga"
-    className = "Jmanga"
-    versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    versionCode = 1
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangareader"
-    baseUrl = "https://jmanga.codes"
+
+    source {
+        lang = "ja"
+        baseUrl {
+            custom("https://jmanga.beer")
+        }
+    }
 }

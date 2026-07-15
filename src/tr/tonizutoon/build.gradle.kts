@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "TonizuToon"
-    className = "TonizuToon"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://tonizu.top"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://tonizu.top"
+    }
 }

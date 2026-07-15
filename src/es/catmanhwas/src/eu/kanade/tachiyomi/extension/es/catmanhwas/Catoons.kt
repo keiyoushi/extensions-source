@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.parseAs
@@ -37,13 +38,8 @@ import kotlin.collections.forEach
 import kotlin.collections.map
 import kotlin.time.Duration.Companion.seconds
 
-class Catoons : HttpSource() {
-
-    override val name = "Catoons"
-
-    override val baseUrl = "https://newcat1.xyz"
-
-    override val lang = "es"
+@Source
+abstract class Catoons : HttpSource() {
 
     override val supportsLatest = true
 

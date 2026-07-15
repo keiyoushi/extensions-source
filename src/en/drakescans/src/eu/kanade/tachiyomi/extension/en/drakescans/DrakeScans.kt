@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -12,17 +13,11 @@ import okhttp3.Request
 import kotlin.getValue
 import kotlin.time.Duration.Companion.seconds
 
-class DrakeScans :
-    MangaThemesia(
-        "Drake Scans",
-        "https://drakecomic.org",
-        "en",
-    ),
+@Source
+abstract class DrakeScans :
+    MangaThemesia(),
     ConfigurableSource {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    // madara -> mangathemesia
-    override val versionId = 2
 
     private val preferences by getPreferencesLazy()
 

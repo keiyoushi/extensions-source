@@ -1,13 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "ManhwaClub.net"
-    className = "ManhwaClubNetFactory"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://manhwaclub.net"
+
+    listOf("en", "ko").forEach {
+        source {
+            lang = it
+            baseUrl = "https://manhwaclub.net"
+        }
+    }
 }

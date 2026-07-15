@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -21,23 +22,24 @@ import okhttp3.Request
 import okhttp3.Response
 import java.util.Calendar
 
-class Zenko :
+@Source
+abstract class Zenko :
     HttpSource(),
     ConfigurableSource {
-    private val apiurlHost by lazy { API_URL.toHttpUrl().host }
+    private val domain by lazy { baseUrl.toHttpUrl().host }
+    private val apiUrl by lazy { "https://api.$domain" }
+    private val imgUrl by lazy { "https://storage.$domain" }
+    private val apiUrlHost by lazy { "api.$domain" }
 
-    override val name = "Zenko"
-    override val baseUrl = "https://zenko.online"
-    override val lang = "uk"
     override val supportsLatest = true
     private val preferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
-        .add("Origin", "$baseUrl/")
+        .add("Origin", baseUrl)
         .add("Referer", "$baseUrl/")
 
     override val client = network.client.newBuilder()
-        .rateLimit(10) { it.host == apiurlHost }
+        .rateLimit(10) { it.host == apiUrlHost }
         .build()
 
     // ============================== Popular ===============================
@@ -64,7 +66,7 @@ class Zenko :
     private fun makeCatalogRequest(page: Int, sortBy: String, query: String? = null, filters: FilterList? = null): Request {
         val offset = offsetCounter(page)
         val currentYear = Calendar.getInstance().get(Calendar.YEAR)
-        val url = "$API_URL/titles".toHttpUrl().newBuilder()
+        val url = "$apiUrl/titles".toHttpUrl().newBuilder()
             .addQueryParameter("limit", "15")
             .addQueryParameter("offset", offset)
 
@@ -76,8 +78,14 @@ class Zenko :
                 }
                 is CategoryFilter -> filter.checked?.let { url.addQueryParameter("categories", it.joinToString(",")) }
                 is TranslationStatusFilter -> filter.checked?.let { url.addQueryParameter("translationStatus", it.joinToString(",")) }
-                is GenresFilter -> filter.checked?.let { url.addQueryParameter("genres", it.joinToString(",")) }
-                is TagsFilter -> filter.checked?.let { url.addQueryParameter("tags", it.joinToString(",")) }
+                is GenresFilter -> {
+                    filter.included?.let { url.addQueryParameter("genres", it.joinToString(",")) }
+                    filter.excluded?.let { url.addQueryParameter("excludeGenres", it.joinToString(",")) }
+                }
+                is TagsFilter -> {
+                    filter.included?.let { url.addQueryParameter("tags", it.joinToString(",")) }
+                    filter.excluded?.let { url.addQueryParameter("excludeTags", it.joinToString(",")) }
+                }
                 is AgeFilter -> filter.checked?.let { url.addQueryParameter("ageLimit", it.joinToString(",")) }
                 is YearRangeFilter -> {
                     filter.minValue?.let { url.addQueryParameter("releaseYearFrom", checkMinRange(it, 1980, currentYear)) }
@@ -90,6 +98,7 @@ class Zenko :
         if (filters == null) {
             val hiddenCat = hiddenCategories()
             val ageCat = ageLimit()
+            val hiddenGenres = blockGenres()
             url.addQueryParameter("sortBy", sortBy)
             url.addQueryParameter("order", "DESC")
 
@@ -100,6 +109,10 @@ class Zenko :
             if (ageCat.isNotEmpty()) {
                 val ageLimitSetting = ageCat.joinToString(",")
                 url.addQueryParameter("ageLimit", ageLimitSetting)
+            }
+            if (hiddenGenres.isNotEmpty()) {
+                val hiddenGenresSetting = hiddenGenres.joinToString(",")
+                url.addQueryParameter("excludeGenres", hiddenGenresSetting)
             }
         }
 
@@ -127,7 +140,7 @@ class Zenko :
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val mangaId = manga.url.substringAfter("titles/")
-        val url = "$API_URL/titles/$mangaId"
+        val url = "$apiUrl/titles/$mangaId"
         return GET(url, headers)
     }
 
@@ -163,7 +176,7 @@ class Zenko :
 
     override fun chapterListRequest(manga: SManga): Request {
         val mangaId = manga.url.substringAfter("titles/")
-        val url = "$API_URL/titles/$mangaId/chapters"
+        val url = "$apiUrl/titles/$mangaId/chapters"
         return GET(url, headers)
     }
 
@@ -186,14 +199,14 @@ class Zenko :
     // =============================== Pages ================================
     override fun pageListRequest(chapter: SChapter): Request {
         val (titleId, chapterId) = chapter.url.substringAfter("titles/").split("/", limit = 2)
-        val url = "$API_URL/chapters/$chapterId"
+        val url = "$apiUrl/chapters/$chapterId"
         return GET(url, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val data = response.parseAs<ChapterResponseItem>()
         return data.pages!!.map { page ->
-            Page(page.id, imageUrl = "$IMAGE_STORAGE_URL/${page.content}")
+            Page(page.id, imageUrl = "$imgUrl/${page.content}")
         }
     }
 
@@ -209,7 +222,7 @@ class Zenko :
         Filter.Separator(),
         AgeFilter(ageLimit()),
         Filter.Separator(),
-        GenresFilter(),
+        GenresFilter(blockGenres()),
         Filter.Separator(),
         TagsFilter(),
         Filter.Separator(),
@@ -220,6 +233,7 @@ class Zenko :
     private fun isEng(): String = preferences.getString(LANGUAGE_PREF, "ua")!!
     private fun ageLimit(): Set<String> = preferences.getStringSet(SITE_AGE_PREF, emptySet<String>())!!
     private fun hiddenCategories(): Set<String> = preferences.getStringSet(SITE_CATEGORIES_PREF, setOf(SITE_CATEGORIES_DEFAULT))!!
+    private fun blockGenres(): Set<String> = preferences.getStringSet(GENRES_PREF, emptySet<String>())!!
 
     private fun getSelectedLanguage(isEng: String, engName: String?, name: String): String = when {
         isEng == "eng" && !engName.isNullOrEmpty() -> engName
@@ -263,6 +277,23 @@ class Zenko :
         }.let(screen::addPreference)
 
         MultiSelectListPreference(screen.context).apply {
+            val tags = GenresFilter.genres
+            key = GENRES_PREF
+            title = GENRES_PREF_TITLE
+            entries = tags.map { it.first }.toTypedArray()
+            entryValues = tags.map { it.second }.toTypedArray()
+            summary = blockGenres().joinToString()
+            dialogTitle = GENRES_PREF_DIALOG
+            setDefaultValue(emptySet<String>())
+
+            setOnPreferenceChangeListener { _, values ->
+                val selected = values as Set<*>
+                this.summary = selected.joinToString()
+                true
+            }
+        }.let(screen::addPreference)
+
+        MultiSelectListPreference(screen.context).apply {
             key = SITE_CATEGORIES_PREF
             title = SITE_CATEGORIES_PREF_TITLE
             val tags = CategoryFilter.categories
@@ -300,7 +331,7 @@ class Zenko :
 
     private fun Long.secToMs(): Long = this * 1000
 
-    private fun buildImageUrl(imageId: String): String = "$IMAGE_STORAGE_URL/$imageId?optimizer=image&width=560&quality=70&height=auto"
+    private fun buildImageUrl(imageId: String): String = "$imgUrl/$imageId?optimizer=image&width=560&quality=70&height=auto"
 
     private fun checkMinRange(input: String?, min: Int, max: Int): String {
         val value = input?.trim()?.takeIf(String::isNotEmpty)?.toIntOrNull() ?: return min.toString()
@@ -314,10 +345,11 @@ class Zenko :
     }
 
     companion object {
-        private const val API_URL = "https://api.zenko.online"
-        private const val IMAGE_STORAGE_URL = "https://storage.zenko.online"
         private const val LANGUAGE_PREF = "TitleLanguagePref"
         private const val LANGUAGE_PREF_TITLE = "Вибір мови на обкладинці"
+        private const val GENRES_PREF = "pref_genres_exclude"
+        private const val GENRES_PREF_TITLE = "Приховані жанри"
+        private const val GENRES_PREF_DIALOG = "Виберіть жанри які потрібно сховати"
         private const val SITE_AGE_PREF = "site_age_categories"
         private const val SITE_AGE_PREF_TITLE = "Вікові обмеження"
         private const val SITE_AGE_PREF_DIALOG = "Контент з обраними віковими обмеженнями буде відображатися"

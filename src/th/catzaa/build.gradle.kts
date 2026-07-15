@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Catzaa"
-    className = "Catzaa"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://catzaa.net"
+
+    source {
+        lang = "th"
+        baseUrl = "https://catzaa.net"
+    }
 }

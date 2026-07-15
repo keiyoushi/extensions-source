@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLPost
@@ -27,13 +28,11 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.util.Locale
 
-class Ono :
+@Source
+abstract class Ono :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Ono"
-    override val baseUrl = "https://www.ono.live"
-    override val lang = "fr"
     override val supportsLatest = false
 
     override val client = network.client.newBuilder()

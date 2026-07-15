@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Komikhwa"
-    className = "Komikhwa"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://komikhwa.com"
+
+    source {
+        lang = "id"
+        baseUrl = "https://komikhwa.com"
+    }
 }

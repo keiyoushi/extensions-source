@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.manhwamanhua
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class ManhwaManhua : Madara("ManhwaManhua", "https://manhwamanhua.com", "en") {
+@Source
+abstract class ManhwaManhua : Madara() {
     override val useNewChapterEndpoint = true
     override val filterNonMangaItems = false
 }

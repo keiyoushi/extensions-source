@@ -1,13 +1,21 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "YaoiChan"
-    className = "YaoiChan"
     versionCode = 5
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
     theme = "multichan"
-    baseUrl = "https://yaoi-chan.me"
+
+    source {
+        baseUrl {
+            custom("https://yaoi-chan.me")
+        }
+        lang = "ru"
+        id = 2466512768990363955L
+    }
 }

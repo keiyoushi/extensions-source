@@ -1,13 +1,27 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Mangalek"
-    className = "Mangalek"
-    versionCode = 9
+    versionCode = 12
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://lekmanga.net"
+
+    source {
+        name = "مانجا ليك"
+        lang = "ar"
+        baseUrl {
+            mirrors(
+                "https://mangalik.net",
+                "https://lekmanga.online",
+                "https://like-manga.net",
+                "https://lekmanga.site",
+                "https://manga-leko.site",
+            )
+        }
+    }
 }

@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Galaxy Manga"
-    className = "GalaxyManga"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://galaxymanga.io"
+
+    source {
+        lang = "en"
+        baseUrl = "https://galaxymanga.io"
+    }
 }

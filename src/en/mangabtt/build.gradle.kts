@@ -1,11 +1,17 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "MangaBTT"
-    className = "MangaBTT"
     versionCode = 5
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://manhwabtt.cc"
+    }
 }

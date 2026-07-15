@@ -1,11 +1,17 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Fairy Scans"
-    className = "FairyScans"
-    versionCode = 33
-    contentWarning = ContentWarning.NSFW
+    versionCode = 34
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://fairyscans.org"
+    }
 }

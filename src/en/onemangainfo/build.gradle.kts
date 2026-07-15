@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "OneManga.info"
-    className = "OneMangaInfo"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangahub"
-    baseUrl = "https://onemanga.info"
+
+    source {
+        lang = "en"
+        baseUrl = "https://onemanga.info"
+    }
 }

@@ -8,91 +8,71 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.json.Json
+import keiyoushi.annotation.Source
+import keiyoushi.utils.parseAs
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import org.jsoup.Jsoup
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import kotlin.experimental.xor
 
-class NicovideoSeiga : HttpSource() {
-    override val baseUrl: String = "https://sp.manga.nicovideo.jp"
-    override val lang: String = "ja"
-    override val name: String = "Nicovideo Seiga"
+@Source
+abstract class NicovideoSeiga : HttpSource() {
+
     override val supportsLatest: Boolean = false
+
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::imageIntercept)
         .build()
-    override val versionId: Int = 2
+
     private val apiUrl: String = "https://api.nicomanga.jp/api/v1/app/manga"
-    private val json: Json by injectLazy()
 
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    // ============================== Popular ==============================
 
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int): Request {
+        // This is the only API call that doesn't use the API url
+        return GET("$baseUrl/manga/ajax/ranking?span=total&category=all&page=$page", headers)
+    }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val pageNumber = response.request.url.queryParameter("page")!!.toInt()
-        val mangas = json.decodeFromString<List<PopularManga>>(response.body.string())
+        val mangas = response.parseAs<List<PopularManga>>()
+
         // The api call allows a maximum of 5 pages
         return MangasPage(
-            mangas.map {
-                SManga.create().apply {
-                    title = it.title
-                    author = it.author
-                    // The thumbnail provided only displays a glimpse of the latest chapter. Not the actual cover
-                    // We can obtain a better thumbnail when the user clicks into the details
-                    thumbnail_url = it.thumbnailUrl
-                    // Store id only as we override the url down the chain
-                    url = it.id.toString()
-                }
-            },
+            mangas.map { it.toSManga() },
             pageNumber < 5,
         )
     }
 
-    override fun popularMangaRequest(page: Int): Request = // This is the only API call that doesn't use the API url
-        GET("$baseUrl/manga/ajax/ranking?span=total&category=all&page=$page", headers)
+    // ============================== Latest ===============================
 
-    // Parses the common manga entry object from the api
-    private fun parseMangaEntry(entry: Manga): SManga = SManga.create().apply {
-        title = entry.meta.title
-        // The description is html. Simply using Jsoup to remove all the html tags
-        description = Jsoup.parse(entry.meta.description).wholeText()
-        // Although their API does contain individual author fields, they are arbitrary strings and we can't trust it conforms to a format
-        // Use display name instead which puts all of the people involved together
-        author = entry.meta.author
-        thumbnail_url = entry.meta.thumbnailUrl
-        // Store id only as we override the url down the chain
-        url = entry.id.toString()
-        status = when (entry.meta.serialStatus) {
-            "serial" -> SManga.ONGOING
-            "concluded" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
-        initialized = true
-    }
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val r = json.decodeFromString<ApiResponse<Manga>>(response.body.string())
-        return MangasPage(r.data.result.map { parseMangaEntry(it) }, r.data.extra!!.hasNext!!)
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    // ============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$apiUrl/contents?mode=keyword&sort=score&q=$query&limit=20&offset=${(page - 1) * 20}", headers)
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val r = json.decodeFromString<ApiResponse<Manga>>(response.body.string())
-        return parseMangaEntry(r.data.result.first())
+    override fun searchMangaParse(response: Response): MangasPage {
+        val r = response.parseAs<ApiResponse<Manga>>()
+        return MangasPage(r.data.result.map { it.toSManga() }, r.data.extra?.hasNext == true)
     }
+
+    // ============================== Details ==============================
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         // Overwrite to use the API instead of scraping the shared URL
         return GET("$apiUrl/contents/${manga.url}", headers)
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val r = response.parseAs<ApiResponse<Manga>>()
+        return r.data.result.first().toSManga()
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -100,38 +80,37 @@ class NicovideoSeiga : HttpSource() {
         return "$baseUrl/comic/${manga.url}"
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val r = json.decodeFromString<ApiResponse<Chapter>>(response.body.string())
-        return r.data.result
-            // Chapter is unpublished by publishers from Niconico
-            // Either due to licensing issues or the publisher is withholding the chapter from selling
-            .filter { it.ownership.sellStatus != "publication_finished" }
-            .map { chapter ->
-                SChapter.create().apply {
-                    val prefix = when (chapter.ownership.sellStatus) {
-                        "selling" -> "\uD83D\uDCB4 "
-                        "pre_selling" -> "\u23F3\uD83D\uDCB4 "
-                        else -> ""
-                    }
-                    name = prefix + chapter.meta.title
-                    // Timestamp is in seconds, convert to milliseconds
-                    date_upload = chapter.meta.createdAt * 1000
-                    // While chapters are properly sorted, authors often add promotional material as "chapters" which breaks trackers
-                    // There's no way to properly filter these as they are treated the same as normal chapters
-                    chapter_number = chapter.meta.number.toFloat()
-                    // Store id only as we override the url down the chain
-                    url = chapter.id.toString()
-                }
-            }
-            .sortedByDescending { it.chapter_number }
-    }
+    // ============================= Chapters ==============================
 
     override fun chapterListRequest(manga: SManga): Request {
         // Overwrite to use the API instead of scraping the shared URL
         return GET("$apiUrl/contents/${manga.url}/episodes", headers)
     }
 
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val r = response.parseAs<ApiResponse<Chapter>>()
+        return r.data.result
+            // Chapter is unpublished by publishers from Niconico
+            // Either due to licensing issues or the publisher is withholding the chapter from selling
+            .filter { it.ownership.sellStatus != "publication_finished" }
+            .map { it.toSChapter() }
+            .sortedByDescending { it.chapter_number }
+    }
+
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/watch/mg${chapter.url}"
+
+    // =============================== Pages ===============================
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        // Overwrite to use the API instead of scraping the shared URL
+        return GET("$apiUrl/episodes/${chapter.url}/frames?enable_webp=true", headers)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val r = response.parseAs<ApiResponse<Frame>>()
+        // Map the frames to pages
+        return r.data.result.mapIndexed { i, frame -> Page(i, imageUrl = frame.meta.sourceUrl) }
+    }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
         .asObservable()
@@ -159,8 +138,8 @@ class NicovideoSeiga : HttpSource() {
                                 }
 
                                 400 -> {
-                                    // User needs to login via WebView first before accessing the chapter
-                                    // "Please login via WebView first"
+                                    // User needs to log in via WebView first before accessing the chapter
+                                    // "Please log in via WebView first"
                                     Observable.error(SecurityException("まず、WebViewでログインしてください"))
                                 }
 
@@ -168,23 +147,10 @@ class NicovideoSeiga : HttpSource() {
                             }
                         }
                 }
-
                 200 -> Observable.just(pageListParse(response))
-
                 else -> Observable.error(Exception("HTTP error ${response.code}"))
             }
         }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val r = json.decodeFromString<ApiResponse<Frame>>(response.body.string())
-        // Map the frames to pages
-        return r.data.result.mapIndexed { i, frame -> Page(i, frame.meta.sourceUrl, frame.meta.sourceUrl) }
-    }
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        // Overwrite to use the API instead of scraping the shared URL
-        return GET("$apiUrl/episodes/${chapter.url}/frames?enable_webp=true", headers)
-    }
 
     override fun imageRequest(page: Page): Request {
         // Headers are required to avoid cache miss from server side
@@ -204,25 +170,30 @@ class NicovideoSeiga : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
+    // ============================== Filters ==============================
+
+    // ============================= Utilities =============================
+
     private fun imageIntercept(chain: Interceptor.Chain): Response {
         // Intercept requests for paid manga images only
         // Manga images come from 2 sources
         // drm.cdn.nicomanga.jp -> Paid manga (Encrypted)
         // deliver.cdn.nicomanga.jp -> Free manga (Unencrypted)
-        val imageRegex =
-            Regex("https://drm.cdn.nicomanga.jp/image/([a-f0-9]+)_\\d+/\\d+p(\\.[a-z]+)?(\\?\\d+)?")
-        val match = imageRegex.find(chain.request().url.toUrl().toString())
-            ?: return chain.proceed(chain.request())
+        val request = chain.request()
+        val match = IMAGE_REGEX.find(request.url.toString())
+            ?: return chain.proceed(request)
 
         // Decrypt the image
         val key = match.destructured.component1()
-        val response = chain.proceed(chain.request())
+        val response = chain.proceed(request)
+
+        // Retaining ByteArray usage because `getImageType` validation checks magic numbers
+        // located at both the head and tail (EOF markers) of the entire image array.
         val encryptedImage = response.body.bytes()
         val decryptedImage = decryptImage(key, encryptedImage)
 
         // Construct a new response
-        val body =
-            decryptedImage.toResponseBody("image/${getImageType(decryptedImage)}".toMediaType())
+        val body = decryptedImage.toResponseBody("image/${getImageType(decryptedImage)}".toMediaType())
         return response.newBuilder().body(body).build()
     }
 
@@ -255,14 +226,21 @@ class NicovideoSeiga : HttpSource() {
      * Determine the image type by looking at specific bytes for magic numbers
      * This is also how Nicovideo does it
      */
-    private fun getImageType(image: ByteArray): String = if (image[0].toInt() == -1 && image[1].toInt() == -40 && image[image.size - 2].toInt() == -1 && image[image.size - 1].toInt() == -39) {
-        "jpeg"
-    } else if (image[0].toInt() == -119 && image[1].toInt() == 80 && image[2].toInt() == 78 && image[3].toInt() == 71) {
-        "png"
-    } else if (image[0].toInt() == 71 && image[1].toInt() == 73 && image[2].toInt() == 70 && image[3].toInt() == 56) {
-        "gif"
-    } else {
-        // It defaults to null in the site, but it's a webp image
-        "webp"
+    private fun getImageType(image: ByteArray): String {
+        if (image.size < 4) return "webp"
+        return if (image[0].toInt() == -1 && image[1].toInt() == -40 && image[image.size - 2].toInt() == -1 && image[image.size - 1].toInt() == -39) {
+            "jpeg"
+        } else if (image[0].toInt() == -119 && image[1].toInt() == 80 && image[2].toInt() == 78 && image[3].toInt() == 71) {
+            "png"
+        } else if (image[0].toInt() == 71 && image[1].toInt() == 73 && image[2].toInt() == 70 && image[3].toInt() == 56) {
+            "gif"
+        } else {
+            // It defaults to null in the site, but it's a webp image
+            "webp"
+        }
+    }
+
+    companion object {
+        private val IMAGE_REGEX = Regex("https://drm\\.cdn\\.nicomanga\\.jp/image/([a-f0-9]+)_\\d+/\\d+p(\\.[a-z]+)?(\\?\\d+)?")
     }
 }

@@ -46,6 +46,10 @@ class ScrambledImageInterceptor : Interceptor {
             result.compress(Bitmap.CompressFormat.JPEG, 90, outputStream())
             asResponseBody("image/jpeg".toMediaType())
         }
+
+        image.recycle()
+        result.recycle()
+
         return response.newBuilder().body(responseBody).build()
     }
 

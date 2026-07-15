@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "HentaiDex"
-    className = "HentaiDex"
     versionCode = 2
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://dexhentai.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://dexhentai.com"
+    }
 }

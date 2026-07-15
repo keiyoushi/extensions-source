@@ -1,13 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Harem de Kira"
-    className = "HaremDeKira"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://kiraproject.lat"
+
+    source {
+        lang = "es"
+        baseUrl = "https://kiraproject.lat"
+        versionId = 2
+    }
 }

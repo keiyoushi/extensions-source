@@ -1,11 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Tappytoon"
-    className = "TappytoonFactory"
     versionCode = 10
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
+
+    listOf("en", "fr", "de").forEach {
+        source {
+            lang = it
+            baseUrl = "https://www.tappytoon.com/$it"
+        }
+    }
 }

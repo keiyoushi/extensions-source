@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.parseAs
@@ -16,15 +17,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class Yorai : HttpSource() {
-
-    override val name = "Yorai"
-    override val baseUrl = "https://yorai.io"
+@Source
+abstract class Yorai : HttpSource() {
 
     val apiUrl = "$baseUrl/api"
-    override val lang = "en"
     override val supportsLatest = true
-    override val versionId = 2
 
     private val rscHeaders = headersBuilder()
         .set("rsc", "1")

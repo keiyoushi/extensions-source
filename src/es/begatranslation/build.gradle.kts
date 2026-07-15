@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Bega Translation"
-    className = "BegaTranslation"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://begatranslation.com"
+
+    source {
+        lang = "es"
+        baseUrl = "https://begatranslation.com"
+    }
 }

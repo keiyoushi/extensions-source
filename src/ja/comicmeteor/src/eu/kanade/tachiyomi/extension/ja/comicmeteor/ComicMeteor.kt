@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.SpeedBinbReader
 import keiyoushi.utils.firstInstanceOrNull
@@ -23,13 +24,10 @@ import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ComicMeteor : HttpSource() {
+@Source
+abstract class ComicMeteor : HttpSource() {
 
-    override val name = "Kiraboshi"
-    override val baseUrl = "https://kirapo.jp"
-    override val lang = "ja"
     override val supportsLatest = false
-    override val versionId = 2
 
     private val apiUrl = "https://kirapo.jp/api"
     private val json = Injekt.get<Json>()

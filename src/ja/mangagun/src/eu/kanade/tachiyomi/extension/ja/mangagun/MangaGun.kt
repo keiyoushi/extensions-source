@@ -8,28 +8,23 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Calendar
 
-private const val DOMAIN = "nihonkuni.com"
-
-/**
- * This plugin is for the website originally named MangaGun(漫画軍), which was later renamed to NihonKuni(日本国). Please do not be confused by the names.
- */
-class MangaGun : FMReader("NihonKuni", "https://$DOMAIN", "ja") {
-
-    // Formerly "MangaGun(漫画軍)"
-    override val id = 3811800324362294701
+@Source
+abstract class MangaGun : FMReader() {
 
     override val infoElementSelector = "div.manga-detail-container"
     override val mangaDetailsSelectorDescription = ".description-text-content, .manga-info-list > li:nth-child(1) .info-field-value"
 
     override val client = super.client.newBuilder()
-        .addNetworkInterceptor(CookieInterceptor(DOMAIN, "smartlink_shown" to "1")).build()
+        .addNetworkInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, "smartlink_shown" to "1")).build()
 
     // source is picky about URL format
     private fun mangaRequest(sortBy: String, page: Int): Request = GET(

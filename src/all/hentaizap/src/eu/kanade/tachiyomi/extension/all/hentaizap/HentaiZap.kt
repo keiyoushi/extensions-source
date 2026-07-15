@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.multisrc.galleryadults.toBinary
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -20,14 +21,21 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import kotlin.collections.set
 
-class HentaiZap(
-    lang: String = "all",
-    override val mangaLang: String = LANGUAGE_MULTI,
-) : GalleryAdults(
-    "HentaiZap",
-    "https://hentaizap.com",
-    lang = lang,
-) {
+@Source
+abstract class HentaiZap : GalleryAdults() {
+
+    override val mangaLang = when (lang) {
+        "en" -> LANGUAGE_ENGLISH
+        "ja" -> LANGUAGE_JAPANESE
+        "es" -> LANGUAGE_SPANISH
+        "fr" -> LANGUAGE_FRENCH
+        "ko" -> LANGUAGE_KOREAN
+        "de" -> LANGUAGE_GERMAN
+        "ru" -> LANGUAGE_RUSSIAN
+        "all" -> LANGUAGE_MULTI
+        else -> throw IllegalArgumentException("Invalid lang: $lang")
+    }
+
     override val supportsLatest = true
     override val supportSpeechless: Boolean = true
 

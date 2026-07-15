@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Mangastep"
-    className = "Mangastep"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://mangastep.com"
+
+    source {
+        lang = "th"
+        baseUrl = "https://mangastep.com"
+    }
 }

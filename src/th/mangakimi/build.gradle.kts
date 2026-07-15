@@ -1,15 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "MangaKimi"
-    className = "MangaKimi"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://www.mangakimi.com"
+
+    source {
+        lang = "th"
+        baseUrl = "https://www.mangakimi.com"
+    }
 }
 
 dependencies {

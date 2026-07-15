@@ -2,20 +2,28 @@ package eu.kanade.tachiyomi.extension.all.imhentai
 
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
 import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
+import keiyoushi.annotation.Source
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Element
 import java.io.IOException
 
-class IMHentai(
-    lang: String = "all",
-    override val mangaLang: String = LANGUAGE_MULTI,
-) : GalleryAdults(
-    "IMHentai",
-    "https://imhentai.xxx",
-    lang = lang,
-) {
+@Source
+abstract class IMHentai : GalleryAdults() {
+
+    override val mangaLang = when (lang) {
+        "en" -> LANGUAGE_ENGLISH
+        "ja" -> LANGUAGE_JAPANESE
+        "es" -> LANGUAGE_SPANISH
+        "fr" -> LANGUAGE_FRENCH
+        "ko" -> LANGUAGE_KOREAN
+        "de" -> LANGUAGE_GERMAN
+        "ru" -> LANGUAGE_RUSSIAN
+        "all" -> LANGUAGE_MULTI
+        else -> throw IllegalArgumentException("Invalid lang: $lang")
+    }
+
     override val supportsLatest = true
     override val useIntermediateSearch: Boolean = true
     override val supportAdvancedSearch: Boolean = true

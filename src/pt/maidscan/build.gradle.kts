@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Maid Scan"
-    className = "MaidScan"
     versionCode = 51
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "greenshit"
-    baseUrl = "https://empreguetes.wtf"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://empreguetes.wtf"
+    }
 }

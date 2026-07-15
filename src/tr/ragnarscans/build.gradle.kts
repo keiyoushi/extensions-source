@@ -1,13 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Ragnar Scans"
-    className = "RagnarScans"
-    versionCode = 45
+    versionCode = 47
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "initmanga"
-    baseUrl = "https://ragnarscans.com"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://ragnarscans.net"
+        versionId = 2
+    }
 }

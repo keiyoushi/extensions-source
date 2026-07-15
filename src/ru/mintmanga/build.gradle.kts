@@ -1,13 +1,21 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "MintManga"
-    className = "MintManga"
     versionCode = 47
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "grouple"
-    baseUrl = "https://2.mintmanga.one"
+
+    source {
+        baseUrl {
+            custom("https://2.mintmanga.one")
+        }
+        lang = "ru"
+        id = 6L
+    }
 }

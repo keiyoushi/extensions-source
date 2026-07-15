@@ -1,15 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "ManhuaKey"
-    className = "ManhuaKey"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://www.manhuakey.com"
+
+    source {
+        lang = "th"
+        baseUrl = "https://www.manhuakey.com"
+    }
 }
 
 dependencies {

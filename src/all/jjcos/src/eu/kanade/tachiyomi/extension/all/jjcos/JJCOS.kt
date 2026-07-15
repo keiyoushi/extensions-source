@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl
@@ -21,21 +22,12 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class JJCOS : HttpSource() {
-
-    override val name = "JJCOS"
-
-    override val baseUrl = BASE_URL
-
-    override val lang = "all"
+@Source
+abstract class JJCOS : HttpSource() {
 
     override val supportsLatest = false
 
-    override fun headersBuilder() = super.headersBuilder()
-
-    private val indexUrl = "$baseUrl/api/index.html".toHttpUrl()
-
-    // ========================= Popular =========================
+    // ============================== Popular ==============================
 
     override fun popularMangaRequest(page: Int): Request = GET(
         indexUrlBuilder(page = page).build(),
@@ -49,13 +41,13 @@ class JJCOS : HttpSource() {
         return toMangasPage(posts, page)
     }
 
-    // ========================= Latest =========================
+    // ============================== Latest ===============================
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
     override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    // ========================= Search =========================
+    // ============================== Search ===============================
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         val mangaPath = parseDeeplinkToMangaPath(query)
@@ -97,11 +89,7 @@ class JJCOS : HttpSource() {
         return toMangasPage(filteredPosts, page)
     }
 
-    // ========================= Details =========================
-
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${normalizePath(manga.url)}"
-
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
+    // ============================== Details ==============================
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -128,11 +116,7 @@ class JJCOS : HttpSource() {
         }
     }
 
-    // ========================= Chapters =========================
-
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapterToPostPath(chapter.url)}"
-
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+    // ============================= Chapters ==============================
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -151,9 +135,7 @@ class JJCOS : HttpSource() {
         )
     }
 
-    // ========================= Pages =========================
-
-    override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), headers)
+    // =============================== Pages ===============================
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
@@ -165,6 +147,8 @@ class JJCOS : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    // ============================= Utilities =============================
 
     private fun extractImageUrls(document: Document): List<String> {
         val imageUrls = linkedSetOf<String>()
@@ -191,28 +175,13 @@ class JJCOS : HttpSource() {
 
         val endIndexExclusive = minOf(posts.size, startIndex + PAGE_SIZE)
         val mangas = posts.subList(startIndex, endIndexExclusive).map { post ->
-            post.toSManga()
+            post.toSManga(linkToEncodedPath(post.link))
         }
 
         return MangasPage(
             mangas = mangas,
             hasNextPage = endIndexExclusive < posts.size,
         )
-    }
-
-    private fun PostDto.toSManga(): SManga {
-        val mangaTitle = title.trim()
-        if (mangaTitle.isEmpty()) {
-            throw IOException("Missing title in $link")
-        }
-
-        return SManga.create().apply {
-            title = mangaTitle
-            thumbnail_url = feature
-            status = SManga.COMPLETED
-            url = linkToEncodedPath(link)
-            initialized = true
-        }
     }
 
     private fun parseDeeplinkToMangaPath(query: String): String? {
@@ -243,13 +212,6 @@ class JJCOS : HttpSource() {
             }
     }
 
-    private fun chapterToPostPath(chapterPath: String): String {
-        val rawPath = chapterPath.takeIf { it.startsWith("/post/") }
-            ?: throw IOException("Invalid chapter path: $chapterPath")
-
-        return normalizePath(rawPath)
-    }
-
     private fun linkToEncodedPath(link: String): String {
         val sanitizedLink = link.trim().substringBefore('?').substringBefore('#')
         val absoluteLink = when {
@@ -273,7 +235,7 @@ class JJCOS : HttpSource() {
         return parsed.encodedPath
     }
 
-    private fun indexUrlBuilder(page: Int, query: String? = null): HttpUrl.Builder = indexUrl.newBuilder().apply {
+    private fun indexUrlBuilder(page: Int, query: String? = null): HttpUrl.Builder = "$baseUrl/api/index.html".toHttpUrl().newBuilder().apply {
         addQueryParameter("page", page.toString())
         if (!query.isNullOrBlank()) {
             addQueryParameter("query", query)
@@ -285,13 +247,12 @@ class JJCOS : HttpSource() {
     } ?: 0L
 
     companion object {
-        const val BASE_URL = "https://jjcos.com"
         private const val PAGE_SIZE = 20
 
         private val DATE_FORMATS: List<SimpleDateFormat> by lazy {
             listOf(
-                SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH),
-                SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH),
+                SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT),
+                SimpleDateFormat("yyyy-MM-dd", Locale.ROOT),
             )
         }
     }

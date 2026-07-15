@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -23,16 +24,9 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.time.Duration.Companion.seconds
 
-class LectorJpg : HttpSource() {
+@Source
+abstract class LectorJpg : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val versionId = 3
-
-    override val name = "LectorJPG"
-
-    override val lang = "es"
-
-    override val baseUrl = "https://visorjpg.lat"
 
     private val apiUrl = "https://api.visorjpg.lat"
 

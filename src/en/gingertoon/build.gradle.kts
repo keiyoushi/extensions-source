@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "GingeRTooN"
-    className = "GingeRTooN"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://gingertoon.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://gingertoon.com"
+    }
 }

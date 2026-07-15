@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "MangaTaro"
-    className = "MangaTaroFactory"
     versionCode = 10
-    contentWarning = ContentWarning.SAFE
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangataro"
-    baseUrl = "https://mangataro.org"
+
+    source {
+        lang = "en"
+        baseUrl = "https://mangataro.org"
+    }
 }

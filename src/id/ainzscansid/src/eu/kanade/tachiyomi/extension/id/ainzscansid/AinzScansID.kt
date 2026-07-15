@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -16,13 +17,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class AinzScansID : HttpSource() {
-
-    override val name = "Ainz Scans ID"
-
-    override val baseUrl = "https://v2.ainzscans01.com"
-
-    override val lang = "id"
+@Source
+abstract class AinzScansID : HttpSource() {
 
     override val supportsLatest = true
 

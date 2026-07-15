@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "MangaNow"
-    className = "MangaNow"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangareader"
-    baseUrl = "https://manganow.to"
+
+    source {
+        lang = "en"
+        baseUrl = "https://manganow.to"
+    }
 }

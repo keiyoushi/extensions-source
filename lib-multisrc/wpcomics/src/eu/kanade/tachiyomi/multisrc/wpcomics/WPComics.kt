@@ -24,13 +24,11 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-abstract class WPComics(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String,
-    protected val dateFormat: SimpleDateFormat = SimpleDateFormat("HH:mm - dd/MM/yyyy Z", Locale.US),
-    protected val gmtOffset: String? = "+0500",
-) : HttpSource() {
+abstract class WPComics : HttpSource() {
+
+    protected open val dateFormat: SimpleDateFormat = SimpleDateFormat("HH:mm - dd/MM/yyyy Z", Locale.US)
+
+    protected open val gmtOffset: String? = "+0500"
 
     override val supportsLatest = true
 

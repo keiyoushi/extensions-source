@@ -1,16 +1,17 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Manhastro"
-    className = "Manhastro"
     versionCode = 58
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
-}
 
-dependencies {
-
-    compileOnly("com.squareup.okhttp3:okhttp-brotli:5.0.0-alpha.11")
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://manhastro.net"
+    }
 }

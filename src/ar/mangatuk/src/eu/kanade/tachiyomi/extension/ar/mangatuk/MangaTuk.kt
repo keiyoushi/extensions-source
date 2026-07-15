@@ -1,16 +1,13 @@
 package eu.kanade.tachiyomi.extension.ar.mangatuk
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaTuk :
-    Madara(
-        "MangaTuk",
-        "https://mangatuk.com",
-        "ar",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
-    ) {
+@Source
+abstract class MangaTuk : Madara() {
+    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar"))
     override val useNewChapterEndpoint = true
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never

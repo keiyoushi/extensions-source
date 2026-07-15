@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.th.cat300
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class Cat300 : Madara("Cat300", "https://cat-300.com", "th")
+@Source
+abstract class Cat300 : Madara()

@@ -1,13 +1,25 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "CBHentai"
-    className = "HentaiCB"
-    versionCode = 30
+    versionCode = 37
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://2tencb.pro"
+
+    source {
+        lang = "vi"
+        baseUrl {
+            custom("https://2tencb.pro")
+        }
+        id = 823638192569572166L
+    }
+
+    deeplink {
+        path("/read/..*")
+    }
 }

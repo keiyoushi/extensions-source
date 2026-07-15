@@ -37,14 +37,15 @@ class PageInfo(
 
 @Serializable
 class MangaChapter(
-    val serviceDateDescription: String,
+    private val serviceDateDescription: String,
     private val subtitle: String,
     private val no: Int,
 ) {
-    fun toSChapter(mType: String, titleId: Int) = SChapter.create().apply {
+    fun toSChapter(mType: String, titleId: Int, parseDate: (String) -> Long) = SChapter.create().apply {
         url = "/$mType/detail?titleId=$titleId&no=$no"
         name = subtitle
         chapter_number = no.toFloat()
+        date_upload = parseDate(serviceDateDescription)
     }
 }
 

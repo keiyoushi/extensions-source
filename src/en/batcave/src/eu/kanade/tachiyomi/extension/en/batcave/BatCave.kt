@@ -11,39 +11,30 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.io.IOException
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class BatCave : HttpSource() {
+@Source
+abstract class BatCave : HttpSource() {
 
-    override val name = "BatCave"
-    override val lang = "en"
     override val supportsLatest = true
-    override val baseUrl = "https://batcave.biz"
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     // Use client to sync cookies with WebView and intercept the DLE Guard redirect.
     override val client = network.client.newBuilder()
-        .addInterceptor { chain ->
-            val response = chain.proceed(chain.request())
-            // Detect if the site redirected us to the anti-bot challenge page
-            if (response.request.url.pathSegments.firstOrNull() == "_c") {
-                response.close()
-                throw IOException("Please open in WebView to bypass site protection")
-            }
-            response
-        }
+        .addInterceptor(DleGuardResolver.interceptor(baseUrl))
         .build()
 
     // ============================== Popular ==============================
@@ -181,17 +172,19 @@ class BatCave : HttpSource() {
     private val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.US)
 
     // =============================== Pages ===============================
+    override fun pageListRequest(chapter: SChapter): Request {
+        val (newsId, rawId) = chapter.url.substringAfter("reader/").split("/", limit = 2)
+        val id = intRegex.find(rawId)?.value ?: rawId
+        val body = ChapterRequestBody(
+            newsId = newsId,
+            chapterId = id,
+        ).toJsonRequestBody()
+
+        return POST("$baseUrl/engine/ajax/controller.php?mod=api&action=reader/getChapterData", headers, body)
+    }
+
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val script = document.selectFirst("script:containsData(window.__DATA__)")?.data()
-            ?: throw Exception("Page data script not found")
-
-        val data = script
-            .substringAfter("window.__DATA__ = ")
-            .substringBeforeLast(";")
-            .trim()
-            .parseAs<Images>()
-
+        val data = response.parseAs<ChapterApiResponse>().data
         return data.images.mapIndexed { idx, img ->
             val imageUrl = if (img.startsWith("http")) img.trim() else baseUrl + img.trim()
             Page(idx, imageUrl = imageUrl)
@@ -263,5 +256,9 @@ class BatCave : HttpSource() {
         publishers = data.publishers.map { it.value to it.id }
         genres = data.genres.map { it.value to it.id }
         filterParseFailed = false
+    }
+
+    companion object {
+        private val intRegex = Regex("""^\d+""")
     }
 }

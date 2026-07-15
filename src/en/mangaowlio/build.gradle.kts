@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "MangaOwl.io (unoriginal)"
-    className = "MangaOwlIo"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://mangaowl.io"
+
+    source {
+        lang = "en"
+        baseUrl = "https://mangaowl.io"
+    }
 }

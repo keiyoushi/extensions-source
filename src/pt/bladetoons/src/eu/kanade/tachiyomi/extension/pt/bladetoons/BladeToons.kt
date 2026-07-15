@@ -1,14 +1,10 @@
 package eu.kanade.tachiyomi.extension.pt.bladetoons
 
 import eu.kanade.tachiyomi.multisrc.mangotheme.MangoTheme
+import keiyoushi.annotation.Source
 
-class BladeToons : MangoTheme() {
-
-    override val name = "Bladetoons"
-
-    override val baseUrl = "https://bladetoons.com"
-
-    override val lang = "pt-BR"
+@Source
+abstract class BladeToons : MangoTheme() {
 
     override val cdnUrl = "https://cdn.bladetoons.com"
 

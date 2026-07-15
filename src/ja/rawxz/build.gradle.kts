@@ -1,12 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "RawZO"
-    className = "RawXZ"
     versionCode = 51
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
-    baseUrl = "https://rawzo.net"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://rawzo.net"
+        id = 7950551186567193810L
+    }
 }

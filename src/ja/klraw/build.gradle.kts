@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "KL Raw"
-    className = "KLRaw"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangareader"
-    baseUrl = "https://www.klraw.info"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://www.klraw.info"
+    }
 }

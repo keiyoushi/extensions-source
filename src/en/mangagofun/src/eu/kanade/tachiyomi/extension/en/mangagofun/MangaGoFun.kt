@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.mangagofun
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class MangaGoFun : Madara("MangaGo.fun", "https://www.mangago.fun", "en") {
+@Source
+abstract class MangaGoFun : Madara() {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 }

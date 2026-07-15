@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -25,16 +26,13 @@ import kotlin.collections.joinToString
 import kotlin.getValue
 import kotlin.text.ifEmpty
 
-class DGManga :
+@Source
+abstract class DGManga :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "DGManga"
-    override val baseUrl = "https://dgmanga.app"
     private val apiUrl = "https://dgmanga.app/api"
-    override val lang = "uk"
     override val supportsLatest = true
-    override val versionId = 2
     private val preferences by getPreferencesLazy()
     override val client = network.client.newBuilder()
         .build()

@@ -1,13 +1,23 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Mangakakalot"
-    className = "Mangakakalot"
     versionCode = 8
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangabox"
-    baseUrl = "https://www.mangakakalot.gg"
+
+    source {
+        lang = "en"
+        baseUrl {
+            mirrors(
+                "https://www.mangakakalot.gg",
+                "https://www.mangakakalove.com",
+            )
+        }
+    }
 }

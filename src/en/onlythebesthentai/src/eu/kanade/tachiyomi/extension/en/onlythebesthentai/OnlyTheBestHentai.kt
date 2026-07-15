@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -25,11 +26,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class OnlyTheBestHentai : HttpSource() {
+@Source
+abstract class OnlyTheBestHentai : HttpSource() {
 
-    override val name = "Only The Best Hentai"
-    override val baseUrl = "https://onlythebesthentai.com"
-    override val lang = "en"
     override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()

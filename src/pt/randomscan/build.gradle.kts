@@ -1,14 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Lura Toon"
-    className = "LuraToon"
     versionCode = 59
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
-    baseUrl = "https://luratoons.net"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://luratoons.net"
+        versionId = 2
+    }
 }
 
 dependencies {

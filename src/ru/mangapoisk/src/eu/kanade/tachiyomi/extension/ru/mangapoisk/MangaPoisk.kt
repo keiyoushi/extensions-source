@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -22,12 +23,8 @@ import java.util.Locale
 private val chapterRegex = Regex("""Глава\s(\d+)""", RegexOption.IGNORE_CASE)
 private val dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale("ru"))
 
-class MangaPoisk : HttpSource() {
-    override val name = "MangaPoisk"
-
-    override val baseUrl = "https://mangapsk.ru"
-
-    override val lang = "ru"
+@Source
+abstract class MangaPoisk : HttpSource() {
 
     override val supportsLatest = true
 
@@ -77,24 +74,32 @@ class MangaPoisk : HttpSource() {
         val document = response.asJsoup()
         val isSearch = response.request.url.queryParameter("q") != null
         val selector = if (isSearch) "article.card" else ".manga-card"
+        val hasNextPage = if (isSearch) {
+            document.selectFirst("ul.pagination li a[aria-label*=Вперёд]:not([aria-disabled=true])") != null
+        } else {
+            document.selectFirst("ul li:contains(Вперёд) a") != null
+        }
 
         val mangas = document.select(selector).mapNotNull { element ->
             val urlElement = if (isSearch) element.selectFirst("a.card-about") else element.selectFirst("a")
             if (urlElement == null) return@mapNotNull null
+            val titleParsed = if (isSearch) {
+                element.selectFirst("div.post-description p.card-title")?.text()?.takeIf { it.isNotBlank() }
+                    ?: element.selectFirst("a > h2.entry-title")?.text()?.takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
+            } else {
+                urlElement.attr("title").takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
+            }.substringBefore("/")
 
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("a > img")?.let { getImage(it) } ?: ""
                 setUrlWithoutDomain(urlElement.attr("href"))
-
-                title = if (isSearch) {
-                    element.selectFirst("a > h2.entry-title")?.text()?.substringBefore("/") ?: ""
-                } else {
-                    urlElement.attr("title").substringBefore("/")
-                }
+                title = titleParsed
             }
         }
 
-        return MangasPage(mangas, mangas.isNotEmpty())
+        return MangasPage(mangas, hasNextPage)
     }
 
     private fun getImage(element: Element): String {

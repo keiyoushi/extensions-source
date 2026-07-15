@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -19,12 +20,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class Nexusscanlation : HttpSource() {
+@Source
+abstract class Nexusscanlation : HttpSource() {
     private val apiBaseUrlHost by lazy { apiBaseUrl.toHttpUrl().host }
 
-    override val name = "NexusScanlation"
-    override val baseUrl = "https://nexusscanlation.com"
-    override val lang = "es"
     override val supportsLatest = true
 
     private val apiBaseUrl = "https://api.nexusscanlation.com/api/v1"

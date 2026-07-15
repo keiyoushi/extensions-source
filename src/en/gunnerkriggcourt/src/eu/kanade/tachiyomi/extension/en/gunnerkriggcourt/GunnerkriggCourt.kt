@@ -7,14 +7,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class GunnerkriggCourt : HttpSource() {
-    override val name = "Gunnerkrigg Court"
-    override val baseUrl = "https://www.gunnerkrigg.com"
-    override val lang = "en"
+@Source
+abstract class GunnerkriggCourt : HttpSource() {
     override val supportsLatest = false
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {

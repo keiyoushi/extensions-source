@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Aarlas"
-    className = "Aarlas"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "zeistmanga"
-    baseUrl = "https://www.arlas.online"
+
+    source {
+        lang = "id"
+        baseUrl = "https://www.arlas.online"
+    }
 }

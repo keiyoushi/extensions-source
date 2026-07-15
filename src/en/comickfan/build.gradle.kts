@@ -1,12 +1,22 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "ComicK Fanmade"
-    className = "ComicKFan"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
-    baseUrl = "https://comickfan.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://comickfan.com"
+    }
+
+    deeplink {
+        host("comickfan.com")
+        path("/manga/..*")
+    }
 }

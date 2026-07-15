@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Moodtoon"
-    className = "Moodtoon"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://moon-toon.com"
+
+    source {
+        lang = "th"
+        baseUrl = "https://moon-toon.com"
+    }
 }

@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -36,15 +37,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class CuuTruyenMoe :
+@Source
+abstract class CuuTruyenMoe :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "CuuTruyen (unoriginal)"
-
-    override val baseUrl = "https://cuutruyen.moe"
-
-    override val lang = "vi"
 
     override val supportsLatest = true
 

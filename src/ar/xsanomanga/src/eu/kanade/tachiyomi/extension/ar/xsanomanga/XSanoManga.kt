@@ -1,14 +1,11 @@
 package eu.kanade.tachiyomi.extension.ar.xsanomanga
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
+import keiyoushi.annotation.Source
 import okhttp3.Response
 
-class XSanoManga :
-    ZeistManga(
-        "XSano Manga",
-        "https://www.xsano-manga.com",
-        "ar",
-    ) {
+@Source
+abstract class XSanoManga : ZeistManga() {
 
     // Missing popular
     override val supportsLatest = false

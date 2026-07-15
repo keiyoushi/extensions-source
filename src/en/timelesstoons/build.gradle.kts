@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "TimelessToons"
-    className = "TimelessToons"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "keyoapp"
-    baseUrl = "https://timelesstoons.org/"
+
+    source {
+        lang = "en"
+        baseUrl = "https://timelesstoons.org"
+    }
 }

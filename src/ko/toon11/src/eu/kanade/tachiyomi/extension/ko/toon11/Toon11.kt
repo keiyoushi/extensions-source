@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -21,13 +22,8 @@ import java.text.SimpleDateFormat
 import java.util.ArrayList
 import java.util.Locale
 
-class Toon11 : HttpSource() {
-
-    override val name = "11toon"
-
-    override val baseUrl = "https://www.11toon.com"
-
-    override val lang = "ko"
+@Source
+abstract class Toon11 : HttpSource() {
 
     override val supportsLatest = true
 

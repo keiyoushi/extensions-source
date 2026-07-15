@@ -1,13 +1,21 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Siyah Melek"
-    className = "Siyahmelek"
-    versionCode = 60
-    contentWarning = ContentWarning.NSFW
+    versionCode = 62
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
     theme = "initmanga"
-    baseUrl = "https://siyahmelek.vip"
+
+    source {
+        lang = "tr"
+        baseUrl {
+            custom("https://siyahmelek.fun")
+        }
+        versionId = 2
+    }
 }

@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.rateLimit
@@ -29,12 +30,11 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class Jinmantiantang :
+@Source
+abstract class Jinmantiantang :
     HttpSource(),
     ConfigurableSource {
 
-    override val lang: String = "zh"
-    override val name: String = "禁漫天堂"
     override val supportsLatest: Boolean = true
 
     private val preferences = getPreferences { preferenceMigration() }

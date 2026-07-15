@@ -1,15 +1,12 @@
 package eu.kanade.tachiyomi.extension.es.darkroomfansub
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.Response
 
-class DarkRoomFansub :
-    ZeistManga(
-        "Dark Room Fansub",
-        "https://lector-darkroomfansub.blogspot.com",
-        "es",
-    ) {
+@Source
+abstract class DarkRoomFansub : ZeistManga() {
 
     override val client = super.client.newBuilder()
         .rateLimit(3)

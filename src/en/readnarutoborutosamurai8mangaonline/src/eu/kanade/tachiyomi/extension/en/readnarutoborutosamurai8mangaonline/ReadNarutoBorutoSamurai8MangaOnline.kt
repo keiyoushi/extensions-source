@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.readnarutoborutosamurai8mangaonline
 
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
+import keiyoushi.annotation.Source
 
-class ReadNarutoBorutoSamurai8MangaOnline : MangaCatalog("Read Naruto Boruto Samurai 8 Manga Online", "https://ww11.readnaruto.com", "en") {
+@Source
+abstract class ReadNarutoBorutoSamurai8MangaOnline : MangaCatalog() {
     override val sourceList = listOf(
         Pair("Boruto - Two Blue Vortex", "$baseUrl/manga/boruto-two-blue-vortex/"),
         Pair("Naruto", "$baseUrl/manga/naruto/"),

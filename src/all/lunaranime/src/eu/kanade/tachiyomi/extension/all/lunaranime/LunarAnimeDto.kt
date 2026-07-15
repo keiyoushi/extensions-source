@@ -173,3 +173,10 @@ class LunarChapterPasswordDto(
     @SerialName("chapter_number") val chapterNumber: String? = null,
     val language: String? = null,
 )
+
+@Serializable
+class ViewRequestBody(
+    val slug: String,
+    val chapter: String,
+    val language: String,
+)

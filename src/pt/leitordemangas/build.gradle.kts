@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Leitor de Mangas"
-    className = "LeitorDeMangas"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://leitordemangas.com"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://leitordemangas.com"
+    }
 }

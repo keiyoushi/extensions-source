@@ -1,11 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "InfinityScans"
-    className = "InfinityScans"
-    versionCode = 10
-    contentWarning = ContentWarning.NSFW
+    versionCode = 11
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://infinityscans.org"
+        versionId = 2
+    }
 }

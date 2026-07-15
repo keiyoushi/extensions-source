@@ -4,6 +4,8 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Base64
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import keiyoushi.utils.applicationContext
@@ -27,6 +29,11 @@ class WebViewInterceptor(val baseUrl: String, private val userAgent: String?) : 
 
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private var destroyWv: Runnable? = null
+    private var latch: CountDownLatch? = null
+    private var result: FetchResult? = null
+    private var errorMessage: Throwable? = null
+
+    var hasErrored = false
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val req = chain.request()
@@ -41,7 +48,12 @@ class WebViewInterceptor(val baseUrl: String, private val userAgent: String?) : 
             null
         }
 
-        val resultData = fetchViaJs(url, req.method, req.headers, requestBody, isImage)
+        var resultData = fetchViaJs(url, req.method, req.headers, requestBody, isImage)
+
+        if (resultData.result == "HTTP 403") {
+            hasErrored = !hasErrored
+            resultData = fetchViaJs(url, req.method, req.headers, requestBody, isImage)
+        }
         if (!resultData.success) throw IOException("[WebView]: " + resultData.result)
 
         val resultConentType = resultData.contentType ?: "text/html"
@@ -52,6 +64,7 @@ class WebViewInterceptor(val baseUrl: String, private val userAgent: String?) : 
         }
     }
 
+    private val bridgeName = "Lycan_Bridge"
     private var cachedWv: WebView? = null
     private var accessTime = 0L
 
@@ -66,6 +79,23 @@ class WebViewInterceptor(val baseUrl: String, private val userAgent: String?) : 
                         domStorageEnabled = true
                         userAgentString = userAgent
                     }
+
+                    addJavascriptInterface(
+                        object {
+                            @JavascriptInterface
+                            fun passResult(data: String, contentType: String?) {
+                                result = FetchResult(true, data, contentType)
+                                latch?.countDown()
+                            }
+
+                            @JavascriptInterface
+                            fun passError(error: String) {
+                                result = FetchResult(false, error)
+                                latch?.countDown()
+                            }
+                        },
+                        bridgeName,
+                    )
                 }
             }
 
@@ -88,34 +118,50 @@ class WebViewInterceptor(val baseUrl: String, private val userAgent: String?) : 
         requestBody: String?,
         isImage: Boolean,
     ): FetchResult {
-        val bridgeName = "Lycan_${System.currentTimeMillis()}"
-        val latch = CountDownLatch(1)
-        var result: FetchResult? = null
-        var errorMessage: Throwable? = null
+        latch = CountDownLatch(1)
+        result = null
+        errorMessage = null
+
+        val isRsc = "/series/" in url
 
         mainHandler.post {
             try {
                 val webView = globalWebView
-
-                webView.addJavascriptInterface(
-                    object {
-                        @JavascriptInterface
-                        fun passResult(data: String, contentType: String?) {
-                            result = FetchResult(true, data, contentType)
-                            latch.countDown()
-                        }
-
-                        @JavascriptInterface
-                        fun passError(error: String) {
-                            result = FetchResult(false, error)
-                            latch.countDown()
-                        }
-                    },
-                    bridgeName,
-                )
-
                 webView.webViewClient = object : WebViewClient() {
+                    override fun shouldInterceptRequest(
+                        view: WebView,
+                        request: WebResourceRequest,
+                    ): WebResourceResponse? = if (!isRsc || "/series/" in request.url.toString()) {
+                        null
+                    } else {
+                        WebResourceResponse(null, null, null)
+                    }
+
+                    override fun onReceivedHttpError(
+                        view: WebView,
+                        request: WebResourceRequest,
+                        errorResponse: WebResourceResponse,
+                    ) {
+                        if (request.isForMainFrame) {
+                            result = FetchResult(false, "HTTP ${errorResponse.statusCode}")
+                            latch?.countDown()
+                        }
+                    }
+
                     override fun onPageFinished(view: WebView, pageUrl: String?) {
+                        if (isRsc) {
+                            if (result != null) return
+                            view.evaluateJavascript(
+                                """
+                            (function() {
+                                window.$bridgeName.passResult(document.documentElement.outerHTML, document.contentType);
+                            })();
+                                """.trimIndent(),
+                                null,
+                            )
+                            return
+                        }
+
                         val jsScript = if (isImage) {
                             """
                             (function() {
@@ -149,7 +195,7 @@ class WebViewInterceptor(val baseUrl: String, private val userAgent: String?) : 
                                 }
                             }.toJsonString()
 
-                            val requestBody = if (requestBody != null) "body: `$requestBody`," else ""
+                            val jsRequestBody = if (requestBody != null) "body: `$requestBody`," else ""
                             """
                             (function() {
                                 let contentType;
@@ -158,16 +204,14 @@ class WebViewInterceptor(val baseUrl: String, private val userAgent: String?) : 
                                     method: '$method',
                                     credentials: 'include',
                                     headers: $jsHeaders,
-                                    $requestBody
+                                    $jsRequestBody
                                 })
-
                                 .then(res => {
                                 if (!res.ok) throw new Error('HTTP ' + res.status);
                                 contentType = res.headers.get('content-type')
                                 return res.text();
                             })
                             .then(text => window.$bridgeName.passResult(text, contentType))
-
                                 .catch(err => window.$bridgeName.passError(err.message));
                             })();
                             """.trimIndent()
@@ -177,16 +221,20 @@ class WebViewInterceptor(val baseUrl: String, private val userAgent: String?) : 
                     }
                 }
 
-                val pageHtml = if (isImage) "<html><body><img id='_image' src='$url'/></body></html>" else " " // fetch-dest as image
+                if (isRsc && !hasErrored) {
+                    webView.loadUrl(url.substringBefore('?')) // document fetch-dest and drop rsc
+                    return@post
+                }
 
+                val pageHtml = if (isImage) "<html><body><img id='_image' src='$url'/></body></html>" else " "
                 webView.loadDataWithBaseURL(baseUrl, pageHtml, "text/html", "utf-8", null)
             } catch (e: Throwable) {
                 errorMessage = e
-                latch.countDown()
+                latch?.countDown()
             }
         }
 
-        latch.await(if (isImage) 10 else 5, TimeUnit.SECONDS)
+        latch?.await(if (isImage) 10 else 5, TimeUnit.SECONDS)
 
         return result ?: FetchResult(false, (errorMessage ?: "Timed out").toString())
     }

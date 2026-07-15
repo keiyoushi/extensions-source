@@ -1,11 +1,17 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Lmtos"
-    className = "Lmtos"
     versionCode = 54
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
+
+    source {
+        lang = "es"
+        baseUrl = "https://lmtos.net"
+    }
 }

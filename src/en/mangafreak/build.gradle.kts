@@ -1,11 +1,17 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Mangafreak"
-    className = "Mangafreak"
-    versionCode = 13
-    contentWarning = ContentWarning.NSFW
+    versionCode = 14
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://ww2.mangafreak.me"
+    }
 }

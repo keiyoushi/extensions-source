@@ -1,12 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "PornComix"
-    className = "PornComix"
     versionCode = 49
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
-    baseUrl = "https://bestporncomix.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://bestporncomix.com"
+        versionId = 2
+    }
 }

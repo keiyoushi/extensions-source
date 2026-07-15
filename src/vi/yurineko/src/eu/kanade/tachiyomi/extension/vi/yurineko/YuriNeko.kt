@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -22,13 +23,9 @@ import org.jsoup.nodes.Element
 import java.time.Instant
 import java.util.Base64
 
-class YuriNeko : HttpSource() {
-    override val name = "YuriNeko"
-    override val lang = "vi"
-    override val baseUrl = "https://yurinekoz.com"
+@Source
+abstract class YuriNeko : HttpSource() {
     override val supportsLatest = true
-
-    override val id: Long = 4413681066613655890
 
     private val apiUrl = "https://api.${baseUrl.toHttpUrl().host}"
     private val cdnUrl = "https://cdn.${baseUrl.toHttpUrl().host}"

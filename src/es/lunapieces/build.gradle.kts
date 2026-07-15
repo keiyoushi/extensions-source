@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Luna Pieces"
-    className = "LunaPieces"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://lunapiecesfansub.com"
+
+    source {
+        lang = "es"
+        baseUrl = "https://lunapiecesfansub.com"
+    }
 }

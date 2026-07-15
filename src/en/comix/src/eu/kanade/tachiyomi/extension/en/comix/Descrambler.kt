@@ -146,6 +146,7 @@ object Descrambler {
 
     private fun decodeScrambleHash(hash: String?): Int = when (hash?.trim()) {
         "03632" -> 58414
+        "02900" -> 117532
         else -> 0
     }
 

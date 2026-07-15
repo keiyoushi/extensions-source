@@ -1,13 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Hunters Scans"
-    className = "HuntersScans"
     versionCode = 11
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://readhunters.xyz"
+
+    source {
+        name = "Hunters Scan"
+        lang = "pt-BR"
+        baseUrl = "https://readhunters.xyz"
+    }
 }

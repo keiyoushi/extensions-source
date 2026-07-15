@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -26,14 +27,12 @@ import rx.Observable
 import uy.kohesive.injekt.api.get
 import java.text.Normalizer
 
-class MediocreToons :
+@Source
+abstract class MediocreToons :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Mediocre Toons"
-    override val baseUrl = "https://mediocrescan.com"
-    override val lang = "pt-BR"
     override val supportsLatest = true
-    private val apiUrl = "https://back.mediocrescan.com"
+    private val apiUrl = "https://back2.mediocrescan.com"
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 

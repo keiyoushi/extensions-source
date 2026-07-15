@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -36,17 +37,16 @@ import okhttp3.brotli.BrotliInterceptor
 import okio.IOException
 import rx.Observable
 
-abstract class Kagane(
-    final override val lang: String,
-    private val kaganeLangs: List<String> = listOf(lang),
-) : HttpSource(),
+@Source
+abstract class Kagane :
+    HttpSource(),
     ConfigurableSource {
 
-    override val name = "Kagane"
+    private val kaganeLangs: List<String>
+        get() = if (lang == "zh") listOf("zh-Hans", "zh-Hant") else listOf(lang)
 
-    private val domain = "kagane.to"
-    private val apiUrl = "https://yuzuki.$domain"
-    override val baseUrl = "https://$domain"
+    private val domain get() = baseUrl.removePrefix("https://")
+    private val apiUrl get() = "https://yuzuki.$domain"
 
     override val supportsLatest = true
 
@@ -68,7 +68,11 @@ abstract class Kagane(
             return chain.proceed(request)
         }
 
-        val chapterId = url.pathSegments[4]
+        val chapterId = if (url.pathSegments[4] == "datasaver") {
+            url.pathSegments[5]
+        } else {
+            url.pathSegments[4]
+        }
 
         var response = chain.proceed(
             request.newBuilder()
@@ -373,10 +377,12 @@ abstract class Kagane(
 
         val pages = pageList.map { page ->
             val pageUrl = "$cacheUrl/api/v2/books/page".toHttpUrl().newBuilder().apply {
+                if (preferences.dataSaver) {
+                    addPathSegment("datasaver")
+                }
                 addPathSegment(chapterId)
                 addPathSegment("${page.pageUuid}.${page.ext ?: "jxl"}")
                 addQueryParameter("token", accessToken)
-                addQueryParameter("is_datasaver", preferences.dataSaver.toString())
             }.build().toString()
 
             Page(page.pageNumber, url = pageUrl, imageUrl = pageUrl)
@@ -412,10 +418,9 @@ abstract class Kagane(
     private fun getChallengeResponse(chapterId: String): ChallengeDto {
         val integrityToken = getIntegrityToken()
 
-        val challengeUrl =
-            "$apiUrl/api/v2/books/$chapterId".toHttpUrl().newBuilder()
-                .addQueryParameter("is_datasaver", preferences.dataSaver.toString())
-                .build()
+        val challengeUrl = "$apiUrl/api/v2/books/$chapterId".toHttpUrl().newBuilder()
+            .addQueryParameter("is_datasaver", preferences.dataSaver.toString())
+            .build()
 
         val challengeBody = "{}".toRequestBody("application/json".toMediaType())
 

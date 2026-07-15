@@ -4,20 +4,17 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Bloomscans :
-    MangaThemesia(
-        "Bloom Scans",
-        "https://bloomscans.com",
-        "es",
-        mangaUrlDirectory = "/series",
-        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("es")),
-    ) {
+@Source
+abstract class Bloomscans : MangaThemesia() {
+    override val mangaUrlDirectory = "/series"
+    override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("es"))
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty() && filters.isEmpty()) {
@@ -39,14 +36,18 @@ class Bloomscans :
 
     override fun chapterListSelector() = "#lrs-native-chapterlist li"
 
+    private val imagesRegex = Regex(""""images":\[([^\]]+)]""")
+
     override fun pageListParse(document: Document): List<Page> {
-        // The site protects /reader-image/ with a "Bloom Reader Guard" cookie that is only
-        // issued when the reader-bootstrap script is fetched. Without it, images return 403.
-        document.selectFirst("script[data-brg-bootstrap][src]")?.absUrl("src")?.let { bootstrapUrl ->
-            runCatching {
-                client.newCall(GET(bootstrapUrl, headers)).execute().close()
-            }
-        }
-        return super.pageListParse(document)
+        val script = document.selectFirst("script:containsData(ts_reader.run)")
+            ?: return emptyList()
+
+        val match = imagesRegex.find(script.data()) ?: return emptyList()
+
+        val imagePaths = match.groupValues[1]
+            .split(",")
+            .map { it.trim().removeSurrounding("\"") }
+
+        return imagePaths.mapIndexed { idx, url -> Page(idx, imageUrl = baseUrl + url) }
     }
 }

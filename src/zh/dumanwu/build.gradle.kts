@@ -1,13 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Dumanwu"
-    className = "Dumanwu"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mmlook"
-    baseUrl = "https://m.dumanwu1.com"
+
+    source {
+        name = "读漫屋"
+        lang = "zh"
+        baseUrl = "https://m.dumanwu1.com"
+    }
 }

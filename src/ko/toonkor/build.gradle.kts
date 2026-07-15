@@ -1,11 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Toonkor"
-    className = "Toonkor"
-    versionCode = 6
-    contentWarning = ContentWarning.NSFW
+    versionCode = 7
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
+
+    source {
+        lang = "ko"
+        baseUrl {
+            custom("https://tkor131.com")
+        }
+    }
 }

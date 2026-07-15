@@ -30,6 +30,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.CacheControl
@@ -42,13 +43,24 @@ import okhttp3.Response
 import rx.Observable
 import java.util.Date
 
-abstract class MangaDex(final override val lang: String, private val dexLang: String = lang) :
-    HttpSource(),
+@Source
+class MangaDex(
+    override val name: String,
+    override val lang: String,
+    override val baseUrl: String,
+    override val id: Long,
+) : HttpSource(),
     ConfigurableSource {
 
-    override val name = MangaDexIntl.MANGADEX_NAME
-
-    override val baseUrl = "https://mangadex.org"
+    private val dexLang: String
+        get() = when (lang) {
+            "zh-Hans" -> "zh"
+            "zh-Hant" -> "zh-hk"
+            "fil" -> "tl"
+            "pt-BR" -> "pt-br"
+            "es-419" -> "es-la"
+            else -> lang
+        }
 
     override val supportsLatest = true
 

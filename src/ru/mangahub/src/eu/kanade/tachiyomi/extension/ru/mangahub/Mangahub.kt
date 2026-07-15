@@ -1,10 +1,6 @@
 package eu.kanade.tachiyomi.extension.ru.mangahub
 
-import android.widget.Toast
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,8 +8,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -25,28 +21,10 @@ import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Mangahub :
-    HttpSource(),
-    ConfigurableSource {
-
-    override val name = "Mangahub"
-
-    override val lang = "ru"
+@Source
+abstract class Mangahub : HttpSource() {
 
     override val supportsLatest = true
-
-    private val preferences by getPreferencesLazy {
-        getString(DOMAIN_OVERRIDE, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != DOMAIN_DEFAULT) {
-                edit()
-                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
-                    .putString(DOMAIN_OVERRIDE, DOMAIN_DEFAULT)
-                    .apply()
-            }
-        }
-    }
-
-    override val baseUrl = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::confirmAgeInterceptor)
@@ -181,45 +159,10 @@ class Mangahub :
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = DOMAIN_PREF
-            title = "Домен"
-            summary = "$baseUrl\n\nПо умолчанию: $DOMAIN_DEFAULT"
-            setDefaultValue(DOMAIN_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
-                val url = newValue.toString()
-                if (!url.matches(URL_REGEX)) {
-                    Toast.makeText(screen.context, DOMAIN_MISMATCH_1, Toast.LENGTH_LONG).show()
-                    return@setOnPreferenceChangeListener false
-                }
-                if (url.endsWith("/")) {
-                    Toast.makeText(screen.context, DOMAIN_MISMATCH_2, Toast.LENGTH_LONG).show()
-                    return@setOnPreferenceChangeListener false
-                }
-                if (url.length !in 12..255) {
-                    Toast.makeText(screen.context, DOMAIN_MISMATCH_3, Toast.LENGTH_LONG).show()
-                    return@setOnPreferenceChangeListener false
-                }
-                Toast.makeText(screen.context, DOMAIN_RESTART_MESSAGE, Toast.LENGTH_LONG).show()
-                this.summary = "$newValue\n\nПо умолчанию: $DOMAIN_DEFAULT"
-                true
-            }
-        }.let(screen::addPreference)
-    }
-
     companion object {
         private val chapterRegex = Regex("""(Глава\s)((\d|\.)+)""")
         private val dateFormat by lazy {
             SimpleDateFormat("dd.MM.yyyy", Locale.US)
         }
-        private const val DOMAIN_DEFAULT = "https://mangahub.ru"
-        private const val DOMAIN_PREF = "defaultBaseUrl"
-        private const val DOMAIN_OVERRIDE = "overrideBaseUrl"
-        private const val DOMAIN_RESTART_MESSAGE = "Для смены домена необходимо перезапустить приложение с полной остановкой."
-        private const val DOMAIN_MISMATCH_1 = "Домен должен начинаться с https:// или http://."
-        private const val DOMAIN_MISMATCH_2 = "Домен не должен заканчиваться символом /."
-        private const val DOMAIN_MISMATCH_3 = "Домен не может быть меньше 12 символов. И не больше 255."
-        private val URL_REGEX = Regex("^https?://.+")
     }
 }

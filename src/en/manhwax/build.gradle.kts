@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Manhwax"
-    className = "Manhwax"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://manhwax.top"
+
+    source {
+        lang = "en"
+        baseUrl = "https://manhwax.top"
+    }
 }

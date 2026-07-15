@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -30,11 +31,10 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-class Manwa :
+@Source
+abstract class Manwa :
     HttpSource(),
     ConfigurableSource {
-    override val name: String = "漫蛙"
-    override val lang: String = "zh"
     override val supportsLatest: Boolean = true
     private val preferences: SharedPreferences = getPreferences()
     override val baseUrl: String = getTargetUrl()

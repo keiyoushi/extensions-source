@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
@@ -19,19 +20,14 @@ import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
-class SunshineButterflyScans : HttpSource() {
+@Source
+abstract class SunshineButterflyScans : HttpSource() {
 
-    override val name = "Sunshine Butterfly Scans"
-
-    override val baseUrl = "https://wings.sbs"
     private val cdnUrl = "$baseUrl/images/projcoverjpeg/"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 
     // Madara -> custom theme
-    override val versionId = 2
 
     override val client = network.client.newBuilder()
         .rateLimit(2)

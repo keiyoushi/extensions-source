@@ -1,12 +1,17 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Azuretoons"
-    className = "Azuretoons"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
-    baseUrl = "https://azuretoons.com"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://azuretoons.com"
+    }
 }

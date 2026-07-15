@@ -1,13 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Buon Dua"
-    className = "BuonDua"
     versionCode = 10
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "all"
+        baseUrl = "https://buondua.com"
+    }
 }
 
 dependencies {

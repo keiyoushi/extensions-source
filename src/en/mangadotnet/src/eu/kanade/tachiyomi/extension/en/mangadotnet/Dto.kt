@@ -26,6 +26,7 @@ class MangaList(
     val mangaList: List<BrowseManga>? = emptyList(),
     private val pagination: Pagination? = null,
     val allGenres: List<String> = emptyList(),
+    val allTags: List<TagCategory> = emptyList(),
 ) {
     fun hasNextPage() = when {
         pagination?.current != null && pagination.total != null -> pagination.current < pagination.total
@@ -52,7 +53,9 @@ class ViewAllData(
 
 @Serializable
 class BrowseManga(
-    private val id: Int,
+    @SerialName("manga_id")
+    @JsonNames("id")
+    val id: Int,
     private val title: String,
     private val photo: String? = null,
     @SerialName("is_blurworthy")
@@ -81,6 +84,22 @@ class BrowseManga(
                 }
             }
         }
+    }
+}
+
+@Serializable
+class BookmarksData(
+    val entries: List<BrowseManga> = emptyList(),
+    val total: Int? = null,
+    val page: Int? = null,
+    @SerialName("per_page")
+    val perPage: Int? = null,
+) {
+    fun hasNextPage(): Boolean {
+        val p = page ?: 1
+        val pp = perPage ?: 39
+        val t = total ?: 0
+        return p * pp < t
     }
 }
 
@@ -120,6 +139,7 @@ class Manga(
     private val id: Int,
     private val title: String,
     private val genres: List<String> = emptyList(),
+    private val tags: List<TagCategory> = emptyList(),
     private val description: String? = null,
     private val photo: String? = null,
     private val hiatus: String? = null,
@@ -162,7 +182,7 @@ class Manga(
         private val listRegex = Regex("\n\n(-|•|\\d+\\.)")
     }
 
-    fun toSManga(baseUrl: String) = SManga.create().apply {
+    fun toSManga(baseUrl: String, showTags: Boolean = true) = SManga.create().apply {
         url = id.toString()
         title = this@Manga.title
         thumbnail_url = photo?.let {
@@ -187,6 +207,12 @@ class Manga(
                 "CN" -> add("Manhua")
             }
             this@Manga.genres.forEach { add(it.trim()) }
+            if (showTags) {
+                this@Manga.tags.flatMap { it.tags }
+                    .map { it.name.trim() }
+                    .sortedBy { it.lowercase() }
+                    .forEach { add(it) }
+            }
         }.joinToString()
         status = when {
             "One Shot" in this@Manga.genres -> SManga.COMPLETED
@@ -297,6 +323,7 @@ class Volume(
     @SerialName("date_added")
     val date: String? = null,
     val source: String = "user",
+    val language: String? = null,
 )
 
 @Serializable
@@ -321,3 +348,24 @@ class Images(
         val url: String,
     )
 }
+
+@Serializable
+class TagCategory(
+    val category: String,
+    @SerialName("is_adult")
+    val isAdult: Boolean = false,
+    val tags: List<TagItem> = emptyList(),
+)
+
+@Serializable
+class TagItem(
+    val name: String,
+    val weight: String? = null,
+    @SerialName("is_adult")
+    val isAdult: Boolean = false,
+)
+
+@Serializable
+class ForYouResponse(
+    val items: List<BrowseManga> = emptyList(),
+)

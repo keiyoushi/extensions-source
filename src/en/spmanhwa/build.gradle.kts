@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Spmanhwa"
-    className = "Spmanhwa"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://spmanhwa.online"
+
+    source {
+        lang = "en"
+        baseUrl = "https://spmanhwa.online"
+    }
 }

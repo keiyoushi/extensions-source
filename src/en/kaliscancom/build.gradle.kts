@@ -1,13 +1,26 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "KaliScan"
-    className = "KaliScanCom"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madtheme"
-    baseUrl = "https://kaliscan.com"
+
+    source {
+        lang = "en"
+        baseUrl {
+            mirrors(
+                "https://kaliscan.com",
+                "https://kaliscan.me",
+                "https://kaliscan.io",
+                "https://mgjinx.com",
+            )
+        }
+        id = 7660637864742395387L
+    }
 }

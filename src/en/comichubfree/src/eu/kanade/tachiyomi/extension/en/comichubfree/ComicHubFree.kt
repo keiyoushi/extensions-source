@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -16,14 +17,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ComicHubFree : HttpSource() {
+@Source
+abstract class ComicHubFree : HttpSource() {
     private val dateFormat = SimpleDateFormat("d-MMM-yyyy", Locale.getDefault())
-
-    override val baseUrl = "https://comichubfree.com"
-
-    override val lang = "en"
-
-    override val name = "ComicHubFree"
 
     override val supportsLatest = true
 

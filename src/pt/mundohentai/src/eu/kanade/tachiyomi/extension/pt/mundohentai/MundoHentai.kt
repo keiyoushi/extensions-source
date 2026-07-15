@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -19,17 +20,10 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import kotlin.time.Duration.Companion.seconds
 
-class MundoHentai : HttpSource() {
-
-    override val name = "Mundo Hentai"
-
-    override val baseUrl = "https://mundohentaioficial.com"
-
-    override val lang = "pt-BR"
+@Source
+abstract class MundoHentai : HttpSource() {
 
     override val supportsLatest = false
-
-    override val versionId: Int = 2
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(1, 2.seconds)

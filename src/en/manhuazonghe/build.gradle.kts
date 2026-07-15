@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Manhua Zonghe"
-    className = "ManhuaZonghe"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://www.manhuazonghe.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://www.manhuazonghe.com"
+    }
 }

@@ -1,13 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Tapas"
-    className = "Tapastic"
     versionCode = 24
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://tapas.io"
+        versionId = 2
+    }
 }
 
 dependencies {

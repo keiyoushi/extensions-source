@@ -1,18 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
-    name = "CosmicScans.id"
-    className = "CosmicScansID"
-    versionCode = 22
-    contentWarning = ContentWarning.SAFE
+    name = "CosmicScans"
+    versionCode = 55
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
-    theme = "mangathemesia"
-    baseUrl = "https://lc1.cosmicscans.to"
-}
 
-dependencies {
-
-    implementation(project(":lib:randomua"))
+    source {
+        lang = "id"
+        baseUrl = "https://01.cosmicscans.to"
+        id = 6559481336553833282L
+    }
 }

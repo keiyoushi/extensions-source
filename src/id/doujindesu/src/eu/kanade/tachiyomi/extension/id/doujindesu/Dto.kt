@@ -6,9 +6,14 @@ import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
+import org.jsoup.parser.Parser
 import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
-val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
+    timeZone = TimeZone.getTimeZone("UTC")
+}
 
 @Serializable
 class TermsResult(
@@ -22,42 +27,46 @@ class Term(
 
 @Serializable
 class TaxonomyMangas(
-    val mangaList: List<MangaItem>,
+    @SerialName("manga_list") val mangaList: List<MangaItem>,
     val pagination: Pagination,
 )
 
 @Serializable
 class Pagination(
     val page: Int,
-    val totalPages: Int,
+    @SerialName("total_pages") val totalPages: Int,
 )
 
 @Serializable
 class MangaItem(
-    val title: String,
+    private val title: String,
     val slug: String,
-    val description: String?,
-    val author: String?,
-    val status: String,
-    val type: String,
+    private val description: String?,
+    private val author: String?,
+    private val status: String,
+    private val type: String,
     val chapters: List<Chapter>,
-    @SerialName("created_at") val createdAt: String,
-    @SerialName("alt_titles") val altTitles: String?,
-    @SerialName("term_list") val termList: String? = null,
-    @SerialName("cover_url") val coverUrl: String,
-
+    @SerialName("created_at") private val createdAt: String,
+    @SerialName("alt_titles") private val altTitles: String?,
+    @SerialName("term_list") private val termList: String? = null,
+    @SerialName("cover_url") private val coverUrl: String,
 ) {
-    fun toSManga(): SManga = SManga.create().apply {
-        url = slug
-        title = this@MangaItem.title
-        thumbnail_url = coverUrl
-        author = this@MangaItem.author
-        status = when (this@MangaItem.status.lowercase()) {
-            "ongoing", "publishing" -> SManga.ONGOING
-            "completed", "finished" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+    fun isCompleted(): Boolean = status.lowercase() in listOf("completed", "finished")
 
+    fun List<String>?.orUnknown(): String = this
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() && !it.equals("N/A", true) }
+        ?.takeIf { it.isNotEmpty() }
+        ?.joinToString()
+        ?: "Tidak Diketahui"
+
+    fun List<String>?.orNull(): String? = this
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() && !it.equals("N/A", true) }
+        ?.takeIf { it.isNotEmpty() }
+        ?.joinToString()
+
+    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
         val termMap = mutableMapOf<String, MutableList<String>>()
         termList?.split("|")?.forEach {
             val parts = it.split(":")
@@ -66,46 +75,150 @@ class MangaItem(
             }
         }
 
-        description = buildString {
-            this@MangaItem.description?.cleanHtml()?.let {
-                append(it.cleanHtml()) // clean raw escape then remove tags
-                append("\n\n")
+        val mangaAuthor = this@MangaItem.author
+            ?.takeIf { it.isNotBlank() && !it.equals("N/A", ignoreCase = true) }
+            ?: listOf("author", "artist", "author_artist", "creator")
+                .firstNotNullOfOrNull { key ->
+                    termMap[key]
+                        ?.orNull()
+                }
+            ?: termMap["group"].orNull()
+
+        url = "/manga/$slug/"
+        title = this@MangaItem.title
+        thumbnail_url = if (coverUrl.startsWith("/")) baseUrl + coverUrl else coverUrl
+        author = mangaAuthor
+
+        status = when {
+            this@MangaItem.status.lowercase() in listOf("ongoing", "publishing") -> SManga.ONGOING
+            isCompleted() -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+
+        val finalDescription = buildString {
+            val cleanDesc = this@MangaItem.description
+                ?.takeIf { it.isNotBlank() }
+                ?.let { desc ->
+                    val document = Jsoup.parseBodyFragment(Parser.unescapeEntities(desc, false))
+                    val root = document.selectFirst(".rich-text-content") ?: document.body()
+
+                    val html = root.outerHtml()
+                        .replace(textRegex, "%%BR%%")
+
+                    val text = Jsoup.parse(html).text()
+
+                    val lines = mutableListOf<String>()
+
+                    for (line in text.split("%%BR%%")) {
+                        var cleanLine = line
+                            .replace(whitespaceRegex, " ")
+                            .trim()
+
+                        if (cleanLine.isBlank()) continue
+
+                        val lower = cleanLine.lowercase()
+
+                        val downloadIndex = listOf(
+                            lower.indexOf("download batch"),
+                            lower.indexOf("download volume"),
+                        ).filter { it >= 0 }
+                            .minOrNull()
+
+                        if (downloadIndex != null) {
+                            cleanLine = cleanLine.substring(0, downloadIndex).trim()
+                        }
+
+                        if (cleanLine.isNotBlank()) {
+                            lines += cleanLine
+                                .replaceFirst(synopsisRegex, "")
+                                .trim()
+                        }
+
+                        if (downloadIndex != null) {
+                            break
+                        }
+                    }
+
+                    lines
+                        .filter { it.isNotBlank() }
+                        .takeIf { it.isNotEmpty() }
+                }
+
+            if (cleanDesc != null) {
+                val isChapterList = cleanDesc.first().matches(chapterRegex)
+
+                append("\n\n**${if (isChapterList) "Daftar Chapter" else "Sinopsis"}:**\n")
+                append(
+                    cleanDesc.joinToString(
+                        if (isChapterList) "\n" else "\n\n",
+                    ),
+                )
+            } else {
+                append("\n\nTidak ada deskripsi yang tersedia bosque")
             }
-            append("Tipe: ${this@MangaItem.type.replaceFirstChar { it.uppercase() }}\n")
-            termMap["group"]?.let { append("Group: ${it.joinToString()}\n") }
-            termMap["character"]?.let { append("Karakter: ${it.joinToString()}\n") }
-            termMap["series"]?.let { append("Seri: ${it.joinToString()}\n") }
-            this@MangaItem.altTitles?.takeIf { it.isNotBlank() }?.let {
-                append("Judul Alternatif: $it\n")
+            append("\n\n")
+
+            val isManhwa =
+                this@MangaItem.type.equals("manhwa", ignoreCase = true) ||
+                    termMap["series"]?.any { it.equals("Manhwa", ignoreCase = true) } == true
+
+            if (!isManhwa) {
+                append("**Tipe:** ${this@MangaItem.type.replaceFirstChar { it.uppercase() }}\n")
+                append("**Group:** ${termMap["group"].orUnknown()}\n")
+                append("**Karakter:** ${termMap["character"].orUnknown()}\n")
+            }
+            termMap["series"]?.let {
+                append("**Seri:** ${it.joinToString()}\n")
+            }
+            this@MangaItem.altTitles?.takeIf { it.isNotBlank() }?.let { alt ->
+                val formattedAlts = alt.split("|", ",")
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                    .joinToString()
+
+                append("**Judul Alternatif:** $formattedAlts")
             }
         }.trim()
 
-        genre = termMap["genre"]?.joinToString()
-    }
+        description = finalDescription
 
-    fun String.cleanHtml(): String = Jsoup.parse(this).text().trim()
+        genre = termMap["genre"]
+            ?.sortedBy { it.lowercase() }
+            ?.joinToString { it.toTitleCase() }
+    }
 }
+
+val synopsisRegex = Regex("""(?i)^\s*(?:sinopsis|synopsis)\s*:?\s*""")
+val whitespaceRegex = Regex("\\s+")
+val textRegex = Regex("(?i)<br\\s*/?>")
+val chapterRegex = Regex("""^\d+(?:-\d+)?\.\s*.+$""")
+
+private fun String.toTitleCase(): String = lowercase()
+    .split(whitespaceRegex)
+    .joinToString(" ") {
+        it.replaceFirstChar { c -> c.uppercase() }
+    }
 
 @Serializable
 class Chapter(
-    val id: String,
-    @SerialName("chapter_number") val chapterNumber: Float,
-    @SerialName("created_at") val createdAt: String,
-    val title: String? = null,
+    private val id: String,
+    @SerialName("chapter_number") private val chapterNumber: Float,
+    @SerialName("created_at") private val createdAt: String,
+    private val title: String? = null,
 ) {
-    fun toSChapter(): SChapter = SChapter.create().apply {
+    fun toSChapter(isLast: Boolean = false): SChapter = SChapter.create().apply {
         url = id
-        name = "Chapter ${chapterNumber.format()}"
+        name = "Chapter ${chapterNumber.format()}${if (isLast) " END" else ""}"
         chapter_number = chapterNumber
         date_upload = dateFormat.tryParse(createdAt)
     }
 
-    private fun Float.format(): String = if (this % 1f == 0f) toInt().toString() else toString()
+    private fun Float.format(): String = toString().removeSuffix(".0")
 }
 
 @Serializable
 class PageList(
-    @SerialName("content_urls") val contentUrls: List<String>,
+    @SerialName("content_urls") private val contentUrls: List<String>,
 ) {
     val pages: List<String>
         get() = contentUrls.map { page ->

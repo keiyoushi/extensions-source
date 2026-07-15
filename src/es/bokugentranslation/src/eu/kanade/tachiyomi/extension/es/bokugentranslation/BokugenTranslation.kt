@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.bokugentranslation
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -8,13 +9,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class BokugenTranslation :
-    MangaThemesia(
-        "BokugenTranslation",
-        "https://bokugents.com",
-        "es",
-        dateFormat = SimpleDateFormat("dd MMMM, yyyy", Locale("en")),
-    ) {
+@Source
+abstract class BokugenTranslation : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("dd MMMM, yyyy", Locale("en"))
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val client: OkHttpClient = super.client.newBuilder()

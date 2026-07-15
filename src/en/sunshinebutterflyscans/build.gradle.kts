@@ -1,13 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Sunshine Butterfly Scans"
-    className = "SunshineButterflyScans"
     versionCode = 39
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://wings.sbs"
+        versionId = 2
+    }
 }
 
 dependencies {

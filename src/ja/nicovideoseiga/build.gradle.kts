@@ -1,11 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Nicovideo Seiga"
-    className = "NicovideoSeiga"
-    versionCode = 8
+    versionCode = 9
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://sp.manga.nicovideo.jp"
+        versionId = 2
+    }
 }

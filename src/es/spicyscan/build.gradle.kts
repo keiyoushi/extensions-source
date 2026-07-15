@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Spicy Scan"
-    className = "SpicyScan"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "spicytheme"
-    baseUrl = "https://spicyseries.com"
+
+    source {
+        lang = "es"
+        baseUrl = "https://spicyseries.com"
+    }
 }

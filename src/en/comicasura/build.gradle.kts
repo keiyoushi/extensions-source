@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Comic Asura"
-    className = "ComicAsura"
     versionCode = 2
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://comicasura.net"
+
+    source {
+        lang = "en"
+        baseUrl = "https://comicasura.net"
+    }
 }

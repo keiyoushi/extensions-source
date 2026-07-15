@@ -8,8 +8,10 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.toJsonRequestBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -17,17 +19,10 @@ import okhttp3.Request
 import okhttp3.Response
 import kotlin.time.Duration.Companion.seconds
 
-class ArgosComics : HttpSource() {
-
-    override val name: String = "Argos Comics"
-
-    override val baseUrl: String = "https://aniargos.com"
-
-    override val lang: String = "pt-BR"
+@Source
+abstract class ArgosComics : HttpSource() {
 
     override val supportsLatest: Boolean = true
-
-    override val versionId: Int = 2
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3, 2.seconds)
@@ -115,16 +110,20 @@ class ArgosComics : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        if (response.request.url.encodedPath == "/login") error("Login to read")
-        return response.extractNextJs<PagesDto>()!!.toPageList()
+        if (response.request.url.encodedPath == "/login") error("Acesse sua conta")
+
+        val body = response.body.string()
+        val dto = body.extractNextJsRsc<MangaDetailsDto>()
+        if (dto?.isUpcoming == true) error("Capítulo em desenvolvimento")
+        return body.extractNextJsRsc<PagesDto>()!!.toPageList()
     }
 
     override fun imageUrlParse(response: Response) = ""
 
     companion object {
-        private const val SEARCH_TOKEN = "406369e6483a4fe640a38cebf46ca5ea2385392f8d"
-        private const val CHAPTERS_TOKEN = "6075c7373783e0d2488372dc7fcb9ffe1470bc41d2"
-        private const val DETAILS_TOKEN = "60bd903bddc3d9d07f2b58fe32f0238afd74e492d6"
-        private const val PAGES_TOKEN = "605aecabcce97cec193f09ebe5fe3a9ae46e432ea2"
+        private const val SEARCH_TOKEN = "40d9f16929718dd0e02ec0bcdc2393de860707fa79"
+        private const val CHAPTERS_TOKEN = "607bcd9f90d5db5edaa2cf1aff7a002b5b14ead30a"
+        private const val DETAILS_TOKEN = "60d532a2a6a7a0ff42de5f69dcdf2db5860a2f76b0"
+        private const val PAGES_TOKEN = "60390ae612bb67d3d0614b47c7fa396fa4201aa323"
     }
 }

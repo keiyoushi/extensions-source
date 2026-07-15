@@ -1,11 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "VinaHentai"
-    className = "VinaHentai"
-    versionCode = 10
+    versionCode = 11
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "vi"
+        baseUrl {
+            custom("https://vinahentai.club")
+        }
+    }
 }

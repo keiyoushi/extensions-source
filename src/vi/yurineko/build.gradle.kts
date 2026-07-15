@@ -1,11 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "YuriNeko"
-    className = "YuriNeko"
     versionCode = 6
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
+
+    source {
+        lang = "vi"
+        baseUrl = "https://yurinekoz.com"
+        id = 4413681066613655890L
+    }
 }

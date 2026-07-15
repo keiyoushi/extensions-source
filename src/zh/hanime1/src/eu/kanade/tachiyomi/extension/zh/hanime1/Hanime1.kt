@@ -8,23 +8,69 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
-class Hanime1 : HttpSource() {
-    override val baseUrl: String
-        get() = "https://hanimeone.me"
-    override val lang: String
-        get() = "zh"
-    override val name: String
-        get() = "Hanime1.me"
-    override val supportsLatest: Boolean
-        get() = true
+@Source
+abstract class Hanime1 : HttpSource() {
+    override val supportsLatest: Boolean get() = true
 
     private val comicHomepage = "$baseUrl/comics"
+
+    override fun popularMangaRequest(page: Int) = GET(comicHomepage, headers)
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("h3:containsOwn(發燒漫畫) ~ div.comic-rows-videos-div")
+            .map { comicDivToManga(it) }
+        return MangasPage(mangas, false)
+    }
+
+    override fun latestUpdatesRequest(page: Int) = GET("$comicHomepage?page=$page", headers)
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("h3:containsOwn(最新上傳) ~ div.comic-rows-videos-div")
+            .map { comicDivToManga(it) }
+        val hasNextPage = document.select("ul.pagination a[rel=next]").isNotEmpty()
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val searchUrl = comicHomepage.toHttpUrl().newBuilder()
+            .addPathSegment("search")
+            .addQueryParameter("query", query)
+            .addQueryParameter("page", "$page")
+
+        filters.firstInstanceOrNull<SortFilter>()?.selected?.let {
+            searchUrl.addQueryParameter("sort", it)
+        }
+        return GET(searchUrl.build(), headers)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("div#comics-search-tag-top-row + div div.comic-rows-videos-div")
+            .map { comicDivToManga(it) }
+        val hasNextPage = document.select("ul.pagination a[rel=next]").isNotEmpty()
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        val brief = document.select("h3.title.comics-metadata-top-row").first()?.parent()
+        return SManga.create().apply {
+            brief?.select(".title.comics-metadata-top-row")?.first()?.text()?.let { title = it }
+            thumbnail_url =
+                brief?.parent()?.select("div.col-md-4 img")?.attr("data-srcset")?.extraSrc()
+            author = selectInfo("作者：", brief) ?: selectInfo("社團：", brief)
+            genre = selectInfo("分類：", brief)
+        }
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val requestUrl = response.request.url.toString()
@@ -54,32 +100,6 @@ class Hanime1 : HttpSource() {
         return chapterList
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("h3:containsOwn(最新上傳) ~ div.comic-rows-videos-div")
-            .map { comicDivToManga(it) }
-        val hasNextPage = document.select("ul.pagination a[rel=next]").isNotEmpty()
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    override fun latestUpdatesRequest(page: Int) = GET("$comicHomepage?page=$page")
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        val brief = document.select("h3.title.comics-metadata-top-row").first()?.parent()
-        return SManga.create().apply {
-            brief?.select(".title.comics-metadata-top-row")?.first()?.text()?.let { title = it }
-            thumbnail_url =
-                brief?.parent()?.select("div.col-md-4 img")?.attr("data-srcset")?.extraSrc()
-            author = selectInfo("作者：", brief) ?: selectInfo("社團：", brief)
-            genre = selectInfo("分類：", brief)
-        }
-    }
-
-    private fun selectInfo(key: String, brief: Element?): String? = brief?.select(":containsOwn($key)")?.select("div.no-select")?.text()
-
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val currentImage = document.select("img#current-page-image")
@@ -91,33 +111,13 @@ class Hanime1 : HttpSource() {
         }
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("h3:containsOwn(發燒漫畫) ~ div.comic-rows-videos-div")
-            .map { comicDivToManga(it) }
-        return MangasPage(mangas, false)
-    }
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun popularMangaRequest(page: Int) = GET(comicHomepage)
+    override fun getFilterList(): FilterList = FilterList(
+        SortFilter(),
+    )
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("div#comics-search-tag-top-row + div div.comic-rows-videos-div")
-            .map { comicDivToManga(it) }
-        val hasNextPage = document.select("ul.pagination a[rel=next]").isNotEmpty()
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val searchUrl = comicHomepage.toHttpUrl().newBuilder()
-            .addPathSegment("search")
-            .addQueryParameter("query", query)
-            .addQueryParameter("page", "$page")
-        filters.firstInstanceOrNull<SortFilter>()?.selected?.let {
-            searchUrl.addQueryParameter("sort", it)
-        }
-        return GET(searchUrl.build())
-    }
+    private fun selectInfo(key: String, brief: Element?): String? = brief?.select(":containsOwn($key)")?.select("div.no-select")?.text()
 
     private fun comicDivToManga(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.select("a").attr("abs:href"))
@@ -126,8 +126,4 @@ class Hanime1 : HttpSource() {
     }
 
     private fun String.extraSrc(): String = split(",").first()
-
-    override fun getFilterList(): FilterList = FilterList(
-        SortFilter(),
-    )
 }

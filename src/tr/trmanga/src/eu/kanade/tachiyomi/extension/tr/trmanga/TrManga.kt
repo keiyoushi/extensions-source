@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -20,13 +21,8 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class TrManga : HttpSource() {
-
-    override val name = "TrManga"
-
-    override val baseUrl = "https://trmanga.com"
-
-    override val lang = "tr"
+@Source
+abstract class TrManga : HttpSource() {
 
     private val dateFormat = SimpleDateFormat("dd MMMM, yy", Locale.ENGLISH)
 

@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonObject
@@ -22,14 +23,12 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class NoyAcg :
+@Source
+abstract class NoyAcg :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "NoyAcg"
-    override val lang = "zh"
     override val supportsLatest = true
-    override val baseUrl = "https://beta.noyteam.online"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         getPreferencesInternal(screen.context).forEach(screen::addPreference)

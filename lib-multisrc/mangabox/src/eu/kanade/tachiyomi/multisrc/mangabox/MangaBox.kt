@@ -6,7 +6,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import androidx.preference.CheckBoxPreference
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangabox.imagesize.ImageSize
 import eu.kanade.tachiyomi.multisrc.mangabox.imagesize.WebpSizeGetter
@@ -44,48 +43,27 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.CountDownLatch
 
-abstract class MangaBox(
-    override val name: String,
-    private val mirrorEntries: Array<String>,
-    override val lang: String,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat(
+abstract class MangaBox :
+    HttpSource(),
+    ConfigurableSource {
+
+    protected open val dateFormat: SimpleDateFormat = SimpleDateFormat(
         "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",
         Locale.ROOT, // Changed to Locale.ROOT as per CONTRIBUTING.md rules
     ).apply {
         timeZone = TimeZone.getTimeZone("UTC")
-    },
-) : HttpSource(),
-    ConfigurableSource {
+    }
 
     override val supportsLatest = true
-
-    override val baseUrl: String get() = mirror
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::mergeImagesInterceptor)
         .addInterceptor(::useAltCdnInterceptor)
         .build()
 
-    private fun SharedPreferences.getMirrorPref(): String = getString(PREF_USE_MIRROR, mirrorEntries[0])!!
-
     private fun SharedPreferences.getMergeImagesPref(): Boolean = getBoolean(PREF_MERGE_IMAGES, false)
 
-    private val preferences: SharedPreferences by getPreferencesLazy {
-        // if current mirror is not in mirrorEntries, set default
-        if (getMirrorPref() !in mirrorEntries.map { "${URL_PREFIX}$it" }) {
-            edit().putString(PREF_USE_MIRROR, "${URL_PREFIX}${mirrorEntries[0]}").apply()
-        }
-    }
-
-    private var mirror = ""
-        get() {
-            if (field.isNotEmpty()) {
-                return field
-            }
-
-            field = preferences.getMirrorPref()
-            return field
-        }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private var mergeImages: Boolean? = null
         get() {
@@ -239,7 +217,7 @@ abstract class MangaBox(
 
     // ============================== Popular ==============================
 
-    open fun popularMangaSelector() = "div.truyen-list > div.list-truyen-item-wrap, div.comic-list > .list-comic-item-wrap"
+    open fun popularMangaSelector() = ":is(div.truyen-list > div.list-truyen-item-wrap, div.comic-list > .list-comic-item-wrap):has(a[data-id])"
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/$popularUrlPath$page", headers)
 
@@ -607,21 +585,6 @@ abstract class MangaBox(
     // ============================= Utilities =============================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = PREF_USE_MIRROR
-            title = "Mirror"
-            entries = mirrorEntries
-            entryValues = mirrorEntries.map { "${URL_PREFIX}$it" }.toTypedArray()
-            setDefaultValue(entryValues[0])
-            summary = "%s"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                // Update values
-                mirror = newValue as String
-                true
-            }
-        }.let(screen::addPreference)
-
         CheckBoxPreference(screen.context).apply {
             key = PREF_MERGE_IMAGES
             title = "Merge Split Images"
@@ -639,7 +602,6 @@ abstract class MangaBox(
     }
 
     companion object {
-        private const val PREF_USE_MIRROR = "pref_use_mirror"
         private const val PREF_MERGE_IMAGES = "pref_merge_images"
         private const val CHAPTER_LIST_TAKE = 1000
         private const val URL_PREFIX = "https://"

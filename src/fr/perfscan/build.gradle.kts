@@ -1,12 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Perf Scan"
-    className = "PerfScan"
     versionCode = 31
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
-    baseUrl = "https://perf-scan.xyz"
+
+    source {
+        lang = "fr"
+        baseUrl = "https://perf-scan.xyz"
+        versionId = 2
+    }
 }

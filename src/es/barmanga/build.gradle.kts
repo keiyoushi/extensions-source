@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "BarManga"
-    className = "BarManga"
     versionCode = 11
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://archiviumbar.com"
+
+    source {
+        lang = "es"
+        baseUrl = "https://archiviumbar.com"
+    }
 }

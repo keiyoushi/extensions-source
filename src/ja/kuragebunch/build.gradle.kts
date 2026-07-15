@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Kurage Bunch"
-    className = "KurageBunch"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "gigaviewer"
-    baseUrl = "https://kuragebunch.com"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://kuragebunch.com"
+    }
 }

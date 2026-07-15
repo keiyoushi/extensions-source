@@ -1,11 +1,10 @@
 package eu.kanade.tachiyomi.extension.fr.lelscanvf
 
 import eu.kanade.tachiyomi.multisrc.fuzzydoodle.FuzzyDoodle
+import keiyoushi.annotation.Source
 
-class LelscanVF : FuzzyDoodle("Lelscan-VF", "https://lelscanfr.com", "fr") {
-
-    // mmrcms -> FuzzyDoodle
-    override val versionId = 2
+@Source
+abstract class LelscanVF : FuzzyDoodle() {
 
     override val latestFromHomePage = true
 }

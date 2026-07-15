@@ -1,11 +1,30 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Naver Comic"
-    className = "NaverComicFactory"
-    versionCode = 7
+    versionCode = 9
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        name = "Naver Webtoon"
+        lang = "ko"
+        baseUrl = "https://comic.naver.com"
+    }
+
+    source {
+        name = "Naver Webtoon Best Challenge"
+        lang = "ko"
+        baseUrl = "https://comic.naver.com"
+    }
+
+    source {
+        name = "Naver Webtoon Challenge"
+        lang = "ko"
+        baseUrl = "https://comic.naver.com"
+    }
 }

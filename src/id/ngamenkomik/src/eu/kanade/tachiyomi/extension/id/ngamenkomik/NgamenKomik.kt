@@ -4,9 +4,11 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.Genre
 import eu.kanade.tachiyomi.multisrc.zeistmanga.Status
 import eu.kanade.tachiyomi.multisrc.zeistmanga.Type
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 
-class NgamenKomik : ZeistManga("NgamenKomik", "https://ngamenkomik05.blogspot.com", "id") {
+@Source
+abstract class NgamenKomik : ZeistManga() {
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()

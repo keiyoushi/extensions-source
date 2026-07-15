@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Metart Hunter"
-    className = "MetartHunter"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "masonry"
-    baseUrl = "https://www.metarthunter.com"
+
+    source {
+        lang = "all"
+        baseUrl = "https://www.metarthunter.com"
+    }
 }

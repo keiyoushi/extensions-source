@@ -1,12 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.pmscans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import keiyoushi.annotation.Source
 
-class Rackus :
-    MangaThemesia(
-        "Rackus",
-        "https://rackusreads.com",
-        "en",
-    ) {
-    override val versionId = 3
-}
+@Source
+abstract class Rackus : MangaThemesia()

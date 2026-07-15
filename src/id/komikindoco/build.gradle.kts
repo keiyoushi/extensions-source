@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "KomikIndo.co"
-    className = "KomikindoCo"
     versionCode = 6
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://komiksin.net"
+
+    source {
+        lang = "id"
+        baseUrl = "https://komiksin.net"
+    }
 }

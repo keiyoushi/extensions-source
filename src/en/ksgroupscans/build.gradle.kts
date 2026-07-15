@@ -1,13 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "KSGroupScans"
-    className = "KSGroupScans"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://ksgroupscans.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://ksgroupscans.com"
+        versionId = 2
+    }
 }

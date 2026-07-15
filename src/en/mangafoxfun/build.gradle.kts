@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "MangaFox.fun"
-    className = "MangaFoxFun"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangahub"
-    baseUrl = "https://mangafox.fun"
+
+    source {
+        lang = "en"
+        baseUrl = "https://mangafox.fun"
+    }
 }

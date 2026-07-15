@@ -1,13 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Traducciones Moonlight"
-    className = "TraduccionesMoonlight"
     versionCode = 46
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "moonlighttl"
-    baseUrl = "https://traduccionesmoonlight.com"
+
+    source {
+        lang = "es"
+        baseUrl = "https://traduccionesmoonlight.com"
+        versionId = 3
+    }
 }

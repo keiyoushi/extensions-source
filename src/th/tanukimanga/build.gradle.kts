@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Tanuki-Manga"
-    className = "TanukiManga"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://www.tanuki-manga.net"
+
+    source {
+        lang = "th"
+        baseUrl = "https://www.tanuki-manga.net"
+    }
 }

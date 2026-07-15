@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -19,17 +20,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class NhentaiClub : HttpSource() {
-
-    override val name = "NhentaiClub"
-
-    override val lang = "vi"
-
-    override val baseUrl = "https://nhentaiclub.space"
+@Source
+abstract class NhentaiClub : HttpSource() {
 
     override val supportsLatest = true
-
-    override val id: Long = 9124366814387777661
 
     override val client = network.client.newBuilder()
         .rateLimit(5)

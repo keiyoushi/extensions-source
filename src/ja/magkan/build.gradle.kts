@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "MagKan"
-    className = "MagKan"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "comiciviewer"
-    baseUrl = "https://kansai.mag-garden.co.jp"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://kansai.mag-garden.co.jp"
+    }
 }

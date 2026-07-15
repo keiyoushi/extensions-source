@@ -2,15 +2,11 @@ package eu.kanade.tachiyomi.extension.id.siimanga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Element
 
-class Siikomik :
-    Madara(
-        "Siikomik",
-        "https://siikomik.net",
-        "id",
-    ) {
-    override val versionId = 3
+@Source
+abstract class Siikomik : Madara() {
 
     override val mangaSubString = "komik"
 

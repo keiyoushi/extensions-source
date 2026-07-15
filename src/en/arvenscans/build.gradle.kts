@@ -1,12 +1,22 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Vortex Scans"
-    className = "VortexScans"
     versionCode = 61
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
-    baseUrl = "https://vortexscans.org"
+
+    source {
+        lang = "en"
+        baseUrl = "https://vortexscans.org"
+    }
+
+    deeplink {
+        host("vortexscans.org")
+        path("/series/..*")
+    }
 }

@@ -1,13 +1,22 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "HipercooL"
-    className = "Hipercool"
-    versionCode = 3
+    versionCode = 55
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
-    theme = "madara"
-    baseUrl = "https://hiper.cool"
+    theme = "hiper"
+
+    source {
+        name = "Hipercool"
+        lang = "pt-BR"
+        baseUrl {
+            custom("https://lerhentais.com")
+        }
+        id = 2379514871370953957
+    }
 }

@@ -1,12 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Manhwa18.net"
-    className = "Manhwa18Net"
     versionCode = 13
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
-    baseUrl = "https://manhwa18.net"
+
+    source {
+        name = "Manhwa18.Net"
+        lang = "en"
+        baseUrl = "https://manhwa18.net"
+        versionId = 2
+    }
 }

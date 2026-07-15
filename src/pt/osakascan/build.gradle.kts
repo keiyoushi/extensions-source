@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Osaka Scan"
-    className = "OsakaScan"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "zeistmanga"
-    baseUrl = "https://www.osakascan.com"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://www.osakascan.com"
+    }
 }

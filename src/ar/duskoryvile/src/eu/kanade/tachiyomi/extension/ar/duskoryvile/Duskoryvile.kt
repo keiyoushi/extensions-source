@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
@@ -25,15 +26,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class Duskoryvile :
+@Source
+abstract class Duskoryvile :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "Duskoryvile"
-
-    override val baseUrl = "https://duskoryvile.com"
-
-    override val lang = "ar"
 
     override val supportsLatest = false
 

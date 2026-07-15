@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
@@ -16,28 +17,15 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class LycanToons : HttpSource() {
-
-    override val name = "Lycan Toons"
-
-    override val baseUrl = "https://lycantoons.com"
-
-    override val lang = "pt-BR"
+@Source
+abstract class LycanToons : HttpSource() {
 
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
         .addInterceptor(WebViewInterceptor(baseUrl, headers["User-Agent"]))
-        .rateLimit(5)
+        .rateLimit(2)
         .build()
-
-    private val rscHeaders by lazy {
-        headers.newBuilder()
-            .add("next-router-state-tree", "%5B%22%22%2C%7B%7D%5D")
-            .add("next-url", "/")
-            .add("RSC", "1")
-            .build()
-    }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -86,7 +74,7 @@ class LycanToons : HttpSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/series/${manga.slug()}", rscHeaders)
+    override fun mangaDetailsRequest(manga: SManga): Request = rscRequest("$baseUrl/series/${manga.slug()}")
 
     override fun mangaDetailsParse(response: Response): SManga = response.extractNextJs<SeriesDto>()!!.toSManga()
 
@@ -94,36 +82,21 @@ class LycanToons : HttpSource() {
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
         val slug = manga.slug()
-        val chapters = mutableListOf<ChapterDto>()
-        var skip = 0
-        var hasNext = true
 
-        while (hasNext) {
-            val batch = client.newCall(chapterPageRequest(slug, skip)).execute()
-                .parseAs<ChapterResponse>()
-                .chapters
+        val response = client.newCall(chapterPageRequest(slug)).execute()
 
-            chapters.addAll(batch)
-
-            if (batch.size < CHAPTER_LIMIT) {
-                hasNext = false
-            } else {
-                skip += CHAPTER_LIMIT
-            }
-        }
-
-        chapters
+        response.extractNextJs<ChapterResponse>()?.capitulos!!
             .map { it.toSChapter(slug) }
             .sortedByDescending { it.chapter_number }
     }
 
-    private fun chapterPageRequest(slug: String, skip: Int): Request = GET("$baseUrl/api/series/$slug/chapters?skip=$skip", headers)
+    private fun chapterPageRequest(slug: String): Request = rscRequest("$baseUrl/series/$slug/1")
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     // =====================Pages========================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", rscHeaders)
+    override fun pageListRequest(chapter: SChapter): Request = rscRequest("$baseUrl${chapter.url}")
 
     override fun pageListParse(response: Response): List<Page> {
         val dto = response.extractNextJs<PageList>()
@@ -138,11 +111,22 @@ class LycanToons : HttpSource() {
 
     private fun metricsRequest(path: String, page: Int): Request = GET("$baseUrl/api/metrics/$path?limit=$PAGE_LIMIT&page=$page", headers)
 
-    private fun SManga.slug(): String = url.substringAfterLast("/")
+    private fun SManga.slug(): String = url.substringBefore("?").substringAfterLast("/")
+
+    private fun String.rscBust() = "$this?_rsc=${List(5) { BASE36.random() }.joinToString("")}"
+
+    private fun getRscHeaders(url: String) = headers.newBuilder()
+        .add("next-router-state-tree", NEXT_ROUTER)
+        .add("next-url", url.removePrefix(baseUrl))
+        .add("RSC", "1")
+        .build()
+
+    private fun rscRequest(url: String) = GET(url.substringBefore("?").rscBust(), getRscHeaders(url))
 
     companion object {
         private const val PAGE_LIMIT = 20
         private const val CHAPTER_LIMIT = 100
-        private val PAGES_REGEX = """"imageUrls":([^]]+])""".toRegex()
+        private const val BASE36 = "0123456789abcdefghijklmnopqrstuvwxyz"
+        private const val NEXT_ROUTER = "%5B%22%22%2C%7B%22children%22%3A%5B%22__PAGE__%22%2C%7B%7D%2Cnull%2Cnull%5D%7D%2Cnull%2Cnull%2Ctrue%5D"
     }
 }

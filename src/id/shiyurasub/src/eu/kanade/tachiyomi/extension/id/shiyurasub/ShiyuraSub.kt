@@ -2,10 +2,12 @@ package eu.kanade.tachiyomi.extension.id.shiyurasub
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.MangasPage
+import keiyoushi.annotation.Source
 import okhttp3.Request
 import okhttp3.Response
 
-class ShiyuraSub : ZeistManga("ShiyuraSub", "https://shiyurasub.blogspot.com", "id") {
+@Source
+abstract class ShiyuraSub : ZeistManga() {
 
     override val hasFilters = true
     override val hasLanguageFilter = false

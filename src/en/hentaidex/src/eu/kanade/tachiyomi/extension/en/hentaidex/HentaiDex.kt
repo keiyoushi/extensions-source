@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.annotation.Source
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -12,13 +13,9 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class HentaiDex :
-    MangaThemesia(
-        "HentaiDex",
-        "https://dexhentai.com",
-        "en",
-        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.US),
-    ) {
+@Source
+abstract class HentaiDex : MangaThemesia() {
+    override val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.US)
     override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).sortedByDescending { it.chapter_number }
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {

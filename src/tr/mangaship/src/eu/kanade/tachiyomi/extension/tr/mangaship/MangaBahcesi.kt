@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -20,13 +21,8 @@ import java.io.IOException
 import java.net.URLEncoder
 import java.util.Calendar
 
-class MangaBahcesi : HttpSource() {
-
-    override val id: Long = 7110025728969951060
-    override val name = "Manga Bahçesi"
-    override val baseUrl = "https://mangabahcesi.com"
-
-    override val lang = "tr"
+@Source
+abstract class MangaBahcesi : HttpSource() {
 
     override val supportsLatest = true
 

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -17,11 +18,8 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class DongmanManhua : HttpSource() {
-    override val name = "Dongman Manhua"
-    override val lang get() = "zh-Hans"
-    override val id get() = 4222375517460530289
-    override val baseUrl = "https://www.dongmanmanhua.cn"
+@Source
+abstract class DongmanManhua : HttpSource() {
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()

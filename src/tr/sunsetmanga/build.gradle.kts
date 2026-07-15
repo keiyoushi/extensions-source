@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Sunset Manga"
-    className = "SunsetManga"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://sunsetmanga.com"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://sunsetmanga.com"
+    }
 }

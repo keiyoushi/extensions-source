@@ -2,14 +2,11 @@ package eu.kanade.tachiyomi.extension.ja.sundaywebevery
 
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Element
 
-class SundayWebEvery :
-    GigaViewer(
-        "Sunday Web Every",
-        "https://www.sunday-webry.com",
-        "ja",
-    ) {
+@Source
+abstract class SundayWebEvery : GigaViewer() {
     override val popularMangaSelector: String = "ul.webry-series-list li a.webry-series-item-link"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {

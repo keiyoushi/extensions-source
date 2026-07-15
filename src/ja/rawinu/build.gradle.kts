@@ -1,15 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "RawINU"
-    className = "RawINU"
     versionCode = 5
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "fmreader"
-    baseUrl = "https://rawinu.com"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://rawinu.com"
+    }
 }
 
 dependencies {

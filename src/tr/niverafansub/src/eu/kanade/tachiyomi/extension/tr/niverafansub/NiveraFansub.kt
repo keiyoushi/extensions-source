@@ -2,17 +2,14 @@ package eu.kanade.tachiyomi.extension.tr.niverafansub
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class NiveraFansub :
-    Madara(
-        "Nivera Fansub",
-        "https://niverafansub.lol",
-        "tr",
-        dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
-    ) {
+@Source
+abstract class NiveraFansub : Madara() {
+    override val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr"))
     override val chapterUrlSelector = "li > a"
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never

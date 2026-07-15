@@ -19,11 +19,7 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-abstract class Gattsu(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class Gattsu : HttpSource() {
 
     override val supportsLatest = true
 

@@ -1,11 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "TaimuMangas"
-    className = "TaimuMangas"
     versionCode = 2
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
+
+    source {
+        name = "Taimu Mangas"
+        lang = "pt-BR"
+        baseUrl = "https://beta.taimumangas.com"
+    }
 }

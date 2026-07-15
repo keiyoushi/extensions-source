@@ -1,15 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Mangas.in"
-    className = "MangasIn"
     versionCode = 8
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mmrcms"
-    baseUrl = "https://m440.in"
+
+    source {
+        lang = "es"
+        baseUrl = "https://m440.in"
+    }
 }
 
 dependencies {

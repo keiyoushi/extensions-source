@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Rage Scans"
-    className = "RageScans"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://ragescans.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://ragescans.com"
+    }
 }

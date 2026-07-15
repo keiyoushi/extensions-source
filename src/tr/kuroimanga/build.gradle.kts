@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Kuroi Manga"
-    className = "KuroiManga"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://www.kuroimanga.mom"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://www.kuroimanga.best"
+    }
 }

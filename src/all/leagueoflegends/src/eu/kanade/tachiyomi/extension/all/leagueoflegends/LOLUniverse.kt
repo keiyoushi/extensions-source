@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Response
@@ -16,13 +17,11 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class LOLUniverse(
-    private val siteLang: String,
-    override val lang: String = siteLang.substring(0, 2),
-) : HttpSource() {
-    override val baseUrl = "$UNIVERSE_URL/$siteLang/comic/"
+@Source
+abstract class LOLUniverse : HttpSource() {
 
-    override val name = "League of Legends"
+    private val siteLang: String
+        get() = baseUrl.substringAfter("leagueoflegends.com/").substringBefore("/comic/")
 
     override val supportsLatest = false
 
@@ -76,9 +75,9 @@ class LOLUniverse(
 
     override fun fetchPageList(chapter: SChapter) = Observable.just(pageCache[chapter.url].orEmpty())!!
 
-    override fun getMangaUrl(manga: SManga) = "$UNIVERSE_URL/$siteLang/comic/${manga.url}"
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
-    override fun getChapterUrl(chapter: SChapter) = "$UNIVERSE_URL/$siteLang/comic/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
 
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 

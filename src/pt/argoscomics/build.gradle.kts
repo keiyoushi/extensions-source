@@ -1,11 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Argos Comics"
-    className = "ArgosComics"
-    versionCode = 55
+    versionCode = 56
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://aniargos.com"
+        versionId = 2
+    }
 }

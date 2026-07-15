@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Arena Scans"
-    className = "ArenaScans"
     versionCode = 0
-    contentWarning = ContentWarning.SAFE
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://arenascan.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://arenascan.com"
+    }
 }

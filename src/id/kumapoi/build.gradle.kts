@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "KumaPoi"
-    className = "KumaPoi"
     versionCode = 4
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://kumapoi.info"
+
+    source {
+        lang = "id"
+        baseUrl = "https://kumapoi.info"
+    }
 }

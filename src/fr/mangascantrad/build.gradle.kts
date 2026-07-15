@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Manga-Scantrad"
-    className = "MangaScantrad"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://manga-scantrad.io"
+
+    source {
+        lang = "fr"
+        baseUrl = "https://manga-scantrad.io"
+    }
 }

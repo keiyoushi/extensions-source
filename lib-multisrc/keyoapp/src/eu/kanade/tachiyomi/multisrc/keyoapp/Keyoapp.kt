@@ -28,11 +28,8 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-abstract class Keyoapp(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String,
-) : HttpSource(),
+abstract class Keyoapp :
+    HttpSource(),
     ConfigurableSource {
 
     protected val preferences: SharedPreferences by getPreferencesLazy()
@@ -209,7 +206,9 @@ abstract class Keyoapp(
         }
 
     // ============================== Details ==============================
-    protected open val descriptionSelector: String = "div:containsOwn(Synopsis) ~ div"
+    protected open val descriptionSelector: String = "#expand_content p"
+    protected open val altNameSelector: String = "div.font-medium:containsOwn(Alternative titles) ~ div span"
+    protected open val altNamePrefix: String = "${intl["alt_names_heading"]} "
     protected open val statusSelector: String = "div:has(span:containsOwn(Status)) ~ div"
     protected open val authorSelector: String = "div:has(span:containsOwn(Author)) ~ div"
     protected open val artistSelector: String = "div:has(span:containsOwn(Artist)) ~ div"
@@ -223,22 +222,33 @@ abstract class Keyoapp(
     open fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("div.grid > h1")!!.text()
         thumbnail_url = document.getImageUrl("div[class*=photoURL]")
-        description = document.selectFirst(descriptionSelector)?.text()
         status = document.selectFirst(statusSelector).parseStatus()
         author = document.selectFirst(authorSelector)?.text()
         artist = document.selectFirst(artistSelector)?.text()
         genre = buildList {
             document.selectFirst(typeSelector)?.text()?.replaceFirstChar {
                 if (it.isLowerCase()) {
-                    it.titlecase(
-                        Locale.ENGLISH,
-                    )
+                    it.titlecase(Locale.ENGLISH)
                 } else {
                     it.toString()
                 }
             }?.let(::add)
             document.select(genreSelector).forEach { add(it.text()) }
         }.joinToString()
+
+        val synopsis = document.selectFirst(descriptionSelector)?.text().orEmpty()
+        val altNames = document.select(altNameSelector)
+            .map { it.text() }
+            .filter { it.isNotEmpty() && it != "No alternative titles." }
+        description = buildString {
+            append(synopsis)
+            if (altNames.isNotEmpty()) {
+                if (isNotEmpty()) append("\n\n")
+                append(altNamePrefix.trim())
+                append("\n")
+                altNames.joinTo(this, "\n") { "- $it" }
+            }
+        }.takeIf { it.isNotEmpty() }
     }
 
     protected fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {

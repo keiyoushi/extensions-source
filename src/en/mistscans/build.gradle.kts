@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Mist Scans"
-    className = "MistScans"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "keyoapp"
-    baseUrl = "https://mistscans.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://mistscans.com"
+    }
 }

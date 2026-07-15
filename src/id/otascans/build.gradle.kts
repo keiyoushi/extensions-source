@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Ota Scans"
-    className = "OtaScans"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://yurilabs.my.id"
+
+    source {
+        lang = "id"
+        baseUrl = "https://yurilabs.my.id"
+    }
 }

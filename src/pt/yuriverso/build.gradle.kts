@@ -1,13 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Yuri on Air"
-    className = "YuriOnAir"
     versionCode = 5
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://yurionair.top"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://yurionair.top"
+        id = 4476506734614164770L
+    }
 }

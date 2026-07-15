@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Manhwa Toon"
-    className = "ManhwaToon"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://www.manhwatoon.me"
+
+    source {
+        lang = "en"
+        baseUrl = "https://www.manhwatoon.me"
+    }
 }

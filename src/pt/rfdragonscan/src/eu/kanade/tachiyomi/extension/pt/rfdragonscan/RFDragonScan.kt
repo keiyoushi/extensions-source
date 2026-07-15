@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.getPreferencesLazy
@@ -28,15 +29,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class RFDragonScan :
+@Source
+abstract class RFDragonScan :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "RF Dragon Scan"
-
-    override val baseUrl = "https://rfdragonscan.net"
-
-    override val lang = "pt-BR"
 
     override val supportsLatest = false
 
@@ -113,7 +109,7 @@ class RFDragonScan :
 
         return POST(
             baseUrl + manga.url,
-            actionHeaders("60bd903bddc3d9d07f2b58fe32f0238afd74e492d6", baseUrl + manga.url, stateTree),
+            actionHeaders("60d532a2a6a7a0ff42de5f69dcdf2db5860a2f76b0", baseUrl + manga.url, stateTree),
             requestBody,
         )
     }
@@ -145,7 +141,7 @@ class RFDragonScan :
 
         return POST(
             baseUrl + manga.url,
-            actionHeaders("6075c7373783e0d2488372dc7fcb9ffe1470bc41d2", baseUrl + manga.url, stateTree),
+            actionHeaders("607bcd9f90d5db5edaa2cf1aff7a002b5b14ead30a", baseUrl + manga.url, stateTree),
             requestBody,
         )
     }
@@ -190,7 +186,7 @@ class RFDragonScan :
 
         return POST(
             baseUrl + chapter.url,
-            actionHeaders("605aecabcce97cec193f09ebe5fe3a9ae46e432ea2", baseUrl + chapter.url, stateTree),
+            actionHeaders("60390ae612bb67d3d0614b47c7fa396fa4201aa323", baseUrl + chapter.url, stateTree),
             requestBody,
         )
     }
@@ -364,9 +360,9 @@ class RFDragonScan :
             val mangaSlug = pathSegments[1]
 
             val actionId = if (firstSegment == "migrate") {
-                "60bd903bddc3d9d07f2b58fe32f0238afd74e492d6"
+                "60d532a2a6a7a0ff42de5f69dcdf2db5860a2f76b0"
             } else {
-                "6075c7373783e0d2488372dc7fcb9ffe1470bc41d2"
+                "607bcd9f90d5db5edaa2cf1aff7a002b5b14ead30a"
             }
 
             val payload = "[\"$mangaId\",\"$mangaSlug\"]"

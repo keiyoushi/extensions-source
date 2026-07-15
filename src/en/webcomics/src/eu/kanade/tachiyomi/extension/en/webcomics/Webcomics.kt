@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.rateLimit
@@ -19,17 +20,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 
-class Webcomics :
+@Source
+abstract class Webcomics :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Webcomics"
-
-    override val baseUrl = "https://webcomicsapp.com"
-
     private val apiUrl = "https://popeye.${baseUrl.substringAfterLast("/")}/api"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 

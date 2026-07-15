@@ -1,15 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Comic Festa"
-    className = "ComicFesta"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "clipstudioreader"
-    baseUrl = "https://comic.iowl.jp"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://comic.iowl.jp"
+    }
 }
 
 dependencies {

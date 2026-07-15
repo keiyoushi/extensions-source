@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
@@ -22,17 +23,10 @@ import java.nio.charset.Charset
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaOni :
+@Source
+abstract class MangaOni :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "MangaOni"
-
-    override val id: Long = 2202687009511923782
-
-    override val baseUrl = "https://manga-oni.com"
-
-    override val lang = "es"
 
     override val supportsLatest = true
 

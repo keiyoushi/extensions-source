@@ -7,6 +7,7 @@ fun getFilters() = FilterList(
     SortFilter(),
     StatusFilter(),
     TypeFilter(),
+    ChapterFilter(),
     GenreFilter(getGenres()),
 )
 
@@ -45,6 +46,26 @@ class TypeFilter :
         1 -> "manga"
         2 -> "manhua"
         3 -> "manhwa"
+        else -> "all"
+    }
+}
+
+class ChapterFilter :
+    Filter.Select<String>(
+        "Số chương",
+        arrayOf(
+            "Tất cả",
+            "1 - 100 chương",
+            "101 - 500 chương",
+            "501 - 1000 chương",
+            "Trên 1000 chương",
+        ),
+    ) {
+    fun toUriPart(): String = when (state) {
+        1 -> "1-100"
+        2 -> "101-500"
+        3 -> "501-1000"
+        4 -> "1001-plus"
         else -> "all"
     }
 }

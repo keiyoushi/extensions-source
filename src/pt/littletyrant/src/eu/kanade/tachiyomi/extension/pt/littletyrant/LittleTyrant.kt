@@ -1,16 +1,18 @@
 package eu.kanade.tachiyomi.extension.pt.littletyrant
 
+import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
+import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -21,19 +23,18 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class LittleTyrant :
-    Madara(
-        "Little Tyrant",
-        "https://tiraninha.world",
-        "pt-BR",
-        dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("pt", "BR")),
-    ) {
+@Source
+abstract class LittleTyrant : Madara() {
+    override val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("pt", "BR"))
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3, 1.seconds)
         .build()
 
-    private val decoder by lazy { Decoder() }
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .set("Sec-Fetch-Mode", "cors")
+        .set("Sec-Fetch-Dest", "empty")
+        .set("Sec-Fetch-Site", "same-origin")
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
@@ -96,18 +97,19 @@ class LittleTyrant :
 
     // =============================== Pages =================================
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter))
-        .asObservableSuccess()
-        .map { response ->
-            val doc = response.asJsoup()
-            launchIO { countViews(doc) }
+    override fun pageListParse(response: Response): List<Page> {
+        val html = response.asJsoup().html()
+        val match = PAGES_REGEX.find(html) ?: return emptyList()
 
-            decoder.extractPaths(doc).mapIndexed { idx, url ->
-                Page(idx, imageUrl = url)
-            }
+        val imageUrls = match.groupValues[1].split(",")
+            .map { it.trim().trim('"') }
+            .filter { it.isNotBlank() }
+            .map { String(Base64.decode(it, Base64.DEFAULT)) }
+
+        return imageUrls.mapIndexed { idx, url ->
+            Page(idx, imageUrl = url)
         }
-
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+    }
 
     // =============================== Images =================================
 
@@ -115,6 +117,7 @@ class LittleTyrant :
         val imageHeaders = headers.newBuilder()
             .set("Accept", "image/webp,image/*,*/*")
             .set("Referer", "$baseUrl/")
+            .set("X-Reader-Sec", "tiraninha-web")
             .build()
         return GET(page.imageUrl!!, imageHeaders)
     }
@@ -122,5 +125,6 @@ class LittleTyrant :
     companion object {
         private val CHAPTER_NUMBER_REGEX = """\d+(?:\.\d+)?""".toRegex()
         private val COMMA_REGEX = """,\s*""".toRegex()
+        private val PAGES_REGEX = """var\s+pages\s*=\s*\[([\s\S]*?)\]""".toRegex()
     }
 }

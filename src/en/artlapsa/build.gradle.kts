@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Art Lapsa"
-    className = "ArtLapsa"
     versionCode = 5
-    contentWarning = ContentWarning.SAFE
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "keyoapp"
-    baseUrl = "https://artlapsa.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://artlapsa.com"
+    }
 }

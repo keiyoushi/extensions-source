@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -17,11 +18,9 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class MyHentaiGallery : HttpSource() {
+@Source
+abstract class MyHentaiGallery : HttpSource() {
 
-    override val name = "MyHentaiGallery"
-    override val baseUrl = "https://myhentaigallery.com"
-    override val lang = "en"
     override val supportsLatest = true
 
     // =============================== Popular ================================
@@ -61,6 +60,8 @@ class MyHentaiGallery : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        genreSearchRequest(query, page)?.let { return it }
+
         if (query.isNotBlank()) {
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addPathSegment(page.toString())
@@ -137,7 +138,11 @@ class MyHentaiGallery : HttpSource() {
 
         return SManga.create().apply {
             title = info.selectFirst("h1")!!.text()
-            genre = (categories + artists + parodies).joinToString()
+            genre = (
+                categories +
+                    artists.map { "$ARTIST_GENRE_PREFIX$it" } +
+                    parodies.map { "$PARODY_GENRE_PREFIX$it" }
+                ).joinToString()
             artist = artists.joinToString()
             thumbnail_url = document.selectFirst(".comic-listing .comic-inner img")?.absUrl("src")?.encodeSpaces()
             status = SManga.COMPLETED
@@ -183,6 +188,18 @@ class MyHentaiGallery : HttpSource() {
 
     private fun String.encodeSpaces(): String = replace(" ", "%20")
 
+    // Routes a clicked artist/parody genre chip to its tag listing instead of a title search.
+    private fun genreSearchRequest(query: String, page: Int): Request? {
+        val (uriPart, name) = when {
+            query.startsWith(ARTIST_GENRE_PREFIX) -> "artist" to query.removePrefix(ARTIST_GENRE_PREFIX)
+            query.startsWith(PARODY_GENRE_PREFIX) -> "parody" to query.removePrefix(PARODY_GENRE_PREFIX)
+            else -> return null
+        }
+        val id = lookupTagId(uriPart, name)
+            ?: throw Exception("No $uriPart \"$name\" was found.")
+        return GET("$baseUrl/a/$uriPart/$id/$page", headers)
+    }
+
     private fun TagLookupFilter.resolveTagId(): String {
         val value = state.trim()
         value.toLongOrNull()?.let { return it.toString() }
@@ -225,6 +242,8 @@ class MyHentaiGallery : HttpSource() {
 
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
+        private const val ARTIST_GENRE_PREFIX = "Artist: "
+        private const val PARODY_GENRE_PREFIX = "Parody: "
         private val TAG_URL_REGEX = Regex("""/(artist|parody)/(\d+)(?:[/?#]|$)""", RegexOption.IGNORE_CASE)
         private val WHITESPACE_REGEX = Regex("""\s+""")
         private val TAG_COUNT_SUFFIX = Regex("""\s*\(\d+\)\s*$""")

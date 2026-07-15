@@ -1,13 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "MangaYY"
-    className = "MangaYY"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://mangayy.org"
+
+    source {
+        lang = "en"
+        baseUrl = "https://mangayy.org"
+        id = 828698548689586603L
+    }
 }

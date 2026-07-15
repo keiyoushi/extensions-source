@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
@@ -23,16 +24,9 @@ import java.util.Calendar
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class Mangahere : HttpSource() {
+@Source
+abstract class Mangahere : HttpSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val id: Long = 2
-
-    override val name = "Mangahere"
-
-    override val baseUrl = "https://www.mangahere.cc"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 

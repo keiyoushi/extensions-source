@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
@@ -29,13 +30,8 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.time.Duration.Companion.seconds
 
-class Beauty3600000 : HttpSource() {
-
-    override val baseUrl = "https://3600000.xyz"
-
-    override val lang = "all"
-
-    override val name = "3600000 Beauty"
+@Source
+abstract class Beauty3600000 : HttpSource() {
 
     override val supportsLatest = false
 

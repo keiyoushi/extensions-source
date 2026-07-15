@@ -1,12 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "MangaSwat"
-    className = "MangaSwat"
     versionCode = 61
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
-    baseUrl = "https://meshmanga.com"
+
+    source {
+        lang = "ar"
+        versionId = 2
+        baseUrl {
+            custom("https://meshmanga.com")
+        }
+    }
 }

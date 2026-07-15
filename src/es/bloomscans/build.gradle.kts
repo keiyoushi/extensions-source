@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Bloom Scans"
-    className = "Bloomscans"
-    versionCode = 2
-    contentWarning = ContentWarning.NSFW
+    versionCode = 3
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://bloomscans.com"
+
+    source {
+        lang = "es"
+        baseUrl = "https://bloomscans.com"
+    }
 }

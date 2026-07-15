@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Coffee Manga"
-    className = "CoffeeManga"
     versionCode = 5
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://coffeemanga.ink"
+
+    source {
+        lang = "en"
+        baseUrl = "https://coffeemanga.ink"
+    }
 }

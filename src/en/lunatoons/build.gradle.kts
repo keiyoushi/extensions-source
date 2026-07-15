@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Luna Toons"
-    className = "LunaToons"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "keyoapp"
-    baseUrl = "https://lunatoons.org"
+
+    source {
+        lang = "en"
+        baseUrl = "https://lunatoons.org"
+    }
 }

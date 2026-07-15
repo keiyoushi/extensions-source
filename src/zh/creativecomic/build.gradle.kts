@@ -1,13 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Creative Comic Collection"
-    className = "Creativecomic"
     versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        name = "CCC追漫台"
+        lang = "zh-Hant"
+        baseUrl = "https://www.creative-comic.tw"
+    }
 }
 
 dependencies {

@@ -1,13 +1,21 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "MangaChan"
-    className = "MangaChan"
     versionCode = 16
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "multichan"
-    baseUrl = "https://im.manga-chan.me"
+
+    source {
+        baseUrl {
+            custom("https://im.manga-chan.me")
+        }
+        lang = "ru"
+        id = 7L
+    }
 }

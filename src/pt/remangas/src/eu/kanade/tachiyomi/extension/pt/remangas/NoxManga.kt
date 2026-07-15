@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
@@ -17,17 +18,10 @@ import okhttp3.Request
 import okhttp3.Response
 import kotlin.time.Duration.Companion.seconds
 
-class NoxManga : HttpSource() {
-
-    override val name: String = "NoxManga"
-
-    override val baseUrl: String = "https://noxtoons.com"
-
-    override val lang: String = "pt-BR"
+@Source
+abstract class NoxManga : HttpSource() {
 
     override val supportsLatest: Boolean = true
-
-    override val id: Long = 7462657023971681136
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(3, 1.seconds)

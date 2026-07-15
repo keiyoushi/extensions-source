@@ -11,21 +11,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class Kuaikanmanhua : HttpSource() {
-
-    override val name = "快看漫画"
-
-    override val id: Long = 8099870292642776005
-
-    override val baseUrl = "https://www.kuaikanmanhua.com"
-
-    override val lang = "zh-Hans"
+@Source
+abstract class Kuaikanmanhua : HttpSource() {
 
     override val supportsLatest = true
 

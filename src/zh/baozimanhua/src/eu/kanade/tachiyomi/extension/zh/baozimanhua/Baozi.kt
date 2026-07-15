@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.tryParse
@@ -25,27 +26,12 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Baozi :
+@Source
+abstract class Baozi :
     HttpSource(),
     ConfigurableSource {
 
-    override val id = 5724751873601868259
-
-    override val name = "包子漫画"
-
     private val preferences: SharedPreferences = getPreferences()
-
-    private val domain: String = run {
-        val mirrors = MIRRORS
-        val domain = preferences.getString(MIRROR_PREF, null) ?: return@run mirrors[0]
-        if (domain in mirrors) return@run domain
-        preferences.edit().remove(MIRROR_PREF).apply()
-        mirrors[0]
-    }
-
-    override val baseUrl = "https://$domain"
-
-    override val lang = "zh"
 
     override val supportsLatest = true
 
@@ -53,15 +39,17 @@ class Baozi :
         level = preferences.getString(BaoziBanner.PREF, DEFAULT_LEVEL)!!.toInt(),
     )
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(bannerInterceptor)
-        .addNetworkInterceptor(MissingImageInterceptor)
-        .addNetworkInterceptor(RedirectDomainInterceptor(domain))
-        .rateLimit(2)
-        .build()
+    override val client by lazy {
+        network.client.newBuilder()
+            .addInterceptor(bannerInterceptor)
+            .addNetworkInterceptor(MissingImageInterceptor)
+            .addNetworkInterceptor(RedirectDomainInterceptor(baseUrl.toHttpUrl().host))
+            .rateLimit(2)
+            .build()
+    }
 
     override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "https://$domain/")
+        .add("Referer", "$baseUrl/")
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -242,18 +230,6 @@ class Baozi :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
-            val mirrors = MIRRORS
-
-            key = MIRROR_PREF
-            title = "使用镜像网址"
-            entries = mirrors
-            entryValues = mirrors
-            summary = "已选择：%s\n" +
-                "重启生效，切换简繁体后需要迁移才能刷新漫画标题。"
-            setDefaultValue(mirrors[0])
-        }.let { screen.addPreference(it) }
-
-        ListPreference(screen.context).apply {
             key = BaoziBanner.PREF
             title = BaoziBanner.PREF_TITLE
             summary = BaoziBanner.PREF_SUMMARY
@@ -289,7 +265,6 @@ class Baozi :
     companion object {
         const val ID_SEARCH_PREFIX = "id:"
 
-        private const val MIRROR_PREF = "MIRROR"
         private val MIRRORS get() = arrayOf(
             "cn.baozimh.com",
             "tw.baozimh.com",

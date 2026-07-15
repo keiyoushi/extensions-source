@@ -1,12 +1,9 @@
 package eu.kanade.tachiyomi.extension.tr.uzaymanga
 
 import eu.kanade.tachiyomi.multisrc.uzaymanga.UzayManga
+import keiyoushi.annotation.Source
 
-class UzayManga :
-    UzayManga(
-        name = "Uzay Manga",
-        baseUrl = "https://uzaymanga.com",
-        lang = "tr",
-        versionId = 3,
-        cdnUrl = "https://cdn-u.efsaneler2.can.re",
-    )
+@Source
+abstract class UzayManga : UzayManga() {
+    override val cdnUrl = "https://cdn-u.efsaneler2.can.re"
+}

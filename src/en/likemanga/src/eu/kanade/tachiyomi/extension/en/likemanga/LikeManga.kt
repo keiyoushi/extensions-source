@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
@@ -29,12 +30,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class LikeManga : HttpSource() {
-    override val name = "LikeManga"
-
-    override val baseUrl = "https://likemanga.ink"
-
-    override val lang = "en"
+@Source
+abstract class LikeManga : HttpSource() {
 
     override val supportsLatest = true
 

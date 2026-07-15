@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Sushiscan.fr"
-    className = "SushiScanFR"
     versionCode = 3
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://sushiscan.fr"
+
+    source {
+        lang = "fr"
+        baseUrl = "https://sushiscan.fr"
+    }
 }

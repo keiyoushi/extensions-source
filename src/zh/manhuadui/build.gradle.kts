@@ -1,13 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "YKMH"
-    className = "YKMH"
     versionCode = 18
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "sinmh"
-    baseUrl = "https://www.ykmh.net"
+
+    source {
+        name = "优酷漫画"
+        lang = "zh"
+        baseUrl = "https://www.ykmh.net"
+        id = 1637952806167036168L
+    }
 }

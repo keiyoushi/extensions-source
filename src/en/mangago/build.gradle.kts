@@ -1,16 +1,21 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Mangago"
-    className = "Mangago"
-    versionCode = 34
-    contentWarning = ContentWarning.NSFW
+    versionCode = 37
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://www.mangago.me"
+    }
 }
 
 dependencies {
-
     implementation(project(":lib:cookieinterceptor"))
 }

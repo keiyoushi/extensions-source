@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "8Muses"
-    className = "EightMuses"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "eromuse"
-    baseUrl = "https://comics.8muses.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://comics.8muses.com"
+    }
 }

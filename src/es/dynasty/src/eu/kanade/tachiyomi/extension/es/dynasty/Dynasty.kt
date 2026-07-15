@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
@@ -22,13 +23,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class Dynasty : HttpSource() {
-
-    override val name = "Dynasty"
-
-    override val baseUrl = "https://manhuako.net"
-
-    override val lang = "es"
+@Source
+abstract class Dynasty : HttpSource() {
 
     override val supportsLatest = true
 

@@ -5,14 +5,13 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import NoReturn
 
 EXTENSION_REGEX = re.compile(r"^src/(?P<lang>\w+)/(?P<extension>\w+)")
 MULTISRC_LIB_REGEX = re.compile(r"^lib-multisrc/(?P<multisrc>\w+)")
 LIB_REGEX = re.compile(r"^lib/(?P<lib>\w+)")
 MODULE_REGEX = re.compile(r"^:src:(?P<lang>\w+):(?P<extension>\w+)$")
 CORE_FILES_REGEX = re.compile(
-    r"^(common/|core/|gradle/|build\.gradle\.kts|gradle\.properties|settings\.gradle\.kts|.github/scripts)"
+    r"^(common/|compiler/|core/|gradle/|build\.gradle\.kts|gradle\.properties|settings\.gradle\.kts|.github/scripts)"
 )
 
 def run_command(command: str) -> str:
@@ -178,13 +177,6 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
     extensions = resolve_ext(multisrcs, libs)
     modules.update([f":src:{lang}:{extension}" for lang, extension in extensions])
     deleted.update([f"{lang}.{extension}" for lang, extension in extensions])
-
-    if os.getenv("IS_PR_CHECK") != "true":
-        with Path(".github/always_build.json").open() as always_build_file:
-            always_build = json.load(always_build_file)
-        for extension in always_build:
-            modules.add(":src:" + extension.replace(".", ":"))
-            deleted.add(extension)
 
     return list(modules), list(deleted)
 

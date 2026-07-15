@@ -1,11 +1,23 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Mangadotnet"
-    className = "Mangadotnet"
-    versionCode = 12
-    contentWarning = ContentWarning.NSFW
+    versionCode = 14
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://mangadot.net"
+    }
+
+    deeplink {
+        host("mangadot.net")
+        path("/manga/..*")
+        path("/chapter/..*")
+    }
 }

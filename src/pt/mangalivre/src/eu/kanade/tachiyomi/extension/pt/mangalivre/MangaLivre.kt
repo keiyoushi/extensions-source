@@ -11,42 +11,31 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
-class MangaLivre :
+@Source
+abstract class MangaLivre :
     HttpSource(),
     ConfigurableSource {
+
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val name: String = "Manga Livre"
-
-    override val baseUrl: String = "https://toonlivre.net"
-
-    override val lang: String = "pt-BR"
 
     override val supportsLatest: Boolean = true
 
-    override val versionId: Int = 2
-
     override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(::clientHeaderInterceptor)
+        .addInterceptor(ReadingGateInterceptor(baseUrl, headers["User-Agent"]))
         .rateLimit(2, 1.seconds) { it.host == baseUrlHost }
         .build()
-
-    private val scrapeClient: OkHttpClient by lazy {
-        network.client.newBuilder()
-            .followRedirects(false)
-            .build()
-    }
 
     private val apiUrl: String = "$baseUrl/api"
 
@@ -64,8 +53,8 @@ class MangaLivre :
 
     private val popularFilter = FilterList(
         listOf(
-            OrderByFilter(options = listOf("" to "popular")),
-            OrderDirectionFilter(options = listOf("" to "desc")),
+            OrderByFilter(options = listOf("" to SORT_POPULAR)),
+            OrderDirectionFilter(options = listOf("" to DIRECTION_DESC)),
         ),
     )
 
@@ -77,8 +66,8 @@ class MangaLivre :
 
     private val latestFilter = FilterList(
         listOf(
-            OrderByFilter(options = listOf("" to "updated")),
-            OrderDirectionFilter(options = listOf("" to "desc")),
+            OrderByFilter(options = listOf("" to SORT_UPDATED)),
+            OrderDirectionFilter(options = listOf("" to DIRECTION_DESC)),
         ),
     )
 
@@ -112,7 +101,7 @@ class MangaLivre :
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val dto = response.parseAs<WrapperDto>()
+        val dto = response.parseJson<WrapperDto>()
         val mangas = dto.mangas.map { it.toSManga(useAlternativeTitle) }
         return MangasPage(mangas, dto.hasNextPage)
     }
@@ -123,24 +112,28 @@ class MangaLivre :
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/manga-by-slug/${manga.url}", headers)
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().toSManga(useAlternativeTitle)
+    override fun mangaDetailsParse(response: Response): SManga = response.parseJson<MangaDto>().toSManga(useAlternativeTitle)
 
     // ============================== Chapters =======================================
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
-    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<MangaDto>().toSChapterList()
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseJson<MangaDto>().toSChapterList()
 
     // ============================== Pages =======================================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val dto = chapter.url.substringAfterLast("#").parseAs<ChapterReferenceDto>()
-        return GET("$apiUrl/mangas/${dto.mangaId}/chapters/${dto.chapterId}", headers)
+        val readerPath = chapter.url.substringBeforeLast("#")
+        val ref = chapter.url.substringAfterLast("#").parseAs<ChapterReferenceDto>()
+        return GET("$apiUrl/mangas/${ref.mangaId}/chapters/${ref.chapterId}", headers)
+            .newBuilder()
+            .tag(ReadingGateInterceptor.ReaderPath::class.java, ReadingGateInterceptor.ReaderPath(readerPath))
+            .build()
     }
 
-    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageDto>().toPageList()
+    override fun pageListParse(response: Response): List<Page> = response.parseJson<PageDto>().toPageList()
 
-    override fun imageUrlParse(response: Response): String = ""
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Filters =======================================
 
@@ -149,19 +142,19 @@ class MangaLivre :
             OrderByFilter(
                 "Ordem",
                 listOf(
-                    "Mais Visualizados" to "popular",
-                    "Lançamentos" to "release",
-                    "Última Atualização" to "updated",
-                    "Melhor Avaliação" to "rating",
-                    "A-Z" to "title",
+                    "Mais Visualizados" to SORT_POPULAR,
+                    "Lançamentos" to SORT_RELEASE,
+                    "Última Atualização" to SORT_UPDATED,
+                    "Melhor Avaliação" to SORT_RATING,
+                    "A-Z" to SORT_TITLE,
                 ),
             ),
             Filter.Separator(),
             OrderDirectionFilter(
                 "Direção",
                 listOf(
-                    "↑ Decrescente" to "desc",
-                    "↓ Crescente" to "asc",
+                    "↑ Decrescente" to DIRECTION_DESC,
+                    "↓ Crescente" to DIRECTION_ASC,
                 ),
             ),
         ),
@@ -176,79 +169,35 @@ class MangaLivre :
             title = "Titulo alternativo"
             summary = buildString {
                 append("Use titulos alternativos como principal quando disponivel.")
-                append(" Essa opção não tem efeito sobre obras já adicionadas na sua bibilioteca")
+                append(" Essa opção não tem efeito sobre obras já adicionadas na sua biblioteca")
             }
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
 
-    // ============================== Helper =======================================
+    // ============================== Utilities =======================================
 
-    @Volatile
-    private var cachedClientValue: String? = null
-
-    private fun clientHeaderInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        if (request.url.host != baseUrlHost) {
-            return chain.proceed(request)
+    private inline fun <reified T> Response.parseJson(): T {
+        val peek = peekBody(MAX_PEEK).string().trimStart()
+        if (peek.isEmpty() || peek.startsWith("<")) {
+            close()
+            throw IOException(NON_JSON_MESSAGE)
         }
-
-        val response = chain.proceed(
-            request.newBuilder().header(CLIENT_HEADER, currentClientValue()).build(),
-        )
-        if (response.code != 403 || !response.isOfficialAppError()) {
-            return response
-        }
-
-        response.close()
-        return chain.proceed(
-            request.newBuilder().header(CLIENT_HEADER, refreshClientValue()).build(),
-        )
-    }
-
-    private fun currentClientValue(): String = cachedClientValue ?: synchronized(this) {
-        cachedClientValue ?: scrapeClientValue().also { cachedClientValue = it }
-    }
-
-    private fun refreshClientValue(): String = synchronized(this) {
-        scrapeClientValue().also { cachedClientValue = it }
-    }
-
-    private fun scrapeClientValue(): String {
-        return try {
-            val html = scrapeClient.newCall(GET("$baseUrl/index.html", headers)).execute()
-                .use { if (it.isSuccessful) it.body?.string().orEmpty() else "" }
-            val assetPath = ASSET_REGEX.find(html)?.value ?: return DEFAULT_CLIENT
-            val js = scrapeClient.newCall(GET("$baseUrl$assetPath", headers)).execute()
-                .use { if (it.isSuccessful) it.body?.string() else null }
-                ?: return DEFAULT_CLIENT
-            extractClientValue(js) ?: DEFAULT_CLIENT
-        } catch (_: Exception) {
-            DEFAULT_CLIENT
-        }
-    }
-
-    private fun extractClientValue(js: String): String? {
-        ANCHORED_REGEX.find(js)?.let { return it.groupValues[1] }
-        return SHAPE_REGEX.findAll(js)
-            .map { it.groupValues[1] }
-            .toSet()
-            .singleOrNull()
-    }
-
-    private fun Response.isOfficialAppError(): Boolean = try {
-        peekBody(MAX_PEEK).string().contains("aplicativo oficial", ignoreCase = true)
-    } catch (_: Exception) {
-        false
+        return parseAs<T>()
     }
 
     companion object {
         private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
-        private const val CLIENT_HEADER = "x-toonlivre-client"
-        private const val DEFAULT_CLIENT = "web-x"
         private const val MAX_PEEK = 1024L
-        private val ASSET_REGEX = Regex("/assets/index-[\\w-]+\\.js")
-        private val ANCHORED_REGEX = Regex("\"x-toonlivre-client\"\\s*,\\s*\"([\\w.-]+)\"")
-        private val SHAPE_REGEX = Regex("\"(web-[a-z0-9]+)\"")
+        private const val NON_JSON_MESSAGE =
+            "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
+
+        private const val SORT_POPULAR = "popular"
+        private const val SORT_RELEASE = "release"
+        private const val SORT_UPDATED = "updated"
+        private const val SORT_RATING = "rating"
+        private const val SORT_TITLE = "title"
+        private const val DIRECTION_DESC = "desc"
+        private const val DIRECTION_ASC = "asc"
     }
 }

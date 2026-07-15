@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Young Champion"
-    className = "YoungChampion"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "comiciviewer"
-    baseUrl = "https://youngchampion.jp"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://youngchampion.jp"
+    }
 }

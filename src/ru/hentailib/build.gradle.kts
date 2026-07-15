@@ -1,13 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "HentaiLib"
-    className = "HentaiLib"
     versionCode = 20
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "libgroup"
-    baseUrl = "https://hentailib.me"
+
+    source {
+        baseUrl {
+            custom("https://hentailib.me")
+        }
+        lang = "ru"
+    }
 }

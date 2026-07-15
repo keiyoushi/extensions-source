@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Amanga Planet"
-    className = "AmangaPlanet"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://www.amangaplanet.com.tr"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://www.amangaplanet.com.tr"
+    }
 }

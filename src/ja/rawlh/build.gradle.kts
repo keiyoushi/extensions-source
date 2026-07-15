@@ -1,13 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "WeLoveManga"
-    className = "WeLoveManga"
     versionCode = 5
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "fmreader"
-    baseUrl = "https://weloma.art"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://weloma.art"
+        // Formerly "RawLH"
+        id = 7595224096258102519L
+    }
 }

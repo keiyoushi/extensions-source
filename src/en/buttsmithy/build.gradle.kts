@@ -1,13 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "buttsmithy"
-    className = "Buttsmithy"
     versionCode = 4
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        name = "Buttsmithy"
+        lang = "en"
+        baseUrl = "https://incase.buttsmithy.com"
+    }
 }
 
 dependencies {

@@ -12,23 +12,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.HttpUrl
 import java.text.StringCharacterIterator
 import java.util.TreeMap
-import kotlin.properties.PropertyDelegateProvider
-import kotlin.reflect.KProperty
 
-/**
- *  @see EXTENSION_INFO Found in ProjectSuki.kt
- */
 @Suppress("unused")
 private inline val INFO: Nothing get() = error("INFO")
 
 private typealias IsWord = Boolean
 
-/**
- * Handles the "Smart" book search mode, requires [API][RequiresApi] [Build.VERSION_CODES.N]
- * because it uses [android.icu.text] classes.
- *
- * Tries to avoid wasting resource by normalizing text only once and using [ThreadLocal] instances.
- */
 @Suppress("MemberVisibilityCanBePrivate")
 @RequiresApi(Build.VERSION_CODES.N)
 class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID, BookTitle>) {
@@ -39,6 +28,7 @@ class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID,
 
     @Suppress("NOTHING_TO_INLINE")
     private inline fun BreakIterator.collate(text: String): List<CollatedElement<Unit>> = collate(text) {}
+
     private inline fun <Cat> BreakIterator.collate(text: String, categorizer: (ruleStatus: Int) -> Cat): List<CollatedElement<Cat>> {
         this.text = StringCharacterIterator(text)
         var left = first()
@@ -73,7 +63,6 @@ class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID,
 
         words.forEach { collatedElement ->
             if (!collatedElement.category) {
-                // not a "word" per-say
                 extra.addAll(charBreak.collate(collatedElement.value) { Unit }.map { it.value })
             }
         }
@@ -91,10 +80,7 @@ class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID,
     }
 
     @OptIn(ExperimentalUnsignedTypes::class)
-    fun wordScoreFor(matchedText: String): UInt {
-        // not starting from index 0 is intentional here
-        return fib32.getOrElse(charBreak.collate(matchedText).size) { fib32.last() }
-    }
+    fun wordScoreFor(matchedText: String): UInt = fib32.getOrElse(charBreak.collate(matchedText).size) { fib32.last() }
 
     val filteredBooks: Set<BookID> by unexpectedErrorCatchingLazy {
         val stringSearch = stringSearch
@@ -148,39 +134,39 @@ class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID,
     }
 
     companion object {
-        private inline fun <T> threadLocal(crossinline initializer: () -> T) = PropertyDelegateProvider<Any?, ThreadLocal<T>> { _: Any?, _: KProperty<*> ->
-            object : ThreadLocal<T>() {
-                override fun initialValue(): T? = initializer()
-            }
+        private fun <T> threadLocal(initializer: () -> T) = object : ThreadLocal<T>() {
+            override fun initialValue(): T? = initializer()
         }
 
-        private operator fun <T> ThreadLocal<T>.getValue(thisRef: Any?, property: KProperty<*>): T = get() ?: reportErrorToUser("SmartBookSearchHandler.${property.name}") { "null initialValue" }
+        private val charBreakTl = threadLocal { BreakIterator.getCharacterInstance() }
+        private val charBreak get() = charBreakTl.get()!!
 
-        private val charBreak: BreakIterator by threadLocal { BreakIterator.getCharacterInstance() }
-        private val wordBreak: BreakIterator by threadLocal { BreakIterator.getWordInstance() }
-        private val normalizer: Normalizer2 by threadLocal { Normalizer2.getNFKCCasefoldInstance() }
-        private val collator: RuleBasedCollator by threadLocal {
+        private val wordBreakTl = threadLocal { BreakIterator.getWordInstance() }
+        private val wordBreak get() = wordBreakTl.get()!!
+
+        private val normalizerTl = threadLocal { Normalizer2.getNFKCCasefoldInstance() }
+        private val normalizer get() = normalizerTl.get()!!
+
+        private val collatorTl = threadLocal {
             (Collator.getInstance() as RuleBasedCollator).apply {
                 isCaseLevel = true
                 strength = Collator.PRIMARY
-                decomposition = Collator.NO_DECOMPOSITION // !! must handle this ourselves !!
+                decomposition = Collator.NO_DECOMPOSITION
             }
         }
+        private val collator get() = collatorTl.get()!!
 
-        private val stringSearch: StringSearch by threadLocal {
+        private val stringSearchTl = threadLocal {
             StringSearch(
-                /* pattern = */
                 "dummy",
-                /* target = */
                 StringCharacterIterator("dummy"),
-                /* collator = */
                 collator,
             ).apply {
                 isOverlapping = true
             }
         }
+        private val stringSearch get() = stringSearchTl.get()!!
 
-        /** first 32 fibonacci numbers */
         @JvmStatic
         @OptIn(ExperimentalUnsignedTypes::class)
         private val fib32: UIntArray = uintArrayOf(
@@ -201,7 +187,6 @@ class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID,
     }
 }
 
-/** simply creates an https://projectsuki.com/book/<bookid> [HttpUrl] */
 internal fun BookID.bookIDToURL(): HttpUrl = homepageUrl.newBuilder()
     .addPathSegment("book")
     .addPathSegment(this)

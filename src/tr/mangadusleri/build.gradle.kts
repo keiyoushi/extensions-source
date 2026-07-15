@@ -1,13 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Mangadusleri"
-    className = "Mangadusleri"
-    versionCode = 0
+    versionCode = 33
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
-    theme = "mangathemesia"
-    baseUrl = "https://mangadusleri.lol"
+
+    source {
+        versionId = 2
+        lang = "tr"
+        baseUrl {
+            custom("https://mangadusleri.mom")
+        }
+    }
 }

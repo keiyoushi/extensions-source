@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -20,13 +21,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class AkaiComic : HttpSource() {
-
-    override val name = "Akai Comic"
-
-    override val lang = "en"
-
-    override val baseUrl = "https://akaicomic.org"
+@Source
+abstract class AkaiComic : HttpSource() {
 
     override val supportsLatest = true
 

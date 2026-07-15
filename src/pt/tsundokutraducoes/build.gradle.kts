@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Tsundoku Traduções"
-    className = "TsundokuTraducoes"
     versionCode = 10
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://tsundoku.com.br"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://tsundoku.com.br"
+    }
 }

@@ -2,9 +2,11 @@ package eu.kanade.tachiyomi.extension.en.hentai4free
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
 import okhttp3.Request
 
-class Hentai4Free : Madara("Hentai4Free", "https://hentai4free.net", "en") {
+@Source
+abstract class Hentai4Free : Madara() {
     override val useNewChapterEndpoint = true
     override val mangaSubString = "hentai"
 

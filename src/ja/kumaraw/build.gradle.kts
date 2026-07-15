@@ -1,12 +1,22 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Kumaraw"
-    className = "Kumaraw"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
-    baseUrl = "https://kumaraw.com"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://kumaraw.com"
+    }
+
+    deeplink {
+        host("kumaraw.com")
+        path("/manga/..*")
+    }
 }

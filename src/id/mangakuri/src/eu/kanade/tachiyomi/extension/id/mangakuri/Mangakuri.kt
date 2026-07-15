@@ -7,29 +7,21 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
 private const val DOMAIN = "mangakuri.online"
 
-class Mangakuri : HttpSource() {
-
-    override val name = "Mangakuri"
-
-    override val baseUrl = "https://lc1.$DOMAIN"
-
-    override val lang = "id"
+@Source
+abstract class Mangakuri : HttpSource() {
 
     override val supportsLatest = true
-
-    override val versionId = 2
 
     private val apiUrl = "https://api.$DOMAIN/api"
 
@@ -37,7 +29,8 @@ class Mangakuri : HttpSource() {
         .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
 
-    // ================= Popular =================
+    // ============================== Popular ==============================
+
     override fun popularMangaRequest(page: Int): Request {
         val url = "$apiUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("type", "COMIC")
@@ -51,20 +44,15 @@ class Mangakuri : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<SearchResponseDto>()
-        val mangas = dto.data.map { manga ->
-            SManga.create().apply {
-                url = "/comic/${manga.slug}"
-                title = manga.title
-                thumbnail_url = manga.posterImageUrl
-            }
-        }
+        val mangas = dto.data.map { it.toSManga() }
 
         val hasNextPage = response.request.url.queryParameter("page")?.toIntOrNull()?.let { it < dto.totalPages } ?: false
 
         return MangasPage(mangas, hasNextPage)
     }
 
-    // ================= Latest =================
+    // ============================== Latest ===============================
+
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("type", "COMIC")
@@ -78,7 +66,8 @@ class Mangakuri : HttpSource() {
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
-    // ================= Search =================
+    // ============================== Search ===============================
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("type", "COMIC")
@@ -125,52 +114,28 @@ class Mangakuri : HttpSource() {
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
-    // ================= Details =================
+    // ============================== Details ==============================
+
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/series${manga.url}", headers)
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val dto = response.parseAs<SeriesDetailDto>()
-        return SManga.create().apply {
-            url = "/comic/${dto.slug}"
-            title = dto.title
-            thumbnail_url = dto.posterImageUrl
-            author = dto.authorName
-            artist = dto.artistName
-            description = dto.synopsis?.let { Jsoup.parse(it).text() }
-            genre = dto.genres.joinToString { it.name }
-            status = when (dto.comicStatus?.uppercase()) {
-                "ONGOING" -> SManga.ONGOING
-                "COMPLETED" -> SManga.COMPLETED
-                "HIATUS" -> SManga.ON_HIATUS
-                else -> SManga.UNKNOWN
-            }
-            initialized = true
-        }
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<SeriesDetailDto>().toSManga()
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
-    // ================= Chapters =================
+    // ============================= Chapters ==============================
+
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val dto = response.parseAs<SeriesDetailDto>()
         val comicSlug = dto.slug
-        return dto.units.map { chapter ->
-            SChapter.create().apply {
-                url = "/comic/$comicSlug/chapter/${chapter.slug}"
-                name = "Chapter ${formatChapterNumber(chapter.number)}"
-                chapter_number = chapter.number.toFloatOrNull() ?: -1f
-                date_upload = dateFormat.tryParse(chapter.createdAt)
-            }
-        }
+        return dto.units.map { it.toSChapter(comicSlug, dateFormat) }
     }
-
-    private fun formatChapterNumber(number: String): String = number.removeSuffix(".00")
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
-    // ================= Pages =================
+    // =============================== Pages ===============================
+
     override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/series${chapter.url}", headers)
 
     override fun pageListParse(response: Response): List<Page> {
@@ -182,7 +147,8 @@ class Mangakuri : HttpSource() {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    // ================= Filters =================
+    // ============================== Filters ==============================
+
     override fun getFilterList() = FilterList(
         SortFilter(),
         OrderFilter(),
@@ -195,6 +161,8 @@ class Mangakuri : HttpSource() {
         TextFilter("Artist", "artist"),
         TextFilter("Publisher", "publisher"),
     )
+
+    // ============================= Utilities =============================
 
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {

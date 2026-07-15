@@ -1,11 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "StoneScape"
-    className = "StoneScape"
     versionCode = 49
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
+
+    source {
+        lang = "en"
+        baseUrl = "https://stonescape.xyz"
+        versionId = 2
+    }
 }

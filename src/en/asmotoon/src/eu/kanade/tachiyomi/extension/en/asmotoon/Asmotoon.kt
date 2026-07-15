@@ -2,18 +2,15 @@ package eu.kanade.tachiyomi.extension.en.asmotoon
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-class Asmotoon :
-    Keyoapp(
-        "Asmodeus Scans",
-        "https://asmotoon.com",
-        "en",
-    ) {
+@Source
+abstract class Asmotoon : Keyoapp() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val client = super
@@ -27,7 +24,6 @@ class Asmotoon :
     override fun latestUpdatesSelector() = ".group:not([data-type=novel])"
     override fun searchMangaSelector() = ".group:not([data-type=novel])"
 
-    override val descriptionSelector: String = "#expand_content"
     override val genreSelector: String = ".gap-3 .gap-1 a"
 
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {

@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Eris Scans"
-    className = "ErisScans"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "keyoapp"
-    baseUrl = "https://erisscans.com"
+
+    source {
+        lang = "en"
+        baseUrl = "https://erisscans.com"
+    }
 }

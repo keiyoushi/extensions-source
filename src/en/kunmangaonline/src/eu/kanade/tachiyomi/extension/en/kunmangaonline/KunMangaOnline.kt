@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -20,12 +21,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class KunMangaOnline :
-    Madara(
-        "Kun Manga Online",
-        "https://www.kunmanga.online",
-        "en",
-    ) {
+@Source
+abstract class KunMangaOnline : Madara() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val client = network.client.newBuilder()

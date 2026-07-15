@@ -27,6 +27,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
@@ -48,14 +49,12 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
-class Comix :
+@Source
+abstract class Comix :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Comix"
-    override val baseUrl = "https://comix.to"
     private val apiUrl = "https://comix.to/api/v1"
-    override val lang = "en"
     override val supportsLatest = true
     override val supportsRelatedMangas = false
     override val disableRelatedMangasBySearch = true
@@ -71,7 +70,7 @@ class Comix :
             if (response.code != 404) return@addInterceptor response
 
             val url = request.url.toString()
-            val fallbacks = listOf("/si/", "/i/", "/sii/", "/ii/")
+            val fallbacks = listOf("/i5/", "/si/", "/i/", "/sii/", "/ii/")
                 .map { url.replaceFirst(SCRAMBLE_PATH_FALLBACK_REGEX, it) }
                 .filter { it != url }
 
@@ -539,6 +538,18 @@ class Comix :
                             state.submitted = true;
                             window.$$interfaceName.passPayload(JSON.stringify(state.items));
                         };
+                        const findNextButton = page => {
+                            const buttons = [...document.querySelectorAll('.mchap-foot button')]
+                                .filter(button => !button.disabled);
+                            return buttons.find(button => {
+                                const label = [
+                                    button.getAttribute('aria-label'),
+                                    button.getAttribute('title'),
+                                    button.textContent
+                                ].filter(Boolean).join(' ');
+                                return /\bnext\b/i.test(label);
+                            }) || buttons.find(button => Number(button.textContent?.trim()) === page + 1);
+                        };
                         const capture = parsed => {
                             try {
                                 const items = parsed?.result?.items;
@@ -553,17 +564,19 @@ class Comix :
 
                                 const meta = parsed.result.meta || parsed.result.pagination || {};
                                 const page = meta.page || 1;
+                                const lastPage = meta.lastPage || meta.last_page || page;
+                                const hasNext = meta.hasNext || page < lastPage;
                                 if (state.seen.has(page)) return true;
 
                                 state.seen.add(page);
                                 state.items.push(...items);
-                                if (meta.hasNext && !state.nextClicks.has(page)) {
+                                if (hasNext && !state.nextClicks.has(page)) {
                                     state.nextClicks.add(page);
                                     window.$$interfaceName.resetTimer();
                                     let tries = 0;
                                     const interval = setInterval(() => {
-                                        const button = document.querySelector('.mchap-foot button[aria-label*=Next]');
-                                        if (button && !button.disabled) {
+                                        const button = findNextButton(page);
+                                        if (button) {
                                             button.click();
                                             clearInterval(interval);
                                         } else if (++tries > 50) {
@@ -1093,7 +1106,7 @@ class Comix :
         private const val SCRIPT_RETRY_INTERVAL_MS = 100L
         private const val WEBVIEW_WIDTH = 1080
         private const val WEBVIEW_HEIGHT = 1920
-        private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/s?i+/")
+        private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/(?:i5|s?i+)/")
         private val CHAPTER_NUM_REGEX = Regex("""Ch\.([\d.]+)""")
         private val GROUP_ID_REGEX = Regex("""/groups/(\d+)""")
         private val CHAPTER_ID_REGEX = Regex("""/(\d+)-""")

@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.es.barmanga
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import kotlinx.serialization.Serializable
@@ -12,13 +13,9 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class BarManga :
-    Madara(
-        "BarManga",
-        "https://archiviumbar.com",
-        "es",
-        SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-    ) {
+@Source
+abstract class BarManga : Madara() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 

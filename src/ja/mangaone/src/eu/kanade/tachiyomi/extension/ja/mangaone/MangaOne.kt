@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.mangaone
 
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -13,30 +12,28 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAsProto
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.serialization.decodeFromByteArray
-import kotlinx.serialization.protobuf.ProtoBuf
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.util.Calendar
 import java.util.TimeZone
 
-class MangaOne :
+@Source
+abstract class MangaOne :
     HttpSource(),
     ConfigurableSource {
-    override val name = "Manga One"
-    override val baseUrl = "https://manga-one.com"
-    override val lang = "ja"
     override val supportsLatest = true
 
     private val apiUrl = "$baseUrl/api/client"
     private val jst = TimeZone.getTimeZone("Asia/Tokyo")
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy()
 
     private var tagList: List<Tags> = emptyList()
 
@@ -157,8 +154,8 @@ class MangaOne :
         if (result.pages.isNullOrEmpty()) {
             throw Exception("Log in via WebView and rent or purchase this chapter to read.")
         }
-        return result.pages.mapIndexed { i, pages ->
-            Page(i, imageUrl = "${pages.page.url}#$key:$iv")
+        return result.pages.mapNotNull { it.page }.mapIndexed { i, page ->
+            Page(i, imageUrl = "${page.url}#$key:$iv")
         }
     }
 
@@ -189,8 +186,6 @@ class MangaOne :
             }
         }
     }
-
-    private inline fun <reified T> Response.parseAsProto(): T = ProtoBuf.decodeFromByteArray(body.bytes())
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {

@@ -8,19 +8,17 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class MayoTune(
-    override val lang: String,
-    private val chapterEndpoint: String,
-) : HttpSource() {
-    override val name: String = "MayoTune"
-    override val baseUrl: String = "https://mayochuu.xyz"
-    override val versionId: Int = 1
+@Source
+abstract class MayoTune : HttpSource() {
+
+    private val chapterEndpoint: String get() = if (lang == "ja") "raw" else ""
 
     private val names = mapOf(
         "en" to "Tune In to the Midnight Heart",

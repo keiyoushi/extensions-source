@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.UserAgentType
 import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.utils.firstInstance
@@ -37,21 +38,10 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class Readcomiconline :
+@Source
+abstract class Readcomiconline :
     HttpSource(),
     ConfigurableSource {
-
-    override val name = "ReadComicOnline"
-
-    override val baseUrl: String
-        get() {
-            val index = preferences.getString(MIRROR_PREF, "1")!!
-                .toIntOrNull() ?: 1
-
-            return MIRROR_URLS[index.coerceIn(MIRROR_URLS.indices)]
-        }
-
-    override val lang = "en"
 
     override val supportsLatest = true
 
@@ -104,8 +94,7 @@ class Readcomiconline :
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("http")) {
             val url = query.toHttpUrlOrNull()
-            val mirrorHosts = MIRROR_URLS.map { it.toHttpUrl().host }
-            if (url != null && url.host in mirrorHosts &&
+            if (url != null &&
                 url.pathSegments.size >= 2 && url.pathSegments[0] == "Comic"
             ) {
                 val manga = SManga.create().apply {
@@ -271,7 +260,7 @@ class Readcomiconline :
         }
     }
 
-    private val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
+    private val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.ENGLISH)
 
     override fun pageListRequest(chapter: SChapter): Request {
         val qualitySuffix = "&s=${serverPref()}&quality=${qualityPref()}&readType=1"
@@ -444,15 +433,6 @@ class Readcomiconline :
     // Preferences Code
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val mirrorPref = ListPreference(screen.context).apply {
-            key = MIRROR_PREF
-            title = MIRROR_PREF_TITLE
-            entries = MIRROR_NAMES
-            entryValues = Array(MIRROR_URLS.size) { it.toString() }
-            setDefaultValue("1")
-            summary = "%s"
-        }
-
         val qualityPref = ListPreference(screen.context).apply {
             key = QUALITY_PREF
             title = QUALITY_PREF_TITLE
@@ -469,7 +449,6 @@ class Readcomiconline :
             summary = "%s"
         }
 
-        screen.addPreference(mirrorPref)
         screen.addPreference(qualityPref)
         screen.addPreference(serverPref)
     }
@@ -511,11 +490,7 @@ class Readcomiconline :
         private const val QUALITY_PREF = "qualitypref"
         private const val SERVER_PREF_TITLE = "Server Preference"
         private const val SERVER_PREF = "serverpref"
-        private const val MIRROR_PREF_TITLE = "Mirror Preference"
-        private const val MIRROR_PREF = "mirrorpref"
-        private val MIRROR_NAMES = arrayOf("readcomiconline.li", "rcostation.xyz")
-        private val MIRROR_URLS = arrayOf("https://readcomiconline.li", "https://rcostation.xyz")
         private const val IMAGE_REMOTE_CONFIG_DEFAULT =
-            "https://raw.githubusercontent.com/keiyoushi/extensions-source/refs/heads/main/src/en/readcomiconline/config.json"
+            "https://raw.githubusercontent.com/keiyoushi/rco-script/refs/heads/main/decrypt.json"
     }
 }

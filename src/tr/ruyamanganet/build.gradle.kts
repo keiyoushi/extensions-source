@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Rüya Manga.net"
-    className = "RuyaMangaNet"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://ruyamanga.net"
+
+    source {
+        lang = "tr"
+        baseUrl = "https://ruyamanga.net"
+    }
 }

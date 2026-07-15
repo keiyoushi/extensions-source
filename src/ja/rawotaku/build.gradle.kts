@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Raw Otaku"
-    className = "RawOtaku"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangareader"
-    baseUrl = "https://rawotaku.com"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://rawotaku.com"
+    }
 }

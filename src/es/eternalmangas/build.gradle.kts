@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "EternalMangas"
-    className = "EternalMangas"
     versionCode = 2
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "iken"
-    baseUrl = "https://eternalmangas.org"
+
+    source {
+        baseUrl = "https://eternalmangas.org"
+        lang = "es"
+    }
 }

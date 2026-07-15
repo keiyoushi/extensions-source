@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -19,14 +20,11 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.util.Calendar
 
-class Comivex :
+@Source
+abstract class Comivex :
     HttpSource(),
     ConfigurableSource {
 
-    override val id: Long = 954997815643613941
-    override val name = "Comivex"
-    override val baseUrl = "https://comivex.com"
-    override val lang = "en"
     override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()

@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Hwago"
-    className = "Hwago"
     versionCode = 4
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://01.hwago.xyz"
+
+    source {
+        lang = "id"
+        baseUrl = "https://01.hwago.xyz"
+    }
 }

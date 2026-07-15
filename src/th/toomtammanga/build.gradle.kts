@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "ToomTam-Manga"
-    className = "ToomTamManga"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://toomtam-manga.com"
+
+    source {
+        lang = "th"
+        baseUrl = "https://toomtam-manga.com"
+    }
 }

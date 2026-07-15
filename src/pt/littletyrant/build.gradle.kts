@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Little Tyrant"
-    className = "LittleTyrant"
-    versionCode = 8
-    contentWarning = ContentWarning.NSFW
+    versionCode = 10
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://tiraninha.world"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://tiraninha.world"
+    }
 }

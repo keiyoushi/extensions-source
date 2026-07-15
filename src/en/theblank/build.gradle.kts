@@ -1,13 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "The Blank"
-    className = "TheBlank"
     versionCode = 54
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "pam"
-    baseUrl = "https://theblank.net"
+
+    source {
+        lang = "en"
+        baseUrl = "https://theblank.net"
+        versionId = 2
+    }
 }

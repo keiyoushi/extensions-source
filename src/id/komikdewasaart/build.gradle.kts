@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Komik Dewasa Art"
-    className = "KomikDewasaArt"
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://komikdewasa.art"
+
+    source {
+        lang = "id"
+        baseUrl = "https://komikdewasa.art"
+    }
 }

@@ -4,6 +4,7 @@ import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import okhttp3.Cookie
@@ -12,13 +13,9 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import java.io.IOException
 
-class Mangasusu :
-    MangaThemesia(
-        "Mangasusu",
-        "https://mangasusuku.com",
-        "id",
-        "/komik",
-    ) {
+@Source
+abstract class Mangasusu : MangaThemesia() {
+    override val mangaUrlDirectory = "/komik"
     override val client by lazy {
         super.client.newBuilder().addInterceptor(::sucuriInterceptor).build()
     }

@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Ghost Scan"
-    className = "GhostScan"
     versionCode = 2
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://ghostscan.xyz"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://ghostscan.xyz"
+    }
 }

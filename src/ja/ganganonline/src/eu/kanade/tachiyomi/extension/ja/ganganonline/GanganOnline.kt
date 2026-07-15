@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -17,10 +18,8 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class GanganOnline : HttpSource() {
-    override val name = "Gangan Online"
-    override val baseUrl = "https://www.ganganonline.com"
-    override val lang = "ja"
+@Source
+abstract class GanganOnline : HttpSource() {
     override val supportsLatest = false
 
     private val dateFormat = SimpleDateFormat("yyyy.MM.dd", Locale.JAPAN)

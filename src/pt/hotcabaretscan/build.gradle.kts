@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Hot Cabaret Scan"
-    className = "HotCabaretScan"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://hotcabaretscan.com"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://hotcabaretscan.com"
+    }
 }

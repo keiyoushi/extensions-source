@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "MangaReader.in"
-    className = "MangaReaderIN"
-    versionCode = 4
-    contentWarning = ContentWarning.NSFW
+    versionCode = 6
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
-    theme = "paprika"
-    baseUrl = "https://mangareader.in"
+
+    source {
+        lang = "en"
+        baseUrl = "https://mangareader.in"
+        id = 7388100486112484697L
+    }
 }

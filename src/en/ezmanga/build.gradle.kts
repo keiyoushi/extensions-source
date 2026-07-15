@@ -1,13 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "EZmanga"
-    className = "EZmanga"
     versionCode = 60
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "ezmanhwa"
-    baseUrl = "https://ezmanga.org"
+
+    source {
+        lang = "en"
+        baseUrl = "https://ezmanga.org"
+        versionId = 5
+    }
 }

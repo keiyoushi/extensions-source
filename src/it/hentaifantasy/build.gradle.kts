@@ -1,11 +1,17 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "HentaiFantasy"
-    className = "HentaiFantasy"
     versionCode = 7
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
+
+    source {
+        lang = "it"
+        baseUrl = "https://hentaifantasy.it"
+    }
 }

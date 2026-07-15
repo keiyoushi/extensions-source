@@ -1,13 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "DragonTranslation.org"
-    className = "DragonTranslationOrg"
-    versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    versionCode = 2
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
-    baseUrl = "https://dragontranslation.org"
+
+    source {
+        lang = "es"
+        baseUrl = "https://dragontranslation.org"
+    }
 }

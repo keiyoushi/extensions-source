@@ -1,13 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Sodsaime"
-    className = "Sodsaime"
     versionCode = 2
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
-    baseUrl = "https://www.xn--l3c0azab5a2gta.com"
+
+    source {
+        name = "สดใสเมะ"
+        lang = "th"
+        baseUrl = "https://www.xn--l3c0azab5a2gta.com"
+    }
 }

@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.milftoon
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
 
-class Milftoon : Madara("Milftoon", "https://milftoon.xxx", "en") {
+@Source
+abstract class Milftoon : Madara() {
     override val mangaSubString = "comics"
 }

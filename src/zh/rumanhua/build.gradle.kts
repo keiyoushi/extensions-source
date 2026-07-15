@@ -1,13 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Rumanhua"
-    className = "Rumanhua"
     versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mmlook"
-    baseUrl = "https://m.rumanhua2.com"
+
+    source {
+        name = "如漫画"
+        lang = "zh"
+        baseUrl = "https://m.rumanhua2.com"
+    }
 }

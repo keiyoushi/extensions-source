@@ -1,12 +1,17 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Lycan Toons"
-    className = "LycanToons"
-    versionCode = 5
+    versionCode = 8
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
-    baseUrl = "https://lycantoons.com"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://lycantoons.com"
+    }
 }
