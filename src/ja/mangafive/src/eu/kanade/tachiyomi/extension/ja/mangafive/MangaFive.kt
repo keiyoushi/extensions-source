@@ -74,7 +74,7 @@ abstract class MangaFive :
             SManga.create().apply {
                 title = it.selectFirst("h3.title")!!.text()
                 thumbnail_url = it.selectFirst("img.thum")?.absUrl("data-src")
-                setUrlWithoutDomain(it.absUrl("href").toHttpUrl().pathSegments.last())
+               url = it.absUrl("href").toHttpUrl().pathSegments.last()
             }
         }
         val hasNextPage = document.selectFirst(".pagination-list-item.to-next:not(.disabled)") != null
