@@ -1,17 +1,13 @@
 package eu.kanade.tachiyomi.extension.ja.zenon
 
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import okhttp3.Request
 import org.jsoup.nodes.Element
 
 @Source
 abstract class Zenon : GigaViewer() {
     override val supportsLatest: Boolean = false
-
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series/zenyon", headers)
 
     override val popularMangaSelector: String = ".series-item"
 
@@ -23,18 +19,9 @@ abstract class Zenon : GigaViewer() {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
 
-    override val searchMangaSelector: String = "ul.series-list > li"
-
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst(".series-title")!!.text()
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-    }
+    override val searchMangaNextPageSelector = "a.pager-next"
 
     override fun getCollections(): List<Collection> = listOf(
-        Collection("コミックぜにょん", "zenyon"),
-        Collection("月刊コミックゼノン", "zenon"),
-        Collection("コミックタタン", "tatan"),
         Collection("読切作品", "oneshot"),
         Collection("漫画賞", "newcomer"),
     )

@@ -44,7 +44,7 @@ class MangaDto(
             }
 
             if (!alternativeTitle.isNullOrBlank()) {
-                appendLine("${"\n".repeat(3)} Nome altenativo: $alternativeTitle")
+                appendLine("${"\n".repeat(3)} Nome alternativo: $alternativeTitle")
             }
         }
         author = authors?.joinToString()
