@@ -18,6 +18,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +33,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import okhttp3.Call
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
@@ -102,6 +107,9 @@ class WebViewScope<T> internal constructor(
     var useWideViewPort: Boolean by setting({ useWideViewPort }, { useWideViewPort = it })
     var loadWithOverviewMode: Boolean by setting({ loadWithOverviewMode }, { loadWithOverviewMode = it })
     var userAgent: String by setting({ userAgentString }, { userAgentString = it })
+
+    /** Routes all WebView network requests through OkHttp client instead of WebView's own network stack. */
+    var useOkHttpNetwork: Boolean = false
 
     /** Runs [block] on every navigation start. */
     fun onPageStarted(block: (url: String) -> Unit) {
@@ -266,6 +274,12 @@ private class ScopeWebViewClient(
     private val scope: WebViewScope<*>,
 ) : WebViewClient() {
 
+    private val client: OkHttpClient by lazy {
+        Injekt.get<NetworkHelper>().client.newBuilder().apply {
+            interceptors().removeAll { it.javaClass.simpleName == "CloudflareInterceptor" }
+        }.build()
+    }
+
     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
         if (scope.destroyed) return
         scope.pageStartedHooks.forEach { it(url.orEmpty()) }
@@ -280,9 +294,107 @@ private class ScopeWebViewClient(
         view: WebView?,
         request: WebResourceRequest?,
     ): WebResourceResponse? {
-        if (scope.destroyed) return null
-        val hook = scope.interceptHook ?: return null
-        return request?.let(hook)
+        if (scope.destroyed || request == null) return null
+        val hooked = scope.interceptHook?.invoke(request)
+        if (hooked != null) return hooked
+        if (scope.useOkHttpNetwork) return fetchFromOkHttp(request)
+        return null
+    }
+
+    private fun fetchFromOkHttp(request: WebResourceRequest): WebResourceResponse? {
+        if (request.method !in NO_BODY_METHODS) return null
+        if (request.url.scheme != "https" && request.url.scheme != "http") return null
+
+        val okhttpRequest = Request.Builder().apply {
+            url(request.url.toString())
+            method(request.method, null)
+            request.requestHeaders.forEach { (key, value) ->
+                if (key == "X-Requested-With" && value == applicationContext.packageName) {
+                    return@forEach
+                }
+                if (key.startsWith("Sec-CH-UA", ignoreCase = true)) {
+                    return@forEach
+                }
+                header(key, value)
+            }
+            clientHints(request.requestHeaders["User-Agent"]).forEach { (key, value) ->
+                header(key, value)
+            }
+        }.build()
+
+        return try {
+            val response = client.newCall(okhttpRequest).execute()
+            val body = response.body
+            val contentType = body.contentType()
+            WebResourceResponse(
+                contentType?.let { "${it.type}/${it.subtype}" } ?: "application/octet-stream",
+                contentType?.charset()?.name() ?: "UTF-8",
+                response.code,
+                response.message.ifEmpty { "OK" },
+                response.headers.toMap()
+                    .filterKeys { !it.equals("Content-Encoding", true) && !it.equals("Content-Length", true) },
+                body.byteStream(),
+            )
+        } catch (_: IOException) {
+            null
+        }
+    }
+
+    private fun clientHints(userAgent: String?): Map<String, String> {
+        userAgent ?: return emptyMap()
+        val (name, version, chromiumVersion) = when {
+            userAgent.contains("Firefox/") && !userAgent.contains("Chrome") -> return emptyMap()
+
+            userAgent.contains("Safari/") &&
+                !userAgent.contains("Chrome") &&
+                !userAgent.contains("Chromium") -> return emptyMap()
+
+            userAgent.contains("Edg/") || userAgent.contains("EdgA/") || userAgent.contains("EdgiOS/") -> {
+                val edgeVersion = EDGE_REGEX.find(userAgent)?.groupValues?.get(1) ?: "134"
+                val chromiumVersion = CHROME_REGEX.find(userAgent)?.groupValues?.get(1) ?: edgeVersion
+                Triple("Microsoft Edge", edgeVersion, chromiumVersion)
+            }
+
+            userAgent.contains("OPR/") -> {
+                val operaVersion = OPERA_REGEX.find(userAgent)?.groupValues?.get(1) ?: "118"
+                val chromiumVersion = CHROME_REGEX.find(userAgent)?.groupValues?.get(1) ?: "134"
+                Triple("Opera", operaVersion, chromiumVersion)
+            }
+
+            userAgent.contains("Chrome/") -> {
+                val chromeVersion = CHROME_REGEX.find(userAgent)?.groupValues?.get(1) ?: "134"
+                Triple("Google Chrome", chromeVersion, chromeVersion)
+            }
+
+            else -> return emptyMap()
+        }
+
+        val isMobile = userAgent.contains("Mobile") ||
+            userAgent.contains("Android") ||
+            userAgent.contains("iPhone") ||
+            userAgent.contains("iPad")
+
+        val platform = when {
+            userAgent.contains("Windows") -> "\"Windows\""
+            userAgent.contains("Android") -> "\"Android\""
+            userAgent.contains("iPhone") || userAgent.contains("iPad") -> "\"iOS\""
+            userAgent.contains("Macintosh") || userAgent.contains("Mac OS X") -> "\"macOS\""
+            userAgent.contains("Linux") -> "\"Linux\""
+            else -> "\"Windows\""
+        }
+
+        return mapOf(
+            "Sec-CH-UA" to "\"$name\";v=\"$version\", \"Chromium\";v=\"$chromiumVersion\", \"Not A(Brand\";v=\"24\"",
+            "Sec-CH-UA-Mobile" to if (isMobile) "?1" else "?0",
+            "Sec-CH-UA-Platform" to platform,
+        )
+    }
+
+    private companion object {
+        val CHROME_REGEX = Regex("""Chrome/(\d+)""")
+        val EDGE_REGEX = Regex("""Edg[^/]*/(\d+)""")
+        val OPERA_REGEX = Regex("""OPR/(\d+)""")
+        val NO_BODY_METHODS = setOf("GET", "HEAD", "OPTIONS")
     }
 
     override fun onReceivedError(
