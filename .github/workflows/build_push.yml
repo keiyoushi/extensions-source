@@ -97,6 +97,7 @@ jobs:
           retention-days: 1
 
       - name: Clean up CI files
+        if: always()
         run: rm signingkey.jks
 
   publish:
