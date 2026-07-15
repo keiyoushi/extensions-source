@@ -31,7 +31,7 @@ data class ChapterDto(
     fun toSChapter(): SChapter = SChapter.create().apply {
         name = this@ChapterDto.title
         chapter_number = number.toFloatOrNull() ?: 0f
-        url = this@ChapterDto.url.toHttpUrl().encodedPath.trimEnd('/') ?: ""
+        url = this@ChapterDto.url.toHttpUrl().encodedPath
         date_upload = timestamp * 1000
     }
 }

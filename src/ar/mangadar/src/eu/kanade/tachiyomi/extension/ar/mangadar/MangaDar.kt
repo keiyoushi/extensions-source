@@ -78,12 +78,11 @@ abstract class MangaDar : HttpSource() {
     private fun parseSearchJson(response: Response): MangasPage {
         val result = response.parseAs<SearchResponse>()
         val mangas = result.data.map { item ->
-            val encodedPath = item.url.toHttpUrl().encodedPath
-            val slug = encodedPath.trim('/').substringAfterLast("manga/").trim('/')
+            val slug = item.url.toHttpUrl().pathSegments.last { it.isNotEmpty() }
             SManga.create().apply {
                 title = item.title
                 thumbnail_url = item.cover
-                url = "/manga/$slug"
+                url = slug
             }
         }
         return MangasPage(mangas, false)
@@ -92,10 +91,9 @@ abstract class MangaDar : HttpSource() {
     private fun parseMangaListPage(response: Response): MangasPage {
         val doc = response.asJsoup()
         val mangas = doc.select("a[href*=/manga/]").mapNotNull { element ->
-            val href = element.absUrl("href")
-            if (href.isBlank() || !href.contains("/manga/")) return@mapNotNull null
-            val slug = href.removePrefix("$baseUrl/manga/").trim('/')
-            if (slug.isBlank() || slug.contains("/") || slug == "page") return@mapNotNull null
+            val slug = element.absUrl("href").toHttpUrl()
+                .pathSegments.last { it.isNotEmpty() }
+            if (slug.isBlank() || slug == "page") return@mapNotNull null
             val title = element.select("img").attr("alt")
                 .ifBlank { element.select("h3, h4, .font-semibold").text() }
             if (title.isBlank()) return@mapNotNull null
@@ -103,7 +101,7 @@ abstract class MangaDar : HttpSource() {
                 img.attr("abs:src").ifBlank { img.attr("abs:data-src") }
             }
             SManga.create().apply {
-                url = "/manga/$slug"
+                url = slug
                 this.title = title
                 thumbnail_url = thumbnail
             }
@@ -112,7 +110,7 @@ abstract class MangaDar : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", headers)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/manga/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val doc = response.asJsoup()
