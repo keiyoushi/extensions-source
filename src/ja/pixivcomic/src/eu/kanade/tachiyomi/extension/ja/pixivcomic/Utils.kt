@@ -16,7 +16,7 @@ internal fun getTimeAndHash(salt: String): Pair<String, String> {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).format(now) + now.zoneOffset()
     }
 
-    val hash = MessageDigest.getInstance("SHA-256").digest((time + salt).toByteArray()).toHexString()
+    val hash = MessageDigest.getInstance("SHA-256").digest((time + salt).encodeToByteArray()).toHexString()
 
     return time to hash
 }

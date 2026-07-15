@@ -4,6 +4,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
 
@@ -62,7 +64,7 @@ class Product(
     @SerialName("official_work_id") private val officialWorkId: Int?,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = officialWorkId?.toString() ?: "store/$key"
+        url = officialWorkId?.toString() ?: key
         title = this@Product.title
         description = explanation?.let { Jsoup.parseBodyFragment(it).text() }
         author = authorName
@@ -71,6 +73,11 @@ class Product(
             ?.removePathSegment(0)
             ?.build()
             ?.toString()
+        memo = buildJsonObject {
+            if (officialWorkId == null) {
+                put("store", "1")
+            }
+        }
     }
 }
 
@@ -215,7 +222,6 @@ class ReadingEpisode(
 @Serializable
 class Page(
     val url: String,
-    val key: String,
 )
 
 @Serializable

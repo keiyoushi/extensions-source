@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
@@ -20,6 +21,7 @@ import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -32,11 +34,11 @@ import okhttp3.Response
 import java.io.IOException
 
 @Source
-abstract class PixivComic : HttpSource() {
-    override val supportsLatest = true
-
+abstract class PixivComic :
+    KeiSource(),
+    ConfigurableSource {
     private val apiUrl = "$baseUrl/api/app"
-    private val viewerUrl = "https://comic-store-viewer.$domain/api"
+    private val viewerUrl = "https://comic-store-viewer.pixiv.net/api"
     private val preferences by getPreferencesLazy()
     private val pageSize = 30
 
@@ -52,7 +54,7 @@ abstract class PixivComic : HttpSource() {
             val request = it.request()
             val response = it.proceed(request)
             if (response.code == 400 && request.url.pathSegments.last() == "master") {
-                throw IOException("Log in via WebView and purchase this volume to read it, even if it's free.")
+                throw IOException("Log in via WebView and purchase this volume to read.")
             }
             response
         }
@@ -83,10 +85,10 @@ abstract class PixivComic : HttpSource() {
         return client.get(url).toMangasPage()
     }
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filterList: FilterList): MangasPage = coroutineScope {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = coroutineScope {
         if (query.isBlank()) {
-            val tag = filterList.firstInstanceOrNull<TagsFilter>()?.state?.trim()?.removePrefix("#")
-            val category = filterList.firstInstanceOrNull<CategoryFilter>()?.selected
+            val tag = filters.firstInstanceOrNull<TagsFilter>()?.state?.trim()?.removePrefix("#")
+            val category = filters.firstInstanceOrNull<CategoryFilter>()?.selected
             val url = if (!tag.isNullOrEmpty()) {
                 "$apiUrl/tags".toHttpUrl().newBuilder()
                     .addPathSegment(tag)
@@ -160,28 +162,24 @@ abstract class PixivComic : HttpSource() {
         )
     }
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/categories").parseAs<ApiResponse<CategoryResponse>>().data.categories.map { it.name }.toJsonElement()
+    override suspend fun fetchFilterData() = client.get("$apiUrl/categories").parseAs<ApiResponse<CategoryResponse>>().data.categories.map { it.name }.toJsonElement()
 
-    override fun getMangaUrl(manga: SManga): String {
-        val url = "$baseUrl/${manga.url}".toHttpUrl().pathSegments
-        return if (url.first() == "store") {
-            "$baseUrl/store/products/${url.last()}"
-        } else {
-            "$baseUrl/works/${manga.url}"
-        }
+    override fun getMangaUrl(manga: SManga): String = if (manga.memo["store"]?.stringOrNull == "1") {
+        "$baseUrl/store/products/${manga.url}"
+    } else {
+        "$baseUrl/works/${manga.url}"
     }
 
-    override suspend fun getMangaUpdate(
+    override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        val url = "$baseUrl/${manga.url}".toHttpUrl().pathSegments
-        if (url.first() == "store") {
+        if (manga.memo["store"]?.stringOrNull == "1") {
             val product = try {
-                fetchProduct(url.last())
+                fetchProduct(manga.url)
             } catch (_: Exception) {
                 throw Exception("Log in via WebView and enable R-18 content at https://www.pixiv.net/settings/viewing")
             }
