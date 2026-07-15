@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "DeviantArt"
     versionCode = 10
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

@@ -145,7 +145,7 @@ abstract class TeamX : HttpSource() {
         filters: FilterList,
     ): Request {
         if (query.isNotEmpty()) {
-            val url = "$baseUrl/ajax/search".toHttpUrl().newBuilder()
+            val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("keyword", query)
                 .build()
             return GET(url, headers)
@@ -167,7 +167,7 @@ abstract class TeamX : HttpSource() {
         return GET(url.build(), headers)
     }
 
-    private val searchMangaSelector = "a.items-center, $popularMangaSelector"
+    private val searchMangaSelector = "div.tx-grid a.tx-card, $popularMangaSelector"
 
     override fun searchMangaParse(response: Response): MangasPage {
         if ("series" in response.request.url.pathSegments) {
@@ -176,7 +176,7 @@ abstract class TeamX : HttpSource() {
         val document = response.asJsoup()
         val mangas = document.select(searchMangaSelector).map { element ->
             SManga.create().apply {
-                title = element.selectFirst("h4")!!.text()
+                title = element.selectFirst("h3")!!.text()
                 thumbnail_url = element.selectFirst("img")?.absUrl("src")
                     ?.replace(thumbnailSuffix, "")
                 setUrlWithoutDomain(element.absUrl("href"))

@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Mangahere"
     versionCode = 23
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

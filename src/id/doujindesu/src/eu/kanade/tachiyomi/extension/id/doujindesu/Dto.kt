@@ -66,7 +66,7 @@ class MangaItem(
         ?.takeIf { it.isNotEmpty() }
         ?.joinToString()
 
-    fun toSManga(): SManga = SManga.create().apply {
+    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
         val termMap = mutableMapOf<String, MutableList<String>>()
         termList?.split("|")?.forEach {
             val parts = it.split(":")
@@ -86,7 +86,7 @@ class MangaItem(
 
         url = "/manga/$slug/"
         title = this@MangaItem.title
-        thumbnail_url = coverUrl
+        thumbnail_url = if (coverUrl.startsWith("/")) baseUrl + coverUrl else coverUrl
         author = mangaAuthor
 
         status = when {

@@ -53,7 +53,9 @@ class ViewAllData(
 
 @Serializable
 class BrowseManga(
-    private val id: Int,
+    @SerialName("manga_id")
+    @JsonNames("id")
+    val id: Int,
     private val title: String,
     private val photo: String? = null,
     @SerialName("is_blurworthy")
@@ -82,6 +84,22 @@ class BrowseManga(
                 }
             }
         }
+    }
+}
+
+@Serializable
+class BookmarksData(
+    val entries: List<BrowseManga> = emptyList(),
+    val total: Int? = null,
+    val page: Int? = null,
+    @SerialName("per_page")
+    val perPage: Int? = null,
+) {
+    fun hasNextPage(): Boolean {
+        val p = page ?: 1
+        val pp = perPage ?: 39
+        val t = total ?: 0
+        return p * pp < t
     }
 }
 
@@ -305,6 +323,7 @@ class Volume(
     @SerialName("date_added")
     val date: String? = null,
     val source: String = "user",
+    val language: String? = null,
 )
 
 @Serializable
@@ -344,4 +363,9 @@ class TagItem(
     val weight: String? = null,
     @SerialName("is_adult")
     val isAdult: Boolean = false,
+)
+
+@Serializable
+class ForYouResponse(
+    val items: List<BrowseManga> = emptyList(),
 )

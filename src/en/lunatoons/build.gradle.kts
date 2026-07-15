@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Luna Toons"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "keyoapp"
 

@@ -6,8 +6,8 @@ plugins {
 
 keiyoushi {
     name = "Zenko"
-    versionCode = 7
-    contentWarning = ContentWarning.NSFW
+    versionCode = 8
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

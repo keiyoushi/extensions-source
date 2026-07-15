@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "LectorJPG"
     versionCode = 50
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

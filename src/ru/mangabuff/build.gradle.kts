@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "MangaBuff"
     versionCode = 6
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {

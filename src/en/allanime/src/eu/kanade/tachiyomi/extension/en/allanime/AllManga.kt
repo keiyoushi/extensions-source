@@ -42,9 +42,10 @@ import java.util.concurrent.TimeUnit
 abstract class AllManga :
     HttpSource(),
     ConfigurableSource {
-    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
 
     private val apiUrl = "https://api.allanime.day/api"
+
+    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
 
     override val supportsLatest = true
 
@@ -52,8 +53,34 @@ abstract class AllManga :
 
     private val preferences by getPreferencesLazy()
 
+    private val retryRegex = Regex("""in (\d+) second""", RegexOption.IGNORE_CASE)
+
     override val client = network.client.newBuilder()
         .apply { interceptors().removeAll { it.javaClass.simpleName == "CloudflareInterceptor" } }
+        .addInterceptor { chain ->
+            val request = chain.request()
+
+            if (request.url.host != apiUrlHost) return@addInterceptor chain.proceed(request)
+
+            var lastResponse: Response? = null
+
+            for (attempt in 0..5) {
+                val response = chain.proceed(request)
+                lastResponse = response
+
+                val retryAfter = retryRegex.find(response.peekBody(1024).string())
+                    ?.groupValues?.get(1)?.toLongOrNull()
+
+                if (retryAfter == null) return@addInterceptor response
+
+                if (attempt < 5) {
+                    response.close()
+                    Thread.sleep(retryAfter * 1000)
+                }
+            }
+
+            return@addInterceptor lastResponse!!
+        }
         .rateLimit(1) { it.host == apiUrlHost }
         .build()
 
@@ -175,16 +202,7 @@ abstract class AllManga :
         return result.data.manga.toSManga()
     }
 
-    @Volatile
-    private var mangaUrl: String? = null
-
     override fun getMangaUrl(manga: SManga): String {
-        // to solve interactive CF manually for the chapter
-        if (mangaUrl != null) {
-            val chapterUrl = mangaUrl!!
-            mangaUrl = null
-            return chapterUrl
-        }
         val mangaId = manga.url.split("/")[2]
         return "$baseUrl/manga/$mangaId"
     }
@@ -228,13 +246,13 @@ abstract class AllManga :
     /* Pages */
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
         val chapterUrl = getChapterUrl(chapter)
+        val mangaUrl = chapterUrl.substringBeforeLast('/')
 
-        client.newCall(GET(chapterUrl, headers)).execute().use { response ->
+        client.newCall(GET(mangaUrl, headers)).execute().use { response ->
             if (response.code == 403 || response.code == 503) {
-                mangaUrl = chapterUrl
-                throw IOException("Solve Captcha in Webview and Retry")
+                throw IOException("Solve captcha in WebView and retry")
             }
-            pageListFromWebView(response.asJsoup())
+            pageListFromWebView(response.asJsoup(), chapterUrl.replace(baseUrl, ""))
         }
     }
 
@@ -243,7 +261,7 @@ abstract class AllManga :
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun pageListFromWebView(document: Document): List<Page> {
+    private fun pageListFromWebView(document: Document, chapterUrl: String): List<Page> {
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
         val jsInterface = JsInterface(latch)
@@ -263,8 +281,33 @@ abstract class AllManga :
                         return result;
                     }
                 });
+
+                function triggerChapterNav() {
+                    const a = document.createElement('a');
+                    a.href = a.dataset.href = '$chapterUrl';
+                    document.body.append(a);
+                    a.click();
+                }
+
+               let checkAttempts = 0;
+               const maxAttempts = 300; // 15 seconds
+
+               function check() {
+                   if (document.querySelector('[data-href]')) {
+                       // trigger early when SPA nav ready
+                       triggerChapterNav();
+                   } else if (checkAttempts < maxAttempts) {
+                       checkAttempts++;
+                       setTimeout(check, 50);
+                   } else {
+                       // trigger anyway
+                       triggerChapterNav();
+                   }
+               }
+               check();
             })();
         """.trimIndent()
+
         var webView: WebView? = null
 
         handler.post {
@@ -289,7 +332,7 @@ abstract class AllManga :
             view.loadDataWithBaseURL(document.location(), document.outerHtml(), "text/html", "utf-8", null)
         }
 
-        val completed = latch.await(30, TimeUnit.SECONDS)
+        val completed = latch.await(20, TimeUnit.SECONDS)
         handler.post { webView?.destroy() }
 
         if (!completed) throw Exception("Timed out waiting for page list")
