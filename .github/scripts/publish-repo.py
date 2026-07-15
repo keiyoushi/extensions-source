@@ -13,7 +13,9 @@ from google.protobuf import json_format
 
 import index_pb2
 
-APPLICATION_ICON_320_REGEX = re.compile(r"^application-icon-320:'([^']+)'", re.MULTILINE)
+APPLICATION_ICON_320_REGEX = re.compile(
+    r"^application-icon-320:'([^']+)'", re.MULTILINE
+)
 LANGUAGE_REGEX = re.compile(r"tachiyomi-([^.]+)")
 
 
@@ -21,6 +23,7 @@ LANGUAGE_REGEX = re.compile(r"tachiyomi-([^.]+)")
 def aapt() -> Path:
     *_, build_tools = (Path(os.environ["ANDROID_HOME"]) / "build-tools").iterdir()
     return build_tools / "aapt"
+
 
 # Artifacts downloaded from the build jobs: one APK per extension plus the source metadata JSON
 # emitted by each assembleRelease.
@@ -36,7 +39,7 @@ REPO_JAR_DIR.mkdir(parents=True, exist_ok=True)
 REPO_ICON_DIR.mkdir(parents=True, exist_ok=True)
 
 APK_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions@repo/apk"
-JAR_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions@repo/jar"
+JAR_BASE_URL = "https://raw.githubusercontent.com/keiyoushi/extensions/repo/jar"
 ICON_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions@repo/icon"
 
 to_delete: list[str] = json.loads(sys.argv[1])
@@ -64,14 +67,18 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
     package_name = info["packageName"]
     apk = next((info_file.parent / "outputs/apk/release").glob("*.apk"), None)
     if apk is None:
-        raise FileNotFoundError(f"{package_name}: no release apk found under {info_file.parent}")
+        raise FileNotFoundError(
+            f"{package_name}: no release apk found under {info_file.parent}"
+        )
 
     apk_name = apk.name.replace("-release.apk", ".apk")
     (REPO_APK_DIR / apk_name).write_bytes(apk.read_bytes())
 
     jar = next((info_file.parent / "outputs/jar/release").glob("*.jar"), None)
     if jar is None:
-        raise FileNotFoundError(f"{package_name}: no release jar found under {info_file.parent}")
+        raise FileNotFoundError(
+            f"{package_name}: no release jar found under {info_file.parent}"
+        )
     (REPO_JAR_DIR / jar.name).write_bytes(jar.read_bytes())
 
     badging = subprocess.check_output(

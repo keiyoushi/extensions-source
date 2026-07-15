@@ -38,7 +38,7 @@ kotlin-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", ver
 kotlin-protobuf = { module = "org.jetbrains.kotlinx:kotlinx-serialization-protobuf", version.ref = "serialization" }
 kotlin-json-okio = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json-okio", version.ref = "serialization" }
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib-jdk8", version.ref = "kotlin-gradle" }
-okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+okhttp-core = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 okhttp-brotli = { module = "com.squareup.okhttp3:okhttp-brotli", version.ref = "okhttp" }
 okhttp-zstd = { module = "com.squareup.okhttp3:okhttp-zstd", version.ref = "okhttp" }
 quickjs = { module = "app.cash.quickjs:quickjs-android", version = "0.9.2" }
@@ -64,4 +64,4 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 
 [bundles]
-common = ["kotlin-stdlib", "coroutines-core", "coroutines-android", "injekt-core", "rxjava", "kotlin-protobuf", "kotlin-json", "kotlin-json-okio", "jsoup", "jspecify", "okhttp", "okhttp-brotli", "okhttp-zstd", "zstd-kmp-okio", "quickjs"]
+common = ["kotlin-stdlib", "coroutines-core", "coroutines-android", "injekt-core", "rxjava", "kotlin-protobuf", "kotlin-json", "kotlin-json-okio", "jsoup", "jspecify", "okhttp-core", "okhttp-brotli", "okhttp-zstd", "zstd-kmp-okio", "quickjs"]
