@@ -288,7 +288,7 @@ abstract class PixivComic :
             val content = client.get(cUrl).parseAs<PublusContent>()
 
             if (content.url.isNullOrEmpty()) {
-                throw Exception("Log in via WebView and purchase this volume to read it, even if it's free.")
+                throw Exception("Log in via WebView and purchase this volume to read.")
             }
 
             return fetchPages(content.url!!, headers, client, content.authInfo?.toAuth(), hashFilenames = false)
