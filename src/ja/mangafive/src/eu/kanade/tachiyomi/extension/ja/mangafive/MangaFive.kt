@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
@@ -28,13 +29,10 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaFive :
+@Source
+abstract class MangaFive :
     KeiSource(),
     ConfigurableSource {
-    override val name = "Manga-5"
-    override val baseUrl = "https://manga-5.com"
-    override val lang = "ja"
-
     private val preferences by getPreferencesLazy()
     private val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.ROOT)
 
@@ -44,9 +42,9 @@ class MangaFive :
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = client.get("$baseUrl/series?p=$page").toMangasPage()
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filterList: FilterList): MangasPage {
-        val sort = filterList.firstInstance<SortFilter>()
-        val genre = filterList.firstInstance<GenreFilter>()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val sort = filters.firstInstance<SortFilter>()
+        val genre = filters.firstInstance<GenreFilter>()
 
         if (query.isNotBlank()) {
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
@@ -83,7 +81,7 @@ class MangaFive :
         return MangasPage(mangas, hasNextPage)
     }
 
-    override suspend fun getMangaUpdate(
+    override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
@@ -91,16 +89,18 @@ class MangaFive :
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
 
-        if (fetchDetails) {
+        val mangas = if (fetchDetails) {
             val detail = document.selectFirst(".comic-main-right-detail")!!
             val name = detail.selectFirst("h1.comic-title")!!.text()
-            manga.apply {
+            SManga.create().apply {
                 title = name
                 author = detail.select(".author-list .author").joinToString { it.text() }
                 description = detail.selectFirst(".comic-discription-text")?.text()
                 thumbnail_url = document.selectFirst(".comic-main-thum-wrapper img")?.absUrl("src")
                 status = if ("完結" in name) SManga.COMPLETED else SManga.ONGOING
             }
+        } else {
+            manga
         }
 
         val chapterList = if (fetchChapters) {
@@ -128,7 +128,7 @@ class MangaFive :
             chapters
         }
 
-        return SMangaUpdate(manga, chapterList)
+        return SMangaUpdate(mangas, chapterList)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/content/${manga.url}"
