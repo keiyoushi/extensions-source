@@ -89,18 +89,14 @@ abstract class MangaFive :
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
 
-        val mangas = if (fetchDetails) {
-            val detail = document.selectFirst(".comic-main-right-detail")!!
-            val name = detail.selectFirst("h1.comic-title")!!.text()
-            SManga.create().apply {
-                title = name
-                author = detail.select(".author-list .author").joinToString { it.text() }
-                description = detail.selectFirst(".comic-discription-text")?.text()
-                thumbnail_url = document.selectFirst(".comic-main-thum-wrapper img")?.absUrl("src")
-                status = if ("完結" in name) SManga.COMPLETED else SManga.ONGOING
-            }
-        } else {
-            manga
+        val detail = document.selectFirst(".comic-main-right-detail")!!
+        val titleName = detail.selectFirst("h1.comic-title")!!.text()
+        val mangas = SManga.create().apply {
+            title = titleName
+            author = detail.select(".author-list .author").joinToString { it.text() }
+            description = detail.selectFirst(".comic-discription-text")?.text()
+            thumbnail_url = document.selectFirst(".comic-main-thum-wrapper img")?.absUrl("src")
+            status = if ("完結" in titleName) SManga.COMPLETED else SManga.ONGOING
         }
 
         val chapterList = if (fetchChapters) {
