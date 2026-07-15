@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.CacheControlInterceptor
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.jsonInstance
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -43,6 +44,19 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.days
 
 abstract class KeiSource : HttpSource() {
+
+    // make `headers` not lazy
+    init {
+        val delegate = object : Lazy<Headers> {
+            override val value: Headers get() = headersBuilder().build()
+            override fun isInitialized(): Boolean = true
+        }
+
+        HttpSource::class.java.getDeclaredField($$"headers$delegate").apply {
+            isAccessible = true
+            set(this@KeiSource, delegate)
+        }
+    }
 
     /**
      * Customizes the OkHttpClient builder. Subclasses can override this to configure timeouts,
@@ -81,6 +95,8 @@ abstract class KeiSource : HttpSource() {
             }
 
             configureClient()
+
+            addNetworkInterceptor(CacheControlInterceptor())
 
             // last application interceptor
             addInterceptor(CompressionInterceptor(Brotli, Gzip, Zstd))
@@ -168,9 +184,7 @@ abstract class KeiSource : HttpSource() {
 
     /**
      * Text shown as a filter header hint while filters are unavailable
-     * (see [supportsFilterFetching]). Sources generated from an abstract
-     * `@Source` class get a localized value filled in by the DSL; concrete
-     * sources just use this default unless they override it themselves.
+     * Do not override by hand
      */
     protected open val filterFetchHint: String get() = "Tap 'Reset' to load filters"
 
@@ -333,11 +347,15 @@ abstract class KeiSource : HttpSource() {
 
     /**
      * Whether the source supports retrieving related manga.
+     *
+     * Only works on Komikku
      */
     override val supportsRelatedMangas get() = true
 
     /**
      * Whether to fall back to searching the source by the manga's title if a direct related manga list is unavailable.
+     *
+     * Only works on Komikku
      */
     protected open val supportRelatedMangasBySearch get() = false
 
@@ -349,6 +367,8 @@ abstract class KeiSource : HttpSource() {
 
     /**
      * Fetches a list of related manga for the specified manga.
+     *
+     * Only works on Komikku
      *
      * @param manga The reference manga.
      * @return A list of related [SManga].
