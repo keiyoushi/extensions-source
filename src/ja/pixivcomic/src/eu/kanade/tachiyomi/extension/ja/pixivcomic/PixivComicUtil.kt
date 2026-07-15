@@ -1,11 +1,15 @@
 package eu.kanade.tachiyomi.extension.ja.pixivcomic
 
+import android.annotation.SuppressLint
+import android.os.Build
 import okhttp3.Interceptor
 import okhttp3.Response
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
+import kotlin.math.abs
 
 private class NoSuchTagException(message: String) : Exception(message)
 
@@ -34,7 +38,12 @@ internal fun randomString(): String {
 
 @OptIn(ExperimentalUnsignedTypes::class)
 internal fun getTimeAndHash(salt: String): Pair<String, String> {
-    val timeFormatted = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ENGLISH).format(Date())
+    val timeFormatted = if (Build.VERSION.SDK_INT < 24) {
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH).format(Date())
+            .plus(getCurrentTimeZoneOffsetString())
+    } else {
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ENGLISH).format(Date())
+    }
 
     val saltedTimeArray = timeFormatted.plus(salt).toByteArray()
     val saltedTimeHash = MessageDigest.getInstance("SHA-256")
@@ -48,4 +57,22 @@ internal fun getTimeAndHash(salt: String): Pair<String, String> {
     }
 
     return Pair(timeFormatted, hexadecimalTimeHash)
+}
+
+/**
+ * workaround to retrieve time zone offset for android with version lower than 24
+ */
+@SuppressLint("DefaultLocale")
+private fun getCurrentTimeZoneOffsetString(): String {
+    val timeZone = TimeZone.getDefault()
+    val offsetInMillis = timeZone.rawOffset
+
+    val hours = offsetInMillis / (1000 * 60 * 60)
+    val minutes = (offsetInMillis % (1000 * 60 * 60)) / (1000 * 60)
+
+    val sign = if (hours >= 0) "+" else "-"
+    val formattedHours = String.format("%02d", abs(hours))
+    val formattedMinutes = String.format("%02d", abs(minutes))
+
+    return "$sign$formattedHours:$formattedMinutes"
 }

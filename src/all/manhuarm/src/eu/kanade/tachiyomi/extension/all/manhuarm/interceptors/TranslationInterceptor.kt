@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.manhuarm.interceptors
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import eu.kanade.tachiyomi.extension.all.manhuarm.Dialog
 import eu.kanade.tachiyomi.extension.all.manhuarm.Language
 import eu.kanade.tachiyomi.extension.all.manhuarm.Manhuarm.Companion.PAGE_REGEX
@@ -15,6 +17,7 @@ import okhttp3.Interceptor
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
+@RequiresApi(Build.VERSION_CODES.O)
 class TranslationInterceptor(
     val language: Language,
     private val translator: TranslatorEngine,

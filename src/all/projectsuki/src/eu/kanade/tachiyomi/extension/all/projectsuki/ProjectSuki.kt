@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.projectsuki
 
+import android.os.Build
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -303,6 +304,20 @@ abstract class ProjectSuki :
             }
 
             searchMode == ProjectSukiFilters.SearchMode.SMART -> {
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+                    throw Exception(
+                        buildString {
+                            append("Please enable ")
+                            append(ProjectSukiFilters.SearchMode.SIMPLE)
+                            append(" Search Mode: ")
+                            append(ProjectSukiFilters.SearchMode.SMART)
+                            append(" mode requires Android API version >= 24, but ")
+                            append(Build.VERSION.SDK_INT)
+                            append(" was found!")
+                        },
+                    )
+                }
+
                 client.newCall(ProjectSukiAPI.bookSearchRequest(headers))
                     .asObservableSuccess()
                     .map { response -> ProjectSukiAPI.parseBookSearchResponse(response) }

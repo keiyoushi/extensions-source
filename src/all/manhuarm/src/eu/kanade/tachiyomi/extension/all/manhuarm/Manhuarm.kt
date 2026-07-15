@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.extension.all.manhuarm
 
 import android.content.SharedPreferences
+import android.os.Build
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
@@ -44,6 +46,7 @@ import java.util.Date
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Source
 abstract class Manhuarm :
     Madara(),
