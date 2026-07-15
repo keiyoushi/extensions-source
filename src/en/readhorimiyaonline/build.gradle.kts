@@ -5,17 +5,13 @@ plugins {
 }
 
 keiyoushi {
-    name = "Asura Scans"
-    versionCode = 65
+    name = "Read Horimiya Online"
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.6"
+    libVersion = "1.4"
 
     source {
         lang = "en"
-        baseUrl = "https://asurascans.com"
-    }
-
-    deeplink {
-        path("/comics/..*")
+        baseUrl = "https://read-horimiya.online"
     }
 }
