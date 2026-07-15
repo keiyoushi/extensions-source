@@ -75,10 +75,6 @@ abstract class Pawchive :
 
             response
         }
-        .apply {
-            val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
-            if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
-        }
         .cache(
             Cache(
                 directory = File(Injekt.get<Application>().externalCacheDir, "network_cache_${name.lowercase()}"),
