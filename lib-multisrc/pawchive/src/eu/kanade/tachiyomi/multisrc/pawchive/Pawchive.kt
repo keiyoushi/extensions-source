@@ -77,7 +77,7 @@ abstract class Pawchive :
         }
         .cache(
             Cache(
-                directory = File(Injekt.get<Application>().externalCacheDir, "network_cache_${name.lowercase()}"),
+                directory = File(applicationContext.externalCacheDir, "network_cache_${name.lowercase()}"),
                 maxSize = 50L * 1024 * 1024, // 50 MiB
             ),
         )
