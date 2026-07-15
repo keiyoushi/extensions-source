@@ -7,279 +7,300 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonString
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import okio.IOException
 import org.jsoup.nodes.Document
-import rx.Observable
-import java.util.Collections
+import kotlin.io.use
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class AsuraScans :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     private val apiUrl = "https://api.asurascans.com/api"
 
-    override val supportsLatest = true
-
-    private val preferences: SharedPreferences = getPreferences()
-
-    init {
-        // remove legacy preferences
-        preferences.run {
-            if (contains("pref_url_map")) {
-                edit().remove("pref_url_map").apply()
-            }
-            if (contains("pref_base_url_host")) {
-                edit().remove("pref_base_url_host").apply()
-            }
-            if (contains("pref_permanent_manga_url_2_en")) {
-                edit().remove("pref_permanent_manga_url_2_en").apply()
-            }
-            if (contains("pref_slug_map")) {
-                edit().remove("pref_slug_map").apply()
-            }
-            if (contains("pref_dynamic_url")) {
-                edit().remove("pref_dynamic_url").apply()
-            }
-            if (contains("pref_slug_map_2")) {
-                edit().remove("pref_slug_map_2").apply()
-            }
-            if (contains("pref_force_high_quality")) {
-                edit().remove("pref_force_high_quality").apply()
-            }
+    private val preferences: SharedPreferences = getPreferences {
+        if (contains("pref_url_map")) {
+            edit().remove("pref_url_map").apply()
+        }
+        if (contains("pref_base_url_host")) {
+            edit().remove("pref_base_url_host").apply()
+        }
+        if (contains("pref_permanent_manga_url_2_en")) {
+            edit().remove("pref_permanent_manga_url_2_en").apply()
+        }
+        if (contains("pref_slug_map")) {
+            edit().remove("pref_slug_map").apply()
+        }
+        if (contains("pref_dynamic_url")) {
+            edit().remove("pref_dynamic_url").apply()
+        }
+        if (contains("pref_slug_map_2")) {
+            edit().remove("pref_slug_map_2").apply()
+        }
+        if (contains("pref_force_high_quality")) {
+            edit().remove("pref_force_high_quality").apply()
         }
     }
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addNetworkInterceptor(::scrambledImageInterceptor)
-        .rateLimit(2, 2.seconds) { !it.encodedPath.contains("/covers/") }
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(::scrambledImageInterceptor)
+        rateLimit(2, 2.seconds) { !it.encodedPath.contains("/covers/") }
+    }
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter(defaultSort = "popular")))
 
-    // ============================== Popular ==============================
-
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter(defaultSort = "popular")))
-
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
-
-    // ============================== Latest ===============================
-
-    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter(defaultSort = "latest")))
-
-    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter(defaultSort = "latest")))
 
     // ============================== Search ===============================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("http")) {
-            val url = query.toHttpUrlOrNull()
-            if (url != null && url.host == baseUrl.toHttpUrl().host) {
-                val slug = getMangaSlug(url.encodedPath)
-                val manga = SManga.create().apply {
-                    this.url = "/series/$slug"
-                }
-
-                return fetchMangaDetails(manga).map {
-                    it.initialized = true
-                    MangasPage(listOf(it), false)
-                }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$apiUrl/series".toHttpUrl().newBuilder().apply {
+            addQueryParameter("offset", ((page - 1) * PER_PAGE_LIMIT).toString())
+            addQueryParameter("limit", PER_PAGE_LIMIT.toString())
+            if (query.isNotBlank()) {
+                addQueryParameter("search", query)
             }
-        }
 
-        return super.fetchSearchManga(page, query, filters)
+            filters.filterIsInstance<UriFilter>().forEach {
+                it.addToUri(this)
+            }
+        }.build()
+
+        client.get(url).use { response ->
+            val result = response.parseAs<DataDto<List<MangaDto>>>()
+            val mangas = result.data.orEmpty().map { it.toSManga(baseUrl) }
+            return MangasPage(mangas, result.meta!!.hasMore)
+        }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$apiUrl/series".toHttpUrl().newBuilder()
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "comics") {
+            val slug = url.pathSegments[1]
 
-        url.addQueryParameter("offset", ((page - 1) * PER_PAGE_LIMIT).toString())
-        url.addQueryParameter("limit", PER_PAGE_LIMIT.toString())
+            val tmpManga = SManga.create().apply {
+                this.url = "/series/$slug"
+                memo = buildJsonObject { put("slug", slug) }
+            }
 
-        if (query.isNotBlank()) {
-            url.addQueryParameter("search", query)
+            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
         }
 
-        filters.filterIsInstance<UriFilter>().forEach {
-            it.addToUri(url)
-        }
-
-        return GET(url.build(), headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<DataDto<List<MangaDto>>>()
-        val mangas = result.data.orEmpty().map { it.toSManga() }
-        result.data.orEmpty().forEach {
-            slugMap[it.slug] = "$baseUrl${it.publicUrl}".toHttpUrl().pathSegments.last()
-        }
-        slugMap.persist()
-        return MangasPage(mangas, result.meta!!.hasMore)
+        return null
     }
 
     // ============================== Details ==============================
 
     override fun getMangaUrl(manga: SManga): String {
-        val slug = getMangaSlug(manga.url)
-        val randomSlug = slugMap[slug] ?: slug
+        val randomSlug = manga.memo["slug"]?.string
+            ?: run {
+                val oldSlugMap = preferences.getString(SLUG_MAP, "{}")!!.parseAs<JsonObject>()
+                val slug = getMangaSlug(manga.url)
+
+                oldSlugMap[slug]?.string ?: slug
+            }
 
         return "$baseUrl/comics/$randomSlug"
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = getMangaSlug(manga.url)
-        val randomSlug = slugMap[slug] ?: slug
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val url = getMangaUrl(manga)
+        var response = client.get(url, ensureSuccess = false)
 
-        return GET("$apiUrl/series/$randomSlug", headers)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga = parseMangaDetails(response.parseAs<JsonElement>())
-
-    private fun parseMangaDetails(json: JsonElement): SManga {
-        val mangaData = if (json is JsonObject && "data" in json) {
-            json.parseAs<DataDto<MangaDetailsDto>>().data!!
-        } else {
-            json.parseAs<MangaDetailsDto>()
+        // retry without random suffix, it redirects to new random suffix
+        if (!response.isSuccessful) {
+            response.close()
+            response = client.get(url.replace(URL_RANDOM_PART, ""))
         }
 
-        slugMap[mangaData.series.slug] = "$baseUrl${mangaData.series.publicUrl}".toHttpUrl().pathSegments.last()
-        slugMap.persist()
-        return mangaData.series.toSMangaDetails()
+        response.use { response ->
+            val document = response.asJsoup()
+
+            val manga = document.extractAstroProp<MangaDetailsDto>("title", "description")
+                .toSMangaDetails()
+            document.extractAstroProp<MangaUrlDto>("publicUrl")
+                .apply(manga, baseUrl)
+            val randomMangaSlug = manga.memo["slug"]!!.string
+
+            val hidePremium = preferences.hidePremiumChapters()
+            val chapters = document.extractAstroProp<ChapterListDto>("chapters").chapters
+                ?.filterNot { hidePremium && it.isLocked }
+                .orEmpty()
+                .map { it.toSChapter(randomMangaSlug) }
+
+            return SMangaUpdate(manga, chapters)
+        }
     }
 
-    // ============================= Chapters ==============================
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        client.get(getMangaUrl(manga)).use { response ->
+            val document = response.asJsoup()
+
+            return document.select("h2:contains(recommended) + div a[href*=/comics/]").mapNotNull { el ->
+                val slug = el.absUrl("href")
+                    .toHttpUrlOrNull()
+                    ?.pathSegments
+                    ?.getOrNull(1)
+                    ?: return@mapNotNull null
+
+                SManga.create().apply {
+                    url = "/series/${slug.replace(URL_RANDOM_PART, "")}"
+                    memo = buildJsonObject {
+                        put("slug", slug)
+                    }
+                    title = el.selectFirst(".mt-2 span")?.ownText() ?: return@mapNotNull null
+                    thumbnail_url = el.selectFirst("img")?.absUrl("src")
+                }
+            }
+        }
+    }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val mangaSlug = getMangaSlug(chapter.url)
-        val randomSlug = slugMap[mangaSlug] ?: mangaSlug
+        val randomSlug = chapter.memo["mangaSlug"]?.string
+            ?: throw Exception("Refresh Chapter List")
         val number = chapter.url.substringAfter("/chapter/")
 
         return "$baseUrl/comics/$randomSlug/chapter/$number"
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val slug = getMangaSlug(manga.url)
-        val randomSlug = slugMap[slug] ?: slug
-        return GET("$baseUrl/comics/$randomSlug", headers)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val chaptersData = response.extractAstroProp<ChapterListDto>("chapters")
-        val hidePremium = preferences.hidePremiumChapters()
-
-        return chaptersData.chapters
-            .filterNot { hidePremium && it.isLocked }
-            .map { it.toSChapter() }
-    }
-
     // =============================== Pages ===============================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), headers)
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val url = getChapterUrl(chapter)
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        var pages = try {
-            document.extractAstroProp<PageListDto>("pages").pages
-        } catch (_: Exception) {
-            emptyList()
-        }
-
-        if (pages.isEmpty()) {
-            val accessToken = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
-                .find { it.name == "access_token" }?.value
-                ?: return emptyList()
-
-            val pageToken = document.selectFirst("script:containsData(pageToken)")
-                ?.data()?.let { PAGE_TOKEN_REGEX.find(it)?.groupValues?.get(1) }
-                ?: "asura-reader-2026"
-
-            val mangaSlug = response.request.url.pathSegments[1]
-            val number = response.request.url.pathSegments[3]
-            val url = "$apiUrl/series/$mangaSlug/chapters/$number"
-            val headers = headersBuilder()
-                .set("Authorization", "Bearer $accessToken")
-                .set("X-Page-Token", pageToken)
-                .build()
-
-            pages = try {
-                client.newCall(GET(url, headers)).execute().use { premiumResponse ->
-                    premiumResponse.parseAs<PremiumPageListDto>().data.chapter.pages
-                }
+        client.get(url).use { response ->
+            val document = response.asJsoup()
+            var pages = try {
+                document.extractAstroProp<PageListDto>("pages").pages
             } catch (_: Exception) {
                 emptyList()
             }
-        }
 
-        if (pages.isEmpty()) {
-            return emptyList()
-        }
+            if (pages.isEmpty()) {
+                val accessToken = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
+                    .find { it.name == "access_token" }?.value
+                    ?: return emptyList()
 
-        return pages.mapIndexed { index, pageDto ->
-            val url = if (!pageDto.tiles.isNullOrEmpty()) {
-                val data = PageData(
-                    pageDto.tiles,
-                    pageDto.tileCols ?: 4,
-                    pageDto.tileRows ?: 5,
-                )
-                pageDto.url.toHttpUrl().newBuilder()
-                    .fragment(data.toJsonString())
-                    .toString()
-            } else {
-                pageDto.url
+                val pageToken = document.selectFirst("script:containsData(pageToken)")
+                    ?.data()?.let { PAGE_TOKEN_REGEX.find(it)?.groupValues?.get(1) }
+                    ?: "asura-reader-2026"
+
+                val mangaSlug = response.request.url.pathSegments[1]
+                val number = response.request.url.pathSegments[3]
+                val url = "$apiUrl/series/$mangaSlug/chapters/$number"
+                val headers = headersBuilder()
+                    .set("Authorization", "Bearer $accessToken")
+                    .set("X-Page-Token", pageToken)
+                    .build()
+
+                pages = try {
+                    client.get(url, headers).use { premiumResponse ->
+                        premiumResponse.parseAs<PremiumPageListDto>().data.chapter.pages
+                    }
+                } catch (_: Exception) {
+                    emptyList()
+                }
             }
 
-            Page(index, imageUrl = url)
+            return pages.mapIndexed { index, pageDto ->
+                val url = if (!pageDto.tiles.isNullOrEmpty()) {
+                    val data = PageData(
+                        pageDto.tiles,
+                        pageDto.tileCols ?: 4,
+                        pageDto.tileRows ?: 5,
+                    )
+                    pageDto.url.toHttpUrl().newBuilder()
+                        .fragment(data.toJsonString())
+                        .toString()
+                } else {
+                    pageDto.url
+                }
+
+                Page(index, imageUrl = url)
+            }
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
     // ============================== Filters ==============================
 
-    override fun getFilterList(): FilterList = FilterList(
-        SortFilter(),
-        StatusFilter(),
-        TypeFilter(),
-        GenresFilter(),
-        MinChaptersFilter(),
-    )
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement = coroutineScope {
+        val genres = async {
+            client.get("$baseUrl/browse")
+                .extractAstroProp<AvailableGenres>("availableGenres")
+                .availableGenres
+        }
+
+        val creators = async {
+            client.get("$apiUrl/creators").parseAs<DataDto<Creators>>().data!!
+        }
+
+        FiltersDto(
+            genres = genres.await(),
+            authors = creators.await().authors,
+            artists = creators.await().artists,
+        ).toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filters = mutableListOf(
+            SortFilter(),
+            StatusFilter(),
+            TypeFilter(),
+        )
+
+        data?.also {
+            val dto = it.parseAs<FiltersDto>()
+
+            filters.add(GenresFilter(dto.genres))
+            filters.add(CreatorFilter(dto.authors, dto.artists))
+        }
+
+        filters.add(MinChaptersFilter())
+
+        return FilterList(filters)
+    }
 
     // ============================= Utilities =============================
 
@@ -352,9 +373,10 @@ abstract class AsuraScans :
         true,
     )
 
-    private inline fun <reified T> Document.extractAstroProp(key: String): T {
-        val prop = selectFirst("[props*=$key]")?.attr("props")
-            ?: throw Exception("Unable to find prop with $key")
+    private inline fun <reified T> Document.extractAstroProp(vararg key: String): T {
+        val selector = key.joinToString(separator = "") { "[props*=$it]" }
+        val prop = selectFirst(selector)?.attr("props")
+            ?: throw Exception("Unable to find prop with ${key.contentToString()}")
         val json = prop.parseAs<JsonElement>()
         val unwrapped = json.unwrapAstro()
 
@@ -365,40 +387,19 @@ abstract class AsuraScans :
 
     private fun JsonElement.unwrapAstro(): JsonElement = when (this) {
         is JsonArray -> when {
+            isEmpty() -> JsonNull
+            size == 1 -> JsonNull
             size == 2 && this[0] is JsonPrimitive -> this[1].unwrapAstro()
             else -> JsonArray(map { it.unwrapAstro() })
         }
-
         is JsonObject -> JsonObject(mapValues { it.value.unwrapAstro() })
         else -> this
     }
-
-    private val slugMap: MutableMap<String, String> =
-        Collections.synchronizedMap(preferences.getString(SLUG_MAP, "{}")!!.parseAs())
-
-    private val flushScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var flushJob: Job? = null
-    private val flushLock = Mutex()
-
-    private fun MutableMap<String, String>.persist() {
-        flushScope.launch {
-            flushLock.withLock {
-                flushJob?.cancel()
-                flushJob = launch {
-                    delay(500)
-                    flushLock.withLock {
-                        preferences.edit().putString(SLUG_MAP, this@persist.toJsonString()).apply()
-                    }
-                }
-            }
-        }
-    }
-
-    companion object {
-        private const val PER_PAGE_LIMIT = 20
-        private val OLD_FORMAT_MANGA_REGEX = """^/manga/(\d+-)?([^/]+)/?$""".toRegex()
-        private const val PREF_HIDE_PREMIUM_CHAPTERS = "pref_hide_premium_chapters"
-        private const val SLUG_MAP = "slug_map_v2"
-        private val PAGE_TOKEN_REGEX = Regex("""pageToken\*=\*"([^"]+)"""")
-    }
 }
+
+private const val PER_PAGE_LIMIT = 20
+private val OLD_FORMAT_MANGA_REGEX = """^/manga/(\d+-)?([^/]+)/?$""".toRegex()
+private const val PREF_HIDE_PREMIUM_CHAPTERS = "pref_hide_premium_chapters"
+private const val SLUG_MAP = "slug_map_v2"
+private val PAGE_TOKEN_REGEX = Regex("""pageToken\*=\*"([^"]+)"""")
+private val URL_RANDOM_PART = Regex("""-[a-z0-9]{8}$""")

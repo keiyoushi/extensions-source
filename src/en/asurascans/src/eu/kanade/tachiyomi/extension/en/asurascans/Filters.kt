@@ -50,44 +50,30 @@ class TypeFilter :
         ),
     )
 
-class GenresFilter :
+class GenresFilter(genres: List<GenreDto>) :
     UriMultiSelectFilter(
         name = "Genres",
         param = "genres",
-        vals = arrayOf(
-            "Action" to "action",
-            "Adventure" to "adventure",
-            "Comedy" to "comedy",
-            "Crazy MC" to "crazy-mc",
-            "Demon" to "demon",
-            "Drama" to "drama",
-            "Dungeons" to "dungeons",
-            "Fantasy" to "fantasy",
-            "Game" to "game",
-            "Genius MC" to "genius-mc",
-            "Isekai" to "isekai",
-            "Kuchikuchi" to "kuchikuchi",
-            "Magic" to "magic",
-            "Martial Arts" to "martial-arts",
-            "Murim" to "murim",
-            "Mystery" to "mystery",
-            "Necromancer" to "necromancer",
-            "Overpowered" to "overpowered",
-            "Regression" to "regression",
-            "Reincarnation" to "reincarnation",
-            "Revenge" to "revenge",
-            "Romance" to "romance",
-            "School Life" to "school-life",
-            "Sci-fi" to "sci-fi",
-            "Shoujo" to "shoujo",
-            "Shounen" to "shounen",
-            "System" to "system",
-            "Tower" to "tower",
-            "Tragedy" to "tragedy",
-            "Villain" to "villain",
-            "Violence" to "violence",
-        ),
+        vals = genres.map { it.name to it.slug }.toTypedArray(),
     )
+
+class CreatorFilter(
+    private val authors: List<String>,
+    private val artists: List<String>,
+) : Filter.Select<String>("Creators", (listOf("") + artists + artists).toTypedArray()),
+    UriFilter {
+    override fun addToUri(builder: HttpUrl.Builder) {
+        val (parm, selected) = when {
+            state == 0 -> null to null
+            state >= 1 && state <= artists.size -> "artist" to artists[state - 1]
+            else -> "author" to authors[state - 1 - artists.size]
+        }
+
+        if (parm != null) {
+            builder.addQueryParameter(parm, selected)
+        }
+    }
+}
 
 class MinChaptersFilter :
     Filter.Text("Min Chapters"),
