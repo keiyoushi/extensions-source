@@ -1,29 +1,30 @@
 package eu.kanade.tachiyomi.extension.ar.mangacloud
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.jsonInstance
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
 
 @Source
-abstract class MangaCloud : HttpSource() {
+abstract class MangaCloud : KeiSource() {
 
     override val supportsLatest = true
 
-    override fun popularMangaRequest(page: Int): Request {
+    // ============================== Popular ==============================
+
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = FIRESTORE_URL.toHttpUrl().newBuilder()
             .addQueryParameter("pageSize", PAGE_SIZE.toString())
             .addQueryParameter("key", API_KEY)
@@ -32,10 +33,7 @@ abstract class MangaCloud : HttpSource() {
                 if (token != null) addQueryParameter("pageToken", token)
             }
             .build()
-        return GET(url, headers)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
+        val response = client.get(url)
         val json = FirestoreParser.parseList(response)
         lastPageToken = json.nextPageToken
         if (allMangasCache.isEmpty()) {
@@ -44,42 +42,38 @@ abstract class MangaCloud : HttpSource() {
         return MangasPage(json.mangas.map { it.smanga }, json.nextPageToken != null)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    // ============================== Latest ===============================
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = FIRESTORE_URL.toHttpUrl().newBuilder()
             .addQueryParameter("pageSize", PAGE_SIZE.toString())
             .addQueryParameter("key", API_KEY)
             .addQueryParameter("orderBy", "updatedAt desc")
             .build()
-        return GET(url, headers)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
+        val response = client.get(url)
         val json = FirestoreParser.parseList(response)
         return MangasPage(json.mangas.map { it.smanga }, false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        currentSearchQuery = query
-        currentSortFilter = filters.firstInstanceOrNull<SortFilter>()?.selected.orEmpty()
-        currentGenreFilter = filters.firstInstanceOrNull<GenreFilter>()?.selected.orEmpty()
-        currentStatusFilter = filters.firstInstanceOrNull<StatusFilter>()?.selected.orEmpty()
+    // ============================== Search ===============================
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val sort = filters.firstInstanceOrNull<SortFilter>()?.selected.orEmpty()
+        val genre = filters.firstInstanceOrNull<GenreFilter>()?.selected.orEmpty()
+        val status = filters.firstInstanceOrNull<StatusFilter>()?.selected.orEmpty()
+
         val url = FIRESTORE_URL.toHttpUrl().newBuilder()
             .addQueryParameter("pageSize", "300")
             .addQueryParameter("key", API_KEY)
             .apply {
-                when (currentSortFilter) {
+                when (sort) {
                     "new" -> addQueryParameter("orderBy", "createdAt desc")
                     "updated" -> addQueryParameter("orderBy", "updatedAt desc")
                 }
             }
             .build()
-        return GET(url, headers)
-    }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val query = currentSearchQuery.trim()
-        val genre = currentGenreFilter
-        val status = currentStatusFilter
+        val response = client.get(url)
         val json = FirestoreParser.parseList(response)
         val allMangas = json.mangas.toMutableList()
 
@@ -89,12 +83,12 @@ abstract class MangaCloud : HttpSource() {
 
         var nextPageToken = json.nextPageToken
         while (nextPageToken != null) {
-            val url = FIRESTORE_URL.toHttpUrl().newBuilder()
+            val nextUrl = FIRESTORE_URL.toHttpUrl().newBuilder()
                 .addQueryParameter("pageSize", "300")
                 .addQueryParameter("key", API_KEY)
                 .addQueryParameter("pageToken", nextPageToken)
                 .build()
-            val nextResponse = client.newCall(GET(url, headers)).execute()
+            val nextResponse = client.get(nextUrl)
             val nextJson = FirestoreParser.parseList(nextResponse)
             allMangas.addAll(nextJson.mangas)
             allMangasCache.addAll(nextJson.mangas)
@@ -126,51 +120,67 @@ abstract class MangaCloud : HttpSource() {
         return MangasPage(filtered.map { it.smanga }, false)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = "$FIRESTORE_URL/${manga.url}?key=$API_KEY".toHttpUrl()
-        return GET(url, headers)
+    // ============================== Details ==============================
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val mangaId = url.pathSegments.lastOrNull() ?: return null
+        val firestoreUrl = "$FIRESTORE_URL/$mangaId?key=$API_KEY".toHttpUrl()
+        val response = client.get(firestoreUrl)
+        return FirestoreParser.parseDetails(response)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = FirestoreParser.parseDetails(response)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val mangaDetail = if (fetchDetails) {
+            val url = "$FIRESTORE_URL/${manga.url}?key=$API_KEY".toHttpUrl()
+            val response = client.get(url)
+            FirestoreParser.parseDetails(response)
+        } else {
+            manga
+        }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val url = "$FIRESTORE_URL/${manga.url}/chapters?pageSize=1000&key=$API_KEY&orderBy=index".toHttpUrl()
-        return GET(url, headers)
+        val chapterList = if (fetchChapters) {
+            fetchAllChapters(manga.url)
+        } else {
+            chapters
+        }
+
+        return SMangaUpdate(mangaDetail, chapterList)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    private suspend fun fetchAllChapters(mangaId: String): List<SChapter> {
         val allChapters = mutableListOf<SChapter>()
         var nextPageToken: String? = null
-        var currentResponse = response
 
         do {
-            val jsonString = currentResponse.body?.string() ?: break
-            val json = jsonInstance.parseToJsonElement(jsonString).jsonObject
-
-            val newResponse = currentResponse.newBuilder()
-                .body(jsonString.toResponseBody(null))
-                .build()
-            val chapters = FirestoreParser.parseChapters(newResponse)
-            allChapters.addAll(chapters)
-
-            nextPageToken = json["nextPageToken"]?.jsonPrimitive?.contentOrNull
-
+            val urlBuilder = "$FIRESTORE_URL/$mangaId/chapters".toHttpUrl().newBuilder()
+                .addQueryParameter("pageSize", "1000")
+                .addQueryParameter("key", API_KEY)
+                .addQueryParameter("orderBy", "index")
             if (nextPageToken != null) {
-                val pathSegments = currentResponse.request.url.pathSegments
-                val chaptersIndex = pathSegments.indexOf("chapters")
-                if (chaptersIndex < 1) break
-                val mangaId = pathSegments[chaptersIndex - 1]
-
-                val urlBuilder = "$FIRESTORE_URL/$mangaId/chapters".toHttpUrl().newBuilder()
-                    .addQueryParameter("pageSize", "1000")
-                    .addQueryParameter("key", API_KEY)
-                    .addQueryParameter("orderBy", "index")
-                    .addQueryParameter("pageToken", nextPageToken)
-
-                val newRequest = GET(urlBuilder.build(), headers)
-                currentResponse = client.newCall(newRequest).execute()
+                urlBuilder.addQueryParameter("pageToken", nextPageToken)
             }
-        } while (nextPageToken != null && currentResponse.isSuccessful)
+            val response = client.get(urlBuilder.build())
+            val jsonString = response.body?.string() ?: break
+            val json = jsonInstance.parseToJsonElement(jsonString).jsonObject
+            val chaptersResponse = jsonInstance.decodeFromString<FirestoreListResponse>(jsonString)
+            val chapters = chaptersResponse.documents?.mapNotNull { doc ->
+                val docName = doc.name ?: return@mapNotNull null
+                val chapterNum = docName.substringAfterLast("/")
+                val num = chapterNum.toIntOrNull() ?: 0
+                SChapter.create().apply {
+                    url = docName.substringAfterLast("cloudmangas/")
+                    name = "الفصل $num"
+                    chapter_number = num.toFloat()
+                }
+            } ?: emptyList()
+            allChapters.addAll(chapters)
+            nextPageToken = json["nextPageToken"]?.jsonPrimitive?.contentOrNull
+        } while (nextPageToken != null)
 
         allChapters.sortByDescending {
             it.chapter_number?.toString()?.toFloatOrNull() ?: 0f
@@ -179,14 +189,15 @@ abstract class MangaCloud : HttpSource() {
         return allChapters
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    // ============================== Pages ===============================
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = "${FIRESTORE_URL}/${chapter.url}?key=$API_KEY".toHttpUrl()
-        return GET(url, headers)
+        val response = client.get(url)
+        return FirestoreParser.parsePages(response)
     }
 
-    override fun pageListParse(response: Response): List<Page> = FirestoreParser.parsePages(response)
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    // ============================== URLs ================================
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
@@ -198,17 +209,22 @@ abstract class MangaCloud : HttpSource() {
         return "$baseUrl/manga/${chapter.url}"
     }
 
-    override fun getFilterList(): FilterList = FilterList(
+    // ============================== Filters =============================
+
+    override fun getFilterList(data: kotlinx.serialization.json.JsonElement?) = FilterList(
         SortFilter("ترتيب حسب", sortingList),
         StatusFilter("الحالة", statusList),
         GenreFilter("التصنيف", genreList),
     )
 
+    // ============================== Related =============================
+
+    override val supportsRelatedMangas get() = false
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
+
+    // ============================== State ===============================
+
     private var lastPageToken: String? = null
-    private var currentSearchQuery: String = ""
-    private var currentSortFilter: String = ""
-    private var currentGenreFilter: String = ""
-    private var currentStatusFilter: String = ""
     private val allMangasCache = mutableListOf<MangaData>()
 
     companion object {
