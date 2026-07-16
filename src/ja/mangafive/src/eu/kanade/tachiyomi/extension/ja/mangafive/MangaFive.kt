@@ -185,6 +185,8 @@ abstract class MangaFive :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? = null
+    
+    override val supportsRelatedMangas get() = false
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
 
     companion object {
