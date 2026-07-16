@@ -183,14 +183,10 @@ abstract class PixivComic :
             } catch (_: Exception) {
                 throw Exception("Log in via WebView and enable R-18 content at https://www.pixiv.net/settings/viewing")
             }
-            val updatedManga = if (fetchDetails) product.product.toSManga() else manga
-            val updatedChapters = if (fetchChapters) {
-                product.variants
-                    .filter { !hideLocked || !it.isLocked }
-                    .map { it.toSChapter() }
-            } else {
-                chapters
-            }
+            val updatedManga = product.product.toSManga()
+            val updatedChapters = product.variants
+                .filter { !hideLocked || !it.isLocked }
+                .map { it.toSChapter() }
             return@coroutineScope SMangaUpdate(updatedManga, updatedChapters)
         }
 
@@ -321,6 +317,7 @@ abstract class PixivComic :
         }.also(screen::addPreference)
     }
 
+    override val supportsRelatedMangas get() = false
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? = null
 
