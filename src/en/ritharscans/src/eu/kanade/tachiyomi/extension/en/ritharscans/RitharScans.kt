@@ -64,7 +64,7 @@ abstract class RitharScans : Keyoapp() {
         return MangasPage(mangas, false)
     }
 
-    override val descriptionSelector = "#expand_content"
+    override val altNameSelector: String = "div.font-medium:containsOwn(Alternative titles) ~ div span.select-all"
     override val statusSelector = "[alt=Status]"
     override val typeSelector = "[alt=Type]"
 

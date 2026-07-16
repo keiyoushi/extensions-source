@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.all.mangafire
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,6 +14,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -18,7 +22,9 @@ import okhttp3.Response
 import rx.Observable
 
 @Source
-abstract class MangaFire : HttpSource() {
+abstract class MangaFire :
+    HttpSource(),
+    ConfigurableSource {
 
     private val langCode: String
         get() = when (lang) {
@@ -36,6 +42,8 @@ abstract class MangaFire : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("Accept", "application/json")
+
+    private val preferences = getPreferences()
 
     // ============================== Popular ==============================
 
@@ -133,27 +141,42 @@ abstract class MangaFire : HttpSource() {
         val hid = getHid(manga.url)
         var page = 1
         var lastPage: Int
+        var displayVolumes = showAsVolumes
         val chapters = mutableListOf<SChapter>()
 
-        do {
-            val url = "$baseUrl/api/titles/$hid/chapters".toHttpUrl().newBuilder()
-                .addQueryParameter("language", langCode)
-                .addQueryParameter("sort", "number")
-                .addQueryParameter("order", "desc")
-                .addQueryParameter("page", page.toString())
-                .addQueryParameter("limit", "200")
-                .build()
-
-            val response = client.newCall(GET(url, headers)).execute()
-            val data = response.parseAs<ApiResponse<ChapterDto>>()
-
-            data.items.forEach { ch ->
-                chapters.add(ch.toSChapter(manga.url, langCode))
+        if (displayVolumes) {
+            val url = "$baseUrl/api/titles/$hid/volumes"
+            val res = client.newCall(GET(url, headers)).execute()
+            val volumes = res.parseAs<ApiResponse<VolumeDto>>().items
+            if (volumes.isNotEmpty()) {
+                val items = volumes.filter { it.language == langCode }
+                    .forEach { chapters.add(it.toSChapter(manga.url)) }
+            } else {
+                displayVolumes = false // Fallback to chapter display
             }
+        }
 
-            lastPage = data.meta?.lastPage ?: 1
-            page++
-        } while (page <= lastPage)
+        if (!displayVolumes) {
+            do {
+                val url = "$baseUrl/api/titles/$hid/chapters".toHttpUrl().newBuilder()
+                    .addQueryParameter("language", langCode)
+                    .addQueryParameter("sort", "number")
+                    .addQueryParameter("order", "desc")
+                    .addQueryParameter("page", page.toString())
+                    .addQueryParameter("limit", "200")
+                    .build()
+
+                val response = client.newCall(GET(url, headers)).execute()
+                val data = response.parseAs<ApiResponse<ChapterDto>>()
+
+                data.items.forEach { ch ->
+                    chapters.add(ch.toSChapter(manga.url, langCode))
+                }
+
+                lastPage = data.meta?.lastPage ?: 1
+                page++
+            } while (page <= lastPage)
+        }
 
         chapters
     }
@@ -165,8 +188,17 @@ abstract class MangaFire : HttpSource() {
     // =============================== Pages ===============================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringAfterLast("/").substringBefore("-")
-        return GET("$baseUrl/api/chapters/$chapterId", headers)
+        val segments = (baseUrl + chapter.url).toHttpUrl().pathSegments
+        val last = segments.last()
+
+        val url = if (segments.contains("volume")) {
+            "$baseUrl/api/volumes/$last"
+        } else {
+            val chapterId = last.substringBefore("-")
+            "$baseUrl/api/chapters/$chapterId"
+        }
+
+        return GET(url, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -185,6 +217,8 @@ abstract class MangaFire : HttpSource() {
         Filter.Separator(),
         GenreModeFilter(),
         GenreFilter(),
+        Filter.Separator(),
+        ThemeFilter(),
         Filter.Separator(),
         StatusFilter(),
         Filter.Separator(),
@@ -205,5 +239,24 @@ abstract class MangaFire : HttpSource() {
             lastPart.contains("-") -> lastPart.substringBefore("-")
             else -> lastPart
         }
+    }
+
+    // ========================= Preferences =========================
+
+    private val showAsVolumes: Boolean
+        get() = preferences.getBoolean(PREF_SHOW_AS_VOLUMES, false)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SHOW_AS_VOLUMES
+            title = "Prefer Volume Release"
+            summary = SUMMARY_MSG
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
+    companion object {
+        private const val PREF_SHOW_AS_VOLUMES = "show_as_volumes"
+        private const val SUMMARY_MSG = "Requires Chapter List Refresh to Apply"
     }
 }

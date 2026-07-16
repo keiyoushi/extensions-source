@@ -1,3 +1,5 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
@@ -5,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Manhuarm"
     versionCode = 25
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
 
@@ -15,9 +17,4 @@ keiyoushi {
             baseUrl = "https://manhuarmtl.com"
         }
     }
-}
-
-dependencies {
-
-    compileOnly("com.squareup.okhttp3:okhttp-brotli:5.0.0-alpha.11")
 }

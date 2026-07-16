@@ -7,8 +7,8 @@ import android.graphics.Rect
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayOutputStream
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 
 /** Descrambles YuriGarden images using key-based strip permutation. */
 class ImageDescrambler : Interceptor {
@@ -22,12 +22,14 @@ class ImageDescrambler : Interceptor {
             ?: return response
 
         val descrambled = unscrambleImage(bitmap, key)
+        bitmap.recycle()
 
-        val output = ByteArrayOutputStream()
-        descrambled.compress(Bitmap.CompressFormat.JPEG, 90, output)
+        val buffer = Buffer()
+        descrambled.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
+        descrambled.recycle()
 
         return response.newBuilder()
-            .body(output.toByteArray().toResponseBody(MEDIA_TYPE))
+            .body(buffer.asResponseBody(MEDIA_TYPE, buffer.size))
             .build()
     }
 
