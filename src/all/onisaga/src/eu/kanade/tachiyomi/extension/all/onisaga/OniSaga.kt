@@ -154,7 +154,7 @@ abstract class OniSaga :
         val state = if (cachedStateUrl == url && cachedState != null) {
             cachedState!!
         } else {
-            val doc = client.get(url, headers).use { it.asJsoup() }
+            val doc = client.get(url, headers).asJsoup()
 
             if (page == 1 && updates == null && prefExcluded.isEmpty()) {
                 return parseMangaList(doc)
@@ -230,17 +230,15 @@ abstract class OniSaga :
             var mangaUrl = query
 
             if (url.pathSegments.firstOrNull() == "read") {
-                val doc = client.get(query, headers).use { it.asJsoup() }
+                val doc = client.get(query, headers).asJsoup()
                 mangaUrl = doc.selectFirst("a[href*=\"/manga/\"]")?.absUrl("href")
                     ?: throw Exception("Could not find manga link on chapter page")
             } else if (url.pathSegments.size >= 3 && url.pathSegments[0] == "manga") {
                 mangaUrl = "${url.scheme}://${url.host}/manga/${url.pathSegments[1]}"
             }
 
-            val manga = client.get(mangaUrl, headers).use { response ->
-                mangaDetailsParse(response.asJsoup()).apply {
-                    setUrlWithoutDomain(mangaUrl)
-                }
+            val manga = mangaDetailsParse(client.get(mangaUrl, headers).asJsoup()).apply {
+                setUrlWithoutDomain(mangaUrl)
             }
             return MangasPage(listOf(manga), false)
         }
@@ -313,12 +311,8 @@ abstract class OniSaga :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        if (!fetchDetails && !fetchChapters) {
-            return SMangaUpdate(manga, chapters)
-        }
-
         val url = getMangaUrl(manga)
-        val doc = client.get(url, headers).use { it.asJsoup() }
+        val doc = client.get(url, headers).asJsoup()
 
         val details = if (fetchDetails) mangaDetailsParse(doc) else manga
         val chapterList = if (fetchChapters) fetchChapterList(doc) else chapters
@@ -481,7 +475,7 @@ abstract class OniSaga :
     // =============================== Related Manga ===============================
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val doc = client.get(baseUrl + manga.url, headers).use { it.asJsoup() }
+        val doc = client.get(baseUrl + manga.url, headers).asJsoup()
         return relatedMangaListParse(doc)
     }
 
@@ -779,7 +773,7 @@ abstract class OniSaga :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.pathSegments.firstOrNull()?.equals("manga", true) == true) {
             val mangaUrl = "${url.scheme}://${url.host}/manga/${url.pathSegments[1]}"
-            val doc = client.get(mangaUrl, headers).use { it.asJsoup() }
+            val doc = client.get(mangaUrl, headers).asJsoup()
             return mangaDetailsParse(doc).apply {
                 setUrlWithoutDomain(mangaUrl)
             }
