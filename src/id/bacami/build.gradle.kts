@@ -12,6 +12,6 @@ keiyoushi {
 
     source {
         lang = "id"
-        baseUrl = "https://v1.bacami.site/"
+        baseUrl = "https://v1.bacami.site"
     }
 }
