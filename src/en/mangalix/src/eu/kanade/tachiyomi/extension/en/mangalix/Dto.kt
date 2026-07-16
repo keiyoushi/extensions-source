@@ -24,7 +24,7 @@ internal class MangaDto(
         get() = latestChapter?.releaseDate.toMangaTimestamp()
 
     fun toSManga(baseUrl: String): SManga = SManga.create().apply {
-        url = "/manga/$slug"
+        url = slug
         title = this@MangaDto.title
         thumbnail_url = coverImage.takeIf { it.isNotBlank() }?.let {
             when {

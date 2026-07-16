@@ -8,77 +8,56 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
+import okhttp3.CacheControl
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.InputStreamReader
 import java.util.Locale
 import java.util.zip.GZIPInputStream
+import kotlin.time.Duration.Companion.minutes
 
 @Source
-abstract class Mangalix : HttpSource() {
+abstract class Mangalix : KeiSource() {
 
-    override val supportsLatest = true
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        val host = baseUrl.toHttpUrl().host
+        rateLimit(2) { it.host == host }
+    }
 
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val client = network.client.newBuilder()
-        .rateLimit(2) { it.host == baseUrlHost }
-        .build()
-
-    private val archiveHeaders by lazy {
-        headersBuilder()
+    private val archiveHeaders: Headers
+        get() = headersBuilder()
             .set("Accept", "application/gzip")
             .set("Accept-Encoding", "identity")
             .build()
-    }
 
-    private val imageHeaders by lazy {
-        headers.newBuilder()
+    private val imageHeaders: Headers
+        get() = headersBuilder()
             .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .build()
-    }
 
-    @Volatile
-    private var catalogCache: CatalogCache? = null
+    override suspend fun getPopularManga(page: Int): MangasPage = loadCatalog().toPage(page)
 
-    @Volatile
-    private var archiveCache: ArchiveCache? = null
+    override suspend fun getLatestUpdates(page: Int): MangasPage = loadCatalog().sortedByDescending(MangaDto::latestTimestamp).toPage(page)
 
-    @Volatile
-    private var chapterCache: ChapterCache? = null
-
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
-        getCatalog().toPage(page)
-    }
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = Observable.fromCallable {
-        getCatalog().sortedByDescending(MangaDto::latestTimestamp).toPage(page)
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val statusFilter = filters.firstInstanceOrNull<StatusFilter>()
         val sortFilter = filters.firstInstanceOrNull<SortFilter>()
         val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
 
-        var result = getCatalog().asSequence()
+        var result = loadCatalog().asSequence()
             .filter { manga -> query.isBlank() || manga.matchesQuery(query) }
             .filter { manga -> statusFilter?.matches(manga.status) != false }
             .filter { manga -> genreFilter?.matches(manga.genres) != false }
@@ -93,67 +72,74 @@ abstract class Mangalix : HttpSource() {
         }
 
         if (sortFilter?.ascending == true) result = result.reversed()
-        result.toPage(page)
+        return result.toPage(page)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         StatusFilter(),
         SortFilter(),
         GenreFilter(),
     )
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.fromCallable {
-        getCatalog().firstOrNull { it.slug == manga.slug() }?.toSManga(baseUrl) ?: manga
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.pathSegments.getOrNull(0) != "manga") return null
+        val slug = url.pathSegments.getOrNull(1) ?: return null
+
+        return loadCatalog().firstOrNull { it.slug == slug }?.toSManga(baseUrl)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = throw UnsupportedOperationException()
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val slug = manga.url
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.slug()}"
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
-        val slug = manga.slug()
-        val archive = getArchive()
-        getChapters(archive, slug).distinctBy { it.id to it.number }.map { chapter ->
-            SChapter.create().apply {
-                val number = chapter.number.toString().removeSuffix(".0")
-                url = "$baseUrl/manga/$slug/chapter/$number".toHttpUrl().newBuilder()
-                    .addQueryParameter("id", chapter.id)
-                    .build()
-                    .toString()
-                    .removePrefix(baseUrl)
-                name = chapter.title.ifBlank { "Chapter $number" }
-                chapter_number = chapter.number.toFloat()
-                date_upload = chapter.releaseDate.toMangaTimestamp()
-            }
-        }
+        return SMangaUpdate(
+            manga = if (fetchDetails) {
+                loadCatalog().firstOrNull { it.slug == slug }?.toSManga(baseUrl) ?: manga
+            } else {
+                manga
+            },
+            chapters = if (fetchChapters) {
+                readChapters(slug).distinctBy { it.id to it.number }.map { chapter ->
+                    SChapter.create().apply {
+                        val number = chapter.number.toString().removeSuffix(".0")
+                        url = "$slug/$number/${chapter.id}"
+                        name = chapter.title.ifBlank { "Chapter $number" }
+                        chapter_number = chapter.number.toFloat()
+                        date_upload = chapter.releaseDate.toMangaTimestamp()
+                    }
+                }
+            } else {
+                chapters
+            },
+        )
     }
 
-    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
+    override val supportsRelatedMangas = false
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = throw UnsupportedOperationException()
 
-    override fun getChapterUrl(chapter: SChapter): String = (baseUrl + chapter.url).toHttpUrl().newBuilder()
-        .query(null)
-        .build()
-        .toString()
+    override fun getChapterUrl(chapter: SChapter): String {
+        val (slug, number) = chapter.url.split('/')
+        return "$baseUrl/manga/$slug/chapter/$number"
+    }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
-        val chapterUrl = (baseUrl + chapter.url).toHttpUrl()
-        val slug = chapterUrl.pathSegments.getOrNull(1)
-            ?: throw IOException("Missing manga slug")
-        val chapterNumber = chapterUrl.pathSegments.getOrNull(3)?.toDoubleOrNull()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val parts = chapter.url.split('/')
+        if (parts.size < 3) throw IOException("Invalid chapter url")
+        val slug = parts[0]
+        val number = parts[1].toDoubleOrNull()
             ?: throw IOException("Missing chapter number")
-        val chapterId = chapterUrl.queryParameter("id")
-            ?: throw IOException("Missing chapter id")
+        val chapterId = parts[2]
 
-        getChapters(getArchive(), slug)
-            .firstOrNull { it.id == chapterId && it.number == chapterNumber }
+        return readChapters(slug)
+            .firstOrNull { it.id == chapterId && it.number == number }
             ?.pages
             .orEmpty()
             .mapIndexed { index, imageUrl ->
@@ -161,40 +147,16 @@ abstract class Mangalix : HttpSource() {
             }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
-
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
-
     override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, imageHeaders)
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    @Synchronized
-    private fun getCatalog(): List<MangaDto> {
-        val cached = catalogCache
-        if (cached != null && System.currentTimeMillis() - cached.savedAt < CATALOG_CACHE_LIFETIME) {
-            return cached.mangas
-        }
-
-        return loadCatalog().also {
-            catalogCache = CatalogCache(it, System.currentTimeMillis())
-        }
-    }
-
-    private fun loadCatalog(): List<MangaDto> {
-        val document = client.newCall(GET(baseUrl, headers)).execute().use { response ->
-            response.requireSuccess()
-            response.asJsoup()
-        }
+    private suspend fun loadCatalog(): List<MangaDto> {
+        val document = client.get(baseUrl).asJsoup()
         val scriptUrl = document.selectFirst("script[type=module][src*=assets/main-], script[src*=assets/main-]")
             ?.absUrl("src")
             ?.takeIf(String::isNotBlank)
             ?: throw IOException("Main script not found")
 
-        val script = client.newCall(GET(scriptUrl, headers)).execute().use { response ->
-            response.requireSuccess()
-            response.body.string()
-        }
+        val script = client.get(scriptUrl).body.string()
 
         CATALOG_START_REGEX.findAll(script).forEach { match ->
             val element = runCatching {
@@ -225,49 +187,19 @@ abstract class Mangalix : HttpSource() {
         return MangasPage(subList(start, end).map { it.toSManga(baseUrl) }, end < size)
     }
 
-    @Synchronized
-    private fun getArchive(): ByteArray {
-        val cached = archiveCache
-        if (cached != null && System.currentTimeMillis() - cached.savedAt < ARCHIVE_CACHE_LIFETIME) {
-            return cached.bytes
-        }
-
-        return client.newCall(GET("$baseUrl/chapters.json.gz", archiveHeaders)).execute().use { response ->
-            response.requireSuccess()
-            response.body.bytes().also(::cacheArchive)
-        }
-    }
-
-    private fun cacheArchive(bytes: ByteArray) {
-        if (bytes.size < 2 || bytes[0] != GZIP_MAGIC_FIRST || bytes[1] != GZIP_MAGIC_SECOND) {
-            throw IOException("Invalid chapter archive")
-        }
-        archiveCache = ArchiveCache(bytes, System.currentTimeMillis())
-        chapterCache = null
-    }
-
-    @Synchronized
-    private fun getChapters(archive: ByteArray, slug: String): List<ChapterDto> {
-        chapterCache?.takeIf { it.archive === archive && it.slug == slug }?.let { return it.chapters }
-
-        return readChapters(archive, slug).also {
-            chapterCache = ChapterCache(archive, slug, it)
-        }
-    }
-
-    private fun readChapters(archive: ByteArray, slug: String): List<ChapterDto> = withArchiveReader(archive) { reader ->
-        reader.beginObject()
-        while (reader.hasNext()) {
-            if (reader.nextName() == slug) {
-                return@withArchiveReader reader.readChapterArray()
+    private suspend fun readChapters(slug: String): List<ChapterDto> = client.get("$baseUrl/chapters.json.gz", archiveHeaders, ARCHIVE_CACHE_CONTROL).use { response ->
+        JsonReader(InputStreamReader(GZIPInputStream(response.body.byteStream()), Charsets.UTF_8)).use { reader ->
+            var chapters: List<ChapterDto> = emptyList()
+            reader.beginObject()
+            while (reader.hasNext()) {
+                if (reader.nextName() == slug) {
+                    chapters = reader.readChapterArray()
+                    break
+                }
+                reader.skipValue()
             }
-            reader.skipValue()
+            chapters
         }
-        emptyList()
-    }
-
-    private inline fun <T> withArchiveReader(archive: ByteArray, block: (JsonReader) -> T): T = GZIPInputStream(ByteArrayInputStream(archive)).use { gzip ->
-        JsonReader(InputStreamReader(gzip, Charsets.UTF_8)).use(block)
     }
 
     private fun JsonReader.readChapterArray(): List<ChapterDto> {
@@ -315,9 +247,6 @@ abstract class Mangalix : HttpSource() {
         nextString()
     }
 
-    private fun SManga.slug(): String = (baseUrl + url).toHttpUrl().pathSegments.getOrNull(1)
-        ?: throw IOException("Missing manga slug")
-
     private fun String.resolveImageUrl(): String = when {
         startsWith("\$TEMP") -> replaceFirst("\$TEMP", "https://temp.compsci88.com")
         startsWith("\$HOT") -> replaceFirst("\$HOT", "https://scans-hot.planeptune.us")
@@ -330,22 +259,9 @@ abstract class Mangalix : HttpSource() {
         else -> this
     }
 
-    private fun Response.requireSuccess() {
-        if (!isSuccessful) throw IOException("HTTP $code for ${request.url}")
-    }
-
-    private data class CatalogCache(val mangas: List<MangaDto>, val savedAt: Long)
-
-    private data class ArchiveCache(val bytes: ByteArray, val savedAt: Long)
-
-    private data class ChapterCache(val archive: ByteArray, val slug: String, val chapters: List<ChapterDto>)
-
     companion object {
         private const val PAGE_SIZE = 16
-        private const val CATALOG_CACHE_LIFETIME = 30 * 60 * 1000L
-        private const val ARCHIVE_CACHE_LIFETIME = 30 * 60 * 1000L
-        private const val GZIP_MAGIC_FIRST: Byte = 0x1F
-        private const val GZIP_MAGIC_SECOND: Byte = -117
+        private val ARCHIVE_CACHE_CONTROL = CacheControl.Builder().maxAge(30.minutes).build()
         private val CATALOG_START_REGEX = Regex("""\[\{id\s*:""")
         private val WHITESPACE_REGEX = Regex("""\s+""")
     }
