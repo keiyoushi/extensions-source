@@ -5,7 +5,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -34,7 +33,7 @@ class SvelteResponseDto(
 
 @Serializable
 class SvelteNodeDto(
-    val type: String? = null,
+    val type: String,
     val data: JsonArray? = null,
 )
 
@@ -77,22 +76,20 @@ internal inline fun <reified T> Response.parseSvelte(): T = parseAs<SvelteRespon
 
 @Serializable
 class CatalogDto(
-    val initialMangas: List<MangaDto> = emptyList(),
+    val initialMangas: List<MangaDto>,
 )
 
 @Serializable
 class MangaDto(
     private val slug: String,
     private val title: String,
-    private val type: String? = null,
+    private val type: String,
     private val coverUrl: String? = null,
-    private val genres: List<String> = emptyList(),
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
-        url = "${type ?: FALLBACK_MANGA_TYPE}/$slug"
+        url = "$type/$slug"
         title = this@MangaDto.title
         thumbnail_url = coverUrl.toAbsoluteUrl(baseUrl)
-        genre = genres.joinToString()
     }
 }
 
@@ -110,37 +107,41 @@ class MangaDetailsDto(
     private val slug: String,
     private val title: String,
     private val titleEnglish: String? = null,
-    private val type: String? = null,
+    private val type: String,
     private val year: Int? = null,
     private val coverUrl: String? = null,
-    @SerialName("description") private val summary: String? = null,
+    private val description: String? = null,
     private val alternateTitles: List<String> = emptyList(),
     private val genres: List<String> = emptyList(),
-    private val authors: List<String> = emptyList(),
-    private val artists: List<String> = emptyList(),
+    private val authors: List<String>? = null,
+    private val artists: List<String>? = null,
     private val statusTitle: String? = null,
     private val pegiRating: String? = null,
     private val likes: Int? = null,
     private val views: Int? = null,
     val chapters: List<ChapterDto> = emptyList(),
 ) {
-    val mangaUrl get() = "${type ?: FALLBACK_MANGA_TYPE}/$slug"
+    val mangaUrl get() = "$type/$slug"
 
-    fun toSManga(baseUrl: String) = SManga.create().apply {
-        url = mangaUrl
-        title = this@MangaDetailsDto.title
-        thumbnail_url = coverUrl.toAbsoluteUrl(baseUrl)
-        author = authors.firstOrNull { it != NOT_AVAILABLE }
-        artist = artists.firstOrNull { it != NOT_AVAILABLE }
-        genre = genres.joinToString()
-        status = when (statusTitle?.lowercase()) {
-            "ongoing" -> SManga.ONGOING
-            "completed" -> SManga.COMPLETED
-            "paused", "on hiatus", "hiatus" -> SManga.ON_HIATUS
-            "discontinued", "cancelled", "abandoned" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
+    fun toSManga(baseUrl: String): SManga {
+        val fullDescription = buildDescription()
+
+        return SManga.create().apply {
+            url = mangaUrl
+            title = this@MangaDetailsDto.title
+            thumbnail_url = coverUrl.toAbsoluteUrl(baseUrl)
+            author = authors.toCreditString()
+            artist = artists.toCreditString()
+            genre = genres.joinToString()
+            status = when (statusTitle?.lowercase()) {
+                "ongoing" -> SManga.ONGOING
+                "completed" -> SManga.COMPLETED
+                "paused", "on hiatus", "hiatus" -> SManga.ON_HIATUS
+                "discontinued", "cancelled", "abandoned" -> SManga.CANCELLED
+                else -> SManga.UNKNOWN
+            }
+            description = fullDescription
         }
-        description = buildDescription()
     }
 
     /**
@@ -158,8 +159,8 @@ class MangaDetailsDto(
     }
 
     private fun buildDescription() = buildString {
-        if (summary != null && summary.isNotBlank()) {
-            append(summary.trim())
+        if (description != null && description.isNotBlank()) {
+            append(description.trim())
         }
 
         val stats = listOfNotNull(
@@ -205,7 +206,7 @@ class PagesDto(
 
 @Serializable
 class ChapterPagesDto(
-    val files: List<FileDto> = emptyList(),
+    val files: List<FileDto>,
 )
 
 @Serializable
@@ -213,18 +214,15 @@ class FileDto(
     private val diskFile: String,
     private val position: JsonPrimitive,
 ) {
-    fun toPage(baseUrl: String) = Page(
-        index = position.content.toDoubleOrNull()?.toInt() ?: 0,
-        imageUrl = diskFile.toAbsoluteUrl(baseUrl),
-    )
+    /** Comes through as a string like `"1.000000000"`. */
+    val order get() = position.content.toDoubleOrNull() ?: 0.0
+
+    fun toPage(index: Int, baseUrl: String) = Page(index, imageUrl = "$baseUrl$diskFile")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-/** Used when the `type` field is missing from the response. */
-private const val FALLBACK_MANGA_TYPE = "manga"
 
 /** Placeholder the site uses for unknown authors/artists. */
 private const val NOT_AVAILABLE = "N/A"
@@ -233,8 +231,16 @@ private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale
     timeZone = TimeZone.getTimeZone("UTC")
 }
 
-/** Paths come back with a leading slash, e.g. `/app/uploads/.../cover.webp`. */
+/**
+ * Paths come back with a leading slash, e.g. `/app/uploads/.../cover.webp`,
+ * but strip it before joining anyway in case the API ever stops sending it.
+ */
 private fun String?.toAbsoluteUrl(baseUrl: String): String? = this?.takeIf { it.isNotBlank() }?.let { "$baseUrl/${it.removePrefix("/")}" }
+
+private fun List<String>?.toCreditString(): String? = this
+    ?.filter { it != NOT_AVAILABLE }
+    ?.joinToString()
+    ?.takeIf { it.isNotBlank() }
 
 private fun formatCount(count: Int): String = when {
     count >= 1_000_000 -> {

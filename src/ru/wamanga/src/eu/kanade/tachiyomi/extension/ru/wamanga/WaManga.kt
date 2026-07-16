@@ -125,9 +125,7 @@ abstract class WaManga : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val manga = response.parseSvelte<DetailsDto>().manga
 
-        return manga.chapters
-            .map { it.toSChapter(manga.mangaUrl) }
-            .sortedByDescending { it.chapter_number }
+        return manga.chapters.map { it.toSChapter(manga.mangaUrl) }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -152,11 +150,11 @@ abstract class WaManga : HttpSource() {
         val files = response.parseSvelte<PagesDto>().chapter.files
 
         return files
-            .map { it.toPage(baseUrl) }
-            .sortedBy { it.index }
+            .sortedBy { it.order }
+            .mapIndexed { index, file -> file.toPage(index, baseUrl) }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ─────────────────────────────────────────────────────────────────────────
     // Filters
