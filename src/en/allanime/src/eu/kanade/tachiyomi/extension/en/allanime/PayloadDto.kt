@@ -37,3 +37,12 @@ class MangaUpdateVariables(
     private val id: String,
     private val showId: String,
 )
+
+@Serializable
+class RelatedVariables(
+    private val ids: List<String>,
+    private val search: SearchPayload,
+    private val fewerGenresSearch: SearchPayload,
+    private val size: Int,
+    private val translationType: String,
+)

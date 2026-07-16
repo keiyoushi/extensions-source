@@ -67,6 +67,9 @@ const val UPDATE_QUERY: String = $$"""
             status
             altNames
             englishName
+            malId
+            aniListId
+            relatedMangas
             availableChaptersDetail
         }
         episodeInfos(
@@ -78,5 +81,46 @@ const val UPDATE_QUERY: String = $$"""
             notes
             uploadDates
         }
+    }
+"""
+
+const val RELATED_QUERY: String = $$"""
+    query (
+        $ids: [String!]!
+        $search: SearchInput
+        $fewerGenresSearch: SearchInput
+        $size: Int
+        $translationType: VaildTranslationTypeMangaEnumType
+    ) {
+      mangas(
+          search: $search
+          limit: $size
+          translationType: $translationType
+      ) {
+        edges {
+          _id
+          name
+          thumbnail
+          englishName
+        }
+      }
+      fewerGenresSearch: mangas(
+          search: $fewerGenresSearch
+          limit: $size
+          translationType: $translationType
+      ) {
+        edges {
+          _id
+          name
+          thumbnail
+          englishName
+        }
+      }
+      mangasWithIds(ids: $ids) {
+        _id
+        name
+        thumbnail
+        englishName
+      }
     }
 """

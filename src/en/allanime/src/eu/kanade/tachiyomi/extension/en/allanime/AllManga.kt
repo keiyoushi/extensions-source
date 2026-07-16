@@ -7,7 +7,6 @@ import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -21,7 +20,6 @@ import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.GraphQLErrorInterceptor
-import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLBody
@@ -170,25 +168,44 @@ abstract class AllManga :
     }
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val genres = manga.genre?.split(", ") ?: return emptyList()
+        val related = manga.memo["relatedMangas"]?.parseAs<List<Related>>().orEmpty()
+        val genres = manga.genre?.split(", ").orEmpty().filter { it in genreList }
+        val fewerGenres = genres.shuffled().take(genres.size / 2)
 
-        suspend fun searchByGenres(included: List<String>): List<SManga> {
-            val filters = getFilters().apply {
-                firstInstance<GenreFilter>().state.forEach { genre ->
-                    if (genre.name in included) {
-                        genre.state = Filter.TriState.STATE_INCLUDE
-                    }
-                }
-            }
+        if (related.isEmpty() && genres.isEmpty()) return emptyList()
 
-            return getSearchMangaList(1, "", filters).mangas
-        }
+        fun searchPayload(includedGenres: List<String>) = SearchPayload(
+            query = null,
+            sortBy = null,
+            genres = includedGenres.takeUnless { it.isEmpty() },
+            excludeGenres = null,
+            isManga = true,
+            allowAdult = preferences.allowAdult,
+            allowUnknown = false,
+        )
 
-        val result = searchByGenres(genres)
-        if (result.size > 1) return result
+        val payload = graphQLBody(
+            query = RELATED_QUERY,
+            variables = RelatedVariables(
+                ids = related.map { it.mangaId },
+                search = searchPayload(genres),
+                fewerGenresSearch = searchPayload(fewerGenres),
+                size = LIMIT,
+                translationType = "sub",
+            ),
+        )
 
-        val fewerGenres = genres.shuffled().take((genres.size / 2).coerceAtLeast(1))
-        return searchByGenres(fewerGenres)
+        val data = client.post(apiUrl, payload).parseGraphQLAs<RelatedData>()
+
+        val result = (data.mangasWithIds.orEmpty() + data.search?.edges.orEmpty() + data.fewerGenresSearch?.edges.orEmpty())
+            .distinctBy { it.id }
+            .map(SearchManga::toSManga)
+
+        if (result.size > 1 || genres.size <= 1) return result
+
+        return data.fewerGenresSearch?.edges.orEmpty()
+            .distinctBy { it.id }
+            .map(SearchManga::toSManga)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {

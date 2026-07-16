@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.allanime
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
@@ -68,6 +69,9 @@ class Manga(
     private val status: String? = null,
     private val altNames: List<String>? = emptyList(),
     private val englishName: String? = null,
+    private val malId: String? = null,
+    private val aniListId: String? = null,
+    private val relatedMangas: List<Related>? = null,
     val availableChaptersDetail: AvailableChaptersDetail,
 ) {
     fun toSManga() = SManga.create().apply {
@@ -75,18 +79,20 @@ class Manga(
         url = id
         memo = buildJsonObject {
             put("slug", name.titleToSlug())
+            relatedMangas?.also { put("relatedMangas", it.toJsonElement()) }
         }
         thumbnail_url = thumbnail?.parseThumbnailUrl()
-        description = this@Manga.description?.let { Jsoup.parseBodyFragment(it).wholeText() }
-        if (!altNames.isNullOrEmpty()) {
-            if (description.isNullOrEmpty()) {
-                description = "Alternative Titles:\n"
-            } else {
-                description += "\n\nAlternative Titles:\n"
+        description = buildString {
+            this@Manga.description?.let { append(Jsoup.parseBodyFragment(it).wholeText()) }
+            append("\n\n")
+            this@Manga.malId?.let { append("[MyAnimeList](https://myanimelist.net/manga/$it)\n") }
+            this@Manga.aniListId?.let { append("[AniList](https://anilist.co/manga/$it)\n") }
+            append("\n\n")
+            if (altNames.orEmpty().isNotEmpty()) {
+                append("Alternative Titles:\n")
+                append(altNames.orEmpty().joinToString("\n") { "- $it" })
             }
-
-            description += altNames.joinToString("\n") { "• ${it.trim()}" }
-        }
+        }.trim()
         if (authors?.isNotEmpty() == true) {
             author = authors.first().trim()
             artist = author
@@ -96,6 +102,18 @@ class Manga(
         status = this@Manga.status.parseStatus()
     }
 }
+
+@Serializable
+class Related(
+    val mangaId: String,
+)
+
+@Serializable
+class RelatedData(
+    @SerialName("mangas") val search: Edges<SearchManga>?,
+    val fewerGenresSearch: Edges<SearchManga>?,
+    val mangasWithIds: List<SearchManga>?,
+)
 
 @Serializable
 class AvailableChaptersDetail(
