@@ -20,7 +20,7 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.int
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
-import keiyoushi.utils.toJsonString
+import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -28,9 +28,8 @@ import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.internal.closeQuietly
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
@@ -98,7 +97,7 @@ abstract class Iken :
             }
         }.build()
 
-        return parseSearchMangaList(client.get(url, headers))
+        return parseSearchMangaList(client.get(url))
     }
 
     // Tracks the current page
@@ -188,7 +187,7 @@ abstract class Iken :
 
     protected open val genreFilterKey: String = "genreIds"
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/api/genres", headers).parseAs<JsonElement>()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/api/genres").parseAs<JsonElement>()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genresList = data?.let {
@@ -253,7 +252,7 @@ abstract class Iken :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.substringBeforeLast("#")
-        val response = client.get("$apiUrl/api/post?postSlug=$slug", headers)
+        val response = client.get("$apiUrl/api/post?postSlug=$slug")
 
         val data = response.parseAs<MangaDto>().post
 
@@ -273,7 +272,7 @@ abstract class Iken :
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val id = manga.url.substringAfterLast("#")
-        val response = client.get("$apiUrl/api/recommendations?postId=$id&limit=25", headers)
+        val response = client.get("$apiUrl/api/recommendations?postId=$id&limit=25")
 
         return response.parseAs<RelatedMangaDto>().recommendations.filterNot {
             it.isNovel
@@ -290,7 +289,7 @@ abstract class Iken :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val id = chapter.memo["id"]?.int ?: throw Exception("Refresh Chapter List")
-        val response = client.get("$apiUrl/api/chapter?chapterId=$id", headers)
+        val response = client.get("$apiUrl/api/chapter?chapterId=$id")
 
         val data = response.parseAs<PageResponse>().chapter
 
@@ -336,12 +335,12 @@ abstract class Iken :
             POST(
                 "$apiUrl/api/analytics/updateViews",
                 headers,
-                ViewQuery(postId, chapterId).toJsonString().toRequestBody(JSON_MEDIA_TYPE),
+                ViewQuery(postId, chapterId).toJsonRequestBody(),
             ),
         ).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) = Unit
             override fun onResponse(call: Call, response: Response) {
-                response.close()
+                response.closeQuietly()
             }
         })
     }
@@ -358,7 +357,6 @@ abstract class Iken :
 
     companion object {
         const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
-        val JSON_MEDIA_TYPE = "application/json".toMediaType()
         val NUMBER_REGEX = Regex("\\d+")
     }
 }
