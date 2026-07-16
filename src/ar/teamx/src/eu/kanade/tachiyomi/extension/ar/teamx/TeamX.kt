@@ -28,8 +28,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class TeamX : KeiSource() {
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
-        connectTimeout(15.seconds)
-        readTimeout(30.seconds)
         rateLimit(10, 1.seconds)
     }
 
