@@ -2,27 +2,17 @@ package eu.kanade.tachiyomi.extension.en.allanime
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
-
-typealias ApiPopularResponse = Data<PopularData>
-
-typealias ApiSearchResponse = Data<SearchData>
-
-typealias ApiMangaDetailsResponse = Data<MangaDetailsData>
-
-typealias ApiChapterListResponse = Data<ChapterListData>
-
-@Serializable
-class Data<T>(val data: T)
+import kotlin.time.Instant
 
 @Serializable
 class Edges<T>(val edges: List<T>)
 
-// Popular
 @Serializable
 class PopularData(
     @SerialName("queryPopular") val popular: PopularMangas,
@@ -38,7 +28,6 @@ class PopularManga(
     @SerialName("anyCard") val manga: SearchManga? = null,
 )
 
-// Search
 @Serializable
 class SearchData(
     val mangas: Edges<SearchManga>,
@@ -53,15 +42,18 @@ class SearchManga(
 ) {
     fun toSManga() = SManga.create().apply {
         title = englishName ?: name
-        url = "/manga/$id/${name.titleToSlug()}"
+        url = id
+        memo = buildJsonObject {
+            put("slug", name.titleToSlug())
+        }
         thumbnail_url = thumbnail?.parseThumbnailUrl()
     }
 }
 
-// Details
 @Serializable
-class MangaDetailsData(
+class MangaUpdateData(
     val manga: Manga,
+    @SerialName("episodeInfos") val chapterList: List<ChapterData>,
 )
 
 @Serializable
@@ -76,10 +68,14 @@ class Manga(
     private val status: String? = null,
     private val altNames: List<String>? = emptyList(),
     private val englishName: String? = null,
+    val availableChaptersDetail: AvailableChaptersDetail,
 ) {
     fun toSManga() = SManga.create().apply {
         title = englishName ?: name
-        url = "/manga/$id/${name.titleToSlug()}"
+        url = id
+        memo = buildJsonObject {
+            put("slug", name.titleToSlug())
+        }
         thumbnail_url = thumbnail?.parseThumbnailUrl()
         description = this@Manga.description?.let { Jsoup.parseBodyFragment(it).wholeText() }
         if (!altNames.isNullOrEmpty()) {
@@ -101,20 +97,6 @@ class Manga(
     }
 }
 
-// chapters details
-@Serializable
-class ChapterListData(
-    val manga: ChapterMangaData,
-    @SerialName("episodeInfos") val chapterList: List<ChapterData>,
-)
-
-@Serializable
-class ChapterMangaData(
-    @SerialName("_id") val mangaId: String,
-    val name: String,
-    val availableChaptersDetail: AvailableChaptersDetail,
-)
-
 @Serializable
 class AvailableChaptersDetail(
     val sub: List<String>,
@@ -126,26 +108,27 @@ class ChapterData(
     @SerialName("notes") val title: String? = null,
     private val uploadDates: DateDto? = null,
 ) {
-    fun toSChapter(mangaUrl: String) = SChapter.create().apply {
+    fun toSChapter(mangaId: String, mangaSlug: String) = SChapter.create().apply {
         name = "Chapter $chapterNum"
         if (!title.isNullOrEmpty() && !title.contains(numberRegex)) {
             name += ": $title"
         }
-        url = "/read/$mangaUrl/chapter-$chapterNum-sub"
-        date_upload = dateFormat.tryParse(uploadDates?.sub)
-    }
-
-    companion object {
-        private val numberRegex by lazy { Regex("\\d") }
+        url = chapterNum.toString()
+        memo = buildJsonObject {
+            put("mangaId", mangaId)
+            put("mangaSlug", mangaSlug)
+        }
+        date_upload = uploadDates?.sub?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: 0L
     }
 }
+
+private val numberRegex = Regex("\\d")
 
 @Serializable
 class DateDto(
     val sub: String? = null,
 )
 
-// page list
 @Serializable
 class PageListData(
     @SerialName("chapterPages") val pageList: Edges<Servers>?,

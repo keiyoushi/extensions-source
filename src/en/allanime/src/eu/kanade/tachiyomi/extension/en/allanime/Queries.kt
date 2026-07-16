@@ -54,8 +54,8 @@ const val SEARCH_QUERY: String = $$"""
     }
 """
 
-const val DETAILS_QUERY: String = $$"""
-    query ($id: String!) {
+const val UPDATE_QUERY: String = $$"""
+    query ($id: String!, $showId: String!) {
         manga(_id: $id) {
             _id
             name
@@ -67,15 +67,6 @@ const val DETAILS_QUERY: String = $$"""
             status
             altNames
             englishName
-        }
-    }
-"""
-
-const val CHAPTERS_QUERY: String = $$"""
-    query ($id: String!, $showId: String!) {
-        manga(_id: $id) {
-            _id
-            name
             availableChaptersDetail
         }
         episodeInfos(

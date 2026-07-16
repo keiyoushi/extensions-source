@@ -3,12 +3,6 @@ package eu.kanade.tachiyomi.extension.en.allanime
 import kotlinx.serialization.Serializable
 
 @Serializable
-class GraphQL<T>(
-    private val variables: T,
-    private val query: String,
-)
-
-@Serializable
 class PopularVariables(
     private val type: String,
     private val size: Int,
@@ -39,12 +33,7 @@ class SearchPayload(
 )
 
 @Serializable
-class IDVariables(
-    private val id: String,
-)
-
-@Serializable
-class ChapterListVariables(
+class MangaUpdateVariables(
     private val id: String,
     private val showId: String,
 )
