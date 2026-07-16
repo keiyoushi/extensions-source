@@ -40,7 +40,7 @@ abstract class AllManga :
     KeiSource(),
     ConfigurableSource {
 
-    private val apiDomain get() = "api.allanime.day"
+    private val apiDomain get() = "api.mkissa.net"
 
     private val apiUrl get() = "https://$apiDomain/api"
 
