@@ -194,9 +194,8 @@ abstract class OniSaga :
             "$baseUrl/livewire/update",
             buildLivewireHeaders(url.substringBefore("?")),
             request.toJsonRequestBody(livewireJson),
-        ).let { response ->
+        ).use { response ->
             if (!response.isSuccessful) {
-                response.close()
                 cachedState = null
                 throw HttpException(response.code)
             }
@@ -535,9 +534,8 @@ abstract class OniSaga :
                     "$baseUrl/livewire/update",
                     buildLivewireHeaders(doc.location()),
                     request.toJsonRequestBody(livewireJson),
-                ).let { response ->
+                ).use { response ->
                     if (!response.isSuccessful) {
-                        response.close()
                         null
                     } else {
                         response.parseAs<LivewireResponse>()
