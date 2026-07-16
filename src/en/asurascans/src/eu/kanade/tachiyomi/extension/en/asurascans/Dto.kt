@@ -2,13 +2,14 @@ package eu.kanade.tachiyomi.extension.en.asurascans
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Serializable
 class DataDto<T>(
@@ -22,43 +23,47 @@ class MetaDto(
 )
 
 @Serializable
-class MangaDetailsDto(
-    val series: MangaDto,
-)
-
-@Serializable
 class MangaDto(
     @SerialName("public_url")
     val publicUrl: String,
     val slug: String,
     private val title: String,
+    @JsonNames("coverUrl")
     private val cover: String,
+) {
+    fun toSManga(baseUrl: String) = SManga.create().apply {
+        title = this@MangaDto.title
+        thumbnail_url = cover
+        url = "/series/$slug" // Keep the old URL structure for compatibility with existing bookmarks
+        memo = buildJsonObject {
+            put("slug", "$baseUrl$publicUrl".toHttpUrl().pathSegments.last())
+        }
+    }
+}
+
+@Serializable
+class MangaDetailsDto(
+    private val title: String,
+    private val coverUrl: String,
     private val author: String? = null,
     private val artist: String? = null,
     private val description: String? = null,
     private val rating: Double? = null,
-    @SerialName("popularity_rank")
     private val popularityRank: Int? = null,
-    @SerialName("alt_titles")
-    private val altTitles: List<String>? = null,
+    @SerialName("alternativeTitles")
+    private val altTitles: String? = null,
     private val genres: List<GenreDto>? = null,
     private val status: String? = null,
 ) {
-    fun toSManga() = SManga.create().apply {
-        title = this@MangaDto.title
-        thumbnail_url = cover
-        url = "/series/$slug" // Keep the old URL structure for compatibility with existing bookmarks
-    }
-
     fun toSMangaDetails() = SManga.create().apply {
-        title = this@MangaDto.title
-        thumbnail_url = cover
-        author = this@MangaDto.author
-        artist = this@MangaDto.artist
+        title = this@MangaDetailsDto.title
+        thumbnail_url = coverUrl
+        author = this@MangaDetailsDto.author
+        artist = this@MangaDetailsDto.artist
         description = parseDescription()
         genre = genres?.joinToString { it.name }
         status = parseStatus()
-        url = "/series/$slug"
+        initialized = true
     }
 
     fun parseDescription(): String = buildString {
@@ -76,7 +81,7 @@ class MangaDto(
         }
 
         val cleanAltTitles = altTitles
-            ?.flatMap { it.split(" • ") }
+            ?.split(" • ")
             ?.map { it.trim() }
             ?.filter { it.isNotBlank() }
 
@@ -97,17 +102,45 @@ class MangaDto(
 }
 
 @Serializable
-class GenreDto(
-    val name: String,
-)
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
+class MangaUrlDto(
+    val publicUrl: String,
+    val seriesSlug: String,
+) {
+    fun apply(manga: SManga, baseUrl: String) = manga.apply {
+        url = "/series/$seriesSlug" // Keep the old URL structure for compatibility with existing bookmarks
+        memo = buildJsonObject {
+            put("slug", "$baseUrl$publicUrl".toHttpUrl().pathSegments.last())
+        }
+    }
 }
 
 @Serializable
+class AvailableGenres(
+    val availableGenres: List<GenreDto>,
+)
+
+@Serializable
+class GenreDto(
+    val name: String,
+    val slug: String,
+)
+
+@Serializable
+class Creators(
+    val artists: List<String>,
+    val authors: List<String>,
+)
+
+@Serializable
+class FiltersDto(
+    val genres: List<GenreDto>,
+    val artists: List<String>,
+    val authors: List<String>,
+)
+
+@Serializable
 class ChapterListDto(
-    val chapters: List<ChapterDto> = emptyList(),
+    val chapters: List<ChapterDto>? = null,
 )
 
 @Serializable
@@ -118,23 +151,21 @@ class ChapterDto(
     @SerialName("is_locked") val isLocked: Boolean = false,
     @SerialName("series_slug") private val seriesSlug: String? = null,
 ) {
-    fun toSChapter() = SChapter.create().apply {
+    fun toSChapter(randomMangaSlug: String) = SChapter.create().apply {
         val numberStr = number.toString().removeSuffix(".0")
         url = "/series/$seriesSlug/chapter/$numberStr"
+        memo = buildJsonObject {
+            put("mangaSlug", randomMangaSlug)
+        }
         name = buildString {
             if (isLocked) append("🔒 ")
             append("Chapter $numberStr")
             title?.let { append(" - $it") }
         }
 
-        // Strip fractional seconds if they exist before parsing
-        val cleanDate = if (createdAt.contains(".")) {
-            createdAt.substringBefore(".") + "Z"
-        } else {
-            createdAt
-        }
-
-        date_upload = dateFormat.tryParse(cleanDate)
+        date_upload = runCatching {
+            Instant.parse(createdAt).toEpochMilliseconds()
+        }.getOrDefault(0L)
     }
 }
 
