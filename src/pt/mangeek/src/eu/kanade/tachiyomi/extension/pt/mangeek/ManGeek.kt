@@ -1,34 +1,32 @@
 package eu.kanade.tachiyomi.extension.pt.mangeek
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.RequestBody
-import okhttp3.Response
-import rx.Observable
+import okhttp3.OkHttpClient
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.Locale
 
 @Source
-abstract class ManGeek : HttpSource() {
+abstract class ManGeek : KeiSource() {
 
-    override val supportsLatest = true
-
-    override val client = network.client.newBuilder()
-        .rateLimit(3)
-        .build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        rateLimit(3)
+    }
 
     private val apiUrl = "http://geekstations.com.br/api/v2/pt".toHttpUrl()
 
@@ -36,15 +34,9 @@ abstract class ManGeek : HttpSource() {
     private var activeDiscoverTags: List<String>? = null
     private val discoveredIds = mutableListOf<Long>()
 
-    override fun popularMangaRequest(page: Int): Request = GET(signedUrl("home"), headers)
-        .newBuilder()
-        .tag(PageTag::class.java, PageTag(page.coerceAtLeast(1)))
-        .build()
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val mangas = response.parseAs<HomeDto>().catalogMangas()
-        val page = requireNotNull(response.request.tag(PageTag::class.java)).page
-        val start = (page - 1) * CATALOG_PAGE_SIZE
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val mangas = fetchHome().catalogMangas()
+        val start = (page.coerceAtLeast(1) - 1) * CATALOG_PAGE_SIZE
         val pageMangas = mangas.drop(start).take(CATALOG_PAGE_SIZE)
 
         return MangasPage(
@@ -53,10 +45,8 @@ abstract class ManGeek : HttpSource() {
         )
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(signedUrl("home"), headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val mangas = response.parseAs<HomeDto>().news
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val mangas = fetchHome().news
             .map { it.manga }
             .distinctBy { it.id }
             .map { it.toSManga() }
@@ -64,87 +54,62 @@ abstract class ManGeek : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val requestedPage = page.coerceAtLeast(1)
         val normalizedQuery = query.trim().lowercase(Locale.ROOT)
         val includedTags = filters.includedTags()
-        var ignoredIds = emptyList<Long>()
 
-        val (mode, request) = when {
-            normalizedQuery.isBlank() && includedTags.isEmpty() ->
-                SEARCH_MODE_HOME to
-                    GET(signedUrl("home"), headers)
-            normalizedQuery.isBlank() -> {
-                ignoredIds = synchronized(discoverLock) {
-                    if (requestedPage == 1 || activeDiscoverTags != includedTags) {
-                        activeDiscoverTags = includedTags
-                        discoveredIds.clear()
-                    }
-
-                    discoveredIds.take((requestedPage - 1) * DISCOVER_PAGE_SIZE)
-                }
-
-                SEARCH_MODE_DISCOVER to
-                    post(
-                        signedUrl("discover"),
-                        DiscoverBody(includedTags, ignoredIds).toJsonRequestBody(),
-                    )
-            }
-            else ->
-                SEARCH_MODE_QUERY to
-                    post(
-                        signedUrl("search", normalizedQuery),
-                        SearchBody(includedTags).toJsonRequestBody(),
-                    )
+        return when {
+            normalizedQuery.isBlank() && includedTags.isEmpty() -> getPopularManga(requestedPage)
+            normalizedQuery.isBlank() -> discoverPage(requestedPage, includedTags)
+            else -> searchPage(requestedPage, normalizedQuery, includedTags)
         }
-
-        val tag = SearchTag(
-            mode = mode,
-            page = requestedPage,
-            includedTags = includedTags,
-            ignoredIds = ignoredIds,
-        )
-
-        return request.newBuilder()
-            .tag(SearchTag::class.java, tag)
-            .build()
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val tag = requireNotNull(response.request.tag(SearchTag::class.java))
+    private suspend fun discoverPage(page: Int, includedTags: List<String>): MangasPage {
+        val ignoredIds = synchronized(discoverLock) {
+            if (page == 1 || activeDiscoverTags != includedTags) {
+                activeDiscoverTags = includedTags
+                discoveredIds.clear()
+            }
 
-        val responseMangas = if (tag.mode == SEARCH_MODE_HOME) {
-            response.parseAs<HomeDto>().catalogMangas()
-        } else {
-            response.parseAs<List<MangaDto>>()
+            discoveredIds.take((page - 1) * DISCOVER_PAGE_SIZE)
         }
 
-        val mangas = if (tag.mode == SEARCH_MODE_DISCOVER) {
-            val ignoredIds = tag.ignoredIds.toHashSet()
-            responseMangas
-                .filterNot { it.id in ignoredIds }
-                .distinctBy { it.id }
-                .also { pageMangas ->
-                    synchronized(discoverLock) {
-                        if (activeDiscoverTags == tag.includedTags) {
-                            discoveredIds.clear()
-                            discoveredIds.addAll(tag.ignoredIds)
-                            discoveredIds.addAll(pageMangas.map { it.id })
-                        }
+        val response = client.post(
+            signedUrl("discover"),
+            DiscoverBody(includedTags, ignoredIds).toJsonRequestBody(),
+        )
+
+        val responseMangas = response.parseAs<List<MangaDto>>()
+        val ignoredIdSet = ignoredIds.toHashSet()
+        val mangas = responseMangas
+            .filterNot { it.id in ignoredIdSet }
+            .distinctBy { it.id }
+            .also { pageMangas ->
+                synchronized(discoverLock) {
+                    if (activeDiscoverTags == includedTags) {
+                        discoveredIds.clear()
+                        discoveredIds.addAll(ignoredIds)
+                        discoveredIds.addAll(pageMangas.map { it.id })
                     }
                 }
-        } else {
-            responseMangas
-        }
+            }
 
-        if (tag.mode != SEARCH_MODE_QUERY) {
-            return MangasPage(
-                mangas.map { it.toSManga() },
-                tag.mode == SEARCH_MODE_DISCOVER && responseMangas.size == DISCOVER_PAGE_SIZE,
-            )
-        }
+        return MangasPage(
+            mangas.map { it.toSManga() },
+            responseMangas.size == DISCOVER_PAGE_SIZE,
+        )
+    }
 
-        val start = (tag.page - 1) * SEARCH_PAGE_SIZE
+    private suspend fun searchPage(page: Int, query: String, includedTags: List<String>): MangasPage {
+        val response = client.post(
+            signedUrl("search", query),
+            SearchBody(includedTags).toJsonRequestBody(),
+        )
+
+        val mangas = response.parseAs<List<MangaDto>>()
+        val start = (page - 1) * SEARCH_PAGE_SIZE
         val pageMangas = mangas.drop(start).take(SEARCH_PAGE_SIZE)
 
         return MangasPage(
@@ -153,45 +118,62 @@ abstract class ManGeek : HttpSource() {
         )
     }
 
-    override fun getFilterList(): FilterList = getFilters()
+    private suspend fun fetchHome(): HomeDto = client.get(signedUrl("home")).parseAs<HomeDto>()
+
+    override fun getFilterList(data: JsonElement?): FilterList = getFilters()
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val id = url.pathSegments.getOrNull(1)?.takeIf { url.pathSegments.getOrNull(0) == "manga" }
+            ?: return null
+
+        val manga = SManga.create().apply { this.url = id }
+
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+            .manga
+            .apply { initialized = true }
+    }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(
-        signedUrl("manga", manga.url),
-        headers,
-    )
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val dto = client.get(signedUrl("manga", manga.url)).parseAs<MangaDto>()
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().toSManga(details = true)
+        return SMangaUpdate(
+            manga = dto.toSManga(details = true),
+            chapters = if (fetchChapters) {
+                dto.chapters
+                    .orEmpty()
+                    .asReversed()
+                    .map { it.toSChapter() }
+            } else {
+                chapters
+            },
+        )
+    }
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+    override val supportsRelatedMangas = false
 
-    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<MangaDto>().chapters
-        .orEmpty()
-        .asReversed()
-        .map { it.toSChapter() }
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = throw UnsupportedOperationException()
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url}"
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
-        val chapterId = chapter.url
-        val primary = runCatching { fetchChapterPages("chapter", chapterId) }.getOrNull()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val primary = runCatching { fetchChapterPages("chapter", chapter.url) }.getOrNull()
 
         if (!primary.isNullOrEmpty()) {
-            primary
-        } else {
-            fetchChapterPages("mirror", chapterId)
+            return primary
         }
+
+        return fetchChapterPages("mirror", chapter.url)
     }
 
-    private fun fetchChapterPages(route: String, chapterId: String): List<Page> = client.newCall(GET(signedUrl(route, chapterId), headers)).execute().use { response ->
-        if (!response.isSuccessful) error("HTTP ${response.code}")
-        response.parseAs<ChapterPagesDto>().toPageList()
-    }
-
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    private suspend fun fetchChapterPages(route: String, chapterId: String): List<Page> = client.get(signedUrl(route, chapterId)).parseAs<ChapterPagesDto>().toPageList()
 
     private fun signedUrl(route: String, input: String? = null): HttpUrl {
         val nonce = System.currentTimeMillis().toString(16).uppercase(Locale.ROOT)
@@ -210,25 +192,7 @@ abstract class ManGeek : HttpSource() {
         .digest(value.toByteArray(StandardCharsets.UTF_8))
         .joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
-    private fun post(url: HttpUrl, body: RequestBody): Request = Request.Builder()
-        .url(url)
-        .headers(headers)
-        .post(body)
-        .build()
-
-    private class PageTag(val page: Int)
-
-    private class SearchTag(
-        val mode: String,
-        val page: Int,
-        val includedTags: List<String>,
-        val ignoredIds: List<Long>,
-    )
-
     companion object {
-        private const val SEARCH_MODE_HOME = "home"
-        private const val SEARCH_MODE_DISCOVER = "discover"
-        private const val SEARCH_MODE_QUERY = "query"
         private const val CATALOG_PAGE_SIZE = 24
         private const val SEARCH_PAGE_SIZE = 24
         private const val DISCOVER_PAGE_SIZE = 25
