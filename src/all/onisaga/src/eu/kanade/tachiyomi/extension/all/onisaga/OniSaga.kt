@@ -194,8 +194,9 @@ abstract class OniSaga :
             "$baseUrl/livewire/update",
             buildLivewireHeaders(url.substringBefore("?")),
             request.toJsonRequestBody(livewireJson),
-        ).use { response ->
+        ).let { response ->
             if (!response.isSuccessful) {
+                response.close()
                 cachedState = null
                 throw HttpException(response.code)
             }
@@ -534,8 +535,9 @@ abstract class OniSaga :
                     "$baseUrl/livewire/update",
                     buildLivewireHeaders(doc.location()),
                     request.toJsonRequestBody(livewireJson),
-                ).use { response ->
+                ).let { response ->
                     if (!response.isSuccessful) {
+                        response.close()
                         null
                     } else {
                         response.parseAs<LivewireResponse>()
@@ -674,7 +676,7 @@ abstract class OniSaga :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = baseUrl + chapter.url
-        val body = client.get(chapterUrl, headers).use { it.body.string() }
+        val body = client.get(chapterUrl, headers).body.string()
 
         val token = READER_TOKEN_REGEX.find(body)?.groupValues?.get(1) ?: ""
         if (token.isBlank()) throw Exception("Could not find readerToken in chapter page")
@@ -707,14 +709,14 @@ abstract class OniSaga :
                 currentReaderToken = it
             }
 
-            val dto = response.use { it.parseAs<PageApiResponse>() }
+            val dto = response.parseAs<PageApiResponse>()
 
             if (dto.url != null) {
                 return dto.url
             }
 
             if (!response.isSuccessful || dto.message?.contains("expired", ignoreCase = true) == true) {
-                val refreshBody = client.get(chapterUrl, headers).use { it.body.string() }
+                val refreshBody = client.get(chapterUrl, headers).body.string()
                 val newToken = READER_TOKEN_REGEX.find(refreshBody)?.groupValues?.get(1)
 
                 if (newToken.isNullOrBlank()) {
