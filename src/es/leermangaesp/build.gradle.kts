@@ -6,17 +6,17 @@ plugins {
 
 keiyoushi {
     name = "LeerMangaEsp"
-    versionCode = 1
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {
         lang = "es"
-        baseUrl = "https://leermangaesp.net"
+        baseUrl = "https://mangalect.org"
     }
 
     deeplink {
-        host("leermangaesp.net")
+        host("mangalect.org")
         path("/manga/..*")
         path("/leer-m/..*")
     }
