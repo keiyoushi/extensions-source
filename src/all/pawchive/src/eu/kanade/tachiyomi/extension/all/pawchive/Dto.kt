@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.pawchive
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import kotlinx.serialization.json.JsonPrimitive
@@ -28,11 +29,7 @@ class PawchiveCreatorDto(
     var fav: Long = 0L
 
     val updatedDate get() = when {
-        updated.isString -> try {
-            dateFormat.get()!!.parse(updated.content)?.time ?: 0L
-        } catch (_: Exception) {
-            0L
-        }
+        updated.isString -> dateFormat.get()!!.tryParse(updated.content)
         else -> (updated.double * 1000).toLong()
     }
 
@@ -89,11 +86,7 @@ class PawchivePostDto(
         // Prevents leaking SimpleDateFormat mutations across concurrently fetched mangas
         format.timeZone = if (serviceName == "Pixiv Fanbox") TimeZone.getTimeZone("GMT+09:00") else TimeZone.getTimeZone("GMT")
 
-        val postDate = try {
-            if (dateStr != null) format.parse(dateStr)?.time ?: 0L else 0L
-        } catch (_: Exception) {
-            0L
-        }
+        val postDate = format.tryParse(dateStr)
 
         url = "/$service/user/$user/post/$id"
         date_upload = postDate

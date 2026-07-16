@@ -5,6 +5,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.all.pawchive.PawchiveCreatorDto.Companion.serviceName
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.await // Imported for non-blocking network calls
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -12,35 +13,43 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.Cache
 import okhttp3.CacheControl
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
+import okhttp3.HttpUrl
+import okhttp3.OkHttpClient
 import java.io.File
+import kotlin.io.use
 import kotlin.math.min
 import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class Pawchive :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    override val supportsLatest = true
 
     private val preferences = getPreferences()
+
     private val apiPath = "api/v1"
+
     private val dataPath = "data"
+
     private val fileUrl = baseUrl.replace("//", "//file.")
+
     private val imgUrl = baseUrl.replace("//", "//img.")
 
-    override val client = network.client.newBuilder()
-        .addInterceptor { chain ->
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor { chain ->
             val request = chain.request()
 
             // 1. Existing API fix
@@ -66,20 +75,18 @@ abstract class Pawchive :
 
             response
         }
-        .cache(
-            Cache(
-                directory = File(applicationContext.externalCacheDir, "network_cache_${name.lowercase()}"),
-                maxSize = 50L * 1024 * 1024, // 50 MiB
-            ),
-        )
-        .rateLimit(1)
-        .build()
+            .cache(
+                Cache(
+                    directory = File(applicationContext.externalCacheDir, "network_cache_${name.lowercase()}"),
+                    maxSize = 50L * 1024 * 1024, // 50 MiB
+                ),
+            )
+            .rateLimit(1)
+    }
 
     private val creatorsClient = client.newBuilder()
         .readTimeout(5.minutes)
         .build()
-
-    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
     private fun String.toThumbnailUrl(): String {
         val pathIndex = this.indexOf('/', 8) // Skips the `https://`
@@ -90,19 +97,13 @@ abstract class Pawchive :
         }
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
-        searchMangas(page, sortBy = "pop" to "desc")
-    }
+    override suspend fun getPopularManga(page: Int): MangasPage = searchMangas(page, sortBy = "pop" to "desc")
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = Observable.fromCallable {
-        searchMangas(page, sortBy = "lat" to "desc")
-    }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = searchMangas(page, sortBy = "lat" to "desc")
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
-        searchMangas(page, query, filters)
-    }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = searchMangas(page, query, filters)
 
-    private fun searchMangas(page: Int = 1, title: String = "", filters: FilterList? = null, sortBy: Pair<String, String> = "" to ""): MangasPage {
+    private suspend fun searchMangas(page: Int = 1, title: String = "", filters: FilterList? = null, sortBy: Pair<String, String> = "" to ""): MangasPage {
         var sort = sortBy
         val typeIncluded = mutableListOf<String>()
         val typeExcluded = mutableListOf<String>()
@@ -128,33 +129,43 @@ abstract class Pawchive :
             }
         }
 
-        val mangas = run {
-            val favorites = if (fav != null) {
-                val response = client.newCall(GET("$baseUrl/$apiPath/account/favorites", headers)).execute()
-                if (response.isSuccessful) {
-                    response.parseAs<List<PawchiveFavoritesDto>>()
+        val mangas = coroutineScope {
+            // 1. Start fetching favorites in the background
+            val favoritesDeferred = async {
+                if (fav != null) {
+                    client.get("$baseUrl/$apiPath/account/favorites", headers).use { response ->
+                        if (response.isSuccessful) {
+                            response.parseAs<List<PawchiveFavoritesDto>>()
+                        } else {
+                            val message = if (response.code == 401) "You are not logged in" else "HTTP error ${response.code}"
+                            throw Exception("Failed to fetch favorites: $message")
+                        }
+                    }
                 } else {
-                    response.close()
-                    val message = if (response.code == 401) "You are not logged in" else "HTTP error ${response.code}"
-                    throw Exception("Failed to fetch favorites: $message")
+                    emptyList()
                 }
-            } else {
-                emptyList()
             }
 
-            val request = GET(
-                "$baseUrl/$apiPath/creators",
-                headers,
-                CacheControl.Builder().maxStale(30.minutes).build(),
-            )
-            val response = creatorsClient.newCall(request).execute()
-            if (!response.isSuccessful) {
-                response.close()
-                throw Exception("HTTP error ${response.code}")
+            // 2. Start fetching creators in the background simultaneously
+            val creatorsDeferred = async {
+                val request = GET(
+                    "$baseUrl/$apiPath/creators",
+                    headers,
+                    CacheControl.Builder().maxStale(30.minutes).build(),
+                )
+                creatorsClient.newCall(request).await().use { response ->
+                    if (!response.isSuccessful) {
+                        throw Exception("HTTP error ${response.code}")
+                    }
+                    response.parseAs<List<PawchiveCreatorDto>>()
+                }
             }
 
-            val allCreators = response.parseAs<List<PawchiveCreatorDto>>()
+            // 3. Wait for both background tasks to finish
+            val favorites = favoritesDeferred.await()
+            val allCreators = creatorsDeferred.await()
 
+            // 4. Perform the filter mapping as before
             allCreators.filter { creator ->
                 val sName = creator.service.serviceName().lowercase()
                 val includeType = typeIncluded.isEmpty() || typeIncluded.contains(sName)
@@ -193,60 +204,94 @@ abstract class Pawchive :
         return MangasPage(final, toIndex != maxIndex)
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
-        val prefMaxPost = preferences.getString(POST_PAGES_PREF, POST_PAGES_DEFAULT)!!
-            .toInt().coerceAtMost(POST_PAGES_MAX) * PAGE_POST_LIMIT
+    // RESOLVES: getMangaByUrl(url)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val id = url.pathSegments.lastOrNull() ?: return null
+        val request = GET("$baseUrl/$apiPath/creators", headers, CacheControl.Builder().maxStale(30.minutes).build())
+        val response = creatorsClient.newCall(request).await()
+        if (!response.isSuccessful) {
+            response.close()
+            return null
+        }
+        val allCreators = response.parseAs<List<PawchiveCreatorDto>>()
+        val creator = allCreators.find { it.id == id } ?: return null
+        return creator.toSManga(baseUrl)
+    }
 
-        val datePref = preferences.getString(POST_DATE_PREF, POST_DATE_PUBLISHED)!!
+    // RESOLVES: fetchRelatedMangaList(manga)
+    override val supportsRelatedMangas get() = false
 
-        var offset = 0
-        var hasNextPage = true
-        val result = ArrayList<SChapter>()
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
 
-        while (offset < prefMaxPost && hasNextPage) {
-            val request = GET("$baseUrl/$apiPath${manga.url}/posts?o=$offset", headers)
-            val page: List<PawchivePostDto> = retry(request).parseAs()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        // We aren't fetching new details in this snippet, so we pass the existing manga back
+        val updatedManga = manga
 
-            page.forEach { post ->
-                if (post.images.isNotEmpty()) {
-                    result.add(post.toSChapter(manga.author, datePref))
+        val updatedChapters = if (fetchChapters) {
+            val prefMaxPost = preferences.getString(POST_PAGES_PREF, POST_PAGES_DEFAULT)!!
+                .toInt().coerceAtMost(POST_PAGES_MAX) * PAGE_POST_LIMIT
+
+            val datePref = preferences.getString(POST_DATE_PREF, POST_DATE_PUBLISHED)!!
+
+            var offset = 0
+            var hasNextPage = true
+            val result = ArrayList<SChapter>()
+
+            while (offset < prefMaxPost && hasNextPage) {
+                val url = "$baseUrl/$apiPath${manga.url}/posts?o=$offset"
+
+                // Using the client.get().use {} pattern from your example
+                client.get(url, headers).use { response ->
+                    val page: List<PawchivePostDto> = response.parseAs()
+
+                    page.forEach { post ->
+                        if (post.images.isNotEmpty()) {
+                            result.add(post.toSChapter(manga.author, datePref))
+                        }
+                    }
+
+                    offset += PAGE_POST_LIMIT
+                    hasNextPage = page.size == PAGE_POST_LIMIT
                 }
             }
-
-            offset += PAGE_POST_LIMIT
-            hasNextPage = page.size == PAGE_POST_LIMIT
+            result
+        } else {
+            chapters
         }
-        result
+
+        return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    private fun retry(request: Request): Response {
-        var code = 0
-        repeat(5) {
-            val response = client.newCall(request).execute()
-            if (response.isSuccessful) return response
-            response.close()
-            code = response.code
-            if (code == 429) {
-                Thread.sleep(10000)
+    // 4. Pages/Images
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val url = "$baseUrl/$apiPath${chapter.url}"
+
+        // 1. Fetch and parse the page list
+        client.get(url, headers).use { response ->
+            val postData: PawchivePostDto = response.parseAs()
+
+            // 2. Grab the preference ONCE before mapping to save performance
+            val useLowRes = preferences.getBoolean(USE_LOW_RES_IMG, false)
+
+            // 3. Map the images and apply the low-res logic immediately
+            return postData.images.mapIndexed { i, path ->
+                val originalUrl = "$fileUrl/$dataPath$path"
+
+                // This replaces your old `imageRequest` logic
+                val finalImageUrl = if (useLowRes) originalUrl.toThumbnailUrl() else originalUrl
+
+                Page(i, imageUrl = finalImageUrl)
             }
         }
-        throw Exception("HTTP error $code")
-    }
-
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/$apiPath${chapter.url}", headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val postData: PawchivePostDto = response.parseAs()
-        return postData.images.mapIndexed { i, path -> Page(i, imageUrl = "$fileUrl/$dataPath$path") }
-    }
-
-    override fun imageRequest(page: Page): Request {
-        val imageUrl = page.imageUrl!!
-        return GET(if (preferences.getBoolean(USE_LOW_RES_IMG, false)) imageUrl.toThumbnailUrl() else imageUrl, headers)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -278,12 +323,13 @@ abstract class Pawchive :
         SwitchPreferenceCompat(screen.context).apply {
             key = FALLBACK_LOW_RES_IMG
             title = "Fallback to low resolution images"
-            summary = "If a full size image fails to load (e.g. 404 Not Found), automatically try loading the low resolution thumbnail instead."
+            summary =
+                "If a full size image fails to load (e.g. 404 Not Found), automatically try loading the low resolution thumbnail instead."
             setDefaultValue(true)
         }.let(screen::addPreference)
     }
 
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         SortFilter("Sort by", Filter.Sort.Selection(0, false), getSortsList),
         TypeFilter("Types", getTypes),
         FavoritesFilter(),
@@ -306,17 +352,6 @@ abstract class Pawchive :
     internal open class SortFilter(name: String, selection: Selection, private val vals: List<Pair<String, String>>) : Filter.Sort(name, vals.map { it.first }.toTypedArray(), selection) {
         fun getValue() = vals[state!!.index].second
     }
-
-    // Required by HttpSource when no generic overrides are in place
-    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
-    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     companion object {
         private const val PAGE_POST_LIMIT = 50
