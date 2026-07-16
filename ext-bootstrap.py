@@ -41,6 +41,7 @@ def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser):
     args.path = path
 
     # Validate multisrc theme if provided
+    args.is_keisource = True
     if args.multisrc:
         multisrc_dir = path / "lib-multisrc"
         if not multisrc_dir.exists() or not multisrc_dir.is_dir():
@@ -53,10 +54,133 @@ def validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser):
             )
         args.multisrc = multisrc_theme
 
+        if (
+            'libVersion = "1.4"'
+            in (multisrc_dir / multisrc_theme / "build.gradle.kts").read_text()
+        ):
+            args.is_keisource = False
+
 
 def get_ext_classname(extname: str) -> str:
     sanitized = re.sub(r"[^A-Za-z0-9 ]", "", extname)
     return "".join(word.capitalize() for word in re.findall(r"[A-Za-z0-9]+", sanitized))
+
+
+def write_gradle_file(args: argparse.Namespace, ext_dir: Path) -> None:
+    with open(ext_dir / "build.gradle.kts", "w") as f:
+        f.write("import io.github.keiyoushi.gradle.api.ContentWarning\n\n")
+        f.write("plugins {\n")
+        f.write("\talias(kei.plugins.extension)\n")
+        f.write("}\n\n")
+        f.write("keiyoushi {\n")
+        f.write(f'\tname = "{args.extname}"\n')
+
+        if args.multisrc:
+            f.write(f'\ttheme = "{args.multisrc}"\n')
+            f.write("\tversionCode = 0\n")
+        else:
+            f.write("\tversionCode = 1\n")
+
+        f.write(f"\tcontentWarning = ContentWarning.{args.content_warning}\n")
+        f.write("\tlibVersion = ")
+        f.write('"1.6"' if args.is_keisource else '"1.4"')
+        f.write("\n\n")
+
+        f.write("\tsource {\n")
+        if args.source_name:
+            f.write(f'\t\tname = "{args.source_name}"\n')
+
+        f.write(f'\t\tbaseUrl = "{args.baseurl}"\n')
+        f.write(f'\t\tlang = "{args.lang}"\n')
+        f.write("\t}\n")
+
+        if not args.multisrc:
+            f.write("\n\tdeeplink {\n")
+            f.write('\t\tpath("/..*")\n')
+            f.write("\t}\n")
+
+        f.write("}\n")
+
+
+def write_multisrc_source(f, args: argparse.Namespace, classname: str) -> None:
+    multisrc_classname = get_ext_classname(args.multisrc)
+    f.write(
+        f"import eu.kanade.tachiyomi.multisrc.{args.multisrc}.{multisrc_classname}\n"
+    )
+    f.write("import keiyoushi.annotation.Source\n\n")
+    f.write("@Source\n")
+    f.write(f"abstract class {classname} : {multisrc_classname}()\n")
+
+
+def write_keisource_source(f, classname: str) -> None:
+    """Extension stub targeting lib 1.6."""
+    f.write("import eu.kanade.tachiyomi.source.model.FilterList\n")
+    f.write("import eu.kanade.tachiyomi.source.model.MangasPage\n")
+    f.write("import eu.kanade.tachiyomi.source.model.Page\n")
+    f.write("import eu.kanade.tachiyomi.source.model.SChapter\n")
+    f.write("import eu.kanade.tachiyomi.source.model.SManga\n")
+    f.write("import eu.kanade.tachiyomi.source.model.SMangaUpdate\n")
+    f.write("import keiyoushi.annotation.Source\n")
+    f.write("import keiyoushi.source.KeiSource\n")
+    f.write("import okhttp3.HttpUrl\n")
+    f.write("import java.lang.UnsupportedOperationException\n\n")
+
+    f.write("@Source\n")
+    f.write(f"abstract class {classname} : KeiSource() {{\n\n")
+
+    f.write(
+        "\toverride suspend fun getPopularManga(page: Int): MangasPage = throw UnsupportedOperationException()\n\n"
+    )
+    f.write(
+        "\toverride suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()\n\n"
+    )
+    f.write(
+        "\toverride suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage =\n"
+        "\t\tthrow UnsupportedOperationException()\n\n"
+    )
+    f.write(
+        "\toverride suspend fun getMangaByUrl(url: HttpUrl): SManga? = throw UnsupportedOperationException()\n\n"
+    )
+
+    f.write("\toverride suspend fun fetchMangaUpdate(\n")
+    f.write("\t\tmanga: SManga,\n")
+    f.write("\t\tchapters: List<SChapter>,\n")
+    f.write("\t\tfetchDetails: Boolean,\n")
+    f.write("\t\tfetchChapters: Boolean,\n")
+    f.write("\t): SMangaUpdate = throw UnsupportedOperationException()\n\n")
+
+    f.write(
+        "\toverride suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = throw UnsupportedOperationException()\n\n"
+    )
+    f.write(
+        "\toverride fun getMangaUrl(manga: SManga): String = throw UnsupportedOperationException()\n\n"
+    )
+    f.write(
+        "\toverride fun getChapterUrl(chapter: SChapter): String = throw UnsupportedOperationException()\n\n"
+    )
+    f.write(
+        "\toverride suspend fun getPageList(chapter: SChapter): List<Page> = throw UnsupportedOperationException()\n"
+    )
+    f.write("}\n")
+
+
+def write_source_file(
+    args: argparse.Namespace,
+    ext_package_dir: Path,
+    ext_dir_lang: str,
+    ext_dir_name: str,
+) -> None:
+    classname = get_ext_classname(args.extname)
+
+    with open(ext_package_dir / f"{classname}.kt", "w") as f:
+        f.write(
+            f"package eu.kanade.tachiyomi.extension.{ext_dir_lang}.{ext_dir_name}\n\n"
+        )
+
+        if args.multisrc:
+            write_multisrc_source(f, args, classname)
+        else:
+            write_keisource_source(f, classname)
 
 
 if __name__ == "__main__":
@@ -88,7 +212,7 @@ if __name__ == "__main__":
     argparser.add_argument(
         "-c",
         "--content-warning",
-        choices=["SAFE", "MIXED", "NSFW"],
+        choices=("SAFE", "MIXED", "NSFW"),
         type=str.upper,
         default="SAFE",
         help="Content warning level",
@@ -121,36 +245,7 @@ if __name__ == "__main__":
     ext_dir.mkdir(parents=True)
     print(f"Created extension directory: '{ext_dir}'")
 
-    with open(ext_dir / "build.gradle.kts", "w") as f:
-        f.write("import io.github.keiyoushi.gradle.api.ContentWarning\n\n")
-        f.write("plugins {\n")
-        f.write("\talias(kei.plugins.extension)\n")
-        f.write("}\n\n")
-        f.write("keiyoushi {\n")
-        f.write(f'\tname = "{args.extname}"\n')
-
-        if args.multisrc:
-            f.write(f'\ttheme = "{args.multisrc}"\n')
-            f.write("\tversionCode = 0\n")
-        else:
-            f.write("\tversionCode = 1\n")
-
-        f.write(f"\tcontentWarning = ContentWarning.{args.content_warning}\n")
-        f.write('\tlibVersion = "1.4"\n\n')
-
-        f.write("\tsource {\n")
-        if args.source_name:
-            f.write(f'\t\tname = "{args.source_name}"\n')
-        f.write(f'\t\tlang = "{args.lang}"\n')
-        f.write(f'\t\tbaseUrl = "{args.baseurl}"\n')
-        f.write("\t}\n")
-
-        if not args.multisrc:
-            f.write("\n\tdeeplink {\n")
-            f.write('\t\tpath("/..*")\n')
-            f.write("\t}\n")
-
-        f.write("}\n")
+    write_gradle_file(args, ext_dir)
 
     ext_package_dir = (
         ext_dir
@@ -165,110 +260,5 @@ if __name__ == "__main__":
     ext_package_dir.mkdir(parents=True)
     print(f"Created extension package directory: '{ext_package_dir}'")
 
-    with open(ext_package_dir / f"{get_ext_classname(args.extname)}.kt", "w") as f:
-        f.write(
-            f"""package eu.kanade.tachiyomi.extension.{ext_dir_lang}.{ext_dir_name}\n\n"""
-        )
-
-        if args.multisrc:
-            f.write(
-                f"import eu.kanade.tachiyomi.multisrc.{args.multisrc}.{get_ext_classname(args.multisrc)}\n"
-            )
-            f.write("import keiyoushi.annotation.Source\n\n")
-            f.write("@Source\n")
-            f.write(
-                f"abstract class {get_ext_classname(args.extname)} : {get_ext_classname(args.multisrc)}()\n"
-            )
-        else:
-            f.write("import eu.kanade.tachiyomi.source.model.FilterList\n")
-            f.write("import eu.kanade.tachiyomi.source.model.MangasPage\n")
-            f.write("import eu.kanade.tachiyomi.source.model.Page\n")
-            f.write("import eu.kanade.tachiyomi.source.model.SChapter\n")
-            f.write("import eu.kanade.tachiyomi.source.model.SManga\n")
-            f.write("import eu.kanade.tachiyomi.source.online.HttpSource\n")
-            f.write("import keiyoushi.annotation.Source\n")
-            f.write("import okhttp3.Request\n")
-            f.write("import okhttp3.Response\n")
-            f.write("import rx.Observable\n")
-            f.write("import java.lang.UnsupportedOperationException\n\n")
-
-            f.write("@Source\n")
-            f.write(
-                f"abstract class {get_ext_classname(args.extname)} : HttpSource() {{\n\n"
-            )
-            f.write("\toverride val supportsLatest = true\n\n")
-            f.write("\toverride val client = network.client\n\n")
-
-            f.write("\toverride fun headersBuilder() = super.headersBuilder()\n")
-            f.write('\t\t.set("Referer", "$baseUrl/")\n\n')
-
-            f.write(
-                "\toverride fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()\n\n"
-            )
-
-            f.write(
-                "\toverride fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()\n\n"
-            )
-
-            f.write(
-                "\toverride fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()\n\n"
-            )
-
-            f.write(
-                "\toverride fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()\n\n"
-            )
-
-            f.write(
-                "\toverride fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {\n"
-            )
-            f.write('\t\tif (query.startsWith("https://")) {\n')
-            f.write('\t\t\tthrow Exception("Deeplink not implemented")\n')
-            f.write("\t\t}\n\n")
-            f.write("\t\treturn super.fetchSearchManga(page, query, filters)\n")
-            f.write("\t}\n\n")
-
-            f.write(
-                "\toverride fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()\n\n"
-            )
-
-            f.write(
-                "\toverride fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()\n\n"
-            )
-
-            f.write(
-                "\toverride fun mangaDetailsRequest(manga: SManga): Request = throw UnsupportedOperationException()\n\n"
-            )
-
-            f.write(
-                "\toverride fun getMangaUrl(manga: SManga): String = throw UnsupportedOperationException()\n\n"
-            )
-
-            f.write(
-                "\toverride fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()\n\n"
-            )
-
-            f.write(
-                "\toverride fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()\n\n"
-            )
-
-            f.write(
-                "\toverride fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()\n\n"
-            )
-
-            f.write(
-                "\toverride fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()\n\n"
-            )
-
-            f.write(
-                "\toverride fun getChapterUrl(chapter: SChapter): String = throw UnsupportedOperationException()\n\n"
-            )
-
-            f.write(
-                "\toverride fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()\n\n"
-            )
-
-            f.write(
-                "\toverride fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()\n"
-            )
-
-            f.write("}\n")
+    write_source_file(args, ext_package_dir, ext_dir_lang, ext_dir_name)
+    print(f"Created source file: '{ext_package_dir}'")
