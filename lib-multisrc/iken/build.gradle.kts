@@ -8,7 +8,7 @@ dependencies {
 
 keiyoushi {
     baseVersionCode = 23
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     deeplink {
         path("/.*/..*")

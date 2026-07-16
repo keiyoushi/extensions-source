@@ -44,6 +44,7 @@ class ThemePlugin : Plugin<Project> {
 
         dependencies {
             compileOnly(libs.bundles.common)
+            compileOnly(keiyoushi.libVersion.flatMap { if (it == "1.6") libs.tachiyomi.lib.v16 else libs.tachiyomi.lib.v14 })
             implementation(project(":core"))
         }
 
