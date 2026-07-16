@@ -64,11 +64,7 @@ abstract class TeamX : KeiSource() {
 
     // ============================== Latest ===============================
 
-    private val titlesAdded = mutableSetOf<String>()
-
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        if (page == 1) titlesAdded.clear()
-
         val document = client.get("$baseUrl${page.pageNumber()}").asJsoup()
 
         val mangaList = document.select("div.last-chapter div.box")
@@ -76,9 +72,6 @@ abstract class TeamX : KeiSource() {
                 SManga.create().apply {
                     val linkElement = element.selectFirst("div.info a")!!
                     title = linkElement.selectFirst("h3")!!.text()
-
-                    // add() returns false if title already exists
-                    if (!titlesAdded.add(title)) return@mapNotNull null
 
                     setUrlWithoutDomain(linkElement.absUrl("href"))
                     thumbnail_url = element.selectFirst("div.imgu img")
