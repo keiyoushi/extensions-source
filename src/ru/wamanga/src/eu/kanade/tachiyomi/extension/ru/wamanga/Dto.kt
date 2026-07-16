@@ -100,6 +100,7 @@ class MangaDto(
 @Serializable
 class DetailsDto(
     val manga: MangaDetailsDto,
+    val sameMangas: List<MangaDetailsDto> = emptyList(),
 )
 
 @Serializable

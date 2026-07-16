@@ -1,27 +1,25 @@
 package eu.kanade.tachiyomi.extension.ru.wamanga
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
 
 @Source
-abstract class WaManga : HttpSource() {
+abstract class WaManga : KeiSource() {
 
-    override val supportsLatest = true
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("Origin", baseUrl)
-        .add("Accept", "*/*")
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Accept", "*/*")
 
     // ─────────────────────────────────────────────────────────────────────────
     // Catalog
@@ -37,22 +35,18 @@ abstract class WaManga : HttpSource() {
         .addQueryParameter("sortDescending", sortDescending.toString())
         .build()
 
-    override fun popularMangaRequest(page: Int): Request = GET(catalogUrl(page, "likes"), headers)
+    override suspend fun getPopularManga(page: Int): MangasPage = catalogParse(client.get(catalogUrl(page, "likes")))
 
-    override fun popularMangaParse(response: Response): MangasPage = catalogParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = catalogParse(client.get(catalogUrl(page, "updatedAt")))
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(catalogUrl(page, "updatedAt"), headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = catalogParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val builder = catalogBuilder(page)
 
         if (query.isNotBlank()) {
             builder.addQueryParameter("query", query.trim())
         }
 
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+        filters.forEach { filter ->
             when (filter) {
                 is OrderByFilter -> {
                     builder.addQueryParameter("sortKey", filter.toKey())
@@ -96,10 +90,8 @@ abstract class WaManga : HttpSource() {
             }
         }
 
-        return GET(builder.build(), headers)
+        return catalogParse(client.get(builder.build()))
     }
-
-    override fun searchMangaParse(response: Response): MangasPage = catalogParse(response)
 
     private fun catalogParse(response: Response): MangasPage {
         val mangas = response.parseSvelte<CatalogDto>().initialMangas
@@ -107,26 +99,43 @@ abstract class WaManga : HttpSource() {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Manga details
+    // Manga details + chapters
     // ─────────────────────────────────────────────────────────────────────────
-
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/${manga.url}/$SVELTE_DATA_SUFFIX", headers)
-
-    override fun mangaDetailsParse(response: Response): SManga = response.parseSvelte<DetailsDto>().manga.toSManga(baseUrl)
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Chapters
-    // ─────────────────────────────────────────────────────────────────────────
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val details = client.get("$baseUrl/${manga.url}/$SVELTE_DATA_SUFFIX").parseSvelte<DetailsDto>().manga
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val manga = response.parseSvelte<DetailsDto>().manga
-
-        return manga.chapters.map { it.toSChapter(manga.mangaUrl) }
+        return SMangaUpdate(
+            manga = details.toSManga(baseUrl),
+            chapters = if (fetchChapters) details.chapters.map { it.toSChapter(details.mangaUrl) } else chapters,
+        )
     }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.size < 2) return null
+
+        val manga = SManga.create().apply {
+            this.url = url.pathSegments.take(2).joinToString("/")
+        }
+
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val sameMangas = client.get("$baseUrl/${manga.url}/$SVELTE_DATA_SUFFIX").parseSvelte<DetailsDto>().sameMangas
+        return sameMangas.map { it.toSManga(baseUrl) }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Pages
+    // ─────────────────────────────────────────────────────────────────────────
 
     override fun getChapterUrl(chapter: SChapter): String {
         val parts = chapter.url.split("/", limit = 3)
@@ -135,32 +144,24 @@ abstract class WaManga : HttpSource() {
         return "$baseUrl/$type/$slug/glava-$position"
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Pages
-    // ─────────────────────────────────────────────────────────────────────────
-
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val parts = chapter.url.split("/", limit = 3)
         if (parts.size < 3) throw IllegalStateException("Invalid chapter URL format: ${chapter.url}")
         val (type, slug, position) = parts
-        return GET("$baseUrl/$type/$slug/glava-$position/$SVELTE_DATA_SUFFIX", headers)
-    }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val files = response.parseSvelte<PagesDto>().chapter.files
+        val files = client.get("$baseUrl/$type/$slug/glava-$position/$SVELTE_DATA_SUFFIX")
+            .parseSvelte<PagesDto>().chapter.files
 
         return files
             .sortedBy { it.order }
             .mapIndexed { index, file -> file.toPage(index, baseUrl) }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // ─────────────────────────────────────────────────────────────────────────
     // Filters
     // ─────────────────────────────────────────────────────────────────────────
 
-    override fun getFilterList(): FilterList = defaultFilters()
+    override fun getFilterList(data: JsonElement?): FilterList = defaultFilters()
 
     companion object {
         private const val PAGE_SIZE = 24
