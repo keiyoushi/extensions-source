@@ -8,29 +8,25 @@ import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.hiper.Hiper
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.getPreferences
 import okhttp3.Response
 
 @Source
-abstract class Hiperdex :
-    Hiper(),
-    ConfigurableSource {
+abstract class Hiperdex : Hiper() {
 
     override fun headersBuilder() = super.headersBuilder()
-        .set("x-svc-gate", "f5pabmx7sdek")
+        .set("x-cfg-auth", "yceqt7qgu004")
 
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
 
-    private val preferences = getPreferences()
-
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        super.setupPreferenceScreen(screen)
+
         val noRemoveTitleBrowsingPref = CheckBoxPreference(screen.context).apply {
             key = NO_REMOVE_TITLE_BROWSING_PREF
             title = "Don't apply title cleaning in browsing/search results"
@@ -150,4 +146,125 @@ abstract class Hiperdex :
             )
         }
     }
+
+    override val genresList = listOf(
+        "4-Koma",
+        "Action",
+        "Adaptation",
+        "Adult",
+        "Adventure",
+        "Age Gap",
+        "Aliens",
+        "Ancient Korea",
+        "Anthology",
+        "Campus",
+        "Childhood Friends",
+        "Comedy",
+        "Cooking",
+        "Crime",
+        "Crossdressing",
+        "Dance",
+        "Delinquents",
+        "Demons",
+        "Doujinshi",
+        "Drama",
+        "Ecchi",
+        "Escolar",
+        "Fantasy",
+        "Fellatio/Blowjob",
+        "Fetish",
+        "Full Color",
+        "Furry",
+        "Gender Bender",
+        "Genderswap",
+        "Ghosts",
+        "Girls' Love",
+        "Gore",
+        "Guideverse",
+        "Gyaru",
+        "Hair Color Change",
+        "Harem",
+        "Hentai",
+        "Heroes",
+        "Historical",
+        "Horror",
+        "Human-Nonhuman Relationship",
+        "Isekai",
+        "Josei",
+        "Korea",
+        "Korean Ambience",
+        "Korean BL",
+        "Long Strip",
+        "Long-Haired Male Character/s",
+        "Long-Haired Male Lead",
+        "Love Triangle/s",
+        "Low Fantasy",
+        "Maduro",
+        "Mafia",
+        "Magic",
+        "Male Protagonist",
+        "Manga",
+        "Martial Arts",
+        "Masculine Uke",
+        "Mature",
+        "Mecha",
+        "Medical",
+        "Military",
+        "Monster Girls",
+        "Monsters",
+        "Monsters Invade Earth",
+        "Murim",
+        "Muscular Male Lead",
+        "Muscular Uke",
+        "Music",
+        "Mystery",
+        "Nameverse",
+        "Ninja",
+        "Office Workers",
+        "Older Uke Younger Seme",
+        "Oneshot",
+        "Orphan Female Lead",
+        "Police",
+        "Post-Apocalyptic",
+        "Psychological",
+        "Red-Haired Male Lead",
+        "Red-Haired Seme",
+        "Regression",
+        "Reincarnation",
+        "Revenge",
+        "Romance",
+        "Samurai",
+        "School Life",
+        "Sci-fi",
+        "Secret Relationship",
+        "Seinen",
+        "Sexual Violence",
+        "Shota",
+        "Shoujo",
+        "Shoujo Ai",
+        "Shounen",
+        "Size Difference",
+        "Slice of Life",
+        "Smut",
+        "Sobrenatural",
+        "Sports",
+        "Superhero",
+        "Supernatural",
+        "Survival",
+        "Suspense",
+        "Thriller",
+        "Time Travel",
+        "Tower",
+        "Tragedy",
+        "Uncensored",
+        "Video Games",
+        "Villainess",
+        "Violence",
+        "Virtual Reality",
+        "Web Comic",
+        "Webtoon",
+        "Wuxia",
+        "Yaoi",
+        "Yuri",
+    )
 }

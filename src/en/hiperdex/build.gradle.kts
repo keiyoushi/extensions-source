@@ -14,7 +14,10 @@ keiyoushi {
     source {
         lang = "en"
         baseUrl {
-            custom("https://hiperdex.com")
+            mirrors(
+                "https://hiperdex.tv",
+                "https://hiperdex.com",
+            )
         }
     }
 }

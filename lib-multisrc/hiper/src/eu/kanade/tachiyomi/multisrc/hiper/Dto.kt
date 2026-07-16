@@ -24,6 +24,8 @@ class MangaDto(
     val genres: List<String>? = null,
     val authors: List<String>? = null,
     val artists: List<String>? = null,
+    val type: String?,
+    val contentRating: String?,
 ) {
     fun toSManga(mangaPath: String) = SManga.create().apply {
         title = this@MangaDto.title
@@ -31,7 +33,7 @@ class MangaDto(
         thumbnail_url = coverUrl
         artist = artists?.joinToString()
         author = authors?.joinToString()
-        genre = genres?.joinToString()
+        genre = ((genres ?: emptyList()) + listOfNotNull(type, contentRating)).joinToString()
         status = when (this@MangaDto.status?.lowercase()) {
             "ongoing" -> SManga.ONGOING
             "hiatus" -> SManga.ON_HIATUS

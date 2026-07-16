@@ -6,7 +6,10 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,8 +18,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.lib.i18n.Intl
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.get
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.add
@@ -35,7 +40,11 @@ import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-abstract class Hiper : HttpSource() {
+abstract class Hiper :
+    HttpSource(),
+    ConfigurableSource {
+
+    protected val preferences by getPreferencesLazy()
 
     protected open val mangaPath: String = "manga"
 
@@ -75,6 +84,13 @@ abstract class Hiper : HttpSource() {
         }
         .build()
 
+    protected val intl = Intl(
+        language = lang,
+        baseLanguage = "en",
+        availableLanguages = setOf("en", "pt-BR"),
+        classLoader = this::class.java.classLoader!!,
+    )
+
     // ============================ Popular ====================================
 
     private val popularFilter = FilterList(OrderByFilter("", arrayOf("" to "popular")))
@@ -84,7 +100,7 @@ abstract class Hiper : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     // ============================ Latest ====================================
-    private val latestFilter = FilterList(OrderByFilter("", arrayOf("" to "newest")))
+    private val latestFilter = FilterList(OrderByFilter("", arrayOf("" to "recent")))
 
     override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", latestFilter)
 
@@ -93,6 +109,11 @@ abstract class Hiper : HttpSource() {
     // ============================ Search ====================================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val limit = 30
+        val typeValue = filters.filterIsInstance<TypeFilter>().firstOrNull()?.selected()
+        val statusValue = filters.filterIsInstance<StatusFilter>().firstOrNull()?.selected()
+        val ratingValue = filters.filterIsInstance<RatingFilter>().firstOrNull()?.selected()
+        val genresValue = filters.filterIsInstance<GenresFilter>().firstOrNull()?.checked.orEmpty()
+
         val input = buildJsonObject {
             putJsonObject("0") {
                 putJsonObject("json") {
@@ -101,10 +122,14 @@ abstract class Hiper : HttpSource() {
                         put("sort", filter.selected())
                     }
                     putJsonObject("filters") {
-                        put("genres", null)
-                        put("type", null)
-                        put("status", null)
-                        put("contentRating", null)
+                        if (genresValue.isEmpty()) {
+                            put("genres", null)
+                        } else {
+                            putJsonArray("genres") { genresValue.forEach { add(it) } }
+                        }
+                        put("type", typeValue)
+                        put("status", statusValue)
+                        put("contentRating", ratingValue)
                         put("author", null)
                         put("artist", null)
                         put("year", null)
@@ -112,14 +137,14 @@ abstract class Hiper : HttpSource() {
 
                     put("limit", limit)
                     put("offset", (page - 1) * limit)
-                    put("maxRating", "pornographic")
+                    put("maxRating", preferences.getString(MAX_RATING_PREF, MAX_RATING_DEFAULT))
                 }
                 putJsonObject("meta") {
                     putJsonObject("values") {
-                        put("filters.genres", buildJsonArray { add("undefined") })
-                        put("filters.type", buildJsonArray { add("undefined") })
-                        put("filters.status", buildJsonArray { add("undefined") })
-                        put("filters.contentRating", buildJsonArray { add("undefined") })
+                        if (genresValue.isEmpty()) put("filters.genres", buildJsonArray { add("undefined") })
+                        if (typeValue == null) put("filters.type", buildJsonArray { add("undefined") })
+                        if (statusValue == null) put("filters.status", buildJsonArray { add("undefined") })
+                        if (ratingValue == null) put("filters.contentRating", buildJsonArray { add("undefined") })
                         put("filters.author", buildJsonArray { add("undefined") })
                         put("filters.artist", buildJsonArray { add("undefined") })
                         put("filters.year", buildJsonArray { add("undefined") })
@@ -351,10 +376,107 @@ abstract class Hiper : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
+    override val supportsRelatedMangas = false
+
+    // ============================ Preferences ================================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = MAX_RATING_PREF
+            title = intl["pref_rating_title"]
+            summary = "${intl["pref_rating_summary"]} %s"
+            entries = MAX_RATING_ENTRIES
+            entryValues = MAX_RATING_VALUES
+            setDefaultValue(MAX_RATING_DEFAULT)
+        }.let(screen::addPreference)
+    }
+
     // ============================ Filters ====================================
+
+    override fun getFilterList(): FilterList = FilterList(
+        SortFilter(intl),
+        RatingFilter(intl),
+        TypeFilter(intl),
+        StatusFilter(intl),
+        GenresFilter(genresList, intl),
+    )
 
     open class OrderByFilter(displayName: String, private val vals: Array<Pair<String, String>>, state: Int = 0) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
         fun selected() = vals[state].second
+    }
+
+    class SortFilter(intl: Intl) :
+        OrderByFilter(
+            intl["sort_by_filter_title"],
+            arrayOf(
+                intl["sort_by_relevance"] to "relevance",
+                intl["sort_by_popular"] to "popular",
+                intl["sort_by_score"] to "score",
+                intl["sort_by_recent"] to "recent",
+                intl["sort_by_newest"] to "newest",
+                intl["sort_by_oldest"] to "oldest",
+                "A-Z" to "alphabetical",
+            ),
+        )
+
+    open class SelectFilter(displayName: String, private val vals: Array<Pair<String, String?>>, state: Int = 0) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
+        fun selected(): String? = vals[state].second
+    }
+
+    class RatingFilter(intl: Intl) :
+        SelectFilter(
+            intl["rating_filter_title"],
+            (
+                listOf(
+                    intl["status_all"] to null,
+                ) + MAX_RATING_ENTRIES.zip(MAX_RATING_VALUES).map { it.first to it.second }
+                )
+                .toTypedArray(),
+        )
+
+    class TypeFilter(intl: Intl) :
+        SelectFilter(
+            intl["type_filter_title"],
+            arrayOf(
+                intl["status_all"] to null,
+                "Manga" to "manga",
+                "Manhwa" to "manhwa",
+                "Manhua" to "manhua",
+                "Novel" to "novel",
+                "Webtoon" to "webtoon",
+                "One Shot" to "one_shot",
+            ),
+        )
+
+    class StatusFilter(intl: Intl) :
+        SelectFilter(
+            intl["status_filter_title"],
+            arrayOf(
+                intl["status_all"] to null,
+                intl["status_ongoing"] to "ongoing",
+                intl["status_completed"] to "completed",
+                intl["status_onhiatus"] to "hiatus",
+                intl["status_canceled"] to "cancelled",
+            ),
+        )
+
+    class GenreCheckBox(val value: String) : Filter.CheckBox(value)
+
+    class GenresFilter(entries: List<String>, intl: Intl) :
+        Filter.Group<GenreCheckBox>(
+            intl["genre_filter_title"],
+            entries.map { GenreCheckBox(it) },
+        ) {
+        val checked get() = state.filter { it.state }.map { it.value }
+    }
+
+    protected open val genresList: List<String> = emptyList()
+
+    companion object {
+        private const val MAX_RATING_PREF = "MAX_RATING"
+        private const val MAX_RATING_DEFAULT = "pornographic"
+        private val MAX_RATING_ENTRIES = arrayOf("Pornographic", "Erotica", "Suggestive", "Safe")
+        private val MAX_RATING_VALUES = arrayOf("pornographic", "erotica", "suggestive", "safe")
     }
 
     // Old (New)
