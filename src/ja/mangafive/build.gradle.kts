@@ -5,15 +5,17 @@ plugins {
 }
 
 keiyoushi {
-    name = "Hive Scans"
-    versionCode = 42
+    name = "Manga-5"
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
-    theme = "iken"
 
     source {
-        baseUrl = "https://hivetoons.org"
-        lang = "en"
-        versionId = 2
+        lang = "ja"
+        baseUrl = "https://manga-5.com"
     }
+}
+
+dependencies {
+    implementation(project(":lib:publus"))
 }
