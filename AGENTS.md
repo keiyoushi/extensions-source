@@ -17,6 +17,11 @@ A few points that are easy to get wrong from stale training data:
   HTTP requests, date parsing, GraphQL, WebView execution, etc.) over hand-rolled equivalents.
 - Check [Available libs](CONTRIBUTING.md#available-libs) before implementing something from scratch
   that a `lib/` module may already solve.
+- Don't add excessive or obvious comments explaining what code does; only comment on non-obvious
+  *why* (a workaround, a subtle invariant, a site-specific quirk).
+- Don't over-engineer: no speculative abstractions, config options, or generalization for
+  requirements that weren't asked for. Match the scope of the actual task, and don't add
+  "just in case" error handling, fallbacks, or validation for scenarios that can't actually happen.
 
 If anything in this file conflicts with `CONTRIBUTING.md`, `CONTRIBUTING.md` wins.
 
