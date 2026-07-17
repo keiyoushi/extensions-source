@@ -140,28 +140,33 @@ abstract class KManga :
         val webTitle = hashedGet(url).parseAs<DetailResponse>().webTitle
         val genre = webTitle.genreIdList?.takeIf { it.isNotEmpty() }?.let { fetchGenreNames(it) }
 
-        val episodeIds = webTitle.episodeIdList.map(Int::toString)
-        val updatedChapters = if (episodeIds.isEmpty()) {
-            emptyList()
+        val updatedChapters = if (fetchChapters) {
+            val episodeIds = webTitle.episodeIdList.map(Int::toString)
+            if (episodeIds.isEmpty()) {
+                emptyList()
+            } else {
+                val (birthday, expires) = getBirthdayCookie(url)
+                val formBody = FormBody.Builder()
+                    .add("episode_id_list", episodeIds.joinToString(","))
+                    .build()
+
+                val params = (0 until formBody.size).associate { formBody.name(it) to formBody.value(it) }
+                val hash = generateHash(params, birthday, expires)
+                val newHeaders = headersBuilder()
+                    .add("X-Kmanga-Hash", hash)
+                    .build()
+
+                val result = client.post("$apiUrl/episode/list", newHeaders, formBody).parseAs<EpisodeListResponse>()
+
+                result.episodeList
+                    .filter { !hideLocked || !it.isLocked }
+                    .map { it.toSChapter() }
+                    .reversed()
+            }
         } else {
-            val (birthday, expires) = getBirthdayCookie(url)
-            val formBody = FormBody.Builder()
-                .add("episode_id_list", episodeIds.joinToString(","))
-                .build()
-
-            val params = (0 until formBody.size).associate { formBody.name(it) to formBody.value(it) }
-            val hash = generateHash(params, birthday, expires)
-            val newHeaders = headersBuilder()
-                .add("X-Kmanga-Hash", hash)
-                .build()
-
-            val result = client.post("$apiUrl/episode/list", newHeaders, formBody).parseAs<EpisodeListResponse>()
-
-            result.episodeList
-                .filter { !hideLocked || !it.isLocked }
-                .map { it.toSChapter() }
-                .reversed()
+            chapters
         }
+
         return SMangaUpdate(
             webTitle.toSManga(titleId, genre),
             updatedChapters,
