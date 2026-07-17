@@ -19,17 +19,37 @@ A few points that are easy to get wrong from stale training data:
   that a `lib/` module may already solve.
 - Don't add excessive or obvious comments explaining what code does; only comment on non-obvious
   *why* (a workaround, a subtle invariant, a site-specific quirk).
-- Don't over-engineer: no speculative abstractions, config options, or generalization for
-  requirements that weren't asked for. Match the scope of the actual task, and don't add
-  "just in case" error handling, fallbacks, or validation for scenarios that can't actually happen.
+- Don't over-engineer. No speculative abstractions, config options, or generalization beyond what
+  was asked, and no "just in case" error handling, fallbacks, or validation for scenarios that
+  can't actually happen.
 
 If anything in this file conflicts with `CONTRIBUTING.md`, `CONTRIBUTING.md` wins.
 
+## Scope
+
+For a typical "add/fix a source" task, only change files under `src/` (individual extensions),
+`lib-multisrc/` (multisrc themes), or - in rare cases - `lib/`. Leave `core/`, `compiler/`,
+`common/`, `gradle/`, and other build-logic/infrastructure files alone unless you were explicitly
+asked to change them - that's a different, higher-risk category of work.
+
+## Before committing / opening a PR
+
+Format the module(s) you touched, not the whole repo - a full-repo Spotless run is slow on
+this monorepo. Use the module's Gradle path, e.g. for a single extension:
+
+```bash
+./gradlew :src:en:mysource:spotlessApply
+```
+
+or for a theme: `./gradlew :lib-multisrc:madara:spotlessApply`.
+
+Spotless also runs as part of `preBuild`, so a full build would catch violations too - running it
+scoped like this first is just faster.
+
 ## Opening a pull request
 
-If you are an AI agent and you are asked to open a pull request, leave a short note at the end of
-the PR description disclosing that: what you were asked to do, and that the PR was opened by an AI
-agent. The note **must start with a 🤖 emoji**. This is in addition to, not instead of, the "This
-PR is AI-assisted..." checklist item in the
-[Pull Request checklist](CONTRIBUTING.md#pull-request-checklist) - that box still needs to be
-checked by the human who reviewed your changes.
+If you are an AI agent asked to open a pull request, disclose that at the end of the PR
+description: what you were asked to do, and that the PR was opened by an AI agent. Start that note
+with a 🤖 emoji. This is in addition to, not a substitute for, the "This PR is AI-assisted..."
+checklist item in the [Pull Request checklist](CONTRIBUTING.md#pull-request-checklist) - that box
+still needs to be checked by the human who reviewed your changes.
