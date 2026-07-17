@@ -239,7 +239,7 @@ abstract class Happymh :
         val url = "$baseUrl/v2.0/apis/manga/reading".toHttpUrl().newBuilder()
             .addQueryParameter("code", comicId)
             .addQueryParameter("cid", chapterId)
-            .addQueryParameter("v", "v4.300101")
+            .addQueryParameter("v", "v4.300102")
             .addQueryParameter("_t", requestId)
             .build()
         val headers = ajaxHeadersBuilder(requestId, accept = "application/json")
