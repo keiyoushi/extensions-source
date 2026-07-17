@@ -276,7 +276,7 @@ abstract class Pawchive :
         val url = "$baseUrl/$apiPath${chapter.url}"
 
         // 1. Fetch and parse the page list
-        client.get(url, headers).use { response ->
+        client.get(url).use { response ->
             val postData: PawchivePostDto = response.parseAs()
 
             // 2. Grab the preference ONCE before mapping to save performance
