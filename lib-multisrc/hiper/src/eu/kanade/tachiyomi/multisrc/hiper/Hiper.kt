@@ -244,7 +244,7 @@ abstract class Hiper :
             }
         }
 
-        val url = "$baseUrl/api/trpc/auth.me,comments.list,series.chapters".toHttpUrl().newBuilder()
+        val url = "$baseUrl/api/trpc/auth.me,series.chapters".toHttpUrl().newBuilder()
             .addQueryParameter("batch", "1")
             .addQueryParameter("input", input.toString())
             .build()

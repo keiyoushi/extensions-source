@@ -96,15 +96,15 @@ abstract class Hiperdex : Hiper() {
     }
 
     override fun parseSearchMangaList(response: Response): MangasPage {
-        val (manga, hasNextPage) = super.parseSearchMangaList(response)
+        val mangaUpdate = super.parseSearchMangaList(response)
         return MangasPage(
-            manga.map {
+            mangaUpdate.mangas.map {
                 if (!noCleanTitlesWhileBrowsing()) {
                     it.title = it.title.cleanTitleIfNeeded()
                 }
                 it
             },
-            hasNextPage,
+            mangaUpdate.hasNextPage,
         )
     }
 
