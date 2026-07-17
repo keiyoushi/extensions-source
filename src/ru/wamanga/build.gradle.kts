@@ -14,4 +14,13 @@ keiyoushi {
         lang = "ru"
         baseUrl = "https://wamanga.ru"
     }
+
+    deeplink {
+        host("wamanga.ru")
+        path("/manga/..*")
+        path("/manhwa/..*")
+        path("/manhua/..*")
+        path("/comic/..*")
+        path("/manuscript/..*")
+    }
 }
