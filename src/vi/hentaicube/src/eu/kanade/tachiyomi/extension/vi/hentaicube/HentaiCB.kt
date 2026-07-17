@@ -13,7 +13,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -165,102 +164,18 @@ abstract class HentaiCB : Madara() {
     }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
-        fetchPageListApi(chapter)
-    }
-
-    private fun fetchPageListApi(chapter: SChapter): List<Page> {
         val chapterUrl = chapter.url
-        val originUrl = chapterUrl.toHttpUrl().newBuilder()
-            .scheme("https")
-            .host(baseUrl.toHttpUrl().host)
-            .encodedPath("/")
-            .build()
 
-        // Build cookies string with cf_clearance from cookie jar
-        val cookies = client.cookieJar.loadForRequest(originUrl)
-            .joinToString("; ") { "${it.name}=${it.value}" }
+        val webViewResult = ImagesIntercept.resolve(chapterUrl)
+        val imageUrls = webViewResult.srcs.filter { it.isNotBlank() }
 
-        val referer = chapterUrl
-
-        // Step 1: Get initial token + session from challenge endpoint
-        var challenge = fetchChallenge(referer, cookies)
-        var token: String? = challenge.token
-        var session = challenge.session
-
-        // Step 2: Paginate images using token-based pagination
-        val allImages = mutableListOf<String>()
-        var policyTxn: String? = null
-
-        while (!token.isNullOrEmpty()) {
-            val pagesUrl = baseUrl.toHttpUrl().newBuilder()
-                .addPathSegments("wp-json/manga-reader/v1/pages")
-                .addQueryParameter("token", token)
-                .build()
-
-            val pagesRequest = Request.Builder()
-                .url(pagesUrl)
-                .header("Accept", "application/json")
-                .header("Referer", referer)
-                .header("Cookie", cookies)
-                .header("X-MASR-Session", session)
-                .build()
-
-            val pagesResponse = client.newCall(pagesRequest).execute()
-            val pages = pagesResponse.parseAs<PagesResponse>()
-
-            if (pages.items.isEmpty()) break
-
-            allImages += pages.items
-
-            // Update session if server returns a new one
-            pages.session?.let { session = it }
-
-            // Handle protocol_policy.action (matches masr-reader.js behavior)
-            when (pages.protocolPolicy?.action) {
-                "refresh_challenge" -> {
-                    policyTxn = pages.protocolPolicy?.transaction
-                    challenge = fetchChallenge(referer, cookies, session, policyTxn)
-                    token = challenge.token
-                    session = challenge.session
-                    continue
-                }
-                "done" -> break
-                else -> {
-                    // "continue" — use next_token
-                    token = if (pages.done) null else pages.nextToken
-                }
-            }
+        if (imageUrls.isEmpty()) {
+            throw Exception("Không tìm thấy dữ liệu ảnh")
         }
 
-        return allImages.mapIndexed { i, imageUrl ->
+        imageUrls.mapIndexed { i, imageUrl ->
             Page(i, chapterUrl, imageUrl)
         }
-    }
-
-    private fun fetchChallenge(
-        referer: String,
-        cookies: String,
-        fromSession: String? = null,
-        policyTxn: String? = null,
-    ): ChallengeResponse {
-        val urlBuilder = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("wp-json/manga-reader/v1/challenge")
-
-        if (fromSession != null) {
-            urlBuilder.addQueryParameter("from_session", fromSession)
-        }
-        if (policyTxn != null) {
-            urlBuilder.addQueryParameter("policy_txn", policyTxn)
-        }
-
-        val challengeRequest = Request.Builder()
-            .url(urlBuilder.build())
-            .header("Accept", "application/json")
-            .header("Referer", referer)
-            .header("Cookie", cookies)
-            .build()
-
-        return client.newCall(challengeRequest).execute().parseAs()
     }
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()

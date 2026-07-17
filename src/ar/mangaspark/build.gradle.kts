@@ -1,10 +1,12 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "MangaSpark"
-    versionCode = 6
+    versionCode = 7
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"

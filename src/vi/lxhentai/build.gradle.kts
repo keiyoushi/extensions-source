@@ -1,10 +1,12 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "LXManga"
-    versionCode = 32
+    versionCode = 33
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 

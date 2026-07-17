@@ -2,22 +2,35 @@
   "en": {
     "mirrorTitle": "Preferred Mirror",
     "customUrlTitle": "Custom Base URL",
-    "customUrlDialogMessage": "Leave blank to use the default URL."
+    "customUrlDialogMessage": "Leave blank to use the default URL.",
+    "filterFetchHint": "Tap 'Reset' to load filters"
   },
   "ar": {
     "mirrorTitle": "الخادم البديل المفضل",
     "customUrlTitle": "عنوان أساسي مخصص",
-    "customUrlDialogMessage": "اترك الحقل فارغًا لاستخدام العنوان الافتراضي"
+    "customUrlDialogMessage": "اترك الحقل فارغًا لاستخدام العنوان الافتراضي",
+    "filterFetchHint": "اضغط على 'إعادة تعيين' لتحميل الفلاتر"
+  },
+  "de": {
+    "filterFetchHint": "Tippe auf „Zurücksetzen“, um die Filter zu laden"
   },
   "es": {
     "mirrorTitle": "Dominio preferido",
     "customUrlTitle": "URL base personalizada",
-    "customUrlDialogMessage": "Dejar en blanco para usar la predeterminada"
+    "customUrlDialogMessage": "Dejar en blanco para usar la predeterminada",
+    "filterFetchHint": "Pulse 'Restablecer' para cargar los filtros"
+  },
+  "ja": {
+    "filterFetchHint": "「リセット」をタップしてフィルターを読み込む"
   },
   "ru": {
     "mirrorTitle": "Домен",
     "customUrlTitle": "Домен",
-    "customUrlDialogMessage": "Оставьте пустым, чтобы использовать домен по умолчанию"
+    "customUrlDialogMessage": "Оставьте пустым, чтобы использовать домен по умолчанию",
+    "filterFetchHint": "Нажмите «Сбросить», чтобы загрузить фильтры"
+  },
+  "uk": {
+    "filterFetchHint": "Натисніть «Скинути», щоб завантажити фільтри"
   },
   "vi": {
     "mirrorTitle": "Chọn tên miền",

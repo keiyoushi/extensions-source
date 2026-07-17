@@ -247,10 +247,10 @@ abstract class Yupmanga : HttpSource() {
                 """
                 var document = {
                     getElementById: function(id) {
-                        if (id === 'ym-fw') {
+                        if (id === 'ym-f2') {
                             return {
                                 elements: {
-                                    'w8': { value: "$anchorValue" }
+                                    'k2': { value: "$anchorValue" }
                                 }
                             };
                         }

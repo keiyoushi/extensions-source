@@ -1,11 +1,13 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Toonily"
-    versionCode = 14
-    contentWarning = ContentWarning.NSFW
+    versionCode = 15
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
 

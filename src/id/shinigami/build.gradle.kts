@@ -1,10 +1,12 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
     name = "Shinigami"
-    versionCode = 79
+    versionCode = 80
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
