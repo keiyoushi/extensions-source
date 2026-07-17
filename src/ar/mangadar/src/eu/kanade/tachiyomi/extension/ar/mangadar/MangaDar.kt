@@ -20,8 +20,6 @@ import okhttp3.OkHttpClient
 @Source
 abstract class MangaDar : KeiSource() {
 
-    override val supportsLatest = false
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
     // ============================== Popular ==============================
@@ -82,6 +80,8 @@ abstract class MangaDar : KeiSource() {
     // ============================== Details ==============================
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val slug = url.pathSegments.last { it.isNotEmpty() }
+        if (slug.isBlank() || slug == "page") return null
         val response = client.get(url)
         return parseMangaDetails(response)
     }
@@ -96,17 +96,8 @@ abstract class MangaDar : KeiSource() {
         val response = client.get(mangaUrl)
         val doc = response.asJsoup()
 
-        val mangaDetail = if (fetchDetails) {
-            parseMangaDetailsFromDoc(doc).apply { url = manga.url }
-        } else {
-            manga
-        }
-
-        val chapterList = if (fetchChapters) {
-            parseChaptersFromDoc(doc)
-        } else {
-            chapters
-        }
+        val mangaDetail = parseMangaDetailsFromDoc(doc).apply { url = manga.url }
+        val chapterList = parseChaptersFromDoc(doc)
 
         return SMangaUpdate(mangaDetail, chapterList)
     }
