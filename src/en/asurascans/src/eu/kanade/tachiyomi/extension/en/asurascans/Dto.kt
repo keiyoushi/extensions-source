@@ -50,8 +50,7 @@ class MangaDetailsDto(
     private val description: String? = null,
     private val rating: Double? = null,
     private val popularityRank: Int? = null,
-    @SerialName("alternativeTitles")
-    private val altTitles: String? = null,
+    private val alternativeTitles: String? = null,
     private val genres: List<GenreDto>? = null,
     private val status: String? = null,
 ) {
@@ -80,10 +79,10 @@ class MangaDetailsDto(
             append("Rating: %.2f".format(it))
         }
 
-        val cleanAltTitles = altTitles
-            ?.split(" • ")
+        val cleanAltTitles = alternativeTitles
+            ?.let { if (it.contains("•")) it.split("•") else it.split(",") }
             ?.map { it.trim() }
-            ?.filter { it.isNotBlank() }
+            ?.filter { it.isNotEmpty() }
 
         if (!cleanAltTitles.isNullOrEmpty()) {
             if (isNotEmpty()) append("\n\n")
