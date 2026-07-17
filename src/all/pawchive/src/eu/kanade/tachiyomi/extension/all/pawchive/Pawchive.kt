@@ -250,7 +250,7 @@ abstract class Pawchive :
                 val url = "$baseUrl/$apiPath${manga.url}/posts?o=$offset"
 
                 // Using the client.get().use {} pattern from your example
-                client.get(url, headers).use { response ->
+                client.get(url).use { response ->
                     val page: List<PawchivePostDto> = response.parseAs()
 
                     page.forEach { post ->
