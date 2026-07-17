@@ -5,21 +5,22 @@ plugins {
 }
 
 keiyoushi {
-    name = "AllManga"
-    versionCode = 23
+    name = "WaManga"
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
-        lang = "en"
-        baseUrl = "https://mkissa.to"
-        id = 4709139914729853090L
+        lang = "ru"
+        baseUrl = "https://wamanga.ru"
     }
 
     deeplink {
-        host("mkissa.to")
-        host("allmanga.to")
+        host("wamanga.ru")
         path("/manga/..*")
-        path("/read/..*")
+        path("/manhwa/..*")
+        path("/manhua/..*")
+        path("/comic/..*")
+        path("/manuscript/..*")
     }
 }
