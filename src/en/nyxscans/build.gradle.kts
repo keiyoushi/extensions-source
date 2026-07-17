@@ -8,7 +8,7 @@ keiyoushi {
     name = "Nyx Scans"
     versionCode = 4
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "iken"
 
     source {

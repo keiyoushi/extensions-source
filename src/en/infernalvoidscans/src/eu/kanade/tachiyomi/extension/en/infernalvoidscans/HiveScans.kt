@@ -1,24 +1,18 @@
 package eu.kanade.tachiyomi.extension.en.infernalvoidscans
 
 import eu.kanade.tachiyomi.multisrc.iken.Iken
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.annotation.Source
+import okhttp3.CacheControl
+import okhttp3.Request
 
 @Source
 abstract class HiveScans : Iken() {
-    override val client =
-        super.client
-            .newBuilder()
-            .addInterceptor { chain ->
-                val request = chain.request()
-                val headers =
-                    request.headers
-                        .newBuilder()
-                        .set("Cache-Control", "max-age=0")
-                        .build()
-                chain.proceed(request.newBuilder().headers(headers).build())
-            }.build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
-        .set("Cache-Control", "max-age=0")
+    override fun imageRequest(page: Page): Request = GET(
+        page.imageUrl!!,
+        headers,
+        CacheControl.Builder().noCache().build(),
+    )
 }
