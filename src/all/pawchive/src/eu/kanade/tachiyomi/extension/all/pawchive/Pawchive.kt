@@ -133,7 +133,7 @@ abstract class Pawchive :
             // 1. Start fetching favorites in the background
             val favoritesDeferred = async {
                 if (fav != null) {
-                    client.get("$baseUrl/$apiPath/account/favorites", headers).use { response ->
+                    client.get("$baseUrl/$apiPath/account/favorites").use { response ->
                         if (response.isSuccessful) {
                             response.parseAs<List<PawchiveFavoritesDto>>()
                         } else {
