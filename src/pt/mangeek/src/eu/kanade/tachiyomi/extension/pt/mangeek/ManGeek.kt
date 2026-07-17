@@ -12,6 +12,7 @@ import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -30,97 +31,49 @@ abstract class ManGeek : KeiSource() {
 
     private val apiUrl = "http://geekstations.com.br/api/v2/pt".toHttpUrl()
 
-    private val discoverLock = Any()
-    private var activeDiscoverTags: List<String>? = null
-    private val discoveredIds = mutableListOf<Long>()
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(
+        fetchHome().catalogMangas().map { it.toSManga() },
+        hasNextPage = false,
+    )
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val mangas = fetchHome().catalogMangas()
-        val start = (page.coerceAtLeast(1) - 1) * CATALOG_PAGE_SIZE
-        val pageMangas = mangas.drop(start).take(CATALOG_PAGE_SIZE)
-
-        return MangasPage(
-            pageMangas.map { it.toSManga() },
-            start + pageMangas.size < mangas.size,
-        )
-    }
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val mangas = fetchHome().news
+    override suspend fun getLatestUpdates(page: Int): MangasPage = MangasPage(
+        fetchHome().news
             .map { it.manga }
             .distinctBy { it.id }
-            .map { it.toSManga() }
-
-        return MangasPage(mangas, false)
-    }
+            .map { it.toSManga() },
+        hasNextPage = false,
+    )
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val requestedPage = page.coerceAtLeast(1)
         val normalizedQuery = query.trim().lowercase(Locale.ROOT)
         val includedTags = filters.includedTags()
 
-        return when {
-            normalizedQuery.isBlank() && includedTags.isEmpty() -> getPopularManga(requestedPage)
-            normalizedQuery.isBlank() -> discoverPage(requestedPage, includedTags)
-            else -> searchPage(requestedPage, normalizedQuery, includedTags)
-        }
-    }
-
-    private suspend fun discoverPage(page: Int, includedTags: List<String>): MangasPage {
-        val ignoredIds = synchronized(discoverLock) {
-            if (page == 1 || activeDiscoverTags != includedTags) {
-                activeDiscoverTags = includedTags
-                discoveredIds.clear()
-            }
-
-            discoveredIds.take((page - 1) * DISCOVER_PAGE_SIZE)
+        val mangas = when {
+            normalizedQuery.isBlank() && includedTags.isEmpty() -> fetchHome().catalogMangas()
+            normalizedQuery.isBlank() -> client.post(
+                signedUrl("discover"),
+                DiscoverBody(includedTags, emptyList()).toJsonRequestBody(),
+            ).parseAs<List<MangaDto>>().distinctBy { it.id }
+            else -> client.post(
+                signedUrl("search", normalizedQuery),
+                SearchBody(includedTags).toJsonRequestBody(),
+            ).parseAs<List<MangaDto>>().distinctBy { it.id }
         }
 
-        val response = client.post(
-            signedUrl("discover"),
-            DiscoverBody(includedTags, ignoredIds).toJsonRequestBody(),
-        )
-
-        val responseMangas = response.parseAs<List<MangaDto>>()
-        val ignoredIdSet = ignoredIds.toHashSet()
-        val mangas = responseMangas
-            .filterNot { it.id in ignoredIdSet }
-            .distinctBy { it.id }
-            .also { pageMangas ->
-                synchronized(discoverLock) {
-                    if (activeDiscoverTags == includedTags) {
-                        discoveredIds.clear()
-                        discoveredIds.addAll(ignoredIds)
-                        discoveredIds.addAll(pageMangas.map { it.id })
-                    }
-                }
-            }
-
-        return MangasPage(
-            mangas.map { it.toSManga() },
-            responseMangas.size == DISCOVER_PAGE_SIZE,
-        )
-    }
-
-    private suspend fun searchPage(page: Int, query: String, includedTags: List<String>): MangasPage {
-        val response = client.post(
-            signedUrl("search", query),
-            SearchBody(includedTags).toJsonRequestBody(),
-        )
-
-        val mangas = response.parseAs<List<MangaDto>>()
-        val start = (page - 1) * SEARCH_PAGE_SIZE
-        val pageMangas = mangas.drop(start).take(SEARCH_PAGE_SIZE)
-
-        return MangasPage(
-            pageMangas.map { it.toSManga() },
-            start + pageMangas.size < mangas.size,
-        )
+        return MangasPage(mangas.map { it.toSManga() }, hasNextPage = false)
     }
 
     private suspend fun fetchHome(): HomeDto = client.get(signedUrl("home")).parseAs<HomeDto>()
 
-    override fun getFilterList(data: JsonElement?): FilterList = getFilters()
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement = fetchHome().tags.toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val tags = data?.parseAs<List<String>>() ?: return FilterList()
+
+        return FilterList(TagsFilter(tags))
+    }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
@@ -146,14 +99,10 @@ abstract class ManGeek : KeiSource() {
 
         return SMangaUpdate(
             manga = dto.toSManga(details = true),
-            chapters = if (fetchChapters) {
-                dto.chapters
-                    .orEmpty()
-                    .asReversed()
-                    .map { it.toSChapter() }
-            } else {
-                chapters
-            },
+            chapters = dto.chapters
+                .orEmpty()
+                .asReversed()
+                .map { it.toSChapter() },
         )
     }
 
@@ -191,10 +140,4 @@ abstract class ManGeek : KeiSource() {
     private fun md5(value: String): String = MessageDigest.getInstance("MD5")
         .digest(value.toByteArray(StandardCharsets.UTF_8))
         .joinToString("") { "%02x".format(it.toInt() and 0xff) }
-
-    companion object {
-        private const val CATALOG_PAGE_SIZE = 24
-        private const val SEARCH_PAGE_SIZE = 24
-        private const val DISCOVER_PAGE_SIZE = 25
-    }
 }

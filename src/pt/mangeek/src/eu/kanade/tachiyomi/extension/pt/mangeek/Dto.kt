@@ -13,6 +13,7 @@ internal class HomeDto(
     val news: List<NewsDto>,
     val reading: List<NewsDto>,
     val categories: List<CategoryDto>,
+    val tags: List<String> = emptyList(),
 ) {
     fun catalogMangas(): List<MangaDto> = buildList {
         addAll(tops)
