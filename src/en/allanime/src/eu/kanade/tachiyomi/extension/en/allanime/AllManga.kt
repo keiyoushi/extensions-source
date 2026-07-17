@@ -142,7 +142,8 @@ abstract class AllManga :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val (mangaId, mangaSlug) = if (manga.url.startsWith("/")) {
+        val legacy = manga.url.startsWith("/")
+        val (mangaId, mangaSlug) = if (legacy) {
             val parts = manga.url.split("/")
             parts[2] to parts[3]
         } else {
@@ -161,7 +162,7 @@ abstract class AllManga :
             return SMangaUpdate(
                 manga = data.manga.toSManga(),
                 chapters = data.manga.availableChaptersDetail.sub.map { chapterNum ->
-                    chapterDetails[chapterNum]!!.toSChapter(mangaId, mangaSlug)
+                    chapterDetails[chapterNum]!!.toSChapter(mangaId, mangaSlug, legacy)
                 },
             )
         }

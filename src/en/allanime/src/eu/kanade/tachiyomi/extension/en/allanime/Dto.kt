@@ -126,12 +126,17 @@ class ChapterData(
     @SerialName("notes") val title: String? = null,
     private val uploadDates: DateDto? = null,
 ) {
-    fun toSChapter(mangaId: String, mangaSlug: String) = SChapter.create().apply {
+    fun toSChapter(mangaId: String, mangaSlug: String, legacy: Boolean = false) = SChapter.create().apply {
         name = "Chapter $chapterNum"
         if (!title.isNullOrEmpty() && !title.contains(numberRegex)) {
             name += ": $title"
         }
-        url = chapterNum.toString()
+        // TODO: remove this path after a while, kept for downloaded chapters compatibility
+        url = if (legacy) {
+            "/read/$mangaId/$mangaSlug/chapter-$chapterNum-sub"
+        } else {
+            chapterNum.toString()
+        }
         memo = buildJsonObject {
             put("mangaId", mangaId)
             put("mangaSlug", mangaSlug)
