@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.onereader
 
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,6 +13,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
@@ -151,13 +151,32 @@ abstract class OneReader : KeiSource() {
             .toPages(apiBaseUrl)
     }
 
-    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        OrderFilter(),
-        Filter.Separator(),
-        TypeFilter(),
-        StatusFilter(),
-        TagFilter(),
-    )
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement = coroutineScope {
+        val tags = async { client.get(apiUrl("api", "tags")).parseAs<List<String>>() }
+        val types = async { client.get(apiUrl("api", "types")).parseAs<List<String>>() }
+
+        FilterData(
+            tags = tags.await().filter(String::isNotBlank),
+            types = types.await().filter(String::isNotBlank),
+        ).toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filterData = data?.parseAs<FilterData>()
+
+        return FilterList(
+            buildList {
+                add(OrderFilter())
+                add(StatusFilter())
+                if (filterData != null) {
+                    add(TypeFilter(filterData.types))
+                    add(TagFilter(filterData.tags))
+                }
+            },
+        )
+    }
 
     private fun apiUrl(vararg pathSegments: String): HttpUrl = apiBaseUrl.newBuilder()
         .apply { pathSegments.forEach { addPathSegment(it) } }

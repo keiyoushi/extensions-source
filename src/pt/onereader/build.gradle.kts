@@ -14,4 +14,9 @@ keiyoushi {
         lang = "pt-BR"
         baseUrl = "https://onereader.net"
     }
+
+    deeplink {
+        path("/manga-details")
+        path("/leitor")
+    }
 }
