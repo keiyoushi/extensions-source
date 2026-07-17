@@ -53,20 +53,30 @@ abstract class Mangalix : KeiSource() {
             .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .build()
 
-    override suspend fun getPopularManga(page: Int): MangasPage = loadCatalog().toPage(page)
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(
+        loadCatalog().map { it.toSManga(baseUrl) },
+        hasNextPage = false,
+    )
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = loadCatalog().sortedByDescending(MangaDto::latestTimestamp).toPage(page)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = MangasPage(
+        loadCatalog()
+            .sortedByDescending(MangaDto::latestTimestamp)
+            .map { it.toSManga(baseUrl) },
+        hasNextPage = false,
+    )
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val statusFilter = filters.firstInstanceOrNull<StatusFilter>()
         val sortFilter = filters.firstInstanceOrNull<SortFilter>()
         val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
+        val terms = query.trim().lowercase(Locale.ROOT)
+            .split(WHITESPACE_REGEX)
+            .filter(String::isNotEmpty)
 
-        var result = loadCatalog().asSequence()
-            .filter { manga -> query.isBlank() || manga.matchesQuery(query) }
+        var result = loadCatalog()
+            .filter { manga -> terms.isEmpty() || manga.matchesTerms(terms) }
             .filter { manga -> statusFilter?.matches(manga.status) != false }
             .filter { manga -> genreFilter?.matches(manga.genres) != false }
-            .toList()
 
         result = when (sortFilter?.selected) {
             SortFilter.LATEST -> result.sortedByDescending(MangaDto::latestTimestamp)
@@ -77,7 +87,8 @@ abstract class Mangalix : KeiSource() {
         }
 
         if (sortFilter?.ascending == true) result = result.reversed()
-        return result.toPage(page)
+
+        return MangasPage(result.map { it.toSManga(baseUrl) }, hasNextPage = false)
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
@@ -189,17 +200,9 @@ abstract class Mangalix : KeiSource() {
         throw IOException("Manga catalog not found")
     }
 
-    private fun MangaDto.matchesQuery(query: String): Boolean {
-        val terms = query.trim().lowercase(Locale.ROOT).split(WHITESPACE_REGEX)
+    private fun MangaDto.matchesTerms(terms: List<String>): Boolean {
         val searchable = "$title $author $slug".lowercase(Locale.ROOT)
         return terms.all(searchable::contains)
-    }
-
-    private fun List<MangaDto>.toPage(page: Int): MangasPage {
-        val start = ((page - 1).coerceAtLeast(0)) * PAGE_SIZE
-        if (start >= size) return MangasPage(emptyList(), false)
-        val end = (start + PAGE_SIZE).coerceAtMost(size)
-        return MangasPage(subList(start, end).map { it.toSManga(baseUrl) }, end < size)
     }
 
     private suspend fun readChapters(slug: String): List<ChapterDto> = client.get("$baseUrl/chapters.json.gz", archiveHeaders, ARCHIVE_CACHE_CONTROL).use { response ->
@@ -275,7 +278,6 @@ abstract class Mangalix : KeiSource() {
     }
 
     companion object {
-        private const val PAGE_SIZE = 16
         private val ARCHIVE_CACHE_CONTROL = CacheControl.Builder().maxAge(30.minutes).build()
         private val CATALOG_START_REGEX = Regex("""\[\{id\s*:""")
         private val WHITESPACE_REGEX = Regex("""\s+""")

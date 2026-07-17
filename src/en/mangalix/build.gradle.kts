@@ -14,4 +14,8 @@ keiyoushi {
         lang = "en"
         baseUrl = "https://mangalix.com"
     }
+
+    deeplink {
+        path("/manga/..*")
+    }
 }
