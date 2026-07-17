@@ -48,19 +48,26 @@ abstract class ManGeek : KeiSource() {
         val normalizedQuery = query.trim().lowercase(Locale.ROOT)
         val includedTags = filters.includedTags()
 
-        val mangas = when {
-            normalizedQuery.isBlank() && includedTags.isEmpty() -> fetchHome().catalogMangas()
-            normalizedQuery.isBlank() -> client.post(
-                signedUrl("discover"),
-                DiscoverBody(includedTags, emptyList()).toJsonRequestBody(),
-            ).parseAs<List<MangaDto>>().distinctBy { it.id }
-            else -> client.post(
-                signedUrl("search", normalizedQuery),
-                SearchBody(includedTags).toJsonRequestBody(),
-            ).parseAs<List<MangaDto>>().distinctBy { it.id }
+        if (normalizedQuery.isBlank() && includedTags.isEmpty()) {
+            return getPopularManga(page)
         }
 
-        return MangasPage(mangas.map { it.toSManga() }, hasNextPage = false)
+        val mangas = if (normalizedQuery.isBlank()) {
+            client.post(
+                signedUrl("discover"),
+                DiscoverBody(includedTags, emptyList()).toJsonRequestBody(),
+            ).parseAs<List<MangaDto>>()
+        } else {
+            client.post(
+                signedUrl("search", normalizedQuery),
+                SearchBody(includedTags).toJsonRequestBody(),
+            ).parseAs<List<MangaDto>>()
+        }
+
+        return MangasPage(
+            mangas.distinctBy { it.id }.map { it.toSManga() },
+            hasNextPage = false,
+        )
     }
 
     private suspend fun fetchHome(): HomeDto = client.get(signedUrl("home")).parseAs<HomeDto>()

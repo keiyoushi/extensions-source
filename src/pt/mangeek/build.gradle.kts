@@ -14,4 +14,8 @@ keiyoushi {
         lang = "pt-BR"
         baseUrl = "https://mangeek.app"
     }
+
+    deeplink {
+        path("/manga/..*")
+    }
 }
