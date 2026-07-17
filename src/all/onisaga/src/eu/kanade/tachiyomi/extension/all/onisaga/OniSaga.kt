@@ -25,11 +25,12 @@ import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
@@ -73,7 +74,7 @@ abstract class OniSaga :
 
     @Volatile private var cachedState: LivewireState? = null
 
-    private val apiLock = Any()
+    private val apiLock = Mutex()
 
     @Volatile private var lastRequestTime = 0L
 
@@ -456,41 +457,39 @@ abstract class OniSaga :
 
         val deferredChapters = langCodes.map { code ->
             async {
-                runCatching {
-                    var currentSnapshot = state.snapshot
-                    var prevChapterCount = 0
-                    var langChapters = emptyList<SChapter>()
+                var currentSnapshot = state.snapshot
+                var prevChapterCount = 0
+                var langChapters = emptyList<SChapter>()
 
-                    while (true) {
-                        val request = ChapterLivewireRequest(
-                            token = state.token,
-                            components = listOf(
-                                ChapterLivewireRequest.Component(
-                                    snapshot = currentSnapshot,
-                                    updates = ChapterUpdatesDto(language = code),
-                                    calls = listOf(LivewireCall(method = "loadMoreChapters")),
-                                ),
+                while (true) {
+                    val request = ChapterLivewireRequest(
+                        token = state.token,
+                        components = listOf(
+                            ChapterLivewireRequest.Component(
+                                snapshot = currentSnapshot,
+                                updates = ChapterUpdatesDto(language = code),
+                                calls = listOf(LivewireCall(method = "loadMoreChapters")),
                             ),
-                        )
+                        ),
+                    )
 
-                        val dto = client.post(
-                            "$baseUrl/livewire/update",
-                            buildLivewireHeaders(doc.location()),
-                            request.toJsonRequestBody(livewireJson),
-                        ).parseAs<LivewireResponse>()
+                    val dto = client.post(
+                        "$baseUrl/livewire/update",
+                        buildLivewireHeaders(doc.location()),
+                        request.toJsonRequestBody(livewireJson),
+                    ).parseAs<LivewireResponse>()
 
-                        val html = dto.components.firstOrNull()?.effects?.html ?: break
-                        val chapterDoc = Jsoup.parseBodyFragment(html, baseUrl)
+                    val html = dto.components.firstOrNull()?.effects?.html ?: break
+                    val chapterDoc = Jsoup.parseBodyFragment(html, baseUrl)
 
-                        langChapters = parseChaptersFromDoc(chapterDoc, code, langCode == null)
+                    langChapters = parseChaptersFromDoc(chapterDoc, code, langCode == null)
 
-                        if (langChapters.size <= prevChapterCount) break
+                    if (langChapters.size <= prevChapterCount) break
 
-                        prevChapterCount = langChapters.size
-                        currentSnapshot = dto.components.firstOrNull()?.snapshot ?: break
-                    }
-                    langChapters
-                }.getOrDefault(emptyList())
+                    prevChapterCount = langChapters.size
+                    currentSnapshot = dto.components.firstOrNull()?.snapshot ?: break
+                }
+                langChapters
             }
         }
 
@@ -638,14 +637,11 @@ abstract class OniSaga :
         while (attempt < 3) {
             attempt++
 
-            synchronized(apiLock) {
+            apiLock.withLock {
                 val rateLimitDelay = preferences.getString(PREF_RATE_LIMIT_KEY, "2000")?.toLongOrNull() ?: 2000L
                 val now = System.currentTimeMillis()
                 val waitTime = (rateLimitDelay - (now - lastRequestTime)).coerceAtLeast(0L)
-
-                // Using rateLimit from keiyoushi.network.rateLimit was too aggressive, leading to 429 errors when it was fine after the rest of the images loaded
-                // Note: Error 429 lasts for approximately 15-30 minutes. Had to jump between many VPN servers to reach this conclusion
-                if (waitTime > 0) Thread.sleep(waitTime)
+                if (waitTime > 0) delay(waitTime)
                 lastRequestTime = System.currentTimeMillis()
             }
 
@@ -656,8 +652,9 @@ abstract class OniSaga :
                 val rateLimitDelay = preferences.getString(PREF_RATE_LIMIT_KEY, "2000")?.toLongOrNull() ?: 2000L
                 val retryAfter = response.header("retry-after")?.toLongOrNull()?.times(1000L) ?: rateLimitDelay
                 response.close()
-                withContext(Dispatchers.IO) {
-                    Thread.sleep(retryAfter)
+                apiLock.withLock {
+                    delay(retryAfter)
+                    lastRequestTime = System.currentTimeMillis()
                 }
                 continue
             }
