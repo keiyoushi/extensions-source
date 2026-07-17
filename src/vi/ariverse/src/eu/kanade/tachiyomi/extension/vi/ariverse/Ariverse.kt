@@ -19,7 +19,12 @@ import keiyoushi.utils.get
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -49,16 +54,13 @@ abstract class Ariverse :
     // ============================== Auth ====================================
 
     private var cachedAuthToken: String? = null
-
-    private val storyCache = mutableMapOf<String, StoryDetail>()
+    private var authChecked = false
 
     private suspend fun loadAuthToken() {
-        if (cachedAuthToken != null) return
-        val token = runCatching {
-            getLocalStorage(baseUrl, "token")
-                ?.takeIf { it.isNotBlank() }
-        }.getOrNull()
-        cachedAuthToken = token
+        if (authChecked) return
+        authChecked = true
+        cachedAuthToken = getLocalStorage(baseUrl, "token")
+            ?.takeIf { it.isNotBlank() }
     }
 
     private fun authInterceptor() = okhttp3.Interceptor { chain ->
@@ -171,7 +173,7 @@ abstract class Ariverse :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val slug = url.pathSegments.lastOrNull() ?: return null
 
-        val story = client.get("$apiUrl/stories/$slug".toHttpUrl())
+        val story = client.get("$apiUrl/stories/$slug")
             .parseAs<StoryDetailResponse>().data
 
         return SManga.create().apply {
@@ -191,7 +193,7 @@ abstract class Ariverse :
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres".toHttpUrl()).parseAs<JsonElement>()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres").parseAs<JsonElement>()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data["data"]?.array
@@ -230,41 +232,55 @@ abstract class Ariverse :
     ): SMangaUpdate {
         val slug = manga.url.substringAfterLast("/")
 
-        val updatedManga = if (fetchDetails) {
-            val story = client.get("$apiUrl/stories/$slug".toHttpUrl())
-                .parseAs<StoryDetailResponse>().data
-            storyCache[slug] = story
+        val updatedManga: SManga
+        val updatedChapters: List<SChapter>
 
-            SManga.create().apply {
-                setUrlWithoutDomain("/comic/story/${story.slug}")
-                title = story.title
-                thumbnail_url = story.coverPath?.let { resolveCoverUrl(it) }
-                author = story.author
-                artist = story.artist
-                description = story.description?.let { parseDescription(it) }
-                genre = story.genres?.joinToString { it.name }
-                status = parseStatus(story.status)
-            }
-        } else {
-            manga
-        }
+        coroutineScope {
+            val mangaDeferred = if (fetchDetails) {
+                async {
+                    val story = client.get("$apiUrl/stories/$slug")
+                        .parseAs<StoryDetailResponse>().data
 
-        val updatedChapters = if (fetchChapters) {
-            val chapterData = client.get("$apiUrl/stories/$slug/chapters".toHttpUrl())
-                .parseAs<ChapterListResponse>().data
-
-            chapterData.chapters
-                .sortedByDescending { it.number }
-                .map { chapter ->
-                    SChapter.create().apply {
-                        setUrlWithoutDomain("/comic/story/${chapterData.story.slug}/${chapter.slug}")
-                        name = chapter.title ?: "${chapter.number.toInt()}"
-                        chapter_number = chapter.number.toFloat()
-                        date_upload = chapter.publishedAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: 0L
+                    SManga.create().apply {
+                        setUrlWithoutDomain("/comic/story/${story.slug}")
+                        title = story.title
+                        thumbnail_url = story.coverPath?.let { resolveCoverUrl(it) }
+                        author = story.author
+                        artist = story.artist
+                        description = story.description?.let { parseDescription(it) }
+                        genre = story.genres?.joinToString { it.name }
+                        status = parseStatus(story.status)
+                        memo = buildJsonObject {
+                            story.genres?.firstOrNull()?.slug?.let { put("genreSlug", JsonPrimitive(it)) }
+                        }
                     }
                 }
-        } else {
-            chapters
+            } else {
+                null
+            }
+
+            val chaptersDeferred = if (fetchChapters) {
+                async {
+                    val chapterData = client.get("$apiUrl/stories/$slug/chapters")
+                        .parseAs<ChapterListResponse>().data
+
+                    chapterData.chapters
+                        .sortedByDescending { it.number }
+                        .map { chapter ->
+                            SChapter.create().apply {
+                                setUrlWithoutDomain("/comic/story/${chapterData.story.slug}/${chapter.slug}")
+                                name = chapter.title ?: "${chapter.number.toInt()}"
+                                chapter_number = chapter.number.toFloat()
+                                date_upload = chapter.publishedAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: 0L
+                            }
+                        }
+                }
+            } else {
+                null
+            }
+
+            updatedManga = mangaDeferred?.await() ?: manga
+            updatedChapters = chaptersDeferred?.await() ?: chapters
         }
 
         return SMangaUpdate(
@@ -301,16 +317,15 @@ abstract class Ariverse :
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val slug = manga.url.substringAfterLast("/")
-        val story = storyCache[slug]
-            ?: client.get("$apiUrl/stories/$slug".toHttpUrl())
-                .parseAs<StoryDetailResponse>().data.also { storyCache[slug] = it }
-
-        val firstGenreSlug = story.genres?.firstOrNull()?.slug ?: return emptyList()
+        val genreSlug = manga.memo["genreSlug"]?.string
+            ?: client.get("$apiUrl/stories/$slug")
+                .parseAs<StoryDetailResponse>().data.genres?.firstOrNull()?.slug
+            ?: return emptyList()
 
         val result = client.get(
             "$apiUrl/stories".toHttpUrl().newBuilder()
                 .addQueryParameter("type", "comic")
-                .addQueryParameter("genre", firstGenreSlug)
+                .addQueryParameter("genre", genreSlug)
                 .addQueryParameter("per_page", "12")
                 .addQueryParameter("page", "1")
                 .build(),
