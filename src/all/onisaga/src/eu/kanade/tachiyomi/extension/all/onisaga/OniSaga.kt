@@ -641,6 +641,8 @@ abstract class OniSaga :
                 val rateLimitDelay = preferences.getString(PREF_RATE_LIMIT_KEY, "2000")?.toLongOrNull() ?: 2000L
                 val now = System.currentTimeMillis()
                 val waitTime = (rateLimitDelay - (now - lastRequestTime)).coerceAtLeast(0L)
+                // Using rateLimit from keiyoushi.network.rateLimit was too aggressive, leading to 429 errors when it was fine after the rest of the images loaded
+                // Note: Error 429 lasts for approximately 15-30 minutes. Had to jump between many VPN servers to reach this conclusion
                 if (waitTime > 0) delay(waitTime)
                 lastRequestTime = System.currentTimeMillis()
             }
