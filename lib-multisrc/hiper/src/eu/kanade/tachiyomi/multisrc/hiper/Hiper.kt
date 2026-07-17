@@ -16,6 +16,7 @@ import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.get
+import keiyoushi.utils.getLongOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
@@ -84,12 +85,12 @@ abstract class Hiper :
 
     // ============================ Popular ====================================
 
-    private val popularFilter = FilterList(OrderByFilter("", arrayOf("" to "popular")))
+    protected open val popularFilter = FilterList(OrderByFilter("", arrayOf("" to "popular")))
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", popularFilter)
 
     // ============================ Latest ====================================
-    private val latestFilter = FilterList(OrderByFilter("", arrayOf("" to "recent")))
+    protected open val latestFilter = FilterList(OrderByFilter("", arrayOf("" to "recent")))
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", latestFilter)
 
@@ -158,10 +159,17 @@ abstract class Hiper :
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
-    protected open suspend fun getMangaDetails(manga: SManga) = getMangaByUrl(getMangaUrl(manga).toHttpUrl())
+    protected open suspend fun getMangaDetails(manga: SManga): SManga? {
+        val slug = manga.url.getSlug()
+        return getMangaBySlug(slug)
+    }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val slug = url.toString().getSlug()
+        return getMangaBySlug(slug)
+    }
+
+    protected open suspend fun getMangaBySlug(slug: String): SManga? {
         if (slug.isBlank()) return null
 
         val input = buildJsonObject {
@@ -200,9 +208,10 @@ abstract class Hiper :
         return "$baseUrl/$mangaPath/$slug/${chapter.getNumber()}".removeSuffix(".0")
     }
 
-    private suspend fun getChapterList(manga: SManga): List<SChapter> {
-        val mangaId = manga.url.substringAfterLast("#").toLongOrNull()
-            ?: throw IOException("Migrate from $name to $name")
+    protected open suspend fun getChapterList(manga: SManga): List<SChapter> {
+        val mangaId = manga.memo.getLongOrNull("mangaId")
+            ?: manga.url.substringAfterLast("#").toLongOrNull() // Fallback for old manga URLs
+            ?: throw IOException("Refresh chapter list")
 
         val input = buildJsonObject {
             putJsonObject("0") {
@@ -269,7 +278,7 @@ abstract class Hiper :
 
     // ============================ Pages =====================================
 
-    private fun pageListUrl(chapter: SChapter): HttpUrl {
+    protected open fun pageListUrl(chapter: SChapter): HttpUrl {
         val slug = chapter.url.getSlug()
 
         val input = buildJsonObject {
@@ -320,7 +329,7 @@ abstract class Hiper :
         }
     }
 
-    private fun parsePages(response: Response): List<Page>? {
+    protected open fun parsePages(response: Response): List<Page>? {
         val elements = response.parseAs<List<JsonElement>>()
 
         for (element in elements) {
@@ -334,7 +343,7 @@ abstract class Hiper :
         return pages.map(PageDto::toPage)
     }
 
-    private suspend fun fetchHeadersWv(url: String) {
+    protected open suspend fun fetchHeadersWv(url: String) {
         wvMutex.withLock {
             val doc = client.get(url).asJsoup()
 
@@ -472,7 +481,7 @@ abstract class Hiper :
         .substringBefore("/")
         .substringBefore("#")
         .takeIf(String::isNotBlank)
-        ?: throw IOException("Migrate from $name to $name")
+        ?: throw IOException("Refresh chapter list")
 
     fun SChapter.getNumber() = if (chapter_number > 0) {
         chapter_number

@@ -5,6 +5,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -41,7 +43,10 @@ class MangaDto(
             "completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        url = "/$mangaPath/$slug#${this@MangaDto.id}"
+        url = "/$mangaPath/$slug"
+        memo = buildJsonObject {
+            put("mangaId", id)
+        }
         initialized = true
     }
 }
