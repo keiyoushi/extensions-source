@@ -34,7 +34,7 @@ private val countryList: List<Pair<String, String>> = listOf(
     Pair("Korea", "KR"),
 )
 
-private val genreList: List<String> = listOf(
+val genreList: List<String> = listOf(
     "4 Koma",
     "Action",
     "Adult",
