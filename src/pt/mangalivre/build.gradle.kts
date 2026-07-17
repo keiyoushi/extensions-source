@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Manga Livre"
-    versionCode = 78
+    versionCode = 79
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
