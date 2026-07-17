@@ -4,10 +4,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.all.pawchive.PawchiveCreatorDto.Companion.serviceName
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.await // Imported for non-blocking network calls
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -21,8 +18,10 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Cache
 import okhttp3.CacheControl
@@ -30,8 +29,8 @@ import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import java.io.File
 import kotlin.io.use
-import kotlin.math.min
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Pawchive :
@@ -52,7 +51,6 @@ abstract class Pawchive :
         addInterceptor { chain ->
             val request = chain.request()
 
-            // 1. Existing API fix
             val modifiedRequest = if (request.url.pathSegments.firstOrNull() == "api") {
                 request.newBuilder().header("Accept", "text/css").build()
             } else {
@@ -61,10 +59,9 @@ abstract class Pawchive :
 
             var response = chain.proceed(modifiedRequest)
 
-            // 2. New Fallback Logic for Images
             if (response.code == 404 && request.url.toString().startsWith(fileUrl)) {
                 if (preferences.getBoolean(FALLBACK_LOW_RES_IMG, true)) {
-                    response.close() // Close the failed response to prevent memory leaks
+                    response.close()
 
                     val fallbackRequest = request.newBuilder()
                         .url(request.url.toString().toThumbnailUrl())
@@ -75,41 +72,33 @@ abstract class Pawchive :
 
             response
         }
-            cache(
-                Cache(
-                    directory = File(applicationContext.externalCacheDir, "network_cache_${name.lowercase()}"),
-                    maxSize = 50L * 1024 * 1024, // 50 MiB
-                ),
-            )
-            rateLimit(1)
+        val cacheDir = File(applicationContext.cacheDir, "network_cache_${name.lowercase()}")
+        val cache = customCache ?: synchronized(this@Pawchive.javaClass) {
+            customCache ?: Cache(cacheDir, 50L * 1024 * 1024).also { customCache = it }
+        }
+        cache(cache)
+        connectTimeout(15.seconds)
+        readTimeout(30.seconds)
+        writeTimeout(15.seconds)
     }
 
-    private val creatorsClient = client.newBuilder()
-        .readTimeout(5.minutes)
+    private val apiClient = client.newBuilder()
+        .rateLimit(2)
         .build()
 
-    private fun String.toThumbnailUrl(): String {
-        val pathIndex = this.indexOf('/', 8) // Skips the `https://`
-        return buildString {
-            append(imgUrl)
-            append("/thumbnail")
-            append(this@toThumbnailUrl.substring(pathIndex))
-        }
-    }
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", getFilterList(null))
 
-    override suspend fun getPopularManga(page: Int): MangasPage = searchMangas(page, sortBy = "pop" to "desc")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", getLatestUpdatesFilterList())
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = searchMangas(page, sortBy = "lat" to "desc")
+    // ============================== Search ===============================
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = searchMangas(page, query, filters)
-
-    private suspend fun searchMangas(page: Int = 1, title: String = "", filters: FilterList? = null, sortBy: Pair<String, String> = "" to ""): MangasPage {
-        var sort = sortBy
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        var sort: Pair<String, String> = "" to ""
         val typeIncluded = mutableListOf<String>()
         val typeExcluded = mutableListOf<String>()
         var fav: Boolean? = null
 
-        filters?.forEach { filter ->
+        filters.forEach { filter ->
             when (filter) {
                 is SortFilter -> sort = filter.getValue() to if (filter.state!!.ascending) "asc" else "desc"
                 is TypeFilter -> {
@@ -129,11 +118,16 @@ abstract class Pawchive :
             }
         }
 
+        if (sort.first.isEmpty()) {
+            sort = "pop" to "desc"
+        }
+
         val mangas = coroutineScope {
-            // 1. Start fetching favorites in the background
-            val favoritesDeferred = async {
+            val favoritesDeferred = async(Dispatchers.IO) {
                 if (fav != null) {
-                    client.get("$baseUrl/$apiPath/account/favorites").use { response ->
+                    val url = "$baseUrl/$apiPath/account/favorites"
+
+                    apiClient.get(url, headers, ensureSuccess = false).use { response ->
                         if (response.isSuccessful) {
                             response.parseAs<List<PawchiveFavoritesDto>>()
                         } else {
@@ -146,14 +140,11 @@ abstract class Pawchive :
                 }
             }
 
-            // 2. Start fetching creators in the background simultaneously
-            val creatorsDeferred = async {
-                val request = GET(
-                    "$baseUrl/$apiPath/creators",
-                    headers,
-                    CacheControl.Builder().maxStale(30.minutes).build(),
-                )
-                creatorsClient.newCall(request).await().use { response ->
+            val creatorsDeferred = async(Dispatchers.IO) {
+                val url = "$baseUrl/$apiPath/creators"
+                val cacheControl = CacheControl.Builder().maxStale(30.minutes).build()
+
+                apiClient.get(url, headers, cacheControl).use { response ->
                     if (!response.isSuccessful) {
                         throw Exception("HTTP error ${response.code}")
                     }
@@ -161,16 +152,14 @@ abstract class Pawchive :
                 }
             }
 
-            // 3. Wait for both background tasks to finish
             val favorites = favoritesDeferred.await()
             val allCreators = creatorsDeferred.await()
 
-            // 4. Perform the filter mapping as before
             allCreators.filter { creator ->
                 val sName = creator.service.serviceName().lowercase()
                 val includeType = typeIncluded.isEmpty() || typeIncluded.contains(sName)
                 val excludeType = typeExcluded.isNotEmpty() && typeExcluded.contains(sName)
-                val regularSearch = creator.name.contains(title, true)
+                val regularSearch = creator.name.contains(query, true)
 
                 val favEntry = favorites.find { f -> f.id == creator.id }
                 creator.fav = favEntry?.faved_seq ?: 0L
@@ -196,46 +185,45 @@ abstract class Pawchive :
             else -> if (sort.second == "desc") mangas.sortedByDescending { it.updatedDate } else mangas.sortedBy { it.updatedDate }
         }
 
-        val maxIndex = sorted.size
-        val fromIndex = (page - 1) * PAGE_CREATORS_LIMIT
-        val toIndex = min(maxIndex, fromIndex + PAGE_CREATORS_LIMIT)
-        val final = sorted.subList(fromIndex, toIndex).map { it.toSManga(baseUrl) }
+        val startIndex = (page - 1) * PAGE_CREATORS_LIMIT
+        val endIndex = minOf(startIndex + PAGE_CREATORS_LIMIT, sorted.size)
 
-        return MangasPage(final, toIndex != maxIndex)
+        if (startIndex >= sorted.size) {
+            return MangasPage(emptyList(), false)
+        }
+
+        val pageItems = sorted.subList(startIndex, endIndex)
+        val final = pageItems.map { it.toSManga(baseUrl) }
+        val hasNextPage = endIndex < sorted.size
+
+        return MangasPage(final, hasNextPage)
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
-
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
-
-    // RESOLVES: getMangaByUrl(url)
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val id = url.pathSegments.lastOrNull() ?: return null
-        val request = GET("$baseUrl/$apiPath/creators", headers, CacheControl.Builder().maxStale(30.minutes).build())
-        val response = creatorsClient.newCall(request).await()
-        if (!response.isSuccessful) {
-            response.close()
-            return null
+        val cache = CacheControl.Builder().maxStale(30.minutes).build()
+        val url = "$baseUrl/$apiPath/creators"
+
+        return apiClient.get(url, headers, cache, ensureSuccess = false).use { response ->
+            if (!response.isSuccessful) {
+                return null
+            }
+            val allCreators = response.parseAs<List<PawchiveCreatorDto>>()
+            val creator = allCreators.find { it.id == id } ?: return null
+            creator.toSManga(baseUrl)
         }
-        val allCreators = response.parseAs<List<PawchiveCreatorDto>>()
-        val creator = allCreators.find { it.id == id } ?: return null
-        return creator.toSManga(baseUrl)
     }
 
-    // RESOLVES: fetchRelatedMangaList(manga)
-    override val supportsRelatedMangas get() = false
+    // ============================== Details ==============================
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        // We aren't fetching new details in this snippet, so we pass the existing manga back
-        val updatedManga = manga
-
+    ): SMangaUpdate = withContext(Dispatchers.IO) {
         val updatedChapters = if (fetchChapters) {
             val prefMaxPost = preferences.getString(POST_PAGES_PREF, POST_PAGES_DEFAULT)!!
                 .toInt().coerceAtMost(POST_PAGES_MAX) * PAGE_POST_LIMIT
@@ -249,8 +237,7 @@ abstract class Pawchive :
             while (offset < prefMaxPost && hasNextPage) {
                 val url = "$baseUrl/$apiPath${manga.url}/posts?o=$offset"
 
-                // Using the client.get().use {} pattern from your example
-                client.get(url).use { response ->
+                apiClient.get(url, headers).use { response ->
                     val page: List<PawchivePostDto> = response.parseAs()
 
                     page.forEach { post ->
@@ -268,29 +255,47 @@ abstract class Pawchive :
             chapters
         }
 
-        return SMangaUpdate(updatedManga, updatedChapters)
+        SMangaUpdate(manga, updatedChapters)
     }
 
-    // 4. Pages/Images
+    override val supportsRelatedMangas get() = false
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
+
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
+
+    // =============================== Pages ===============================
+
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = "$baseUrl/$apiPath${chapter.url}"
 
-        // 1. Fetch and parse the page list
-        client.get(url).use { response ->
+        apiClient.get(url, headers).use { response ->
             val postData: PawchivePostDto = response.parseAs()
 
-            // 2. Grab the preference ONCE before mapping to save performance
             val useLowRes = preferences.getBoolean(USE_LOW_RES_IMG, false)
 
-            // 3. Map the images and apply the low-res logic immediately
             return postData.images.mapIndexed { i, path ->
                 val originalUrl = "$fileUrl/$dataPath$path"
 
-                // This replaces your old `imageRequest` logic
                 val finalImageUrl = if (useLowRes) originalUrl.toThumbnailUrl() else originalUrl
 
                 Page(i, imageUrl = finalImageUrl)
             }
+        }
+    }
+
+    // ============================== Filters ==============================
+
+    override fun getFilterList(data: JsonElement?): FilterList = getDefaultFilterList()
+
+    // ============================= Utilities =============================
+
+    private fun String.toThumbnailUrl(): String {
+        val pathIndex = this.indexOf('/', 8) // Skips the `https://`
+        return buildString {
+            append(imgUrl)
+            append("/thumbnail")
+            append(this@toThumbnailUrl.substring(pathIndex))
         }
     }
 
@@ -329,31 +334,9 @@ abstract class Pawchive :
         }.let(screen::addPreference)
     }
 
-    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        SortFilter("Sort by", Filter.Sort.Selection(0, false), getSortsList),
-        TypeFilter("Types", getTypes),
-        FavoritesFilter(),
-    )
-
-    open val getTypes = listOf("Patreon", "Pixiv Fanbox")
-
-    open val getSortsList: List<Pair<String, String>> = listOf(
-        Pair("Popularity", "pop"),
-        Pair("Date Indexed", "new"),
-        Pair("Date Updated", "lat"),
-        Pair("Alphabetical Order", "tit"),
-        Pair("Service", "serv"),
-        Pair("Date Favorited", "fav"),
-    )
-
-    internal open class TypeFilter(name: String, vals: List<String>) : Filter.Group<TriFilter>(name, vals.map { TriFilter(it, it.lowercase()) })
-    internal class FavoritesFilter : Filter.Group<TriFilter>("Favorites", listOf(TriFilter("Favorites Only", "fav")))
-    internal open class TriFilter(name: String, val value: String) : Filter.TriState(name)
-    internal open class SortFilter(name: String, selection: Selection, private val vals: List<Pair<String, String>>) : Filter.Sort(name, vals.map { it.first }.toTypedArray(), selection) {
-        fun getValue() = vals[state!!.index].second
-    }
-
     companion object {
+        @Volatile
+        private var customCache: Cache? = null
         private const val PAGE_POST_LIMIT = 50
         private const val PAGE_CREATORS_LIMIT = 50
         const val PROMPT = "You can change how many posts to load in the extension preferences."

@@ -2,14 +2,11 @@ package eu.kanade.tachiyomi.extension.all.pawchive
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.double
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Serializable
 class PawchiveFavoritesDto(
@@ -29,7 +26,7 @@ class PawchiveCreatorDto(
     var fav: Long = 0L
 
     val updatedDate get() = when {
-        updated.isString -> dateFormat.get()!!.tryParse(updated.content)
+        updated.isString -> Instant.parseOrNull(updated.content)?.toEpochMilliseconds() ?: 0L
         else -> (updated.double * 1000).toLong()
     }
 
@@ -43,12 +40,6 @@ class PawchiveCreatorDto(
     }
 
     companion object {
-        val dateFormat = object : ThreadLocal<SimpleDateFormat>() {
-            override fun initialValue() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH).apply {
-                timeZone = TimeZone.getTimeZone("GMT")
-            }
-        }
-
         fun String.serviceName() = when (this) {
             "fanbox" -> "Pixiv Fanbox"
             else -> replaceFirstChar { it.uppercase() }
@@ -81,18 +72,22 @@ class PawchivePostDto(
             else -> published ?: added ?: edited // Default to published
         }
 
-        val format = dateFormat.get()!!
-
-        // Prevents leaking SimpleDateFormat mutations across concurrently fetched mangas
-        format.timeZone = if (serviceName == "Pixiv Fanbox") TimeZone.getTimeZone("GMT+09:00") else TimeZone.getTimeZone("GMT")
-
-        val postDate = format.tryParse(dateStr)
+        val postDate = dateStr?.let {
+            val dateWithTz = if (it.endsWith("Z") || it.contains("+")) {
+                it
+            } else {
+                it + if (serviceName == "Pixiv Fanbox") "+09:00" else "Z"
+            }
+            Instant.parseOrNull(dateWithTz)?.toEpochMilliseconds()
+        } ?: 0L
 
         url = "/$service/user/$user/post/$id"
         date_upload = postDate
+
         name = title.ifBlank {
-            val postDateString = if (postDate != 0L) {
-                chapterNameDateFormat.get()!!.apply { timeZone = format.timeZone }.format(postDate)
+            val postDateString = if (postDate != 0L && dateStr != null) {
+                // Strips any unexpected timezone markers and recreates "yyyy-MM-dd 'at' HH:mm:ss" natively
+                dateStr.substringBefore("+").substringBefore("Z").replace("T", " at ")
             } else {
                 "unknown date"
             }
@@ -103,14 +98,6 @@ class PawchivePostDto(
 
     companion object {
         private val validImageExtensions = setOf("png", "jpg", "gif", "jpeg", "webp")
-
-        private val dateFormat = object : ThreadLocal<SimpleDateFormat>() {
-            override fun initialValue() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH)
-        }
-
-        private val chapterNameDateFormat = object : ThreadLocal<SimpleDateFormat>() {
-            override fun initialValue() = SimpleDateFormat("yyyy-MM-dd 'at' HH:mm:ss", Locale.ENGLISH)
-        }
     }
 }
 
