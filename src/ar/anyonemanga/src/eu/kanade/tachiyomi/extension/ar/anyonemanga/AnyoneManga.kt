@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.ar.anyonemanga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import keiyoushi.annotation.Source
+import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
