@@ -1,11 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.hiper
 
-import android.os.Handler
-import android.os.Looper
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -16,13 +10,17 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.i18n.Intl
-import keiyoushi.utils.applicationContext
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.get
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
@@ -32,57 +30,50 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import rx.Observable
 import java.io.IOException
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 abstract class Hiper :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     protected val preferences by getPreferencesLazy()
 
     protected open val mangaPath: String = "manga"
 
-    override val supportsLatest: Boolean = true
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
-
-    private val acceptHeaders = headersBuilder()
-        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-        .build()
-
-    private val handler by lazy { Handler(Looper.getMainLooper()) }
-
     private var wvHeaders: Headers? = null
 
-    override val client = network.client.newBuilder()
-        .addInterceptor { chain ->
-            var request = chain.request()
+    private val wvMutex = Mutex()
 
-            wvHeaders?.let {
-                request = request.newBuilder()
-                    .headers(it)
-                    .build()
-            }
+    protected fun OkHttpClient.Builder.addHiperAuthInterceptor(): OkHttpClient.Builder = addInterceptor { chain ->
+        var request = chain.request()
 
-            val response = chain.proceed(request)
-
-            // Fetch baseUrl with accept headers which then populates a cookie
-            if (response.code == 401) {
-                response.close()
-                network.client.newCall(GET(baseUrl, acceptHeaders)).execute().close()
-                chain.proceed(chain.request())
-            } else {
-                response
-            }
+        wvHeaders?.let {
+            request = request.newBuilder()
+                .headers(it)
+                .build()
         }
-        .build()
+
+        val response = chain.proceed(request)
+
+        // Fetch baseUrl with accept headers which then populates a cookie
+        if (response.code == 401) {
+            response.close()
+            val acceptHeaders = headers.newBuilder()
+                .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                .build()
+            network.client.newCall(GET(baseUrl, acceptHeaders)).execute().close()
+            chain.proceed(chain.request())
+        } else {
+            response
+        }
+    }
+
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addHiperAuthInterceptor()
 
     protected val intl = Intl(
         language = lang,
@@ -95,19 +86,15 @@ abstract class Hiper :
 
     private val popularFilter = FilterList(OrderByFilter("", arrayOf("" to "popular")))
 
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", popularFilter)
-
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", popularFilter)
 
     // ============================ Latest ====================================
     private val latestFilter = FilterList(OrderByFilter("", arrayOf("" to "recent")))
 
-    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", latestFilter)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", latestFilter)
 
     // ============================ Search ====================================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val limit = 30
         val typeValue = filters.filterIsInstance<TypeFilter>().firstOrNull()?.selected()
         val statusValue = filters.filterIsInstance<StatusFilter>().firstOrNull()?.selected()
@@ -158,10 +145,10 @@ abstract class Hiper :
             .addQueryParameter("input", input)
             .build()
 
-        return GET(url, headers)
+        return parseSearchMangaList(client.get(url))
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
+    protected open fun parseSearchMangaList(response: Response): MangasPage {
         val element = response.parseAs<List<JsonElement>>().first()
         val dto = element["result"]["data"]["json"]?.parseAs<WrapperContent>() ?: return MangasPage(emptyList(), false)
         return MangasPage(dto.hits.map { it.toSManga(mangaPath) }, dto.hits.isNotEmpty())
@@ -171,8 +158,11 @@ abstract class Hiper :
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = manga.url.getSlug()
+    protected open suspend fun getMangaDetails(manga: SManga) = getMangaByUrl(getMangaUrl(manga).toHttpUrl())
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val slug = url.toString().getSlug()
+        if (slug.isBlank()) return null
 
         val input = buildJsonObject {
             putJsonObject("0") {
@@ -194,10 +184,11 @@ abstract class Hiper :
             .addQueryParameter("batch", "1")
             .addQueryParameter("input", input.toString())
             .build()
-        return GET(url, headers)
+
+        return parseMangaDetails(client.get(url))
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
+    protected open fun parseMangaDetails(response: Response): SManga {
         val element = response.parseAs<List<JsonElement>>().last()
         return element["result"]["data"]["json"]!!.parseAs<MangaDto>().toSManga(mangaPath)
     }
@@ -209,9 +200,10 @@ abstract class Hiper :
         return "$baseUrl/$mangaPath/$slug/${chapter.getNumber()}".removeSuffix(".0")
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
+    private suspend fun getChapterList(manga: SManga): List<SChapter> {
         val mangaId = manga.url.substringAfterLast("#").toLongOrNull()
             ?: throw IOException("Migrate from $name to $name")
+
         val input = buildJsonObject {
             putJsonObject("0") {
                 putJsonObject("json") {
@@ -246,21 +238,38 @@ abstract class Hiper :
         val url = "$baseUrl/api/trpc/auth.me,comments.list,series.chapters".toHttpUrl().newBuilder()
             .addQueryParameter("batch", "1")
             .addQueryParameter("input", input.toString())
-            .fragment(manga.url)
             .build()
-        return GET(url, headers)
-    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaPath = response.request.url.fragment!!
+        val response = client.get(url)
         val element = response.parseAs<List<JsonElement>>().last()
         val chaptersDTO = element["result"]["data"]["json"]!!.parseAs<List<ChapterDto>>()
-        return chaptersDTO.map { it.toSChapter(mangaPath) }
+        return chaptersDTO.map { it.toSChapter(manga.url) }
     }
+
+    // ============================ Manga updates =============================
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val updatedManga = if (fetchDetails) getMangaDetails(manga) else null
+        val updatedChapters = if (fetchChapters) getChapterList(manga) else null
+
+        return SMangaUpdate(updatedManga ?: manga, updatedChapters ?: chapters)
+    }
+
+    // ============================ Related manga ==============================
+
+    override val supportsRelatedMangas = false
+    override val supportRelatedMangasBySearch = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = throw UnsupportedOperationException()
 
     // ============================ Pages =====================================
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    private fun pageListUrl(chapter: SChapter): HttpUrl {
         val slug = chapter.url.getSlug()
 
         val input = buildJsonObject {
@@ -290,27 +299,23 @@ abstract class Hiper :
             }
         }
 
-        val url = "$baseUrl/api/trpc/auth.me,series.bySlug,reader.chapterPages".toHttpUrl().newBuilder()
+        return "$baseUrl/api/trpc/auth.me,series.bySlug,reader.chapterPages".toHttpUrl().newBuilder()
             .addQueryParameter("batch", "1")
             .addQueryParameter("input", input.toString())
             .build()
-
-        return GET(url, headers)
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
+        val url = pageListUrl(chapter)
 
-        val request = pageListRequest(chapter)
-        val response = client.newCall(request).execute()
-        val resJson = parsePages(response)
+        val pages = parsePages(client.get(url, ensureSuccess = false))
 
-        resJson?.takeIf { it.isNotEmpty() } ?: run {
+        return pages?.takeIf { it.isNotEmpty() } ?: run {
             fetchHeadersWv(chapterUrl)
 
             wvHeaders?.let {
-                val response = client.newCall(request).execute()
-                parsePages(response) ?: emptyList()
+                parsePages(client.get(url, ensureSuccess = false)) ?: emptyList()
             } ?: error("Failed to get headers")
         }
     }
@@ -329,54 +334,34 @@ abstract class Hiper :
         return pages.map(PageDto::toPage)
     }
 
-    @Synchronized
-    fun fetchHeadersWv(url: String) {
-        val latch = CountDownLatch(1)
-        var webView: WebView? = null
-        val doc = client.newCall(GET(url, headers)).execute().asJsoup()
+    private suspend fun fetchHeadersWv(url: String) {
+        wvMutex.withLock {
+            val doc = client.get(url).asJsoup()
 
-        handler.post {
-            val wv = WebView(applicationContext).also { webView = it }
+            runWebView(timeout = 15.seconds) {
+                userAgent = headers["User-Agent"] ?: ""
+                blockImages = true
 
-            wv.settings.javaScriptEnabled = true
-            wv.settings.domStorageEnabled = true
-            wv.settings.loadsImagesAutomatically = false
-            wv.settings.blockNetworkImage = true
-            wv.settings.userAgentString = headers["user-agent"]
-
-            wv.webViewClient = object : WebViewClient() {
-                override fun shouldInterceptRequest(
-                    view: WebView,
-                    request: WebResourceRequest,
-                ): WebResourceResponse? {
-                    val url = request.url.toString()
-                    if (url.startsWith("$baseUrl/api")) {
+                interceptRequest { request ->
+                    val requestUrl = request.url.toString()
+                    if (requestUrl.startsWith("$baseUrl/api")) {
                         val allHeaders = request.requestHeaders
                         if (allHeaders.isNotEmpty()) {
                             wvHeaders = headers.newBuilder().apply {
                                 allHeaders.forEach { (key, value) ->
-                                    headers.get(key) ?: add(key, value)
+                                    headers[key] ?: add(key, value)
                                 }
                             }.build()
                         }
-                        latch.countDown()
-                        return null
+                        resolve(Unit)
                     }
-                    return super.shouldInterceptRequest(view, request)
+                    null
                 }
+
+                loadData(doc.location(), doc.outerHtml())
             }
-            wv.loadDataWithBaseURL(doc.location(), doc.outerHtml(), "text/html", "utf-8", null)
         }
-
-        latch.await(15, TimeUnit.SECONDS)
-        handler.post { webView?.destroy() }
     }
-
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override val supportsRelatedMangas = false
 
     // ============================ Preferences ================================
 
@@ -393,7 +378,7 @@ abstract class Hiper :
 
     // ============================ Filters ====================================
 
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         SortFilter(intl),
         RatingFilter(intl),
         TypeFilter(intl),

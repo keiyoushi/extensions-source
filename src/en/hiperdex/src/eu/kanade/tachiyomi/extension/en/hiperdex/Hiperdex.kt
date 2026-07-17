@@ -12,17 +12,18 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import okhttp3.Headers
+import okhttp3.OkHttpClient
 import okhttp3.Response
 
 @Source
 abstract class Hiperdex : Hiper() {
 
-    override fun headersBuilder() = super.headersBuilder()
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = this
         .set("x-cfg-auth", "yceqt7qgu004")
 
-    override val client = super.client.newBuilder()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addHiperAuthInterceptor()
         .rateLimit(3)
-        .build()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         super.setupPreferenceScreen(screen)
@@ -94,8 +95,8 @@ abstract class Hiperdex : Hiper() {
         screen.addPreference(noRemoveTitleBrowsingPref)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val (manga, hasNextPage) = super.searchMangaParse(response)
+    override fun parseSearchMangaList(response: Response): MangasPage {
+        val (manga, hasNextPage) = super.parseSearchMangaList(response)
         return MangasPage(
             manga.map {
                 if (!noCleanTitlesWhileBrowsing()) {
@@ -107,7 +108,7 @@ abstract class Hiperdex : Hiper() {
         )
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = super.mangaDetailsParse(response).apply {
+    override fun parseMangaDetails(response: Response): SManga = super.parseMangaDetails(response).apply {
         val cleanedTitle = title.cleanTitleIfNeeded()
         if (cleanedTitle != title.trim()) {
             description = listOfNotNull(title, description)
