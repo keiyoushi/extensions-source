@@ -1,10 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.bookwalkerjp
 
-import android.annotation.SuppressLint
-import android.os.Handler
-import android.os.Looper
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -17,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.publus.PublusAuthHandler
 import keiyoushi.lib.publus.PublusContent
@@ -25,14 +21,15 @@ import keiyoushi.lib.publus.fetchPages
 import keiyoushi.lib.publus.parseFragmentOrNull
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
+import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
+import keiyoushi.utils.string
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -42,23 +39,19 @@ import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.io.IOException
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
-class BookWalkerJp :
+@Source
+abstract class BookWalkerJp :
     KeiSource(),
     ConfigurableSource {
-    override val name = "BookWalker Japan"
-    override val baseUrl = "https://$DOMAIN"
-    override val lang = "ja"
-
     private val memberApiUrl = "https://member.$DOMAIN/api"
     private val viewerUrl = "https://viewer.$DOMAIN"
     private val trialUrl = "https://viewer-trial.$DOMAIN"
     private val dfViewer = "https://viewer-df.$DOMAIN"
     private val preferences by getPreferencesLazy()
     private val desktopHeaders = headersBuilder()
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36")
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36")
         .build()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
@@ -103,12 +96,12 @@ class BookWalkerJp :
         return client.get(url, desktopHeaders).asJsoup().toMangasPage()
     }
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filterList: FilterList): MangasPage {
-        val search = filterList.firstInstance<SearchFilter>()
-        val sort = filterList.firstInstance<SortFilter>()
-        val library = filterList.firstInstance<LibraryFilter>()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val search = filters.firstInstance<SearchFilter>()
+        val sort = filters.firstInstance<SortFilter>()
+        val library = filters.firstInstance<LibraryFilter>()
         if (library.state) {
-            val response = client.get("$baseUrl/prx/holdBooks-api/hold-book-list/?page=$page", headers)
+            val response = client.get("$baseUrl/prx/holdBooks-api/hold-book-list/?page=$page")
             val result = response.parseAs<LibraryResponse>().holdBookList
             val hasNextPage = response.request.url.queryParameter("page")!!.toInt() < result.totalPage
             val mangas = result.entities.map { it.toSManga() }
@@ -122,7 +115,7 @@ class BookWalkerJp :
             .addQueryParameter("np", "0")
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url, desktopHeaders).asJsoup().toMangasPage(wayomi = search.value == "1")
+        return client.get(url, desktopHeaders).asJsoup().toMangasPage()
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
@@ -134,53 +127,41 @@ class BookWalkerJp :
         LibraryFilter(),
     )
 
-    private fun Document.toMangasPage(wayomi: Boolean = false): MangasPage {
-        val tileSelector = if (wayomi) ".o-tile--series" else ".m-tile"
-        val linkSelector = if (wayomi) ".o-tile-ttl a" else "a.m-book-item__title"
-        val imgSelector = if (wayomi) ".o-tile-book-img img" else ".m-thumb__image img"
-
-        val mangas = select(tileSelector).map {
-            val link = it.selectFirst(linkSelector)!!
+    private fun Document.toMangasPage(): MangasPage {
+        val mangas = select(".m-tile, .o-tile--series").map {
+            val link = it.selectFirst("a.m-book-item__title, .o-tile-ttl a")!!
             SManga.create().apply {
                 title = link.text()
-                val cover = it.selectFirst(imgSelector)?.absUrl("data-original")
-                thumbnail_url = cover.getHiResCoverFromLegacyUrl() ?: cover
+                val cover = it.selectFirst(".m-thumb__image img, .o-tile-book-img img")
+                    ?.absUrl("data-original")
+                    ?.takeIf(String::isNotEmpty)
+                thumbnail_url = cover?.getHiResCoverFromLegacyUrl()
                 val href = link.absUrl("href").toHttpUrl().pathSegments
-                setUrlWithoutDomain(if (href.first() == "series") href[1] else href[0])
+                url = (if (href.first() == "series") href[1] else href[0])
             }
         }
 
-        val hasNext = if (wayomi) selectFirst("a[data-action-label=次のページへ]:not(.o-pager-box-btn_hidden)") != null else hasNextPage()
-        return MangasPage(mangas, hasNext)
+        return MangasPage(mangas, hasNextPage())
     }
 
-    override suspend fun getMangaUpdate(
+    override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val isBook = manga.url.startsWith("de")
-
-        val seriesDoc = if (!isBook && (fetchDetails || fetchChapters)) {
-            client.get(seriesUrl(manga.url), desktopHeaders).asJsoup()
-        } else {
-            null
-        }
+        val seriesDoc = if (!isBook) client.get(seriesUrl(manga.url), desktopHeaders).asJsoup() else null
         val wayomi = seriesDoc?.selectFirst(".p-episode__list") != null
-
-        val details = if (fetchDetails || (fetchChapters && (isBook || wayomi))) {
-            fetchBookDetails(manga, seriesDoc, wayomi)
-        } else {
-            null
-        }
+        val (details, firstListPage) = fetchBookDetails(manga, seriesDoc, wayomi)
 
         return SMangaUpdate(
-            manga = if (fetchDetails) details!!.toSManga() else manga,
+            manga = details.toSManga(),
             chapters = when {
                 !fetchChapters -> chapters
-                wayomi -> seriesDoc.toWayomiChapters(preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false))
-                else -> chapterList(details?.seriesId?.toString() ?: manga.url)
+                wayomi -> seriesDoc.toWayomiChapters(hideLocked)
+                else -> chapterList(details.seriesId.toString(), hideLocked, firstListPage)
             },
         )
     }
@@ -190,26 +171,30 @@ class BookWalkerJp :
         return "$baseUrl/series/$seriesId/list/"
     }
 
-    private suspend fun fetchBookDetails(manga: SManga, seriesDoc: Document?, wayomi: Boolean): DetailsResponse {
+    private suspend fun fetchBookDetails(manga: SManga, seriesDoc: Document?, wayomi: Boolean): Pair<DetailsResponse, Document?> {
+        var firstListPage: Document? = null
         val bookId = when {
             manga.url.startsWith("de") -> manga.url
             wayomi -> seriesDoc!!.firstEpisodeId()
-            else -> client.get(seriesListUrl(manga.url, 1), desktopHeaders).asJsoup().firstBookId()
+            else -> client.get(seriesListUrl(manga.url, 1), desktopHeaders).asJsoup()
+                .also { firstListPage = it }
+                .firstBookId()
         }
-        return client.get(booksUpdatesUrl(bookId)).parseAs<List<DetailsResponse>>().first()
+        val details = client.get(booksUpdatesUrl(bookId)).parseAs<List<DetailsResponse>>().first()
+        return details to firstListPage
     }
 
-    private suspend fun chapterList(seriesId: String): List<SChapter> {
-        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+    private suspend fun chapterList(seriesId: String, hideLocked: Boolean, firstPage: Document? = null): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
         var page = 1
+        var document = firstPage ?: client.get(seriesListUrl(seriesId, page), desktopHeaders).asJsoup()
         while (true) {
-            val document = client.get(seriesListUrl(seriesId, page), desktopHeaders).asJsoup()
             val items = document.select(".m-tile-list .m-book-item")
             if (items.isEmpty()) break
             items.mapNotNullTo(chapters) { it.toSChapter(hideLocked) }
             if (!document.hasNextPage()) break
             page++
+            document = client.get(seriesListUrl(seriesId, page), desktopHeaders).asJsoup()
         }
         return chapters.reversed()
     }
@@ -239,11 +224,13 @@ class BookWalkerJp :
             else -> "🔒 "
         }
         if (hideLocked && prefix.isNotEmpty()) return null
-
         val link = bookLink()
+        val viewerUrl = (readButton ?: trialButton)?.absUrl("href") ?: link.absUrl("href")
+
         return SChapter.create().apply {
             name = prefix + link.text()
-            url = (readButton ?: trialButton)?.absUrl("href") ?: link.absUrl("href")
+            url = link.attr("data-uuid")
+            memo = buildJsonObject { put("viewerUrl", viewerUrl) }
         }
     }
 
@@ -254,22 +241,26 @@ class BookWalkerJp :
     private fun Element.toWayomiChapter(hideLocked: Boolean): SChapter? {
         val free = attr("data-is-free") == "1"
         val rented = attr("data-is-now-rental") == "1"
-        val unlocked = free || rented || attr("data-is-settled") == "1"
+        val purchased = attr("data-is-settled") == "1"
+        val unlocked = free || rented || purchased
         if (hideLocked && !unlocked) return null
 
         return SChapter.create().apply {
             name = (if (unlocked) "" else "🔒 ") + selectFirst(".o-ttsk-list-item__title")!!.text()
-            url = if (free) absUrl("href") else attr("data-viewer-url")
-            if (rented) {
-                memo = buildJsonObject { put("df", attr("data-df-viewer-url")) }
+            url = attr("data-book-uuid")
+            val viewerUrl = when {
+                rented -> attr("data-df-viewer-url")
+                free -> absUrl("href")
+                else -> attr("data-viewer-url")
             }
+            memo = buildJsonObject { put("viewerUrl", viewerUrl) }
         }
     }
 
     private fun seriesUrl(seriesId: String): HttpUrl = "$baseUrl/series/$seriesId/".toHttpUrl()
     private fun Document.firstEpisodeId(): String = "de" + selectFirst(".p-episode__list a[data-book-uuid]")!!.attr("data-book-uuid")
     private fun Document.firstBookId(): String = selectFirst(".m-tile-list .m-book-item")!!.bookId()
-    private fun Document.hasNextPage(): Boolean = selectFirst(".o-pager-next a:not(.o-pager-box-btn_hidden)") != null
+    private fun Document.hasNextPage(): Boolean = selectFirst(".o-pager-next a:not(.o-pager-box-btn_hidden), a[data-action-label=次のページへ]:not(.o-pager-box-btn_hidden)") != null
     private fun Element.bookLink(): Element = selectFirst("a.m-book-item__title")!!
     private fun Element.bookId(): String = bookLink().absUrl("href").toHttpUrl().pathSegments.first()
 
@@ -291,7 +282,7 @@ class BookWalkerJp :
         GET(refreshUrl, headers)
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = chapter.memo["df"]?.jsonPrimitive?.content ?: chapter.url
+    override fun getChapterUrl(chapter: SChapter): String = chapter.memo["viewerUrl"]?.string ?: throw Exception("Refresh Chapter List")
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = client.get(getChapterUrl(chapter), desktopHeaders, ensureSuccess = false).request.url
@@ -313,7 +304,7 @@ class BookWalkerJp :
             var cr: String? = null
             if (!isTrial) {
                 val loaderUrl = if (isDf) {
-                    "$viewerUrl/browserWebApi4/04/getLoader"
+                    "$dfViewer/browserWebApi4/04/getLoader"
                 } else {
                     "$viewerUrl/browserWebApi/03/getLoader"
                 }
@@ -339,12 +330,8 @@ class BookWalkerJp :
 
             val content = client.get(cApiUrl).parseAs<PublusContent>()
 
-            if (content.status == "503") {
-                throw Exception("This chapter can only be viewed on one device. Log out and log in again.")
-            }
-
             if (content.status == "401" || content.status == "403") {
-                throw Exception("Log in via WebView and purchase this chapter to read.")
+                throw Exception("Log in via WebView and rent or purchase this chapter to read.")
             }
 
             if (content.cty != 1 && content.cty != 2) {
@@ -366,43 +353,31 @@ class BookWalkerJp :
 
             fetchPages(content.url!!, headers, client, auth, sessionData)
         } else {
-            throw Exception("No preview available, or you aren't logged in via Webview.")
+            throw Exception("No preview available, or you need to purchase this volume.")
         }
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun fetchCr(scriptContent: String, viewerUrl: String): String? {
-        val match = Regex("""^(\w+)=function\(\)\{[\s\S]*?\};""", RegexOption.MULTILINE).find(scriptContent) ?: return null
+    private suspend fun fetchCr(scriptContent: String, viewerUrl: String): String? {
+        val match = SCRIPT_REGEX.find(scriptContent) ?: return null
         val functionName = match.groupValues[1]
-        val latch = CountDownLatch(1)
 
-        var result: String? = null
-
-        Handler(Looper.getMainLooper()).post {
-            val webView = WebView(applicationContext)
-            with(webView.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                blockNetworkImage = true
-            }
-            webView.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView, url: String?) {
-                    view.evaluateJavascript(scriptContent) {
-                        view.evaluateJavascript("$functionName()") {
-                            // c9P = function()
-                            result = it?.trim('"')
-                            if (result == "null" || result.isNullOrBlank()) result = null
-                            latch.countDown()
+        return try {
+            runWebView(timeout = 10.seconds) {
+                blockImages = true
+                onPageFinished {
+                    evaluateJs(scriptContent) {
+                        // c9P = function()
+                        evaluateJs("$functionName()") { value ->
+                            val result = value.trim('"')
+                            resolve(result.takeIf { it != "null" && it.isNotBlank() })
                         }
                     }
                 }
+                loadData(viewerUrl, " ")
             }
-            webView.loadDataWithBaseURL(viewerUrl, " ", "text/html", "utf-8", null)
+        } catch (_: WebViewTimeoutException) {
+            null
         }
-
-        latch.await(10, TimeUnit.SECONDS)
-        return result
     }
 
     private fun authorize(imageUrl: String): String {
@@ -425,6 +400,7 @@ class BookWalkerJp :
         }.also(screen::addPreference)
     }
 
+    override val supportsRelatedMangas get() = false
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? = null
 
@@ -432,5 +408,6 @@ class BookWalkerJp :
         // Normal (non-trial) auth data expires after 60s
         private const val AUTH_REFRESH_SECONDS = 45L
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+        private val SCRIPT_REGEX = Regex("""^(\w+)=function\(\)\{[\s\S]*?\};""", RegexOption.MULTILINE)
     }
 }
