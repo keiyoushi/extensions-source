@@ -4,7 +4,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -14,9 +13,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
 import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SvelteKit `__data.json`
@@ -192,7 +189,7 @@ class ChapterDto(
         url = "$mangaUrl/${position.content}"
         name = "Глава ${position.content}"
         chapter_number = position.content.toFloatOrNull() ?: -1f
-        date_upload = dateFormat.tryParse(createdAt)
+        date_upload = createdAt?.let { Instant.parseOrNull(it) }?.toEpochMilliseconds() ?: 0L
     }
 }
 
@@ -227,10 +224,6 @@ class FileDto(
 
 /** Placeholder the site uses for unknown authors/artists. */
 private const val NOT_AVAILABLE = "N/A"
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
 
 /**
  * Paths come back with a leading slash, e.g. `/app/uploads/.../cover.webp`,

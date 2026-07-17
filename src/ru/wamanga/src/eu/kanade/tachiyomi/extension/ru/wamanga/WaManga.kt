@@ -114,7 +114,7 @@ abstract class WaManga : KeiSource() {
 
         return SMangaUpdate(
             manga = details.toSManga(baseUrl),
-            chapters = if (fetchChapters) details.chapters.map { it.toSChapter(details.mangaUrl) } else chapters,
+            chapters = details.chapters.map { it.toSChapter(details.mangaUrl) },
         )
     }
 
