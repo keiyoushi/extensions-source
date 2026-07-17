@@ -15,9 +15,10 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -100,13 +101,12 @@ internal class ChapterDto(
     @SerialName("posted_date")
     private val postedDate: String,
 ) {
-    fun toSChapter(number: String, baseUrl: String): SChapter = SChapter.create().apply {
-        val webUrl = "$baseUrl/leitor".toHttpUrl().newBuilder()
-            .addQueryParameter("id", mangaKey)
-            .addQueryParameter("capitulo", number)
-            .build()
-
-        url = webUrl.run { "$encodedPath?$encodedQuery" }
+    fun toSChapter(number: String): SChapter = SChapter.create().apply {
+        url = "$mangaKey/$number"
+        memo = buildJsonObject {
+            put("id", mangaKey)
+            put("number", number)
+        }
         name = "Capítulo $number"
         chapter_number = number.toFloatOrNull() ?: -1F
         date_upload = chapterDateFormat.tryParse(postedDate)

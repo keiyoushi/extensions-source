@@ -13,6 +13,9 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -97,35 +100,51 @@ abstract class OneReader : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = SMangaUpdate(
-        manga = if (fetchDetails) {
-            client.get(apiUrl("api", "mangas", manga.url)).parseAs<MangaDto>().toSManga(details = true)
+    ): SMangaUpdate = coroutineScope {
+        val updatedManga = if (fetchDetails) {
+            async {
+                client.get(apiUrl("api", "mangas", manga.url)).parseAs<MangaDto>().toSManga(details = true)
+            }
         } else {
-            manga
-        },
-        chapters = if (fetchChapters) {
-            client.get(apiUrl("api", "chapters", manga.url))
-                .parseAs<Map<String, ChapterDto>>()
-                .entries
-                .sortedByDescending { it.key.toDoubleOrNull() ?: Double.NEGATIVE_INFINITY }
-                .map { it.value.toSChapter(it.key, baseUrl) }
+            null
+        }
+
+        val updatedChapters = if (fetchChapters) {
+            async {
+                client.get(apiUrl("api", "chapters", manga.url))
+                    .parseAs<Map<String, ChapterDto>>()
+                    .entries
+                    .sortedByDescending { it.key.toDoubleOrNull() ?: Double.NEGATIVE_INFINITY }
+                    .map { it.value.toSChapter(it.key) }
+            }
         } else {
-            chapters
-        },
-    )
+            null
+        }
+
+        SMangaUpdate(
+            manga = updatedManga?.await() ?: manga,
+            chapters = updatedChapters?.await() ?: chapters,
+        )
+    }
 
     override val supportsRelatedMangas = false
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = throw UnsupportedOperationException()
 
-    override fun getChapterUrl(chapter: SChapter): String = requireNotNull(
-        baseUrl.toHttpUrl().resolve(chapter.url),
-    ).toString()
+    override fun getChapterUrl(chapter: SChapter): String {
+        val mangaKey = chapter.memo["id"]!!.string
+        val number = chapter.memo["number"]!!.string
+
+        return "$baseUrl/leitor".toHttpUrl().newBuilder()
+            .addQueryParameter("id", mangaKey)
+            .addQueryParameter("capitulo", number)
+            .build()
+            .toString()
+    }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val webUrl = getChapterUrl(chapter).toHttpUrl()
-        val mangaKey = requireNotNull(webUrl.queryParameter("id"))
-        val chapterNumber = requireNotNull(webUrl.queryParameter("capitulo")).replace('.', '_')
+        val mangaKey = chapter.memo["id"]?.string ?: throw Exception("Atualize a lista de capítulos")
+        val chapterNumber = chapter.memo["number"]!!.string.replace('.', '_')
 
         return client.get(apiUrl("api", "chapters", mangaKey, chapterNumber))
             .parseAs<PagesDto>()
