@@ -75,13 +75,13 @@ abstract class Pawchive :
 
             response
         }
-            .cache(
+            cache(
                 Cache(
                     directory = File(applicationContext.externalCacheDir, "network_cache_${name.lowercase()}"),
                     maxSize = 50L * 1024 * 1024, // 50 MiB
                 ),
             )
-            .rateLimit(1)
+            rateLimit(1)
     }
 
     private val creatorsClient = client.newBuilder()
