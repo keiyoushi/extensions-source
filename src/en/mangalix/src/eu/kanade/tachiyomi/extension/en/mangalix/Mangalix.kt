@@ -16,7 +16,12 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -96,28 +101,40 @@ abstract class Mangalix : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
+    ): SMangaUpdate = coroutineScope {
         val slug = manga.url
 
-        return SMangaUpdate(
-            manga = if (fetchDetails) {
+        val updatedManga = if (fetchDetails) {
+            async {
                 loadCatalog().firstOrNull { it.slug == slug }?.toSManga(baseUrl) ?: manga
-            } else {
-                manga
-            },
-            chapters = if (fetchChapters) {
+            }
+        } else {
+            null
+        }
+
+        val updatedChapters = if (fetchChapters) {
+            async {
                 readChapters(slug).distinctBy { it.id to it.number }.map { chapter ->
                     SChapter.create().apply {
                         val number = chapter.number.toString().removeSuffix(".0")
-                        url = "$slug/$number/${chapter.id}"
+                        url = chapter.id
+                        memo = buildJsonObject {
+                            put("slug", slug)
+                            put("number", number)
+                        }
                         name = chapter.title.ifBlank { "Chapter $number" }
                         chapter_number = chapter.number.toFloat()
                         date_upload = chapter.releaseDate.toMangaTimestamp()
                     }
                 }
-            } else {
-                chapters
-            },
+            }
+        } else {
+            null
+        }
+
+        SMangaUpdate(
+            manga = updatedManga?.await() ?: manga,
+            chapters = updatedChapters?.await() ?: chapters,
         )
     }
 
@@ -126,17 +143,15 @@ abstract class Mangalix : KeiSource() {
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = throw UnsupportedOperationException()
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val (slug, number) = chapter.url.split('/')
+        val slug = chapter.memo["slug"]!!.string
+        val number = chapter.memo["number"]!!.string
         return "$baseUrl/manga/$slug/chapter/$number"
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val parts = chapter.url.split('/')
-        if (parts.size < 3) throw IOException("Invalid chapter url")
-        val slug = parts[0]
-        val number = parts[1].toDoubleOrNull()
-            ?: throw IOException("Missing chapter number")
-        val chapterId = parts[2]
+        val slug = chapter.memo["slug"]?.string ?: throw Exception("Refresh chapter list")
+        val number = chapter.memo["number"]!!.string.toDouble()
+        val chapterId = chapter.url
 
         return readChapters(slug)
             .firstOrNull { it.id == chapterId && it.number == number }
