@@ -10,17 +10,14 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.jsonInstance
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class MangaCloud : KeiSource() {
-
-    override val supportsLatest = true
 
     // ============================== Popular ==============================
 
@@ -36,9 +33,6 @@ abstract class MangaCloud : KeiSource() {
         val response = client.get(url)
         val json = FirestoreParser.parseList(response)
         lastPageToken = json.nextPageToken
-        if (allMangasCache.isEmpty()) {
-            allMangasCache.addAll(json.mangas)
-        }
         return MangasPage(json.mangas.map { it.smanga }, json.nextPageToken != null)
     }
 
@@ -77,10 +71,6 @@ abstract class MangaCloud : KeiSource() {
         val json = FirestoreParser.parseList(response)
         val allMangas = json.mangas.toMutableList()
 
-        if (allMangasCache.isEmpty()) {
-            allMangasCache.addAll(json.mangas)
-        }
-
         var nextPageToken = json.nextPageToken
         while (nextPageToken != null) {
             val nextUrl = FIRESTORE_URL.toHttpUrl().newBuilder()
@@ -91,7 +81,6 @@ abstract class MangaCloud : KeiSource() {
             val nextResponse = client.get(nextUrl)
             val nextJson = FirestoreParser.parseList(nextResponse)
             allMangas.addAll(nextJson.mangas)
-            allMangasCache.addAll(nextJson.mangas)
             nextPageToken = nextJson.nextPageToken
         }
 
@@ -134,22 +123,27 @@ abstract class MangaCloud : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val mangaDetail = if (fetchDetails) {
-            val url = "$FIRESTORE_URL/${manga.url}?key=$API_KEY".toHttpUrl()
-            val response = client.get(url)
-            FirestoreParser.parseDetails(response)
+    ): SMangaUpdate = coroutineScope {
+        val mangaDetailDeferred = if (fetchDetails) {
+            async {
+                val url = "$FIRESTORE_URL/${manga.url}?key=$API_KEY".toHttpUrl()
+                val response = client.get(url)
+                FirestoreParser.parseDetails(response)
+            }
         } else {
-            manga
+            null
         }
 
-        val chapterList = if (fetchChapters) {
-            fetchAllChapters(manga.url)
+        val chapterListDeferred = if (fetchChapters) {
+            async { fetchAllChapters(manga.url) }
         } else {
-            chapters
+            null
         }
 
-        return SMangaUpdate(mangaDetail, chapterList)
+        val mangaDetail = mangaDetailDeferred?.await() ?: manga
+        val chapterList = chapterListDeferred?.await() ?: chapters
+
+        SMangaUpdate(mangaDetail, chapterList)
     }
 
     private suspend fun fetchAllChapters(mangaId: String): List<SChapter> {
@@ -165,10 +159,8 @@ abstract class MangaCloud : KeiSource() {
                 urlBuilder.addQueryParameter("pageToken", nextPageToken)
             }
             val response = client.get(urlBuilder.build())
-            val jsonString = response.body?.string() ?: break
-            val json = jsonInstance.parseToJsonElement(jsonString).jsonObject
-            val chaptersResponse = jsonInstance.decodeFromString<FirestoreListResponse>(jsonString)
-            val chapters = chaptersResponse.documents?.mapNotNull { doc ->
+            val result = response.parseAs<FirestoreListResponse>()
+            val chapters = result.documents?.mapNotNull { doc ->
                 val docName = doc.name ?: return@mapNotNull null
                 val chapterNum = docName.substringAfterLast("/")
                 val num = chapterNum.toIntOrNull() ?: 0
@@ -179,7 +171,7 @@ abstract class MangaCloud : KeiSource() {
                 }
             } ?: emptyList()
             allChapters.addAll(chapters)
-            nextPageToken = json["nextPageToken"]?.jsonPrimitive?.contentOrNull
+            nextPageToken = result.nextPageToken
         } while (nextPageToken != null)
 
         allChapters.sortByDescending {
@@ -225,7 +217,6 @@ abstract class MangaCloud : KeiSource() {
     // ============================== State ===============================
 
     private var lastPageToken: String? = null
-    private val allMangasCache = mutableListOf<MangaData>()
 
     companion object {
         private const val API_KEY = "AIzaSyAvdmgz_r_d89Eo8JBs9vAjUAJR451bMYU"

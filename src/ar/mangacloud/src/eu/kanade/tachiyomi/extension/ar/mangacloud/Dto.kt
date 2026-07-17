@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.ar.mangacloud
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.jsonInstance
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -39,7 +39,7 @@ data class MangaListResult(
 object FirestoreParser {
 
     fun parseList(response: Response): MangaListResult {
-        val result = jsonInstance.decodeFromString<FirestoreListResponse>(response.body.string())
+        val result = response.parseAs<FirestoreListResponse>()
         val mangas = result.documents?.mapNotNull { doc ->
             val fields = doc.fields ?: return@mapNotNull null
             val mangaId = doc.name?.substringAfterLast("/") ?: return@mapNotNull null
@@ -73,9 +73,10 @@ object FirestoreParser {
     }
 
     fun parseDetails(response: Response): SManga {
-        val doc = jsonInstance.decodeFromString<FirestoreDocument>(response.body.string())
-        val fields = doc.fields ?: return SManga.create()
-        val mangaId = doc.name?.substringAfterLast("/") ?: ""
+        val doc = response.parseAs<FirestoreDocument>()
+        val fields = doc.fields!!
+        val mangaId = doc.name!!.substringAfterLast("/")
+        check(mangaId.isNotEmpty()) { "mangaId must not be empty" }
         return SManga.create().apply {
             url = mangaId
             title = fields.string("title")
@@ -94,7 +95,7 @@ object FirestoreParser {
     }
 
     fun parseChapters(response: Response): List<SChapter> {
-        val result = jsonInstance.decodeFromString<FirestoreListResponse>(response.body.string())
+        val result = response.parseAs<FirestoreListResponse>()
         return result.documents?.mapNotNull { doc ->
             val docName = doc.name ?: return@mapNotNull null
             val chapterNum = docName.substringAfterLast("/")
@@ -108,7 +109,7 @@ object FirestoreParser {
     }
 
     fun parsePages(response: Response): List<Page> {
-        val doc = jsonInstance.decodeFromString<FirestoreDocument>(response.body.string())
+        val doc = response.parseAs<FirestoreDocument>()
         val fields = doc.fields ?: return emptyList()
         val pagesArray = fields["pages"]?.jsonObject?.get("arrayValue")?.jsonObject
             ?.get("values")?.jsonArray ?: return emptyList()
