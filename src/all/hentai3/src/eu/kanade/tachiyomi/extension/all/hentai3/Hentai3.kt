@@ -128,13 +128,18 @@ abstract class Hentai3 :
                                 if (tag.startsWith("-")) append("-")
 
                                 append(filter.type)
-                                append(":'")
-                                append(tag.removePrefix("-"))
 
-                                if (filter.specific.isNotEmpty()) {
-                                    append(" (${filter.specific})")
+                                if (filter.type == "page") {
+                                    append(":$tag")
+                                } else {
+                                    append(":'")
+                                    append(tag.removePrefix("-"))
+
+                                    if (filter.specific.isNotEmpty()) {
+                                        append(" (${filter.specific})")
+                                    }
+                                    append("' ")
                                 }
-                                append("' ")
                             }
                     }
 
