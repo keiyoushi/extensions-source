@@ -5,7 +5,6 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 class GenreFilter(
     name: String,
