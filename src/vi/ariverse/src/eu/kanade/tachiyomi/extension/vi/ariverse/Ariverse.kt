@@ -107,6 +107,7 @@ abstract class Ariverse :
     // ============================== Latest ================================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
+        loadAuthToken()
         val url = "$apiUrl/stories".toHttpUrl().newBuilder()
             .addQueryParameter("type", "comic")
             .addQueryParameter("is_18_plus", if (allowR18) "1" else "0")
@@ -126,6 +127,7 @@ abstract class Ariverse :
         query: String,
         filters: FilterList,
     ): MangasPage {
+        loadAuthToken()
         val url = "$apiUrl/stories".toHttpUrl().newBuilder().apply {
             addQueryParameter("type", "comic")
             addQueryParameter("is_18_plus", if (allowR18) "1" else "0")
@@ -171,6 +173,7 @@ abstract class Ariverse :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        loadAuthToken()
         val slug = url.pathSegments.lastOrNull() ?: return null
 
         val story = client.get("$apiUrl/stories/$slug")
@@ -230,6 +233,7 @@ abstract class Ariverse :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
+        loadAuthToken()
         val slug = manga.url.substringAfterLast("/")
 
         val updatedManga: SManga
@@ -292,6 +296,7 @@ abstract class Ariverse :
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        loadAuthToken()
         val parts = chapter.url.trim('/').split("/")
         val storySlug = parts.getOrElse(2) { "" }
         val chapterSlug = parts.getOrElse(3) { "" }

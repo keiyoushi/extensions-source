@@ -66,8 +66,8 @@ fun buildGenreFilter(data: JsonElement?): FilterList {
     val genres = (data as? JsonArray)
         ?.mapNotNull {
             val obj = it.jsonObject
-            val name = obj["name"]?.jsonPrimitive?.content ?: return@mapNotNull null
-            val slug = obj["slug"]?.jsonPrimitive?.content ?: return@mapNotNull null
+            val name = obj["name"]?.string ?: return@mapNotNull null
+            val slug = obj["slug"]?.string ?: return@mapNotNull null
             name to slug
         }
         .orEmpty()
