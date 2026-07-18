@@ -106,7 +106,7 @@ abstract class Comix :
         val baseUrlHost = baseUrl.toHttpUrl().host
         val requestHeaders = if (
             imageHost.isNotEmpty() &&
-            !imageHost.contains(baseUrlHost) &&
+            !imageHost.endsWith(baseUrlHost) &&
             !isLegacyScramble
         ) {
             headersBuilder()
@@ -825,8 +825,10 @@ abstract class Comix :
                             ?: return super.shouldInterceptRequest(view, request)
 
                         val baseUrlHost = baseUrl.toHttpUrl().host
-                        val allowedHost = requestUrl.host.contains(baseUrlHost) ||
-                            requestUrl.host.contains("comix.to") ||
+                        val allowedHost = requestUrl.host.endsWith(baseUrlHost) ||
+                            requestUrl.host.endsWith(".comix.to") ||
+                            requestUrl.host == "comix.to" ||
+                            requestUrl.host == "comix.ws" ||
                             requestUrl.host == "challenges.cloudflare.com"
                         if (!allowedHost) return emptyResponse
                         return super.shouldInterceptRequest(view, request)
