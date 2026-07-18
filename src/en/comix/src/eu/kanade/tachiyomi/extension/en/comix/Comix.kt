@@ -54,7 +54,7 @@ abstract class Comix :
     HttpSource(),
     ConfigurableSource {
 
-    private val apiUrl = "https://comix.to/api/v1"
+    private val apiUrl get() = "$baseUrl/api/v1"
     override val supportsLatest = true
     override val supportsRelatedMangas = false
     override val disableRelatedMangasBySearch = true
@@ -103,7 +103,12 @@ abstract class Comix :
         val isScrambled = imageUrl.contains("#scrambled")
         val isV3 = urlWithoutFragment.toHttpUrlOrNull()?.queryParameterNames?.contains("v3") == true
         val isLegacyScramble = isScrambled && !isV3
-        val requestHeaders = if (imageHost.isNotEmpty() && !imageHost.contains("comix.to") && !isLegacyScramble) {
+        val baseUrlHost = baseUrl.toHttpUrl().host
+        val requestHeaders = if (
+            imageHost.isNotEmpty() &&
+            !imageHost.endsWith(baseUrlHost) &&
+            !isLegacyScramble
+        ) {
             headersBuilder()
                 .removeAll("Origin")
                 .build()
@@ -819,8 +824,11 @@ abstract class Comix :
                         val requestUrl = request.url?.toString()?.toHttpUrlOrNull()
                             ?: return super.shouldInterceptRequest(view, request)
 
-                        val allowedHost = requestUrl.host == "comix.to" ||
+                        val baseUrlHost = baseUrl.toHttpUrl().host
+                        val allowedHost = requestUrl.host.endsWith(baseUrlHost) ||
                             requestUrl.host.endsWith(".comix.to") ||
+                            requestUrl.host == "comix.to" ||
+                            requestUrl.host == "comix.ws" ||
                             requestUrl.host == "challenges.cloudflare.com"
                         if (!allowedHost) return emptyResponse
                         return super.shouldInterceptRequest(view, request)
@@ -952,7 +960,7 @@ abstract class Comix :
             setDefaultValue(DEFAULT_CONTENT_RATING)
         }.let(screen::addPreference)
 
-        // Content preferences (mirrors comix.to's "Content preferences" modal):
+        // Content preferences (mirrors the site's "Content preferences" modal):
         //   - Default Types       — checkbox per type, all checked by default
         //   - Default Demographics — same, all checked by default
         //   - Blocked Genres      — opt-in list of genres to always exclude
@@ -1030,7 +1038,7 @@ abstract class Comix :
             summary = "Include the site's narrative tag list (e.g. Demons, " +
                 "Vampires, Time Travel) alongside the curated genres in the " +
                 "manga details. Off by default — the curated set matches what " +
-                "comix.to itself shows on the page."
+                "the site itself shows on the page."
             setDefaultValue(false)
         }.let(screen::addPreference)
 
