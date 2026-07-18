@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.bilimanga
 
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -168,12 +166,12 @@ abstract class BiliManga :
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val suffix = pref.getString(PREF_POPULAR_MANGA_DISPLAY, "/top/weekvisit/%d.html")!!
-        return mangaPageParse(client.get(baseUrl + String.format(suffix, page), headers))
+        return mangaPageParse(client.get(baseUrl + String.format(suffix, page)))
     }
 
     // Latest Page
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaPageParse(client.get("$baseUrl/top/lastupdate/$page.html", headers))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaPageParse(client.get("$baseUrl/top/lastupdate/$page.html"))
 
     // Search Page
 
@@ -181,8 +179,7 @@ abstract class BiliManga :
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (!MANGA_ID_REGEX.matches(url.encodedPath)) return null
-        val response = client.get(url, headers)
-        return response.parseManga()
+        return client.get(url).parseManga()
     }
 
     // /${Sort}_${Theme}_${Status}_${Anime}_${Region}_${Type}_${Time}_${Novel}_${page}_0_${Year}_${Award}.html
@@ -194,7 +191,7 @@ abstract class BiliManga :
             url.addPathSegment("filter")
                 .addPathSegment("${filters[5]}_${filters[1]}_${filters[9]}_${filters[6]}_${filters[3]}_${filters[2]}_${filters[10]}_${filters[7]}_${page}_0_${filters[4]}_${filters[8]}.html")
         }
-        val response = client.get(url.build(), headers)
+        val response = client.get(url.build())
         if (response.request.url.pathSegments.contains("detail")) {
             return MangasPage(listOf(response.parseManga()), false)
         }
@@ -214,14 +211,14 @@ abstract class BiliManga :
         fetchChapters: Boolean,
     ) = supervisorScope {
         val asyncManga = if (fetchDetails) {
-            async { client.newCall(GET(baseUrl + manga.url, headers)).awaitSuccess().parseManga() }
+            async { client.get(baseUrl + manga.url).parseManga() }
         } else {
             CompletableDeferred(manga)
         }
 
         val asyncChapters = if (fetchChapters) {
             async {
-                val doc = client.newCall(GET("$baseUrl/read/${manga.id}/catalog", headers)).awaitSuccess().asJsoup()
+                val doc = client.get("$baseUrl/read/${manga.id}/catalog").asJsoup()
                 val info = doc.selectFirst(".chapter-sub-title")!!.text()
                 val title = doc.selectFirst(".book-title")!!.text()
                 val date = DATE_FORMAT.tryParse(DATE_REGEX.find(info)?.value)
@@ -239,7 +236,7 @@ abstract class BiliManga :
     }
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val doc = client.get(getMangaUrl(manga), headers).asJsoup()
+        val doc = client.get(getMangaUrl(manga)).asJsoup()
         return doc.select("#book-friend-list-container").last()?.select(".module-slide-a")?.map {
             SManga.create().apply {
                 setUrlWithoutDomain(it.absUrl("href"))
@@ -252,7 +249,7 @@ abstract class BiliManga :
     // Manga View Page
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.newCall(GET(baseUrl + chapter.url, headers)).awaitSuccess()
+        val response = client.get(baseUrl + chapter.url)
         return response.asJsoup().let { doc ->
             val images = doc.select(".imagecontent")
             check(images.isNotEmpty()) {
