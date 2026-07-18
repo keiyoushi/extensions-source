@@ -207,19 +207,23 @@ abstract class BuonDua :
         val basePageUrl = document.location()
         val maxPage = document.getLastPageNum()
 
-        return (1..maxPage).parallelCatchingFlatMap { page ->
-            val doc = when (page) {
-                1 -> document
-                else -> {
-                    val pageUrl = basePageUrl.toHttpUrl().newBuilder()
-                        .setQueryParameter("page", page.toString())
-                        .build()
-                    client.get(pageUrl).asJsoup()
+        return withContext(Dispatchers.IO) {
+            (1..maxPage).map { page ->
+                async {
+                    val doc = when (page) {
+                        1 -> document
+                        else -> {
+                            val pageUrl = basePageUrl.toHttpUrl().newBuilder()
+                                .setQueryParameter("page", page.toString())
+                                .build()
+                            client.get(pageUrl).asJsoup()
+                        }
+                    }
+                    doc.select(pageListSelector).map { imgEl ->
+                        imgEl.absUrl("src")
+                    }
                 }
-            }
-            doc.select(pageListSelector).map { imgEl ->
-                imgEl.absUrl("src")
-            }
+            }.awaitAll().flatten()
         }.mapIndexed { index, url ->
             Page(index, imageUrl = url)
         }
@@ -250,23 +254,6 @@ abstract class BuonDua :
             summaryOn = "Multiple pages"
             setDefaultValue(DEFAULT_SPLIT_PAGES)
         }.also(screen::addPreference)
-    }
-
-    /**
-     * Parallel implementation of [Iterable.flatMap], but running
-     * the transformation function inside a try-catch block.
-     */
-    private suspend inline fun <A, B> Iterable<A>.parallelCatchingFlatMap(crossinline f: suspend (A) -> Iterable<B>): List<B> = withContext(Dispatchers.IO) {
-        map {
-            async {
-                try {
-                    f(it)
-                } catch (e: Throwable) {
-                    e.printStackTrace()
-                    emptyList()
-                }
-            }
-        }.awaitAll().flatten()
     }
 
     companion object {
