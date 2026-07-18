@@ -287,12 +287,8 @@ abstract class Mangadotnet :
     @Serializable
     private data class FilterDataDto(
         val genres: List<String>? = null,
-        val adultGenres: List<String>? = null,
         val tags: List<String>? = null,
     )
-
-    @Volatile
-    private var filterDataCache: FilterDataDto? = null
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         val searchUrl = "$baseUrl/search.data?page=1&_routes=pages/SearchPage".toHttpUrl()
@@ -310,12 +306,11 @@ abstract class Mangadotnet :
             .sortedBy { it.lowercase(Locale.ROOT) }
             .toList()
 
-        FilterDataDto(genres, genres, tags).toJsonElement()
+        FilterDataDto(genres, tags).toJsonElement()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val dto = data?.parseAs<FilterDataDto>()
-        filterDataCache = dto
 
         val filters = mutableListOf(
             BrowseFilter(),
@@ -326,9 +321,7 @@ abstract class Mangadotnet :
             DemographicFilter(excludedDemographicsPref()),
         )
 
-        val isAdult = adultModePref() != "none"
-        val genreList = (if (isAdult) dto?.adultGenres else dto?.genres)
-            ?.sortedBy { it.lowercase(Locale.ROOT) }
+        val genreList = dto?.genres?.sortedBy { it.lowercase(Locale.ROOT) }
         val tagList = dto?.tags?.sortedBy { it.lowercase(Locale.ROOT) }
 
         if (genreList != null) {
@@ -377,13 +370,6 @@ abstract class Mangadotnet :
             is Filter.Group<*> -> filter.state.filterIsInstance<TagFilter>()
             else -> emptyList()
         }
-    }
-
-    private fun getFilterData(): FilterDataDto? {
-        if (filterDataCache == null) {
-            getFilterList()
-        }
-        return filterDataCache
     }
 
     private suspend fun fetchForYouItems(): List<BrowseManga> = runCatching {
@@ -789,41 +775,42 @@ abstract class Mangadotnet :
         }
         screen.addPreference(demographicPref)
 
-        val dto = getFilterData()
-        val excludedNormal = preferences.getStringSet(EXCLUDE_GENRE_PREF, emptySet())!!
-        val normalGenres = (dto?.genres ?: excludedNormal.filter { it !in demographicNames })
+        val filters = getFilterList()
+        val genresFromFilters = filters.firstInstanceOrNull<GenreFilter>()?.state?.map { it.name }
+
+        val excludedNormal = preferences.getStringSet(EXCLUDE_GENRE_PREF, emptySet()) ?: emptySet()
+        val excludedAdult = preferences.getStringSet(EXCLUDE_GENRE_ADULT_PREF, emptySet()) ?: emptySet()
+
+        val genres = (genresFromFilters ?: (excludedNormal + excludedAdult).filter { it !in demographicNames })
+            .distinct()
             .sortedBy { it.lowercase(Locale.ROOT) }
 
         val normalGenrePref = MultiSelectListPreference(screen.context).apply {
             key = EXCLUDE_GENRE_PREF
             title = "Genre Blacklist"
             summary = "Exclude genres when browsing without 18+ content."
-            entries = normalGenres.toTypedArray()
-            entryValues = normalGenres.toTypedArray()
+            entries = genres.toTypedArray()
+            entryValues = genres.toTypedArray()
             setDefaultValue(emptySet<String>())
-            setEnabled(normalGenres.isNotEmpty() && mode == "none")
+            setEnabled(genres.isNotEmpty() && mode == "none")
         }
         screen.addPreference(normalGenrePref)
-
-        val excludedAdult = preferences.getStringSet(EXCLUDE_GENRE_ADULT_PREF, emptySet())!!
-        val adultGenres = (dto?.adultGenres ?: excludedAdult.filter { it !in demographicNames })
-            .sortedBy { it.lowercase(Locale.ROOT) }
 
         val adultGenrePref = MultiSelectListPreference(screen.context).apply {
             key = EXCLUDE_GENRE_ADULT_PREF
             title = "Genre Blacklist (Adult Mode)"
             summary = "Exclude genres when browsing with 18+ content."
-            entries = adultGenres.toTypedArray()
-            entryValues = adultGenres.toTypedArray()
+            entries = genres.toTypedArray()
+            entryValues = genres.toTypedArray()
             setDefaultValue(emptySet<String>())
-            setEnabled(adultGenres.isNotEmpty() && (mode == "1" || mode == "both"))
+            setEnabled(genres.isNotEmpty() && (mode == "1" || mode == "both"))
         }
         screen.addPreference(adultGenrePref)
 
         nsfwPref.setOnPreferenceChangeListener { _, newValue ->
             val newMode = newValue as String
-            normalGenrePref.setEnabled(normalGenres.isNotEmpty() && newMode == "none")
-            adultGenrePref.setEnabled(adultGenres.isNotEmpty() && (newMode == "1" || newMode == "both"))
+            normalGenrePref.setEnabled(genres.isNotEmpty() && newMode == "none")
+            adultGenrePref.setEnabled(genres.isNotEmpty() && (newMode == "1" || newMode == "both"))
             true
         }
     }
