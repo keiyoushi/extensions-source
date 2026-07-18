@@ -9,6 +9,7 @@ const val SERIES_PATH_SEGMENT = "series"
 const val API_QUERY_PATH = "/api/query"
 const val API_POST_PATH = "/api/post"
 const val API_CHAPTER_PATH = "/api/chapter"
+const val API_CHAPTERS_PATH = "/api/chapters"
 
 const val STATUS_FILTER_KEY = "seriesStatus"
 val STATUS_OPTIONS: Options = listOf(

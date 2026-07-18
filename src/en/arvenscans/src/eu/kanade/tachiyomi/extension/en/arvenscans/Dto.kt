@@ -25,6 +25,16 @@ class GenreDto(
 )
 
 @Serializable
+class ChaptersResponseDto(
+    val post: PostChaptersResponseDto,
+)
+
+@Serializable
+class PostChaptersResponseDto(
+    val chapters: List<PostChapterDto>,
+)
+
+@Serializable
 class PostResponseDto(
     val post: PostDto,
 )
@@ -42,7 +52,6 @@ class PostDto(
     val seriesType: String? = null,
     val seriesStatus: String? = null,
     val genres: List<GenreDto> = emptyList(),
-    val chapters: List<PostChapterDto> = emptyList(),
 )
 
 @Serializable
@@ -54,6 +63,14 @@ class PostChapterDto(
     val createdAt: String,
     val isLocked: Boolean? = null,
     val isAccessible: Boolean? = null,
+    val mangaPost: MangaPostDto,
+)
+
+@Serializable
+class MangaPostDto(
+    val postTitle: String,
+    val featuredImage: String? = null,
+    val slug: String,
 )
 
 @Serializable

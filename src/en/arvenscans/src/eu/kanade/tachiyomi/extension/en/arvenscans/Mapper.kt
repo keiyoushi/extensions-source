@@ -36,14 +36,14 @@ fun PostDto.toSMangaDetailsModel(): SManga {
     }
 }
 
-fun PostChapterDto.toSChapterModel(mangaSlug: String, dateFormat: SimpleDateFormat): SChapter {
+fun PostChapterDto.toSChapterModel(dateFormat: SimpleDateFormat): SChapter {
     val rawNumber = number.toString().trim('"').trim()
     val fallbackNumber = slug.substringAfter("chapter-", "")
     val chapterNumberText = if (rawNumber.isNotEmpty()) rawNumber else fallbackNumber
     val chapterTitle = title?.trim().orEmpty()
 
     return SChapter.create().apply {
-        url = "$mangaSlug/$slug#$id"
+        url = "${mangaPost.slug}/$slug#$id"
         name = buildString {
             if (isAccessible == false || isLocked == true) {
                 append("🔒 ")

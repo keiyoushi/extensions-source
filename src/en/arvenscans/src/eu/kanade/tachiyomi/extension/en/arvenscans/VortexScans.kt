@@ -135,17 +135,16 @@ abstract class VortexScans :
         return "$baseUrl/$SERIES_PATH_SEGMENT/${slugs.first}/${slugs.second}"
     }
 
-    override fun chapterListRequest(manga: SManga): Request = postRequest(resolvePostId(manga))
+    override fun chapterListRequest(manga: SManga): Request = chaptersRequest(resolvePostId(manga))
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val payload = response.parseAs<PostResponseDto>()
-        val mangaSlug = payload.post.slug
+        val payload = response.parseAs<ChaptersResponseDto>()
 
         return payload.post.chapters
             .filter { chapter ->
                 showLockedChapters || (chapter.isAccessible != false && chapter.isLocked != true)
             }
-            .map { it.toSChapterModel(mangaSlug, dateFormat) }
+            .map { it.toSChapterModel(dateFormat) }
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -209,6 +208,15 @@ abstract class VortexScans :
         return GET(url, apiHeaders)
     }
 
+    private fun chaptersRequest(postId: Int): Request {
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            encodedPath(API_CHAPTERS_PATH)
+            addQueryParameter("postId", postId.toString())
+        }.build()
+
+        return GET(url, apiHeaders)
+    }
+
     private fun postRequest(postId: Int): Request {
         val url = apiUrl.toHttpUrl().newBuilder().apply {
             encodedPath(API_POST_PATH)
@@ -245,12 +253,12 @@ abstract class VortexScans :
             ?: throw Exception("Unable to resolve series id")
 
         return try {
-            client.newCall(postRequest(summary.id)).execute().use { response ->
+            client.newCall(chaptersRequest(summary.id)).execute().use { response ->
                 if (!response.isSuccessful) {
                     throw Exception("Unable to resolve chapter id")
                 }
 
-                val payload = response.parseAs<PostResponseDto>()
+                val payload = response.parseAs<ChaptersResponseDto>()
                 val chapterDto = payload.post.chapters.firstOrNull { it.slug == slugs.second }
                     ?: throw Exception("Unable to resolve chapter id")
 
