@@ -55,12 +55,12 @@ abstract class ManGeek : KeiSource() {
         val mangas = if (normalizedQuery.isBlank()) {
             client.post(
                 signedUrl("discover"),
-                DiscoverBody(includedTags, emptyList()).toJsonRequestBody(),
+                TagsBody(includedTags).toJsonRequestBody(),
             ).parseAs<List<MangaDto>>()
         } else {
             client.post(
                 signedUrl("search", normalizedQuery),
-                SearchBody(includedTags).toJsonRequestBody(),
+                TagsBody(includedTags).toJsonRequestBody(),
             ).parseAs<List<MangaDto>>()
         }
 

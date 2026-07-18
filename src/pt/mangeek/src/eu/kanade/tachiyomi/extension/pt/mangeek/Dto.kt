@@ -97,14 +97,8 @@ internal class ChapterPagesDto(
 }
 
 @Serializable
-internal class SearchBody(
+internal class TagsBody(
     val tags: List<String>,
-)
-
-@Serializable
-internal class DiscoverBody(
-    val tags: List<String>,
-    val ignore: List<Long>,
 )
 
 internal fun String.normalizeImageUrl(): String = when {
