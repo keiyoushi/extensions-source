@@ -4,7 +4,7 @@ import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.Response
 
-class MangaInterceptor : Interceptor {
+class ChapterInterceptor : Interceptor {
 
     companion object {
         val PREV_URL_REGEX = Regex("url_previous:'(.*?)'")
@@ -21,12 +21,12 @@ class MangaInterceptor : Interceptor {
     private fun predictUrlByContext(url: HttpUrl) = when (url.fragment) {
         "prev" -> {
             val groups = CHAPTER_ID_REGEX.find(url.toString())?.groups
-            "/read/${groups?.get(1)?.value}/${groups?.get(2)?.value?.toInt()?.plus(1)}.html"
+            "/read/${groups?.get(1)?.value}/${groups?.get(2)?.value?.toInt()?.minus(1)}.html"
         }
 
         "next" -> {
             val groups = CHAPTER_ID_REGEX.find(url.toString())?.groups
-            "/read/${groups?.get(1)?.value}/${groups?.get(2)?.value?.toInt()?.minus(1)}.html"
+            "/read/${groups?.get(1)?.value}/${groups?.get(2)?.value?.toInt()?.plus(1)}.html"
         }
 
         else -> "/read/0/0.html"
@@ -35,10 +35,10 @@ class MangaInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val origin = chain.request()
         regexOf(origin.url.fragment)?.let {
-            val response = chain.proceed(origin.newBuilder().removeHeader("Accept-Encoding").build())
-            val url = it.find(response.body.string())?.groups?.get(1)?.value
-            return response.newBuilder().code(302)
-                .header("Location", url ?: predictUrlByContext(origin.url)).build()
+            val response = chain.proceed(origin)
+            val path = it.find(response.body.string())?.groups?.get(1)?.value ?: predictUrlByContext(origin.url)
+            val url = origin.url.newBuilder().encodedPath(path.replace(".", "_2.")).build()
+            return chain.proceed(origin.newBuilder().url(url).build())
         }
         return chain.proceed(origin.newBuilder().addHeader("Cookie", "night=1").build())
     }
