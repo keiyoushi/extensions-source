@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.hcomic
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class RandomFilter : Filter.Select<String>("排序", arrayOf("最近更新", "随机排序")) {
+class RandomFilter : Filter.Select<String>("排序", arrayOf("最近更新", "隨機排序")) {
     override fun toString() = arrayOf("", "/random")[state]
 }
 

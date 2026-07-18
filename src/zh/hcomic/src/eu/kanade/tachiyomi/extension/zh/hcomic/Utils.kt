@@ -2,17 +2,21 @@ package eu.kanade.tachiyomi.extension.zh.hcomic
 
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import keiyoushi.utils.array
+import keiyoushi.utils.get
+import keiyoushi.utils.getInt
+import keiyoushi.utils.getIntOrNull
+import keiyoushi.utils.int
+import keiyoushi.utils.long
+import keiyoushi.utils.obj
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.Response
-import kotlin.collections.map
+import java.net.URLEncoder
 
 data class HManga(
     val id: String,
@@ -36,7 +40,7 @@ data class HManga(
     }
 
     fun toSManga(imgUrl: String): SManga = SManga.create().apply {
-        url = "$source/$mediaId:$numPages|$timestamp:${tags.find { it.type == "category" }?.nameZH ?: ""}"
+        url = "/comics/${URLEncoder.encode(this@HManga.title.display, "UTF-8")}/1"
         title = this@HManga.title.display
         author = this@HManga.author
         description = filterTags("parody") + filterTags("character") + filterTags("group") + "**页数：** $numPages"
@@ -44,6 +48,12 @@ data class HManga(
         thumbnail_url = "$imgUrl/$source/$mediaId"
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+        memo = buildJsonObject {
+            put("mediaId", "$source/$mediaId")
+            put("numPages", numPages)
+            put("timestamp", timestamp * 1000L)
+            put("category", tags.find { it.type == "category" }?.nameZH ?: "")
+        }
         initialized = true
     }
 }
@@ -53,55 +63,52 @@ data class Title(val japanese: String, val english: String, val pretty: String, 
 data class Tag(val id: Int, val type: String, val name: String, val nameZH: String)
 
 fun parseMangas(data: List<JsonElement>, structIdx: Int): HManga {
-    val struct = data[structIdx].jsonObject
+    val struct = data[structIdx].obj
 
-    val id = data[struct["id"]!!.jsonPrimitive.int].jsonPrimitive.content
-    val mediaId = data[struct["media_id"]!!.jsonPrimitive.int].jsonPrimitive.content
-    val source = data[struct["comic_source"]!!.jsonPrimitive.int].jsonPrimitive.content
+    val id = data[struct.getInt("id")].string
+    val mediaId = data[struct.getInt("media_id")].string
+    val source = data[struct.getInt("comic_source")].string
 
-    // title
-    val titleObj = data[struct["title"]!!.jsonPrimitive.int].jsonObject
+    val titleObj = data[struct.getInt("title")].obj
     val title = Title(
-        data[titleObj["japanese"]!!.jsonPrimitive.int].jsonPrimitive.content,
-        data[titleObj["english"]!!.jsonPrimitive.int].jsonPrimitive.content,
-        data[titleObj["pretty"]!!.jsonPrimitive.int].jsonPrimitive.content,
-        data[titleObj["display"]!!.jsonPrimitive.int].jsonPrimitive.content,
+        data[titleObj.getInt("japanese")].string,
+        data[titleObj.getInt("english")].string,
+        data[titleObj.getInt("pretty")].string,
+        data[titleObj.getInt("display")].string,
     )
 
-    // tag
-    val tagIdxs = data[struct["tags"]!!.jsonPrimitive.int].jsonArray
+    val tagIdxs = data[struct.getInt("tags")].array
     val allTags = tagIdxs.map { tagIdx ->
-        val t = data[tagIdx.jsonPrimitive.int].jsonObject
-        val tagId = data[t["id"]!!.jsonPrimitive.int].jsonPrimitive.int
-        val type = data[t["type"]!!.jsonPrimitive.int].jsonPrimitive.content
-        val name = data[t["name"]!!.jsonPrimitive.int].jsonPrimitive.content
-        val nameZH = t["name_zh"]?.let { data[it.jsonPrimitive.int] }?.jsonPrimitive?.contentOrNull ?: name
+        val t = data[tagIdx.int].obj
+        val tagId = data[t.getInt("id")].int
+        val type = data[t.getInt("type")].string
+        val name = data[t.getInt("name")].string
+        val nameZH = t.getIntOrNull("name_zh")?.let { data[it].string } ?: name
         Tag(tagId, type, name, nameZH)
     }
 
     val author = allTags.filter { it.type == "artist" }.joinToString(", ") { it.nameZH }
     val tags = allTags.filter { it.type != "artist" }
 
-    val numPages = data[struct["num_pages"]!!.jsonPrimitive.int].jsonPrimitive.int
-    val timestamp = data[struct["upload_date"]!!.jsonPrimitive.int].jsonPrimitive.long
+    val numPages = data[struct.getInt("num_pages")].int
+    val timestamp = data[struct.getInt("upload_date")].long
 
     return HManga(id, mediaId, title, numPages, author, tags, timestamp, source)
 }
 
 fun Response.parseAsMangaList(page: Int): Pair<List<HManga>, Boolean> {
     val root = parseAs<JsonObject>()
-    val data = root["nodes"]!!.jsonArray[1].jsonObject["data"]!!.jsonArray
-    val indexes = data[0].jsonObject
-    val pages = indexes["pages"]?.jsonPrimitive?.int
+    val data = root["nodes"]!![1]!!["data"]!!.array
+    val indexes = data[0].obj
+    val pages = indexes.getIntOrNull("pages")
 
-    val comicIndexes = data[indexes["comics"]!!.jsonPrimitive.int].jsonArray.map { it.jsonPrimitive.int }
-    val totalPages = pages?.let { data[data[it].jsonObject["pages"]!!.jsonPrimitive.int].jsonPrimitive.int } ?: 1
+    val comicIndexes = data[indexes.getInt("comics")].array.map { it.int }
+    val totalPages = pages?.let { data[data[it].obj.getInt("pages")].int } ?: 1
     return comicIndexes.map { parseMangas(data, it) } to (page < totalPages)
 }
 
 fun Response.parseAsManga(): HManga {
     val root = parseAs<JsonObject>()
-    val data = root["nodes"]!!.jsonArray[1].jsonObject["data"]!!.jsonArray
-
+    val data = root["nodes"]!![1]!!["data"]!!.array
     return parseMangas(data, 1)
 }

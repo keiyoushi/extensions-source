@@ -5,18 +5,13 @@ plugins {
 }
 
 keiyoushi {
-    name = "Buon Dua"
-    versionCode = 11
+    name = "Pawchive"
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
     source {
         lang = "all"
-        baseUrl = "https://buondua.com"
+        baseUrl = "https://pawchive.pw"
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:randomua"))
 }
