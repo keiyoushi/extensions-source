@@ -2,113 +2,99 @@ package eu.kanade.tachiyomi.extension.pt.mangalivre
 
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.IOException
 
 /**
- * Adds the reading-gate header to same-host requests and, when the server rejects the cached one,
- * re-derives it via a hidden WebView ([TokenResolver]), validating each captured candidate against
- * the real endpoint before caching it since the site rotates the header and serves decoys.
- * Single-flighted, with a cooldown so a persistent failure can't spawn a WebView per request.
+ * Clears the site's reading gate for same-host requests. The gate is a double-submit check: the
+ * client-generated `toon_v` cookie must be echoed in the `x-toon-verify` header. On a 403 this
+ * primes the cookie via a hidden WebView ([TokenResolver]); on a decrypt failure it reloads the
+ * rotated constants ([decryptor]). The two retries are independent, so a request that is both gated
+ * and stale-keyed still recovers.
  */
 class ReadingGateInterceptor(
     private val baseUrl: String,
     private val userAgent: String?,
+    private val cookieClient: OkHttpClient,
+    private val decryptor: MangaLivreDecryptor,
 ) : Interceptor {
 
     private val baseUrlHost = baseUrl.toHttpUrl().host
 
     @Volatile
-    private var cachedToken = DEFAULT_TOKEN
-
-    @Volatile
-    private var lastFailedAttemptAt = 0L
+    private var lastPrimeAttemptAt = 0L
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         if (request.url.host != baseUrlHost) {
             return chain.proceed(request)
         }
-
-        val token = cachedToken
-        val response = request.withToken(token).proceedOrNull(chain)
-        if (response != null && !response.needsTokenRefresh()) {
-            return response
-        }
-        response?.close()
-
-        return refreshAndRetry(chain, request, staleToken = token)
+        return proceedDecrypted(chain, request, primed = false, reloaded = false)
     }
 
-    private fun refreshAndRetry(chain: Interceptor.Chain, request: Request, staleToken: TokenResolver.ClientToken): Response = synchronized(this) {
-        if (cachedToken != staleToken) {
-            return@synchronized chain.proceed(request.withToken(cachedToken))
+    private fun proceedDecrypted(
+        chain: Interceptor.Chain,
+        request: Request,
+        primed: Boolean,
+        reloaded: Boolean,
+    ): Response {
+        val response = chain.proceed(request.withVerifyHeader())
+
+        if (response.code == 403) {
+            if (primed) return response
+            response.close()
+            primeCookie(request)
+            return proceedDecrypted(chain, request, primed = true, reloaded = reloaded)
         }
 
-        // Only chapter-page requests can capture the real header; the homepage serves the decoy.
-        val readerPath = request.tag(ReaderPath::class.java)
-            ?: return@synchronized chain.proceed(request.withToken(staleToken))
+        val dataKey = response.headers["x-toon-datakey"] ?: return response
 
-        if (System.currentTimeMillis() - lastFailedAttemptAt < REFRESH_COOLDOWN_MS) {
-            return@synchronized chain.proceed(request.withToken(staleToken))
+        val contentType = response.body.contentType()
+        val decrypted = decryptor.decrypt(response.body.string(), dataKey)
+        if (decrypted != null) {
+            return response.newBuilder()
+                .body(decrypted.toResponseBody(contentType))
+                .build()
         }
 
-        val candidates = try {
-            TokenResolver.resolve("$baseUrl${readerPath.path}", userAgent)
-        } catch (_: Exception) {
-            emptyList()
-        }
-
-        for (candidate in candidates) {
-            if (candidate == staleToken) continue
-            val validation = request.withToken(candidate).proceedOrNull(chain)
-            if (validation != null && validation.unlockedGate()) {
-                cachedToken = candidate
-                return@synchronized validation
-            }
-            validation?.close()
-        }
-
-        lastFailedAttemptAt = System.currentTimeMillis()
-        chain.proceed(request.withToken(staleToken))
+        response.close()
+        if (reloaded) throw IOException(NON_JSON_MESSAGE)
+        decryptor.reloadConstants()
+        return proceedDecrypted(chain, request, primed = primed, reloaded = true)
     }
 
-    private fun Request.withToken(token: TokenResolver.ClientToken): Request = newBuilder().header(token.header, token.value).build()
-
-    private fun Request.proceedOrNull(chain: Interceptor.Chain): Response? = try {
-        chain.proceed(this)
-    } catch (_: IOException) {
-        null
-    }
-
-    private fun Response.needsTokenRefresh(): Boolean {
-        if (request.url.host != baseUrlHost) return true
-        if (code != 403) return false
-        return try {
-            peekBody(MAX_PEEK).string().contains(GATE_ERROR_MARKER, ignoreCase = true)
-        } catch (_: Exception) {
-            false
+    private fun primeCookie(request: Request) {
+        synchronized(this) {
+            if (System.currentTimeMillis() - lastPrimeAttemptAt < REFRESH_COOLDOWN_MS) return
+            lastPrimeAttemptAt = System.currentTimeMillis()
+            val primePath = request.tag(ReaderPath::class.java)?.path ?: "/"
+            runCatching { TokenResolver.prime("$baseUrl$primePath", userAgent) }
         }
     }
 
-    // Trust a candidate only on a real page-list: a 2xx JSON body on our own host.
-    private fun Response.unlockedGate(): Boolean {
-        if (!isSuccessful || needsTokenRefresh()) return false
-        return try {
-            peekBody(MAX_PEEK).string().trimStart().startsWith("{")
-        } catch (_: Exception) {
-            false
-        }
+    private fun Request.withVerifyHeader(): Request {
+        val verify = cookieClient.getCookie(baseUrl, "toon_v") ?: return this
+        val pass = if (url.encodedPath.contains("/chapters")) PASS_CHAPTERS else PASS_DEFAULT
+        return newBuilder()
+            .header("x-toon-verify", verify)
+            .header("toonlivre-pass", pass)
+            .build()
     }
 
     data class ReaderPath(val path: String)
 
     companion object {
-        private const val MAX_PEEK = 1024L
-        private const val GATE_ERROR_MARKER = "aplicativo oficial"
         private const val REFRESH_COOLDOWN_MS = 60_000L
-
-        private val DEFAULT_TOKEN = TokenResolver.ClientToken("toonlivre-pass", "auth2028xy")
+        private const val PASS_CHAPTERS = "auth2028xy"
+        private const val PASS_DEFAULT = "decoy99xz"
+        private const val NON_JSON_MESSAGE =
+            "Não foi possível decifrar a resposta. Abra a fonte na WebView do app e tente de novo."
     }
 }
+
+private fun OkHttpClient.getCookies(baseUrl: String) = cookieJar.loadForRequest(baseUrl.toHttpUrl())
+
+private fun OkHttpClient.getCookie(baseUrl: String, cookie: String): String? = getCookies(baseUrl).firstOrNull { it.name == cookie }?.value?.takeUnless { it.isEmpty() }
