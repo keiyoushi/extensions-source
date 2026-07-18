@@ -7,19 +7,21 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.long
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.supervisorScope
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.io.IOException
@@ -27,21 +29,19 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Source
-abstract class JComic : HttpSource() {
+abstract class JComic : KeiSource() {
 
-    override val supportsLatest = true
-
-    override fun headersBuilder() = super.headersBuilder().add("Referer", baseUrl)
-
-    override val client = super.client.newBuilder().addInterceptor { chain ->
-        val origin = chain.request()
-        chain.proceed(origin).also {
-            if (it.code == 403 && origin.url.toString().contains("jcomic-content")) {
-                it.close()
-                throw IOException("图片已失效，清除章节缓存后重试\n（链接有效期只有1分钟，建议以后下载完章节再看）")
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor { chain ->
+            val origin = chain.request()
+            chain.proceed(origin).also {
+                if (it.code == 403 && origin.url.toString().contains("jcomic-content")) {
+                    it.close()
+                    throw IOException("图片已失效，清除章节缓存后重试\n（链接有效期只有1分钟，建议以后下载完章节再看）")
+                }
             }
         }
-    }.build()
+    }
 
     // Customize
 
@@ -74,11 +74,14 @@ abstract class JComic : HttpSource() {
         return MangasPage(mangas, hasNext)
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = mangaPageParse(client.get("$baseUrl/cat/%E9%9A%A8%E6%A9%9F/$page", headers))
+    // Popular
+    override suspend fun getPopularManga(page: Int) = mangaPageParse(client.get("$baseUrl/cat/%E9%9A%A8%E6%A9%9F/$page"))
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaPageParse(client.get("$baseUrl/cat/%E6%9C%80%E8%BF%91%E6%9B%B4%E6%96%B0/$page", headers))
+    // Updates
+    override suspend fun getLatestUpdates(page: Int) = mangaPageParse(client.get("$baseUrl/cat/%E6%9C%80%E8%BF%91%E6%9B%B4%E6%96%B0/$page"))
 
-    override fun getFilterList() = FilterList(
+    // Search
+    override fun getFilterList(data: JsonElement?) = FilterList(
         object : Filter.Select<String>("搜索类型", arrayOf("默认", "作者")) {
             override fun toString(): String = arrayOf("search", "author", "cat")[state]
         },
@@ -97,17 +100,30 @@ abstract class JComic : HttpSource() {
         },
     )
 
-    override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder()
         val finalUrl = if (query.isNotBlank()) {
             url.addPathSegments("${filters.first()}/$query/$page").build()
         } else {
             url.addPathSegments("cat/${filters[1]}/$page").build()
         }
-        return mangaPageParse(client.get(finalUrl, headers))
+        return mangaPageParse(client.get(finalUrl))
     }
 
-    override suspend fun getMangaUpdate(
+    // Redundant
+
+    override val supportsRelatedMangas = false
+
+    override suspend fun getMangaByUrl(url: HttpUrl) = throw UnsupportedOperationException()
+
+    override suspend fun fetchRelatedMangaList(manga: SManga) = throw UnsupportedOperationException()
+
+    // Manga & Chapter
+    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
+
+    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
+
+    override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
@@ -115,7 +131,7 @@ abstract class JComic : HttpSource() {
     ) = supervisorScope {
         val asyncManga = if (fetchDetails) {
             async {
-                val doc = client.get(baseUrl + manga.url.replace("/page", "/eps"), headers).asJsoup()
+                val doc = client.get(baseUrl + manga.url.replace("/page", "/eps")).asJsoup()
                 SManga.create().apply {
                     thumbnail_url = doc.selectFirst(".col-md-6:nth-child(1) img")?.absUrl("src")
                 }
@@ -126,7 +142,7 @@ abstract class JComic : HttpSource() {
 
         val asyncChapters = if (fetchChapters) {
             async {
-                val time = manga.memo["time"]!!.jsonPrimitive.long
+                val time = manga.memo["time"]!!.long
                 if (manga.url.contains("/page")) {
                     listOf(
                         SChapter.create().apply {
@@ -136,7 +152,7 @@ abstract class JComic : HttpSource() {
                         },
                     )
                 } else {
-                    val doc = client.get(baseUrl + manga.url, headers).asJsoup()
+                    val doc = client.get(baseUrl + manga.url).asJsoup()
                     doc.select(".col-md-6:nth-child(2) a").map {
                         SChapter.create().apply {
                             url = it.attr("href")
@@ -153,8 +169,9 @@ abstract class JComic : HttpSource() {
         SMangaUpdate(asyncManga.await(), asyncChapters.await())
     }
 
+    // Page
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(baseUrl + chapter.url, headers)
+        val response = client.get(baseUrl + chapter.url)
         return response.asJsoup().select(".comic-thumb").mapIndexed { i, img ->
             Page(i, imageUrl = img.attr("src"))
         }
