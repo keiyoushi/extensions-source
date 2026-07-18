@@ -5,6 +5,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -24,6 +26,8 @@ class MangaDto(
     val genres: List<String>? = null,
     val authors: List<String>? = null,
     val artists: List<String>? = null,
+    val type: String?,
+    val contentRating: String?,
 ) {
     fun toSManga(mangaPath: String) = SManga.create().apply {
         title = this@MangaDto.title
@@ -31,7 +35,7 @@ class MangaDto(
         thumbnail_url = coverUrl
         artist = artists?.joinToString()
         author = authors?.joinToString()
-        genre = genres?.joinToString()
+        genre = ((genres ?: emptyList()) + listOfNotNull(type, contentRating)).joinToString()
         status = when (this@MangaDto.status?.lowercase()) {
             "ongoing" -> SManga.ONGOING
             "hiatus" -> SManga.ON_HIATUS
@@ -39,7 +43,10 @@ class MangaDto(
             "completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        url = "/$mangaPath/$slug#${this@MangaDto.id}"
+        url = "/$mangaPath/$slug"
+        memo = buildJsonObject {
+            put("mangaId", id)
+        }
         initialized = true
     }
 }
