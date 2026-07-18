@@ -121,9 +121,9 @@ abstract class ArgosComics : HttpSource() {
     override fun imageUrlParse(response: Response) = ""
 
     companion object {
-        private const val SEARCH_TOKEN = "40d9f16929718dd0e02ec0bcdc2393de860707fa79"
-        private const val CHAPTERS_TOKEN = "607bcd9f90d5db5edaa2cf1aff7a002b5b14ead30a"
-        private const val DETAILS_TOKEN = "60d532a2a6a7a0ff42de5f69dcdf2db5860a2f76b0"
-        private const val PAGES_TOKEN = "60390ae612bb67d3d0614b47c7fa396fa4201aa323"
+        private const val SEARCH_TOKEN = "401563018947bb5e0823b4295c6f5fbbbb27c7c8a7"
+        private const val CHAPTERS_TOKEN = "606716f5913c027ff3c3054981361be598857cefe2"
+        private const val DETAILS_TOKEN = "601ce7e470cca09f45d7d39f2668924e80b1c3df0c"
+        private const val PAGES_TOKEN = "609b98cc48cafaf9f9eb7a2ef652330137d7198d8f"
     }
 }
