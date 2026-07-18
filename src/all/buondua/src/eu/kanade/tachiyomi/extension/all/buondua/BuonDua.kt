@@ -106,11 +106,7 @@ abstract class BuonDua :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
-
-        val updatedManga = if (fetchDetails) parseMangaDetails(document) else manga
-        val updatedChapters = if (fetchChapters) parseChapterList(document) else chapters
-
-        return SMangaUpdate(updatedManga, updatedChapters)
+        return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
     }
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
