@@ -241,18 +241,16 @@ abstract class Pawchive :
             while (offset < prefMaxPost && hasNextPage) {
                 val url = "$baseUrl/$apiPath${manga.url}/posts?o=$offset"
 
-                apiClient.get(url).use { response ->
-                    val page: List<PawchivePostDto> = response.parseAs()
+                val page: List<PawchivePostDto> = apiClient.get(url).parseAs()
 
-                    page.forEach { post ->
-                        if (post.images.isNotEmpty()) {
-                            result.add(post.toSChapter(manga.author, datePref))
-                        }
+                page.forEach { post ->
+                    if (post.images.isNotEmpty()) {
+                        result.add(post.toSChapter(manga.author, datePref))
                     }
-
-                    offset += PAGE_POST_LIMIT
-                    hasNextPage = page.size == PAGE_POST_LIMIT
                 }
+
+                offset += PAGE_POST_LIMIT
+                hasNextPage = page.size == PAGE_POST_LIMIT
             }
             result
         } else {
