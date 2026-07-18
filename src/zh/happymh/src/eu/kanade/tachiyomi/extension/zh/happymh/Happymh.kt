@@ -17,17 +17,16 @@ import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Cookie
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.asResponseBody
 
 const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua_"
 
@@ -48,26 +47,6 @@ abstract class Happymh :
         }
     }
 
-    private val rewriteOctetStream: Interceptor = Interceptor { chain ->
-        val originalResponse: Response = chain.proceed(chain.request())
-        if (originalResponse.headers("Content-Type")
-                .contains("application/octet-stream") && originalResponse.request.url.toString()
-                .contains(".jpg")
-        ) {
-            val orgBody = originalResponse.body.source()
-            val newBody = orgBody.asResponseBody("image/jpeg".toMediaType())
-            originalResponse.newBuilder()
-                .body(newBody)
-                .build()
-        } else {
-            originalResponse
-        }
-    }
-
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
-        addInterceptor(rewriteOctetStream)
-    }
-
     override fun Headers.Builder.configureHeaders(): Headers.Builder {
         val userAgent = preferences.getString(PREF_KEY_CUSTOM_UA, "")!!
         return if (userAgent.isNotBlank()) {
@@ -77,16 +56,13 @@ abstract class Happymh :
         }
     }
 
-    // Popular
-
-    // Requires login, otherwise result is the same as latest updates
+    // Popular + Latest
     override suspend fun getPopularManga(page: Int): MangasPage {
+        // Requires login, otherwise result is the same as latest updates
         val headers = headers.newBuilder().set("Referer", "$baseUrl/latest").build()
         val response = client.get("$baseUrl/apis/c/index?pn=$page&series_status=-1&order=views", headers)
         return response.parseAs<PopularResponseDto>().toMangasPage()
     }
-
-    // Latest
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val headers = headers.newBuilder().set("Referer", "$baseUrl/latest").build()
@@ -95,7 +71,6 @@ abstract class Happymh :
     }
 
     // Search
-
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotEmpty()) {
             val body = FormBody.Builder()
@@ -126,7 +101,6 @@ abstract class Happymh :
     )
 
     // Details + Chapters
-
     private suspend fun getMangaDetails(manga: SManga): SManga {
         val response = client.get(getMangaUrl(manga))
         return parseMangaDetails(response)
@@ -162,31 +136,34 @@ abstract class Happymh :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val updatedManga = if (fetchDetails) getMangaDetails(manga) else manga
-        val updatedChapters = if (fetchChapters) fetchAllChapters(manga) else chapters
-        return SMangaUpdate(updatedManga, updatedChapters)
+    ): SMangaUpdate = coroutineScope {
+        val detailsDeferred = async { if (fetchDetails) getMangaDetails(manga) else manga }
+        val chaptersDeferred = async { if (fetchChapters) fetchAllChapters(manga) else chapters }
+
+        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
     }
 
-    private suspend fun fetchAllChapters(manga: SManga): List<SChapter> {
+    private suspend fun fetchAllChapters(manga: SManga): List<SChapter> = coroutineScope {
         val comicId = "$baseUrl${manga.url}".toHttpUrl().pathSegments.last()
-        var page = 1
-        val allChapters = mutableListOf<SChapter>()
-        while (true) {
-            val data = fetchChapterByPage(comicId, page)
-            allChapters.addAll(
-                data.items.map {
-                    SChapter.create().apply {
-                        name = it.chapterName
-                        // create a dummy chapter url : /comic_id/dummy_mark/chapter_id#expect_page
-                        url = "/$comicId/$DUMMY_CHAPTER_MARK/${it.id}#$page"
-                    }
-                },
-            )
-            if (data.isPageEnd) break
-            page++
+
+        val firstPage = fetchChapterByPage(comicId, 1)
+        val chunkSize = firstPage.items.size
+        val totalPages = if (chunkSize > 0) (firstPage.total + chunkSize - 1) / chunkSize else 1
+
+        val deferred = (2..totalPages).map { page ->
+            async { fetchChapterByPage(comicId, page) }
         }
-        return allChapters.reversed()
+
+        val allResponses = listOf(firstPage) + deferred.awaitAll()
+        val itemsWithPage = allResponses.flatMap { data -> data.items.map { it to data.curr } }
+
+        itemsWithPage.map { (chapter, pageNum) ->
+            SChapter.create().apply {
+                name = chapter.chapterName
+                // create a dummy chapter url : /comic_id/dummy_mark/chapter_id#expect_page
+                url = "/$comicId/$DUMMY_CHAPTER_MARK/${chapter.id}#$pageNum"
+            }
+        }.reversed()
     }
 
     private suspend fun fetchChapterByPage(comicId: String, page: Int): ChapterByPageResponseData {
@@ -211,7 +188,6 @@ abstract class Happymh :
     }
 
     // Pages
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (!chapter.url.contains(DUMMY_CHAPTER_MARK)) {
             // Old format is detected
@@ -261,6 +237,7 @@ abstract class Happymh :
             }
     }
 
+    // Preferences
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val context = screen.context
 
@@ -282,6 +259,7 @@ abstract class Happymh :
         }.let(screen::addPreference)
     }
 
+    // Utils
     private fun ajaxHeadersBuilder(
         requestId: String,
         accept: String = "application/json, text/plain, */*",

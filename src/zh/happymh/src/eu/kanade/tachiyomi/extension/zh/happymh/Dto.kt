@@ -43,10 +43,9 @@ class ChapterByPageResponseDataItem(
 @Serializable
 class ChapterByPageResponseData(
     val items: List<ChapterByPageResponseDataItem>,
-    val isEnd: Int,
-) {
-    val isPageEnd = isEnd == 1 || items.isEmpty()
-}
+    val total: Int,
+    val curr: Int,
+)
 
 @Serializable
 class ChapterByPageResponse(
