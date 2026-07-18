@@ -4,7 +4,6 @@ import android.util.Base64
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -83,7 +83,7 @@ abstract class Komiic :
     private val SManga.id get() = url.substringAfterLast("/")
     private val SChapter.id get() = url.substringAfterLast("/")
 
-    private suspend fun OkHttpClient.query(body: RequestBody) = newCall(POST("$baseUrl/api/query", headers, body)).awaitSuccess()
+    private suspend fun OkHttpClient.query(body: RequestBody) = post("$baseUrl/api/query", body)
 
     private suspend fun mangasPage(page: Int, orderBy: OrderBy): MangasPage {
         val pagination = Pagination((page - 1) * PAGE_SIZE, orderBy)
@@ -91,13 +91,13 @@ abstract class Komiic :
         return parseListing(response.parseGraphQLAs())
     }
 
-    // Popular Manga
+    // Popular
     override suspend fun getPopularManga(page: Int) = mangasPage(page, OrderBy.MONTH_VIEWS)
 
-    // Latest Updates
+    // Update
     override suspend fun getLatestUpdates(page: Int) = mangasPage(page, OrderBy.DATE_UPDATED)
 
-    // Search Manga
+    // Search
     override fun getFilterList(data: JsonElement?) = buildFilterList()
 
     override suspend fun getMangaByUrl(url: HttpUrl) = url.takeIf { url.pathSegments[0] == "comic" }?.let {
@@ -117,13 +117,7 @@ abstract class Komiic :
         return parseListing(response.parseGraphQLAs())
     }
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val response = client.query(recommendQuery(manga.id))
-        val comicIds = response.parseGraphQLAs<DataDto>().recommendComicById!!
-        return parseListing(client.query(idsQuery(comicIds)).parseGraphQLAs()).mangas
-    }
-
-    // Manga Details + Chapter List
+    // Manga & Chapter
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url + "/images/all"
@@ -156,7 +150,13 @@ abstract class Komiic :
         return SMangaUpdate(sManga, sChapters)
     }
 
-    // Page List
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val response = client.query(recommendQuery(manga.id))
+        val comicIds = response.parseGraphQLAs<DataDto>().recommendComicById!!
+        return parseListing(client.query(idsQuery(comicIds)).parseGraphQLAs()).mangas
+    }
+
+    // Page
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val response = client.query(pageListQuery(chapter.id))
         val data = response.parseGraphQLAs<DataDto>()
