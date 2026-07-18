@@ -206,9 +206,9 @@ abstract class Pawchive :
         }
 
         val cache = CacheControl.Builder().maxStale(30.minutes).build()
-        val apiUrl = "$baseUrl/$apiPath/creators"
+        val url = "$baseUrl/$apiPath/creators"
 
-        return apiClient.get(apiUrl, cache, ensureSuccess = false).use { response ->
+        return apiClient.get(url, cache, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 return null
             }
