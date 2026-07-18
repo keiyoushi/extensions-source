@@ -826,7 +826,7 @@ abstract class Madara : HttpSource() {
      */
     protected open fun String.getSrcSetImage(): String? {
         val images = this.split(",")
-            .map { it.trim().split("\\s+".toRegex()) }
+            .map { it.trim().split(WHITESPACE_REGEX, limit = 2) }
             .filter { it.isNotEmpty() && URL_REGEX.matches(it[0]) }
 
         val imagesWithDescriptor = images
@@ -1188,6 +1188,7 @@ abstract class Madara : HttpSource() {
     companion object {
         const val URL_SEARCH_PREFIX = "slug:"
         val URL_REGEX = """^(https?://[^\s/$.?#].[^\s]*)${'$'}""".toRegex()
+        val WHITESPACE_REGEX = """\s+""".toRegex()
         val IMAGE_DESCRIPTOR_REGEX = """^(\d+|\d+\.\d+)([wx])$""".toRegex()
     }
 }
