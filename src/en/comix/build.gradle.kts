@@ -6,18 +6,25 @@ plugins {
 
 keiyoushi {
     name = "Comix"
-    versionCode = 33
+    versionCode = 34
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {
         lang = "en"
-        baseUrl = "https://comix.to"
+        baseUrl {
+            mirrors(
+                "https://comix.to",
+                "https://comix.ws",
+            )
+        }
     }
 
     deeplink {
         host("comix.to")
         host("www.comix.to")
+        host("comix.ws")
+        host("www.comix.ws")
         path("/title/..*")
     }
 }
