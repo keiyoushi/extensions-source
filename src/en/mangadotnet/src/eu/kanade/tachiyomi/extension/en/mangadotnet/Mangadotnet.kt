@@ -37,6 +37,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
+import okhttp3.CacheControl
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.FormBody
@@ -48,6 +49,7 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.time.Duration.Companion.hours
 
 @Source
 abstract class Mangadotnet :
@@ -287,26 +289,15 @@ abstract class Mangadotnet :
         val genres: List<String>? = null,
         val adultGenres: List<String>? = null,
         val tags: List<String>? = null,
-        val forYou: List<BrowseManga>? = null,
     )
 
     @Volatile
     private var filterDataCache: FilterDataDto? = null
 
-    @Volatile
-    private var forYouMemoryCache: List<BrowseManga>? = null
-
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         val searchUrl = "$baseUrl/search.data?page=1&_routes=pages/SearchPage".toHttpUrl()
-        val forYouUrl = "$baseUrl/api/manga/for-you?limit=100".toHttpUrl().newBuilder().apply {
-            addAdultParam()
-        }.build()
 
-        val searchDeferred = async { client.get(searchUrl).use { it.decodeRscAs<Data<MangaList>>().data } }
-        val forYouDeferred = async { runCatching { client.get(forYouUrl).use { it.parseAs<ForYouResponse>().items } }.getOrNull() }
-
-        val searchData = searchDeferred.await()
-        val forYouItems = forYouDeferred.await()
+        val searchData = client.get(searchUrl).use { it.decodeRscAs<Data<MangaList>>().data }
 
         val genres = searchData.allGenres.filter { it !in demographicNames }
             .distinct()
@@ -319,8 +310,7 @@ abstract class Mangadotnet :
             .sortedBy { it.lowercase(Locale.ROOT) }
             .toList()
 
-        forYouMemoryCache = forYouItems
-        FilterDataDto(genres, genres, tags, forYouItems).toJsonElement()
+        FilterDataDto(genres, genres, tags).toJsonElement()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
@@ -400,22 +390,13 @@ abstract class Mangadotnet :
         val forYouUrl = "$baseUrl/api/manga/for-you?limit=100".toHttpUrl().newBuilder().apply {
             addAdultParam()
         }.build()
-        client.get(forYouUrl).use { response ->
-            val items = response.parseAs<ForYouResponse>().items
-            forYouMemoryCache = items
-            items
+        val cache = CacheControl.Builder().maxAge(6.hours).build()
+        client.get(forYouUrl, cacheControl = cache).use { response ->
+            response.parseAs<ForYouResponse>().items
         }
     }.getOrElse { emptyList() }
 
-    private suspend fun getForYouItems(): List<BrowseManga> {
-        forYouMemoryCache?.let { return it }
-        val fromFilters = getFilterData()?.forYou
-        if (fromFilters != null) {
-            forYouMemoryCache = fromFilters
-            return fromFilters
-        }
-        return fetchForYouItems()
-    }
+    private suspend fun getForYouItems(): List<BrowseManga> = fetchForYouItems()
 
     // ============================== Details ==============================
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
