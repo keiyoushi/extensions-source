@@ -48,7 +48,6 @@ abstract class HComic : HttpSource() {
     }
 
     // Manga & Chapter
-
     override suspend fun getMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
