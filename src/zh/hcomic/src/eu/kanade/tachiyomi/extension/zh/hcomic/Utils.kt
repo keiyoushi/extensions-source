@@ -5,13 +5,16 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import kotlinx.serialization.json.put
 import okhttp3.Response
+import java.net.URLEncoder
 import kotlin.collections.map
 
 data class HManga(
@@ -36,7 +39,7 @@ data class HManga(
     }
 
     fun toSManga(imgUrl: String): SManga = SManga.create().apply {
-        url = "$source/$mediaId:$numPages|$timestamp:${tags.find { it.type == "category" }?.nameZH ?: ""}"
+        url = "/comics/${URLEncoder.encode(this@HManga.title.display, "UTF-8")}/1"
         title = this@HManga.title.display
         author = this@HManga.author
         description = filterTags("parody") + filterTags("character") + filterTags("group") + "**页数：** $numPages"
@@ -44,6 +47,12 @@ data class HManga(
         thumbnail_url = "$imgUrl/$source/$mediaId"
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+        memo = buildJsonObject {
+            put("mediaId", "$source/$mediaId")
+            put("numPages", numPages)
+            put("timestamp", timestamp * 1000L)
+            put("category", tags.find { it.type == "category" }?.nameZH ?: "")
+        }
         initialized = true
     }
 }

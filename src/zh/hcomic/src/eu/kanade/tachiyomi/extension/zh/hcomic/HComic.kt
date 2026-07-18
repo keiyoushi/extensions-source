@@ -1,104 +1,81 @@
 package eu.kanade.tachiyomi.extension.zh.hcomic
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.int
+import keiyoushi.utils.long
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import java.net.URLEncoder
 
 @Source
 abstract class HComic : HttpSource() {
+
     override val supportsLatest = true
 
     private val imgUrl = "https://h-comic.link/api"
 
     // Popular (Random)
-
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/random/__data.json")
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAsMangaList(0)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val result = client.get("$baseUrl/random/__data.json", headers).parseAsMangaList(0)
         return MangasPage(result.first.map { it.toSManga(imgUrl) }, true)
     }
 
     // Latest
-
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/__data.json?page=$page")
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val page = response.request.url.queryParameter("page")!!.toInt()
-        val result = response.parseAsMangaList(page)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val result = client.get("$baseUrl/__data.json?page=$page", headers).parseAsMangaList(page)
         return MangasPage(result.first.map { it.toSManga(imgUrl) }, result.second)
     }
 
     // Search
-
     override fun getFilterList() = FilterList(RandomFilter(), TagGroup())
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
         val tags = filters.firstInstance<TagGroup>().state.filter { it.state }.joinToString(",") { it.value }
         val url = "${baseUrl + filters[0]}/__data.json".toHttpUrl().newBuilder()
-        url.addQueryParameter("tag", tags).addQueryParameter("q", query).addQueryParameter("page", page.toString())
-        return GET(url.build())
+            .addQueryParameter("tag", tags)
+            .addQueryParameter("q", query)
+            .addQueryParameter("page", page.toString())
+        val result = client.get(url.build(), headers).parseAsMangaList(page)
+        return MangasPage(result.first.map { it.toSManga(imgUrl) }, result.second)
     }
 
-    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
+    // Manga & Chapter
 
-    // Manga Detail
+    override suspend fun getMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val sManga = if (fetchDetails) {
+            client.get("${getMangaUrl(manga)}/__data.json", headers).parseAsManga().toSManga(imgUrl)
+        } else {
+            manga
+        }
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl/comics/${URLEncoder.encode(manga.title, "UTF-8")}/1"
+        val sChapter = SChapter.create().apply {
+            url = sManga.url
+            name = sManga.title
+            date_upload = sManga.memo["timestamp"]!!.jsonPrimitive.long
+            scanlator = sManga.memo["category"]!!.jsonPrimitive.content
+            memo = sManga.memo
+        }
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("${getMangaUrl(manga)}/__data.json")
-
-    override fun mangaDetailsParse(response: Response) = response.parseAsManga().toSManga(imgUrl)
-
-    // Chapters
-
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/comics/${URLEncoder.encode(chapter.name, "UTF-8")}/1"
-
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val info = manga.url.split('|')
-        return Observable.just(
-            listOf(
-                SChapter.create().apply {
-                    url = info.first()
-                    name = manga.title
-                    date_upload = info.last().substringBefore(':').toLong() * 1000L
-                    scanlator = info.last().substringAfter(':')
-                },
-            ),
-        )
+        return SMangaUpdate(sManga, listOf(sChapter))
     }
-
-    override fun chapterListRequest(manga: SManga) = throw UnsupportedOperationException()
-
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
     // Pages
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        val info = chapter.url.split(':')
-        return Observable.just(
-            List(info.last().toInt()) {
-                Page(it, imageUrl = "$imgUrl/${info.first()}/pages/${it + 1}")
-            },
-        )
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val pageCount = chapter.memo["numPages"]!!.jsonPrimitive.int
+        val mediaId = chapter.memo["mediaId"]!!.jsonPrimitive.content
+        return List(pageCount) { Page(it, imageUrl = "$imgUrl/$mediaId/pages/${it + 1}") }
     }
-
-    override fun pageListRequest(chapter: SChapter) = throw UnsupportedOperationException()
-
-    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
-
-    // Image
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }
