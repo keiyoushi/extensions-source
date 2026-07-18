@@ -8,6 +8,7 @@ import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -18,7 +19,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
-import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
@@ -27,12 +27,8 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -41,11 +37,14 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -596,8 +595,6 @@ abstract class Mangadotnet :
         }.build().toString()
     }
 
-    private val viewScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = chapter.url.parseAs<ChapterUrl>()
         val segment = if (chapterUrl.source == "user") "uploads" else "chapters"
@@ -605,7 +602,7 @@ abstract class Mangadotnet :
 
         val data = client.get(apiUrl).use { it.parseAs<Images>() }
 
-        viewScope.launch { countViews(data.manga.id) }
+        countViews(data.manga.id)
 
         val chapterPageUrl = getChapterUrl(chapter)
         return data.images.mapIndexed { index, image ->
@@ -623,15 +620,22 @@ abstract class Mangadotnet :
         }.filter { it.imageUrl != null }
     }
 
-    private suspend fun countViews(mangaId: Int) {
-        try {
-            client.post(
-                url = "$baseUrl/api/manga/$mangaId/view",
-                body = FormBody.Builder().build(),
-            ).close()
-        } catch (e: Exception) {
-            Log.e(name, "Failed to count views", e)
-        }
+    private fun countViews(mangaId: Int) {
+        val url = "$baseUrl/api/manga/$mangaId/view"
+        val request = POST(url, headers, FormBody.Builder().build())
+        client.newCall(request).enqueue(object : Callback {
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    if (!response.isSuccessful) {
+                        Log.e(name, "Failed to count views: ${response.code}")
+                    }
+                }
+            }
+
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e(name, "Failed to count views", e)
+            }
+        })
     }
 
     override fun imageRequest(page: Page): Request {
@@ -867,7 +871,11 @@ abstract class Mangadotnet :
             val result = when (val el = flat[i]) {
                 is JsonNull -> null
                 is JsonPrimitive -> if (el.isString) JsonPrimitive(el.content) else el
-                is JsonArray -> JsonArray(el.map { resolve((it as JsonPrimitive).int) ?: JsonNull })
+                is JsonArray -> JsonArray(
+                    el.map {
+                        resolve((it as JsonPrimitive).int) ?: JsonNull
+                    },
+                )
                 is JsonObject -> JsonObject(
                     el.entries.associate { (k, v) ->
                         (flat[k.removePrefix("_").toInt()] as JsonPrimitive).content to
