@@ -15,19 +15,16 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Cache
 import okhttp3.CacheControl
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import java.io.File
 import kotlin.io.use
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -72,11 +69,6 @@ abstract class Pawchive :
 
             response
         }
-        val cacheDir = File(applicationContext.cacheDir, "network_cache_${name.lowercase()}")
-        val cache = customCache ?: synchronized(this@Pawchive.javaClass) {
-            customCache ?: Cache(cacheDir, 50L * 1024 * 1024).also { customCache = it }
-        }
-        cache(cache)
         connectTimeout(15.seconds)
         readTimeout(30.seconds)
         writeTimeout(15.seconds)
@@ -127,7 +119,7 @@ abstract class Pawchive :
                 if (fav != null) {
                     val url = "$baseUrl/$apiPath/account/favorites"
 
-                    apiClient.get(url, headers, ensureSuccess = false).use { response ->
+                    apiClient.get(url, ensureSuccess = false).use { response ->
                         if (response.isSuccessful) {
                             response.parseAs<List<PawchiveFavoritesDto>>()
                         } else {
@@ -144,7 +136,7 @@ abstract class Pawchive :
                 val url = "$baseUrl/$apiPath/creators"
                 val cacheControl = CacheControl.Builder().maxStale(30.minutes).build()
 
-                apiClient.get(url, headers, cacheControl).use { response ->
+                apiClient.get(url, cacheControl).use { response ->
                     if (!response.isSuccessful) {
                         throw Exception("HTTP error ${response.code}")
                     }
@@ -200,11 +192,23 @@ abstract class Pawchive :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        val id = url.pathSegments.lastOrNull() ?: return null
-        val cache = CacheControl.Builder().maxStale(30.minutes).build()
-        val url = "$baseUrl/$apiPath/creators"
+        if (url.host != baseUrl.toHttpUrl().host) {
+            return null
+        }
 
-        return apiClient.get(url, headers, cache, ensureSuccess = false).use { response ->
+        if (url.pathSegments.firstOrNull() != "creators" || url.pathSegments.size < 2) {
+            return null
+        }
+
+        val id = url.pathSegments[1]
+        if (id.isBlank()) {
+            return null
+        }
+
+        val cache = CacheControl.Builder().maxStale(30.minutes).build()
+        val apiUrl = "$baseUrl/$apiPath/creators"
+
+        return apiClient.get(apiUrl, cache, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 return null
             }
@@ -223,7 +227,7 @@ abstract class Pawchive :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = withContext(Dispatchers.IO) {
+    ): SMangaUpdate {
         val updatedChapters = if (fetchChapters) {
             val prefMaxPost = preferences.getString(POST_PAGES_PREF, POST_PAGES_DEFAULT)!!
                 .toInt().coerceAtMost(POST_PAGES_MAX) * PAGE_POST_LIMIT
@@ -237,7 +241,7 @@ abstract class Pawchive :
             while (offset < prefMaxPost && hasNextPage) {
                 val url = "$baseUrl/$apiPath${manga.url}/posts?o=$offset"
 
-                apiClient.get(url, headers).use { response ->
+                apiClient.get(url).use { response ->
                     val page: List<PawchivePostDto> = response.parseAs()
 
                     page.forEach { post ->
@@ -255,7 +259,7 @@ abstract class Pawchive :
             chapters
         }
 
-        SMangaUpdate(manga, updatedChapters)
+        return SMangaUpdate(manga, updatedChapters)
     }
 
     override val supportsRelatedMangas get() = false
@@ -269,7 +273,7 @@ abstract class Pawchive :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = "$baseUrl/$apiPath${chapter.url}"
 
-        apiClient.get(url, headers).use { response ->
+        apiClient.get(url).use { response ->
             val postData: PawchivePostDto = response.parseAs()
 
             val useLowRes = preferences.getBoolean(USE_LOW_RES_IMG, false)
@@ -335,8 +339,6 @@ abstract class Pawchive :
     }
 
     companion object {
-        @Volatile
-        private var customCache: Cache? = null
         private const val PAGE_POST_LIMIT = 50
         private const val PAGE_CREATORS_LIMIT = 50
         const val PROMPT = "You can change how many posts to load in the extension preferences."
