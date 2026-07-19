@@ -24,7 +24,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Cookie
 import okhttp3.FormBody
 import okhttp3.Headers
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 
@@ -116,6 +115,8 @@ abstract class Happymh :
         description = document.selectFirst("div.manga-introduction > mip-showmore#showmore")!!.text()
     }
 
+    override val supportsRelatedMangas get() = true
+
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val doc = client.get(getMangaUrl(manga)).asJsoup()
         return doc.select("div.manga-recommended div.manga-cover").map { el ->
@@ -128,8 +129,6 @@ abstract class Happymh :
     }
 
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
-
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = null
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
