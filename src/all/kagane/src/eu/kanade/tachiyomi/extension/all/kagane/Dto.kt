@@ -62,17 +62,18 @@ class SearchDto(
         val alternateTitles: List<String> = emptyList(),
     ) {
 
-        fun toSManga(domain: String, showSource: Boolean, sources: Map<String, String>): SManga = SManga.create().apply {
+        fun toSManga(apiUrl: String, showSource: Boolean, sources: Map<String, String>): SManga = SManga.create().apply {
             title = if (showSource) "${this@Book.title.trim()} [${sources[this@Book.sourceId]}]" else this@Book.title.trim()
             url = id
-            thumbnail_url = coverImage?.let { "$domain/api/v2/image/$it" }
+            thumbnail_url = coverImage?.let { "$apiUrl/image/$it" }
         }
     }
 }
 
 @Serializable
 class TrackerDto(
-    val series: List<Book> = emptyList(),
+    @SerialName("book_series")
+    val bookSeries: List<Book> = emptyList(),
 ) {
     @Serializable
     class Book(
@@ -86,10 +87,10 @@ class TrackerDto(
         val coverImage: String? = null,
     ) {
 
-        fun toSManga(domain: String, showSource: Boolean, sources: Map<String, String>): SManga = SManga.create().apply {
+        fun toSManga(apiUrl: String, showSource: Boolean, sources: Map<String, String>): SManga = SManga.create().apply {
             title = if (showSource) "${this@Book.title.trim()} [${sources[this@Book.sourceId]}]" else this@Book.title.trim()
             url = id
-            thumbnail_url = coverImage?.let { "$domain/api/v2/image/$it" }
+            thumbnail_url = coverImage?.let { "$apiUrl/image/$it" }
         }
     }
 }
@@ -156,11 +157,11 @@ class DetailsDto(
         val imageId: String,
     )
 
-    fun toSManga(domain: String, sourceName: String? = null, baseUrl: String = "", showEdition: Boolean = false, showSource: Boolean = false): SManga = SManga.create().apply {
+    fun toSManga(apiUrl: String, sourceName: String? = null, baseUrl: String = "", showEdition: Boolean = false, showSource: Boolean = false): SManga = SManga.create().apply {
         val base = this@DetailsDto.title.trim()
         val withEdition = if (showEdition && !this@DetailsDto.editionInfo.isNullOrBlank()) "$base (${this@DetailsDto.editionInfo})" else base
         title = if (showSource && sourceName != null) "$withEdition [$sourceName]" else withEdition
-        thumbnail_url = covers.firstOrNull()?.imageId?.let { "$domain/api/v2/image/$it" }
+        thumbnail_url = covers.firstOrNull()?.imageId?.let { "$apiUrl/image/$it" }
         val desc = StringBuilder()
 
         // Add main description

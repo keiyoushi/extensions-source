@@ -46,7 +46,7 @@ abstract class Kagane :
         get() = if (lang == "zh") listOf("zh-Hans", "zh-Hant") else listOf(lang)
 
     private val domain get() = baseUrl.removePrefix("https://")
-    private val apiUrl get() = "https://$domain"
+    private val apiUrl get() = "https://$domain/api/v2"
 
     override val supportsLatest = true
 
@@ -239,7 +239,7 @@ abstract class Kagane :
             .toJsonString()
             .toRequestBody("application/json".toMediaType())
 
-        val url = "$apiUrl/api/v2/search/series".toHttpUrl().newBuilder().apply {
+        val url = "$apiUrl/search/series".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", (page - 1).toString())
             addQueryParameter("size", 35.toString()) // Default items per request
             filters.forEach { filter ->
@@ -285,7 +285,7 @@ abstract class Kagane :
 
     private fun getSourcesResponse(): Response = metadataClient.newCall(
         POST(
-            "$apiUrl/api/v2/sources/list",
+            "$apiUrl/sources/list",
             apiHeaders,
             buildJsonObject { put("source_types", null) }.toJsonString()
                 .toRequestBody("application/json".toMediaType()),
@@ -299,7 +299,7 @@ abstract class Kagane :
     override fun relatedMangaListParse(response: Response): List<SManga> {
         val dto = response.parseAs<DetailsDto>()
         val trackerId = dto.trackerId?.takeIf(String::isNotBlank) ?: return emptyList()
-        val trackerRequest = GET("$apiUrl/api/v2/trackers/$trackerId/series", apiHeaders)
+        val trackerRequest = GET("$apiUrl/trackers/$trackerId/series", apiHeaders)
         val series = client.newCall(trackerRequest).execute().use { resp ->
             if (!resp.isSuccessful) return emptyList()
             resp.parseAs<TrackerDto>().series
@@ -329,7 +329,7 @@ abstract class Kagane :
 
     override fun mangaDetailsRequest(manga: SManga): Request = mangaDetailsRequest(manga.url)
 
-    private fun mangaDetailsRequest(seriesId: String): Request = GET("$apiUrl/api/v2/series/$seriesId", apiHeaders)
+    private fun mangaDetailsRequest(seriesId: String): Request = GET("$apiUrl/series/$seriesId", apiHeaders)
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
@@ -353,7 +353,7 @@ abstract class Kagane :
         }.reversed()
     }
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/api/v2/series/${manga.url}", apiHeaders)
+    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/series/${manga.url}", apiHeaders)
 
     // =============================== Pages ================================
 
@@ -418,7 +418,7 @@ abstract class Kagane :
     private fun getChallengeResponse(chapterId: String): ChallengeDto {
         val integrityToken = getIntegrityToken()
 
-        val challengeUrl = "$apiUrl/api/v2/books/$chapterId".toHttpUrl().newBuilder()
+        val challengeUrl = "$apiUrl/books/$chapterId".toHttpUrl().newBuilder()
             .addQueryParameter("is_datasaver", preferences.dataSaver.toString())
             .build()
 
@@ -631,13 +631,13 @@ abstract class Kagane :
         kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
             try {
                 val genres = metadataClient.newCall(
-                    GET("$apiUrl/api/v2/genres/list", apiHeaders),
+                    GET("$apiUrl/genres/list", apiHeaders),
                 ).execute().use { resp ->
                     if (!resp.isSuccessful) return@use null
                     resp.parseAs<List<GenreDto>>().associate { it.id to it.genreName }
                 }
                 val tags = metadataClient.newCall(
-                    GET("$apiUrl/api/v2/tags/list", apiHeaders),
+                    GET("$apiUrl/tags/list", apiHeaders),
                 ).execute().use { resp ->
                     if (!resp.isSuccessful) return@use null
                     resp.parseAs<List<TagDto>>().associate { it.id to it.tagName }
