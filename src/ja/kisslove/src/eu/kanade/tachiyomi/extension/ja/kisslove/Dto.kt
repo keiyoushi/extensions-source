@@ -6,6 +6,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
 
 @Serializable
@@ -24,7 +28,7 @@ data class Manga(
     val cover: String,
     @SerialName("daily_views") val dailyViews: Long?,
     val description: String = "",
-    val genres: String?,
+    @SerialName("genres") val genresRaw: JsonElement? = null,
     @SerialName("group_uploader") val groupUploader: Long?,
     val hidden: Int?,
     val id: Long,
@@ -63,6 +67,12 @@ data class Manga(
             mainTitle to extra
         }
 
+        val genres = when (val raw = genresRaw) {
+            is JsonArray -> raw.map { it.jsonPrimitive.content }
+            is JsonPrimitive -> raw.content.split(",")
+            else -> emptyList()
+        }
+
         return SManga.create().apply {
             url = this@Manga.slug
             title = mainName
@@ -70,7 +80,7 @@ data class Manga(
             author = this@Manga.authors
             description = "${Jsoup.parse(this@Manga.description).text()}\n\n$extraName"
             thumbnail_url = this@Manga.cover
-            genre = this@Manga.genres?.split(",")?.joinToString { it.trim() }
+            genre = genres.joinToString { it.trim() }
             status = if (mStatus == 1) SManga.COMPLETED else SManga.ONGOING
         }
     }
