@@ -30,12 +30,11 @@ import java.util.*
 
 @Source
 class KissLove(
-    override val name: String = "KissLove"
-    override val baseUrl: String = "https://klz9.com"
-    override val lang: String = "ja"
-    override val supportsLatest: Boolean = true
-):
-    HttpSource(),
+    override val name: String = "KissLove",
+    override val baseUrl: String = "https://klz9.com",
+    override val lang: String = "ja",
+    override val supportsLatest: Boolean = true,
+) : HttpSource(),
     ConfigurableSource {
 
     private val intl = Intl(
