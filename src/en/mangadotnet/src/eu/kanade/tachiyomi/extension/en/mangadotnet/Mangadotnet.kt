@@ -120,6 +120,8 @@ abstract class Mangadotnet :
         return this
     }
 
+    override val supportsRelatedMangas = true
+
     // ========================= Popular & Latest ==========================
     private suspend fun getViewAllPage(mode: String, page: Int): MangasPage {
         val url = "$baseUrl/view-all/$mode.data".toHttpUrl().newBuilder().apply {
@@ -373,6 +375,7 @@ abstract class Mangadotnet :
     }
 
     private suspend fun fetchForYouItems(): List<BrowseManga> = runCatching {
+        if (!isLoggedIn()) return emptyList()
         val forYouUrl = "$baseUrl/api/manga/for-you?limit=100".toHttpUrl().newBuilder().apply {
             addAdultParam()
         }.build()
@@ -381,8 +384,6 @@ abstract class Mangadotnet :
             response.parseAs<ForYouResponse>().items
         }
     }.getOrElse { emptyList() }
-
-    private suspend fun getForYouItems(): List<BrowseManga> = fetchForYouItems()
 
     // ============================== Details ==============================
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
@@ -413,7 +414,7 @@ abstract class Mangadotnet :
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = coroutineScope {
         val url = "$baseUrl/manga/${manga.url}.data?_routes=pages/MangaDetailPage".toHttpUrl()
         val dataDeferred = async { client.get(url).use { it.decodeRscAs<Data<RelatedData>>().data } }
-        val forYouDeferred = async { getForYouItems() }
+        val forYouDeferred = async { fetchForYouItems() }
 
         val data = dataDeferred.await()
         val forYouItems = forYouDeferred.await()
