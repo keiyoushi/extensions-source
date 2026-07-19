@@ -255,6 +255,7 @@ class ChapterDto(
             return when (mode) {
                 "optional" -> {
                     when {
+                        trimmedTitle.isEmpty() && chapterNo.isNullOrBlank() && !volumeNo.isNullOrBlank() -> buildChapterName("vol_chapter")
                         trimmedTitle.isEmpty() && !chapterNo.isNullOrBlank() -> "Ch.$chapterNo"
                         else -> trimmedTitle
                     }
@@ -262,7 +263,7 @@ class ChapterDto(
 
                 "always" -> {
                     when {
-                        chapterNo.isNullOrBlank() -> trimmedTitle
+                        chapterNo.isNullOrBlank() && !volumeNo.isNullOrBlank() -> buildChapterName("vol_chapter")
                         trimmedTitle.isEmpty() -> "Ch.$chapterNo"
                         else -> "Ch.$chapterNo $trimmedTitle"
                     }
