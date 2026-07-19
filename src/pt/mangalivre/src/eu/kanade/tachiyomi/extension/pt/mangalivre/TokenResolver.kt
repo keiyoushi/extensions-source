@@ -57,6 +57,7 @@ object TokenResolver {
 
                 view.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, url: String) {
+                        view.evaluateJavascript("window.dispatchEvent(new Event('click'))", null)
                         pageFinishedLatch.countDown()
                     }
                 }

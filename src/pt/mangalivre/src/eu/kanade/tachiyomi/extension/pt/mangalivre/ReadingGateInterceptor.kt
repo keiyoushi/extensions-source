@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivre
 
+import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -7,13 +8,15 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.IOException
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.UUID
 
 /**
- * Clears the site's reading gate for same-host requests. The gate is a double-submit check: the
- * client-generated `toon_v` cookie must be echoed in the `x-toon-verify` header. On a 403 this
- * primes the cookie via a hidden WebView ([TokenResolver]); on a decrypt failure it reloads the
- * rotated constants ([decryptor]). The two retries are independent, so a request that is both gated
- * and stale-keyed still recovers.
+ * Clears the site's reading gate for same-host requests. The gate combines a double-submit
+ * `toon_v` cookie with a request signature whose format rotates between fixed and time-windowed
+ * values. A 403 first refreshes the live bundle constants, then rotates the cookie, and finally
+ * uses a hidden WebView as a last resort. Encrypted responses are transparently decrypted.
  */
 class ReadingGateInterceptor(
     private val baseUrl: String,
@@ -32,22 +35,91 @@ class ReadingGateInterceptor(
         if (request.url.host != baseUrlHost) {
             return chain.proceed(request)
         }
-        return proceedDecrypted(chain, request, primed = false, reloaded = false)
+        ensureVerifyCookie()
+        return proceedDecrypted(
+            chain,
+            request,
+            signatureWindow = decryptor.currentSignatureWindow(),
+            serverClockRetried = false,
+            securityReloaded = false,
+            cookieRotated = false,
+            webViewPrimed = false,
+            decryptReloaded = false,
+        )
     }
 
     private fun proceedDecrypted(
         chain: Interceptor.Chain,
         request: Request,
-        primed: Boolean,
-        reloaded: Boolean,
+        signatureWindow: Long,
+        serverClockRetried: Boolean,
+        securityReloaded: Boolean,
+        cookieRotated: Boolean,
+        webViewPrimed: Boolean,
+        decryptReloaded: Boolean,
     ): Response {
-        val response = chain.proceed(request.withVerifyHeader())
+        val response = chain.proceed(request.withGateHeaders(signatureWindow))
 
         if (response.code == 403) {
-            if (primed) return response
-            response.close()
-            primeCookie(request)
-            return proceedDecrypted(chain, request, primed = true, reloaded = reloaded)
+            val serverSignatureWindow = response.serverSignatureWindow()
+            return when {
+                !serverClockRetried && serverSignatureWindow != null && serverSignatureWindow != signatureWindow -> {
+                    response.close()
+                    proceedDecrypted(
+                        chain,
+                        request,
+                        serverSignatureWindow,
+                        true,
+                        securityReloaded,
+                        cookieRotated,
+                        webViewPrimed,
+                        decryptReloaded,
+                    )
+                }
+                !securityReloaded -> {
+                    response.close()
+                    decryptor.reloadConstants(force = true)
+                    proceedDecrypted(
+                        chain,
+                        request,
+                        decryptor.currentSignatureWindow(),
+                        serverClockRetried,
+                        true,
+                        cookieRotated,
+                        webViewPrimed,
+                        decryptReloaded,
+                    )
+                }
+                !cookieRotated -> {
+                    response.close()
+                    ensureVerifyCookie(forceNew = true)
+                    proceedDecrypted(
+                        chain,
+                        request,
+                        decryptor.currentSignatureWindow(),
+                        serverClockRetried,
+                        securityReloaded,
+                        true,
+                        webViewPrimed,
+                        decryptReloaded,
+                    )
+                }
+                !webViewPrimed -> {
+                    response.close()
+                    primeCookie(request)
+                    proceedDecrypted(
+                        chain,
+                        request,
+                        decryptor.currentSignatureWindow(),
+                        serverClockRetried,
+                        securityReloaded,
+                        cookieRotated,
+                        true,
+                        decryptReloaded,
+                    )
+                }
+                else -> response
+            }
         }
 
         val dataKey = response.headers["x-toon-datakey"] ?: return response
@@ -61,9 +133,18 @@ class ReadingGateInterceptor(
         }
 
         response.close()
-        if (reloaded) throw IOException(NON_JSON_MESSAGE)
-        decryptor.reloadConstants()
-        return proceedDecrypted(chain, request, primed = primed, reloaded = true)
+        if (decryptReloaded) throw IOException(NON_JSON_MESSAGE)
+        decryptor.reloadConstants(force = true)
+        return proceedDecrypted(
+            chain,
+            request,
+            decryptor.currentSignatureWindow(),
+            serverClockRetried,
+            securityReloaded,
+            cookieRotated,
+            webViewPrimed,
+            true,
+        )
     }
 
     private fun primeCookie(request: Request) {
@@ -75,21 +156,46 @@ class ReadingGateInterceptor(
         }
     }
 
-    private fun Request.withVerifyHeader(): Request {
-        val verify = cookieClient.getCookie(baseUrl, "toon_v") ?: return this
-        val pass = if (url.encodedPath.contains("/chapters")) PASS_CHAPTERS else PASS_DEFAULT
+    private fun Request.withGateHeaders(signatureWindow: Long): Request {
+        val verify = ensureVerifyCookie()
         return newBuilder()
+            // Public API requests only need the double-submit cookie. Dropping stale session and
+            // Cloudflare cookies prevents an old WebView session from poisoning reader requests.
+            .header("Cookie", "$VERIFY_COOKIE=$verify")
             .header("x-toon-verify", verify)
-            .header("toonlivre-pass", pass)
+            .header("x-toon-signature", decryptor.signature(url.encodedPath, signatureWindow))
             .build()
+    }
+
+    private fun Response.serverSignatureWindow(): Long? = headers["Date"]
+        ?.let { runCatching { ZonedDateTime.parse(it, DateTimeFormatter.RFC_1123_DATE_TIME) }.getOrNull() }
+        ?.toInstant()
+        ?.toEpochMilli()
+        ?.div(SIGNATURE_WINDOW_MS)
+
+    private fun ensureVerifyCookie(forceNew: Boolean = false): String = synchronized(this) {
+        if (!forceNew) {
+            cookieClient.getCookie(baseUrl, VERIFY_COOKIE)?.let { return@synchronized it }
+        }
+        val value = UUID.randomUUID().toString().replace("-", "")
+        val cookie = Cookie.Builder()
+            .name(VERIFY_COOKIE)
+            .value(value)
+            .hostOnlyDomain(baseUrlHost)
+            .path("/")
+            .expiresAt(System.currentTimeMillis() + COOKIE_MAX_AGE_MS)
+            .build()
+        cookieClient.cookieJar.saveFromResponse(baseUrl.toHttpUrl(), listOf(cookie))
+        cookieClient.getCookie(baseUrl, VERIFY_COOKIE) ?: value
     }
 
     data class ReaderPath(val path: String)
 
     companion object {
         private const val REFRESH_COOLDOWN_MS = 60_000L
-        private const val PASS_CHAPTERS = "auth2028xy"
-        private const val PASS_DEFAULT = "decoy99xz"
+        private const val VERIFY_COOKIE = "toon_v"
+        private const val COOKIE_MAX_AGE_MS = 365L * 24 * 60 * 60 * 1_000
+        private const val SIGNATURE_WINDOW_MS = 30_000L
         private const val NON_JSON_MESSAGE =
             "Não foi possível decifrar a resposta. Abra a fonte na WebView do app e tente de novo."
     }
