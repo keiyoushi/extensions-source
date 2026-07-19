@@ -47,13 +47,6 @@ abstract class HComic : KeiSource() {
         return MangasPage(result.first.map { it.toSManga(imgUrl) }, result.second)
     }
 
-    // Redundant
-    override val supportsRelatedMangas = false
-
-    override suspend fun getMangaByUrl(url: HttpUrl) = throw UnsupportedOperationException()
-
-    override suspend fun fetchRelatedMangaList(manga: SManga) = throw UnsupportedOperationException()
-
     // Manga & Chapter
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 

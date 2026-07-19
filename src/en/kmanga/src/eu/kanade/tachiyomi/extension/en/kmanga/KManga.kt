@@ -250,9 +250,6 @@ abstract class KManga :
         GenreFilter(),
     )
 
-    override val supportsRelatedMangas get() = false
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
-
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
     }

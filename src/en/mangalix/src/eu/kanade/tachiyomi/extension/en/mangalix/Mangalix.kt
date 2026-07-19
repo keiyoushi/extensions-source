@@ -149,10 +149,6 @@ abstract class Mangalix : KeiSource() {
         )
     }
 
-    override val supportsRelatedMangas = false
-
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = throw UnsupportedOperationException()
-
     override fun getChapterUrl(chapter: SChapter): String {
         val slug = chapter.memo["slug"]!!.string
         val number = chapter.memo["number"]!!.string
