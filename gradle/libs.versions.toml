@@ -1,5 +1,5 @@
 [versions]
-android-gradle = "9.2.1"
+android-gradle = "9.3.0"
 coroutines = "1.10.2"
 serialization = "1.7.3"
 junit = "4.13.2"
