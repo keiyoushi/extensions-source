@@ -46,7 +46,7 @@ abstract class Kagane :
         get() = if (lang == "zh") listOf("zh-Hans", "zh-Hant") else listOf(lang)
 
     private val domain get() = baseUrl.removePrefix("https://")
-    private val apiUrl get() = "https://yuzuki.$domain"
+    private val apiUrl get() = "https://$domain"
 
     override val supportsLatest = true
 
