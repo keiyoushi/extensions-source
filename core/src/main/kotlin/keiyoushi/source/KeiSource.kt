@@ -182,13 +182,25 @@ abstract class KeiSource : HttpSource() {
      * @param url The [HttpUrl] of the manga.
      * @return The [SManga] details if resolved successfully, or null.
      */
-    abstract suspend fun getMangaByUrl(url: HttpUrl): SManga?
+    protected open suspend fun getMangaByUrl(url: HttpUrl): SManga? = throw Exception("getMangaByUrl not implemented")
+
+    /**
+     * Fetches a page of manga list from given url.
+     * Not needed for most sources
+     *
+     * @param url the [HttpUrl] of a manga list
+     * @param page the page number to retrieve
+     * @return a [MangasPage] containing the list of manga and whether there is a next page
+     */
+    protected open suspend fun getMangasByUrl(url: HttpUrl, page: Int): MangasPage {
+        val manga = getMangaByUrl(url)
+
+        return MangasPage(listOfNotNull(manga), hasNextPage = false)
+    }
 
     final override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
         query.toHttpUrlOrNull()?.also { url ->
-            val manga = getMangaByUrl(url)
-
-            return MangasPage(listOfNotNull(manga), hasNextPage = false)
+            return getMangasByUrl(url, page)
         }
 
         return getSearchMangaList(page, query, filters)
@@ -378,7 +390,7 @@ abstract class KeiSource : HttpSource() {
      *
      * Only works on Komikku
      */
-    override val supportsRelatedMangas get() = true
+    override val supportsRelatedMangas get() = false
 
     /**
      * Whether to fall back to searching the source by the manga's title if a direct related manga list is unavailable.
@@ -401,7 +413,7 @@ abstract class KeiSource : HttpSource() {
      * @param manga The reference manga.
      * @return A list of related [SManga].
      */
-    abstract override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga>
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
 
     /**
      * Returns the absolute web URL for the provided manga.
@@ -410,7 +422,7 @@ abstract class KeiSource : HttpSource() {
      * @param manga The manga.
      * @return The absolute URL of the manga.
      */
-    abstract override fun getMangaUrl(manga: SManga): String
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     /**
      * Returns the absolute web URL for the provided chapter.
@@ -419,7 +431,7 @@ abstract class KeiSource : HttpSource() {
      * @param chapter The chapter.
      * @return The absolute URL of the chapter.
      */
-    abstract override fun getChapterUrl(chapter: SChapter): String
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     /**
      * Get the list of pages a chapter has. Pages should be returned

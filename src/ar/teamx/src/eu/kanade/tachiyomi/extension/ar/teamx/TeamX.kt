@@ -217,10 +217,6 @@ abstract class TeamX : KeiSource() {
         }
     }
 
-    override val supportsRelatedMangas = false
-
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = throw UnsupportedOperationException()
-
     // =============================== Pages ===============================
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url

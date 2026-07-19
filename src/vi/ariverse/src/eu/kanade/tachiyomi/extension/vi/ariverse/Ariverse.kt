@@ -320,6 +320,8 @@ abstract class Ariverse :
 
     // ============================== Related ===============================
 
+    override val supportsRelatedMangas get() = true
+
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val slug = manga.url.substringAfterLast("/")
         val genreSlug = manga.memo["genreSlug"]?.string
