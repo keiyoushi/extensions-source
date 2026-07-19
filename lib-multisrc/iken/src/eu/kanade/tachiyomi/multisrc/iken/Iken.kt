@@ -21,6 +21,8 @@ import keiyoushi.utils.int
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -265,27 +267,32 @@ abstract class Iken :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
+    ): SMangaUpdate = coroutineScope {
         val slug = manga.url.substringBeforeLast("#")
         val id = manga.url.substringAfterLast("#")
 
-        val data = getMangaData(slug)
-        val updatedManga = data.toSManga()
-
-        val updatedChapters = if (fetchChapters) {
-            if (useChaptersApi) {
-                val mangaId = data.id
-                val response = client.get("$apiUrl/api/chapters?postId=$id")
-                val chapterData = response.parseAs<ChapterDto>().post
-                chapterData.chapters.map { it.toSChapter(slug) }
-            } else {
-                data.chapters.filter { it.isVisible() }.map { it.toSChapter(data.slug) }
+        if (useChaptersApi) {
+            val mangaDeferred = async { getMangaData(slug).toSManga() }
+            val chaptersDeferred = async {
+                if (fetchChapters) {
+                    val response = client.get("$apiUrl/api/chapters?postId=$id")
+                    val chapterData = response.parseAs<ChapterDto>().post
+                    chapterData.chapters.filter { it.isVisible() }.map { it.toSChapter(slug) }
+                } else {
+                    chapters
+                }
             }
+            SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
         } else {
-            chapters
+            val data = getMangaData(slug)
+            val updatedManga = data.toSManga()
+            val updatedChapters = if (fetchChapters) {
+                data.chapters.filter { it.isVisible() }.map { it.toSChapter(data.slug) }
+            } else {
+                chapters
+            }
+            SMangaUpdate(updatedManga, updatedChapters)
         }
-
-        return SMangaUpdate(updatedManga, updatedChapters)
     }
 
     // ========================= Related Manga =========================
