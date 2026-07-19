@@ -30,10 +30,10 @@ import java.util.*
 
 @Source
 class KissLove(
-    override val name = "KissLove"
-    override val baseUrl = "https://klz9.com"
-    override val lang = "ja"
-    override val supportsLatest = true
+    override val name: String = "KissLove"
+    override val baseUrl: String = "https://klz9.com"
+    override val lang: String = "ja"
+    override val supportsLatest: Boolean = true
 ):
     HttpSource(),
     ConfigurableSource {
