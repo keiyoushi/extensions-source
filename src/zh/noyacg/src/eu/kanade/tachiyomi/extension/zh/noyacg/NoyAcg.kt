@@ -65,8 +65,8 @@ abstract class NoyAcg :
     private fun mangaPageParse(response: Response, page: Int): MangasPage {
         val result = response.parseAs<ListingPageDto>()
         if (result.status != "ok") throw Exception("請在 WebView 中登入")
-        val mangas = result.info!!.map { it.toSManga(imgBaseUrl) }
-        return MangasPage(mangas, page * LISTING_PAGE_SIZE < result.len!!)
+        val mangas = result.data!!.map { it.toSManga(imgBaseUrl) }
+        return MangasPage(mangas, page * LISTING_PAGE_SIZE < result.count!!)
     }
 
     // Popular
@@ -94,10 +94,7 @@ abstract class NoyAcg :
         val body = FormBody.Builder().addEncoded("value", query).addEncoded("page", page.toString()).addEncoded("type", "book")
         filters.filterIsInstance<SearchFilter>().forEach { it.addTo(body) }
         val response = client.post("$baseUrl/api/v4/search/fetch", body.build())
-        val result = response.parseAs<SearchPageDto>()
-        if (result.status != "ok") throw Exception("請在 WebView 中登入")
-        val mangas = result.data!!.map(SearchMangaDto::toSManga)
-        return MangasPage(mangas, page * LISTING_PAGE_SIZE < result.count!!)
+        return mangaPageParse(response, page)
     }
 
     // Manga & Chapters
@@ -106,8 +103,12 @@ abstract class NoyAcg :
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/reader/${chapter.url}"
 
-    override suspend fun getMangaByUrl(url: HttpUrl) = url.pathSegments.last().toIntOrNull()?.let {
-        client.get("$baseUrl/api/v4/book/$it?comment=false").parseManga().book!!.toSManga(imgBaseUrl)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        return url.pathSegments.last().toIntOrNull()?.let {
+            val comic = client.get("$baseUrl/api/v4/book/$it?comment=false").parseManga()
+            if (comic.status != "ok") throw Exception("請在 WebView 中登入")
+            comic.book!!.toSManga(imgBaseUrl)
+        }
     }
 
     override suspend fun fetchMangaUpdate(
@@ -142,6 +143,7 @@ abstract class NoyAcg :
                         date_upload = it.createdAt * 1000
                         // chapter_number = it.sort.toFloat()
                         scanlator = category.key
+                        memo = buildJsonObject { put("size", it.count) }
                     }
                 }.reversed()
             }
@@ -152,7 +154,7 @@ abstract class NoyAcg :
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val comic = client.get("$baseUrl/api/v4/book/${manga.url}?comment=false").parseManga()
-        return comic.recommend?.map(RecommendMangaDto::toSManga) ?: emptyList()
+        return comic.recommend?.map { it.toSManga(imgBaseUrl) } ?: emptyList()
     }
 
     // Pages
