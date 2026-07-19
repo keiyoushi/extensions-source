@@ -205,9 +205,7 @@ abstract class MangaDar : KeiSource() {
     }
 
     private fun parseChaptersFromDoc(doc: org.jsoup.nodes.Document): List<SChapter> {
-        val chaptersContainer = doc.select("div[x-data]").firstOrNull { element ->
-            element.attr("x-data").contains("chapters")
-        }
+        val chaptersContainer = doc.selectFirst("div[x-data]:containsData(chapters)")
         if (chaptersContainer != null) {
             val xData = chaptersContainer.attr("x-data")
             val chaptersStart = xData.indexOf("chapters:")
