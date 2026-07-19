@@ -16,4 +16,8 @@ keiyoushi {
             baseUrl = "https://kagane.to"
         }
     }
+
+    deeplink {
+        path("/series/..*")
+    }
 }

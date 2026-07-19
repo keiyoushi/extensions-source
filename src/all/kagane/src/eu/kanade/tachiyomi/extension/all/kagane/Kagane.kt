@@ -31,6 +31,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -285,6 +286,22 @@ abstract class Kagane :
 
     // ====================== Manga Details + Chapters ======================
 
+    private suspend fun getMangaById(seriesId: String): DetailsDto {
+        val url = "$apiUrl/series/$seriesId"
+        return client.get(url).parseAs<DetailsDto>()
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val segments = url.pathSegments
+        if (segments.size < 2) return null
+        val seriesId = segments[1]
+        return parseMangaDetails(getMangaById(seriesId)).apply {
+            this.url = seriesId
+            initialized = true
+        }
+    }
+
     private suspend fun parseMangaDetails(details: DetailsDto): SManga {
         val sourceName = details.sourceId?.let { sourceId ->
             metadata?.sources?.firstOrNull { it.sourceId == sourceId }?.title
@@ -311,8 +328,7 @@ abstract class Kagane :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val seriesId = manga.url
-        val url = "$apiUrl/series/$seriesId"
-        val dto = client.get(url).parseAs<DetailsDto>()
+        val dto = getMangaById(seriesId)
 
         val updatedManga = parseMangaDetails(dto).apply { initialized = true }
         val updatedChapters = parseChapterList(dto, seriesId)
@@ -339,9 +355,7 @@ abstract class Kagane :
     override val supportsRelatedMangas = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val url = "$apiUrl/series/${manga.url}"
-        val response = client.get(url)
-        val dto = response.parseAs<DetailsDto>()
+        val dto = getMangaById(manga.url)
         val trackerId = dto.trackerId?.takeIf(String::isNotBlank) ?: return emptyList()
 
         val series = client.get("$apiUrl/trackers/$trackerId/series")
