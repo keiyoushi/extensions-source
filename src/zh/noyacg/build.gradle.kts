@@ -6,12 +6,17 @@ plugins {
 
 keiyoushi {
     name = "NoyAcg"
-    versionCode = 4
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
-    libVersion = "1.4"
+    versionCode = 5
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
 
     source {
         lang = "zh"
         baseUrl = "https://beta.noyteam.online"
+    }
+
+    deeplink {
+        host("beta.noyteam.online")
+        path("/manga/..*")
     }
 }

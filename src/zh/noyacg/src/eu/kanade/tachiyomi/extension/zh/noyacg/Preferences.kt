@@ -6,6 +6,9 @@ import androidx.preference.ListPreference
 
 const val POPULAR_MANGAS_PREF = "POPULAR_MANGAS"
 const val ADULT_PREF = "ADULT"
+const val IMG_HOSTING_PREF = "IMG_HOSTING"
+
+val imgBaseUrls = arrayOf("https://img.noymanga.com", "https://img.noyteam.online", "https://img.noy.asia")
 
 fun getPreferencesInternal(context: Context) = arrayOf(
     ListPreference(context).apply {
@@ -27,5 +30,13 @@ fun getPreferencesInternal(context: Context) = arrayOf(
             Toast.makeText(context, "重啟應用後生效", Toast.LENGTH_SHORT).show()
             true
         }
+    },
+    ListPreference(context).apply {
+        key = IMG_HOSTING_PREF
+        title = "切換伺服器分流（圖床）"
+        summary = "%s"
+        setDefaultValue("https://img.noymanga.com")
+        entries = imgBaseUrls.map { it.removePrefix("https://") }.toTypedArray()
+        entryValues = imgBaseUrls
     },
 )

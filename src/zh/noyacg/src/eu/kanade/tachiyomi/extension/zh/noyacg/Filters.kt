@@ -4,11 +4,7 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.FormBody
 
-fun getFilterListInternal() = FilterList(
-    SearchTypeFilter(),
-    SortFilter(),
-    StatusFilter(),
-)
+fun buildFilterList() = FilterList(SearchTypeFilter(), SortFilter(), StatusFilter())
 
 interface SearchFilter {
     fun addTo(builder: FormBody.Builder)

@@ -9,9 +9,11 @@ import java.util.Locale
 const val LISTING_PAGE_SIZE = 20
 val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
 
-fun String.formatNames() = split(" ").joinToString { name ->
+fun String.formatAuthors() = split(" ").joinToString { name ->
     name.split("-").joinToString(" ") { word -> word.replaceFirstChar { it.uppercaseChar() } }
 }
+
+fun String.formatNames() = split(" ").joinToString()
 
 @Serializable
 class ListingPageDto(
@@ -30,7 +32,8 @@ class SearchPageDto(
 class MangaDetailDto(
     val status: String,
     val book: MangaDto?,
-    val chapters: List<Pair<String, List<ChapterDto>>>?,
+    val recommend: List<RecommendMangaDto>?,
+    val chapters: Map<String, List<ChapterDto>>?,
 )
 
 @Serializable
@@ -59,41 +62,60 @@ class MangaDto(
     @SerialName("Status") val status: Int,
     @SerialName("RatingSUM") val rating: Float,
 ) {
-    fun toSManga() = SManga.create().also { m ->
+    fun toSManga(imgBaseUrl: String) = SManga.create().also { m ->
         m.url = id.toString()
         m.title = name
-        m.author = author.formatNames()
+        m.author = author.formatAuthors()
         m.description = formatDescription()
         m.genre = tags.replace(" ", ", ")
         m.status = if (mode == 0 || status == 1) SManga.COMPLETED else SManga.ONGOING
-        m.thumbnail_url = "https://img.noymanga.com/$id/m1.webp"
+        m.thumbnail_url = "$imgBaseUrl/$id/m1.webp"
         m.initialized = mode == 0 || description.isNotEmpty()
     }
 
-    fun formatDescription() = "時間：${DATE_FORMAT.format(time * 1000)}\n" +
-        "评分：$rating\n" +
-        "原作：${otag.formatNames()}\n" +
-        "角色：${pname.formatNames()}" + (description.takeIf(CharSequence::isNotEmpty)?.let { "\n---\n$it" } ?: "")
+    fun formatDescription() = description.ifBlank {
+        "時間：${DATE_FORMAT.format(time * 1000)}\n评分：$rating\n原作：${otag.formatNames()}\n角色：${pname.formatNames()}"
+    }
+}
+
+@Serializable
+class RecommendMangaDto(
+    @SerialName("bid") val id: Int,
+    @SerialName("mode") val mode: Boolean,
+    @SerialName("bookname") val name: String,
+    @SerialName("author") val author: String,
+    @SerialName("tags") val tags: String,
+    @SerialName("status") val status: Boolean,
+) {
+    fun toSManga() = SManga.create().also { m ->
+        m.url = id.toString()
+        m.title = name
+        m.author = author.formatAuthors()
+        m.genre = tags.replace(" ", ", ")
+        m.status = if (!mode || status) SManga.COMPLETED else SManga.ONGOING
+        m.thumbnail_url = "https://img.noymanga.com/$id/m1.webp"
+        m.initialized = !mode
+    }
 }
 
 @Serializable
 class SearchMangaDto(
     private val id: Int,
+    private val mode: Int,
     private val name: String,
     private val description: String,
     private val author: String,
-    private val tags: List<String>,
     private val pname: List<String>,
+    private val tags: List<String>,
     private val otag: List<String>,
     private val time: Long,
-    private val mode: Int,
     private val status: Int,
     @SerialName("rating_sum") private val rating: Float,
 ) {
     fun toSManga() = SManga.create().also { m ->
         m.url = id.toString()
         m.title = name
-        m.author = author.formatNames()
+        m.author = author.formatAuthors()
         m.description = "時間：${DATE_FORMAT.format(time * 1000)}\n" +
             "评分：$rating\n" +
             "原作：${otag.joinToString()}\n" +
