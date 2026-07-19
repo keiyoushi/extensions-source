@@ -24,8 +24,6 @@ import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
@@ -228,17 +226,21 @@ abstract class Iken :
 
     // ============================== Details ==============================
 
+    private suspend fun getMangaDetails(slug: String): Manga {
+        val mangaUrl = "$apiUrl/api/post?postSlug=$slug"
+        val response = client.get(mangaUrl)
+        val data = response.parseAs<MangaDto>().post
+        updateViews(data.id)
+        return data
+    }
+
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.pathSegments.size >= 2) {
             val slug = url.pathSegments[1]
-            val manga = SManga.create().apply {
-                this.url = slug
-                memo = buildJsonObject {
-                    put("slug", slug)
-                }
-            }
 
-            return fetchMangaUpdate(manga, emptyList(), true, true).manga.apply {
+            val details = getMangaDetails(slug)
+            if (details.isNovel) return null
+            return details.toSManga().apply {
                 initialized = true
             }
         }
@@ -252,15 +254,6 @@ abstract class Iken :
         preferences.getBoolean(SHOW_LOCKED_CHAPTER_PREF_KEY, false) && isLocked()
         )
 
-    private suspend fun getMangaData(slug: String): Manga {
-        val mangaUrl = "$apiUrl/api/post?postSlug=$slug"
-        val response = client.get(mangaUrl)
-        val data = response.parseAs<MangaDto>().post
-        assert(!data.isNovel) { "Novels are unsupported" }
-        updateViews(data.id)
-        return data
-    }
-
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -271,7 +264,7 @@ abstract class Iken :
         val id = manga.url.substringAfterLast("#")
 
         if (useChaptersApi) {
-            val mangaDeferred = async { if (fetchDetails) getMangaData(slug).toSManga() else manga }
+            val mangaDeferred = async { if (fetchDetails) getMangaDetails(slug).toSManga() else manga }
             val chaptersDeferred = async {
                 if (fetchChapters) {
                     val response = client.get("$apiUrl/api/chapters?postId=$id")
@@ -283,10 +276,11 @@ abstract class Iken :
             }
             SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
         } else {
-            val data = getMangaData(slug)
-            val updatedManga = data.toSManga()
+            val details = getMangaDetails(slug)
+            assert(!details.isNovel) { "Novels are unsupported" }
+            val updatedManga = details.toSManga()
             val updatedChapters = if (fetchChapters) {
-                data.chapters.filter { it.isVisible() }.map { it.toSChapter(data.slug) }
+                details.chapters.filter { it.isVisible() }.map { it.toSChapter(details.slug) }
             } else {
                 chapters
             }
