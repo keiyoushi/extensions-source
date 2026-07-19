@@ -30,6 +30,7 @@ import java.util.*
 
 @Source
 class KissLove(
+    override val id: Long,
     override val name: String = "KissLove",
     override val baseUrl: String = "https://klz9.com",
     override val lang: String = "ja",
