@@ -1,9 +1,9 @@
 [versions]
 android-gradle = "9.3.0"
-coroutines = "1.10.2"
-serialization = "1.7.3"
+coroutines = "1.11.0"
+serialization = "1.11.0"
 junit = "4.13.2"
-kotlin-gradle = "2.4.0"
+kotlin-gradle = "2.4.10"
 ksp = "2.3.9"
 kotlinpoet = "2.3.0"
 ktlint = "1.8.0"
