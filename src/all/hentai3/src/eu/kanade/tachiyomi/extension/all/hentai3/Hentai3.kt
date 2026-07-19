@@ -222,11 +222,9 @@ abstract class Hentai3 :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = if (fetchDetails || fetchChapters) {
+    ): SMangaUpdate {
         val doc = client.get(getMangaUrl(manga)).asJsoup()
-        SMangaUpdate(parseMangaDetails(doc), parseChapterList(doc))
-    } else {
-        SMangaUpdate(manga, chapters)
+        return SMangaUpdate(parseMangaDetails(doc), parseChapterList(doc))
     }
 
     // Related manga
