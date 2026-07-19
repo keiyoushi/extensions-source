@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.xomanga
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,7 +10,6 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.string
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
@@ -24,7 +22,7 @@ abstract class XoManga : KeiSource() {
         val body = client.get("$baseUrl/our-works").body.string()
         val block = EXCLUSIVE_REGEX.find(body)?.groupValues?.get(1) ?: return MangasPage(emptyList(), false)
         val exclusiveTitles = QUOTED_REGEX.findAll(block).map { it.groupValues[1].lowercase().trim().replace(Regex("""\s+"""), " ") }.toSet()
-        val index = client.newCall(GET("$baseUrl/index.json", headers)).execute().parseAs<IndexResponse>()
+        val index = client.get("$baseUrl/index.json").parseAs<IndexResponse>()
         val mangas = index.latest.filter { it.isExclusive(exclusiveTitles) }.map { it.toSManga(baseUrl) }
         return MangasPage(mangas, false)
     }
@@ -82,7 +80,7 @@ abstract class XoManga : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String {
         val url = "$baseUrl/${chapter.url}".toHttpUrl()
         val slug = url.pathSegments.first()
-        val chapterNum = chapter.memo["chapterNum"]?.string ?: url.fragment
+        val chapterNum = url.fragment
         val chapterUrl = "$baseUrl/reader.html".toHttpUrl().newBuilder()
             .addQueryParameter("id", slug)
             .addQueryParameter("ch", chapterNum)
@@ -96,7 +94,7 @@ abstract class XoManga : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = "$baseUrl/${chapter.url}".toHttpUrl()
         val slug = url.pathSegments.first()
-        val chapterNum = chapter.memo["chapterNum"]?.string ?: url.fragment
+        val chapterNum = url.fragment
         val images = client.get("$baseUrl/manga/$slug/chapters/$chapterNum.json")
             .parseAs<ImageResponse>().images
 
