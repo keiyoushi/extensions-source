@@ -159,11 +159,16 @@ abstract class Kagane :
                 }
             }
 
+            val metadata = metadata
+
             filters.forEach { filter ->
                 when (filter) {
                     is GenresFilter -> {
                         val excludedGenreIds = preferences.excludedGenres.mapNotNull { genreName ->
-                            metadata?.genres?.entries?.firstOrNull {
+                            // fetch genre ids for exclusion to work initially for popular + latest
+                            val genresMap = metadata?.genres ?: runCatching { getGenreMap() }.getOrElse { emptyMap() }
+
+                            genresMap.entries.firstOrNull {
                                 it.value.equals(genreName, ignoreCase = true)
                             }?.key
                         }
@@ -173,7 +178,6 @@ abstract class Kagane :
                     is TagsSearchFilter -> {
                         val rawInput = filter.state.trim()
                         if (rawInput.isNotBlank()) {
-                            val metadata = metadata
                             if (metadata != null) {
                                 val tagEntries = rawInput.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
@@ -555,12 +559,14 @@ abstract class Kagane :
 
     override val supportsFilterFetching = true
 
+    private var genreMap: Map<String, String>? = null
+
+    private suspend fun getGenreMap(): Map<String, String> = genreMap ?: client.get("$apiUrl/genres/list")
+        .parseAs<List<GenreDto>>()
+        .associate { it.id to it.genreName }
+        .also { genreMap = it }
+
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
-        val genresDeferred = async {
-            client.get("$apiUrl/genres/list")
-                .parseAs<List<GenreDto>>()
-                .associate { it.id to it.genreName }
-        }
         val tagsDeferred = async {
             client.get("$apiUrl/tags/list")
                 .parseAs<List<TagDto>>()
@@ -574,6 +580,7 @@ abstract class Kagane :
             )
                 .parseAs<SourcesDto>().sources
         }
+        val genresDeferred = async { getGenreMap() }
 
         MetadataDto(genresDeferred.await(), tagsDeferred.await(), sourcesDeferred.await())
             .toJsonElement()
