@@ -271,10 +271,7 @@ abstract class Hiper :
 
     // ============================ Related manga ==============================
 
-    override val supportsRelatedMangas = false
     override val supportRelatedMangasBySearch = true
-
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = throw UnsupportedOperationException()
 
     // ============================ Pages =====================================
 

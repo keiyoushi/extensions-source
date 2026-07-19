@@ -19,7 +19,6 @@ import kotlinx.coroutines.supervisorScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -109,14 +108,6 @@ abstract class JComic : KeiSource() {
         }
         return mangaPageParse(client.get(finalUrl))
     }
-
-    // Redundant
-
-    override val supportsRelatedMangas = false
-
-    override suspend fun getMangaByUrl(url: HttpUrl) = throw UnsupportedOperationException()
-
-    override suspend fun fetchRelatedMangaList(manga: SManga) = throw UnsupportedOperationException()
 
     // Manga & Chapter
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url

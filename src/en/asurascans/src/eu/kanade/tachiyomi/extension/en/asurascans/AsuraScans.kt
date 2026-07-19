@@ -172,6 +172,8 @@ abstract class AsuraScans :
         }
     }
 
+    override val supportsRelatedMangas get() = true
+
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         client.get(getMangaUrl(manga)).use { response ->
             val document = response.asJsoup()

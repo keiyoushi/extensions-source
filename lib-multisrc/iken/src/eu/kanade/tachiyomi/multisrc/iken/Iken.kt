@@ -270,6 +270,8 @@ abstract class Iken :
 
     // ========================= Related Manga =========================
 
+    override val supportsRelatedMangas get() = true
+
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val id = manga.url.substringAfterLast("#")
         val response = client.get("$apiUrl/api/recommendations?postId=$id&limit=25")

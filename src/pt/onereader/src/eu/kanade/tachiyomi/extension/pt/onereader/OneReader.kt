@@ -127,10 +127,6 @@ abstract class OneReader : KeiSource() {
         )
     }
 
-    override val supportsRelatedMangas = false
-
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = throw UnsupportedOperationException()
-
     override fun getChapterUrl(chapter: SChapter): String {
         val mangaKey = chapter.memo["id"]!!.string
         val number = chapter.memo["number"]!!.string

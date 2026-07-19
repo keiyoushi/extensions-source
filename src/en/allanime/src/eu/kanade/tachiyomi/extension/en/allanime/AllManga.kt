@@ -168,6 +168,8 @@ abstract class AllManga :
         }
     }
 
+    override val supportsRelatedMangas get() = true
+
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val related = manga.memo["relatedMangas"]?.parseAs<List<Related>>().orEmpty()
         val genres = manga.genre?.split(", ").orEmpty().filter { it in genreList }

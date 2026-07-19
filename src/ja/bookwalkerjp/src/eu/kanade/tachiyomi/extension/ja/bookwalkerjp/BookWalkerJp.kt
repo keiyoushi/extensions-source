@@ -400,10 +400,6 @@ abstract class BookWalkerJp :
         }.also(screen::addPreference)
     }
 
-    override val supportsRelatedMangas get() = false
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = null
-
     companion object {
         // Normal (non-trial) auth data expires after 60s
         private const val AUTH_REFRESH_SECONDS = 45L
