@@ -14,7 +14,6 @@ import keiyoushi.utils.int
 import keiyoushi.utils.long
 import keiyoushi.utils.string
 import kotlinx.serialization.json.JsonElement
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
@@ -46,13 +45,6 @@ abstract class HComic : KeiSource() {
         val result = client.get(url.build()).parseAsMangaList(page)
         return MangasPage(result.first.map { it.toSManga(imgUrl) }, result.second)
     }
-
-    // Redundant
-    override val supportsRelatedMangas = false
-
-    override suspend fun getMangaByUrl(url: HttpUrl) = throw UnsupportedOperationException()
-
-    override suspend fun fetchRelatedMangaList(manga: SManga) = throw UnsupportedOperationException()
 
     // Manga & Chapter
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url

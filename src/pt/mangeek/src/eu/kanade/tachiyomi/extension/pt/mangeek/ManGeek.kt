@@ -113,10 +113,6 @@ abstract class ManGeek : KeiSource() {
         )
     }
 
-    override val supportsRelatedMangas = false
-
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = throw UnsupportedOperationException()
-
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {

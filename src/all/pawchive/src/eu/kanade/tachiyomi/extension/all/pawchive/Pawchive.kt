@@ -260,10 +260,6 @@ abstract class Pawchive :
         return SMangaUpdate(manga, updatedChapters)
     }
 
-    override val supportsRelatedMangas get() = false
-
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
-
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
 
     // =============================== Pages ===============================

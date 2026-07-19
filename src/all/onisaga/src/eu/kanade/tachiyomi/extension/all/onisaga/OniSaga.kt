@@ -418,6 +418,8 @@ abstract class OniSaga :
 
     // =============================== Related Manga ===============================
 
+    override val supportsRelatedMangas get() = true
+
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val doc = client.get(baseUrl + manga.url).asJsoup()
         return relatedMangaListParse(doc)

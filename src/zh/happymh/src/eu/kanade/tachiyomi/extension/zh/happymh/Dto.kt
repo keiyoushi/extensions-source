@@ -1,11 +1,24 @@
 package eu.kanade.tachiyomi.extension.zh.happymh
 
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 // Popular / Latest / Search pages
 @Serializable
-class PopularResponseDto(val data: PopularData)
+class PopularResponseDto(val data: PopularData) {
+    fun toMangasPage(): MangasPage {
+        val items = data.items.map {
+            SManga.create().apply {
+                title = it.name
+                url = it.url
+                thumbnail_url = it.cover
+            }
+        }
+        return MangasPage(items, data.isEnd.not())
+    }
+}
 
 @Serializable
 class PopularData(val items: List<MangaDto>, val isEnd: Boolean)
@@ -30,7 +43,8 @@ class ChapterByPageResponseDataItem(
 @Serializable
 class ChapterByPageResponseData(
     val items: List<ChapterByPageResponseDataItem>,
-    val isEnd: Int,
+    val total: Int,
+    val curr: Int,
 )
 
 @Serializable
