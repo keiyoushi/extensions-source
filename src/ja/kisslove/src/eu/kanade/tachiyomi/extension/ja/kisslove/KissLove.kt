@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.ja.kisslove
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -15,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
+import keiyoushi.lib.i18n.Intl
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
@@ -31,9 +31,9 @@ import java.util.*
 @Source
 class KissLove(
     override val id: Long,
-    override val name: String = "KissLove",
-    override val baseUrl: String = "https://klz9.com",
-    override val lang: String = "ja",
+    override val name: String,
+    override val baseUrl: String,
+    override val lang: String,
     override val supportsLatest: Boolean = true,
 ) : HttpSource(),
     ConfigurableSource {
