@@ -6,8 +6,6 @@ import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -15,13 +13,19 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonString
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -30,16 +34,15 @@ import kotlinx.serialization.json.putJsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import okio.IOException
-import rx.Observable
 
 @Source
 abstract class Kagane :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     private val kaganeLangs: List<String>
@@ -48,18 +51,14 @@ abstract class Kagane :
     private val domain get() = baseUrl.removePrefix("https://")
     private val apiUrl get() = "https://$domain/api/v2"
 
-    override val supportsLatest = true
-
     private val preferences by getPreferencesLazy()
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(::refreshTokenInterceptor)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        addInterceptor(::refreshTokenInterceptor)
         // fix disk cache
-        .apply {
-            val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
-            if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
-        }
-        .build()
+        val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
+        if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
+    }
 
     private fun refreshTokenInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -82,13 +81,11 @@ abstract class Kagane :
 
         if (response.code == 401 || response.code == 403 || response.code == 507) {
             response.close()
-            val challenge = try {
-                getChallengeResponse(chapterId)
-            } catch (_: Exception) {
-                throw IOException("Failed to retrieve token")
-            }
+            val challenge = runBlocking {
+                runCatching { getChallengeResponse(chapterId) }
+            }.getOrElse { throw IOException("Failed to retrieve token") }
+
             accessToken = challenge.accessToken
-            cacheUrl = challenge.cacheUrl
             response = chain.proceed(
                 request.newBuilder()
                     .url(url.newBuilder().setQueryParameter("token", accessToken).build())
@@ -101,7 +98,7 @@ abstract class Kagane :
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(
         page,
         "",
         FilterList(
@@ -113,11 +110,9 @@ abstract class Kagane :
         ),
     )
 
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
-
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(
         page,
         "",
         FilterList(
@@ -129,11 +124,9 @@ abstract class Kagane :
         ),
     )
 
-    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
-
     // =============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val body = buildJsonObject {
             if (query.isNotBlank()) {
                 put("title", query)
@@ -254,19 +247,16 @@ abstract class Kagane :
                     else -> {}
                 }
             }
-        }
+        }.build()
 
-        return POST(url.toString(), headers, body)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
+        val response = client.post(url, body)
         val dto = response.parseAs<SearchDto>()
         val sources = getSourcesMap()
         val mangas = dto.content.map { it.toSManga(apiUrl, preferences.showSource, sources) }
         return MangasPage(mangas, hasNextPage = dto.hasNextPage())
     }
 
-    private fun getSourcesMap(): Map<String, String> = if (!preferences.showSource) {
+    private suspend fun getSourcesMap(): Map<String, String> = if (!preferences.showSource) {
         emptyMap()
     } else {
         metadata?.sources?.associate { it.sourceId to it.title }
@@ -283,35 +273,16 @@ abstract class Kagane :
             }
     }
 
-    private fun getSourcesResponse(): Response = metadataClient.newCall(
-        POST(
-            "$apiUrl/sources/list",
-            apiHeaders,
-            buildJsonObject { put("source_types", null) }.toJsonString()
-                .toRequestBody("application/json".toMediaType()),
-        ),
-    ).execute()
+    private suspend fun getSourcesResponse(): Response = client.post(
+        "$apiUrl/sources/list",
+        buildJsonObject { put("source_types", null) }.toJsonString()
+            .toRequestBody("application/json".toMediaType()),
+    )
 
-    // =========================== Manga Details ============================
+    // ====================== Manga Details + Chapters ======================
 
-    override fun relatedMangaListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
-    override fun relatedMangaListParse(response: Response): List<SManga> {
-        val dto = response.parseAs<DetailsDto>()
-        val trackerId = dto.trackerId?.takeIf(String::isNotBlank) ?: return emptyList()
-        val trackerRequest = GET("$apiUrl/trackers/$trackerId/series", apiHeaders)
-        val series = client.newCall(trackerRequest).execute().use { resp ->
-            if (!resp.isSuccessful) return emptyList()
-            resp.parseAs<TrackerDto>().series
-        }
-        val sources = getSourcesMap()
-        return series
-            .map { it.toSManga(apiUrl, preferences.showSource, sources) }
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val dto = response.parseAs<DetailsDto>()
-        val sourceName = dto.sourceId?.let { sourceId ->
+    private suspend fun parseMangaDetails(details: DetailsDto): SManga {
+        val sourceName = details.sourceId?.let { sourceId ->
             metadata?.sources?.firstOrNull { it.sourceId == sourceId }?.title
                 ?: try {
                     getSourcesResponse().use { response ->
@@ -324,58 +295,77 @@ abstract class Kagane :
                     null
                 }
         }
-        return dto.toSManga(apiUrl, sourceName, baseUrl, preferences.showEdition, preferences.showSource)
+        return details.toSManga(apiUrl, sourceName, baseUrl, preferences.showEdition, preferences.showSource)
     }
-
-    override fun mangaDetailsRequest(manga: SManga): Request = mangaDetailsRequest(manga.url)
-
-    private fun mangaDetailsRequest(seriesId: String): Request = GET("$apiUrl/series/$seriesId", apiHeaders)
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
-    // ============================== Chapters ==============================
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val seriesId = manga.url
+        val url = "$apiUrl/series/$seriesId"
+        val dto = client.get(url).parseAs<DetailsDto>()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val seriesId = response.request.url.toString()
-            .substringAfterLast("/")
+        val updatedManga = parseMangaDetails(dto).apply { initialized = true }
+        val updatedChapters = parseChapterList(dto, seriesId)
 
-        val dto = response.parseAs<DetailsDto>()
+        return SMangaUpdate(updatedManga, updatedChapters)
+    }
 
-        val useSourceChapterNumber = dto.format in setOf(
+    private fun parseChapterList(details: DetailsDto, seriesId: String): List<SChapter> {
+        val useSourceChapterNumber = details.format in setOf(
             "Dark Horse Comics",
             "Flame Comics",
             "MangaDex",
             "Square Enix Manga",
         )
 
-        return dto.seriesBooks.map { book ->
+        return details.seriesBooks.map { book ->
             book.toSChapter(seriesId, useSourceChapterNumber, preferences.chapterTitleMode)
         }.reversed()
     }
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/series/${manga.url}", apiHeaders)
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
+
+    // =========================== Related Manga ============================
+    override val supportsRelatedMangas = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val url = "$apiUrl/series/${manga.url}"
+        val response = client.get(url)
+        val dto = response.parseAs<DetailsDto>()
+        val trackerId = dto.trackerId?.takeIf(String::isNotBlank) ?: return emptyList()
+
+        val series = client.get("$apiUrl/trackers/$trackerId/series")
+            .use { resp ->
+                if (!resp.isSuccessful) return emptyList()
+                resp.parseAs<TrackerDto>().bookSeries
+            }
+        val sources = getSourcesMap()
+        return series
+            .map { it.toSManga(apiUrl, preferences.showSource, sources) }
+    }
 
     // =============================== Pages ================================
 
-    private val apiHeaders = headers.newBuilder().apply {
-        add("Origin", baseUrl)
-        add("Referer", "$baseUrl/")
-    }.build()
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (chapter.url.contains(";")) {
-            throw Exception("Outdated chapter URL. Please refresh the chapter list")
+            throw IOException("Outdated chapter URL. Please refresh the chapter list")
         }
 
         val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments.last()
         val challengeResp = getChallengeResponse(chapterId)
 
         accessToken = challengeResp.accessToken
-        cacheUrl = challengeResp.cacheUrl
+        val cacheUrl = challengeResp.cacheUrl
 
         val pageList = challengeResp.manifest?.pages ?: emptyList()
 
-        val pages = pageList.map { page ->
+        return pageList.map { page ->
             val pageUrl = "$cacheUrl/api/v2/books/page".toHttpUrl().newBuilder().apply {
                 if (preferences.dataSaver) {
                     addPathSegment("datasaver")
@@ -387,27 +377,20 @@ abstract class Kagane :
 
             Page(page.pageNumber, url = pageUrl, imageUrl = pageUrl)
         }
-        return Observable.just(pages)
     }
 
-    override fun imageUrlRequest(page: Page): Request = GET(page.imageUrl!!, apiHeaders)
-
-    private var cacheUrl = "https://akari.$domain"
     private var accessToken: String = ""
     private var integrityToken: String = ""
     private var integrityExp = System.currentTimeMillis()
 
-    private fun getIntegrityToken(): String {
+    private suspend fun getIntegrityToken(): String {
         if (integrityExp < System.currentTimeMillis()) {
-            client.newCall(GET("$baseUrl/", headers)).execute().close()
+            client.get("$baseUrl/").close()
 
-            val res = client.newCall(
-                POST(
-                    "$baseUrl/api/integrity",
-                    headers,
-                    body = "".toRequestBody("application/json".toMediaType()),
-                ),
-            ).execute().parseAs<IntegrityDto>()
+            val res = client.post(
+                "$baseUrl/api/integrity",
+                body = "".toRequestBody("application/json".toMediaType()),
+            ).parseAs<IntegrityDto>()
             integrityToken = res.token
             integrityExp = res.exp * 1000
         }
@@ -415,7 +398,7 @@ abstract class Kagane :
         return integrityToken
     }
 
-    private fun getChallengeResponse(chapterId: String): ChallengeDto {
+    private suspend fun getChallengeResponse(chapterId: String): ChallengeDto {
         val integrityToken = getIntegrityToken()
 
         val challengeUrl = "$apiUrl/books/$chapterId".toHttpUrl().newBuilder()
@@ -424,20 +407,16 @@ abstract class Kagane :
 
         val challengeBody = "{}".toRequestBody("application/json".toMediaType())
 
-        val headers = apiHeaders.newBuilder().add("x-integrity-token", integrityToken).build()
+        val headers = headers.newBuilder().add("x-integrity-token", integrityToken).build()
 
-        val response = client.newCall(POST(challengeUrl.toString(), headers, challengeBody)).execute()
+        val response = client.post(challengeUrl.toString(), headers, challengeBody)
         if (!response.isSuccessful) {
             response.close()
-            throw Exception("Failed to get challenge. HTTP error ${response.code}")
+            throw IOException("Failed to get challenge. HTTP error ${response.code}")
         }
 
         return response.parseAs<ChallengeDto>()
     }
-
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================ Preferences =============================
 
@@ -573,33 +552,46 @@ abstract class Kagane :
     // ============================= Filters ==============================
 
     private var metadata: MetadataDto? = null
-    private val metadataClient = client.newBuilder()
-        .addNetworkInterceptor { chain ->
-            chain.proceed(chain.request()).newBuilder()
-                .header("Cache-Control", "max-age=${24 * 60 * 60}")
-                .removeHeader("Pragma")
-                .removeHeader("Expires")
-                .build()
-        }.build()
 
-    override fun getFilterList(): FilterList {
-        val filters: MutableList<Filter<*>> = mutableListOf(
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement = coroutineScope {
+        val genresDeferred = async {
+            client.get("$apiUrl/genres/list")
+                .parseAs<List<GenreDto>>()
+                .associate { it.id to it.genreName }
+        }
+        val tagsDeferred = async {
+            client.get("$apiUrl/tags/list")
+                .parseAs<List<TagDto>>()
+                .associate { it.id to it.tagName }
+        }
+        val sourcesDeferred = async {
+            client.post(
+                "$apiUrl/sources/list",
+                buildJsonObject { put("source_types", null) }.toJsonString()
+                    .toRequestBody("application/json".toMediaType()),
+            )
+                .parseAs<SourcesDto>().sources
+        }
+
+        MetadataDto(genresDeferred.await(), tagsDeferred.await(), sourcesDeferred.await())
+            .toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val meta = data?.parseAs<MetadataDto>()?.also { metadata = it }
+
+        val filters = mutableListOf(
             SortFilter(),
-            ContentRatingFilter(
-                preferences.contentRating.toSet(),
-            ),
+            ContentRatingFilter(preferences.contentRating.toSet()),
             FormatFilter(),
             PublicationStatusFilter(),
             Filter.Separator(),
         )
 
-        fetchMetadata()
-
-        val meta = metadata
-
         if (meta != null) {
             val displayMode = preferences.sourceDisplayMode
-
             val validSources = meta.sources.filter { source ->
                 when (displayMode) {
                     "official" -> source.sourceType.equals("Official", ignoreCase = true)
@@ -619,43 +611,8 @@ abstract class Kagane :
                     SourcesFilter(sourceFilters),
                 ),
             )
-        } else {
-            filters.add(0, Filter.Header("Press 'Reset' to load more filters"))
-            filters.add(1, Filter.Separator())
         }
 
         return FilterList(filters)
-    }
-
-    private fun fetchMetadata() {
-        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val genres = metadataClient.newCall(
-                    GET("$apiUrl/genres/list", apiHeaders),
-                ).execute().use { resp ->
-                    if (!resp.isSuccessful) return@use null
-                    resp.parseAs<List<GenreDto>>().associate { it.id to it.genreName }
-                }
-                val tags = metadataClient.newCall(
-                    GET("$apiUrl/tags/list", apiHeaders),
-                ).execute().use { resp ->
-                    if (!resp.isSuccessful) return@use null
-                    resp.parseAs<List<TagDto>>().associate { it.id to it.tagName }
-                }
-                val sources = getSourcesResponse().use { resp ->
-                    if (!resp.isSuccessful) return@use null
-                    resp.parseAs<SourcesDto>().sources
-                }
-
-                if (genres != null && tags != null && sources != null) {
-                    metadata = MetadataDto(genres, tags, sources)
-                    Log.d(name, "Metadata fetched and updated")
-                } else {
-                    Log.e(name, "Failed to fetch metadata: One or more requests failed")
-                }
-            } catch (e: Exception) {
-                Log.e(name, "Failed to fetch metadata", e)
-            }
-        }
     }
 }
