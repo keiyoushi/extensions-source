@@ -230,6 +230,7 @@ abstract class Iken :
         val mangaUrl = "$apiUrl/api/post?postSlug=$slug"
         val response = client.get(mangaUrl)
         val data = response.parseAs<MangaDto>().post
+        if (data.isNovel) throw IOException("Novels are unsupported")
         updateViews(data.id)
         return data
     }
@@ -237,9 +238,7 @@ abstract class Iken :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.pathSegments.size >= 2) {
             val slug = url.pathSegments[1]
-
             val details = getMangaDetails(slug)
-            if (details.isNovel) return null
             return details.toSManga().apply {
                 initialized = true
             }
@@ -277,7 +276,6 @@ abstract class Iken :
             SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
         } else {
             val details = getMangaDetails(slug)
-            assert(!details.isNovel) { "Novels are unsupported" }
             val updatedManga = details.toSManga()
             val updatedChapters = if (fetchChapters) {
                 details.chapters.filter { it.isVisible() }.map { it.toSChapter(details.slug) }
