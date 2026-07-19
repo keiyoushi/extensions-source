@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -62,8 +63,8 @@ class SearchDto(
         val alternateTitles: List<String> = emptyList(),
     ) {
 
-        fun toSManga(apiUrl: String, showSource: Boolean, sources: Map<String, String>): SManga = SManga.create().apply {
-            title = if (showSource) "${this@Book.title.trim()} [${sources[this@Book.sourceId]}]" else this@Book.title.trim()
+        fun toSManga(apiUrl: String, showSource: Boolean, sources: Map<String, String>, cleanTitle: Boolean): SManga = SManga.create().apply {
+            title = if (showSource) "${this@Book.title.trim()} [${sources[this@Book.sourceId]}]" else this@Book.title.clean(cleanTitle)
             url = id
             thumbnail_url = coverImage?.let { "$apiUrl/image/$it" }
         }
@@ -87,8 +88,8 @@ class TrackerDto(
         val coverImage: String? = null,
     ) {
 
-        fun toSManga(apiUrl: String, showSource: Boolean, sources: Map<String, String>): SManga = SManga.create().apply {
-            title = if (showSource) "${this@Book.title.trim()} [${sources[this@Book.sourceId]}]" else this@Book.title.trim()
+        fun toSManga(apiUrl: String, showSource: Boolean, sources: Map<String, String>, cleanTitle: Boolean): SManga = SManga.create().apply {
+            title = if (showSource) "${this@Book.title.trim()} [${sources[this@Book.sourceId]}]" else this@Book.title.clean(cleanTitle)
             url = id
             thumbnail_url = coverImage?.let { "$apiUrl/image/$it" }
         }
@@ -157,16 +158,16 @@ class DetailsDto(
         val imageId: String,
     )
 
-    fun toSManga(apiUrl: String, sourceName: String? = null, baseUrl: String = "", showEdition: Boolean = false, showSource: Boolean = false): SManga = SManga.create().apply {
+    fun toSManga(apiUrl: String, sourceName: String? = null, baseUrl: String = "", showEdition: Boolean = false, showSource: Boolean = false, cleanTitle: Boolean): SManga = SManga.create().apply {
         val base = this@DetailsDto.title.trim()
         val withEdition = if (showEdition && !this@DetailsDto.editionInfo.isNullOrBlank()) "$base (${this@DetailsDto.editionInfo})" else base
-        title = if (showSource && sourceName != null) "$withEdition [$sourceName]" else withEdition
+        title = if (showSource && sourceName != null) "$withEdition [$sourceName]" else withEdition.clean(cleanTitle)
         thumbnail_url = covers.firstOrNull()?.imageId?.let { "$apiUrl/image/$it" }
         val desc = StringBuilder()
 
         // Add main description
         this@DetailsDto.description?.takeIf { it.isNotBlank() }?.let {
-            desc.append(it.trim())
+            desc.append(Jsoup.parse(it.trim()).text())
             desc.append("\n")
         }
 
@@ -320,3 +321,7 @@ class IntegrityDto(
     val token: String,
     val exp: Long,
 )
+
+private val TITLE_REGEX = Regex("""(?:\s*(?:\([^()]*\)|\[[^\[\]]*]))+\s*$""")
+
+private fun String.clean(removeExtras: Boolean): String = if (removeExtras) this.replace(TITLE_REGEX, "").trim() else this.trim()

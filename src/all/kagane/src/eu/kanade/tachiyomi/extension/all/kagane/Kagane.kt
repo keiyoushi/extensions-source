@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.kagane
 
-import android.content.SharedPreferences
 import android.util.Log
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
@@ -52,7 +51,7 @@ abstract class Kagane :
     private val domain get() = baseUrl.removePrefix("https://")
     private val apiUrl get() = "https://$domain/api/v2"
 
-    private val preferences by getPreferencesLazy()
+    private val prefs by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(::refreshTokenInterceptor)
@@ -105,7 +104,7 @@ abstract class Kagane :
         FilterList(
             SortFilter(Filter.Sort.Selection(1, false)),
             ContentRatingFilter(
-                preferences.contentRating.toSet(),
+                contentRating.toSet(),
             ),
             GenresFilter(emptyList()),
         ),
@@ -119,7 +118,7 @@ abstract class Kagane :
         FilterList(
             SortFilter(Filter.Sort.Selection(6, false)),
             ContentRatingFilter(
-                preferences.contentRating.toSet(),
+                contentRating.toSet(),
             ),
             GenresFilter(emptyList()),
         ),
@@ -133,7 +132,7 @@ abstract class Kagane :
                 put("title", query)
             }
 
-            val displayMode = preferences.sourceDisplayMode
+            val displayMode = sourceDisplayMode
             val sourceTypes = if (displayMode == "official") {
                 listOf("Official")
             } else {
@@ -165,7 +164,7 @@ abstract class Kagane :
             filters.forEach { filter ->
                 when (filter) {
                     is GenresFilter -> {
-                        val excludedGenreIds = preferences.excludedGenres.mapNotNull { genreName ->
+                        val excludedGenreIds = excludedGenres.mapNotNull { genreName ->
                             // fetch genre ids for exclusion to work initially for popular + latest
                             val genresMap = metadata?.genres ?: runCatching { getGenreMap() }.getOrElse { emptyMap() }
 
@@ -257,11 +256,11 @@ abstract class Kagane :
         val response = client.post(url, body)
         val dto = response.parseAs<SearchDto>()
         val sources = getSourcesMap()
-        val mangas = dto.content.map { it.toSManga(apiUrl, preferences.showSource, sources) }
+        val mangas = dto.content.map { it.toSManga(apiUrl, showSource, sources, cleanTitle) }
         return MangasPage(mangas, hasNextPage = dto.hasNextPage())
     }
 
-    private suspend fun getSourcesMap(): Map<String, String> = if (!preferences.showSource) {
+    private suspend fun getSourcesMap(): Map<String, String> = if (!showSource) {
         emptyMap()
     } else {
         metadata?.sources?.associate { it.sourceId to it.title }
@@ -316,7 +315,7 @@ abstract class Kagane :
                     null
                 }
         }
-        return details.toSManga(apiUrl, sourceName, baseUrl, preferences.showEdition, preferences.showSource)
+        return details.toSManga(apiUrl, sourceName, baseUrl, showEdition, showSource, cleanTitle)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
@@ -345,7 +344,7 @@ abstract class Kagane :
         )
 
         return details.seriesBooks.map { book ->
-            book.toSChapter(seriesId, useSourceChapterNumber, preferences.chapterTitleMode)
+            book.toSChapter(seriesId, useSourceChapterNumber, chapterTitleMode)
         }.reversed()
     }
 
@@ -365,7 +364,7 @@ abstract class Kagane :
             }
         val sources = getSourcesMap()
         return series
-            .map { it.toSManga(apiUrl, preferences.showSource, sources) }
+            .map { it.toSManga(apiUrl, showSource, sources, cleanTitle) }
     }
 
     // =============================== Pages ================================
@@ -385,7 +384,7 @@ abstract class Kagane :
 
         return pageList.map { page ->
             val pageUrl = "$cacheUrl/api/v2/books/page".toHttpUrl().newBuilder().apply {
-                if (preferences.dataSaver) {
+                if (dataSaver) {
                     addPathSegment("datasaver")
                 }
                 addPathSegment(chapterId)
@@ -420,7 +419,7 @@ abstract class Kagane :
         val integrityToken = getIntegrityToken()
 
         val challengeUrl = "$apiUrl/books/$chapterId".toHttpUrl().newBuilder()
-            .addQueryParameter("is_datasaver", preferences.dataSaver.toString())
+            .addQueryParameter("is_datasaver", dataSaver.toString())
             .build()
 
         val challengeBody = "{}".toRequestBody("application/json".toMediaType())
@@ -438,30 +437,33 @@ abstract class Kagane :
 
     // ============================ Preferences =============================
 
-    private val SharedPreferences.contentRating: List<String>
+    private val contentRating: List<String>
         get() {
-            val maxRating = this.getString(CONTENT_RATING, CONTENT_RATING_DEFAULT)
+            val maxRating = prefs.getString(CONTENT_RATING, CONTENT_RATING_DEFAULT)
             val index = CONTENT_RATINGS.indexOfFirst { it == maxRating }
             return CONTENT_RATINGS.slice(0..index.coerceAtLeast(0))
         }
 
-    private val SharedPreferences.excludedGenres: Set<String>
-        get() = this.getStringSet(GENRES_PREF, emptySet()) ?: emptySet()
+    private val excludedGenres: Set<String>
+        get() = prefs.getStringSet(GENRES_PREF, emptySet()) ?: emptySet()
 
-    private val SharedPreferences.sourceDisplayMode: String
-        get() = this.getString(SOURCE_DISPLAY_MODE, SOURCE_DISPLAY_MODE_DEFAULT) ?: SOURCE_DISPLAY_MODE_DEFAULT
+    private val sourceDisplayMode: String
+        get() = prefs.getString(SOURCE_DISPLAY_MODE, SOURCE_DISPLAY_MODE_DEFAULT) ?: SOURCE_DISPLAY_MODE_DEFAULT
 
-    private val SharedPreferences.showEdition: Boolean
-        get() = this.getBoolean(SHOW_EDITION, SHOW_EDITION_DEFAULT)
+    private val cleanTitle: Boolean
+        get() = prefs.getBoolean(CLEAN_TITLE, CLEAN_TITLE_DEFAULT)
 
-    private val SharedPreferences.showSource: Boolean
-        get() = this.getBoolean(SHOW_SOURCE, SHOW_SOURCE_DEFAULT)
+    private val showEdition: Boolean
+        get() = !cleanTitle && prefs.getBoolean(SHOW_EDITION, SHOW_EDITION_DEFAULT)
 
-    private val SharedPreferences.dataSaver
-        get() = this.getBoolean(DATA_SAVER, false)
+    private val showSource: Boolean
+        get() = !cleanTitle && prefs.getBoolean(SHOW_SOURCE, SHOW_SOURCE_DEFAULT)
 
-    private val SharedPreferences.chapterTitleMode
-        get() = this.getString(CHAPTER_TITLE_MODE, CHAPTER_TITLE_MODE_DEFAULT)!!
+    private val dataSaver
+        get() = prefs.getBoolean(DATA_SAVER, false)
+
+    private val chapterTitleMode
+        get() = prefs.getString(CHAPTER_TITLE_MODE, CHAPTER_TITLE_MODE_DEFAULT)!!
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
@@ -480,7 +482,7 @@ abstract class Kagane :
             entries = GenresList.map { it.replaceFirstChar { c -> c.uppercase() } }.toTypedArray()
             entryValues = GenresList
             summary =
-                preferences.excludedGenres.joinToString { it.replaceFirstChar { c -> c.uppercase() } }
+                excludedGenres.joinToString { it.replaceFirstChar { c -> c.uppercase() } }
             setDefaultValue(emptySet<String>())
 
             setOnPreferenceChangeListener { _, values ->
@@ -498,6 +500,13 @@ abstract class Kagane :
             entries = arrayOf("Official Sources Only", "Show All (Official + Scanlations)")
             entryValues = arrayOf("official", "all")
             setDefaultValue(SOURCE_DISPLAY_MODE_DEFAULT)
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = CLEAN_TITLE
+            title = "Clean title"
+            summary = "Removes extra brackets / parentheses in title (Disables other title toggles)"
+            setDefaultValue(CLEAN_TITLE_DEFAULT)
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
@@ -544,6 +553,9 @@ abstract class Kagane :
 
         private const val SOURCE_DISPLAY_MODE = "pref_source_display_mode"
         private const val SOURCE_DISPLAY_MODE_DEFAULT = "all"
+
+        private const val CLEAN_TITLE = "pref_clean_title"
+        private const val CLEAN_TITLE_DEFAULT = false
 
         private const val SHOW_SOURCE = "pref_show_source"
         private const val SHOW_SOURCE_DEFAULT = false
@@ -605,14 +617,14 @@ abstract class Kagane :
 
         val filters = mutableListOf(
             SortFilter(),
-            ContentRatingFilter(preferences.contentRating.toSet()),
+            ContentRatingFilter(contentRating.toSet()),
             FormatFilter(),
             PublicationStatusFilter(),
             Filter.Separator(),
         )
 
         if (meta != null) {
-            val displayMode = preferences.sourceDisplayMode
+            val displayMode = sourceDisplayMode
             val validSources = meta.sources.filter { source ->
                 when (displayMode) {
                     "official" -> source.sourceType.equals("Official", ignoreCase = true)
