@@ -6,17 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Vortex Scans"
-    versionCode = 61
+    versionCode = 62
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
+    theme = "iken"
 
     source {
-        lang = "en"
         baseUrl = "https://vortexscans.org"
-    }
-
-    deeplink {
-        host("vortexscans.org")
-        path("/series/..*")
+        lang = "en"
     }
 }
