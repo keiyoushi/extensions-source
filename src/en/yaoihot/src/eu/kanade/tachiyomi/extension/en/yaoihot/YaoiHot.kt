@@ -18,8 +18,6 @@ import java.util.Calendar
 @Source
 abstract class YaoiHot : KeiSource() {
 
-    override val supportsLatest = true
-
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -132,12 +130,6 @@ abstract class YaoiHot : KeiSource() {
 
         return SMangaUpdate(manga, chapters)
     }
-
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
-
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
-
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
 
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
