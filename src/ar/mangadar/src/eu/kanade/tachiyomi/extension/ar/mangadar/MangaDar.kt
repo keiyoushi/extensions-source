@@ -13,12 +13,17 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Response
+import org.jsoup.nodes.Document
 
 @Source
 abstract class MangaDar : KeiSource() {
+
+    override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
@@ -29,10 +34,6 @@ abstract class MangaDar : KeiSource() {
         val response = client.get(url)
         return parseMangaListPage(response)
     }
-
-    // ============================== Latest ===============================
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getPopularManga(page)
 
     // ============================== Search ===============================
 
@@ -122,7 +123,7 @@ abstract class MangaDar : KeiSource() {
 
     // ============================== Filters =============================
 
-    override fun getFilterList(data: kotlinx.serialization.json.JsonElement?) = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SortFilter("الترتيب", sortingList),
         TypeFilter("النوع", typeList),
         StatusFilter("الحالة", statusList),
@@ -136,7 +137,7 @@ abstract class MangaDar : KeiSource() {
 
     // ============================== Parsers ============================
 
-    private fun parseSearchJson(response: okhttp3.Response): MangasPage {
+    private fun parseSearchJson(response: Response): MangasPage {
         val result = response.parseAs<SearchResponse>()
         val mangas = result.data.map { item ->
             val slug = item.url.toHttpUrl().pathSegments.last { it.isNotEmpty() }
@@ -149,7 +150,7 @@ abstract class MangaDar : KeiSource() {
         return MangasPage(mangas, false)
     }
 
-    private fun parseMangaListPage(response: okhttp3.Response): MangasPage {
+    private fun parseMangaListPage(response: Response): MangasPage {
         val doc = response.asJsoup()
         val mangas = doc.select("a[href*=/manga/]").mapNotNull { element ->
             val slug = element.absUrl("href").toHttpUrl()
@@ -171,12 +172,12 @@ abstract class MangaDar : KeiSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun parseMangaDetails(response: okhttp3.Response): SManga {
+    private fun parseMangaDetails(response: Response): SManga {
         val doc = response.asJsoup()
         return parseMangaDetailsFromDoc(doc)
     }
 
-    private fun parseMangaDetailsFromDoc(doc: org.jsoup.nodes.Document): SManga = SManga.create().apply {
+    private fun parseMangaDetailsFromDoc(doc: Document): SManga = SManga.create().apply {
         title = doc.select("h1").text()
         description = doc.select("meta[name=description]").attr("content")
             .ifBlank { doc.select("p.text-neutral-400").text() }
@@ -204,7 +205,7 @@ abstract class MangaDar : KeiSource() {
         thumbnail_url = doc.select("meta[property=og:image]").attr("content")
     }
 
-    private fun parseChaptersFromDoc(doc: org.jsoup.nodes.Document): List<SChapter> {
+    private fun parseChaptersFromDoc(doc: Document): List<SChapter> {
         val chaptersContainer = doc.selectFirst("div[x-data]:containsData(chapters)")
         if (chaptersContainer != null) {
             val xData = chaptersContainer.attr("x-data")
