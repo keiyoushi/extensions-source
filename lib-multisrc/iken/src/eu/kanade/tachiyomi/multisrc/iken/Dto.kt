@@ -24,6 +24,16 @@ class MangaDto(
 )
 
 @Serializable
+class ChapterDto(
+    val post: ChapterPost,
+)
+
+@Serializable
+class ChapterPost(
+    val chapters: List<Chapter>,
+)
+
+@Serializable
 class PageResponse(
     val chapter: Page,
 )
@@ -87,7 +97,7 @@ class Manga(
     }.trim()
 
     private fun getStatus() = when (seriesStatus) {
-        "ONGOING", "COMING_SOON" -> SManga.ONGOING
+        "ONGOING", "COMING_SOON", "MASS_RELEASED" -> SManga.ONGOING
         "COMPLETED" -> SManga.COMPLETED
         "CANCELLED", "DROPPED" -> SManga.CANCELLED
         else -> SManga.UNKNOWN

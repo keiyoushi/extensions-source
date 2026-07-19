@@ -67,6 +67,11 @@ abstract class Iken :
      */
     protected open val sortPagesByFilename = false
 
+    /**
+     * Whether to use standalone chapters endpoint than manga object
+     */
+    protected open val useChaptersApi = false
+
     // ============================== Popular ==============================
 
     // Popular (Search with popular order and nothing else)
@@ -227,6 +232,7 @@ abstract class Iken :
             val manga = SManga.create().apply {
                 this.url = slug
                 memo = buildJsonObject {
+                    put("id", id)
                     put("slug", slug)
                 }
             }
@@ -245,6 +251,15 @@ abstract class Iken :
         preferences.getBoolean(SHOW_LOCKED_CHAPTER_PREF_KEY, false) && isLocked()
         )
 
+    private suspend fun getMangaData(slug: String): Manga {
+        val mangaUrl = "$apiUrl/api/post?postSlug=$slug"
+        val response = client.get(mangaUrl)
+        val data = response.parseAs<MangaDto>().post
+        assert(!data.isNovel) { "Novels are unsupported" }
+        updateViews(data.id)
+        return data
+    }
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -252,20 +267,25 @@ abstract class Iken :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.substringBeforeLast("#")
-        val response = client.get("$apiUrl/api/post?postSlug=$slug")
+        val id = manga.url.substringAfterLast("#")
 
-        val data = response.parseAs<MangaDto>().post
+        val data = getMangaData(slug)
+        val updatedManga = data.toSManga()
 
-        assert(!data.isNovel) { "Novels are unsupported" }
+        val updatedChapters = if (fetchChapters) {
+            if (useChaptersApi) {
+                val mangaId = data.id
+                val response = client.get("$apiUrl/api/chapters?postId=$id")
+                val chapterData = response.parseAs<ChapterDto>().post
+                chapterData.chapters.map { it.toSChapter(slug) }
+            } else {
+                data.chapters.filter { it.isVisible() }.map { it.toSChapter(data.slug) }
+            }
+        } else {
+            chapters
+        }
 
-        updateViews(data.id)
-
-        return SMangaUpdate(
-            manga = data.toSManga(),
-            chapters = data.chapters.filter { it.isVisible() }.map {
-                it.toSChapter(data.slug)
-            },
-        )
+        return SMangaUpdate(updatedManga, updatedChapters)
     }
 
     // ========================= Related Manga =========================
