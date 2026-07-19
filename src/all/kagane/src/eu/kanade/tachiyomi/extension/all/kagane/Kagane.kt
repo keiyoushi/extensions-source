@@ -200,11 +200,11 @@ abstract class Kagane :
                                         if (tagsMatchAll == true) {
                                             put("match_all", true)
                                         }
-                                        if (includeIds.isNotEmpty()) {
-                                            putJsonArray("values") {
-                                                includeIds.forEach { add(it) }
-                                            }
+
+                                        putJsonArray("values") {
+                                            includeIds.forEach { add(it) }
                                         }
+
                                         if (excludeIds.isNotEmpty()) {
                                             putJsonArray("exclude") {
                                                 excludeIds.forEach { add(it) }
