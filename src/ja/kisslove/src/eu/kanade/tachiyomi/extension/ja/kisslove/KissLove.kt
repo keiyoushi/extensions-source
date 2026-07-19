@@ -58,9 +58,7 @@ class KissLove :
         return MangasPage(mangas, false)
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/${manga.url}.html"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}.html"
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
@@ -115,9 +113,7 @@ class KissLove :
         return result.toSManga(preferences.getBoolean(USE_ROMAJI_PREF, true))
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<Manga>()
@@ -217,8 +213,7 @@ class KissLove :
         intl["completed"] to "Completed",
     )
 
-    private class StatusFilter(name: String, private val status: Array<Pair<String, String>>) :
-        Filter.Select<String>(name, status.map { it.first }.toTypedArray()) {
+    private class StatusFilter(name: String, private val status: Array<Pair<String, String>>) : Filter.Select<String>(name, status.map { it.first }.toTypedArray()) {
         fun toUriPart() = status[state].second
     }
 
