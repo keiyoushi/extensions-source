@@ -29,13 +29,14 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 @Source
-class KissLove :
-    HttpSource(),
-    ConfigurableSource {
+class KissLove(
     override val name = "KissLove"
     override val baseUrl = "https://klz9.com"
     override val lang = "ja"
     override val supportsLatest = true
+):
+    HttpSource(),
+    ConfigurableSource {
 
     private val intl = Intl(
         Locale.getDefault().language,
