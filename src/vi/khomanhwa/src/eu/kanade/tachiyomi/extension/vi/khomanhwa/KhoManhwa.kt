@@ -12,7 +12,6 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
@@ -65,19 +64,9 @@ abstract class KhoManhwa : KeiSource() {
         query: String,
         filters: FilterList,
     ): MangasPage {
-        val categoryFilter = filters.firstInstanceOrNull<CategoryFilter>()
-        val categoryPath = categoryFilter?.getCategoryPath()
-
-        if (categoryPath != null) {
-            return parseMangaList(client.get("$baseUrl/$categoryPath?page=$page"))
-        }
-
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
             if (query.isNotEmpty()) addQueryParameter("q", query)
-            filters.firstInstanceOrNull<GenreFilter>()?.addQueryParameter(this)
-            filters.firstInstanceOrNull<StatusFilter>()?.addQueryParameter(this)
-            filters.firstInstanceOrNull<SortFilter>()?.addQueryParameter(this)
         }.build()
 
         return parseMangaList(client.get(url))
@@ -105,8 +94,8 @@ abstract class KhoManhwa : KeiSource() {
         val document = response.asJsoup()
 
         return SMangaUpdate(
-            manga = if (fetchDetails) parseDetails(document, manga) else manga,
-            chapters = if (fetchChapters) parseChapters(document) else chapters,
+            manga = parseDetails(document, manga),
+            chapters = parseChapters(document),
         )
     }
 
@@ -189,6 +178,8 @@ abstract class KhoManhwa : KeiSource() {
     }
 
     // ============================== Related ===============================
+
+    override val supportsRelatedMangas: Boolean = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val document = client.get("$baseUrl${manga.url}").asJsoup()
