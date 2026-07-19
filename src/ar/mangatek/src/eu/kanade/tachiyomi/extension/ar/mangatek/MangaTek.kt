@@ -1,9 +1,7 @@
 package eu.kanade.tachiyomi.extension.ar.mangatek
 
 import android.content.SharedPreferences
-import android.os.Build
 import android.widget.Toast
-import androidx.annotation.RequiresApi
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -29,7 +27,6 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-@RequiresApi(Build.VERSION_CODES.O)
 @Source
 abstract class MangaTek :
     HttpSource(),

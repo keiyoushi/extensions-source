@@ -10,7 +10,6 @@ import android.os.Build
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
-import androidx.annotation.RequiresApi
 import eu.kanade.tachiyomi.extension.ar.mangatek.MangaTek.Companion.PAGE_REGEX
 import keiyoushi.utils.parseAs
 import okhttp3.Interceptor
@@ -20,7 +19,6 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.Jsoup
 import java.io.ByteArrayOutputStream
 
-@RequiresApi(Build.VERSION_CODES.O)
 class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
