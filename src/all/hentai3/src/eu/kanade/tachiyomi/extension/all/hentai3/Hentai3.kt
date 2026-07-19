@@ -222,19 +222,16 @@ abstract class Hentai3 :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
+    ): SMangaUpdate = if (fetchDetails || fetchChapters) {
         val doc = client.get(getMangaUrl(manga)).asJsoup()
-        return SMangaUpdate(
-            manga = if (fetchDetails) parseMangaDetails(doc) else manga,
-            chapters = if (fetchChapters) parseChapterList(doc) else chapters,
-        )
+        SMangaUpdate(parseMangaDetails(doc), parseChapterList(doc))
+    } else {
+        SMangaUpdate(manga, chapters)
     }
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
-
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
-
     // Related manga
+    override val supportsRelatedMangas = true
+
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val doc = client.get(getMangaUrl(manga)).asJsoup()
         return doc.select("#similar-content .doujin-col .doujin a.cover").mapNotNull { link ->
