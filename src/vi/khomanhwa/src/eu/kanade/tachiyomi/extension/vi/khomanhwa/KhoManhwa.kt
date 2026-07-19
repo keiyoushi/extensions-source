@@ -12,6 +12,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
@@ -64,9 +65,23 @@ abstract class KhoManhwa : KeiSource() {
         query: String,
         filters: FilterList,
     ): MangasPage {
+        val categoryFilter = filters.firstInstanceOrNull<CategoryFilter>()
+        val categoryPath = categoryFilter?.getCategoryPath()
+
+        if (query.isNotEmpty()) {
+            val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+                addQueryParameter("page", page.toString())
+                addQueryParameter("q", query)
+            }.build()
+            return parseMangaList(client.get(url))
+        }
+
+        if (categoryPath != null) {
+            return parseMangaList(client.get("$baseUrl/$categoryPath?page=$page"))
+        }
+
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
-            if (query.isNotEmpty()) addQueryParameter("q", query)
         }.build()
 
         return parseMangaList(client.get(url))
