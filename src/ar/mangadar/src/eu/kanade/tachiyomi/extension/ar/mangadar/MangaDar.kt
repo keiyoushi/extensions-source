@@ -35,6 +35,10 @@ abstract class MangaDar : KeiSource() {
         return parseMangaListPage(response)
     }
 
+    // ============================== Latest ===============================
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getPopularManga(page)
+
     // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
