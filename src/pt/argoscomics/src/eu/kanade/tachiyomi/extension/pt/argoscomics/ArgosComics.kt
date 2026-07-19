@@ -1,129 +1,120 @@
 package eu.kanade.tachiyomi.extension.pt.argoscomics
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class ArgosComics : HttpSource() {
+abstract class ArgosComics : KeiSource() {
 
-    override val supportsLatest: Boolean = true
-
-    override val client: OkHttpClient = network.client.newBuilder()
-        .rateLimit(3, 2.seconds)
-        .build()
-
-    private val rscHeaders by lazy {
-        headersBuilder().set("rsc", "1").build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        rateLimit(3, 2.seconds)
     }
+
+    private val rscHeaders
+        get() = headersBuilder().set("rsc", "1").build()
 
     // ======================== Popular =============================
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment("projetos")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, rscHeaders)
+        return client.get(url, rscHeaders).extractNextJs<MangasListDto>()!!.toMangasPage()
     }
-
-    override fun popularMangaParse(response: Response): MangasPage = response.extractNextJs<MangasListDto>()!!.toMangasPage()
 
     // ======================== Latest =============================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, rscHeaders)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = response.extractNextJs<LatestMangas>()!!.toMangasPage()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get(baseUrl, rscHeaders).extractNextJs<LatestMangas>()!!.toMangasPage()
 
     // ======================== Search =============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val searchHeaders = headers.newBuilder()
             .set("Next-Action", SEARCH_TOKEN)
             .build()
         val payload = listOf(query).toJsonRequestBody()
-        return POST(baseUrl, searchHeaders, payload)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val dto = response.extractNextJs<List<MangaDto>>() ?: emptyList()
+        val dto = client.post(baseUrl, searchHeaders, payload).extractNextJs<List<MangaDto>>() ?: emptyList()
         return MangasPage(dto.map(MangaDto::toSManga), false)
     }
 
-    // ======================== Details =============================
+    // ======================== Details + Chapters =============================
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val detailsDeferred = async {
+            if (fetchDetails) {
+                val url = getMangaUrl(manga)
+                val payload = url.toHttpUrl().pathSegments.toJsonRequestBody()
+                val detailsHeaders = headers.newBuilder()
+                    .set("Next-Action", DETAILS_TOKEN)
+                    .build()
+                client.post(url, detailsHeaders, payload).extractNextJs<MangaDetailsDto>()!!.toSManga()
+            } else {
+                manga
+            }
+        }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = getMangaUrl(manga)
-        val payload = url.toHttpUrl().pathSegments.toJsonRequestBody()
-        val detailsHeaders = headers.newBuilder()
-            .set("Next-Action", DETAILS_TOKEN)
-            .build()
-        return POST(url, detailsHeaders, payload)
-    }
+        val chaptersDeferred = async {
+            if (fetchChapters) {
+                val url = getMangaUrl(manga)
+                val payload = url.toHttpUrl().pathSegments.toJsonRequestBody()
+                val chaptersHeaders = headers.newBuilder()
+                    .set("Next-Action", CHAPTERS_TOKEN)
+                    .build()
+                val response = client.post(url, chaptersHeaders, payload)
+                val pathSegment = url.substringAfter(baseUrl)
+                response.extractNextJs<VolumeChapterDto>()!!.toChapterList(pathSegment)
+            } else {
+                chapters
+            }
+        }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.extractNextJs<MangaDetailsDto>()!!.toSManga()
-
-    // ======================== Chapters =============================
-
-    override fun chapterListRequest(manga: SManga): Request {
-        val chaptersHeaders = headers.newBuilder()
-            .set("Next-Action", CHAPTERS_TOKEN)
-            .build()
-        return mangaDetailsRequest(manga).newBuilder()
-            .headers(chaptersHeaders)
-            .build()
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val pathSegment = response.request.url.toString().substringAfter(baseUrl)
-        return response.extractNextJs<VolumeChapterDto>()!!.toChapterList(pathSegment)
+        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
     }
 
     // ======================== Pages =============================
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        val segments = getChapterUrl(chapter).toHttpUrl().pathSegments
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val url = getChapterUrl(chapter)
+        val segments = url.toHttpUrl().pathSegments
         val payload = listOf(segments.first(), segments.last()).toJsonRequestBody()
         val pagesHeaders = headers.newBuilder()
             .set("Next-Action", PAGES_TOKEN)
             .build()
-        return POST(getChapterUrl(chapter), pagesHeaders, payload)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
+        val response = client.post(url, pagesHeaders, payload)
         if (response.request.url.encodedPath == "/login") error("Acesse sua conta")
-
         val body = response.body.string()
         val dto = body.extractNextJsRsc<MangaDetailsDto>()
         if (dto?.isUpcoming == true) error("Capítulo em desenvolvimento")
         return body.extractNextJsRsc<PagesDto>()!!.toPageList()
     }
 
-    override fun imageUrlParse(response: Response) = ""
-
     companion object {
-        private const val SEARCH_TOKEN = "40d9f16929718dd0e02ec0bcdc2393de860707fa79"
-        private const val CHAPTERS_TOKEN = "607bcd9f90d5db5edaa2cf1aff7a002b5b14ead30a"
-        private const val DETAILS_TOKEN = "60d532a2a6a7a0ff42de5f69dcdf2db5860a2f76b0"
-        private const val PAGES_TOKEN = "60390ae612bb67d3d0614b47c7fa396fa4201aa323"
+        private const val SEARCH_TOKEN = "401563018947bb5e0823b4295c6f5fbbbb27c7c8a7"
+        private const val CHAPTERS_TOKEN = "606716f5913c027ff3c3054981361be598857cefe2"
+        private const val DETAILS_TOKEN = "601ce7e470cca09f45d7d39f2668924e80b1c3df0c"
+        private const val PAGES_TOKEN = "609b98cc48cafaf9f9eb7a2ef652330137d7198d8f"
     }
 }
