@@ -235,6 +235,8 @@ abstract class BiliManga :
         SMangaUpdate(asyncManga.await(), asyncChapters.await())
     }
 
+    override val supportsRelatedMangas get() = true
+
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val doc = client.get(getMangaUrl(manga)).asJsoup()
         return doc.select("#book-friend-list-container").last()?.select(".module-slide-a")?.map {

@@ -150,6 +150,8 @@ abstract class Komiic :
         return SMangaUpdate(sManga, sChapters)
     }
 
+    override val supportsRelatedMangas get() = true
+
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val response = client.query(recommendQuery(manga.id))
         val comicIds = response.parseGraphQLAs<DataDto>().recommendComicById!!

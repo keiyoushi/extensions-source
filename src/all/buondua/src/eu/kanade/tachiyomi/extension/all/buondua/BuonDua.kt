@@ -182,6 +182,8 @@ abstract class BuonDua :
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     // Related
+    override val supportsRelatedMangas get() = true
+
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val response = client.get(getMangaUrl(manga))
         return parseMangasPage(response).mangas
