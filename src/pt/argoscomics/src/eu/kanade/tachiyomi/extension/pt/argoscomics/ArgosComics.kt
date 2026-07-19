@@ -16,8 +16,6 @@ import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.serialization.json.JsonElement
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import kotlin.time.Duration.Companion.seconds
@@ -29,9 +27,8 @@ abstract class ArgosComics : KeiSource() {
         rateLimit(3, 2.seconds)
     }
 
-    private val rscHeaders by lazy {
-        headers.newBuilder().set("rsc", "1").build()
-    }
+    private val rscHeaders
+        get() = headersBuilder().set("rsc", "1").build()
 
     // ======================== Popular =============================
 
@@ -58,13 +55,7 @@ abstract class ArgosComics : KeiSource() {
         return MangasPage(dto.map(MangaDto::toSManga), false)
     }
 
-    override fun getFilterList(data: JsonElement?): FilterList = FilterList()
-
     // ======================== Details + Chapters =============================
-
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
-
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = null
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -103,8 +94,6 @@ abstract class ArgosComics : KeiSource() {
         SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
-
     // ======================== Pages =============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -121,8 +110,6 @@ abstract class ArgosComics : KeiSource() {
         if (dto?.isUpcoming == true) error("Capítulo em desenvolvimento")
         return body.extractNextJsRsc<PagesDto>()!!.toPageList()
     }
-
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
 
     companion object {
         private const val SEARCH_TOKEN = "401563018947bb5e0823b4295c6f5fbbbb27c7c8a7"
