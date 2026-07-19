@@ -27,7 +27,9 @@ import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.*
 
-class KissLove : HttpSource(), ConfigurableSource {
+class KissLove :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "KissLove"
     override val baseUrl = "https://klz9.com"
     override val lang = "ja"
