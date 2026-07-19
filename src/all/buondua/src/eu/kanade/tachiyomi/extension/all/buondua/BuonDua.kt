@@ -183,7 +183,7 @@ abstract class BuonDua :
 
     // Related
     override val supportsRelatedMangas get() = true
-    
+
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val response = client.get(getMangaUrl(manga))
         return parseMangasPage(response).mangas

@@ -14,7 +14,6 @@ import keiyoushi.utils.int
 import keiyoushi.utils.long
 import keiyoushi.utils.string
 import kotlinx.serialization.json.JsonElement
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
