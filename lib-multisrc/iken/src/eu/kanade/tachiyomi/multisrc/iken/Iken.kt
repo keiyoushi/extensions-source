@@ -234,7 +234,6 @@ abstract class Iken :
             val manga = SManga.create().apply {
                 this.url = slug
                 memo = buildJsonObject {
-                    put("id", id)
                     put("slug", slug)
                 }
             }
@@ -272,7 +271,7 @@ abstract class Iken :
         val id = manga.url.substringAfterLast("#")
 
         if (useChaptersApi) {
-            val mangaDeferred = async { getMangaData(slug).toSManga() }
+            val mangaDeferred = async { if (fetchDetails) getMangaData(slug).toSManga() else manga }
             val chaptersDeferred = async {
                 if (fetchChapters) {
                     val response = client.get("$apiUrl/api/chapters?postId=$id")
