@@ -42,50 +42,64 @@ data class Manga(
     val views: Long,
     @SerialName("vote_count") val voteCount: Long?,
 ) {
-    fun toSManga() = SManga.create().apply {
-        url = this@Manga.slug
-        title = this@Manga.name
-        artist = this@Manga.artists
-        author = this@Manga.authors
-        description = "${Jsoup.parse(this@Manga.description).text()}\n\n$otherName"
-        thumbnail_url = this@Manga.cover
-        genre = this@Manga.genres?.split(",")?.joinToString { it.trim() }
-        status = if (mStatus == 1) SManga.COMPLETED else SManga.ONGOING
+    fun toSManga(useRomajiTitle: Boolean = true): SManga {
+        val (mainName, extraName) = if (useRomajiTitle) {
+            name to otherName
+        } else {
+            val parts = otherName.split(Regex(",\\s*"))
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+
+            val (jpParts, nonJpParts) = parts.partition { hasJapaneseKana(it) }
+
+            val mainTitle = if (jpParts.isNotEmpty()) {
+                jpParts.maxByOrNull { it.length } ?: jpParts.first()
+            } else {
+                parts.firstOrNull() ?: name
+            }
+
+            val extra = buildExtraName(mainTitle, name, jpParts, nonJpParts)
+
+            mainTitle to extra
+        }
+
+        return SManga.create().apply {
+            url = this@Manga.slug
+            title = mainName
+            artist = this@Manga.artists
+            author = this@Manga.authors
+            description = "${Jsoup.parse(this@Manga.description).text()}\n\n$extraName"
+            thumbnail_url = this@Manga.cover
+            genre = this@Manga.genres?.split(",")?.joinToString { it.trim() }
+            status = if (mStatus == 1) SManga.COMPLETED else SManga.ONGOING
+        }
     }
-}
 
-@Serializable
-data class ListPagedManga(
-    val currentPage: Long,
-    val items: List<MangaEntry>,
-    val totalItems: Long,
-    val totalPages: Long,
-)
+    private fun hasJapaneseKana(text: String): Boolean {
+        val kanaRegex = Regex("[\\p{Script=Hiragana}\\p{Script=Katakana}]")
+        return kanaRegex.containsMatchIn(text)
+    }
 
-@Serializable
-data class MangaEntry(
-    val artists: String?,
-    val authors: String,
-    val cover: String,
-    val description: String = "",
-    val genres: List<String>?,
-    val hidden: Int?,
-    val id: Long,
-    @SerialName("m_status") val mStatus: Int,
-    val name: String,
-    @SerialName("other_name") val otherName: String,
-    val slug: String,
-    @SerialName("trans_group") val transGroup: String,
-) {
-    fun toSManga() = SManga.create().apply {
-        url = this@MangaEntry.slug
-        title = this@MangaEntry.name
-        artist = this@MangaEntry.artists
-        author = this@MangaEntry.authors
-        description = "${Jsoup.parse(this@MangaEntry.description).text()}\n\n$otherName"
-        thumbnail_url = this@MangaEntry.cover
-        genre = this@MangaEntry.genres?.joinToString { it.trim() }
-        status = if (mStatus == 1) SManga.COMPLETED else SManga.ONGOING
+    private fun buildExtraName(
+        mainTitle: String,
+        originalName: String,
+        jpParts: List<String>,
+        nonJpParts: List<String>,
+    ): String {
+        val extraParts = mutableListOf<String>()
+
+        extraParts.add(originalName)
+
+        extraParts.addAll(nonJpParts)
+
+        jpParts
+            .filter { it != mainTitle }
+            .forEach { extraParts.add(it) }
+
+        return extraParts
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .joinToString(", ")
     }
 }
 
