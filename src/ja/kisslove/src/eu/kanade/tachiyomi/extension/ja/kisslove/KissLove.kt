@@ -27,6 +27,7 @@ import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.*
 
+@Source
 class KissLove :
     HttpSource(),
     ConfigurableSource {
