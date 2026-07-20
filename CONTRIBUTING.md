@@ -38,7 +38,7 @@ or fix them directly by submitting a Pull Request.
         - [JSON serialization - `toJsonString` / `toJsonRequestBody`](#json-serialization---tojsonstring--tojsonrequestbody)
         - [JSON models (DTOs) and serialization](#json-models-dtos-and-serialization)
         - [Protobuf parsing and serialization - `parseAsProto` / `toRequestBodyProto`](#protobuf-parsing-and-serialization---parseasproto--torequestbodyproto)
-        - [Date parsing - `Instant.parseOrNull` / `tryParse`](#date-parsing---instantparseornull--tryparse)
+        - [Date parsing - `Instant.parseOrNull` / `java.time`](#date-parsing---instantparseornull--javatime)
         - [HTTP requests - `OkHttpClient.get` / `post` / `put` / `head`](#http-requests---okhttpclientget--post--put--head)
         - [WebView execution - `runWebView` / `getLocalStorage`](#webview-execution---runwebview--getlocalstorage)
         - [Filter helpers - `firstInstance` / `firstInstanceOrNull`](#filter-helpers---firstinstance--firstinstanceornull)
@@ -700,10 +700,9 @@ If you only need to work with raw bytes, you can also use `.decodeProto()` and `
 
 Do not create a local `private val proto: ProtoBuf by injectLazy()` unless you specifically need a custom configuration. For standard parsing, the global instance is already available and the `parseAsProto` helpers use it automatically.
 
-##### Date parsing - `Instant.parseOrNull` / `tryParse`
+##### Date parsing - `Instant.parseOrNull` / `java.time`
 
-For **ISO-8601** date strings (e.g. `2024-03-05T12:30:00Z`), prefer `kotlin.time.Instant.parseOrNull`
-over `SimpleDateFormat`:
+For **ISO-8601** date strings (e.g. `2024-03-05T12:30:00Z`), prefer `kotlin.time.Instant.parseOrNull`:
 
 ```kotlin
 import kotlin.time.Instant
@@ -713,38 +712,49 @@ chapter.date_upload = Instant.parseOrNull(dateStr)?.toEpochMilliseconds() ?: 0L
 
 It returns `null` on a malformed string instead of throwing, and needs no format pattern, locale, or
 timezone handling - `parseOrNull` only accepts strict ISO-8601 (with an explicit `Z` or offset), so
-fall back to `SimpleDateFormat` for anything else (e.g. `dd MMM yyyy`, or a site-local format with no
+fall back to `java.time` for anything else (e.g. `dd MMM yyyy`, or a site-local format with no
 offset).
 
-For those non-ISO formats, use `keiyoushi.utils.tryParse` on a `SimpleDateFormat` instance to safely
-parse the date string. It returns `0L` on failure or when the input is `null`, which is exactly what
-the app expects.
+For those non-ISO formats, prefer `java.time` (`DateTimeFormatter` with `LocalDate`/`LocalDateTime`/
+`OffsetDateTime`) over `SimpleDateFormat`, which is discouraged for new code. Wrap the parse in
+`runCatching` so a malformed or unexpected string falls back to `0L` instead of crashing:
 
 ```kotlin
-import keiyoushi.utils.tryParse
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
-// Declare dateFormat at class/file level - creating SimpleDateFormat is expensive:
-private val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH)
+// Declare the formatter at class/file level - creating one is not free:
+private val dateFormat = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH)
 
-chapter.date_upload = dateFormat.tryParse(dateStr)
+chapter.date_upload = runCatching {
+    LocalDate.parse(dateStr, dateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+}.getOrDefault(0L)
 ```
 
-**Do not** write manual try/catch blocks or null-guards around `SimpleDateFormat.parse()`;
-`tryParse` handles both. Also, always declare your `SimpleDateFormat` as a class-level or
-file-level `val` so it is not reconstructed for every chapter.
+If a site mixes ISO and non-ISO shapes in the same field (rare, but happens), chain the attempts with
+`recoverCatching` instead of hand-rolling detection logic:
 
-Two common mistakes to avoid:
+```kotlin
+runCatching { Instant.parse(dateStr).toEpochMilliseconds() }
+    .recoverCatching { LocalDate.parse(dateStr, dateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() }
+    .getOrDefault(0L)
+```
 
-- **Always set `Locale.ROOT`**, unless the pattern contains locale-sensitive text (such as month names), in which case use the appropriate locale.
-- **Set the timezone** if known, either if the site's region is known or because the pattern uses a literal `'Z'`.
+Only reach for `SimpleDateFormat` + `keiyoushi.utils.tryParse` if `java.time` genuinely can't express
+the pattern you need; it is otherwise discouraged in new code.
+
+Two common mistakes to avoid, regardless of which API you use:
+
+- **Always set `Locale.ROOT`** (or `Locale.ENGLISH` for `java.time`, which requires a non-root locale for some symbol sets), unless the pattern contains locale-sensitive text (such as month names), in which case use the appropriate locale.
+- **Set the timezone/offset** if known, either because the site's region is known or because the pattern uses a literal `'Z'`.
 
   ```kotlin
-  // Wrong: 'Z' is treated as a literal character, timezone defaults to device local time
-  SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
-  // Correct, if you must use SimpleDateFormat for this shape at all - prefer Instant.parseOrNull instead:
-  SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-      timeZone = TimeZone.getTimeZone("UTC")
-  }
+  // Wrong: 'Z' is treated as a literal character, no offset is applied
+  DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
+  // Correct, if you must parse this shape by hand at all - prefer Instant.parseOrNull instead:
+  LocalDateTime.parse(dateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")).toInstant(ZoneOffset.UTC)
   ```
 
 ##### HTTP requests - `OkHttpClient.get` / `post` / `put` / `head`
@@ -1017,26 +1027,34 @@ for new sources.
 `KeiSource` (package `keiyoushi.source`) is a suspend-function-based source API. Use it for every
 new source.
 
-Methods you must implement:
+Methods you must implement (no default - the class will not compile without them):
 
 | Method                                                                                                                               | Notes                                                                                                                                      |
 |--------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
 | `suspend fun getPopularManga(page: Int): MangasPage`                                                                                 | Make your HTTP calls with `client` (see [HTTP requests](#http-requests---okhttpclientget--post--put--head)) directly inside this function. |
 | `suspend fun getLatestUpdates(page: Int): MangasPage`                                                                                | Only called when `supportsLatest` is `true` (defaults to `true` on `KeiSource`).                                                           |
-| `suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage`                                          | Plain-text/filter search only; URL search queries are already handled for you (see `getMangaByUrl`).                                       |
-| `suspend fun getMangaByUrl(url: HttpUrl): SManga?`                                                                                   | Called automatically whenever the search query is itself a URL. Return `null` if the URL isn't recognized.                                 |
+| `suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage`                                          | Plain-text/filter search only; URL search queries are already routed to `getMangaByUrl`/`getMangasByUrl` instead.                          |
 | `suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate` | See below - whether to honor the flags depends on whether details and chapters come from the same request.                                 |
-| `fun getMangaUrl(manga: SManga): String`                                                                                             | Mandatory: `KeiSource` has no request to derive a default from.                                                                            |
-| `fun getChapterUrl(chapter: SChapter): String`                                                                                       | Mandatory, same reason.                                                                                                                    |
 | `suspend fun getPageList(chapter: SChapter): List<Page>`                                                                             | Fetch and parse the page list directly here.                                                                                               |
-| `suspend fun fetchRelatedMangaList(manga: SManga): List<SManga>`                                                                     | Only used by Komikku. If the source doesn't support related manga, set `supportsRelatedMangas = false` and return `emptyList()`.           |
 
-Optional overrides (inherited with a default; override only when needed):
+Optional overrides (each has a working default; override only when your source needs different behavior):
 
-| Method                                        | Default                                       | Override when...                                                                                                                                                                                                                                                        |
-|-----------------------------------------------|-----------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `fun getHomeUrl(): String`                    | Returns `baseUrl`.                            | The browse screen's "Open in WebView" action should land somewhere other than `baseUrl` (e.g. the source's real site differs from the API host used as `baseUrl`).                                                                                                      |
-| `suspend fun getImageUrl(page: Page): String` | Not called unless a `Page.imageUrl` is empty. | A page's image URL can't be determined upfront in `getPageList` and must be resolved lazily once the chapter is opened - see [Chapter Pages](#chapter-pages). Make your request with `client` and return the URL directly; there's no request/parse split to implement. |
+| Method                                                             | Default                                                          | Override when...                                                                                                                                                                                        |
+|----------------------------------------------------------------------|----------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `fun getHomeUrl(): String`                                            | Returns `baseUrl`.                                              | The browse screen's "Open in WebView" action should land somewhere other than `baseUrl` (e.g. the source's real site differs from the API host used as `baseUrl`).                                      |
+| `suspend fun getImageUrl(page: Page): String`                         | Not called unless a `Page.imageUrl` is empty.                   | A page's image URL can't be determined upfront in `getPageList` and must be resolved lazily once the chapter is opened - see [Chapter Pages](#chapter-pages). Make your request with `client` and return the URL directly. |
+| `fun getMangaUrl(manga: SManga): String`                              | Returns `baseUrl + manga.url`.                                  | That doesn't land on the manga's real page. Since `SManga.url` is recommended to hold just an ID/slug rather than a full relative path (see [Misc notes](#misc-notes)), the default concatenation often isn't a valid path by itself - override to build the real URL from the ID/slug (e.g. `"$baseUrl/manga/${manga.url}"`).      |
+| `fun getChapterUrl(chapter: SChapter): String`                        | Returns `baseUrl + chapter.url`.                                | Same reasoning as `getMangaUrl`, for chapters.                                                                                                                                                            |
+| `suspend fun getMangaByUrl(url: HttpUrl): SManga?`                    | Throws (unimplemented).                                         | Almost always: this backs URL search (pasting/opening a manga link for this source). Return `null` if the URL isn't recognized - leaving this unimplemented means URL search crashes for this source.  |
+| `suspend fun getMangasByUrl(url: HttpUrl, page: Int): MangasPage`     | Wraps `getMangaByUrl`'s result into a single-item `MangasPage`. | A URL can resolve to more than one manga (e.g. a listing/category page URL) - override this instead of/alongside `getMangaByUrl`.                                                                       |
+| `val supportsRelatedMangas: Boolean`                                  | `false`.                                                         | Recommended whenever the site itself surfaces related/similar manga - set to `true` and implement `fetchRelatedMangaList`. **Only works on Komikku.**                                                   |
+| `val supportRelatedMangasBySearch: Boolean`                           | `false`.                                                         | Related manga should fall back to searching the source by title when a direct related-manga list isn't available. **Only works on Komikku.**                                                           |
+| `suspend fun fetchRelatedMangaList(manga: SManga): List<SManga>`      | Returns `emptyList()`.                                           | Only called when `supportsRelatedMangas` is `true`.                                                                                                                                                      |
+| `val supportsFilterFetching: Boolean`                                 | `false`.                                                         | The source needs to fetch its filter options from the network - see filter fetching below.                                                                                                              |
+| `suspend fun fetchFilterData(): JsonElement`                          | Returns `JsonNull`.                                              | Paired with `supportsFilterFetching = true`.                                                                                                                                                              |
+| `fun getFilterList(data: JsonElement?): FilterList`                   | Returns an empty `FilterList`.                                   | The source has any filters at all, fetched or static.                                                                                                                                                    |
+| `fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder`    | No changes.                                                      | Timeouts, extra interceptors, cookie/cache/DNS config - `client` itself is `final` on `KeiSource`.                                                                                                       |
+| `fun Headers.Builder.configureHeaders(): Headers.Builder`             | No changes.                                                      | Extra default headers beyond the `Referer`/`Origin` `KeiSource` already sets - `headersBuilder()` itself is `final`.                                                                                     |
 
 **`fetchMangaUpdate`:** if manga details and the chapter list come from the same page or the same
 API response, fetch and parse it once and return both the updated `SManga` and the full chapter
@@ -1052,15 +1070,15 @@ Behavior `KeiSource` gives you for free:
   `pageListRequest`/`pageListParse`, etc. - make the request and parse the response in the same
   suspend function.
 - **Automatic URL search:** `getSearchManga` inspects the query; if it parses as an `HttpUrl`, it
-  calls `getMangaByUrl` instead of `getSearchMangaList`. You do not need to handle this manually.
+  calls `getMangasByUrl`/`getMangaByUrl` instead of `getSearchMangaList`. You do not need to handle
+  this manually.
 - **Headers:** `headersBuilder()` already sets `Referer` and `Origin` to `baseUrl`; override
   `Headers.Builder.configureHeaders()` instead of `headersBuilder()` to add more.
 - **Filter fetching:** if a source needs to fetch its filter options from the network, set
   `supportsFilterFetching = true`, implement `fetchFilterData()` (returns the raw filter data as a
-  `JsonElement`, called on a background coroutine and cached to disk for 3 days), and implement
-  `getFilterList(data: JsonElement?)` (pure, synchronous - build a `FilterList` from cached data,
-  `null` on first launch or if fetching failed).
-- **Related manga:** `supportsRelatedMangas` defaults to `true`.
+  `JsonElement`, called on a background coroutine, retried up to 3 times on failure, and cached to
+  disk for 3 days), and implement `getFilterList(data: JsonElement?)` (pure, synchronous - build a
+  `FilterList` from cached data, `null` on first launch or if fetching failed/hasn't completed yet).
 
 #### Main class key variables
 
@@ -1215,9 +1233,10 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
       (Swipe-to-Refresh).
 - `fetchChapters = true` asks for the chapter list.
   - **The list should be sorted descending by the source order**.
-- `getMangaUrl` is called when the user taps "Open in WebView". Unlike on the legacy flow, it has no
-  request to derive a default from - implement it explicitly, returning the manga's absolute URL on
-  the website (even if the source itself is API-driven).
+- `getMangaUrl` is called when the user taps "Open in WebView". It defaults to `baseUrl + manga.url`;
+  only override it if that doesn't already resolve to the manga's page on the website. In practice
+  this is common, since `SManga.url` is recommended to hold just an ID/slug rather than a full
+  relative path - override to build the real URL from it (e.g. `"$baseUrl/manga/${manga.url}"`).
 
 #### Chapter
 
@@ -1233,21 +1252,26 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
         chapter.date_upload = Instant.parseOrNull(dateStr)?.toEpochMilliseconds() ?: 0L
         ```
 
-      For any other format, use a `SimpleDateFormat` with `keiyoushi.utils.tryParse` instead:
+      For any other format, prefer `java.time` (`DateTimeFormatter` + `LocalDateTime`) over
+      `SimpleDateFormat`, which is discouraged for new code:
 
         ```kotlin
-        import keiyoushi.utils.tryParse
+        import java.time.LocalDateTime
+        import java.time.ZoneOffset
+        import java.time.format.DateTimeFormatter
   
-        chapter.date_upload = dateFormat.tryParse(dateStr)
+        chapter.date_upload = runCatching {
+            LocalDateTime.parse(dateStr, dateFormat).toInstant(ZoneOffset.UTC).toEpochMilli()
+        }.getOrDefault(0L)
   
         private val dateFormat by lazy {
-            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
         }
         ```
 
-      Ensure the `SimpleDateFormat` is a class constant or variable so it is not
-      recreated for every chapter. If you need to parse or format dates in a manga description, create
-      another instance since `SimpleDateFormat` is not thread-safe.
+      Ensure the formatter is a class constant or variable so it is not recreated for every chapter
+      (a `DateTimeFormatter`, unlike `SimpleDateFormat`, is thread-safe and can safely be reused across
+      instances).
 
   - If parsing fails, return `0L` so the app uses the default date
       instead.
@@ -1255,8 +1279,8 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
   - If the source only provides the manga's update date, assign it to the latest chapter only.
 
 - `getChapterUrl` is called when the user taps "Open in WebView" in the reader. Like `getMangaUrl`,
-  it has no default and must be implemented explicitly, returning the chapter's absolute URL on the
-  website.
+  it defaults to `baseUrl + chapter.url`; override it only when that doesn't resolve to the chapter's
+  page on the website.
 
 #### Chapter Pages
 
