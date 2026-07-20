@@ -22,7 +22,6 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -183,11 +182,6 @@ abstract class MangaFive :
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
-
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = null
-
-    override val supportsRelatedMangas get() = false
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"

@@ -1,21 +1,28 @@
 package eu.kanade.tachiyomi.extension.zh.bilimanga
 
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.supervisorScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -26,10 +33,8 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class BiliManga :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-
-    override val supportsLatest = true
 
     private val pref by getPreferencesLazy()
 
@@ -37,15 +42,16 @@ abstract class BiliManga :
         preferencesInternal(screen.context, pref).forEach(screen::addPreference)
     }
 
-    override val client = super.client.newBuilder()
-        .addNetworkInterceptor(MangaInterceptor())
-        .also {
-            val split = pref.getString(PREF_RATE_LIMIT, "10/10")!!.split("/")
-            it.rateLimit(split[0].toInt(), split[1].toInt().seconds)
-        }
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(ChapterInterceptor())
+        val split = pref.getString(PREF_RATE_LIMIT, "10/10")!!.split("/")
+        rateLimit(split[0].toInt(), split[1].toInt().seconds)
+    }
 
-    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/").add("Accept-Language", "zh").add("Accept", "*/*")
+    override fun Headers.Builder.configureHeaders() = apply {
+        add("Accept-Language", "zh")
+        add("Accept", "*/*")
+    }
 
     // Customize
 
@@ -108,14 +114,7 @@ abstract class BiliManga :
         else -> "${els[i - 1].attr("href")}#next"
     }
 
-    // Popular Page
-
-    override fun popularMangaRequest(page: Int): Request {
-        val suffix = pref.getString(PREF_POPULAR_MANGA_DISPLAY, "/top/weekvisit/%d.html")!!
-        return GET(baseUrl + String.format(suffix, page), headers)
-    }
-
-    override fun popularMangaParse(response: Response) = response.asJsoup().let { doc ->
+    private fun mangaPageParse(response: Response) = response.asJsoup().let { doc ->
         val mangas = doc.select(".book-layout").map {
             SManga.create().apply {
                 setUrlWithoutDomain(it.absUrl("href"))
@@ -143,41 +142,8 @@ abstract class BiliManga :
         MangasPage(mangas, hasNextPage)
     }
 
-    // Latest Page
-
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/top/lastupdate/$page.html", headers)
-
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
-    // Search Page
-
-    override fun getFilterList() = buildFilterList()
-
-    // /lastupdate_1_1_1_1_1_1_1_1_0_2026_2027.html
-    // /${Sort}_${Theme}_${Status}_${Anime}_${Region}_${Type}_${Time}_${Novel}_${page}_0_${Year}_${Award}.html
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.startsWith(baseUrl) && MANGA_ID_REGEX.matches(query.substring(baseUrl.length))) return GET(query, headers)
-        val url = baseUrl.toHttpUrl().newBuilder()
-        if (query.isNotBlank()) {
-            url.addPathSegment("search").addPathSegment("${query}_$page.html")
-        } else {
-            url.addPathSegment("filter")
-                .addPathSegment("${filters[5]}_${filters[1]}_${filters[9]}_${filters[6]}_${filters[3]}_${filters[2]}_${filters[10]}_${filters[7]}_${page}_0_${filters[4]}_${filters[8]}.html")
-        }
-        return GET(url.build(), headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.pathSegments.contains("detail")) {
-            return MangasPage(listOf(mangaDetailsParse(response)), false)
-        }
-        return popularMangaParse(response)
-    }
-
-    // Manga Detail Page
-
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val doc = response.asJsoup()
+    private fun Response.parseManga() = SManga.create().apply {
+        val doc = asJsoup()
         doc.selectFirst(".aui-ver-form")?.let { throw Exception(it.text()) }
         val meta = doc.select(".book-meta em").map(Element::text)
         val (main, extra) = meta.partition(META_REGEX::containsMatchIn)
@@ -196,36 +162,104 @@ abstract class BiliManga :
         initialized = true
     }
 
-    // Catalog Page
+    // Popular Page
 
-    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/read/${manga.id}/catalog", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val suffix = pref.getString(PREF_POPULAR_MANGA_DISPLAY, "/top/weekvisit/%d.html")!!
+        return mangaPageParse(client.get(baseUrl + String.format(suffix, page)))
+    }
 
-    override fun chapterListParse(response: Response) = response.asJsoup().let { resp ->
-        val info = resp.selectFirst(".chapter-sub-title")!!.text()
-        val title = resp.selectFirst(".book-title")!!.text()
-        val date = DATE_FORMAT.tryParse(DATE_REGEX.find(info)?.value)
-        resp.select(".catalog-volume").takeIf(Elements::isNotEmpty)?.flatMap {
-            val bar = it.selectFirst(".chapter-bar")!!.text().substring(title.length + 1)
-            val volume = if (bar.first().isDigit()) "Vol.$bar" else bar.toHalfWidthDigits()
-            it.select(".chapter-li-a").mapToChapter(date, volume)
-        } ?: resp.select(".chapter-li-a").mapToChapter(date)
-    }.reversed()
+    // Latest Page
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaPageParse(client.get("$baseUrl/top/lastupdate/$page.html"))
+
+    // Search Page
+
+    override fun getFilterList(data: JsonElement?) = buildFilterList()
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (!MANGA_ID_REGEX.matches(url.encodedPath)) return null
+        return client.get(url).parseManga()
+    }
+
+    // /${Sort}_${Theme}_${Status}_${Anime}_${Region}_${Type}_${Time}_${Novel}_${page}_0_${Year}_${Award}.html
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = baseUrl.toHttpUrl().newBuilder()
+        if (query.isNotBlank()) {
+            url.addPathSegment("search").addPathSegment("${query}_$page.html")
+        } else {
+            url.addPathSegment("filter")
+                .addPathSegment("${filters[5]}_${filters[1]}_${filters[9]}_${filters[6]}_${filters[3]}_${filters[2]}_${filters[10]}_${filters[7]}_${page}_0_${filters[4]}_${filters[8]}.html")
+        }
+        val response = client.get(url.build())
+        if (response.request.url.pathSegments.contains("detail")) {
+            return MangasPage(listOf(response.parseManga()), false)
+        }
+        return mangaPageParse(response)
+    }
+
+    // Manga Detail Page
+
+    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
+
+    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ) = supervisorScope {
+        val asyncManga = if (fetchDetails) {
+            async { client.get(baseUrl + manga.url).parseManga() }
+        } else {
+            CompletableDeferred(manga)
+        }
+
+        val asyncChapters = if (fetchChapters) {
+            async {
+                val doc = client.get("$baseUrl/read/${manga.id}/catalog").asJsoup()
+                val info = doc.selectFirst(".chapter-sub-title")!!.text()
+                val title = doc.selectFirst(".book-title")!!.text()
+                val date = DATE_FORMAT.tryParse(DATE_REGEX.find(info)?.value)
+                doc.select(".catalog-volume").takeIf(Elements::isNotEmpty)?.flatMap {
+                    val bar = it.selectFirst(".chapter-bar")!!.text().substring(title.length + 1)
+                    val volume = if (bar.first().isDigit()) "Vol.$bar" else bar.toHalfWidthDigits()
+                    it.select(".chapter-li-a").mapToChapter(date, volume)
+                }?.reversed() ?: doc.select(".chapter-li-a").mapToChapter(date).reversed()
+            }
+        } else {
+            CompletableDeferred(chapters)
+        }
+
+        SMangaUpdate(asyncManga.await(), asyncChapters.await())
+    }
+
+    override val supportsRelatedMangas get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        return doc.select("#book-friend-list-container").last()?.select(".module-slide-a")?.map {
+            SManga.create().apply {
+                setUrlWithoutDomain(it.absUrl("href"))
+                title = it.selectFirst(".module-slide-caption")!!.text()
+                thumbnail_url = it.selectFirst(".module-slide-img")!!.attr("data-src")
+            }
+        } ?: emptyList()
+    }
 
     // Manga View Page
 
-    override fun pageListParse(response: Response) = response.asJsoup().let { doc ->
-        val images = doc.select(".imagecontent")
-        check(images.isNotEmpty()) {
-            doc.selectFirst("#acontentz")?.let {
-                if ("電腦端" in it.text()) "不支持電腦端查看，請在高級設置中更換移動端UA標識" else "漫畫可能已下架或需要足夠的權限"
-            } ?: "章节鏈接错误"
-        }
-        images.mapIndexed { i, image ->
-            Page(i, imageUrl = image.attr("data-src"))
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get(baseUrl + chapter.url)
+        return response.asJsoup().let { doc ->
+            val images = doc.select(".imagecontent")
+            check(images.isNotEmpty()) {
+                doc.selectFirst("#acontentz")?.let {
+                    if ("電腦端" in it.text()) "不支持電腦端查看，請在高級設置中更換移動端UA標識" else "漫畫可能已下架或需要足夠的權限"
+                } ?: "章节鏈接错误"
+            }
+            images.mapIndexed { i, img -> Page(i, imageUrl = img.attr("data-src")) }
         }
     }
-
-    // Image
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }

@@ -824,9 +824,27 @@ abstract class Madara : HttpSource() {
     /**
      *  Get the best image quality available from srcset
      */
-    protected open fun String.getSrcSetImage(): String? = this.split(" ")
-        .filter(URL_REGEX::matches)
-        .maxOfOrNull(String::toString)
+    protected open fun String.getSrcSetImage(): String? {
+        val images = this.split(",")
+            .map { it.trim().split(WHITESPACE_REGEX, limit = 2) }
+            .filter { it.isNotEmpty() && URL_REGEX.matches(it[0]) }
+
+        val imagesWithDescriptor = images
+            .filter { it.size == 2 }
+            .mapNotNull { candidate ->
+                IMAGE_DESCRIPTOR_REGEX.find(candidate[1])?.let { match ->
+                    Pair(candidate[0], match.groupValues[1].toFloat())
+                }
+            }
+
+        // Prefer images with descriptors as to get the highest resolution
+        if (imagesWithDescriptor.isNotEmpty()) {
+            return imagesWithDescriptor.maxByOrNull { it.second }?.first
+        }
+
+        // Fallback to lexicographical comparison of image URLs
+        return images.maxOfOrNull { it.first() }
+    }
 
     /**
      *  Apply any additional processing to the thumbnail URL if needed.
@@ -1170,6 +1188,8 @@ abstract class Madara : HttpSource() {
     companion object {
         const val URL_SEARCH_PREFIX = "slug:"
         val URL_REGEX = """^(https?://[^\s/$.?#].[^\s]*)${'$'}""".toRegex()
+        val WHITESPACE_REGEX = """\s+""".toRegex()
+        val IMAGE_DESCRIPTOR_REGEX = """^(\d+|\d+\.\d+)([wx])$""".toRegex()
     }
 }
 

@@ -27,7 +27,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -316,10 +315,6 @@ abstract class PixivComic :
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
-
-    override val supportsRelatedMangas get() = false
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = null
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
