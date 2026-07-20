@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.vi.cuutruyenmoe
+package eu.kanade.tachiyomi.extension.vi.damconuong
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -8,6 +8,7 @@ fun getFilters(genres: List<GenreOption>?): FilterList = FilterList(
     buildList {
         add(SortFilter())
         add(StatusFilter())
+        add(SearchTypeFilter())
         genres?.let { add(GenreFilter(it.map { genre -> Genre(genre.name, genre.id) })) }
     },
 )
@@ -26,6 +27,8 @@ class SortFilter :
             Pair("Mới nhất", "-created_at"),
             Pair("Cũ nhất", "created_at"),
             Pair("Xem nhiều", "-views"),
+            Pair("Top ngày", "-views_day"),
+            Pair("Top tuần", "-views_week"),
             Pair("A-Z", "name"),
             Pair("Z-A", "-name"),
         ),
@@ -35,9 +38,19 @@ class StatusFilter :
     UriPartFilter(
         "Trạng thái",
         arrayOf(
-            Pair("Tất cả", "2,1"),
+            Pair("Đang tiến hành + Hoàn thành", "2,1"),
             Pair("Đang tiến hành", "2"),
-            Pair("Đã hoàn thành", "1"),
+            Pair("Hoàn thành", "1"),
+        ),
+    )
+
+class SearchTypeFilter :
+    UriPartFilter(
+        "Tìm theo",
+        arrayOf(
+            Pair("Tên truyện", "name"),
+            Pair("Tác giả", "artist"),
+            Pair("Doujinshi", "doujinshi"),
         ),
     )
 

@@ -39,14 +39,15 @@ abstract class OneReader : KeiSource() {
         status = "",
     )
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = search(
-        page = page,
-        query = "",
-        order = "recent",
-        genre = "",
-        type = "",
-        status = "",
-    )
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = apiUrl("api", "mangas", "home").newBuilder()
+            .addQueryParameter("limit", HOME_LIMIT.toString())
+            .build()
+
+        val mangas = client.get(url).parseAs<List<HomeMangaDto>>().map(HomeMangaDto::toSManga)
+
+        return MangasPage(mangas, hasNextPage = false)
+    }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val order = filters.firstInstanceOrNull<OrderFilter>()?.selected() ?: "az"
@@ -180,5 +181,6 @@ abstract class OneReader : KeiSource() {
 
     companion object {
         private const val PAGE_SIZE = 24
+        private const val HOME_LIMIT = 60
     }
 }
