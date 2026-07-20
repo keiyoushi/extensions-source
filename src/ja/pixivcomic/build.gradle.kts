@@ -6,13 +6,17 @@ plugins {
 
 keiyoushi {
     name = "Pixiv Comic"
-    versionCode = 3
-    contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    versionCode = 4
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
 
     source {
         name = "Pixivコミック"
         lang = "ja"
         baseUrl = "https://comic.pixiv.net"
     }
+}
+
+dependencies {
+    implementation(project(":lib:publus"))
 }

@@ -26,7 +26,10 @@ class Decoder {
         val str = encryptedScans
         val key = str.substring(off1 + 8, off1 + 72).decodeHex()
         val nonce = str.substring(off1 + 72 + off2, off1 + 72 + off2 + 32).decodeHex()
-        val ciphertext = Base64.decode(str.substring(off1 + 72 + off2 + 32 + off3), Base64.DEFAULT)
+
+        val ciphertext = runCatching {
+            Base64.decode(str.substring(off1 + 72 + off2 + 32 + off3), Base64.DEFAULT)
+        }.getOrNull() ?: error("Failed to decode scan data")
 
         // CTR: key (32) + nonce (16) + counter (4)
         val state = ByteArray(52)
@@ -48,7 +51,7 @@ class Decoder {
             }
         }
 
-        if (!plain.startsWith("SC01".encodeToByteArray())) error("Decoding scans failed")
+        if (!plain.startsWith("SC01".encodeToByteArray())) error("Decrypting scans failed")
 
         val decompressed = zlibDecompress(plain.copyOfRange(4, plain.size))
         return decompressed.decodeToString()
@@ -64,7 +67,7 @@ class Decoder {
     }
 
     companion object {
-        private const val SECRET = "DEV_SCAN_SECRET_2026_change_me"
+        private const val SECRET = "PRO_SCAN_SECRET_20260712_watching_you_DEBUG"
         private const val DOMAIN = "happymh.com"
 
         private fun ByteArray.startsWith(prefix: ByteArray): Boolean {

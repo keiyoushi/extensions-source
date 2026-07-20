@@ -1,96 +1,61 @@
 package eu.kanade.tachiyomi.extension.en.allanime
 
-import android.annotation.SuppressLint
-import android.app.Application
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
-import android.webkit.JavascriptInterface
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.GraphQLErrorInterceptor
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonRequestBody
+import keiyoushi.utils.parseGraphQLAs
+import keiyoushi.utils.runWebView
+import keiyoushi.utils.string
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
-import org.jsoup.nodes.Document
-import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import java.io.IOException
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 @Source
 abstract class AllManga :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
-    private val apiUrl = "https://api.allanime.day/api"
+    private val apiDomain get() = "api.mkissa.net"
 
-    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
-
-    override val supportsLatest = true
-
-    override val supportsRelatedMangas = false
+    private val apiUrl get() = "https://$apiDomain/api"
 
     private val preferences by getPreferencesLazy()
 
-    private val retryRegex = Regex("""in (\d+) second""", RegexOption.IGNORE_CASE)
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        interceptors().removeAll { it.javaClass.simpleName == "CloudflareInterceptor" }
+        addInterceptor(GraphQLErrorInterceptor())
+        rateLimit(1) { it.host == apiDomain }
+    }
 
-    override val client = network.client.newBuilder()
-        .apply { interceptors().removeAll { it.javaClass.simpleName == "CloudflareInterceptor" } }
-        .addInterceptor { chain ->
-            val request = chain.request()
+    override fun getHomeUrl(): String = "$baseUrl/manga"
 
-            if (request.url.host != apiUrlHost) return@addInterceptor chain.proceed(request)
-
-            var lastResponse: Response? = null
-
-            for (attempt in 0..5) {
-                val response = chain.proceed(request)
-                lastResponse = response
-
-                val retryAfter = retryRegex.find(response.peekBody(1024).string())
-                    ?.groupValues?.get(1)?.toLongOrNull()
-
-                if (retryAfter == null) return@addInterceptor response
-
-                if (attempt < 5) {
-                    response.close()
-                    Thread.sleep(retryAfter * 1000)
-                }
-            }
-
-            return@addInterceptor lastResponse!!
-        }
-        .rateLimit(1) { it.host == apiUrlHost }
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    /* Popular */
-    override fun popularMangaRequest(page: Int): Request {
-        val payload = GraphQL(
-            PopularVariables(
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val payload = graphQLBody(
+            query = POPULAR_QUERY,
+            variables = PopularVariables(
                 type = "manga",
                 size = LIMIT,
                 dateRange = 0,
@@ -98,55 +63,26 @@ abstract class AllManga :
                 allowAdult = preferences.allowAdult,
                 allowUnknown = false,
             ),
-            POPULAR_QUERY,
         )
 
-        val requestBody = payload.toJsonRequestBody()
+        client.post(apiUrl, payload).use { response ->
+            val data = response.parseGraphQLAs<PopularData>()
 
-        return POST(apiUrl, headers, requestBody)
-    }
+            val mangaList = data.popular.mangas
+                .mapNotNull { it.manga?.toSManga() }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<ApiPopularResponse>()
+            val hasNextPage = data.popular.mangas.size == LIMIT
 
-        val mangaList = result.data.popular.mangas
-            .mapNotNull { it.manga?.toSManga() }
-
-        val hasNextPage = result.data.popular.mangas.size == LIMIT
-
-        return MangasPage(mangaList, hasNextPage)
-    }
-
-    /* Latest */
-    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", FilterList())
-
-    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
-
-    /* Search */
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val httpUrl = query.toHttpUrl()
-            if (httpUrl.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
-            }
-            val id = httpUrl.pathSegments.getOrNull(1)
-                ?: throw Exception("Unsupported url")
-            return fetchSearchManga(page, "$SEARCH_PREFIX$id", filters)
-        }
-
-        if (!query.startsWith(SEARCH_PREFIX)) {
-            return super.fetchSearchManga(page, query, filters)
-        }
-
-        val url = "/manga/${query.substringAfter(SEARCH_PREFIX)}/"
-        return fetchMangaDetails(SManga.create().apply { this.url = url }).map {
-            MangasPage(listOf(it), false)
+            return MangasPage(mangaList, hasNextPage)
         }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val payload = GraphQL(
-            SearchVariables(
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList())
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val payload = graphQLBody(
+            query = SEARCH_QUERY,
+            variables = SearchVariables(
                 search = SearchPayload(
                     query = query.takeUnless { it.isEmpty() },
                     sortBy = filters.firstInstanceOrNull<SortFilter>()?.getValue(),
@@ -161,184 +97,208 @@ abstract class AllManga :
                 translationType = "sub",
                 countryOrigin = filters.firstInstanceOrNull<CountryFilter>()?.getValue() ?: "ALL",
             ),
-            SEARCH_QUERY,
         )
 
-        val requestBody = payload.toJsonRequestBody()
+        client.post(apiUrl, payload).use { response ->
+            val data = response.parseGraphQLAs<SearchData>()
 
-        return POST(apiUrl, headers, requestBody)
+            val mangaList = data.mangas.edges
+                .map(SearchManga::toSManga)
+
+            val hasNextPage = data.mangas.edges.size == LIMIT
+
+            return MangasPage(mangaList, hasNextPage)
+        }
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<ApiSearchResponse>()
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) {
+            throw Exception("Unsupported url")
+        }
+        val id = url.pathSegments.getOrNull(1)
+            ?: throw Exception("Unsupported url")
 
-        val mangaList = result.data.mangas.edges
-            .map(SearchManga::toSManga)
+        val tmpManga = SManga.create().apply {
+            this.url = id
+        }
 
-        val hasNextPage = result.data.mangas.edges.size == LIMIT
-
-        return MangasPage(mangaList, hasNextPage)
+        return fetchMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
-    override fun getFilterList() = getFilters()
-
-    /* Details */
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val mangaId = manga.url.split("/")[2]
-
-        val payload = GraphQL(
-            IDVariables(mangaId),
-            DETAILS_QUERY,
-        )
-
-        val requestBody = payload.toJsonRequestBody()
-
-        return POST(apiUrl, headers, requestBody)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val result = response.parseAs<ApiMangaDetailsResponse>()
-
-        return result.data.manga.toSManga()
-    }
+    override fun getFilterList(data: JsonElement?) = getFilters()
 
     override fun getMangaUrl(manga: SManga): String {
-        val mangaId = manga.url.split("/")[2]
-        return "$baseUrl/manga/$mangaId"
+        if (manga.url.startsWith("/")) {
+            val mangaId = manga.url.split("/")[2]
+            return "$baseUrl/manga/$mangaId"
+        } else {
+            return "$baseUrl/manga/${manga.url}"
+        }
     }
 
-    /* Chapters */
-    override fun chapterListRequest(manga: SManga): Request {
-        val mangaId = manga.url.split("/")[2]
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val legacy = manga.url.startsWith("/")
+        val (mangaId, mangaSlug) = if (legacy) {
+            val parts = manga.url.split("/")
+            parts[2] to parts[3]
+        } else {
+            manga.url to manga.memo["slug"]!!.string
+        }
 
-        val payload = GraphQL(
-            ChapterListVariables(
-                id = mangaId,
-                showId = "manga@$mangaId",
-            ),
-            CHAPTERS_QUERY,
+        val payload = graphQLBody(
+            query = UPDATE_QUERY,
+            variables = MangaUpdateVariables(mangaId, "manga@$mangaId"),
         )
 
-        val requestBody = payload.toJsonRequestBody()
+        client.post(apiUrl, payload).use { response ->
+            val data = response.parseGraphQLAs<MangaUpdateData>()
+            val chapterDetails = data.chapterList.associateBy { it.chapterNum.content }
 
-        return POST(apiUrl, headers, requestBody)
+            return SMangaUpdate(
+                manga = data.manga.toSManga(),
+                chapters = data.manga.availableChaptersDetail.sub.map { chapterNum ->
+                    chapterDetails[chapterNum]!!.toSChapter(mangaId, mangaSlug, legacy)
+                },
+            )
+        }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAs<ApiChapterListResponse>()
-        val mangaUrl = "${result.data.manga.mangaId}/${result.data.manga.name.titleToSlug()}"
+    override val supportsRelatedMangas get() = true
 
-        val availableChapters = result.data.manga.availableChaptersDetail.sub
-        val chapterDetails = result.data.chapterList.associateBy { it.chapterNum.content }
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val related = manga.memo["relatedMangas"]?.parseAs<List<Related>>().orEmpty()
+        val genres = manga.genre?.split(", ").orEmpty().filter { it in genreList }
+        val fewerGenres = genres.shuffled().take(genres.size / 2)
 
-        return availableChapters.map { chapterNum ->
-            chapterDetails[chapterNum]!!.toSChapter(mangaUrl)
-        }
+        if (related.isEmpty() && genres.isEmpty()) return emptyList()
+
+        fun searchPayload(includedGenres: List<String>) = SearchPayload(
+            query = null,
+            sortBy = null,
+            genres = includedGenres.takeUnless { it.isEmpty() },
+            excludeGenres = null,
+            isManga = true,
+            allowAdult = preferences.allowAdult,
+            allowUnknown = false,
+        )
+
+        val payload = graphQLBody(
+            query = RELATED_QUERY,
+            variables = RelatedVariables(
+                ids = related.map { it.mangaId },
+                search = searchPayload(genres),
+                fewerGenresSearch = searchPayload(fewerGenres),
+                size = LIMIT,
+                translationType = "sub",
+            ),
+        )
+
+        val data = client.post(apiUrl, payload).parseGraphQLAs<RelatedData>()
+
+        val result = (data.mangasWithIds.orEmpty() + data.search?.edges.orEmpty() + data.fewerGenresSearch?.edges.orEmpty())
+            .distinctBy { it.id }
+            .map(SearchManga::toSManga)
+
+        if (result.size > 1 || genres.size <= 1) return result
+
+        return data.fewerGenresSearch?.edges.orEmpty()
+            .distinctBy { it.id }
+            .map(SearchManga::toSManga)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val chapterUrlParts = chapter.url.split("/")
-        val mangaId = chapterUrlParts[2]
-        val chapterSlug = chapterUrlParts[4]
-        return "$baseUrl/manga/$mangaId/$chapterSlug"
-    }
-
-    /* Pages */
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
-        val chapterUrl = getChapterUrl(chapter)
-        val mangaUrl = chapterUrl.substringBeforeLast('/')
-
-        client.newCall(GET(mangaUrl, headers)).execute().use { response ->
-            if (response.code == 403 || response.code == 503) {
-                throw IOException("Solve captcha in WebView and retry")
-            }
-            pageListFromWebView(response.asJsoup(), chapterUrl.replace(baseUrl, ""))
+        if (chapter.url.startsWith("/")) {
+            // /read/$mangaId/$mangaSlug/chapter-$chapterNum-sub
+            val chapterUrlParts = chapter.url.split("/")
+            val mangaId = chapterUrlParts[2]
+            val chapterSlug = chapterUrlParts[4]
+            return "$baseUrl/manga/$mangaId/$chapterSlug"
+        } else {
+            val mangaId = chapter.memo["mangaId"]!!.string
+            return "$baseUrl/manga/$mangaId/chapter-${chapter.url}-sub"
         }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val mangaId = chapter.memo["mangaId"]?.string ?: throw Exception("Refresh Chapter List")
+        val mangaUrl = "$baseUrl/manga/$mangaId"
+        val chapterUrl = getChapterUrl(chapter).toHttpUrl().encodedPath
 
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+        val document = client.get(mangaUrl, ensureSuccess = false).use { response ->
+            if (!response.isSuccessful) {
+                if (response.code == 403 || response.code == 503) {
+                    throw Exception("Solve captcha in WebView and retry")
+                } else {
+                    throw HttpException(response.code)
+                }
+            }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun pageListFromWebView(document: Document, chapterUrl: String): List<Page> {
-        val handler = Handler(Looper.getMainLooper())
-        val latch = CountDownLatch(1)
-        val jsInterface = JsInterface(latch)
-        val pool = ('a'..'z') + ('A'..'Z')
-        val interfaceName = (1..(10..20).random())
-            .map { pool.random() }
-            .joinToString("")
-        val script = """
-            (function () {
-                const originalParse = JSON.parse;
-                JSON.parse = new Proxy(originalParse, {
-                    apply(target, thisArg, args) {
-                        const result = Reflect.apply(target, thisArg, args);
-                        if (result && result.chapterPages) {
-                            window.$interfaceName.passPayload(args[0]);
+            response.asJsoup()
+        }
+
+        val payload = runWebView {
+            blockImages = true
+            userAgent = headers["User-Agent"]!!
+
+            val interfaceName = (1..(10..20).random())
+                .map { (('a'..'z') + ('A'..'Z')).random() }
+                .joinToString("")
+            val script = """
+                (function () {
+                    const originalParse = JSON.parse;
+                    JSON.parse = new Proxy(originalParse, {
+                        apply(target, thisArg, args) {
+                            const result = Reflect.apply(target, thisArg, args);
+                            if (result && result.chapterPages) {
+                                window.$interfaceName.post(args[0]);
+                            }
+                            return result;
                         }
-                        return result;
+                    });
+
+                    function triggerChapterNav() {
+                        const a = document.createElement('a');
+                        a.href = a.dataset.href = '$chapterUrl';
+                        document.body.append(a);
+                        a.click();
                     }
-                });
 
-                function triggerChapterNav() {
-                    const a = document.createElement('a');
-                    a.href = a.dataset.href = '$chapterUrl';
-                    document.body.append(a);
-                    a.click();
-                }
+                   let checkAttempts = 0;
+                   const maxAttempts = 300; // 15 seconds
 
-               let checkAttempts = 0;
-               const maxAttempts = 300; // 15 seconds
-
-               function check() {
-                   if (document.querySelector('[data-href]')) {
-                       // trigger early when SPA nav ready
-                       triggerChapterNav();
-                   } else if (checkAttempts < maxAttempts) {
-                       checkAttempts++;
-                       setTimeout(check, 50);
-                   } else {
-                       // trigger anyway
-                       triggerChapterNav();
+                   function check() {
+                       if (document.querySelector('[data-href]')) {
+                           // trigger early when SPA nav ready
+                           triggerChapterNav();
+                       } else if (checkAttempts < maxAttempts) {
+                           checkAttempts++;
+                           setTimeout(check, 50);
+                       } else {
+                           // trigger anyway
+                           triggerChapterNav();
+                       }
                    }
-               }
-               check();
-            })();
-        """.trimIndent()
+                   check();
+                })();
+            """.trimIndent()
 
-        var webView: WebView? = null
-
-        handler.post {
-            val view = WebView(Injekt.get<Application>())
-            webView = view
-
-            with(view.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                blockNetworkImage = true
-                userAgentString = headers["User-Agent"]
-            }
-            view.addJavascriptInterface(jsInterface, interfaceName)
-
-            view.webViewClient = object : WebViewClient() {
-                override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
-                    super.onPageStarted(view, url, favicon)
-                    view.evaluateJavascript(script) {}
-                }
+            jsBridge(interfaceName) {
+                resolve(it)
             }
 
-            view.loadDataWithBaseURL(document.location(), document.outerHtml(), "text/html", "utf-8", null)
+            onPageStarted {
+                evaluateJs(script)
+            }
+
+            loadData(mangaUrl, document.outerHtml())
         }
 
-        val completed = latch.await(20, TimeUnit.SECONDS)
-        handler.post { webView?.destroy() }
-
-        if (!completed) throw Exception("Timed out waiting for page list")
-
-        val payload = jsInterface.payload ?: throw Exception("Failed to capture page list")
-        val pageListData = payload.parseAs<PageListData>(json).pageList
+        val pageListData = payload.parseAs<PageListData>().pageList
             ?: return emptyList()
 
         val pages = pageListData.edges.firstOrNull {
@@ -373,20 +333,6 @@ abstract class AllManga :
         }
     }
 
-    private class JsInterface(private val latch: CountDownLatch) {
-        var payload: String? = null
-            private set
-
-        @JavascriptInterface
-        @Suppress("UNUSED")
-        fun passPayload(data: String) {
-            if (payload == null) {
-                payload = data
-                latch.countDown()
-            }
-        }
-    }
-
     override fun imageRequest(page: Page): Request {
         val quality = preferences.imageQuality
 
@@ -399,8 +345,6 @@ abstract class AllManga :
 
         return GET(newUrl, headers)
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
@@ -424,17 +368,14 @@ abstract class AllManga :
 
     private val SharedPreferences.imageQuality
         get() = getString(IMAGE_QUALITY_PREF, IMAGE_QUALITY_PREF_DEFAULT)!!
-
-    companion object {
-        private const val LIMIT = 20
-        const val SEARCH_PREFIX = "id:"
-        val urlRegex = Regex("^https?://.*")
-        private const val IMAGE_CDN = "https://wp.youtube-anime.com"
-        private val imageQualityRegex = Regex("^https?://([^#]+)")
-
-        private const val SHOW_ADULT_PREF = "pref_adult"
-        private const val SHOW_ADULT_PREF_DEFAULT = false
-        private const val IMAGE_QUALITY_PREF = "pref_quality"
-        private const val IMAGE_QUALITY_PREF_DEFAULT = "original"
-    }
 }
+
+private const val LIMIT = 20
+val urlRegex = Regex("^https?://.*")
+private const val IMAGE_CDN = "https://wp.youtube-anime.com"
+private val imageQualityRegex = Regex("^https?://([^#]+)")
+
+private const val SHOW_ADULT_PREF = "pref_adult"
+private const val SHOW_ADULT_PREF_DEFAULT = false
+private const val IMAGE_QUALITY_PREF = "pref_quality"
+private const val IMAGE_QUALITY_PREF_DEFAULT = "original"
