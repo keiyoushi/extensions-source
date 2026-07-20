@@ -5,12 +5,15 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.readIntBigEndian
 import keiyoushi.utils.readIntLittleEndian
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import org.json.JSONArray
-import org.json.JSONObject
-import org.json.JSONTokener
 import java.security.MessageDigest
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -57,7 +60,12 @@ class MangaLivreDecryptor(
     )
 
     fun decrypt(cipherWrapperBody: String, dataKey: String): String? = runCatching {
-        val ciphertext = JSONObject(cipherWrapperBody).optString(dataKey).takeIf { it.isNotEmpty() } ?: return@runCatching null
+        val ciphertext = Json.parseToJsonElement(cipherWrapperBody)
+            .jsonObject[dataKey]
+            ?.jsonPrimitive
+            ?.contentOrNull
+            ?.takeIf { it.isNotEmpty() }
+            ?: return@runCatching null
         decryptRabbit(ciphertext, derivePassword()).takeIf { it.isValidJson() }
     }.getOrNull()
 
@@ -155,9 +163,9 @@ class MangaLivreDecryptor(
 
     private fun encodeBase64(value: String): String = Base64.encodeToString(value.toByteArray(), Base64.NO_WRAP)
 
-    private fun String.isValidJson(): Boolean = runCatching {
-        JSONTokener(this).nextValue().let { it is JSONObject || it is JSONArray }
-    }.getOrDefault(false)
+    private fun String.isValidJson(): Boolean = runCatching { Json.parseToJsonElement(this) }
+        .getOrNull()
+        .let { it is JsonObject || it is JsonArray }
 
     private fun decryptRabbit(ciphertextB64: String, password: String): String {
         val encrypted = Base64.decode(ciphertextB64, Base64.DEFAULT)

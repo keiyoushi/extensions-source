@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivre
 
+import android.webkit.WebSettings
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -13,13 +14,16 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferencesLazy
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONObject
 import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
@@ -43,14 +47,20 @@ abstract class MangaLivre :
 
     private val preferences by getPreferencesLazy()
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .set("User-Agent", BROWSER_USER_AGENT)
-        .add("Accept", "*/*")
-        .add("Accept-Language", "pt-BR,en-US;q=0.9,en;q=0.8")
-        .add("Referer", "$baseUrl/")
-        .add("Sec-Fetch-Dest", "empty")
-        .add("Sec-Fetch-Mode", "cors")
-        .add("Sec-Fetch-Site", "same-origin")
+    private val webViewUserAgent: String? by lazy {
+        runCatching { WebSettings.getDefaultUserAgent(applicationContext) }
+            .getOrNull()
+    }
+
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder().apply {
+        webViewUserAgent?.takeIf { it.isNotBlank() }?.let { set("User-Agent", it) }
+        add("Accept", "*/*")
+        add("Accept-Language", "pt-BR,en-US;q=0.9,en;q=0.8")
+        add("Referer", "$baseUrl/")
+        add("Sec-Fetch-Dest", "empty")
+        add("Sec-Fetch-Mode", "cors")
+        add("Sec-Fetch-Site", "same-origin")
+    }
 
     // ============================== Popular =======================================
 
@@ -180,21 +190,18 @@ abstract class MangaLivre :
 
     // ============================== Utilities =======================================
 
-    private fun Response.parseJson(): JSONObject {
+    private fun Response.parseJson(): JsonObject {
         val responseBody = body.string().trimStart()
         if (responseBody.isEmpty() || responseBody.startsWith("<")) {
             close()
             throw IOException(NON_JSON_MESSAGE)
         }
-        return runCatching { JSONObject(responseBody) }
+        return runCatching { Json.parseToJsonElement(responseBody).jsonObject }
             .getOrElse { throw IOException(NON_JSON_MESSAGE, it) }
     }
 
     companion object {
         private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
-        private const val BROWSER_USER_AGENT =
-            "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36"
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
 

@@ -3,8 +3,19 @@ package eu.kanade.tachiyomi.extension.pt.mangalivre
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.put
 import java.text.Normalizer
 
 class WrapperDto(
@@ -14,9 +25,9 @@ class WrapperDto(
     val hasNextPage get() = pagination.hasNextPage
 
     companion object {
-        fun fromJson(json: JSONObject) = WrapperDto(
-            mangas = json.getJSONArray("mangas").mapObjects(MangaDto::fromJson),
-            pagination = PaginationDto.fromJson(json.getJSONObject("pagination")),
+        fun fromJson(json: JsonObject) = WrapperDto(
+            mangas = json.requiredArray("mangas").mapObjects(MangaDto::fromJson),
+            pagination = PaginationDto.fromJson(json.requiredObject("pagination")),
         )
     }
 }
@@ -25,7 +36,7 @@ class PaginationDto(
     val hasNextPage: Boolean,
 ) {
     companion object {
-        fun fromJson(json: JSONObject) = PaginationDto(json.getBoolean("hasNextPage"))
+        fun fromJson(json: JsonObject) = PaginationDto(json.requiredBoolean("hasNextPage"))
     }
 }
 
@@ -80,16 +91,18 @@ class MangaDto(
         private val MARKS_REGEX = "\\p{InCombiningDiacriticalMarks}+".toRegex()
         private val NON_ALPHA_REGEX = "[^a-z0-9]+".toRegex()
 
-        fun fromJson(json: JSONObject) = MangaDto(
-            id = json.getString("id"),
-            title = json.getString("title"),
+        fun fromJson(json: JsonObject) = MangaDto(
+            id = json.requiredString("id"),
+            title = json.requiredString("title"),
             thumbnailUrl = json.optionalString("coverUrl"),
-            authors = json.optJSONArray("authors")?.toStringList(),
-            artists = json.optJSONArray("artists")?.toStringList(),
-            genres = json.optJSONArray("genres")?.toStringList(),
+            authors = json.optionalStringList("authors"),
+            artists = json.optionalStringList("artists"),
+            genres = json.optionalStringList("genres"),
             description = json.optionalString("description"),
             alternativeTitle = json.optionalString("alternativeTitle"),
-            chapters = json.optJSONArray("chapters")?.mapObjects(ChapterDto::fromJson),
+            chapters = json["chapters"]?.takeUnless { it === JsonNull }
+                ?.jsonArray
+                ?.mapObjects(ChapterDto::fromJson),
             status = json.optionalString("status"),
         )
     }
@@ -99,14 +112,14 @@ class ChapterReferenceDto(
     val mangaId: String,
     val chapterId: String,
 ) {
-    fun toJson(): String = JSONObject()
-        .put("mangaId", mangaId)
-        .put("chapterId", chapterId)
-        .toString()
+    fun toJson(): String = buildJsonObject {
+        put("mangaId", mangaId)
+        put("chapterId", chapterId)
+    }.toString()
 
     companion object {
-        fun fromJson(value: String) = JSONObject(value).let {
-            ChapterReferenceDto(it.getString("mangaId"), it.getString("chapterId"))
+        fun fromJson(value: String) = Json.parseToJsonElement(value).jsonObject.let {
+            ChapterReferenceDto(it.requiredString("mangaId"), it.requiredString("chapterId"))
         }
     }
 }
@@ -123,10 +136,10 @@ class ChapterDto(
     }
 
     companion object {
-        fun fromJson(json: JSONObject) = ChapterDto(
-            id = json.getString("id"),
-            number = json.getString("number"),
-            timestamp = json.getLong("timestamp"),
+        fun fromJson(json: JsonObject) = ChapterDto(
+            id = json.requiredString("id"),
+            number = json.requiredString("number"),
+            timestamp = json.requiredLong("timestamp"),
         )
     }
 }
@@ -139,12 +152,35 @@ class PageDto(
     }
 
     companion object {
-        fun fromJson(json: JSONObject) = PageDto(json.getJSONArray("pages").toStringList())
+        fun fromJson(json: JsonObject) = PageDto(json.requiredArray("pages").toStringList())
     }
 }
 
-private fun JSONObject.optionalString(key: String): String? = takeIf { has(key) && !isNull(key) }?.getString(key)?.takeIf { it.isNotBlank() }
+private fun JsonObject.requiredElement(key: String) = this[key]
+    ?: throw SerializationException("Missing required field: $key")
 
-private fun JSONArray.toStringList(): List<String> = List(length(), ::getString)
+private fun JsonObject.requiredString(key: String): String = requiredElement(key).jsonPrimitive.content
 
-private fun <T> JSONArray.mapObjects(transform: (JSONObject) -> T): List<T> = List(length()) { transform(getJSONObject(it)) }
+private fun JsonObject.requiredBoolean(key: String): Boolean = requiredElement(key).jsonPrimitive.booleanOrNull
+    ?: throw SerializationException("Field is not a boolean: $key")
+
+private fun JsonObject.requiredLong(key: String): Long = requiredElement(key).jsonPrimitive.longOrNull
+    ?: throw SerializationException("Field is not a long: $key")
+
+private fun JsonObject.requiredArray(key: String): JsonArray = requiredElement(key).jsonArray
+
+private fun JsonObject.requiredObject(key: String): JsonObject = requiredElement(key).jsonObject
+
+private fun JsonObject.optionalString(key: String): String? = this[key]
+    ?.jsonPrimitive
+    ?.contentOrNull
+    ?.takeIf { it.isNotBlank() }
+
+private fun JsonObject.optionalStringList(key: String): List<String>? = this[key]
+    ?.takeUnless { it === JsonNull }
+    ?.jsonArray
+    ?.toStringList()
+
+private fun JsonArray.toStringList(): List<String> = map { it.jsonPrimitive.content }
+
+private fun <T> JsonArray.mapObjects(transform: (JsonObject) -> T): List<T> = map { transform(it.jsonObject) }
