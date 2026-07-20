@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Simply Cosplay"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.NSFW // or MIXED, please confirm
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "all"
