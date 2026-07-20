@@ -18,6 +18,7 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
@@ -247,7 +248,7 @@ abstract class SimplyCosplay :
                             it.toString()
                         }
                     }
-                    date_upload = updatedManga.description?.substringAfterLast("Date: ").parseDate()
+                    date_upload = updatedManga.memo.getStringOrNull("date").parseDate()
                 },
             )
         } else {
