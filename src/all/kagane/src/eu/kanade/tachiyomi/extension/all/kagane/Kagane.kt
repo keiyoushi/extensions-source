@@ -20,7 +20,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
-import keiyoushi.utils.toJsonString
+import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
@@ -33,13 +33,9 @@ import kotlinx.serialization.json.putJsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import okhttp3.brotli.BrotliInterceptor
 import okio.IOException
-
 @Source
 abstract class Kagane :
     KeiSource(),
@@ -53,11 +49,8 @@ abstract class Kagane :
 
     private val prefs by getPreferencesLazy()
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+    override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(::refreshTokenInterceptor)
-        // fix disk cache
-        val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
-        if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
     }
 
     private fun refreshTokenInterceptor(chain: Interceptor.Chain): Response {
@@ -232,9 +225,7 @@ abstract class Kagane :
             putJsonArray("content_lang") {
                 kaganeLangs.forEach { add(it) }
             }
-        }
-            .toJsonString()
-            .toRequestBody("application/json".toMediaType())
+        }.toJsonRequestBody()
 
         val url = "$apiUrl/search/series".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", (page - 1).toString())
@@ -279,8 +270,8 @@ abstract class Kagane :
 
     private suspend fun getSourcesResponse(): Response = client.post(
         "$apiUrl/sources/list",
-        buildJsonObject { put("source_types", null) }.toJsonString()
-            .toRequestBody("application/json".toMediaType()),
+        buildJsonObject { put("source_types", null) }
+            .toJsonRequestBody(),
     )
 
     // ====================== Manga Details + Chapters ======================
@@ -329,7 +320,7 @@ abstract class Kagane :
         val seriesId = manga.url
         val dto = getMangaById(seriesId)
 
-        val updatedManga = parseMangaDetails(dto).apply { initialized = true }
+        val updatedManga = parseMangaDetails(dto)
         val updatedChapters = parseChapterList(dto, seriesId)
 
         return SMangaUpdate(updatedManga, updatedChapters)
@@ -358,10 +349,8 @@ abstract class Kagane :
         val trackerId = dto.trackerId?.takeIf(String::isNotBlank) ?: return emptyList()
 
         val series = client.get("$apiUrl/trackers/$trackerId/series")
-            .use { resp ->
-                if (!resp.isSuccessful) return emptyList()
-                resp.parseAs<TrackerDto>().bookSeries
-            }
+            .parseAs<TrackerDto>()
+            .bookSeries
         val sources = getSourcesMap()
         return series
             .map { it.toSManga(apiUrl, showSource, sources, cleanTitle) }
@@ -371,7 +360,7 @@ abstract class Kagane :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (chapter.url.contains(";")) {
-            throw IOException("Outdated chapter URL. Please refresh the chapter list")
+            error("Outdated chapter URL. Please refresh the chapter list")
         }
 
         val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments.last()
@@ -406,7 +395,7 @@ abstract class Kagane :
 
             val res = client.post(
                 "$baseUrl/api/integrity",
-                body = "".toRequestBody("application/json".toMediaType()),
+                "".toJsonRequestBody(),
             ).parseAs<IntegrityDto>()
             integrityToken = res.token
             integrityExp = res.exp * 1000
@@ -422,7 +411,7 @@ abstract class Kagane :
             .addQueryParameter("is_datasaver", dataSaver.toString())
             .build()
 
-        val challengeBody = "{}".toRequestBody("application/json".toMediaType())
+        val challengeBody = "{}".toJsonRequestBody()
 
         val headers = headers.newBuilder().add("x-integrity-token", integrityToken).build()
 
@@ -601,8 +590,7 @@ abstract class Kagane :
         val sourcesDeferred = async {
             client.post(
                 "$apiUrl/sources/list",
-                buildJsonObject { put("source_types", null) }.toJsonString()
-                    .toRequestBody("application/json".toMediaType()),
+                buildJsonObject { put("source_types", null) }.toJsonRequestBody(),
             )
                 .parseAs<SourcesDto>().sources
         }
