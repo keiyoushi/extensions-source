@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import org.jsoup.Jsoup
 import java.time.OffsetDateTime
 
 @Serializable
@@ -42,7 +43,10 @@ class SeriesInfo(
         this.thumbnail_url = coverUrl?.toAbsoluteUrl(baseUrl)
         this.author = this@SeriesInfo.author
         this.artist = this@SeriesInfo.artist
-        this.description = this@SeriesInfo.description
+        this.description = this@SeriesInfo.description?.let {
+            val html = Jsoup.parseBodyFragment(it)
+            whitespaceRegex.replace(html.wholeText(), "\n\n").trim()
+        }
         this.status = when (this@SeriesInfo.status?.lowercase()) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
@@ -52,6 +56,10 @@ class SeriesInfo(
         }
         this.genre = genres?.joinToString { it.name }
         this.initialized = true
+    }
+
+    companion object {
+        private val whitespaceRegex = Regex("""([ \u00a0\t\r]*\n){3,}""")
     }
 }
 
