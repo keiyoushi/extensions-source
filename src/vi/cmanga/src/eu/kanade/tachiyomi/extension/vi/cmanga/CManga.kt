@@ -12,11 +12,15 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.int
+import keiyoushi.utils.long
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
-import keiyoushi.utils.tryParse
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -25,9 +29,10 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
-import java.text.SimpleDateFormat
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 
 @Source
 abstract class CManga : KeiSource() {
@@ -68,26 +73,30 @@ abstract class CManga : KeiSource() {
 
     override val supportsFilterFetching: Boolean get() = true
 
-    override suspend fun fetchFilterData(): JsonElement {
-        val genres = client.get("$baseUrl/assets/json/album_tags_image.json")
-            .parseAs<CMangaGenreResponse>()
-            .list
-            .mapNotNull { (value, genre) ->
-                val name = genre.name.trim()
-                if (name.isEmpty() || value.isEmpty()) null else GenreOption(name, value)
-            }
+    override suspend fun fetchFilterData(): JsonElement = coroutineScope {
+        val genres = async {
+            client.get("$baseUrl/assets/json/album_tags_image.json")
+                .parseAs<CMangaGenreResponse>()
+                .list
+                .mapNotNull { (value, genre) ->
+                    val name = genre.name.trim()
+                    if (name.isEmpty() || value.isEmpty()) null else GenreOption(name, value)
+                }
+        }
 
-        val teams = client.get("$baseUrl/api/team_list")
-            .parseAs<CMangaTeamResponse>()
-            .data
-            .mapNotNull { team ->
-                val name = runCatching { team.info.parseAs<CMangaTeamInfo>().name.trim() }
-                    .getOrNull()
-                    .orEmpty()
-                if (name.isEmpty()) null else FilterOption(name, team.id.toString())
-            }
+        val teams = async {
+            client.get("$baseUrl/api/team_list")
+                .parseAs<CMangaTeamResponse>()
+                .data
+                .mapNotNull { team ->
+                    val name = runCatching { team.info.parseAs<CMangaTeamInfo>().name.trim() }
+                        .getOrNull()
+                        .orEmpty()
+                    if (name.isEmpty()) null else FilterOption(name, team.id.toString())
+                }
+        }
 
-        return CMangaFilterData(genres, teams).toJsonElement()
+        CMangaFilterData(genres.await(), teams.await()).toJsonElement()
     }
 
     override suspend fun getSearchMangaList(
@@ -265,32 +274,49 @@ abstract class CManga : KeiSource() {
 
     // ============================== Chapters ==============================
 
-    private suspend fun getChapterList(manga: SManga): List<SChapter> {
+    private suspend fun getChapterList(manga: SManga): List<SChapter> = coroutineScope {
         val albumId = extractAlbumId(manga.url) ?: throw Exception("Không tìm thấy mã truyện")
         val albumSlug = extractAlbumSlug(manga.url)
         val version = currentEpochSeconds()
-        var page = 1
 
         val seenChapterIds = mutableSetOf<String>()
         val chapters = mutableListOf<SChapter>()
 
-        var pageItems = client.get(chapterListPageUrl(albumId, page, albumSlug, version))
+        val firstPageItems = client.get(chapterListPageUrl(albumId, 1, albumSlug, version))
             .parseAs<CMangaChapterListResponse>().data.orEmpty()
-        chapters += toSChapterList(pageItems, albumSlug, seenChapterIds)
+        chapters += toSChapterList(firstPageItems, albumSlug, seenChapterIds)
 
-        while (pageItems.size >= chapterPageSize) {
-            page += 1
-            pageItems = client.get(chapterListPageUrl(albumId, page, albumSlug, version))
-                .parseAs<CMangaChapterListResponse>().data.orEmpty()
+        var nextPage = 2
+        var hasMorePages = firstPageItems.size >= chapterPageSize
 
-            if (pageItems.isEmpty()) break
+        while (hasMorePages) {
+            val pageResults = (nextPage until nextPage + chapterFetchBatchSize)
+                .map { page ->
+                    async {
+                        client.get(chapterListPageUrl(albumId, page, albumSlug, version))
+                            .parseAs<CMangaChapterListResponse>().data.orEmpty()
+                    }
+                }
+                .awaitAll()
 
-            val newItems = toSChapterList(pageItems, albumSlug, seenChapterIds)
-            if (newItems.isEmpty()) break
-            chapters += newItems
+            for (pageItems in pageResults) {
+                val newItems = toSChapterList(pageItems, albumSlug, seenChapterIds)
+                if (pageItems.isEmpty() || newItems.isEmpty()) {
+                    hasMorePages = false
+                    break
+                }
+
+                chapters += newItems
+                if (pageItems.size < chapterPageSize) {
+                    hasMorePages = false
+                    break
+                }
+            }
+
+            nextPage += chapterFetchBatchSize
         }
 
-        return chapters
+        chapters
     }
 
     private fun chapterListPageUrl(albumId: String, page: Int, slug: String?, version: String): HttpUrl = "$baseUrl/api/chapter_list".toHttpUrl().newBuilder()
@@ -312,10 +338,13 @@ abstract class CManga : KeiSource() {
     ): List<SChapter> {
         return chapterItems.mapNotNull { chapterItem ->
             val chapterInfo = parseChapterInfo(chapterItem.info) ?: return@mapNotNull null
-            val chapterId = chapterInfo.id.asStringOrNull() ?: chapterItem.idChapter?.toString() ?: return@mapNotNull null
+            val chapterId = chapterInfo.id?.let { runCatching { it.string }.getOrNull() }
+                ?: chapterItem.idChapter?.toString()
+                ?: return@mapNotNull null
             if (!seenChapterIds.add(chapterId)) return@mapNotNull null
 
-            val chapterNumber = chapterInfo.num.asStringOrNull() ?: return@mapNotNull null
+            val chapterNumber = chapterInfo.num?.let { runCatching { it.string }.getOrNull() }
+                ?: return@mapNotNull null
             val chapterTitle = buildChapterTitle(chapterNumber, chapterInfo.name)
             val chapterName = if (isChapterLocked(chapterInfo)) "🔒 $chapterTitle" else chapterTitle
             val slug = albumSlug ?: "truyen"
@@ -323,9 +352,19 @@ abstract class CManga : KeiSource() {
             SChapter.create().apply {
                 name = chapterName
                 setUrlWithoutDomain("/album/$slug/chapter-$chapterNumber-$chapterId")
-                date_upload = chapterInfo.lastUpdate?.let { dateFormat.tryParse(it) } ?: 0L
+                date_upload = parseChapterDate(chapterInfo.lastUpdate)
             }
         }
+    }
+
+    private fun parseChapterDate(date: String?): Long {
+        if (date == null) return 0L
+        return runCatching {
+            LocalDateTime.parse(date, dateFormat)
+                .atZone(dateZone)
+                .toInstant()
+                .toEpochMilli()
+        }.getOrDefault(0L)
     }
 
     private fun buildChapterTitle(number: String, chapterTitle: String?): String {
@@ -367,11 +406,12 @@ abstract class CManga : KeiSource() {
 
     private fun isChapterLocked(chapterInfo: CMangaChapterInfo): Boolean {
         val lock = chapterInfo.lock
-        val chapterLevel = chapterInfo.level.asIntOrNull() ?: 0
-        val lockLevel = lock?.level.asIntOrNull() ?: 0
-        val lockFee = lock?.fee.asIntOrNull() ?: 0
+        val chapterLevel = chapterInfo.level?.let { runCatching { it.int }.getOrNull() } ?: 0
+        val lockLevel = lock?.level?.let { runCatching { it.int }.getOrNull() } ?: 0
+        val lockFee = lock?.fee?.let { runCatching { it.int }.getOrNull() } ?: 0
         val nowSeconds = System.currentTimeMillis() / 1000
-        val hasActiveLock = lock != null && (lock.end.asLongOrNull() ?: 0L) >= nowSeconds
+        val lockEnd = lock?.end?.let { runCatching { it.long }.getOrNull() } ?: 0L
+        val hasActiveLock = lock != null && lockEnd >= nowSeconds
         return hasActiveLock || chapterLevel != 0 || lockLevel != 0 || lockFee != 0
     }
 
@@ -453,8 +493,8 @@ abstract class CManga : KeiSource() {
             ?: return CMangaUserSecurityCredential()
 
         return CMangaUserSecurityCredential(
-            id = security.id.asStringOrNull(),
-            token = security.token.asStringOrNull(),
+            id = security.id?.let { runCatching { it.string }.getOrNull() },
+            token = security.token?.let { runCatching { it.string }.getOrNull() },
         )
     }
 
@@ -471,12 +511,6 @@ abstract class CManga : KeiSource() {
 
     private fun currentEpochSeconds(): String = (System.currentTimeMillis() / 1000).toString()
 
-    private fun JsonElement?.asStringOrNull(): String? = (this as? JsonPrimitive)?.content
-
-    private fun JsonElement?.asIntOrNull(): Int? = asStringOrNull()?.toIntOrNull()
-
-    private fun JsonElement?.asLongOrNull(): Long? = asStringOrNull()?.toLongOrNull()
-
     override fun getFilterList(data: JsonElement?): FilterList {
         val filterData = data
             ?.let { runCatching { it.parseAs<CMangaFilterData>() }.getOrNull() }
@@ -492,17 +526,15 @@ abstract class CManga : KeiSource() {
     private val xemThemRegex = Regex("""\.\.\.\s*Xem thêm""", RegexOption.IGNORE_CASE)
     private val anBotRegex = Regex("""Ẩn bớt""", RegexOption.IGNORE_CASE)
 
-    private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {
-            timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
-        }
-    }
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
+    private val dateZone = ZoneId.of("Asia/Ho_Chi_Minh")
 
     private val redundantChapterPrefixes = listOf("chapter", "chap", "chương", "chuong")
     private val sourceFile = "image"
     private val defaultSort = "update"
     private val pageSize = 20
     private val chapterPageSize = 50
+    private val chapterFetchBatchSize = 3
     private val loginWebviewMessage = "Vui lòng đăng nhập vào tài khoản phù hợp qua Webview để đọc chương này"
     private val userSecurityCookie = "user_security"
 }
