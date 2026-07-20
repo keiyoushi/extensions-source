@@ -36,7 +36,7 @@ abstract class WebNovel : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addNetworkInterceptor(::csrfTokenInterceptor)
-        addNetworkInterceptor(::expiredImageUrlInterceptor)
+        addInterceptor(::expiredImageUrlInterceptor)
     }
 
     // Popular
