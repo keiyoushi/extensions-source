@@ -277,11 +277,8 @@ abstract class Iken :
         } else {
             val details = getMangaDetails(slug)
             val updatedManga = details.toSManga()
-            val updatedChapters = if (fetchChapters) {
-                details.chapters.filter { it.isVisible() }.map { it.toSChapter(details.slug) }
-            } else {
-                chapters
-            }
+
+            val updatedChapters = details.chapters.filter { it.isVisible() }.map { it.toSChapter(details.slug) }
             SMangaUpdate(updatedManga, updatedChapters)
         }
     }
