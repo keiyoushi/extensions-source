@@ -10,6 +10,12 @@ A few points that are easy to get wrong from stale training data:
 - **New sources must extend `KeiSource`** (`libVersion = "1.6"`), never `HttpSource` directly.
   `HttpSource`/`libVersion = "1.4"` only exists in extensions/themes not yet migrated - see
   [KeiSource](CONTRIBUTING.md#keisource).
+  - **Metadata is injected via KSP:** Do NOT manually declare or `override val name`, `lang`, `id`, or `baseUrl` in your `@Source` class. These are defined using `source {}` blocks in `build.gradle.kts` and injected automatically.
+- **`SourceFactory` is obsolete:** Do NOT implement `SourceFactory` to create multiple sources. Instead, add multiple `source {}` blocks in the extension's `build.gradle.kts`.
+- **Generated Preferences:** Do NOT write manual `SharedPreferences` logic for base URL mirrors or custom user URLs. Use `baseUrl { mirrors(...) }` or `baseUrl { custom(...) }` inside the `source {}` block in `build.gradle.kts`.
+- **Deeplinks are DSL-driven:** Declare URL intent filters using the `deeplink {}` block in `build.gradle.kts`. Do NOT modify `AndroidManifest.xml` or write manual intent filtering logic.
+- **DTOs must be regular classes:** Do NOT use `data class` for `@Serializable` JSON/Protobuf DTOs (it bloats bytecode). Use a regular `class`, make fields `private` where possible, and only use `@SerialName` when the JSON key differs from the camelCase property name.
+- **No local JSON/Proto instances:** Do NOT create `private val json: Json by injectLazy()`. Use the shared `keiyoushi.utils` helpers like `response.parseAs<T>()`, `toJsonRequestBody()`, or `parseAsProto<T>()`.
 - Use `ext-bootstrap.py` to scaffold new extensions rather than hand-writing the module structure -
   see [Using ext-bootstrap.py](CONTRIBUTING.md#using-ext-bootstrappy).
 - Prefer the helpers documented under
