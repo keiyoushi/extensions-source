@@ -48,12 +48,7 @@ abstract class MangaDar : KeiSource() {
                 .addQueryParameter("q", query)
                 .build()
             val response = client.get(url)
-            val contentType = response.header("Content-Type").orEmpty()
-            return if (contentType.contains("application/json")) {
-                parseSearchJson(response)
-            } else {
-                parseMangaListPage(response)
-            }
+            return parseSearchJson(response)
         }
 
         val urlBuilder = "$baseUrl/manga/".toHttpUrl().newBuilder()
@@ -133,11 +128,6 @@ abstract class MangaDar : KeiSource() {
         StatusFilter("الحالة", statusList),
         GenreFilter("التصنيف", genreFilterList),
     )
-
-    // ============================== Related =============================
-
-    override val supportsRelatedMangas get() = false
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
 
     // ============================== Parsers ============================
 
