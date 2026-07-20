@@ -19,6 +19,7 @@ import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
@@ -36,6 +37,7 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import okio.IOException
+
 @Source
 abstract class Kagane :
     KeiSource(),
@@ -320,7 +322,13 @@ abstract class Kagane :
         val seriesId = manga.url
         val dto = getMangaById(seriesId)
 
-        val updatedManga = parseMangaDetails(dto)
+        val updatedManga = parseMangaDetails(dto).apply {
+            if (!dto.trackerId.isNullOrEmpty()) {
+                memo = buildJsonObject {
+                    put("trackerId", dto.trackerId)
+                }
+            }
+        }
         val updatedChapters = parseChapterList(dto, seriesId)
 
         return SMangaUpdate(updatedManga, updatedChapters)
@@ -345,8 +353,7 @@ abstract class Kagane :
     override val supportsRelatedMangas = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val dto = getMangaById(manga.url)
-        val trackerId = dto.trackerId?.takeIf(String::isNotBlank) ?: return emptyList()
+        val trackerId = manga.memo["trackerId"]!!.string
 
         val series = client.get("$apiUrl/trackers/$trackerId/series")
             .parseAs<TrackerDto>()
