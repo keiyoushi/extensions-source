@@ -1,9 +1,17 @@
 package eu.kanade.tachiyomi.extension.en.webcomics
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class ChapterWrapper(
+data class GenreListItem(
+    @SerialName("manga_id") val mangaId: String,
+    val cover: String,
+    val name: String,
+)
+
+@Serializable
+class ChapterWrapper(
     val `data`: Data,
 ) {
     val chapters get() = data.list
@@ -11,19 +19,19 @@ data class ChapterWrapper(
 }
 
 @Serializable
-data class Data(
+class Data(
     val list: List<ChapterDto>,
     val book: Book,
 )
 
 @Serializable
-data class Book(
+class Book(
     val manga_id: String,
     val name: String,
 )
 
 @Serializable
-data class ChapterDto(
+class ChapterDto(
     val chapter_id: String,
     val index: Int,
     val is_last: Boolean,
@@ -31,6 +39,11 @@ data class ChapterDto(
     val is_pay: Boolean,
     val name: String,
     val update_time: Long,
+)
+
+@Serializable
+class PageDto(
+    val src: String,
 )
 
 @Serializable
