@@ -247,7 +247,10 @@ class ChapterDto(
             if (useSourceChapterNumber) {
                 chapter_number = number
             }
-            scanlator = groups.joinToString(", ") { it.title }
+            scanlator = buildString {
+                append(groups.joinToString(", ") { it.title })
+                BRACKET_REGEX.find(title)?.groupValues?.get(1)?.let { append(" " + it.trim()) }
+            }
         }
 
         private fun buildChapterName(mode: String = "optional"): String {
@@ -269,13 +272,13 @@ class ChapterDto(
                     }
                 }
 
-                "vol_chapter" -> {
+                "vol_chapter", "vol_local" -> {
                     val volPart = if (!volumeNo.isNullOrBlank()) "Vol.$volumeNo " else ""
                     val chPart = if (!chapterNo.isNullOrBlank()) "Ch.$chapterNo" else ""
                     val numPart = "$volPart$chPart".trim()
                     when {
                         numPart.isEmpty() -> trimmedTitle
-                        trimmedTitle.isEmpty() -> numPart
+                        trimmedTitle.isEmpty() || mode == "vol_local" -> numPart
                         else -> "$numPart $trimmedTitle"
                     }
                 }
@@ -323,6 +326,6 @@ class IntegrityDto(
     val exp: Long,
 )
 
-private val TITLE_REGEX = Regex("""(?:\s*(?:\([^()]*\)|\[[^\[\]]*]))+\s*$""")
+private val BRACKET_REGEX = Regex("""(\([^()]*\)|\[[^\[\]]*\])\s*$""")
 
-private fun String.clean(removeExtras: Boolean): String = if (removeExtras) this.replace(TITLE_REGEX, "").trim() else this.trim()
+private fun String.clean(removeExtras: Boolean): String = if (removeExtras) this.replace(BRACKET_REGEX, "").trim() else this.trim()

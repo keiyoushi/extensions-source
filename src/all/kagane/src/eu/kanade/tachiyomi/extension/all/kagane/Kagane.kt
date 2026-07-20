@@ -353,7 +353,7 @@ abstract class Kagane :
     override val supportsRelatedMangas = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val trackerId = manga.memo["trackerId"]!!.string
+        val trackerId = manga.memo["trackerId"]?.string ?: return emptyList()
 
         val series = client.get("$apiUrl/trackers/$trackerId/series")
             .parseAs<TrackerDto>()
@@ -493,28 +493,37 @@ abstract class Kagane :
             key = SOURCE_DISPLAY_MODE
             title = "Source Display Selection"
             summary = "%s"
-            entries = arrayOf("Official Sources Only", "Show All (Official + Scanlations)")
-            entryValues = arrayOf("official", "all")
+            entries = arrayOf("Show All (Official + Scanlations)", "Official Sources Only")
+            entryValues = arrayOf("all", "official")
             setDefaultValue(SOURCE_DISPLAY_MODE_DEFAULT)
         }.let(screen::addPreference)
+
+        val showEdition = SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_EDITION
+            title = "Show edition name in title"
+            setDefaultValue(SHOW_EDITION_DEFAULT)
+            setEnabled(!cleanTitle)
+        }.also(screen::addPreference)
+
+        val showSource = SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_SOURCE
+            title = "Show source name in title"
+            setDefaultValue(SHOW_SOURCE_DEFAULT)
+            setEnabled(!cleanTitle)
+        }.also(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
             key = CLEAN_TITLE
             title = "Clean title"
-            summary = "Removes extra brackets / parentheses in title (Disables other title toggles)"
+            summary = "Removes extra brackets or parentheses in title (Disables others)"
             setDefaultValue(CLEAN_TITLE_DEFAULT)
-        }.let(screen::addPreference)
 
-        SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_EDITION
-            title = "Show edition name in title"
-            setDefaultValue(SHOW_EDITION_DEFAULT)
-        }.let(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_SOURCE
-            title = "Show source name in title"
-            setDefaultValue(SHOW_SOURCE_DEFAULT)
+            setOnPreferenceChangeListener { _, newValue ->
+                val enabled = !(newValue as Boolean)
+                showEdition.setEnabled(enabled)
+                showSource.setEnabled(enabled)
+                true
+            }
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
@@ -566,11 +575,13 @@ abstract class Kagane :
         internal val CHAPTER_TITLE_MODES = arrayOf(
             "optional",
             "always",
+            "vol_local",
             "vol_chapter",
         )
         internal val CHAPTER_TITLE_MODE_NAMES = arrayOf(
             "Title only (e.g. 'Manga Title' / 'Ch.5')",
             "Ch.X + title (e.g. 'Ch.5 Manga Title')",
+            "Vol.X Ch.Y (e.g. 'Vol.1 Ch.5')",
             "Vol.X Ch.Y + title (e.g. 'Vol.1 Ch.5 Manga Title')",
         )
     }
