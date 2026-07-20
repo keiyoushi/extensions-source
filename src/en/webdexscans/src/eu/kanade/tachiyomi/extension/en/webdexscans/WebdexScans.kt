@@ -21,9 +21,6 @@ import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 
 @Source
 abstract class WebdexScans :
@@ -41,10 +38,6 @@ abstract class WebdexScans :
             .add("authorization", "Bearer $supabaseApiKey")
             .add("Accept", "application/json")
             .build()
-    }
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
     }
 
     // ============================== Popular ==============================
@@ -160,12 +153,12 @@ abstract class WebdexScans :
         val filteredChapters = if (showPremium) {
             chapters
         } else {
-            chapters.filterNot { it.isPremium }
+            chapters.filterNot { it.isPremium() }
         }
 
         return SMangaUpdate(
             manga = newManga,
-            chapters = filteredChapters.map { it.toSChapter(seriesSlug, dateFormat) },
+            chapters = filteredChapters.map { it.toSChapter(seriesSlug) },
         )
     }
 

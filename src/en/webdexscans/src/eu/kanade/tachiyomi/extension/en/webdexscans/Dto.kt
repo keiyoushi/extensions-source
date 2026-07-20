@@ -2,10 +2,9 @@ package eu.kanade.tachiyomi.extension.en.webdexscans
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import java.time.OffsetDateTime
 
 @Serializable
 class SearchSeriesDto(
@@ -62,16 +61,22 @@ class ChapterInfo(
     private val slug: String,
     @SerialName("chapter_number") private val chapterNumber: Float? = null,
     @SerialName("created_at") private val createdAt: String? = null,
-    @SerialName("is_premium") val isPremium: Boolean = false,
+    @SerialName("is_premium") private val isPremium: Boolean = false,
+    @SerialName("free_at") private val freeAt: String? = null,
 ) {
-    fun toSChapter(seriesSlug: String, dateFormat: SimpleDateFormat) = SChapter.create().apply {
+    fun toSChapter(seriesSlug: String) = SChapter.create().apply {
         val chapterName = title?.takeIf { it.isNotBlank() }
             ?: chapterNumber?.toString()?.removeSuffix(".0")?.let { "Chapter $it" }
             ?: "Chapter"
-        this.name = if (isPremium) "🔒 $chapterName" else chapterName
+        this.name = if (isPremium()) "🔒 $chapterName" else chapterName
         this.url = "/series/$seriesSlug/$slug"
-        // Grab the first 19 characters to format "yyyy-MM-dd'T'HH:mm:ss" properly and bypass timezone + subsecond issues
-        this.date_upload = dateFormat.tryParse(createdAt?.take(19))
+        this.date_upload = createdAt?.let(OffsetDateTime::parse)?.toInstant()?.toEpochMilli() ?: 0L
+    }
+
+    fun isPremium(): Boolean {
+        val now = OffsetDateTime.now()
+        val freeAt = freeAt?.let(OffsetDateTime::parse)
+        return isPremium && freeAt?.isAfter(now) ?: true
     }
 }
 
