@@ -13,7 +13,9 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -200,21 +202,57 @@ abstract class MangaDar : KeiSource() {
     }
 
     private fun parseChaptersFromDoc(doc: Document): List<SChapter> {
-        val chaptersContainer = doc.selectFirst("div[x-data]:containsData(chapters)")
-        if (chaptersContainer != null) {
-            val xData = chaptersContainer.attr("x-data")
-            val chaptersStart = xData.indexOf("chapters:")
-            if (chaptersStart != -1) {
-                val jsonStart = xData.indexOf("[", chaptersStart)
-                val jsonEnd = findMatchingBracket(xData, jsonStart)
-                if (jsonStart != -1 && jsonEnd != -1) {
-                    val chaptersJson = xData.substring(jsonStart, jsonEnd + 1)
-                    val chapters = chaptersJson.parseAs<List<ChapterDto>>()
-                    return chapters.map { it.toSChapter() }
-                }
+        val chaptersContainer = doc.selectFirst("div[x-data]")
+            ?: return emptyList()
+
+        val xData = chaptersContainer.attr("x-data")
+
+        // New format: rows: [[id, number, url, timestamp, num], ...]
+        val rowsStart = xData.indexOf("rows:")
+        if (rowsStart != -1) {
+            val bracketStart = xData.indexOf("[", rowsStart)
+            val bracketEnd = findMatchingBracket(xData, bracketStart)
+            if (bracketStart != -1 && bracketEnd != -1) {
+                val rowsJson = xData.substring(bracketStart, bracketEnd + 1)
+                return parseRowsJson(rowsJson)
             }
         }
+
+        // Legacy format: chapters: [{...}]
+        val chaptersStart = xData.indexOf("chapters:")
+        if (chaptersStart != -1) {
+            val jsonStart = xData.indexOf("[", chaptersStart)
+            val jsonEnd = findMatchingBracket(xData, jsonStart)
+            if (jsonStart != -1 && jsonEnd != -1) {
+                val chaptersJson = xData.substring(jsonStart, jsonEnd + 1)
+                val initialChapters = chaptersJson.parseAs<List<ChapterDto>>()
+                return initialChapters.map { it.toSChapter() }
+            }
+        }
+
         return emptyList()
+    }
+
+    private fun parseRowsJson(rowsJson: String): List<SChapter> {
+        // Parse the compact array format: [[id, number, url, timestamp, num], ...]
+        val rows = rowsJson.parseAs<JsonArray>()
+        return rows.mapNotNull { element ->
+            val row = element as? JsonArray ?: return@mapNotNull null
+            if (row.size < 4) return@mapNotNull null
+
+            val chapterNumber = (row[1] as? JsonPrimitive)?.content ?: ""
+            val chapterUrl = (row[2] as? JsonPrimitive)?.content ?: ""
+            val timestamp = (row[3] as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L
+
+            if (chapterUrl.isBlank()) return@mapNotNull null
+
+            SChapter.create().apply {
+                this.url = chapterUrl.removePrefix(baseUrl)
+                this.name = "الفصل $chapterNumber"
+                chapter_number = chapterNumber.toFloatOrNull() ?: 0f
+                date_upload = timestamp * 1000
+            }
+        }
     }
 
     private fun findMatchingBracket(str: String, startIndex: Int): Int {
