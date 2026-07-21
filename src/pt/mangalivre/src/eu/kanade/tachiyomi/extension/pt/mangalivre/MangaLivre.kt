@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivre
 
-import android.webkit.WebSettings
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -14,11 +13,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
+import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -47,20 +43,13 @@ abstract class MangaLivre :
 
     private val preferences by getPreferencesLazy()
 
-    private val webViewUserAgent: String? by lazy {
-        runCatching { WebSettings.getDefaultUserAgent(applicationContext) }
-            .getOrNull()
-    }
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder().apply {
-        webViewUserAgent?.takeIf { it.isNotBlank() }?.let { set("User-Agent", it) }
-        add("Accept", "*/*")
-        add("Accept-Language", "pt-BR,en-US;q=0.9,en;q=0.8")
-        add("Referer", "$baseUrl/")
-        add("Sec-Fetch-Dest", "empty")
-        add("Sec-Fetch-Mode", "cors")
-        add("Sec-Fetch-Site", "same-origin")
-    }
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .add("Accept", "*/*")
+        .add("Accept-Language", "pt-BR,en-US;q=0.9,en;q=0.8")
+        .add("Referer", "$baseUrl/")
+        .add("Sec-Fetch-Dest", "empty")
+        .add("Sec-Fetch-Mode", "cors")
+        .add("Sec-Fetch-Site", "same-origin")
 
     // ============================== Popular =======================================
 
@@ -114,7 +103,7 @@ abstract class MangaLivre :
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val dto = WrapperDto.fromJson(response.parseJson())
+        val dto = response.parseJson<WrapperDto>()
         val mangas = dto.mangas.map { it.toSManga(useAlternativeTitle) }
         return MangasPage(mangas, dto.hasNextPage)
     }
@@ -125,26 +114,26 @@ abstract class MangaLivre :
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/manga-by-slug/${manga.url}", headers)
 
-    override fun mangaDetailsParse(response: Response): SManga = MangaDto.fromJson(response.parseJson()).toSManga(useAlternativeTitle)
+    override fun mangaDetailsParse(response: Response): SManga = response.parseJson<MangaDto>().toSManga(useAlternativeTitle)
 
     // ============================== Chapters =======================================
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
-    override fun chapterListParse(response: Response): List<SChapter> = MangaDto.fromJson(response.parseJson()).toSChapterList()
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseJson<MangaDto>().toSChapterList()
 
     // ============================== Pages =======================================
 
     override fun pageListRequest(chapter: SChapter): Request {
         val readerPath = chapter.url.substringBeforeLast("#")
-        val ref = ChapterReferenceDto.fromJson(chapter.url.substringAfterLast("#"))
+        val ref = chapter.url.substringAfterLast("#").parseAs<ChapterReferenceDto>()
         return GET("$apiUrl/mangas/${ref.mangaId}/chapters/${ref.chapterId}", headers)
             .newBuilder()
             .tag(ReadingGateInterceptor.ReaderPath::class.java, ReadingGateInterceptor.ReaderPath(readerPath))
             .build()
     }
 
-    override fun pageListParse(response: Response): List<Page> = PageDto.fromJson(response.parseJson()).toPageList()
+    override fun pageListParse(response: Response): List<Page> = response.parseJson<PageDto>().toPageList()
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
@@ -190,18 +179,18 @@ abstract class MangaLivre :
 
     // ============================== Utilities =======================================
 
-    private fun Response.parseJson(): JsonObject {
-        val responseBody = body.string().trimStart()
-        if (responseBody.isEmpty() || responseBody.startsWith("<")) {
+    private inline fun <reified T> Response.parseJson(): T {
+        val peek = peekBody(MAX_PEEK).string().trimStart()
+        if (peek.isEmpty() || peek.startsWith("<")) {
             close()
             throw IOException(NON_JSON_MESSAGE)
         }
-        return runCatching { Json.parseToJsonElement(responseBody).jsonObject }
-            .getOrElse { throw IOException(NON_JSON_MESSAGE, it) }
+        return parseAs<T>()
     }
 
     companion object {
         private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
+        private const val MAX_PEEK = 1024L
         private const val NON_JSON_MESSAGE =
             "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
 

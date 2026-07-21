@@ -3,46 +3,29 @@ package eu.kanade.tachiyomi.extension.pt.mangalivre
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import kotlinx.serialization.SerializationException
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.longOrNull
-import kotlinx.serialization.json.put
+import keiyoushi.utils.toJsonString
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import java.text.Normalizer
 
+@Serializable
 class WrapperDto(
     val mangas: List<MangaDto>,
     val pagination: PaginationDto,
 ) {
     val hasNextPage get() = pagination.hasNextPage
-
-    companion object {
-        fun fromJson(json: JsonObject) = WrapperDto(
-            mangas = json.requiredArray("mangas").mapObjects(MangaDto::fromJson),
-            pagination = PaginationDto.fromJson(json.requiredObject("pagination")),
-        )
-    }
 }
 
+@Serializable
 class PaginationDto(
     val hasNextPage: Boolean,
-) {
-    companion object {
-        fun fromJson(json: JsonObject) = PaginationDto(json.requiredBoolean("hasNextPage"))
-    }
-}
+)
 
+@Serializable
 class MangaDto(
     val id: String,
     val title: String,
+    @SerialName("coverUrl")
     val thumbnailUrl: String? = null,
     val authors: List<String>? = null,
     val artists: List<String>? = null,
@@ -90,40 +73,16 @@ class MangaDto(
     companion object {
         private val MARKS_REGEX = "\\p{InCombiningDiacriticalMarks}+".toRegex()
         private val NON_ALPHA_REGEX = "[^a-z0-9]+".toRegex()
-
-        fun fromJson(json: JsonObject) = MangaDto(
-            id = json.requiredString("id"),
-            title = json.requiredString("title"),
-            thumbnailUrl = json.optionalString("coverUrl"),
-            authors = json.optionalStringList("authors"),
-            artists = json.optionalStringList("artists"),
-            genres = json.optionalStringList("genres"),
-            description = json.optionalString("description"),
-            alternativeTitle = json.optionalString("alternativeTitle"),
-            chapters = json["chapters"]?.takeUnless { it === JsonNull }
-                ?.jsonArray
-                ?.mapObjects(ChapterDto::fromJson),
-            status = json.optionalString("status"),
-        )
     }
 }
 
+@Serializable
 class ChapterReferenceDto(
     val mangaId: String,
     val chapterId: String,
-) {
-    fun toJson(): String = buildJsonObject {
-        put("mangaId", mangaId)
-        put("chapterId", chapterId)
-    }.toString()
+)
 
-    companion object {
-        fun fromJson(value: String) = Json.parseToJsonElement(value).jsonObject.let {
-            ChapterReferenceDto(it.requiredString("mangaId"), it.requiredString("chapterId"))
-        }
-    }
-}
-
+@Serializable
 class ChapterDto(
     val id: String,
     val number: String,
@@ -132,55 +91,15 @@ class ChapterDto(
     fun toSChapter(slug: String, mangaId: String) = SChapter.create().apply {
         name = "Capítulo $number"
         date_upload = timestamp
-        url = "/$slug/$number#${ChapterReferenceDto(mangaId, id).toJson()}"
-    }
-
-    companion object {
-        fun fromJson(json: JsonObject) = ChapterDto(
-            id = json.requiredString("id"),
-            number = json.requiredString("number"),
-            timestamp = json.requiredLong("timestamp"),
-        )
+        url = "/$slug/$number#${ChapterReferenceDto(mangaId, id).toJsonString()}"
     }
 }
 
+@Serializable
 class PageDto(
     val pages: List<String>,
 ) {
     fun toPageList() = pages.mapIndexed { index, imageUrl ->
         Page(index, imageUrl = imageUrl)
     }
-
-    companion object {
-        fun fromJson(json: JsonObject) = PageDto(json.requiredArray("pages").toStringList())
-    }
 }
-
-private fun JsonObject.requiredElement(key: String) = this[key]
-    ?: throw SerializationException("Missing required field: $key")
-
-private fun JsonObject.requiredString(key: String): String = requiredElement(key).jsonPrimitive.content
-
-private fun JsonObject.requiredBoolean(key: String): Boolean = requiredElement(key).jsonPrimitive.booleanOrNull
-    ?: throw SerializationException("Field is not a boolean: $key")
-
-private fun JsonObject.requiredLong(key: String): Long = requiredElement(key).jsonPrimitive.longOrNull
-    ?: throw SerializationException("Field is not a long: $key")
-
-private fun JsonObject.requiredArray(key: String): JsonArray = requiredElement(key).jsonArray
-
-private fun JsonObject.requiredObject(key: String): JsonObject = requiredElement(key).jsonObject
-
-private fun JsonObject.optionalString(key: String): String? = this[key]
-    ?.jsonPrimitive
-    ?.contentOrNull
-    ?.takeIf { it.isNotBlank() }
-
-private fun JsonObject.optionalStringList(key: String): List<String>? = this[key]
-    ?.takeUnless { it === JsonNull }
-    ?.jsonArray
-    ?.toStringList()
-
-private fun JsonArray.toStringList(): List<String> = map { it.jsonPrimitive.content }
-
-private fun <T> JsonArray.mapObjects(transform: (JsonObject) -> T): List<T> = map { transform(it.jsonObject) }
