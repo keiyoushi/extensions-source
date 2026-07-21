@@ -512,8 +512,7 @@ abstract class CManga : KeiSource() {
     private fun currentEpochSeconds(): String = (System.currentTimeMillis() / 1000).toString()
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val filterData = data
-            ?.let { runCatching { it.parseAs<CMangaFilterData>() }.getOrNull() }
+        val filterData = data?.parseAs<CMangaFilterData>()
         return getFilters(filterData?.genres.orEmpty(), filterData?.teams.orEmpty())
     }
 

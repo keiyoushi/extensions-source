@@ -5,13 +5,15 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-fun getFilters(genres: List<GenreOption>, teams: List<FilterOption>): FilterList = FilterList(
-    GenreFilter(genres.map { Genre(it.name, it.value) }),
-    TeamFilter(teams),
-    MinChapterFilter(),
-    SortFilter(),
-    StatusFilter(),
-)
+fun getFilters(genres: List<GenreOption>, teams: List<FilterOption>): FilterList {
+    val filters = mutableListOf<Filter<*>>()
+    if (genres.isNotEmpty()) filters += GenreFilter(genres.map { Genre(it.name, it.value) })
+    if (teams.isNotEmpty()) filters += TeamFilter(teams)
+    filters += MinChapterFilter()
+    filters += SortFilter()
+    filters += StatusFilter()
+    return FilterList(filters)
+}
 
 @Serializable
 data class CMangaFilterData(
