@@ -1,5 +1,10 @@
 package eu.kanade.tachiyomi.extension.vi.goctruyentranhvui
 
+import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,6 +18,7 @@ import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getLocalStorage
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -27,7 +33,9 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 
 @Source
-abstract class GocTruyenTranhVui : KeiSource() {
+abstract class GocTruyenTranhVui :
+    KeiSource(),
+    ConfigurableSource {
 
     private val apiUrl get() = "$baseUrl/api/v2"
 
@@ -56,10 +64,14 @@ abstract class GocTruyenTranhVui : KeiSource() {
     private var cachedAuthToken: String? = null
     private var authChecked = false
 
+    private val preferences: SharedPreferences = getPreferences()
+
+    private fun customToken(): String? = preferences.getString(CUSTOM_TOKEN, null)?.takeIf { it.isNotBlank() }
+
     private suspend fun loadAuthToken() {
         if (authChecked) return
         authChecked = true
-        cachedAuthToken = getLocalStorage(baseUrl, "Authorization")
+        cachedAuthToken = customToken() ?: getLocalStorage(baseUrl, "Authorization")
             ?.takeIf { it.isNotBlank() }
     }
 
@@ -104,6 +116,7 @@ abstract class GocTruyenTranhVui : KeiSource() {
         query: String,
         filters: FilterList,
     ): MangasPage {
+        loadAuthToken()
         val url = apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("search")
             addQueryParameter("p", (page - 1).toString())
@@ -183,6 +196,7 @@ abstract class GocTruyenTranhVui : KeiSource() {
     }
 
     private suspend fun fetchChapters(manga: SManga): List<SChapter> {
+        loadAuthToken()
         val mangaId = manga.url.substringBefore(':')
         val slug = manga.url.substringAfter(':')
         val result = client.get("$baseUrl/api/comic/$mangaId/chapter?limit=-1", xhrHeaders)
@@ -258,8 +272,27 @@ abstract class GocTruyenTranhVui : KeiSource() {
         return FilterList(filters)
     }
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = CUSTOM_TOKEN
+            title = "Authorization Token"
+            summary = "Nhập token thủ công từ cookies/localStorage nếu tự động lấy thất bại."
+            dialogTitle = "Token"
+            dialogMessage = "Dán Authorization token của bạn vào đây."
+            setOnPreferenceChangeListener { _, newValue ->
+                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.also(screen::addPreference)
+    }
+
     // ============================== Constants =============================
 
     private val comicIdRegex = Regex("""id:\s*"([^"]+)"""")
     private val comicNameEnRegex = Regex("""nameEn:\s*`([^`]+)`""")
+
+    companion object {
+        private const val CUSTOM_TOKEN = "custom_token"
+        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng token mới nhập."
+    }
 }
