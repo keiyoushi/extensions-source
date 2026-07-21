@@ -14,10 +14,13 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -29,10 +32,8 @@ abstract class GocTruyenTranhVui : KeiSource() {
 
     // ============================== Client ================================
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
-        addInterceptor(authInterceptor())
-        rateLimit(3)
-    }
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(authInterceptor())
+        .rateLimit(3)
 
     private val xhrHeaders by lazy {
         headersBuilder()
@@ -62,7 +63,7 @@ abstract class GocTruyenTranhVui : KeiSource() {
             ?.takeIf { it.isNotBlank() }
     }
 
-    private fun authInterceptor() = okhttp3.Interceptor { chain ->
+    private fun authInterceptor() = Interceptor { chain ->
         val original = chain.request()
         val request = original.newBuilder().apply {
             if (original.url.encodedPath.startsWith("/api/")) {
@@ -140,15 +141,26 @@ abstract class GocTruyenTranhVui : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        if (!fetchDetails && !fetchChapters) return SMangaUpdate(manga, chapters)
-
+    ): SMangaUpdate = coroutineScope {
         val detailUrl = getMangaUrl(manga).toHttpUrl()
-        val document = client.get(detailUrl).asJsoup()
-        val updatedManga = if (fetchDetails) parseMangaDetails(document, detailUrl) else manga
-        val updatedChapters = if (fetchChapters) fetchChapters(manga) else chapters
+        val mangaDeferred = if (fetchDetails) {
+            async {
+                val document = client.get(detailUrl).asJsoup()
+                parseMangaDetails(document, detailUrl)
+            }
+        } else {
+            null
+        }
+        val chaptersDeferred = if (fetchChapters) {
+            async { fetchChapters(manga) }
+        } else {
+            null
+        }
 
-        return SMangaUpdate(updatedManga, updatedChapters)
+        SMangaUpdate(
+            mangaDeferred?.await() ?: manga,
+            chaptersDeferred?.await() ?: chapters,
+        )
     }
 
     private fun parseMangaDetails(document: Document, url: HttpUrl): SManga = SManga.create().apply {
@@ -237,11 +249,13 @@ abstract class GocTruyenTranhVui : KeiSource() {
             .orEmpty()
             .map(CategoryDto::toOption)
 
-        return FilterList(
+        val filters = mutableListOf<FilterGroup>(
             StatusList(getStatusList()),
             SortByList(getSortByList()),
-            GenreList(genres),
         )
+        if (genres.isNotEmpty()) filters += GenreList(genres)
+
+        return FilterList(filters)
     }
 
     // ============================== Constants =============================
