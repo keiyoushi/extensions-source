@@ -18,6 +18,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -35,8 +36,8 @@ abstract class GocTruyenTranhVui : KeiSource() {
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(authInterceptor())
         .rateLimit(3)
 
-    private val xhrHeaders by lazy {
-        headersBuilder()
+    private val xhrHeaders: Headers
+        get() = headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")
             .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
             .add("Accept-Language", "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7")
@@ -49,7 +50,6 @@ abstract class GocTruyenTranhVui : KeiSource() {
             .add("Sec-Fetch-User", "?1")
             .add("Upgrade-Insecure-Requests", "1")
             .build()
-    }
 
     // ============================== Auth ==================================
 
