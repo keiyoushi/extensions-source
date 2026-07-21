@@ -64,13 +64,11 @@ abstract class DaoMeoDen : KeiSource() {
         query: String,
         filters: FilterList,
     ): MangasPage {
-        val filterList = filters.ifEmpty { getFilters() }
-
-        val status = filterList.firstInstanceOrNull<StatusFilter>()?.toUriPart() ?: defaultStatus
-        val category = filterList.firstInstanceOrNull<CategoryFilter>()?.toUriPart() ?: defaultCategory
-        val genre = filterList.firstInstanceOrNull<GenreFilter>()?.toUriPart() ?: defaultGenre
-        val explicit = filterList.firstInstanceOrNull<ExplicitFilter>()?.toUriPart() ?: defaultExplicit
-        val order = filterList.firstInstanceOrNull<SortFilter>()?.toUriPart() ?: defaultOrder
+        val status = filters.firstInstanceOrNull<StatusFilter>()?.toUriPart() ?: defaultStatus
+        val category = filters.firstInstanceOrNull<CategoryFilter>()?.toUriPart() ?: defaultCategory
+        val genre = filters.firstInstanceOrNull<GenreFilter>()?.toUriPart() ?: defaultGenre
+        val explicit = filters.firstInstanceOrNull<ExplicitFilter>()?.toUriPart() ?: defaultExplicit
+        val order = filters.firstInstanceOrNull<SortFilter>()?.toUriPart() ?: defaultOrder
 
         val url = "$baseUrl$listPath".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
@@ -104,12 +102,9 @@ abstract class DaoMeoDen : KeiSource() {
     private suspend fun parseBrowsePage(response: Response): MangasPage {
         val requestUrl = response.request.url
         val document = response.asJsoup()
-        val apiRequest = buildBookListApiRequest(document, requestUrl.toString())
+        val payload = fetchBookList(document, requestUrl.toString())
+            ?.parseAs<BookListApiResponse>()
             ?: return MangasPage(emptyList(), false)
-        val requestBody = apiRequest.body
-            ?: return MangasPage(emptyList(), false)
-        val payload = client.post(apiRequest.url, apiRequest.headers, requestBody)
-            .parseAs<BookListApiResponse>()
 
         val listDocument = parsePayloadDocument(payload.status, payload.htmlBook)
             ?: return MangasPage(emptyList(), false)
@@ -124,7 +119,7 @@ abstract class DaoMeoDen : KeiSource() {
         return MangasPage(mangas, currentPage < lastPage)
     }
 
-    private fun buildBookListApiRequest(document: Document, referer: String): Request? {
+    private suspend fun fetchBookList(document: Document, referer: String): Response? {
         val token = extractScriptVariable(document, "_token") ?: return null
         val pageCurrent = extractScriptVariable(document, "pageCurrent") ?: return null
         val pageLast = extractScriptVariable(document, "pageLast") ?: return null
@@ -161,11 +156,11 @@ abstract class DaoMeoDen : KeiSource() {
             .set("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        return Request.Builder()
-            .url("$baseUrl/apps/controllers/book/bookList.php")
-            .headers(apiHeaders)
-            .post(body)
-            .build()
+        return client.post(
+            "$baseUrl/apps/controllers/book/bookList.php",
+            apiHeaders,
+            body,
+        )
     }
 
     // ============================== Details ===============================

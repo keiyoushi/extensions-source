@@ -4,13 +4,16 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import kotlinx.serialization.Serializable
 
-fun getFilters(genres: List<GenreOption>? = null): FilterList = FilterList(
-    StatusFilter(),
-    CategoryFilter(),
-    GenreFilter(genres.orEmpty()),
-    ExplicitFilter(),
-    SortFilter(),
-)
+fun getFilters(genres: List<GenreOption>? = null): FilterList {
+    val filters = mutableListOf<Filter<*>>(
+        StatusFilter(),
+        CategoryFilter(),
+    )
+    if (!genres.isNullOrEmpty()) filters += GenreFilter(genres)
+    filters += ExplicitFilter()
+    filters += SortFilter()
+    return FilterList(filters)
+}
 
 @Serializable
 class GenreOption(
@@ -47,7 +50,6 @@ class GenreFilter(genres: List<GenreOption>) :
         "Genre",
         genres
             .map { it.name to it.id }
-            .ifEmpty { listOf("All" to "0") }
             .toTypedArray(),
     )
 
