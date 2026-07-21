@@ -2,13 +2,23 @@ package eu.kanade.tachiyomi.extension.vi.daomeoden
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import kotlinx.serialization.Serializable
 
-fun getFilters(): FilterList = FilterList(
-    StatusFilter(),
-    CategoryFilter(),
-    GenreFilter(),
-    ExplicitFilter(),
-    SortFilter(),
+fun getFilters(genres: List<GenreOption>? = null): FilterList {
+    val filters = mutableListOf<Filter<*>>(
+        StatusFilter(),
+        CategoryFilter(),
+    )
+    if (!genres.isNullOrEmpty()) filters += GenreFilter(genres)
+    filters += ExplicitFilter()
+    filters += SortFilter()
+    return FilterList(filters)
+}
+
+@Serializable
+class GenreOption(
+    val name: String,
+    val id: String,
 )
 
 class StatusFilter :
@@ -35,35 +45,12 @@ class CategoryFilter :
         ),
     )
 
-class GenreFilter :
+class GenreFilter(genres: List<GenreOption>) :
     UriPartFilter(
         "Genre",
-        arrayOf(
-            Pair("All", "0"),
-            Pair("Action", "9"),
-            Pair("Adventure", "11"),
-            Pair("Boys' Love", "296"),
-            Pair("Comedy", "294"),
-            Pair("Crime", "299"),
-            Pair("Drama", "19"),
-            Pair("Fantasy", "22"),
-            Pair("Girl's Love", "297"),
-            Pair("Historical", "300"),
-            Pair("Horror", "310"),
-            Pair("Isekai", "304"),
-            Pair("Magical", "311"),
-            Pair("Martial Arts", "298"),
-            Pair("Mecha", "308"),
-            Pair("Mystery", "285"),
-            Pair("Philosophical", "312"),
-            Pair("Psychological", "286"),
-            Pair("Romance", "295"),
-            Pair("Sci-fi", "309"),
-            Pair("Slice of life", "288"),
-            Pair("Superhero", "305"),
-            Pair("Thriller", "306"),
-            Pair("Tragedy", "303"),
-        ),
+        genres
+            .map { it.name to it.id }
+            .toTypedArray(),
     )
 
 class ExplicitFilter :
