@@ -1,22 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.mimi
 
 import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.source.model.FilterList
-
-fun getFilters(
-    genreList: List<GenreDto>,
-): FilterList = FilterList(
-    SortByFilter(),
-    TextField("Parody", "parody"),
-    TextField("Nhân vật", "character"),
-    Filter.Header("ID Tác giả (chỉ nhập số)"),
-    TextField("ID Tác giả", "author"),
-    if (genreList.isEmpty()) {
-        Filter.Header("Nhấn 'Làm mới' để tải thể loại")
-    } else {
-        GenresFilter(genreList)
-    },
-)
 
 class Genre(name: String, val id: Int) : Filter.TriState(name) {
     override fun toString(): String = name
