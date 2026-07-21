@@ -53,8 +53,8 @@ class SearchManga(
 
 @Serializable
 class MangaUpdateData(
-    val manga: Manga,
-    @SerialName("episodeInfos") val chapterList: List<ChapterData>,
+    val manga: Manga? = null,
+    @SerialName("episodeInfos") val chapterList: List<ChapterData> = emptyList(),
 )
 
 @Serializable
