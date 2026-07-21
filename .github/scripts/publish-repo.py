@@ -152,46 +152,6 @@ with REPO_DIR.joinpath("index.json").open("w", encoding="utf-8") as f:
 with REPO_DIR.joinpath("index.pb").open("wb") as f:
     f.write(gzip.compress(index.SerializeToString()))
 
-
-def get_legacy_lang(ext) -> str:
-    apk_filename = ext.resources.apkUrl.split("/")[-1]
-    lang = LANGUAGE_REGEX.search(apk_filename).group(1)
-    if len(ext.sources) == 1:
-        source_language = ext.sources[0].language
-        if (
-            source_language != lang
-            and source_language not in {"all", "other"}
-            and lang not in {"all", "other"}
-        ):
-            lang = source_language
-    return lang
-
-
-legacy_json_index = [
-    {
-        "name": f"Tachiyomi: {ext.name}",
-        "pkg": ext.packageName,
-        "apk": ext.resources.apkUrl.split("/")[-1],
-        "lang": get_legacy_lang(ext),
-        "code": ext.versionCode,
-        "version": ext.versionName,
-        "nsfw": 1 if ext.contentWarning > 2 else 0,
-        "sources": [
-            {
-                "name": source.name,
-                "lang": source.language,
-                "id": str(source.id),
-                "baseUrl": source.homeUrl,
-            }
-            for source in ext.sources
-        ],
-    }
-    for ext in all_extensions
-]
-
-with REPO_DIR.joinpath("index.min.json").open("w", encoding="utf-8") as f:
-    json.dump(legacy_json_index, f, ensure_ascii=False, separators=(",", ":"))
-
 with REPO_DIR.joinpath("index.html").open("w", encoding="utf-8") as f:
     f.write(
         '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<title>apks</title>\n</head>\n<body>\n<pre>\n'
