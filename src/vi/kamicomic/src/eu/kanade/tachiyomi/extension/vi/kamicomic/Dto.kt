@@ -4,16 +4,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-class SearchResult(
-    val title: String? = null,
-    val url: String? = null,
-    val thumb: String? = null,
-)
-
-@Serializable
 class WpManga(
-    val slug: String? = null,
-    val title: WpRendered? = null,
+    val title: WpRendered,
     val content: WpRendered? = null,
     @SerialName("_embedded")
     val embedded: WpEmbedded? = null,
@@ -21,7 +13,7 @@ class WpManga(
 
 @Serializable
 class WpRendered(
-    val rendered: String? = null,
+    val rendered: String,
 )
 
 @Serializable
@@ -41,6 +33,5 @@ class WpFeaturedMedia(
 @Serializable
 class WpTerm(
     val name: String? = null,
-    val slug: String? = null,
     val taxonomy: String? = null,
 )
