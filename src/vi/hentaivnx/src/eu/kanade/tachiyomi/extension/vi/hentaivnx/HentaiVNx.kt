@@ -21,7 +21,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.util.Calendar
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class HentaiVNx : KeiSource() {
@@ -47,13 +52,6 @@ abstract class HentaiVNx : KeiSource() {
         query: String,
         filters: FilterList,
     ): MangasPage {
-        if (query.startsWith(prefixIdSearch)) {
-            val slug = query.removePrefix(prefixIdSearch).trim()
-            return getMangaByUrl("$baseUrl/truyen-hentai/$slug".toHttpUrl())
-                ?.let { MangasPage(listOf(it), false) }
-                ?: MangasPage(emptyList(), false)
-        }
-
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
                 addPathSegments("tim-truyen")
@@ -190,11 +188,9 @@ abstract class HentaiVNx : KeiSource() {
         this ?: return 0L
         if (!contains("trước", ignoreCase = true)) return 0L
 
-        val calendar = Calendar.getInstance()
-        for ((pattern, field) in relativeDatePatterns) {
+        for ((pattern, toDuration) in relativeDatePatterns) {
             pattern.find(this)?.groupValues?.get(1)?.toIntOrNull()?.let { number ->
-                calendar.add(field, -number)
-                return calendar.timeInMillis
+                return (Clock.System.now() - toDuration(number)).toEpochMilliseconds()
             }
         }
         return 0L
@@ -235,15 +231,13 @@ abstract class HentaiVNx : KeiSource() {
         }
     }
 
-    private val relativeDatePatterns = listOf(
-        Regex("""(\d+)\s*giờ""", RegexOption.IGNORE_CASE) to Calendar.HOUR_OF_DAY,
-        Regex("""(\d+)\s*ngày""", RegexOption.IGNORE_CASE) to Calendar.DAY_OF_MONTH,
-        Regex("""(\d+)\s*tuần""", RegexOption.IGNORE_CASE) to Calendar.WEEK_OF_YEAR,
-        Regex("""(\d+)\s*tháng""", RegexOption.IGNORE_CASE) to Calendar.MONTH,
-        Regex("""(\d+)\s*năm""", RegexOption.IGNORE_CASE) to Calendar.YEAR,
-        Regex("""(\d+)\s*phút""", RegexOption.IGNORE_CASE) to Calendar.MINUTE,
-        Regex("""(\d+)\s*giây""", RegexOption.IGNORE_CASE) to Calendar.SECOND,
+    private val relativeDatePatterns: List<Pair<Regex, (Int) -> Duration>> = listOf(
+        Regex("""(\d+)\s*giờ""", RegexOption.IGNORE_CASE) to { it.hours },
+        Regex("""(\d+)\s*ngày""", RegexOption.IGNORE_CASE) to { it.days },
+        Regex("""(\d+)\s*tuần""", RegexOption.IGNORE_CASE) to { (it * 7).days },
+        Regex("""(\d+)\s*tháng""", RegexOption.IGNORE_CASE) to { (it * 30).days },
+        Regex("""(\d+)\s*năm""", RegexOption.IGNORE_CASE) to { (it * 365).days },
+        Regex("""(\d+)\s*phút""", RegexOption.IGNORE_CASE) to { it.minutes },
+        Regex("""(\d+)\s*giây""", RegexOption.IGNORE_CASE) to { it.seconds },
     )
-
-    private val prefixIdSearch = "id:"
 }
