@@ -47,13 +47,12 @@ abstract class FastScan : KeiSource() {
                 addQueryParameter("q", query)
             } else {
                 addPathSegment("tim-kiem-nang-cao")
-                val filterList = filters.ifEmpty { getFilterList(null) }
 
-                addQueryParameter("category", filterList.firstInstanceOrNull<GenreFilter>()?.selected ?: "")
+                addQueryParameter("category", filters.firstInstanceOrNull<GenreFilter>()?.selected ?: "")
                 addQueryParameter("notcategory", "")
-                addQueryParameter("status", filterList.firstInstanceOrNull<StatusFilter>()?.value ?: "0")
-                addQueryParameter("minchapter", filterList.firstInstanceOrNull<MinChapterFilter>()?.value ?: "0")
-                addQueryParameter("sort", filterList.firstInstanceOrNull<SortFilter>()?.value ?: "0")
+                addQueryParameter("status", filters.firstInstanceOrNull<StatusFilter>()?.value ?: "0")
+                addQueryParameter("minchapter", filters.firstInstanceOrNull<MinChapterFilter>()?.value ?: "0")
+                addQueryParameter("sort", filters.firstInstanceOrNull<SortFilter>()?.value ?: "0")
             }
             addQueryParameter("page", page.toString())
         }.build()
