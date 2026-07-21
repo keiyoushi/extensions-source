@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Omega Scans"
-    versionCode = 20
+    versionCode = 19
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "heancms"
