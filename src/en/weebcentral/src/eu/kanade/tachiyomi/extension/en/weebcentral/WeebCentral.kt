@@ -126,14 +126,23 @@ abstract class WeebCentral : KeiSource() {
                     if (relatedSeries.isNotEmpty()) {
                         append("\n\nRelated Series(s):")
                         relatedSeries.forEach { series ->
-                            append("\n• ${series.text()}")
+                            append("\n- ${series.text()}")
                         }
                     }
 
                     val alternateTitles = select("li:has(strong:contains(Associated Name)) li")
                     if (alternateTitles.isNotEmpty()) {
                         append("\n\nAssociated Name(s):")
-                        alternateTitles.forEach { append("\n• ${it.text()}") }
+                        alternateTitles.forEach { append("\n- ${it.text()}") }
+                    }
+
+                    val trackers = document.select("li:has(strong:contains(Track)) span[data-tip] > a")
+                    if (trackers.isNotEmpty()) {
+                        append("\n\nTracker(s):")
+                        trackers.forEach { tracker ->
+                            val name = tracker.parent()!!.attr("data-tip")
+                            append("\n- [$name](${tracker.attr("abs:href")})")
+                        }
                     }
                 }
             }
