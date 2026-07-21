@@ -220,13 +220,7 @@ abstract class AllManga :
 
         val data = client.post(apiUrl, payload).parseGraphQLAs<RelatedData>()
 
-        val result = (data.mangasWithIds.orEmpty() + data.search?.edges.orEmpty() + data.fewerGenresSearch?.edges.orEmpty())
-            .distinctBy { it.id }
-            .map(SearchManga::toSManga)
-
-        if (result.size > 1 || genres.size <= 1) return result
-
-        return data.fewerGenresSearch?.edges.orEmpty()
+        return (data.mangasWithIds.orEmpty() + data.search?.edges.orEmpty() + data.fewerGenresSearch?.edges.orEmpty())
             .distinctBy { it.id }
             .map(SearchManga::toSManga)
     }
