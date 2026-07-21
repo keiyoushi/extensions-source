@@ -13,6 +13,6 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl = "https://toonily.me"
+        baseUrl = "https://toontop.io"
     }
 }
