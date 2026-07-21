@@ -20,13 +20,10 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Dilib : KeiSource() {
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
-        connectTimeout(30.seconds)
-        readTimeout(60.seconds)
         rateLimit(3)
     }
 
@@ -53,12 +50,10 @@ abstract class Dilib : KeiSource() {
         query: String,
         filters: FilterList,
     ): MangasPage {
-        val filterList = filters.ifEmpty { getFilters() }
-
-        val mainCategory = filterList.firstInstanceOrNull<MainCategoriesFilter>()?.toUriPart() ?: defaultMainCategory
-        val subCategory = filterList.firstInstanceOrNull<SubCategoriesFilter>()?.toUriPart() ?: defaultSubCategory
-        val author = filterList.firstInstanceOrNull<AuthorFilter>()?.state ?: ""
-        val order = filterList.firstInstanceOrNull<SortFilter>()?.toUriPart() ?: defaultOrder
+        val mainCategory = filters.firstInstanceOrNull<MainCategoriesFilter>()?.toUriPart() ?: defaultMainCategory
+        val subCategory = filters.firstInstanceOrNull<SubCategoriesFilter>()?.toUriPart() ?: defaultSubCategory
+        val author = filters.firstInstanceOrNull<AuthorFilter>()?.state ?: ""
+        val order = filters.firstInstanceOrNull<SortFilter>()?.toUriPart() ?: defaultOrder
 
         val url = "$baseUrl$searchPath".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
@@ -139,7 +134,7 @@ abstract class Dilib : KeiSource() {
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
         return SMangaUpdate(
-            manga = if (fetchDetails) parseMangaDetails(document, manga) else manga,
+            manga = parseMangaDetails(document, manga),
             chapters = if (fetchChapters) parseChapterList(document) else chapters,
         )
     }
