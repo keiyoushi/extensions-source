@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.slimeread
+package eu.kanade.tachiyomi.extension.pt.slimereadunoriginal
 
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -22,7 +22,7 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
 @Source
-abstract class SlimeRead : KeiSource() {
+abstract class SlimeReadUnoriginal : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 

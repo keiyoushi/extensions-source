@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.slimeread
+package eu.kanade.tachiyomi.extension.pt.slimereadunoriginal
 
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
