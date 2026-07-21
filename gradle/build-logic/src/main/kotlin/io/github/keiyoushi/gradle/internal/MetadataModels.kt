@@ -7,6 +7,7 @@ internal data class ResolvedSource(val name: String, val lang: String, val id: L
 
 @Serializable
 internal data class ExtensionMetadata(
+    val module: String,
     val packageName: String,
     val name: String,
     val versionCode: Int,
