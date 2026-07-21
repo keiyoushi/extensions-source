@@ -19,8 +19,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
@@ -167,32 +165,39 @@ abstract class GocTruyenTranhVui :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val detailsDeferred = async {
-            if (fetchDetails) {
-                client.get(getMangaUrl(manga)).use { response ->
-                    parseMangaDetails(response.asJsoup(), response.request.url)
-                }
-            } else {
-                manga
+    ): SMangaUpdate {
+        val mangaUrl = getMangaUrl(manga)
+        val mangaId = manga.url.substringBefore(':')
+        val slug = manga.url.substringAfter(':')
+
+        suspend fun requestChapters(): List<SChapter>? {
+            val chapterUrl = "$baseUrl/api/comic/$mangaId/chapter?limit=-1"
+            return client.get(chapterUrl, xhrHeaders).use { response ->
+                parseChapterList(response, slug)
             }
         }
 
-        val chaptersDeferred = async {
-            if (fetchChapters) {
-                val mangaId = manga.url.substringBefore(':')
-                val slug = manga.url.substringAfter(':')
-                val chapterUrl = "$baseUrl/api/comic/$mangaId/chapter?limit=-1"
-
-                client.get(chapterUrl, xhrHeaders).use { response ->
-                    parseChapterList(response, slug)
-                }
-            } else {
-                chapters
+        var details = manga
+        if (fetchDetails) {
+            details = client.get(mangaUrl).use { response ->
+                parseMangaDetails(response.asJsoup(), response.request.url)
             }
         }
 
-        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
+        var chaptersList = chapters
+        if (fetchChapters) {
+            // Thử lần 1
+            chaptersList = requestChapters() ?: run {
+                // Nếu chưa fetch details ở trên thì gọi mồi để làm mới cookie
+                if (!fetchDetails) {
+                    client.get(mangaUrl).use { }
+                }
+                // Thử lần 2 sau khi đã làm mới cookie
+                requestChapters() ?: throw Exception("Phiên làm việc hết hạn. Không thể tải danh sách chương!")
+            }
+        }
+
+        return SMangaUpdate(details, chaptersList)
     }
 
     private fun parseMangaDetails(document: Document, requestUrl: HttpUrl): SManga = SManga.create().apply {
@@ -214,12 +219,11 @@ abstract class GocTruyenTranhVui :
         }
     }
 
-    private fun parseChapterList(response: Response, slug: String): List<SChapter> {
+    private fun parseChapterList(response: Response, slug: String): List<SChapter>? {
         val chapterJson = runCatching { response.parseAs<ResultDto<ChapterListDto>>() }.getOrNull()
-        if (chapterJson == null || chapterJson.result.chapters.isEmpty()) {
-            throw Exception("Có thể: Phiên làm việc đã hết hạn, vui lòng tải lại.")
-        }
-        return chapterJson.result.chapters.map { it.toSChapter(slug) }
+        val chapters = chapterJson?.result?.chapters ?: return null
+        if (chapters.isEmpty()) return null
+        return chapters.map { it.toSChapter(slug) }
     }
 
     private fun parseStatus(status: String?) = when {
