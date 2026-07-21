@@ -3,64 +3,169 @@ package eu.kanade.tachiyomi.extension.pt.mangalivre
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.get
-import keiyoushi.utils.parseAs
 import keiyoushi.utils.readIntBigEndian
 import keiyoushi.utils.readIntLittleEndian
-import keiyoushi.utils.stringOrNull
-import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.security.MessageDigest
 import java.time.LocalDate
 import java.time.ZoneOffset
 
 /**
- * Decrypts the {"<dataKey>": "<ciphertext>"} bodies the API returns (Rabbit cipher, CryptoJS
- * "Salted__" framing). Passphrase is ENC_KEY + MD5(dateUTC + HOST + ANTIBOT)[0..8]; the date
- * rotates daily and the three constants rotate in the site's bundle, so they're re-extracted from
- * the live bundle at runtime ([reloadConstants]) with the hardcoded values as fallback.
+ * Decrypts the {"<dataKey>": "<ciphertext>"} bodies the API returns and signs API requests using
+ * the active reading-gate scheme. All rotating constants are re-extracted from the live bundle at
+ * runtime ([reloadConstants]) with hardcoded values only as a startup fallback.
  */
 class MangaLivreDecryptor(
     private val baseUrl: String,
-    private val client: OkHttpClient,
+    client: OkHttpClient,
     private val headers: Headers,
 ) {
 
-    @Volatile private var constants = Constants(DEFAULT_HOSTNAME_PART, DEFAULT_ANTIBOT_PART, DEFAULT_ENC_KEY)
+    private val baseUrlHost = baseUrl.toHttpUrl().host
 
-    @Volatile private var lastReloadAt = 0L
+    private val scrapeClient = client.newBuilder()
+        .followRedirects(false)
+        .build()
 
-    private data class Constants(val hostPart: String, val antibotPart: String, val encKey: String)
+    @Volatile
+    private var constants = Constants(
+        DEFAULT_HOSTNAME_PART,
+        DEFAULT_ANTIBOT_PART,
+        DEFAULT_ENC_KEY,
+        DEFAULT_SIGNATURE_PI_LENGTH,
+        DEFAULT_SIGNATURE_SUFFIX,
+        DEFAULT_CHAPTER_SIGNATURE,
+        DEFAULT_OTHER_SIGNATURE,
+    )
+
+    @Volatile
+    private var lastReloadAt = 0L
+
+    private data class Constants(
+        val hostPart: String,
+        val antibotPart: String,
+        val encKey: String,
+        val signaturePiLength: Int,
+        val signatureSuffix: String,
+        val fixedChapterSignature: String?,
+        val fixedOtherSignature: String?,
+    )
 
     fun decrypt(cipherWrapperBody: String, dataKey: String): String? = runCatching {
-        val ciphertext = cipherWrapperBody.parseAs<JsonElement>()[dataKey]?.stringOrNull
+        val ciphertext = Json.parseToJsonElement(cipherWrapperBody)
+            .jsonObject[dataKey]
+            ?.jsonPrimitive
+            ?.contentOrNull
+            ?.takeIf { it.isNotEmpty() }
             ?: return@runCatching null
         decryptRabbit(ciphertext, derivePassword()).takeIf { it.isValidJson() }
     }.getOrNull()
 
-    fun reloadConstants() {
+    fun currentSignatureWindow(): Long = System.currentTimeMillis() / SIGNATURE_WINDOW_MS
+
+    fun signature(path: String, timestamp: Long = currentSignatureWindow()): String {
+        val c = constants
+        val isChapter = "/chapters" in path
+        val fixedSignature = if (isChapter) c.fixedChapterSignature else c.fixedOtherSignature
+        if (fixedSignature != null) return fixedSignature
+
+        val scope = if (isChapter) SIGNATURE_SCOPE_CHAPTERS else SIGNATURE_SCOPE_DEFAULT
+        val pi = Math.PI.toString()
+        val piPart = pi.substring(0, c.signaturePiLength.coerceIn(1, pi.length))
+        val marker = encodeBase64(piPart) + "_" + c.signatureSuffix
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest("$timestamp:$scope:$marker".toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        return encodeBase64("$timestamp:$digest")
+    }
+
+    fun reloadConstants(force: Boolean = false) {
         val now = System.currentTimeMillis()
         synchronized(this) {
-            if (now - lastReloadAt < RELOAD_COOLDOWN_MS) return
+            if (!force && now - lastReloadAt < RELOAD_COOLDOWN_MS) return
+            val reloaded = runCatching { fetchBundle()?.extractConstants(constants) }.getOrNull() ?: return
+            constants = reloaded
             lastReloadAt = now
-        }
-        runCatching {
-            val indexJsUrl = client.newCall(GET(baseUrl, headers)).execute()
-                .asJsoup()
-                .selectFirst("script[src*=index]")
-                ?.absUrl("src")
-            if (indexJsUrl != null) {
-                val js = client.newCall(GET(indexJsUrl, headers)).execute().body.string()
-                EV_CONSTANTS_REGEX.find(js)?.let { match ->
-                    // Order matters: host, antibot, encKey.
-                    constants = Constants(match.groupValues[1], match.groupValues[2], match.groupValues[3])
-                }
-            }
         }
     }
 
-    private fun String.isValidJson(): Boolean = runCatching { parseAs<JsonElement>() }.isSuccess
+    private fun fetchBundle(): String? {
+        val documentHeaders = headers.newBuilder()
+            .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+            .set("Sec-Fetch-Dest", "document")
+            .set("Sec-Fetch-Mode", "navigate")
+            .set("Sec-Fetch-Site", "none")
+            .set("Upgrade-Insecure-Requests", "1")
+            .build()
+        val scriptHeaders = headers.newBuilder()
+            .set("Accept", "*/*")
+            .set("Sec-Fetch-Dest", "script")
+            .set("Sec-Fetch-Mode", "no-cors")
+            .set("Sec-Fetch-Site", "same-origin")
+            .build()
+        val indexUrl = scrapeClient.newCall(GET(baseUrl, documentHeaders)).execute().use { response ->
+            if (!response.isSuccessful || response.request.url.host != baseUrlHost) return null
+            response.asJsoup()
+                .selectFirst("script[src*=index]")
+                ?.absUrl("src")
+        } ?: return null
+        return scrapeClient.newCall(GET(indexUrl, scriptHeaders)).execute().use { response ->
+            response.body.string().takeIf { response.isSuccessful }
+        }
+    }
+
+    private fun String.extractConstants(previous: Constants): Constants? {
+        val legacy = EV_CONSTANTS_REGEX.find(this)
+        val timedSignature = SIGNATURE_MARKER_REGEX.find(this)
+        val fixedSignature = FIXED_SIGNATURE_REGEX.find(this)?.let { match ->
+            val chapter = match.groupValues[2].decodeAsciiList() ?: return@let null
+            val other = match.groupValues[3].decodeAsciiList() ?: return@let null
+            chapter to other
+        }
+        val hostPart = ENV_HOST_REGEX.find(this)?.groupValues?.get(1) ?: legacy?.groupValues?.get(1)
+        val antibotPart = ENV_ANTIBOT_REGEX.find(this)?.groupValues?.get(1) ?: legacy?.groupValues?.get(2)
+        val encKey = ENV_ENCRYPTION_REGEX.find(this)?.groupValues?.get(1) ?: legacy?.groupValues?.get(3)
+
+        if (hostPart == null && antibotPart == null && encKey == null && timedSignature == null && fixedSignature == null) return null
+
+        return Constants(
+            hostPart = hostPart ?: previous.hostPart,
+            antibotPart = antibotPart ?: previous.antibotPart,
+            encKey = encKey ?: previous.encKey,
+            signaturePiLength = timedSignature?.groupValues?.get(1)?.toIntOrNull() ?: previous.signaturePiLength,
+            signatureSuffix = timedSignature?.groupValues?.get(2) ?: previous.signatureSuffix,
+            fixedChapterSignature = when {
+                fixedSignature != null -> fixedSignature.first
+                timedSignature != null -> null
+                else -> previous.fixedChapterSignature
+            },
+            fixedOtherSignature = when {
+                fixedSignature != null -> fixedSignature.second
+                timedSignature != null -> null
+                else -> previous.fixedOtherSignature
+            },
+        )
+    }
+
+    private fun String.decodeAsciiList(): String? = split(',')
+        .map { it.trim().toIntOrNull() ?: return null }
+        .takeIf { values -> values.all { it in 32..126 } }
+        ?.map { it.toChar() }
+        ?.joinToString("")
+
+    private fun encodeBase64(value: String): String = Base64.encodeToString(value.toByteArray(), Base64.NO_WRAP)
+
+    private fun String.isValidJson(): Boolean = runCatching { Json.parseToJsonElement(this) }
+        .getOrNull()
+        .let { it is JsonObject || it is JsonArray }
 
     private fun decryptRabbit(ciphertextB64: String, password: String): String {
         val encrypted = Base64.decode(ciphertextB64, Base64.DEFAULT)
@@ -104,16 +209,31 @@ class MangaLivreDecryptor(
 
     companion object {
         // Fallback only (current at build time); [reloadConstants] refreshes from the live bundle.
-        private const val DEFAULT_HOSTNAME_PART = "toonlivre.net::v8"
-        private const val DEFAULT_ANTIBOT_PART = "t81_4v21_b1"
-        private const val DEFAULT_ENC_KEY = "Sprang-Unkind-Unframed0"
+        private const val DEFAULT_HOSTNAME_PART = "toonlivre.tv::v8"
+        private const val DEFAULT_ANTIBOT_PART = "t17_4v19_b2"
+        private const val DEFAULT_ENC_KEY = "Dealer-Critter-Catnip4"
+        private const val DEFAULT_SIGNATURE_PI_LENGTH = 5
+        private const val DEFAULT_SIGNATURE_SUFFIX = "1388"
+        private const val DEFAULT_CHAPTER_SIGNATURE = "t8v_authX9"
+        private const val DEFAULT_OTHER_SIGNATURE = "t8v_decoy9"
 
         private const val RELOAD_COOLDOWN_MS = 30_000L
+        private const val SIGNATURE_WINDOW_MS = 30_000L
+        private const val SIGNATURE_SCOPE_CHAPTERS = "chapters"
+        private const val SIGNATURE_SCOPE_DEFAULT = "other"
 
-        // Matches the bundle's ev() password builder; minified var names vary, so match them as \w+
-        // and capture the three literals in declaration order (host, antibot, encKey).
+        // Older bundle shape: constants declared in the password-builder function.
         private val EV_CONSTANTS_REGEX = Regex(
             """toISOString\(\)\.split\("T"\)\[0]\s*,\s*\w+\s*=\s*"([^"]+)"\s*,\s*\w+\s*=\s*"([^"]+)"\s*,\s*\w+\s*=\s*"([^"]+)""",
+        )
+        private val ENV_HOST_REGEX = Regex("""VITE_HOSTNAME_PART\s*:\s*"([^"]+)"""")
+        private val ENV_ANTIBOT_REGEX = Regex("""VITE_ANTIBOT\s*:\s*"([^"]+)"""")
+        private val ENV_ENCRYPTION_REGEX = Regex("""VITE_ENCRYPTION_KEY\s*:\s*"([^"]+)"""")
+        private val SIGNATURE_MARKER_REGEX = Regex(
+            """btoa\(Math\.PI\.toString\(\)\.substring\(0,\s*(\d+)\)\)\s*\+\s*["']_["']\s*\+\s*["']([^"']+)["']""",
+        )
+        private val FIXED_SIGNATURE_REGEX = Regex(
+            """[\w$]+=([\w$]+)\(\[120,45,116,111,111,110,45,115,105,103,110,97,116,117,114,101]\),[\w$]+=\1\(\[([\d,\s]+)]\),[\w$]+=\1\(\[([\d,\s]+)]\),[\w$]+=[\w$]+\.includes\(["']/chapters["']\)""",
         )
     }
 }
