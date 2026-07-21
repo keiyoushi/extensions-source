@@ -1,69 +1,43 @@
 package eu.kanade.tachiyomi.extension.vi.goctruyentranhvui
 
-import android.annotation.SuppressLint
-import android.app.Application
-import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.widget.Toast
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.getPreferences
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
-import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import org.jsoup.nodes.Document
 
 @Source
-abstract class GocTruyenTranhVui :
-    HttpSource(),
-    ConfigurableSource {
+abstract class GocTruyenTranhVui : KeiSource() {
 
     private val apiUrl get() = "$baseUrl/api/v2"
 
-    override val supportsLatest: Boolean = true
+    // ============================== Client ================================
 
-    private val preferences: SharedPreferences = getPreferences()
-
-    override val client: OkHttpClient = network.client.newBuilder()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(authInterceptor())
         .rateLimit(3)
-        .build()
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .apply {
-            build()["user-agent"]?.let { userAgent ->
-                set("user-agent", removeWebViewToken(userAgent))
-            }
-        }
-
-    private fun removeWebViewToken(userAgent: String): String = userAgent.replace(WEBVIEW_TOKEN_REGEX, ")")
-
-    private val xhrHeaders by lazy {
-        headersBuilder()
+    private val xhrHeaders: Headers
+        get() = headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")
             .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
             .add("Accept-Language", "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7")
@@ -76,9 +50,32 @@ abstract class GocTruyenTranhVui :
             .add("Sec-Fetch-User", "?1")
             .add("Upgrade-Insecure-Requests", "1")
             .build()
+
+    // ============================== Auth ==================================
+
+    private var cachedAuthToken: String? = null
+    private var authChecked = false
+
+    private suspend fun loadAuthToken() {
+        if (authChecked) return
+        authChecked = true
+        cachedAuthToken = getLocalStorage(baseUrl, "Authorization")
+            ?.takeIf { it.isNotBlank() }
     }
 
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
+    private fun authInterceptor() = Interceptor { chain ->
+        val original = chain.request()
+        val request = original.newBuilder().apply {
+            if (original.url.encodedPath.startsWith("/api/")) {
+                cachedAuthToken?.let { header("Authorization", it) }
+            }
+        }.build()
+        chain.proceed(request)
+    }
+
+    // ============================== Popular ===============================
+
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(
         page,
         "",
         FilterList(
@@ -88,13 +85,9 @@ abstract class GocTruyenTranhVui :
         ),
     )
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val res = response.parseAs<ResultDto<ListingDto>>()
-        val hasNextPage = res.result.next
-        return MangasPage(res.result.data.map { it.toSManga(baseUrl) }, hasNextPage)
-    }
+    // ============================== Latest ================================
 
-    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(
         page,
         "",
         FilterList(
@@ -104,74 +97,73 @@ abstract class GocTruyenTranhVui :
         ),
     )
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    // ============================== Search ================================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            val baseHost = baseUrl.toHttpUrl().host
-            if (url.host != baseHost) {
-                throw Exception("Tên miền không được hỗ trợ")
-            }
-
-            if (url.pathSegments.size >= 2 && url.pathSegments[0] == "truyen") {
-                // Note: Fetching manga details directly for Deep Links is a temporary workaround
-                // because the website currently restricts browsing/searching.
-                // This allows users to access specific manga via URL as a temporary support measure.
-                return client.newCall(GET(query, headers))
-                    .asObservableSuccess()
-                    .map { response ->
-                        val manga = mangaDetailsParse(response)
-                        MangasPage(listOf(manga), false)
+    override suspend fun getSearchMangaList(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): MangasPage {
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("search")
+            addQueryParameter("p", (page - 1).toString())
+            if (query.isNotEmpty()) addQueryParameter("searchValue", query)
+            for (filter in filters) {
+                if (filter is FilterGroup) {
+                    for (checkbox in filter.state) {
+                        if (checkbox.state) addQueryParameter(filter.query, checkbox.id)
                     }
+                }
             }
-            return Observable.just(MangasPage(emptyList(), false))
-        }
-        return super.fetchSearchManga(page, query, filters)
+        }.build()
+
+        return parseMangaPage(client.get(url, xhrHeaders))
     }
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl/truyen/${manga.url.substringAfter(':')}"
+    private fun parseMangaPage(response: Response): MangasPage {
+        val result = response.parseAs<ResultDto<ListingDto>>().result
+        return MangasPage(result.data.map { it.toSManga(baseUrl) }, result.next)
+    }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        // B1: call manga detail url refresh cookie
-        val refreshReq = GET(getMangaUrl(manga), headers)
+    // ============================== Details + Chapters ====================
 
-        return client.newCall(refreshReq)
-            .asObservableSuccess()
-            .flatMap { _ ->
-                // B2: recall chapter list request
-                client.newCall(chapterListRequest(manga))
-                    .asObservableSuccess()
-                    .map(::chapterListParse)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.pathSegments.size < 2 || url.pathSegments[0] != "truyen") return null
+
+        return parseMangaDetails(client.get(url).asJsoup(), url)
+    }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/truyen/${manga.url.substringAfter(':')}"
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val detailUrl = getMangaUrl(manga).toHttpUrl()
+        val mangaDeferred = if (fetchDetails) {
+            async {
+                val document = client.get(detailUrl).asJsoup()
+                parseMangaDetails(document, detailUrl)
             }
-    }
-
-    override fun chapterListRequest(manga: SManga): Request {
-        val mangaId = manga.url.substringBefore(':')
-        val slug = manga.url.substringAfter(':')
-        return GET("$baseUrl/api/comic/$mangaId/chapter?limit=-1#$slug", xhrHeaders)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val slug = response.request.url.fragment!!
-        val chapterJson = runCatching { response.parseAs<ResultDto<ChapterListDto>>() }.getOrNull()
-        if (chapterJson == null || chapterJson.result.chapters.isEmpty()) {
-            throw Exception("Có thể: Phiên làm việc đã hết hạn, vui lòng tải lại.")
+        } else {
+            null
         }
-        return chapterJson.result.chapters.map { it.toSChapter(slug) }
+        val chaptersDeferred = if (fetchChapters) {
+            async { fetchChapters(manga) }
+        } else {
+            null
+        }
+
+        SMangaUpdate(
+            mangaDeferred?.await() ?: manga,
+            chaptersDeferred?.await() ?: chapters,
+        )
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        val url = chapter.url
-        val slug = url.substringAfter("/truyen/").substringBefore("/chuong-")
-        val numberChapter = url.substringAfter("/chuong-").substringBefore("#")
-        return "$baseUrl/truyen/$slug/chuong-$numberChapter"
-    }
-
-    override fun mangaDetailsRequest(manga: SManga) = GET(getMangaUrl(manga), headers)
-
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val document = response.asJsoup()
+    private fun parseMangaDetails(document: Document, url: HttpUrl): SManga = SManga.create().apply {
         title = document.select(".v-card-title").text()
         genre = document.select(".group-content > .v-chip-link").joinToString { it.text() }
         thumbnail_url = document.selectFirst("img.image")?.absUrl("src")
@@ -179,159 +171,95 @@ abstract class GocTruyenTranhVui :
         author = document.selectFirst(".mb-1:contains(Tác giả:) span")?.text()
         description = document.select(".v-card-text").joinToString { it.wholeText().trim() }
 
-        // Extract ID and slug for internal use (especially for Deep Links)
         val script = document.select("script").firstOrNull { it.data().contains("const comic = {") }?.data()
-        val id = script?.let { COMIC_ID_REGEX.find(it)?.groupValues?.get(1) }
+        val id = script?.let { comicIdRegex.find(it)?.groupValues?.get(1) }
             ?: document.selectFirst("#comic-id-comment")?.attr("value")
-        val nameEn = script?.let { COMIC_NAME_EN_REGEX.find(it)?.groupValues?.get(1) }
-            ?: response.request.url.pathSegments.getOrNull(1)
+        val nameEn = script?.let { comicNameEnRegex.find(it)?.groupValues?.get(1) }
+            ?: url.pathSegments.getOrNull(1)
 
         if (id != null && nameEn != null) {
-            this.url = "$id:$nameEn"
+            setUrlWithoutDomain("$id:$nameEn")
         }
     }
 
-    private fun parseStatus(status: String?) = when {
+    private suspend fun fetchChapters(manga: SManga): List<SChapter> {
+        val mangaId = manga.url.substringBefore(':')
+        val slug = manga.url.substringAfter(':')
+        val result = client.get("$baseUrl/api/comic/$mangaId/chapter?limit=-1", xhrHeaders)
+            .parseAs<ResultDto<ChapterListDto>>()
+
+        if (result.result.chapters.isEmpty()) {
+            throw Exception("Có thể: Phiên làm việc đã hết hạn, vui lòng tải lại.")
+        }
+
+        return result.result.chapters.map { it.toSChapter(slug) }
+    }
+
+    private fun parseStatus(status: String?): Int = when {
         status == null -> SManga.UNKNOWN
-        status.contains("Đang thực hiện", ignoreCase = true) -> SManga.ONGOING
-        status.contains("Hoàn thành", ignoreCase = true) -> SManga.COMPLETED
+        status.lowercase().contains("đang thực hiện") -> SManga.ONGOING
+        status.lowercase().contains("hoàn thành") -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val url = chapter.url
-        val slug = url.substringAfter("/truyen/").substringBefore("/chuong-")
-        val numberChapter = url.substringAfter("/chuong-").substringBefore("#")
-        val comicId = url.substringAfter("#")
+    override fun getChapterUrl(chapter: SChapter): String {
+        val slug = chapter.url.substringAfter("/truyen/").substringBefore("/chuong-")
+        val numberChapter = chapter.url.substringAfter("/chuong-").substringBefore("#")
+        return "$baseUrl/truyen/$slug/chuong-$numberChapter"
+    }
 
+    // ============================== Pages =================================
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        loadAuthToken()
+
+        val slug = chapter.url.substringAfter("/truyen/").substringBefore("/chuong-")
+        val numberChapter = chapter.url.substringAfter("/chuong-").substringBefore("#")
+        val comicId = chapter.url.substringAfter("#")
         val body = FormBody.Builder()
             .add("comicId", comicId)
             .add("chapterNumber", numberChapter)
             .add("nameEn", slug)
             .build()
 
-        return POST("$baseUrl/api/chapter/loadAll", pageHeaders, body)
-    }
+        val imageList = client.post("$baseUrl/api/chapter/loadAll", xhrHeaders, body)
+            .parseAs<ResultDto<ImageListDto>>()
+            .result
+            .data
 
-    override fun pageListParse(response: Response): List<Page> {
-        val jsonResult = runCatching { response.parseAs<ResultDto<ImageListDto>>() }
-        jsonResult.onFailure {
-            throw Exception("Có thể: Phiên làm việc đã hết hạn, vui lòng tải lại")
-        }
-
-        val imageList = jsonResult.getOrThrow().result.data
         if (imageList.isNullOrEmpty()) {
             throw Exception("Chưa đăng nhập trong WebView. Hoặc không có ảnh!")
         }
 
-        return imageList.mapIndexed { i, url ->
-            val finalUrl = if (url.startsWith("/image/")) {
-                baseUrl + url
-            } else {
-                url
-            }
-            Page(i, imageUrl = finalUrl)
+        return imageList.mapIndexed { index, imageUrl ->
+            Page(index, imageUrl = if (imageUrl.startsWith("/image/")) baseUrl + imageUrl else imageUrl)
         }
     }
 
-    private val pageHeaders by lazy {
-        token?.let {
-            headersBuilder()
-                .set("X-Requested-With", "XMLHttpRequest")
-                .set("Origin", baseUrl)
-                .set("Authorization", it)
-                .build()
-        } ?: xhrHeaders
+    // ============================== Filters ===============================
+
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/category", xhrHeaders).parseAs()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data
+            ?.parseAs<ResultDto<List<CategoryDto>>>()
+            ?.result
+            .orEmpty()
+            .map(CategoryDto::toOption)
+
+        val filters = mutableListOf<FilterGroup>(
+            StatusList(getStatusList()),
+            SortByList(getSortByList()),
+        )
+        if (genres.isNotEmpty()) filters += GenreList(genres)
+
+        return FilterList(filters)
     }
 
-    private var _token: String? = null
+    // ============================== Constants =============================
 
-    @get:SuppressLint("SetJavaScriptEnabled")
-    val token: String?
-        get() {
-            _token?.also { return it }
-            val handler = Handler(Looper.getMainLooper())
-            val latch = CountDownLatch(1)
-            if (!customToken().isNullOrBlank()) {
-                return customToken()
-            }
-            if (_token != null) return _token
-
-            handler.post {
-                val webview = WebView(Injekt.get<Application>())
-                with(webview.settings) {
-                    javaScriptEnabled = true
-                    domStorageEnabled = true
-                    databaseEnabled = true
-                    blockNetworkImage = true
-                }
-                webview.webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView?, url: String?) {
-                        // Get token
-                        view!!.evaluateJavascript("window.localStorage.getItem('Authorization')") { token ->
-                            _token = token.takeUnless { it == "null" }?.removeSurrounding("\"")
-                            latch.countDown()
-                            webview.destroy()
-                        }
-                    }
-                }
-                webview.loadDataWithBaseURL(baseUrl, " ", "text/html", "UTF-8", null)
-            }
-
-            latch.await(10, TimeUnit.SECONDS)
-            return _token
-        }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("search")
-            addQueryParameter("p", (page - 1).toString())
-            if (query.isNotEmpty()) addQueryParameter("searchValue", query)
-            for (filter in filters) {
-                when (filter) {
-                    is FilterGroup ->
-                        for (checkbox in filter.state) {
-                            if (checkbox.state) addQueryParameter(filter.query, checkbox.id)
-                        }
-
-                    else -> {}
-                }
-            }
-        }.build()
-        return GET(url, xhrHeaders)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun getFilterList() = FilterList(
-        StatusList(getStatusList()),
-        SortByList(getSortByList()),
-        GenreList(getGenreList()),
-    )
-
-    private fun customToken(): String? = preferences.getString(CUSTOM_TOKEN, null)
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = CUSTOM_TOKEN
-            title = "Authorization Token"
-            summary = "Enter token manually"
-            dialogTitle = "Authorization Token"
-            customToken()?.let { dialogMessage = if (it.isNotEmpty()) "Token: ${customToken()}" else "Only show manually entered token, do not show token from WebView" }
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
-                true
-            }
-        }.also(screen::addPreference)
-    }
-
-    companion object {
-        private const val CUSTOM_TOKEN = "custom_token"
-        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng token mới nhập."
-        private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
-        private val COMIC_ID_REGEX = Regex("""id:\s*"([^"]+)"""")
-        private val COMIC_NAME_EN_REGEX = Regex("""nameEn:\s*`([^`]+)`""")
-    }
+    private val comicIdRegex = Regex("""id:\s*"([^"]+)"""")
+    private val comicNameEnRegex = Regex("""nameEn:\s*`([^`]+)`""")
 }

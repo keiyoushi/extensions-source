@@ -5,19 +5,13 @@ plugins {
 }
 
 keiyoushi {
-    name = "FastScan"
-    versionCode = 4
+    name = "MangaDar"
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
-        lang = "vi"
-        baseUrl {
-            custom("https://fastscan.org")
-        }
-    }
-
-    deeplink {
-        path("/..*")
+        lang = "ar"
+        baseUrl = "https://mangadar.com"
     }
 }
