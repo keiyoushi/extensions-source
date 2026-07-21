@@ -2,35 +2,30 @@ package eu.kanade.tachiyomi.extension.en.webdexscans
 
 import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 
 @Source
 abstract class WebdexScans :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-
-    override val supportsLatest = true
-
-    // Hardcode versionId to force users to migrate their old Madara entries.
 
     private val preferences by getPreferencesLazy()
 
@@ -45,13 +40,9 @@ abstract class WebdexScans :
             .build()
     }
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val offset = (page - 1) * 24
         val url = "$supabaseUrl/series".toHttpUrl().newBuilder()
             .addQueryParameter("select", "title,slug,cover_url")
@@ -59,17 +50,18 @@ abstract class WebdexScans :
             .addQueryParameter("offset", offset.toString())
             .addQueryParameter("limit", "24")
             .build()
-        return GET(url, supabaseHeaders)
+
+        return mangaListParse(client.get(url, supabaseHeaders))
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val mangas = response.parseAs<List<SearchSeriesDto>>().map { it.toSManga(baseUrl) }
-        return MangasPage(mangas, mangas.size == 24)
+    private fun mangaListParse(response: Response): MangasPage {
+        val mangaList = response.parseAs<List<SearchSeriesDto>>().map { it.toSManga(baseUrl) }
+        return MangasPage(mangaList, mangaList.size == 24)
     }
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val offset = (page - 1) * 24
         val url = "$supabaseUrl/series".toHttpUrl().newBuilder()
             .addQueryParameter("select", "title,slug,cover_url")
@@ -77,14 +69,13 @@ abstract class WebdexScans :
             .addQueryParameter("offset", offset.toString())
             .addQueryParameter("limit", "24")
             .build()
-        return GET(url, supabaseHeaders)
-    }
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+        return mangaListParse(client.get(url, supabaseHeaders))
+    }
 
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val offset = (page - 1) * 24
         val url = "$supabaseUrl/series".toHttpUrl().newBuilder()
 
@@ -118,10 +109,24 @@ abstract class WebdexScans :
         url.addQueryParameter("offset", offset.toString())
         url.addQueryParameter("limit", "24")
 
-        return GET(url.build(), supabaseHeaders)
+        return mangaListParse(client.get(url.build(), supabaseHeaders))
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "series") {
+            return null
+        }
+
+        val manga = SManga.create().apply {
+            this.url = "/series/${url.pathSegments[1]}"
+        }
+
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+            .manga
+            .apply {
+                initialized = true
+            }
+    }
 
     // ============================= Utilities =============================
 
@@ -129,17 +134,17 @@ abstract class WebdexScans :
         it is JsonObject && "initialSeries" in it && "initialChapters" in it
     } ?: throw Exception("Failed to extract series payload")
 
-    // ============================== Details ==============================
+    // ============================== Updates ==============================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val payload = response.extractSeriesPayload()
-        return payload.initialSeries.toSManga(baseUrl, payload.initialGenres)
-    }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val payload = client.get(baseUrl + manga.url).extractSeriesPayload()
 
-    // ============================= Chapters ==============================
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val payload = response.extractSeriesPayload()
+        val newManga = payload.initialSeries.toSManga(baseUrl, payload.initialGenres)
 
         val seriesSlug = payload.initialSeries.slug
         val showPremium = preferences.getBoolean(PREF_SHOW_PREMIUM, false)
@@ -148,16 +153,19 @@ abstract class WebdexScans :
         val filteredChapters = if (showPremium) {
             chapters
         } else {
-            chapters.filterNot { it.isPremium }
+            chapters.filterNot { it.isPremium() }
         }
 
-        return filteredChapters.map { it.toSChapter(seriesSlug, dateFormat) }
+        return SMangaUpdate(
+            manga = newManga,
+            chapters = filteredChapters.map { it.toSChapter(seriesSlug) },
+        )
     }
 
     // =============================== Pages ===============================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val payload = response.extractNextJs<PagesPayload> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val payload = client.get(baseUrl + chapter.url).extractNextJs<PagesPayload> {
             it is JsonObject && "initialPages" in it
         } ?: throw Exception("Failed to extract pages payload")
 
@@ -166,11 +174,9 @@ abstract class WebdexScans :
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // ============================== Filters ==============================
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         GenreFilter(),
         TypeFilter(),
         StatusFilter(),
