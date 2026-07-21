@@ -1,34 +1,40 @@
 package eu.kanade.tachiyomi.extension.en.vyvymanga
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.utils.tryParse
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
-import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
 
 @Source
-abstract class VyvyManga : HttpSource() {
+abstract class VyvyManga : KeiSource() {
 
-    override val supportsLatest = true
-
-    private val dateFormat = SimpleDateFormat("MMM dd, yyy", Locale.US)
+    private val dateFormat = DateTimeFormatter.ofPattern("MMM dd, yyy", Locale.US)
     private val relativeDateRegex = Regex("""(\d+)""")
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/search" + if (page != 1) "?page=$page" else "", headers)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "$baseUrl/search" + if (page != 1) "?page=$page" else ""
+        return parseMangasPage(client.get(url))
+    }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    private fun parseMangasPage(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select(".comic-item").map { element ->
             SManga.create().apply {
@@ -42,12 +48,13 @@ abstract class VyvyManga : HttpSource() {
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/search?sort=updated_at" + if (page != 1) "&page=$page" else "", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = "$baseUrl/search?sort=updated_at" + if (page != 1) "&page=$page" else ""
+        return parseMangasPage(client.get(url))
+    }
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
             .addQueryParameter("page", page.toString())
@@ -69,15 +76,38 @@ abstract class VyvyManga : HttpSource() {
                 else -> {}
             }
         }
-        return GET(url.build(), headers)
+
+        return parseMangasPage(client.get(url.build()))
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.size < 2) {
+            return null
+        }
 
-    // Details
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
+        val mangaUrl = "/manga/${url.pathSegments[1]}"
+        val manga = SManga.create().apply {
+            this.url = mangaUrl
+        }
+
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+            .manga
+            .apply {
+                initialized = true
+                this.url = mangaUrl
+            }
+    }
+
+    // Updates
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url).asJsoup()
+
+        val manga = SManga.create().apply {
             title = document.selectFirst("h1")!!.text()
             artist = document.selectFirst(".pre-title:contains(Artist) ~ a")?.text()
             author = document.selectFirst(".pre-title:contains(Author) ~ a")?.text()
@@ -90,34 +120,33 @@ abstract class VyvyManga : HttpSource() {
             }
             thumbnail_url = document.selectFirst(".img-manga img")?.absUrl("src")
         }
-    }
 
-    // Chapters
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select(".list-group > a").map { element ->
+        val chapters = document.select(".list-group > a").map { element ->
             SChapter.create().apply {
                 url = element.absUrl("href")
                 name = element.selectFirst("span")!!.text()
                 date_upload = parseChapterDate(element.selectFirst("> p")?.text())
             }
         }
+
+        return SMangaUpdate(manga, chapters)
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.startsWith("http")) {
+        chapter.url
+    } else {
+        baseUrl + chapter.url
     }
 
     // Pages
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (!chapter.url.startsWith("http")) error("Refresh to reload chapters")
-        return GET(chapter.url, headers)
-    }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+        val document = client.get(chapter.url).asJsoup()
         return document.select("img.d-block").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("data-src"))
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Date parsing
     private fun parseChapterDate(date: String?): Long {
@@ -125,7 +154,9 @@ abstract class VyvyManga : HttpSource() {
 
         return when {
             date.endsWith("ago") -> parseRelativeDate(date)
-            else -> dateFormat.tryParse(date)
+            else -> runCatching {
+                LocalDate.parse(date, dateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+            }.getOrDefault(0L)
         }
     }
 
@@ -143,8 +174,22 @@ abstract class VyvyManga : HttpSource() {
     }
 
     // Filters
-    override fun getFilterList(): FilterList {
-        launchIO { fetchGenres(baseUrl, headers, client) }
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrl/search").asJsoup()
+
+        return document.select(".check-genre div div:has(.checkbox-genre)").map {
+            GenreData(
+                it.select("label").text(),
+                it.select(".checkbox-genre").attr("data-value"),
+            )
+        }.toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<List<GenreData>>()?.map { it.toGenre() } ?: emptyList()
+
         return FilterList(
             SearchType(),
             SearchDescription(),
@@ -153,7 +198,7 @@ abstract class VyvyManga : HttpSource() {
             StatusFilter(),
             SortFilter(),
             SortType(),
-            GenreFilter(),
+            GenreFilter(genres),
         )
     }
 }
