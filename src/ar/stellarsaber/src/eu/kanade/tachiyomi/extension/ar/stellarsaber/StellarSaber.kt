@@ -20,7 +20,9 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.buffer
+import okio.cipherSource
 import org.jsoup.nodes.Document
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
@@ -50,7 +52,7 @@ abstract class StellarSaber : KeiSource() {
         return parseMangaListPage(response.asJsoup())
     }
 
-    private suspend fun parseMangaListPage(document: Document): MangasPage {
+    private fun parseMangaListPage(document: Document): MangasPage {
         val entries = document.select(".card-grid .card").map { element ->
             SManga.create().apply {
                 title = element.selectFirst(".card__title")!!.text()
@@ -108,19 +110,22 @@ abstract class StellarSaber : KeiSource() {
         return MangasPage(entries, true)
     }
 
-    // ------------------- Nonce  -------------------
-
     private var nonce: String? = null
 
-    private suspend fun fetchNonce(document: Document? = null): String {
+    private fun fetchNonce(document: Document): String {
         nonce?.let { return it }
 
-        val doc = document ?: client.get("$baseUrl/manga/").asJsoup()
-
-        val script = doc.selectFirst("#flavor-ajax-js-extra")?.data()
+        val script = document.selectFirst("#flavor-ajax-js-extra")?.data()
             ?: error("Nonce script not found")
 
         return script.extract("nonce\":\"", '"').also { nonce = it }
+    }
+
+    private suspend fun fetchNonce(): String {
+        nonce?.let { return it }
+
+        val document = client.get("$baseUrl/manga/").asJsoup()
+        return fetchNonce(document)
     }
 
     // ------------------- details & chapters -------------------
@@ -277,22 +282,22 @@ abstract class StellarSaber : KeiSource() {
             ?: return response
 
         val keyBytes = Base64.decode(fragment, Base64.DEFAULT)
-        val encryptedBytes = response.body.bytes()
 
-        val iv = encryptedBytes.copyOfRange(0, 12)
-        val encrypted = encryptedBytes.copyOfRange(12, encryptedBytes.size)
+        val source = response.body.source()
+        val iv = source.readByteArray(12)
 
-        val decrypted = Cipher.getInstance("AES/GCM/NoPadding").run {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
             init(
                 Cipher.DECRYPT_MODE,
                 SecretKeySpec(keyBytes, "AES"),
                 GCMParameterSpec(128, iv),
             )
-            doFinal(encrypted)
         }
 
+        val cipherSource = source.cipherSource(cipher)
+
         return response.newBuilder()
-            .body(decrypted.toResponseBody(JPEG_MEDIA_TYPE))
+            .body(cipherSource.buffer().asResponseBody(JPEG_MEDIA_TYPE, -1))
             .build()
     }
 
