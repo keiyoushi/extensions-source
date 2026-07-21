@@ -142,6 +142,22 @@ abstract class WeebCentral : KeiSource() {
         }
     }
 
+    // =========================== Related Manga ============================
+
+    override val supportsRelatedMangas get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val document = client.get(baseUrl + manga.url).asJsoup()
+
+        return document.select("section:has(> h2 strong:contains(Recommendations)) li.glide__slide > a").map { element ->
+            SManga.create().apply {
+                thumbnail_url = element.sourceImg()
+                title = element.selectFirst("div.truncate")!!.text()
+                setUrlWithoutDomain(element.attr("abs:href"))
+            }
+        }
+    }
+
     private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
         "ongoing" -> SManga.ONGOING
         "complete" -> SManga.COMPLETED
