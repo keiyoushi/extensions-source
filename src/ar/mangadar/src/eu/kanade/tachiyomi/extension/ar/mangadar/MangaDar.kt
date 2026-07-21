@@ -202,31 +202,32 @@ abstract class MangaDar : KeiSource() {
     }
 
     private fun parseChaptersFromDoc(doc: Document): List<SChapter> {
-        val chaptersContainer = doc.selectFirst("div[x-data]")
-            ?: return emptyList()
+        // There are multiple div[x-data] on the page; find the one containing chapter data
+        val containers = doc.select("div[x-data]")
+        for (container in containers) {
+            val xData = container.attr("x-data")
 
-        val xData = chaptersContainer.attr("x-data")
-
-        // New format: rows: [[id, number, url, timestamp, num], ...]
-        val rowsStart = xData.indexOf("rows:")
-        if (rowsStart != -1) {
-            val bracketStart = xData.indexOf("[", rowsStart)
-            val bracketEnd = findMatchingBracket(xData, bracketStart)
-            if (bracketStart != -1 && bracketEnd != -1) {
-                val rowsJson = xData.substring(bracketStart, bracketEnd + 1)
-                return parseRowsJson(rowsJson)
+            // New format: rows: [[id, number, url, timestamp, num], ...]
+            val rowsStart = xData.indexOf("rows:")
+            if (rowsStart != -1) {
+                val bracketStart = xData.indexOf("[", rowsStart)
+                val bracketEnd = findMatchingBracket(xData, bracketStart)
+                if (bracketStart != -1 && bracketEnd != -1) {
+                    val rowsJson = xData.substring(bracketStart, bracketEnd + 1)
+                    return parseRowsJson(rowsJson)
+                }
             }
-        }
 
-        // Legacy format: chapters: [{...}]
-        val chaptersStart = xData.indexOf("chapters:")
-        if (chaptersStart != -1) {
-            val jsonStart = xData.indexOf("[", chaptersStart)
-            val jsonEnd = findMatchingBracket(xData, jsonStart)
-            if (jsonStart != -1 && jsonEnd != -1) {
-                val chaptersJson = xData.substring(jsonStart, jsonEnd + 1)
-                val initialChapters = chaptersJson.parseAs<List<ChapterDto>>()
-                return initialChapters.map { it.toSChapter() }
+            // Legacy format: chapters: [{...}]
+            val chaptersStart = xData.indexOf("chapters:")
+            if (chaptersStart != -1) {
+                val jsonStart = xData.indexOf("[", chaptersStart)
+                val jsonEnd = findMatchingBracket(xData, jsonStart)
+                if (jsonStart != -1 && jsonEnd != -1) {
+                    val chaptersJson = xData.substring(jsonStart, jsonEnd + 1)
+                    val initialChapters = chaptersJson.parseAs<List<ChapterDto>>()
+                    return initialChapters.map { it.toSChapter() }
+                }
             }
         }
 
