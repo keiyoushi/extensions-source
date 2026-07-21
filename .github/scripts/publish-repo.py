@@ -16,7 +16,6 @@ import index_pb2
 APPLICATION_ICON_320_REGEX = re.compile(
     r"^application-icon-320:'([^']+)'", re.MULTILINE
 )
-LANGUAGE_REGEX = re.compile(r"tachiyomi-([^.]+)")
 
 
 @cache
