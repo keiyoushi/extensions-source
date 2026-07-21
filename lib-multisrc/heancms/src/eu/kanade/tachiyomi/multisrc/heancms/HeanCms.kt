@@ -195,6 +195,30 @@ abstract class HeanCms :
         SortProperty("Created at", "created_at"),
     )
 
+    // ============================== Related ==============================
+
+    override val supportsRelatedMangas get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val genreNames = manga.genre?.split(", ")
+            ?.filter(String::isNotBlank)?.toSet().orEmpty()
+
+        val filters = getFilterList()
+        val genreFilter = filters.firstInstanceOrNull<GenreFilter>()?.apply {
+            state.forEach { it.state = it.name in genreNames }
+        }
+
+        val result = if (genreFilter?.state?.any { it.state } == true) {
+            getSearchMangaList(1, "", filters)
+        } else {
+            val author = manga.author?.trim().orEmpty()
+            if (author.isEmpty()) return emptyList()
+            getSearchMangaList(1, author, FilterList())
+        }
+
+        return result.mangas
+    }
+
     // ============================== Details ==============================
 
     private suspend fun fetchSeries(slug: String): HeanCmsSeriesDto {
@@ -203,7 +227,13 @@ abstract class HeanCms :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        val slug = url.pathSegments.getOrNull(1) ?: return null
+        if (url.host != baseUrl.toHttpUrl().host) {
+            throw Exception("Unsupported URL")
+        }
+
+        val slug = url.pathSegments.getOrNull(1)
+            ?: throw Exception("Unsupported URL")
+
         return fetchSeries(slug)
             .toSManga(cdnUrl, coverPath, mangaSubDirectory)
             .apply { initialized = true }
