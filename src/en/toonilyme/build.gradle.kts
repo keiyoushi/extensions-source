@@ -16,5 +16,3 @@ keiyoushi {
         baseUrl = "https://toontop.io"
     }
 }
-
-
