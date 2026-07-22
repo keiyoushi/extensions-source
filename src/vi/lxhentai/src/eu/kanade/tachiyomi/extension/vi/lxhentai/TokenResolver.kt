@@ -1,210 +1,161 @@
 package eu.kanade.tachiyomi.extension.vi.lxhentai
 
-import android.annotation.SuppressLint
-import android.os.Handler
-import android.os.Looper
-import android.view.View
-import android.view.ViewGroup
-import android.webkit.CookieManager
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import keiyoushi.utils.applicationContext
-import java.io.IOException
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Semaphore
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
+import keiyoushi.utils.WebViewTimeoutException
+import keiyoushi.utils.runWebView
+import kotlin.time.Duration.Companion.seconds
 
-/** Loads chapter in WebView, intercepts CDN image requests to extract URLs + token. */
+/** Loads chapter in WebView, solves Cloudflare Turnstile, decodes obfuscated image URLs. */
 object TokenResolver {
 
     class Result(val token: String = "", val srcs: List<String> = emptyList())
 
-    private const val TIMEOUT_SECONDS = 20L
-    private const val MAX_ATTEMPTS = 3
-    private const val CACHE_TTL_MS = 60_000L
-    private const val WEBVIEW_WIDTH = 1080
-    private const val WEBVIEW_HEIGHT = 1920
-    private val WEBVIEW_TOKEN_REGEX = Regex("""\;\s*wv\)""")
-    private val IMAGE_CDN_REGEX = Regex("""lxmanga\.(xyz|space)/""")
+    private const val MAX_ATTEMPTS = 2
 
-    private val cache = ConcurrentHashMap<String, Pair<Result, Long>>()
-
-    fun resolve(chapterUrl: String): Result {
-        cache[chapterUrl]?.let { (cached, ts) ->
-            if (System.currentTimeMillis() - ts < CACHE_TTL_MS) return cached
-        }
-
-        var lastError: IOException? = null
+    suspend fun resolve(chapterUrl: String): Result {
         repeat(MAX_ATTEMPTS) {
             try {
-                val res = resolveOnce(chapterUrl)
-                cache[chapterUrl] = res to System.currentTimeMillis()
-                return res
-            } catch (e: IOException) {
-                lastError = e
+                return resolveOnce(chapterUrl)
+            } catch (_: WebViewTimeoutException) {
             }
         }
-        throw lastError!!
+        return Result()
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun resolveOnce(chapterUrl: String): Result {
-        val handler = Handler(Looper.getMainLooper())
-        val payloadResult = WebViewPayloadResult()
-        val active = AtomicBoolean(true)
-        val started = Semaphore(0)
-        val startupError = AtomicReference<Throwable?>()
+    private suspend fun resolveOnce(chapterUrl: String): Result {
+        val payloadLock = Any()
+        var resolved = false
+        var latestResult: Result? = null
 
-        var webView: WebView? = null
-        var lastUrl = chapterUrl
+        return runWebView(timeout = 45.seconds) {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            loadWithOverviewMode = true
+            useWideViewPort = true
+            blockImages = false
+            userAgent = userAgent.replace(webViewTokenRegex, ")")
 
-        handler.post {
-            try {
-                if (!active.get()) return@post
+            poll(1.seconds) {
+                if (resolved) return@poll
 
-                val context = applicationContext
-                val view = WebView(context)
-                webView = view
+                evaluateJs(
+                    """(function(){
+                        var b=document.querySelector('.swal2-confirm');
+                        if(b && !b.disabled && b.textContent.includes('tiếp tục')) b.click();
+                    })()""",
+                )
 
-                runCatching {
-                    view.layoutParams = ViewGroup.LayoutParams(WEBVIEW_WIDTH, WEBVIEW_HEIGHT)
-                    view.measure(
-                        View.MeasureSpec.makeMeasureSpec(WEBVIEW_WIDTH, View.MeasureSpec.EXACTLY),
-                        View.MeasureSpec.makeMeasureSpec(WEBVIEW_HEIGHT, View.MeasureSpec.EXACTLY),
-                    )
-                    view.layout(0, 0, WEBVIEW_WIDTH, WEBVIEW_HEIGHT)
-                }
-
-                with(view.settings) {
-                    javaScriptEnabled = true
-                    domStorageEnabled = true
-                    loadWithOverviewMode = true
-                    useWideViewPort = true
-                    blockNetworkImage = false
-                    mediaPlaybackRequiresUserGesture = false
-                    userAgentString = userAgentString.replace(WEBVIEW_TOKEN_REGEX, ")")
-                }
-
-                CookieManager.getInstance().apply {
-                    setAcceptCookie(true)
-                    setAcceptThirdPartyCookies(view, true)
-                }
-
-                view.webViewClient = object : WebViewClient() {
-                    override fun shouldInterceptRequest(
-                        view: WebView,
-                        request: WebResourceRequest,
-                    ): WebResourceResponse? {
-                        if (!active.get()) return null
-                        val url = request.url?.toString() ?: return null
-
-                        if (IMAGE_CDN_REGEX.containsMatchIn(url) && payloadResult.payload == null) {
-                            val token = request.requestHeaders?.get("Token")
-                            if (!token.isNullOrEmpty()) {
-                                payloadResult.collectImage(url, token)
-                            }
-                        }
-
-                        return super.shouldInterceptRequest(view, request)
-                    }
-
-                    override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
-                        super.onPageStarted(view, url, favicon)
-                        if (url != null) lastUrl = url
-                    }
-
-                    override fun onPageFinished(view: WebView, url: String?) {
-                        super.onPageFinished(view, url)
-                        if (url != null) lastUrl = url
-                        payloadResult.pageFinished()
+                evaluateJs(CHECK_AND_DECODE_SCRIPT) { value ->
+                    synchronized(payloadLock) {
+                        val result = parseResult(value) ?: return@evaluateJs
+                        latestResult = result
+                        resolved = true
                     }
                 }
 
-                view.loadUrl(chapterUrl)
-            } catch (error: Throwable) {
-                startupError.set(error)
-            } finally {
-                started.release()
+                val result = synchronized(payloadLock) { latestResult }
+                if (result != null) {
+                    resolve(result)
+                }
             }
-        }
 
-        val completed = try {
-            if (!started.tryAcquire(5, TimeUnit.SECONDS)) {
-                throw IOException("Timed out starting WebView (url=$lastUrl)")
-            }
-            startupError.get()?.let { err ->
-                throw IOException("Failed to start WebView (url=$lastUrl)", err)
-            }
-            payloadResult.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        } finally {
-            active.set(false)
-            handler.post {
-                val view = webView
-                webView = null
-                runCatching { view?.stopLoading() }
-                runCatching { view?.destroy() }
-            }
-        }
-
-        if (!completed) {
-            throw IOException("Không tìm thấy dữ liệu ảnh (url=$lastUrl)")
-        }
-        return payloadResult.payload ?: throw IOException("Failed to capture WebView payload")
-    }
-
-    private class WebViewPayloadResult {
-        private val signal = Semaphore(0)
-        private val handler = Handler(Looper.getMainLooper())
-
-        @Volatile
-        var payload: Result? = null
-            private set
-
-        private val imageUrls = mutableListOf<String>()
-        private var latestToken = ""
-
-        @Synchronized
-        fun collectImage(url: String, token: String) {
-            if (payload != null) return
-            if (url.isNotEmpty() && url !in imageUrls) {
-                imageUrls.add(url)
-            }
-            if (token.isNotEmpty()) {
-                latestToken = token
-            }
-        }
-
-        fun pageFinished() {
-            pollForCompletion()
-        }
-
-        private fun pollForCompletion() {
-            handler.postDelayed({
-                if (tryComplete()) return@postDelayed
-                pollForCompletion()
-            }, 1000)
-        }
-
-        @Synchronized
-        private fun tryComplete(): Boolean {
-            if (payload != null) return true
-            if (imageUrls.isNotEmpty() && latestToken.isNotEmpty()) {
-                payload = Result(latestToken, imageUrls.toList())
-                signal.release()
-                return true
-            }
-            return false
-        }
-
-        fun await(timeout: Long, unit: TimeUnit): Boolean {
-            while (payload == null) {
-                if (!signal.tryAcquire(timeout, unit)) return false
-            }
-            return true
+            loadUrl(chapterUrl)
         }
     }
+
+    private fun parseResult(value: String): Result? {
+        val cleaned = value.trim().removeSurrounding("\"").removeSurrounding("'")
+        if (cleaned.isEmpty() || cleaned == "null" || cleaned == "[]") return null
+
+        return try {
+            val json = cleaned
+                .removePrefix("Object {").removeSuffix("}")
+                .replace("Object {", "{")
+            val tokenMatch = Regex(""""token"\s*:\s*"([^"]*)"""").find(json)
+            val urlsMatch = Regex(""""urls"\s*:\s*\[([^\]]*)\]""").find(json)
+
+            val token = tokenMatch?.groupValues?.get(1) ?: return null
+            val urlsRaw = urlsMatch?.groupValues?.get(1) ?: return null
+
+            val urls = Regex(""""([^"]*http[^"]*)"""").findAll(urlsRaw)
+                .map { it.groupValues[1] }
+                .toList()
+
+            if (token.isNotEmpty() && urls.isNotEmpty()) Result(token, urls) else null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private val webViewTokenRegex = Regex("""\;\s*wv\)""")
+
+    private const val CHECK_AND_DECODE_SCRIPT = """(function(){
+        try {
+            // Dismiss Turnstile dialog
+            var b = document.querySelector('.swal2-confirm');
+            if (b && !b.disabled && b.textContent.indexOf('tiếp tục') >= 0) b.click();
+
+            // Check token
+            var t = window.actionToken;
+            if (!t || typeof t !== 'string' || t.length === 0) return JSON.stringify({token:'',urls:[]});
+
+            // Decode image URLs from obfuscated inline script
+            var scripts = document.querySelectorAll('script:not([src])');
+            var target = null;
+            for (var i = 0; i < scripts.length; i++) {
+                var txt = scripts[i].textContent;
+                if (txt.indexOf('["KGZ1') >= 0 || txt.indexOf('=\["KGZ1') >= 0) {
+                    target = txt;
+                    break;
+                }
+            }
+            if (!target) return JSON.stringify({token:t,urls:[]});
+
+            // Layer 1: base64 array → string
+            var b64Match = target.match(/=\[((?:"[A-Za-z0-9+/=]{20,}",?\s*)+)\]/);
+            if (!b64Match) return JSON.stringify({token:t,urls:[]});
+            var parts = b64Match[1].match(/"([^"]+)"/g);
+            if (!parts) return JSON.stringify({token:t,urls:[]});
+            var joined = parts.map(function(s){return s.replace(/"/g,'');}).join('');
+            var raw = atob(joined);
+            var layer1;
+            try { layer1 = decodeURIComponent(escape(raw)); } catch(e2) { layer1 = raw; }
+
+            // Layer 2: hex key + numeric arrays → XOR decode
+            var key2Match = layer1.match(/var _\w+='([0-9a-f]{20,})'/);
+            if (!key2Match) return JSON.stringify({token:t,urls:[]});
+            var key2 = key2Match[1];
+            var arrRe = /var _\w+=\[((?:-?\d+,?)*)\]/g;
+            var combined = [];
+            var m;
+            while ((m = arrRe.exec(layer1)) !== null) {
+                var nums = m[1].split(',').filter(function(s){return s.length>0;}).map(Number);
+                combined = combined.concat(nums);
+            }
+            if (combined.length === 0) return JSON.stringify({token:t,urls:[]});
+            var decoded = '';
+            for (var i = 0; i < combined.length; i++) {
+                decoded += String.fromCharCode((combined[i] ^ key2.charCodeAt(i % key2.length)) & 0xFF);
+            }
+
+            // Layer 3: hex key + base64 JSON → image URLs
+            var key3Match = decoded.match(/var _\w+="([0-9a-f]{20,})"/);
+            if (!key3Match) return JSON.stringify({token:t,urls:[]});
+            var key3 = key3Match[1];
+            var jsonB64Match = decoded.match(/var _\w+="([A-Za-z0-9+/=]{50,})"/);
+            if (!jsonB64Match) return JSON.stringify({token:t,urls:[]});
+            var jsonArr = JSON.parse(atob(jsonB64Match[1]));
+            var urls = [];
+            for (var j = 0; j < jsonArr.length; j++) {
+                var item;
+                try { item = decodeURIComponent(escape(atob(jsonArr[j]))); }
+                catch(e3) { item = atob(jsonArr[j]); }
+                var url = '';
+                for (var k = 0; k < item.length; k++) {
+                    url += String.fromCharCode((item.charCodeAt(k) ^ key3.charCodeAt(k % key3.length)) & 0xFF);
+                }
+                if (url.indexOf('http') === 0 && urls.indexOf(url) < 0) urls.push(url);
+            }
+            return JSON.stringify({token:t,urls:urls});
+        } catch(e) { return JSON.stringify({token:'',urls:[]}); }
+    })()"""
 }
