@@ -1,283 +1,173 @@
 package eu.kanade.tachiyomi.extension.pt.egotoons
 
-import android.content.SharedPreferences
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.OkHttpClient
 
 @Source
-abstract class EgoToons :
-    HttpSource(),
-    ConfigurableSource {
+abstract class EgoToons : KeiSource() {
 
-    override val supportsLatest = true
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(ImageDecryptor())
-        .rateLimit(2)
-        .build()
+    override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, defaultSort = "populares")
 
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(page, defaultSort = "recentes")
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getMangaList(page, query, filters, defaultSort = "recentes")
 
-    // ============================== Popular ================================
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/api/leaderboard".toHttpUrl().newBuilder()
-            .addQueryParameter("criteria", "global")
-            .build()
-        return GET(url, headers)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<List<EgoToonsMangaDto>>()
-        val mangas = result.map { it.toSManga() }
-        return MangasPage(mangas, false)
-    }
-
-    // ============================= Latest Updates ==========================
-    override fun latestUpdatesRequest(page: Int): Request {
-        val limit = 20
-        val offset = (page - 1) * limit
-        val withHentai = preferences.getBoolean(PREF_HENTAI_KEY, PREF_HENTAI_DEFAULT)
-
-        val url = "$baseUrl/api/releases".toHttpUrl().newBuilder()
-            .addQueryParameter("offset", offset.toString())
-            .addQueryParameter("limit", limit.toString())
-            .addQueryParameter("withHentai", withHentai.toString())
-            .build()
-        return GET(url, headers)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseAs<EgoToonsPaginatedDto<EgoToonsMangaDto>>()
-        val mangas = result.items.map { it.toSManga() }
-        return MangasPage(mangas, result.pagination.hasNextPage)
-    }
-
-    // =============================== Search ================================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val limit = 20
-        val offset = (page - 1) * limit
-        val withHentai = preferences.getBoolean(PREF_HENTAI_KEY, PREF_HENTAI_DEFAULT)
-
-        val url = "$baseUrl/api/manga/search".toHttpUrl().newBuilder()
-            .addQueryParameter("query", query)
-            .addQueryParameter("offset", offset.toString())
-            .addQueryParameter("limit", limit.toString())
-            .addQueryParameter("withHentai", withHentai.toString())
-
-        filters.forEach { filter ->
-            when (filter) {
-                is GenreFilter -> {
-                    filter.state.filter { it.state }.forEach {
-                        url.addQueryParameter("genres", it.name)
-                    }
+    private suspend fun getMangaList(
+        page: Int,
+        query: String = "",
+        filters: FilterList = FilterList(),
+        defaultSort: String,
+    ): MangasPage {
+        val sort = filters.firstInstanceOrNull<SortFilter>()?.selectedValue ?: defaultSort
+        val url = "$baseUrl/api/obras.js".toHttpUrl().newBuilder()
+            .addQueryParameter("pagina", page.toString())
+            .addQueryParameter("limite", MANGA_PAGE_SIZE.toString())
+            .addQueryParameter("ordenarPor", sort)
+            .apply {
+                if (query.isNotBlank()) {
+                    addQueryParameter("busca", query)
                 }
-
-                is TagFilter -> {
-                    filter.state.filter { it.state }.forEach {
-                        url.addQueryParameter("tags", it.name)
-                    }
-                }
-
-                else -> {}
+                filters.filterIsInstance<UrlFilter>()
+                    .filterNot { it is SortFilter }
+                    .forEach { it.addToUrl(this) }
             }
+            .build()
+
+        val result = client.get(url).parseAs<MangaListDto>()
+        return MangasPage(result.mangas.map { it.toSManga(baseUrl) }, result.pagination.hasNextPage)
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.") || url.pathSegments.firstOrNull() != "obra") return null
+        val mangaId = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
+        val manga = SManga.create().apply { this.url = "/obra/$mangaId" }
+
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga.apply {
+            initialized = true
         }
-
-        return GET(url.build(), headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<EgoToonsPaginatedDto<EgoToonsMangaDto>>()
-        val mangas = result.items.map { it.toSManga() }
-        return MangasPage(mangas, result.pagination.hasNextPage)
-    }
-
-    // ============================== Filters ================================
-    override fun getFilterList() = FilterList(
-        GenreFilter(),
-        TagFilter(),
-    )
-
-    // ============================ Manga Details ============================
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("api/manga")
-            .addPathSegment(getMangaId(manga.url))
-            .build()
-
-        return GET(url, headers)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<EgoToonsMangaDto>().toSManga()
-
-    // ============================== Chapters ===============================
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val mangaId = getMangaId(manga.url)
-        val pageSize = 20
-
-        return client.newCall(chapterListRequest(manga)).asObservableSuccess()
-            .map { response ->
-                response.parseAs<EgoToonsPaginatedDto<EgoToonsChapterDto>>()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val mangaId = manga.url.mangaId()
+        val details = if (fetchDetails) {
+            async {
+                client.get("$baseUrl/api/obras/$mangaId")
+                    .parseAs<MangaDetailsDto>()
+                    .manga
+                    .toSManga(baseUrl)
             }
-            .flatMap { firstPageDto ->
-                val firstPageChapters = firstPageDto.items.map { it.toSChapter(mangaId.toInt()) }
-                val total = firstPageDto.pagination.total
+        } else {
+            null
+        }
+        val chapterList = if (fetchChapters) async { getChapterList(mangaId) } else null
 
-                if (total <= pageSize) {
-                    Observable.just(firstPageChapters)
-                } else {
-                    val totalPages = (total + pageSize - 1) / pageSize
-                    val remainingRequests = (1 until totalPages).map { page ->
-                        val url = baseUrl.toHttpUrl().newBuilder()
-                            .addPathSegments("api/manga")
-                            .addPathSegment(mangaId)
-                            .addPathSegment("chapter")
-                            .addQueryParameter("limit", pageSize.toString())
-                            .addQueryParameter("offset", (page * pageSize).toString())
-                            .build()
-
-                        val request = GET(url, headers)
-                        client.newCall(request).asObservableSuccess()
-                            .map { chapterListParse(it) }
-                    }
-                    Observable.concat(
-                        Observable.just(firstPageChapters),
-                        Observable.concat(remainingRequests),
-                    ).reduce(emptyList<SChapter>()) { acc, list -> acc + list }
-                }
-            }
-    }
-
-    override fun chapterListRequest(manga: SManga): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("api/manga")
-            .addPathSegment(getMangaId(manga.url))
-            .addPathSegment("chapter")
-            .addQueryParameter("limit", "20")
-            .addQueryParameter("offset", "0")
-            .build()
-
-        return GET(url, headers)
-    }
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaId = response.request.url.pathSegments[2].toInt()
-        val result = response.parseAs<EgoToonsPaginatedDto<EgoToonsChapterDto>>()
-        return result.items.map { it.toSChapter(mangaId) }
-    }
-
-    // =============================== Pages =================================
-    override fun pageListRequest(chapter: SChapter): Request {
-        val mangaId = getMangaId(chapter.url)
-        val number = chapter.chapter_number.toString().removeSuffix(".0")
-
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("api/manga")
-            .addPathSegment(mangaId)
-            .addPathSegment("chapter")
-            .addPathSegment(number)
-            .addPathSegment("images")
-            .build()
-
-        return GET(
-            url,
-            headersBuilder()
-                .add("x-mymangas-csrf-secure", "true")
-                .add("x-mymangas-secure-panel-domain", "true")
-                .build(),
+        SMangaUpdate(
+            manga = details?.await() ?: manga,
+            chapters = chapterList?.await() ?: chapters,
         )
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val pages = response.parseAs<List<String>>().filter { it.isNotBlank() }
+    private suspend fun getChapterList(mangaId: Int): List<SChapter> = coroutineScope {
+        val firstPage = getChapterPage(mangaId, 1)
+        val remaining = (2..firstPage.pagination.totalPages).map { page ->
+            async { getChapterPage(mangaId, page).chapters }
+        }.awaitAll().flatten()
 
-        if (pages.isEmpty()) {
-            throw Exception("Lista de páginas vazia. Tente abrir na WebView.")
-        }
-
-        return pages.mapIndexed { index, url ->
-            Page(index, imageUrl = url)
-        }
+        (firstPage.chapters + remaining).map { it.toSChapter() }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    // ============================== Settings ===============================
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_HENTAI_KEY
-            title = "Exibir conteúdo Hentai (+18)"
-            summary = "Habilita a visualização de conteúdo adulto nas listas."
-            setDefaultValue(PREF_HENTAI_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
-                val checked = newValue as Boolean
-                preferences.edit().putBoolean(PREF_HENTAI_KEY, checked).apply()
-                true
-            }
-        }.also(screen::addPreference)
-    }
-
-    // =============================== Utils =================================
-
-    override fun getMangaUrl(manga: SManga): String {
-        val id = getMangaId(manga.url)
-        return baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("obra")
-            .addPathSegment(id)
+    private suspend fun getChapterPage(mangaId: Int, page: Int): ChapterListDto {
+        val url = "$baseUrl/api/obras/$mangaId/capitulos.js".toHttpUrl().newBuilder()
+            .addQueryParameter("pagina", page.toString())
+            .addQueryParameter("limite", CHAPTER_PAGE_SIZE.toString())
+            .addQueryParameter("ordenar", "desc")
+            .addQueryParameter("fields", "list")
             .build()
-            .toString()
+        return client.get(url).parseAs()
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        val mangaId = getMangaId(chapter.url)
-        val chapterSlug = if (chapter.url.startsWith("http")) {
-            chapter.url.toHttpUrl().pathSegments.last()
-        } else {
-            chapter.url.trimEnd('/').substringAfterLast('/')
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val mangaId = chapter.url.mangaId()
+        val chapterNumber = chapter.url.chapterNumber()
+
+        return client.get("$baseUrl/api/obras/$mangaId/capitulos/$chapterNumber/index.js")
+            .parseAs<ChapterDetailsDto>()
+            .chapter
+            .toPageList(baseUrl)
+    }
+
+    override val supportsFilterFetching: Boolean get() = true
+
+    override suspend fun fetchFilterData(): JsonElement = coroutineScope {
+        val formats = async {
+            client.get("$baseUrl/api/filtros/formatos.js").parseAs<FormatListDto>().formats
+        }
+        val statuses = async {
+            client.get("$baseUrl/api/filtros/status.js").parseAs<StatusListDto>().statuses
+        }
+        val tags = async {
+            client.get("$baseUrl/api/filtros/tags.js").parseAs<TagListDto>().tags
         }
 
-        return baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("obra")
-            .addPathSegment(mangaId)
-            .addPathSegment("capitulo")
-            .addPathSegment(chapterSlug)
-            .build()
-            .toString()
+        FilterData(formats.await(), statuses.await(), tags.await()).toJsonElement()
     }
 
-    private fun getMangaId(url: String): String {
-        val absoluteUrl = if (url.startsWith("http")) {
-            url
-        } else {
-            "$baseUrl/${url.trimStart('/')}"
-        }
-
-        val segments = absoluteUrl.toHttpUrl().pathSegments
-        val index = segments.indexOfFirst { it == "obra" || it == "manga" }
-
-        return segments[index + 1]
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filterData = data?.parseAs<FilterData>() ?: return FilterList(SortFilter())
+        return FilterList(
+            SortFilter(),
+            FormatFilter(filterData.formats),
+            StatusFilter(filterData.statuses),
+            TagFilter(filterData.tags),
+        )
     }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/obra/${manga.url.mangaId()}"
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/obra/${chapter.url.mangaId()}/capitulo/${chapter.url.chapterNumber()}"
+
+    private fun String.mangaId(): Int {
+        val path = normalizedPath()
+        val index = path.indexOfFirst { it == "obra" || it == "manga" }
+        return path.getOrNull(index + 1)?.toIntOrNull() ?: throw Exception("Invalid manga URL")
+    }
+
+    private fun String.chapterNumber(): String {
+        val path = normalizedPath().filter(String::isNotBlank)
+        val index = path.indexOfFirst { it == "capitulo" || it == "chapter" }
+        return path.getOrNull(index + 1) ?: throw Exception("Invalid chapter URL")
+    }
+
+    private fun String.normalizedPath(): List<String> = toHttpUrlOrNull()?.pathSegments ?: "$baseUrl/${trimStart('/')}".toHttpUrl().pathSegments
 
     companion object {
-        private const val PREF_HENTAI_KEY = "pref_hentai"
-        private const val PREF_HENTAI_DEFAULT = false
+        private const val MANGA_PAGE_SIZE = 24
+        private const val CHAPTER_PAGE_SIZE = 80
     }
 }
