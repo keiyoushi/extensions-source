@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.goctruyentranhvui
 
-import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -28,6 +27,7 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import kotlin.text.isNotBlank
 
 @Source
 abstract class GocTruyenTranhVui :
@@ -44,14 +44,6 @@ abstract class GocTruyenTranhVui :
         rateLimit(3)
         addInterceptor(::authInterceptor)
     }
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
-        build()["user-agent"]?.let {
-            set("user-agent", removeWebViewToken(it))
-        }
-    }
-
-    private fun removeWebViewToken(userAgent: String): String = userAgent.replace(WEBVIEW_TOKEN_REGEX, ")")
 
     private val xhrHeaders: Headers
         get() = headersBuilder()
@@ -140,12 +132,9 @@ abstract class GocTruyenTranhVui :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.pathSegments.getOrNull(0) == "truyen") {
-            client.get(url).use { response ->
-                return parseMangaDetails(response.asJsoup(), response.request.url)
-            }
-        }
-        return null
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.pathSegments.size < 2 || url.pathSegments[0] != "truyen") return null
+        return parseMangaDetails(client.get(url).asJsoup(), url)
     }
 
     // =========================== Manga Details ============================
@@ -168,24 +157,17 @@ abstract class GocTruyenTranhVui :
             }
         }
 
-        var details = manga
-        if (fetchDetails) {
-            details = client.get(mangaUrl).use { response ->
-                parseMangaDetails(response.asJsoup(), response.request.url)
-            }
+        val details = client.get(mangaUrl).use { response ->
+            parseMangaDetails(response.asJsoup(), response.request.url)
         }
 
-        var chaptersList = chapters
-        if (fetchChapters) {
-            // Thử lần 1
-            chaptersList = requestChapters() ?: run {
-                // Nếu chưa fetch details ở trên thì gọi mồi để làm mới cookie
-                if (!fetchDetails) {
-                    client.get(mangaUrl).use { }
-                }
-                // Thử lần 2 sau khi đã làm mới cookie
-                requestChapters() ?: throw Exception("Phiên làm việc hết hạn. Không thể tải danh sách chương!")
+        val chaptersList = requestChapters() ?: run {
+            // Nếu chưa fetch details ở trên thì gọi mồi để làm mới cookie
+            if (!fetchDetails) {
+                client.get(mangaUrl).close()
             }
+            // Thử lần 2 sau khi đã làm mới cookie
+            requestChapters() ?: throw Exception("Phiên làm việc hết hạn. Không thể tải danh sách chương!")
         }
 
         return SMangaUpdate(details, chaptersList)
@@ -211,8 +193,8 @@ abstract class GocTruyenTranhVui :
     }
 
     private fun parseChapterList(response: Response, slug: String): List<SChapter>? {
-        val chapterJson = runCatching { response.parseAs<ResultDto<ChapterListDto>>() }.getOrNull()
-        val chapters = chapterJson?.result?.chapters ?: return null
+        val chapterJson = response.parseAs<ResultDto<ChapterListDto>>()
+        val chapters = chapterJson.result.chapters
         if (chapters.isEmpty()) return null
         return chapters.map { it.toSChapter(slug) }
     }
@@ -262,7 +244,7 @@ abstract class GocTruyenTranhVui :
         if (pages == null) {
             // Gọi "mồi" đến trang chi tiết để làm mới cookie
             val mangaUrl = "$baseUrl/truyen/$slug"
-            client.get(mangaUrl).use { /* Chỉ gọi để lấy cookie */ }
+            client.get(mangaUrl).close()
             // Thử lần 2 sau khi đã có cookie mới
             pages = requestImages()
         }
@@ -325,8 +307,10 @@ abstract class GocTruyenTranhVui :
             dialogTitle = "Authorization Token"
             val currentToken = preferences.getString(CUSTOM_TOKEN, null)
             currentToken?.let { dialogMessage = if (it.isNotEmpty()) "Token: $it" else "Only show manually entered token, do not show token from WebView" }
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+            setOnPreferenceChangeListener { _, newValue ->
+                val token = newValue as String
+                tokenCache = token.takeIf(String::isNotBlank)
+                tokenChecked = true
                 true
             }
         }.also(screen::addPreference)
@@ -334,8 +318,6 @@ abstract class GocTruyenTranhVui :
 
     companion object {
         private const val CUSTOM_TOKEN = "custom_token"
-        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng token mới nhập."
-        private val WEBVIEW_TOKEN_REGEX = Regex(""";\s*wv\)""")
         private val COMIC_ID_REGEX = Regex("""id:\s*"([^"]+)"""")
         private val COMIC_NAME_EN_REGEX = Regex("""nameEn:\s*`([^`]+)`""")
     }
