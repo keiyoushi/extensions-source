@@ -20,9 +20,6 @@ import okhttp3.Response
 
 @Source
 abstract class MiMi : KeiSource() {
-
-    override val name: String = "MiMi"
-
     private val apiUrl: String = "$baseUrl/api"
 
     override fun OkHttpClient.Builder.configureClient() = apply {
@@ -56,16 +53,6 @@ abstract class MiMi : KeiSource() {
     // =============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val isIdSearch = query.startsWith(PREFIX_ID_SEARCH) ||
-            (query.length >= 4 && query.toIntOrNull() != null)
-
-        if (isIdSearch) {
-            val id = query.removePrefix(PREFIX_ID_SEARCH)
-            return client.get("$apiUrl/manga/$id").use { response ->
-                MangasPage(listOf(response.parseAs<MangaDto>().toSManga()), false)
-            }
-        }
-
         val filterList = filters.ifEmpty { getFilterList() }
         val isAdvanced = filterList.any {
             (it is GenresFilter && it.state.any { g -> g.state != Filter.TriState.STATE_IGNORE }) ||
@@ -147,18 +134,12 @@ abstract class MiMi : KeiSource() {
     ): SMangaUpdate {
         val id = manga.url.substringAfterLast("/")
 
-        val details = if (fetchDetails) {
-            client.get("$apiUrl/manga/$id").use { it.parseAs<MangaDto>().toSManga() }
-        } else {
-            manga
+        val details = client.get("$apiUrl/manga/$id").use {
+            it.parseAs<MangaDto>().toSManga()
         }
 
-        val chaptersList = if (fetchChapters) {
-            client.get("$apiUrl/manga/$id/chapters").use { response ->
-                response.parseAs<List<ChapterDto>>().map { it.toSChapter(id) }
-            }
-        } else {
-            chapters
+        val chaptersList = client.get("$apiUrl/manga/$id/chapters").use { response ->
+            response.parseAs<List<ChapterDto>>().map { it.toSChapter(id) }
         }
 
         return SMangaUpdate(details, chaptersList)
@@ -189,15 +170,7 @@ abstract class MiMi : KeiSource() {
             TextField("Nhân vật", "character"),
             Filter.Header("ID Tác giả (chỉ nhập số)"),
             TextField("ID Tác giả", "author"),
-            if (genreList.isEmpty()) {
-                Filter.Header(filterFetchHint)
-            } else {
-                GenresFilter(genreList)
-            },
+            GenresFilter(genreList),
         )
-    }
-
-    companion object {
-        const val PREFIX_ID_SEARCH = "id:"
     }
 }
