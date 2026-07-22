@@ -5,14 +5,17 @@ plugins {
 }
 
 keiyoushi {
-    name = "Ego Toons"
-    versionCode = 9
+    name = "SlimeRead (unoriginal)"
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "pt-BR"
-        baseUrl = "https://egotoons.com"
-        versionId = 3
+        baseUrl = "https://slimeread.app"
+    }
+
+    deeplink {
+        path("/manga/..*")
     }
 }

@@ -126,20 +126,61 @@ abstract class WeebCentral : KeiSource() {
                     if (relatedSeries.isNotEmpty()) {
                         append("\n\nRelated Series(s):")
                         relatedSeries.forEach { series ->
-                            append("\n• ${series.text()}")
+                            val link = series.selectFirst("a")!!
+                            val relation = series.selectFirst("span")?.text().orEmpty()
+                            append("\n- [${link.text()}](${link.attr("abs:href")}) $relation".trimEnd())
                         }
                     }
 
                     val alternateTitles = select("li:has(strong:contains(Associated Name)) li")
                     if (alternateTitles.isNotEmpty()) {
                         append("\n\nAssociated Name(s):")
-                        alternateTitles.forEach { append("\n• ${it.text()}") }
+                        alternateTitles.forEach { append("\n- ${it.text()}") }
+                    }
+
+                    val trackers = document.select("li:has(strong:contains(Track)) span[data-tip] > a")
+                    if (trackers.isNotEmpty()) {
+                        append("\n\nTracker(s):")
+                        trackers.forEach { tracker ->
+                            val name = tracker.parent()!!.attr("data-tip")
+                            append("\n- [$name](${tracker.attr("abs:href")})")
+                        }
                     }
                 }
             }
 
             setUrlWithoutDomain(document.location())
         }
+    }
+
+    // =========================== Related Manga ============================
+
+    override val supportsRelatedMangas get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val document = client.get(baseUrl + manga.url).asJsoup()
+
+        val currentId = document.location().toHttpUrl().pathSegments[1]
+        val coverTemplate = document.sourceImg()
+
+        val relatedSeries = document.select("li:has(strong:contains(Related Series)) li > a").map { element ->
+            SManga.create().apply {
+                val seriesId = element.attr("abs:href").toHttpUrl().pathSegments[1]
+                title = element.text()
+                thumbnail_url = coverTemplate?.replace(currentId, seriesId)
+                setUrlWithoutDomain(element.attr("abs:href"))
+            }
+        }
+
+        val recommendations = document.select("section:has(> h2 strong:contains(Recommendations)) li.glide__slide > a").map { element ->
+            SManga.create().apply {
+                thumbnail_url = element.sourceImg()
+                title = element.selectFirst("div.truncate")!!.text()
+                setUrlWithoutDomain(element.attr("abs:href"))
+            }
+        }
+
+        return relatedSeries + recommendations
     }
 
     private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
@@ -151,10 +192,8 @@ abstract class WeebCentral : KeiSource() {
     }
 
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
-        val url = (baseUrl + manga.url).toHttpUrl().newBuilder().apply {
-            removePathSegment(2)
-            addPathSegment("full-chapter-list")
-        }.build()
+        val seriesId = (baseUrl + manga.url).toHttpUrl().pathSegments[1]
+        val url = "$baseUrl/series/$seriesId/full-chapter-list"
 
         val document = client.get(url).asJsoup()
         return document.select("div[x-data] > a").map { element ->

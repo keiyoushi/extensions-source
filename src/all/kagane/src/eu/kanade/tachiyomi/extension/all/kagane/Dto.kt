@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -62,17 +63,18 @@ class SearchDto(
         val alternateTitles: List<String> = emptyList(),
     ) {
 
-        fun toSManga(domain: String, showSource: Boolean, sources: Map<String, String>): SManga = SManga.create().apply {
-            title = if (showSource) "${this@Book.title.trim()} [${sources[this@Book.sourceId]}]" else this@Book.title.trim()
+        fun toSManga(apiUrl: String, showSource: Boolean, sources: Map<String, String>, cleanTitle: Boolean): SManga = SManga.create().apply {
+            title = if (showSource && !sources.isEmpty()) "${this@Book.title.trim()} [${sources[this@Book.sourceId]}]" else this@Book.title.clean(cleanTitle)
             url = id
-            thumbnail_url = coverImage?.let { "$domain/api/v2/image/$it" }
+            thumbnail_url = coverImage?.let { "$apiUrl/image/$it" }
         }
     }
 }
 
 @Serializable
 class TrackerDto(
-    val series: List<Book> = emptyList(),
+    @SerialName("book_series")
+    val bookSeries: List<Book> = emptyList(),
 ) {
     @Serializable
     class Book(
@@ -86,10 +88,10 @@ class TrackerDto(
         val coverImage: String? = null,
     ) {
 
-        fun toSManga(domain: String, showSource: Boolean, sources: Map<String, String>): SManga = SManga.create().apply {
-            title = if (showSource) "${this@Book.title.trim()} [${sources[this@Book.sourceId]}]" else this@Book.title.trim()
+        fun toSManga(apiUrl: String, showSource: Boolean, sources: Map<String, String>, cleanTitle: Boolean): SManga = SManga.create().apply {
+            title = if (showSource && !sources.isEmpty()) "${this@Book.title.trim()} [${sources[this@Book.sourceId]}]" else this@Book.title.clean(cleanTitle)
             url = id
-            thumbnail_url = coverImage?.let { "$domain/api/v2/image/$it" }
+            thumbnail_url = coverImage?.let { "$apiUrl/image/$it" }
         }
     }
 }
@@ -156,16 +158,16 @@ class DetailsDto(
         val imageId: String,
     )
 
-    fun toSManga(domain: String, sourceName: String? = null, baseUrl: String = "", showEdition: Boolean = false, showSource: Boolean = false): SManga = SManga.create().apply {
+    fun toSManga(apiUrl: String, sourceName: String? = null, baseUrl: String = "", showEdition: Boolean = false, showSource: Boolean = false, cleanTitle: Boolean): SManga = SManga.create().apply {
         val base = this@DetailsDto.title.trim()
         val withEdition = if (showEdition && !this@DetailsDto.editionInfo.isNullOrBlank()) "$base (${this@DetailsDto.editionInfo})" else base
-        title = if (showSource && sourceName != null) "$withEdition [$sourceName]" else withEdition
-        thumbnail_url = covers.firstOrNull()?.imageId?.let { "$domain/api/v2/image/$it" }
+        title = if (showSource && sourceName != null) "$withEdition [$sourceName]" else withEdition.clean(cleanTitle)
+        thumbnail_url = covers.firstOrNull()?.imageId?.let { "$apiUrl/image/$it" }
         val desc = StringBuilder()
 
         // Add main description
         this@DetailsDto.description?.takeIf { it.isNotBlank() }?.let {
-            desc.append(it.trim())
+            desc.append(Jsoup.parse(it.trim()).text())
             desc.append("\n")
         }
 
@@ -245,7 +247,10 @@ class ChapterDto(
             if (useSourceChapterNumber) {
                 chapter_number = number
             }
-            scanlator = groups.joinToString(", ") { it.title }
+            scanlator = buildString {
+                append(groups.joinToString(", ") { it.title })
+                BRACKET_REGEX.find(title)?.groupValues?.get(1)?.let { append(" " + it.trim()) }
+            }
         }
 
         private fun buildChapterName(mode: String = "optional"): String {
@@ -253,6 +258,7 @@ class ChapterDto(
             return when (mode) {
                 "optional" -> {
                     when {
+                        trimmedTitle.isEmpty() && chapterNo.isNullOrBlank() && !volumeNo.isNullOrBlank() -> buildChapterName("vol_chapter")
                         trimmedTitle.isEmpty() && !chapterNo.isNullOrBlank() -> "Ch.$chapterNo"
                         else -> trimmedTitle
                     }
@@ -260,19 +266,19 @@ class ChapterDto(
 
                 "always" -> {
                     when {
-                        chapterNo.isNullOrBlank() -> trimmedTitle
+                        chapterNo.isNullOrBlank() && !volumeNo.isNullOrBlank() -> buildChapterName("vol_chapter")
                         trimmedTitle.isEmpty() -> "Ch.$chapterNo"
                         else -> "Ch.$chapterNo $trimmedTitle"
                     }
                 }
 
-                "vol_chapter" -> {
+                "vol_chapter", "vol_local" -> {
                     val volPart = if (!volumeNo.isNullOrBlank()) "Vol.$volumeNo " else ""
                     val chPart = if (!chapterNo.isNullOrBlank()) "Ch.$chapterNo" else ""
                     val numPart = "$volPart$chPart".trim()
                     when {
                         numPart.isEmpty() -> trimmedTitle
-                        trimmedTitle.isEmpty() -> numPart
+                        trimmedTitle.isEmpty() || mode == "vol_local" -> numPart
                         else -> "$numPart $trimmedTitle"
                     }
                 }
@@ -319,3 +325,7 @@ class IntegrityDto(
     val token: String,
     val exp: Long,
 )
+
+private val BRACKET_REGEX = Regex("""(\([^()]*\)|\[[^\[\]]*\])\s*$""")
+
+private fun String.clean(removeExtras: Boolean): String = if (removeExtras) this.replace(BRACKET_REGEX, "").trim() else this.trim()
