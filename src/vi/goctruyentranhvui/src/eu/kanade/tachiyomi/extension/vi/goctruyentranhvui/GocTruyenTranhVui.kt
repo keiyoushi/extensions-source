@@ -19,7 +19,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -57,16 +56,6 @@ abstract class GocTruyenTranhVui :
     private val xhrHeaders: Headers
         get() = headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")
-            .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
-            .add("Accept-Language", "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7")
-            .add("Cache-Control", "max-age=0")
-            .add("Sec-Ch-Ua-Mobile", "?1")
-            .add("Sec-Ch-Ua-Platform", "\"Android\"")
-            .add("Sec-Fetch-Dest", "document")
-            .add("Sec-Fetch-Mode", "navigate")
-            .add("Sec-Fetch-Site", "same-origin")
-            .add("Sec-Fetch-User", "?1")
-            .add("Upgrade-Insecure-Requests", "1")
             .build()
 
     private fun authInterceptor(chain: Interceptor.Chain): Response {
@@ -76,7 +65,7 @@ abstract class GocTruyenTranhVui :
             return chain.proceed(request)
         }
 
-        val token = tokenCache ?: runBlocking { getToken() }
+        val token = tokenCache
 
         return chain.proceed(
             request.newBuilder().apply {
@@ -120,6 +109,7 @@ abstract class GocTruyenTranhVui :
     // =============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        getToken()
         val url = apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("search")
             addQueryParameter("p", (page - 1).toString())
@@ -166,6 +156,7 @@ abstract class GocTruyenTranhVui :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
+        getToken()
         val mangaUrl = getMangaUrl(manga)
         val mangaId = manga.url.substringBefore(':')
         val slug = manga.url.substringAfter(':')
@@ -238,6 +229,7 @@ abstract class GocTruyenTranhVui :
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        getToken()
         val url = chapter.url
         val slug = url.substringAfter("/truyen/").substringBefore("/chuong-")
         val numberChapter = url.substringAfter("/chuong-").substringBefore("#")
@@ -279,28 +271,32 @@ abstract class GocTruyenTranhVui :
     }
 
     private var tokenCache: String? = null
+    private var tokenChecked = false
 
     private suspend fun getToken(): String? {
-        tokenCache?.let { return it }
+        if (tokenChecked) return tokenCache
 
         preferences.getString(CUSTOM_TOKEN, null)
             ?.takeIf(String::isNotBlank)
             ?.also {
                 tokenCache = it
+                tokenChecked = true
                 return it
             }
 
-        return getLocalStorage(baseUrl, "Authorization")
+        tokenCache = runCatching { getLocalStorage(baseUrl, "Authorization") }.getOrNull()
             ?.takeIf(String::isNotBlank)
-            ?.also {
-                tokenCache = it
-            }
+        tokenChecked = true
+        return tokenCache
     }
 
     // ============================== Filters ===============================
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/category", xhrHeaders).parseAs()
+    override suspend fun fetchFilterData(): JsonElement {
+        getToken()
+        return client.get("$baseUrl/api/category", xhrHeaders).parseAs()
+    }
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data
