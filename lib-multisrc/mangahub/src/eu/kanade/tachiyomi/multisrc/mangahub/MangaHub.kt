@@ -246,9 +246,15 @@ abstract class MangaHub : KeiSource() {
         description = buildString {
             this@toSManga.description?.let(::append)
 
-            if (!alternativeTitle.isNullOrBlank()) {
+            val altTitles = alternativeTitle
+                ?.split(";")
+                ?.mapNotNull { it.trim().takeIf(String::isNotEmpty) }
+                .orEmpty()
+
+            if (altTitles.isNotEmpty()) {
                 if (isNotBlank()) append("\n\n")
-                append("Alternative Name: $alternativeTitle")
+                append("Alternative Names:\n")
+                append(altTitles.joinToString("\n") { "- $it" })
             }
         }
     }
