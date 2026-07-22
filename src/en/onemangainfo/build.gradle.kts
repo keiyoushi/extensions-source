@@ -8,7 +8,7 @@ keiyoushi {
     name = "OneManga.info"
     versionCode = 0
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "mangahub"
 
     source {
