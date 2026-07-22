@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.kagane
 
-import android.util.Log
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
@@ -17,7 +16,8 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
@@ -49,7 +49,7 @@ abstract class Kagane :
     private val domain get() = baseUrl.removePrefix("https://")
     private val apiUrl get() = "https://$domain/api/v2"
 
-    private val prefs by getPreferencesLazy()
+    private val prefs = getPreferences()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(::refreshTokenInterceptor)
@@ -98,10 +98,9 @@ abstract class Kagane :
         "",
         FilterList(
             SortFilter(Filter.Sort.Selection(1, false)),
-            ContentRatingFilter(
-                contentRating.toSet(),
-            ),
-            GenresFilter(emptyList()),
+            ContentRatingFilter(contentRating.toSet()),
+            GenresFilter(emptyList(), excludedGenreIds),
+
         ),
     )
 
@@ -112,16 +111,16 @@ abstract class Kagane :
         "",
         FilterList(
             SortFilter(Filter.Sort.Selection(6, false)),
-            ContentRatingFilter(
-                contentRating.toSet(),
-            ),
-            GenresFilter(emptyList()),
+            ContentRatingFilter(contentRating.toSet()),
+            GenresFilter(emptyList(), excludedGenreIds),
         ),
     )
 
     // =============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        var sortParam = ""
+
         val body = buildJsonObject {
             if (query.isNotBlank()) {
                 put("title", query)
@@ -145,65 +144,53 @@ abstract class Kagane :
                     is MatchAllGenresFilter -> {
                         genresMatchAll = if (filter.state) true else null
                     }
-
                     is MatchAllTagsFilter -> {
                         tagsMatchAll = if (filter.state) true else null
                     }
-
+                    is SortFilter -> {
+                        sortParam = filter.toUriPart()
+                    }
                     else -> {}
                 }
             }
 
-            val metadata = metadata
-
             filters.forEach { filter ->
                 when (filter) {
                     is GenresFilter -> {
-                        val excludedGenreIds = excludedGenres.mapNotNull { genreName ->
-                            // fetch genre ids for exclusion to work initially for popular + latest
-                            val genresMap = metadata?.genres ?: runCatching { getGenreMap() }.getOrElse { emptyMap() }
-
-                            genresMap.entries.firstOrNull {
-                                it.value.equals(genreName, ignoreCase = true)
-                            }?.key
-                        }
-                        filter.addToJsonObject(this, "genres", excludedGenreIds, genresMatchAll)
+                        filter.addToJsonObject(this, "genres", genresMatchAll)
                     }
 
                     is TagsSearchFilter -> {
                         val rawInput = filter.state.trim()
                         if (rawInput.isNotBlank()) {
-                            if (metadata != null) {
-                                val tagEntries = rawInput.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                            val tagEntries = rawInput.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
-                                val includeIds = mutableListOf<String>()
-                                val excludeIds = mutableListOf<String>()
+                            val includeIds = mutableListOf<String>()
+                            val excludeIds = mutableListOf<String>()
 
-                                tagEntries.forEach { entry ->
-                                    val isExclude = entry.startsWith("-")
-                                    val tagName = if (isExclude) entry.removePrefix("-").trim() else entry
-                                    val tagId = metadata.tags.entries.firstOrNull {
-                                        it.value.equals(tagName, ignoreCase = true)
-                                    }?.key
-                                    if (tagId != null) {
-                                        if (isExclude) excludeIds.add(tagId) else includeIds.add(tagId)
-                                    }
+                            tagEntries.forEach { entry ->
+                                val isExclude = entry.startsWith("-")
+                                val tagName = if (isExclude) entry.removePrefix("-").trim() else entry
+
+                                val tagId = filter.tagData[tagName.lowercase()]
+                                if (tagId != null) {
+                                    if (isExclude) excludeIds.add(tagId) else includeIds.add(tagId)
                                 }
+                            }
 
-                                if (includeIds.isNotEmpty() || excludeIds.isNotEmpty()) {
-                                    putJsonObject("tags") {
-                                        if (tagsMatchAll == true) {
-                                            put("match_all", true)
-                                        }
+                            if (includeIds.isNotEmpty() || excludeIds.isNotEmpty()) {
+                                putJsonObject("tags") {
+                                    if (tagsMatchAll == true) {
+                                        put("match_all", true)
+                                    }
 
-                                        putJsonArray("values") {
-                                            includeIds.forEach { add(it) }
-                                        }
+                                    putJsonArray("values") {
+                                        includeIds.forEach { add(it) }
+                                    }
 
-                                        if (excludeIds.isNotEmpty()) {
-                                            putJsonArray("exclude") {
-                                                excludeIds.forEach { add(it) }
-                                            }
+                                    if (excludeIds.isNotEmpty()) {
+                                        putJsonArray("exclude") {
+                                            excludeIds.forEach { add(it) }
                                         }
                                     }
                                 }
@@ -232,49 +219,14 @@ abstract class Kagane :
         val url = "$apiUrl/search/series".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", (page - 1).toString())
             addQueryParameter("size", 35.toString()) // Default items per request
-            filters.forEach { filter ->
-                when (filter) {
-                    is SortFilter -> {
-                        val sortParam = filter.toUriPart()
-                        when {
-                            sortParam.isNotEmpty() -> addQueryParameter("sort", sortParam)
-                        }
-                    }
-
-                    else -> {}
-                }
-            }
+            if (sortParam.isNotEmpty()) addQueryParameter("sort", sortParam)
         }.build()
 
         val response = client.post(url, body)
         val dto = response.parseAs<SearchDto>()
-        val sources = getSourcesMap()
         val mangas = dto.content.map { it.toSManga(apiUrl, showSource, sources, cleanTitle) }
         return MangasPage(mangas, hasNextPage = dto.hasNextPage())
     }
-
-    private suspend fun getSourcesMap(): Map<String, String> = if (!showSource) {
-        emptyMap()
-    } else {
-        metadata?.sources?.associate { it.sourceId to it.title }
-            ?: try {
-                getSourcesResponse().use { response ->
-                    response.takeIf { it.isSuccessful }
-                        ?.parseAs<SourcesDto>()?.sources
-                }
-                    ?.associate { it.sourceId to it.title }
-                    ?: emptyMap()
-            } catch (e: Exception) {
-                Log.w(name, "Failed to load sources", e)
-                emptyMap()
-            }
-    }
-
-    private suspend fun getSourcesResponse(): Response = client.post(
-        "$apiUrl/sources/list",
-        buildJsonObject { put("source_types", null) }
-            .toJsonRequestBody(),
-    )
 
     // ====================== Manga Details + Chapters ======================
 
@@ -296,17 +248,7 @@ abstract class Kagane :
 
     private suspend fun parseMangaDetails(details: DetailsDto): SManga {
         val sourceName = details.sourceId?.let { sourceId ->
-            metadata?.sources?.firstOrNull { it.sourceId == sourceId }?.title
-                ?: try {
-                    getSourcesResponse().use { response ->
-                        response.takeIf { it.isSuccessful }
-                            ?.parseAs<SourcesDto>()?.sources
-                    }
-                        ?.firstOrNull { it.sourceId == sourceId }?.title
-                } catch (e: Exception) {
-                    Log.w(name, "Failed to load sources", e)
-                    null
-                }
+            sources[sourceId]
         }
         return details.toSManga(apiUrl, sourceName, baseUrl, showEdition, showSource, cleanTitle)
     }
@@ -358,7 +300,6 @@ abstract class Kagane :
         val series = client.get("$apiUrl/trackers/$trackerId/series")
             .parseAs<TrackerDto>()
             .bookSeries
-        val sources = getSourcesMap()
         return series
             .map { it.toSManga(apiUrl, showSource, sources, cleanTitle) }
     }
@@ -440,8 +381,8 @@ abstract class Kagane :
             return CONTENT_RATINGS.slice(0..index.coerceAtLeast(0))
         }
 
-    private val excludedGenres: Set<String>
-        get() = prefs.getStringSet(GENRES_PREF, emptySet()) ?: emptySet()
+    private val excludedGenreIds: Set<String>
+        get() = prefs.getStringSet(GENRES_ID_PREF, emptySet()) ?: emptySet()
 
     private val sourceDisplayMode: String
         get() = prefs.getString(SOURCE_DISPLAY_MODE, SOURCE_DISPLAY_MODE_DEFAULT) ?: SOURCE_DISPLAY_MODE_DEFAULT
@@ -472,19 +413,24 @@ abstract class Kagane :
             setDefaultValue(CONTENT_RATING_DEFAULT)
         }.let(screen::addPreference)
 
-        MultiSelectListPreference(screen.context).apply {
-            key = GENRES_PREF
-            title = "Exclude Genres"
-            entries = GenresList.map { it.replaceFirstChar { c -> c.uppercase() } }.toTypedArray()
-            entryValues = GenresList
-            summary =
-                excludedGenres.joinToString { it.replaceFirstChar { c -> c.uppercase() } }
-            setDefaultValue(emptySet<String>())
+        val genreFilter = getFilterList().firstInstanceOrNull<GenresFilter>()
+        val genreMap = genreFilter?.state?.associate { it.id to it.name.replaceFirstChar { c -> c.uppercase() } } ?: emptyMap()
 
+        MultiSelectListPreference(screen.context).apply {
+            key = GENRES_ID_PREF
+            title = "Exclude Genres"
+            entries = genreMap.values.toTypedArray()
+            entryValues = genreMap.keys.toTypedArray()
+            summary = genreMap.keys
+                .filter { excludedGenreIds.contains(it) }
+                .map { id -> genreMap[id] }
+                .joinToString()
+            setDefaultValue(emptySet<String>())
+            setEnabled(genreMap.isNotEmpty())
             setOnPreferenceChangeListener { _, values ->
                 @Suppress("UNCHECKED_CAST")
                 val selected = values as Set<String>
-                this.summary = selected.joinToString { it.replaceFirstChar { c -> c.uppercase() } }
+                this.summary = selected.mapNotNull { genreMap[it] }.joinToString()
                 true
             }
         }.let(screen::addPreference)
@@ -517,7 +463,6 @@ abstract class Kagane :
             title = "Clean title"
             summary = "Removes extra brackets or parentheses in title (Disables others)"
             setDefaultValue(CLEAN_TITLE_DEFAULT)
-
             setOnPreferenceChangeListener { _, newValue ->
                 val enabled = !(newValue as Boolean)
                 showEdition.setEnabled(enabled)
@@ -554,7 +499,7 @@ abstract class Kagane :
             "pornographic",
         )
 
-        private const val GENRES_PREF = "pref_genres_exclude"
+        private const val GENRES_ID_PREF = "pref_genre_id_exclude"
 
         private const val SOURCE_DISPLAY_MODE = "pref_source_display_mode"
         private const val SOURCE_DISPLAY_MODE_DEFAULT = "all"
@@ -588,22 +533,19 @@ abstract class Kagane :
 
     // ============================= Filters ==============================
 
-    private var metadata: MetadataDto? = null
-
     override val supportsFilterFetching = true
 
-    private var genreMap: Map<String, String>? = null
-
-    private suspend fun getGenreMap(): Map<String, String> = genreMap ?: client.get("$apiUrl/genres/list")
-        .parseAs<List<GenreDto>>()
-        .associate { it.id to it.genreName }
-        .also { genreMap = it }
-
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
+        val genresDeferred = async {
+            client.get("$apiUrl/genres/list")
+                .parseAs<List<GenreDto>>()
+                .associate { it.id to it.genreName }
+        }
+
         val tagsDeferred = async {
             client.get("$apiUrl/tags/list")
                 .parseAs<List<TagDto>>()
-                .associate { it.id to it.tagName }
+                .associate { it.tagName.lowercase() to it.id }
         }
         val sourcesDeferred = async {
             client.post(
@@ -612,14 +554,23 @@ abstract class Kagane :
             )
                 .parseAs<SourcesDto>().sources
         }
-        val genresDeferred = async { getGenreMap() }
 
         MetadataDto(genresDeferred.await(), tagsDeferred.await(), sourcesDeferred.await())
             .toJsonElement()
     }
 
+    var sourceCache: Map<String, String>? = null
+
+    val sources: Map<String, String>
+        get() {
+            if (sourceCache == null) {
+                getFilterList()
+            }
+            return (sourceCache ?: emptyMap()).also { sourceCache = it }
+        }
+
     override fun getFilterList(data: JsonElement?): FilterList {
-        val meta = data?.parseAs<MetadataDto>()?.also { metadata = it }
+        val meta = data?.parseAs<MetadataDto>()
 
         val filters = mutableListOf(
             SortFilter(),
@@ -630,6 +581,8 @@ abstract class Kagane :
         )
 
         if (meta != null) {
+            sourceCache = meta.sources.associate { it.sourceId to it.title }
+
             val displayMode = sourceDisplayMode
             val validSources = meta.sources.filter { source ->
                 when (displayMode) {
@@ -637,6 +590,7 @@ abstract class Kagane :
                     else -> true
                 }
             }
+
             val sourceFilters = validSources
                 .map { FilterData(it.sourceId, it.title) }
                 .sortedBy { it.name }
@@ -644,9 +598,12 @@ abstract class Kagane :
             filters.addAll(
                 listOf(
                     MatchAllGenresFilter(),
-                    GenresFilter(meta.getGenresList()),
+                    GenresFilter(
+                        meta.getGenresList(),
+                        excludedGenreIds,
+                    ),
                     MatchAllTagsFilter(),
-                    TagsSearchFilter(),
+                    TagsSearchFilter(meta.tags),
                     SourcesFilter(sourceFilters),
                 ),
             )
