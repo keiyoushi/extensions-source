@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.otruyen
 
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -20,9 +19,6 @@ import okhttp3.Response
 
 @Source
 abstract class OTruyen : KeiSource() {
-
-    override val name: String = "OTruyen"
-
     private val domainName = "otruyen"
 
     private val domainApi = "${domainName}api.com"
@@ -152,40 +148,5 @@ abstract class OTruyen : KeiSource() {
         it.parseAs<JsonElement>()
     }
 
-    override fun getFilterList(data: JsonElement?): FilterList {
-        val filters = mutableListOf<Filter<*>>(
-            Filter.Header("Không dùng chung được với tìm kiếm bằng tên"),
-        )
-
-        data?.parseAs<DataDto<GenresData>>()?.data?.items?.takeIf { it.isNotEmpty() }?.let { items ->
-            val genres = items.map { Genre(it.name, it.slug) }.sortedBy { it.name }
-            filters.add(GenresFilter("Thể loại", genres))
-        } ?: run {
-            filters.add(Filter.Header(filterFetchHint))
-            filters.add(StatusList())
-        }
-
-        return FilterList(filters)
-    }
-
-    private class StatusList :
-        Filter.Select<Genre>(
-            "Trạng thái",
-            arrayOf(
-                Genre("Mới nhất", "truyen-moi"),
-                Genre("Đang phát hành", "dang-phat-hanh"),
-                Genre("Hoàn thành", "hoan-thanh"),
-                Genre("Sắp ra mắt", "sap-ra-mat"),
-            ),
-        )
-
-    private class GenresFilter(title: String, pairs: List<Genre>) :
-        Filter.Select<Genre>(
-            title,
-            pairs.toTypedArray(),
-        )
-
-    private class Genre(val name: String, val slug: String) {
-        override fun toString() = name
-    }
+    override fun getFilterList(data: JsonElement?): FilterList = getFilters(data)
 }
