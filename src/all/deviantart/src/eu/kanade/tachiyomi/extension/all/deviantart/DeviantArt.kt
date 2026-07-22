@@ -34,10 +34,6 @@ abstract class DeviantArt :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override fun headersBuilder() = Headers.Builder().apply {
-        add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0")
-    }
-
     private val backendBaseUrl = "https://backend.deviantart.com"
     private fun backendBuilder() = backendBaseUrl.toHttpUrl().newBuilder()
 
@@ -82,10 +78,10 @@ abstract class DeviantArt :
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-        val gallery = document.selectFirst("#sub-folder-gallery")
+        val gallery = document.selectFirst("#content")
 
         // If manga is sub-gallery then use sub-gallery name, else use gallery name
-        val galleryName = gallery?.selectFirst("._2vMZg + ._2vMZg")?.text()?.substringBeforeLast(" ")
+        val galleryName = gallery?.selectFirst(".DWReDc")?.ownText()
             ?: gallery?.selectFirst("[aria-haspopup=listbox] > div")!!.ownText()
         val artistInTitle = (preferences.artistInTitle == ArtistInTitle.ALWAYS.name) ||
             ((preferences.artistInTitle == ArtistInTitle.ONLY_ALL_GALLERIES.name) && (galleryName == "All"))
@@ -97,8 +93,8 @@ abstract class DeviantArt :
                 artistInTitle -> "$author - $galleryName"
                 else -> galleryName
             }
-            description = gallery?.selectFirst(".legacy-journal")?.wholeText()
-            thumbnail_url = gallery?.selectFirst("img[property=contentUrl]")?.absUrl("src")
+            description = gallery.selectFirst(".legacy-journal")?.wholeText()
+            thumbnail_url = gallery.selectFirst("img[property=contentUrl]")?.absUrl("src")
         }
     }
 
@@ -182,8 +178,8 @@ abstract class DeviantArt :
         val artistInTitlePref = ListPreference(screen.context).apply {
             key = ArtistInTitle.PREF_KEY
             title = "Artist name in manga title"
-            entries = ArtistInTitle.values().map { it.text }.toTypedArray()
-            entryValues = ArtistInTitle.values().map { it.name }.toTypedArray()
+            entries = ArtistInTitle.entries.map { it.text }.toTypedArray()
+            entryValues = ArtistInTitle.entries.map { it.name }.toTypedArray()
             summary = "Current: %s\n\n" +
                 "Changing this preference will not automatically apply to manga in Library " +
                 "and History, so refresh all DeviantArt manga and/or clear database in Settings " +
