@@ -53,12 +53,11 @@ abstract class MiMi : KeiSource() {
     // =============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val filterList = filters.ifEmpty { getFilterList() }
-        val isAdvanced = filterList.any {
+        val isAdvanced = filters.any {
             (it is GenresFilter && it.state.any { g -> g.state != Filter.TriState.STATE_IGNORE }) ||
                 (it is TextField && it.state.isNotEmpty())
         }
-        val sortId = filterList.filterIsInstance<SortByFilter>().firstOrNull()?.selectedSort ?: ""
+        val sortId = filters.filterIsInstance<SortByFilter>().firstOrNull()?.selectedSort ?: ""
 
         val url = apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("manga")
@@ -68,7 +67,7 @@ abstract class MiMi : KeiSource() {
                 else -> {}
             }
 
-            filterList.forEach { filter ->
+            filters.forEach { filter ->
                 when (filter) {
                     is SortByFilter -> {
                         if (!isAdvanced && sortId.isNotEmpty()) addQueryParameter("sort", sortId)
