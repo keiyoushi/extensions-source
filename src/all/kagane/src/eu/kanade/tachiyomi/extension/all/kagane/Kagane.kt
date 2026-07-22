@@ -364,10 +364,6 @@ abstract class Kagane :
         val headers = headers.newBuilder().add("x-integrity-token", integrityToken).build()
 
         val response = client.post(challengeUrl.toString(), headers, challengeBody)
-        if (!response.isSuccessful) {
-            response.close()
-            throw IOException("Failed to get challenge. HTTP error ${response.code}")
-        }
 
         return response.parseAs<ChallengeDto>()
     }
