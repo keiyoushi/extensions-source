@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivre
 
+import keiyoushi.utils.parseAs
+import kotlinx.serialization.Serializable
+import okhttp3.CacheControl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -8,46 +11,36 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.IOException
 
-/**
- * Clears the site's reading gate for same-host requests. The gate is a double-submit check: the
- * client-generated `toon_v` cookie must be echoed in the `x-toon-verify` header. On a 403 this
- * primes the cookie via a hidden WebView ([TokenResolver]); on a decrypt failure it reloads the
- * rotated constants ([decryptor]). The two retries are independent, so a request that is both gated
- * and stale-keyed still recovers.
- */
 class ReadingGateInterceptor(
     private val baseUrl: String,
-    private val userAgent: String?,
-    private val cookieClient: OkHttpClient,
+    private val seedClient: OkHttpClient,
     private val decryptor: MangaLivreDecryptor,
 ) : Interceptor {
 
     private val baseUrlHost = baseUrl.toHttpUrl().host
 
-    @Volatile
-    private var lastPrimeAttemptAt = 0L
+    private var cachedSeed: CachedSeed? = null
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         if (request.url.host != baseUrlHost) {
             return chain.proceed(request)
         }
-        return proceedDecrypted(chain, request, primed = false, reloaded = false)
+        return proceedDecrypted(chain, request, seedRetried = false, decryptReloaded = false)
     }
 
     private fun proceedDecrypted(
         chain: Interceptor.Chain,
         request: Request,
-        primed: Boolean,
-        reloaded: Boolean,
+        seedRetried: Boolean,
+        decryptReloaded: Boolean,
     ): Response {
-        val response = chain.proceed(request.withVerifyHeader())
+        val response = chain.proceed(request.withSignature(forceRefresh = seedRetried))
 
         if (response.code == 403) {
-            if (primed) return response
+            if (seedRetried) return response
             response.close()
-            primeCookie(request)
-            return proceedDecrypted(chain, request, primed = true, reloaded = reloaded)
+            return proceedDecrypted(chain, request, seedRetried = true, decryptReloaded)
         }
 
         val dataKey = response.headers["x-toon-datakey"] ?: return response
@@ -61,40 +54,43 @@ class ReadingGateInterceptor(
         }
 
         response.close()
-        if (reloaded) throw IOException(NON_JSON_MESSAGE)
-        decryptor.reloadConstants()
-        return proceedDecrypted(chain, request, primed = primed, reloaded = true)
+        if (decryptReloaded) throw IOException(NON_JSON_MESSAGE)
+        val readerPath = request.tag(ReaderPath::class.java)?.path ?: "/"
+        decryptor.reloadConstants(readerPath)
+        return proceedDecrypted(chain, request, seedRetried, decryptReloaded = true)
     }
 
-    private fun primeCookie(request: Request) {
-        synchronized(this) {
-            if (System.currentTimeMillis() - lastPrimeAttemptAt < REFRESH_COOLDOWN_MS) return
-            lastPrimeAttemptAt = System.currentTimeMillis()
-            val primePath = request.tag(ReaderPath::class.java)?.path ?: "/"
-            runCatching { TokenResolver.prime("$baseUrl$primePath", userAgent) }
+    private fun Request.withSignature(forceRefresh: Boolean): Request = newBuilder()
+        .header(SIGNATURE_HEADER, resolveSeed(this, forceRefresh))
+        .build()
+
+    private fun resolveSeed(request: Request, forceRefresh: Boolean): String = synchronized(this) {
+        val now = System.currentTimeMillis()
+        if (!forceRefresh) {
+            cachedSeed?.takeIf { it.expiresAt > now }?.let { return@synchronized it.token }
         }
-    }
 
-    private fun Request.withVerifyHeader(): Request {
-        val verify = cookieClient.getCookie(baseUrl, "toon_v") ?: return this
-        val pass = if (url.encodedPath.contains("/chapters")) PASS_CHAPTERS else PASS_DEFAULT
-        return newBuilder()
-            .header("x-toon-verify", verify)
-            .header("toonlivre-pass", pass)
+        val seedRequest = request.newBuilder()
+            .url("$baseUrl/api/seed")
+            .get()
+            .removeHeader(SIGNATURE_HEADER)
+            .cacheControl(CacheControl.FORCE_NETWORK)
             .build()
+        val token = seedClient.newCall(seedRequest).execute().parseAs<SeedDto>().token
+        cachedSeed = CachedSeed(token, now + SEED_CACHE_MS)
+        token
     }
 
     data class ReaderPath(val path: String)
 
+    private class CachedSeed(val token: String, val expiresAt: Long)
+
     companion object {
-        private const val REFRESH_COOLDOWN_MS = 60_000L
-        private const val PASS_CHAPTERS = "auth2028xy"
-        private const val PASS_DEFAULT = "decoy99xz"
-        private const val NON_JSON_MESSAGE =
-            "Não foi possível decifrar a resposta. Abra a fonte na WebView do app e tente de novo."
+        private const val SIGNATURE_HEADER = "x-toon-signature"
+        private const val SEED_CACHE_MS = 25 * 60 * 1000L
+        private const val NON_JSON_MESSAGE = "Não foi possível decifrar a resposta."
     }
 }
 
-private fun OkHttpClient.getCookies(baseUrl: String) = cookieJar.loadForRequest(baseUrl.toHttpUrl())
-
-private fun OkHttpClient.getCookie(baseUrl: String, cookie: String): String? = getCookies(baseUrl).firstOrNull { it.name == cookie }?.value?.takeUnless { it.isEmpty() }
+@Serializable
+private class SeedDto(val token: String)
