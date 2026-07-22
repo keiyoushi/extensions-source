@@ -3,12 +3,12 @@ package eu.kanade.tachiyomi.extension.pt.mangalivre
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.get
-import keiyoushi.utils.parseAs
 import keiyoushi.utils.readIntBigEndian
 import keiyoushi.utils.readIntLittleEndian
-import keiyoushi.utils.stringOrNull
-import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import java.security.MessageDigest
@@ -28,7 +28,9 @@ class MangaLivreDecryptor(
     private data class Constants(val hostPart: String, val antibotPart: String, val encKey: String)
 
     fun decrypt(cipherWrapperBody: String, dataKey: String): String? = runCatching {
-        val ciphertext = cipherWrapperBody.parseAs<JsonElement>()[dataKey]?.stringOrNull
+        val ciphertext = Json.parseToJsonElement(cipherWrapperBody).jsonObject[dataKey]
+            ?.jsonPrimitive
+            ?.contentOrNull
             ?: return@runCatching null
         decryptRabbit(ciphertext, derivePassword()).takeIf { it.isValidJson() }
     }.getOrNull()
@@ -40,33 +42,52 @@ class MangaLivreDecryptor(
             lastReloadAt = now
         }
         runCatching {
-            val indexJsUrl = client.newCall(GET(baseUrl + readerPath, headers)).execute()
+            val scriptUrls = client.newCall(GET(baseUrl + readerPath, headers)).execute()
                 .asJsoup()
-                .selectFirst("script[src*=index]")
-                ?.absUrl("src")
-            if (indexJsUrl != null) {
-                val js = client.newCall(GET(indexJsUrl, headers)).execute().use { it.body.string() }
-                val direct = DIRECT_CONSTANTS_REGEX.find(js)
-                val legacy = EV_CONSTANTS_REGEX.find(js)
-                val hostPart = direct?.groupValues?.get(1)
-                    ?: ENV_HOST_REGEX.find(js)?.groupValues?.get(1)
-                    ?: legacy?.groupValues?.get(1)
-                val antibotPart = if (direct != null) {
-                    ""
-                } else {
-                    ENV_ANTIBOT_REGEX.find(js)?.groupValues?.get(1) ?: legacy?.groupValues?.get(2)
-                }
-                val encKey = direct?.groupValues?.get(2)
-                    ?: ENV_ENCRYPTION_REGEX.find(js)?.groupValues?.get(1)
-                    ?: legacy?.groupValues?.get(3)
-                if (hostPart != null && antibotPart != null && encKey != null) {
-                    constants = Constants(hostPart, antibotPart, encKey)
+                .select("script[src]")
+                .map { it.absUrl("src") }
+                .filter { it.startsWith("$baseUrl/") }
+                .distinct()
+                .sortedBy { if ("/index-" in it) 0 else 1 }
+                .take(MAX_BUNDLE_CANDIDATES)
+
+            for (scriptUrl in scriptUrls) {
+                val js = client.newCall(GET(scriptUrl, headers)).execute().use { it.body.string() }
+                extractConstants(js)?.let {
+                    constants = it
+                    return@runCatching
                 }
             }
         }
     }
 
-    private fun String.isValidJson(): Boolean = runCatching { parseAs<JsonElement>() }.isSuccess
+    private fun extractConstants(js: String): Constants? {
+        JOINED_CONSTANTS_REGEX.find(js)?.let {
+            return Constants(it.groupValues[1], it.groupValues[2], it.groupValues[3])
+        }
+
+        val direct = DIRECT_CONSTANTS_REGEX.find(js)
+        val legacy = EV_CONSTANTS_REGEX.find(js)
+        val hostPart = direct?.groupValues?.get(1)
+            ?: ENV_HOST_REGEX.find(js)?.groupValues?.get(1)
+            ?: legacy?.groupValues?.get(1)
+        val antibotPart = if (direct != null) {
+            ""
+        } else {
+            ENV_ANTIBOT_REGEX.find(js)?.groupValues?.get(1) ?: legacy?.groupValues?.get(2)
+        }
+        val encKey = direct?.groupValues?.get(2)
+            ?: ENV_ENCRYPTION_REGEX.find(js)?.groupValues?.get(1)
+            ?: legacy?.groupValues?.get(3)
+
+        return if (hostPart != null && antibotPart != null && encKey != null) {
+            Constants(hostPart, antibotPart, encKey)
+        } else {
+            null
+        }
+    }
+
+    private fun String.isValidJson(): Boolean = runCatching { Json.parseToJsonElement(this) }.isSuccess
 
     private fun decryptRabbit(ciphertextB64: String, password: String): String {
         val encrypted = Base64.decode(ciphertextB64, Base64.DEFAULT)
@@ -109,12 +130,16 @@ class MangaLivreDecryptor(
     }
 
     companion object {
-        private const val DEFAULT_HOSTNAME_PART = "toonlivre.net::v9p6_2x8_j"
-        private const val DEFAULT_ANTIBOT_PART = ""
-        private const val DEFAULT_ENC_KEY = "Celestial-Raven-Invoke9"
+        private const val DEFAULT_HOSTNAME_PART = "toonlivre.net::w3"
+        private const val DEFAULT_ANTIBOT_PART = "r7_5m2_k"
+        private const val DEFAULT_ENC_KEY = "Phantom-Tide-Harvest8"
 
         private const val RELOAD_COOLDOWN_MS = 30_000L
+        private const val MAX_BUNDLE_CANDIDATES = 5
 
+        private val JOINED_CONSTANTS_REGEX = Regex(
+            """new Date\(\)\.toISOString\(\)\.(?:slice\(0,10\)|split\("T"\)\[0])\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*]\s*\.join\(""\)\s*;\s*return\s*"([^"]+)"\s*\+\s*[\w$.]+\.SHA256\(""",
+        )
         private val DIRECT_CONSTANTS_REGEX = Regex(
             """getUTCDate\(\)\)\.padStart\(2,"0"\)\}`\s*\+\s*"([^"]+)"\s*;\s*return\s*"([^"]+)"\s*\+\s*[\w$.]+\.SHA256\(""",
         )
