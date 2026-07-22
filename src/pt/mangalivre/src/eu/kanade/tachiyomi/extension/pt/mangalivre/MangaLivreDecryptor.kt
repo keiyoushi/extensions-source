@@ -46,10 +46,19 @@ class MangaLivreDecryptor(
                 ?.absUrl("src")
             if (indexJsUrl != null) {
                 val js = client.newCall(GET(indexJsUrl, headers)).execute().use { it.body.string() }
+                val direct = DIRECT_CONSTANTS_REGEX.find(js)
                 val legacy = EV_CONSTANTS_REGEX.find(js)
-                val hostPart = ENV_HOST_REGEX.find(js)?.groupValues?.get(1) ?: legacy?.groupValues?.get(1)
-                val antibotPart = ENV_ANTIBOT_REGEX.find(js)?.groupValues?.get(1) ?: legacy?.groupValues?.get(2)
-                val encKey = ENV_ENCRYPTION_REGEX.find(js)?.groupValues?.get(1) ?: legacy?.groupValues?.get(3)
+                val hostPart = direct?.groupValues?.get(1)
+                    ?: ENV_HOST_REGEX.find(js)?.groupValues?.get(1)
+                    ?: legacy?.groupValues?.get(1)
+                val antibotPart = if (direct != null) {
+                    ""
+                } else {
+                    ENV_ANTIBOT_REGEX.find(js)?.groupValues?.get(1) ?: legacy?.groupValues?.get(2)
+                }
+                val encKey = direct?.groupValues?.get(2)
+                    ?: ENV_ENCRYPTION_REGEX.find(js)?.groupValues?.get(1)
+                    ?: legacy?.groupValues?.get(3)
                 if (hostPart != null && antibotPart != null && encKey != null) {
                     constants = Constants(hostPart, antibotPart, encKey)
                 }
@@ -100,12 +109,15 @@ class MangaLivreDecryptor(
     }
 
     companion object {
-        private const val DEFAULT_HOSTNAME_PART = "toonlivre.com::v8"
-        private const val DEFAULT_ANTIBOT_PART = "t8_4v2_b"
-        private const val DEFAULT_ENC_KEY = "Magnesium-Strike-Astonish3"
+        private const val DEFAULT_HOSTNAME_PART = "toonlivre.net::v9p6_2x8_j"
+        private const val DEFAULT_ANTIBOT_PART = ""
+        private const val DEFAULT_ENC_KEY = "Celestial-Raven-Invoke9"
 
         private const val RELOAD_COOLDOWN_MS = 30_000L
 
+        private val DIRECT_CONSTANTS_REGEX = Regex(
+            """getUTCDate\(\)\)\.padStart\(2,"0"\)\}`\s*\+\s*"([^"]+)"\s*;\s*return\s*"([^"]+)"\s*\+\s*[\w$.]+\.SHA256\(""",
+        )
         private val EV_CONSTANTS_REGEX = Regex(
             """toISOString\(\)\.split\("T"\)\[0]\s*,\s*\w+\s*=\s*"([^"]+)"\s*,\s*\w+\s*=\s*"([^"]+)"\s*,\s*\w+\s*=\s*"([^"]+)""",
         )

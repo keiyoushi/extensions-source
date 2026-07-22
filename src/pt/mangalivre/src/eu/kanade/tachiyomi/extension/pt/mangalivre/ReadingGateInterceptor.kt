@@ -88,8 +88,7 @@ class ReadingGateInterceptor(
     companion object {
         private const val SIGNATURE_HEADER = "x-toon-signature"
         private const val SEED_CACHE_MS = 25 * 60 * 1000L
-        private const val NON_JSON_MESSAGE =
-            "Não foi possível decifrar a resposta. Abra a fonte na WebView do app e tente de novo."
+        private const val NON_JSON_MESSAGE = "Não foi possível decifrar a resposta."
     }
 }
 
