@@ -161,7 +161,7 @@ abstract class MangaHub : KeiSource() {
     private suspend fun getMangaList(page: Int, order: String, query: String = "", genres: String = "all"): MangasPage {
         val rows = fetchGraphQL(searchQuery(mangaSource, query, genres, order, page)) {
             it.parseGraphQLAs<ApiSearchObject>()
-        }.search.rows
+        }.search!!.rows
 
         val mangas = rows.map {
             SManga.create().apply {
@@ -187,7 +187,7 @@ abstract class MangaHub : KeiSource() {
         return fetchGraphQL(
             mangaQuery(mangaSource, slug),
             refreshUrl = "$baseUrl/manga/$slug",
-        ) { it.parseGraphQLAs<ApiMangaObject>() }.manga
+        ) { it.parseGraphQLAs<ApiMangaObject>() }.manga!!
             .toSManga()
             .apply { this.url = "/manga/$slug" }
     }
@@ -223,7 +223,7 @@ abstract class MangaHub : KeiSource() {
         val data = fetchGraphQL(
             mangaQuery(mangaSource, slug),
             refreshUrl = "$baseUrl${manga.url}",
-        ) { it.parseGraphQLAs<ApiMangaObject>() }.manga
+        ) { it.parseGraphQLAs<ApiMangaObject>() }.manga!!
 
         return SMangaUpdate(
             manga = data.toSManga(),
@@ -281,7 +281,7 @@ abstract class MangaHub : KeiSource() {
         val chapterObject = fetchGraphQL(
             pagesQuery(mangaSource, slug, number),
             refreshUrl = "$baseUrl/chapter${chapter.url}",
-        ) { it.parseGraphQLAs<ApiChapterData>() }.chapter
+        ) { it.parseGraphQLAs<ApiChapterData>() }.chapter!!
         val pages = chapterObject.pages.parseAs<ApiChapterPages>()
 
         // We'll update the cookie here to match the browser's "recently" opened chapter.
