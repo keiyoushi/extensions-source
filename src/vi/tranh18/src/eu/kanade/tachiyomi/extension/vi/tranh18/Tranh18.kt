@@ -22,8 +22,6 @@ import org.jsoup.nodes.Document
 @Source
 abstract class Tranh18 : KeiSource() {
 
-    override val name: String = "Tranh18"
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(3)
     }
@@ -151,8 +149,7 @@ abstract class Tranh18 : KeiSource() {
                 val a = element.selectFirst("a")!!
                 setUrlWithoutDomain(a.absUrl("href"))
                 name = a.text()
-                date_upload = System.currentTimeMillis()
-                chapter_number = Regex("""(\d+(?:\.\d+)*)""").find(name)?.value?.toFloatOrNull() ?: 0f
+                chapter_number = CHAPTER_NUMBER_REGEX.find(name)?.value?.toFloatOrNull() ?: 0f
             }
         }
         .sortedByDescending { it.chapter_number }
@@ -180,4 +177,8 @@ abstract class Tranh18 : KeiSource() {
         StatusList(),
         KeywordList(getGenreList()),
     )
+
+    companion object {
+        private val CHAPTER_NUMBER_REGEX = Regex("""(\d+(?:\.\d+)*)""")
+    }
 }
