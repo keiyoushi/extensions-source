@@ -12,7 +12,6 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
 import okhttp3.CacheControl
 import okhttp3.Headers
@@ -21,9 +20,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -37,9 +37,7 @@ abstract class TruyenQQ : KeiSource() {
         add("Referer", "$baseUrl/")
     }
 
-    private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
-    }
+    private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
 
     // ============================== Popular ===============================
 
@@ -129,10 +127,7 @@ abstract class TruyenQQ : KeiSource() {
     ): SMangaUpdate {
         client.get(getMangaUrl(manga), headers).use { response ->
             val document = response.asJsoup()
-            val details = if (fetchDetails) parseMangaDetails(document) else manga
-            val chaptersList = if (fetchChapters) parseChapterList(document) else chapters
-
-            return SMangaUpdate(details, chaptersList)
+            return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
         }
     }
 
@@ -167,6 +162,13 @@ abstract class TruyenQQ : KeiSource() {
             date_upload = dateFormat.tryParse(element.select(".time-chap").text())
         }
     }
+
+    private fun DateTimeFormatter.tryParse(date: String): Long = runCatching {
+        LocalDate.parse(date, this)
+            .atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh"))
+            .toInstant()
+            .toEpochMilli()
+    }.getOrDefault(0L)
 
     // =============================== Pages ================================
 
