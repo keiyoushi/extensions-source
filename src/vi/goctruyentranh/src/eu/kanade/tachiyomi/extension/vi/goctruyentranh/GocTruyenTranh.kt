@@ -12,7 +12,6 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -22,16 +21,22 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Calendar
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class GocTruyenTranh : KeiSource() {
 
     private val searchUrl get() = "$baseUrl/baseapi/comics/filterComic"
 
-    private val dateFormat = SimpleDateFormat("dd-MM-yyyy HH:mm:ss", Locale.US)
+    private val dateFormat = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss", Locale.US)
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor { chain ->
@@ -158,10 +163,7 @@ abstract class GocTruyenTranh : KeiSource() {
     ): SMangaUpdate {
         client.get(getMangaUrl(manga), headers).use { response ->
             val document = response.asJsoup()
-            val details = if (fetchDetails) parseMangaDetails(document) else manga
-            val chaptersList = if (fetchChapters) parseChapterList(document) else chapters
-
-            return SMangaUpdate(details, chaptersList)
+            return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
         }
     }
 
@@ -204,16 +206,24 @@ abstract class GocTruyenTranh : KeiSource() {
     }
 
     private fun parseDate(date: String): Long = runCatching {
-        val calendar = Calendar.getInstance()
-        val number = date.replace(Regex("[^0-9]"), "").trim().toInt()
-        when (date.replace(Regex("[0-9]"), "").lowercase().trim()) {
-            "giây trước" -> calendar.apply { add(Calendar.SECOND, -number) }.timeInMillis
-            "phút trước" -> calendar.apply { add(Calendar.MINUTE, -number) }.timeInMillis
-            "giờ trước" -> calendar.apply { add(Calendar.HOUR, -number) }.timeInMillis
-            "ngày trước" -> calendar.apply { add(Calendar.DAY_OF_YEAR, -number) }.timeInMillis
-            else -> dateFormat.tryParse(date)
+        val now = Clock.System.now()
+        val number = date.replace(Regex("[^0-9]"), "").trim().toIntOrNull() ?: return 0L
+        val duration = when (date.replace(Regex("[0-9]"), "").lowercase().trim()) {
+            "giây trước" -> number.seconds
+            "phút trước" -> number.minutes
+            "giờ trước" -> number.hours
+            "ngày trước" -> number.days
+            else -> return dateFormat.tryParse(date)
         }
+        (now - duration).toEpochMilliseconds()
     }.getOrNull() ?: 0L
+
+    private fun DateTimeFormatter.tryParse(date: String): Long = runCatching {
+        LocalDateTime.parse(date, this)
+            .atZone(ZoneId.of("Asia/Ho_Chi_Minh"))
+            .toInstant()
+            .toEpochMilli()
+    }.getOrDefault(0L)
 
     private fun getImgUrl(element: Element?): String? {
         val url = element?.absUrl("src")?.takeIf { it.isNotEmpty() }
