@@ -35,7 +35,7 @@ abstract class MangaLivre :
     private val decryptor = MangaLivreDecryptor(baseUrl, network.client, headers)
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(ReadingGateInterceptor(baseUrl, headers["User-Agent"], network.client, decryptor))
+        .addInterceptor(ReadingGateInterceptor(baseUrl, network.client, decryptor))
         .rateLimit(2, 1.seconds) { it.host == baseUrlHost }
         .build()
 
