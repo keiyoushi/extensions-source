@@ -1,7 +1,8 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivre
 
-import keiyoushi.utils.parseAs
-import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.CacheControl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -76,7 +77,10 @@ class ReadingGateInterceptor(
             .removeHeader(SIGNATURE_HEADER)
             .cacheControl(CacheControl.FORCE_NETWORK)
             .build()
-        val token = seedClient.newCall(seedRequest).execute().parseAs<SeedDto>().token
+        val token = seedClient.newCall(seedRequest).execute().use {
+            Json.parseToJsonElement(it.body.string()).jsonObject["token"]?.jsonPrimitive?.content
+                ?: throw IOException(INVALID_SEED_MESSAGE)
+        }
         cachedSeed = CachedSeed(token, now + SEED_CACHE_MS)
         token
     }
@@ -89,8 +93,6 @@ class ReadingGateInterceptor(
         private const val SIGNATURE_HEADER = "x-toon-signature"
         private const val SEED_CACHE_MS = 25 * 60 * 1000L
         private const val NON_JSON_MESSAGE = "Não foi possível decifrar a resposta."
+        private const val INVALID_SEED_MESSAGE = "O site retornou um token de leitura inválido."
     }
 }
-
-@Serializable
-private class SeedDto(val token: String)
