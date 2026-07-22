@@ -9,8 +9,6 @@ class PublicIPResponse(
 )
 
 // Chapter metadata (pages)
-// The queried field is null on error responses (e.g. rate limit), so keep it nullable
-// to let the GraphQL error envelope deserialize and surface as a GraphQLException.
 @Serializable
 class ApiChapterData(
     val chapter: ApiChapter?,
