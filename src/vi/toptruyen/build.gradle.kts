@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Top Truyen"
-    versionCode = 32
+    versionCode = 33
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "wpcomics"
