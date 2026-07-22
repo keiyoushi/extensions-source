@@ -1,8 +1,9 @@
-package eu.kanade.tachiyomi.extension.en.mangabuddy
+package eu.kanade.tachiyomi.multisrc.mangak
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class Genre(name: String, val value: String, state: Int = STATE_IGNORE) : Filter.TriState(name, state)
+class Genre(name: String, val value: String, state: Int = Filter.TriState.STATE_IGNORE) : Filter.TriState(name, state)
+
 class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres)
 
 class AuthorFilter : Filter.Text("Author")
@@ -137,7 +138,7 @@ fun getGenreList(blacklist: Set<String> = emptySet()) = listOf(
     Pair("Magic", "magic"),
     Pair("Magical Girls", "magical-girls"),
     Pair("Mahou Shoujo", "mahou-shoujo"),
-    Pair("Male Protagonists", "male_protagonists"),
+    Pair("Male Protagonists", "male-protagonists"),
     Pair("Manga", "manga"),
     Pair("Mangatoon", "mangatoon"),
     Pair("Manhua", "manhua"),
@@ -153,6 +154,8 @@ fun getGenreList(blacklist: Set<String> = emptySet()) = listOf(
     Pair("Music", "music"),
     Pair("Mystery", "mystery"),
     Pair("Necromancer", "necromancer"),
+    Pair("NTR", "ntr"),
+    Pair("Office", "office"),
     Pair("Office Workers", "office-workers"),
     Pair("One Shot", "one-shot"),
     Pair("OP-MC", "op-mc"),
@@ -197,13 +200,14 @@ fun getGenreList(blacklist: Set<String> = emptySet()) = listOf(
     Pair("Time Travel", "time-travel"),
     Pair("Tower", "tower"),
     Pair("Tragedy", "tragedy"),
+    Pair("Uncensored", "uncensored"),
     Pair("Vampire", "vampire"),
     Pair("Vampires", "vampires"),
     Pair("Video Games", "video-games"),
     Pair("Villain", "villain"),
     Pair("Villainess", "villainess"),
     Pair("Virtual Reality", "virtual-reality"),
-    Pair("Violence", "voilence"),
+    Pair("Violence", "violence"),
     Pair("Web Comic", "web-comic"),
     Pair("Webtoons", "webtoons"),
     Pair("Work-Life", "work-life"),

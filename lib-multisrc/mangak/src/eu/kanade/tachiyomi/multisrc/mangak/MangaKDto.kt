@@ -1,11 +1,10 @@
-package eu.kanade.tachiyomi.extension.en.toonilyme
+package eu.kanade.tachiyomi.multisrc.mangak
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import kotlin.time.Instant
 
 @Serializable
 class SearchResponseDto(
@@ -59,16 +58,16 @@ class ChapterItemDto(
     @SerialName("updated_at") private val updatedAt: String? = null,
     @SerialName("chapter_number") val chapterNumber: Float? = null,
 ) {
-    fun toSChapter(dateFormat: SimpleDateFormat) = SChapter.create().apply {
+    fun toSChapter() = SChapter.create().apply {
         url = this@ChapterItemDto.url
         name = this@ChapterItemDto.name
-        date_upload = dateFormat.tryParse(updatedAt)
+        date_upload = updatedAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: 0L
     }
 }
 
 @Serializable
 class NextJsDto(
-    val pageProps: PagePropsDto,
+    val pageProps: PagePropsDto? = null,
 )
 
 @Serializable
@@ -86,8 +85,9 @@ class InitialMangaDto(
     private val genres: List<EntityDto>? = null,
     private val status: String? = null,
     private val cover: String? = null,
+    private val url: String? = null,
 ) {
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(mangaUrl: String? = null) = SManga.create().apply {
         title = name
         author = authors?.joinToString { it.name }
         description = buildString {
@@ -99,6 +99,13 @@ class InitialMangaDto(
         genre = genres?.joinToString { it.name }
         status = this@InitialMangaDto.status.toStatus()
         thumbnail_url = cover
+
+        // Preserve original URL or use internal URL + ID tag
+        url = when {
+            !mangaUrl.isNullOrBlank() -> mangaUrl
+            !this@InitialMangaDto.url.isNullOrBlank() -> "${this@InitialMangaDto.url}#$id"
+            else -> "#$id"
+        }
     }
 }
 
