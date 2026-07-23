@@ -167,7 +167,7 @@ abstract class GocTruyenTranhVui :
         }
     }
 
-    private suspend  fun parseChapterList(manga: SManga): List<SChapter> {
+    private suspend fun parseChapterList(manga: SManga): List<SChapter> {
         val mangaId = manga.url.substringBefore(':')
         val slug = manga.url.substringAfter(':')
         val result = client.get("$baseUrl/api/comic/$mangaId/chapter?limit=-1", xhrHeaders)
