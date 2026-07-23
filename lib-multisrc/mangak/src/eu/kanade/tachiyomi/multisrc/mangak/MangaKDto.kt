@@ -100,9 +100,10 @@ class InitialMangaDto(
         status = this@InitialMangaDto.status.toStatus()
         thumbnail_url = cover
 
-        // Preserve original URL or use internal URL + ID tag
         url = mangaUrl.takeUnless { it.isNullOrBlank() }
-            ?: this@InitialMangaDto.url.orEmpty()
+            ?: this@InitialMangaDto.url?.takeUnless { it.isBlank() }
+            ?: error("Missing manga URL for id: $id")
+
         memo = buildJsonObject {
             put("id", id)
         }

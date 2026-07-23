@@ -228,6 +228,7 @@ abstract class MangaKSource :
 
     // ============================== Filters ==============================
 
+    // Mirrored into our own prefs since setupPreferenceScreen can't read the framework's internal filter cache
     override suspend fun fetchFilterData(): JsonElement {
         val json = client.get("$apiUrl/genres").parseAs<JsonElement>()
         preferences.edit().putString(PREF_GENRES_CACHE_KEY, json.toString()).apply()

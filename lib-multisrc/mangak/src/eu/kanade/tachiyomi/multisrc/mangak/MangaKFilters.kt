@@ -26,10 +26,10 @@ class SortFilter :
     SelectFilter(
         "Sort By",
         arrayOf(
+            Pair("Most Followed", "popular"),
             Pair("Best Match", ""),
             Pair("Latest Updated", "latest"),
             Pair("Recently Added", "newest"),
-            Pair("Most Followed", "popular"),
             Pair("Highest Rating", "rating"),
             Pair("Most Viewed: Today", "views_today"),
             Pair("Most Viewed: 7 Days", "views_7days"),
