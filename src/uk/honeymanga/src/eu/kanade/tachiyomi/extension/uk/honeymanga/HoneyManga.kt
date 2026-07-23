@@ -185,7 +185,8 @@ abstract class HoneyManga :
 
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        if (chapter.memo["locked"]?.boolean == true) throw Exception("Розділ лише для меценатів.")
+        val hideLocked = hideLocked()
+        if (!hideLocked && chapter.memo["locked"]?.boolean == true) throw Exception("Розділ лише для меценатів.")
         val chapterId = chapter.url.substringBeforeLast('/').substringAfterLast('/')
         val url = "$API_URL/chapter/frames/$chapterId"
         return client.get(url).use { it.parseAs<ChapterPages>().toPageList(IMAGE_STORAGE_URL) }
