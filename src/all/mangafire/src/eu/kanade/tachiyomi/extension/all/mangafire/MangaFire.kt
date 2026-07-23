@@ -37,6 +37,7 @@ abstract class MangaFire :
 
     override val client = network.client.newBuilder()
         .rateLimit(2)
+        .addInterceptor(VrfSigner().interceptor())
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
