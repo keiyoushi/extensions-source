@@ -38,7 +38,7 @@ abstract class TruyenGG : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/top-binh-chon" + if (page > 1) "/trang-$page.html" else ""
 
-        return parseMangaPage(client.get(url, headers))
+        return parseMangaPage(client.get(url))
     }
 
     // =============================== Latest ===============================
@@ -83,7 +83,7 @@ abstract class TruyenGG : KeiSource() {
             }
         }.build()
 
-        return parseMangaPage(client.get(url, headers))
+        return parseMangaPage(client.get(url))
     }
 
     private fun parseMangaPage(response: Response): MangasPage {
@@ -116,10 +116,12 @@ abstract class TruyenGG : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        client.get(getMangaUrl(manga)).use { response ->
-            val document = response.asJsoup()
-            return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
-        }
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
+        return SMangaUpdate(
+            parseMangaDetails(document),
+            parseChapterList(document)
+        )
     }
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
