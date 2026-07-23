@@ -249,7 +249,12 @@ class ChapterDto(
             }
             scanlator = buildString {
                 append(groups.joinToString(", ") { it.title })
-                BRACKET_REGEX.find(title)?.groupValues?.get(1)?.let { append(" " + it.trim()) }
+
+                // Extract group tags in chapter title
+                CHAPTER_GROUP_REGEX.matchEntire(METADATA_REGEX.replace(title.trim(), ""))?.let { match ->
+                    val groupTag = match.groups[1]?.value ?: match.groups[2]?.value
+                    append(" ($groupTag)")
+                }
             }
         }
 
@@ -327,5 +332,12 @@ class IntegrityDto(
 )
 
 private val BRACKET_REGEX = Regex("""(\([^()]*\)|\[[^\[\]]*\])\s*$""")
+
+private val METADATA_REGEX = Regex("""(?:\s*\{[^{}]*\})+\s*$""")
+
+private val CHAPTER_GROUP_REGEX = Regex(
+    """^Chapter\s+.*(?:-\s*Volume\s+.*\(([^()]+)\)|\[([^\[\]]+)\])\s*$""",
+    RegexOption.IGNORE_CASE,
+)
 
 private fun String.clean(removeExtras: Boolean): String = if (removeExtras) this.replace(BRACKET_REGEX, "").trim() else this.trim()
