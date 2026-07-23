@@ -167,7 +167,7 @@ class DetailsDto(
 
         // Add main description
         this@DetailsDto.description?.takeIf { it.isNotBlank() }?.let {
-            desc.append(Jsoup.parse(it.trim()).text())
+            desc.append(Jsoup.parse(it.trim().replace("\n", "<br>")).wholeText())
             desc.append("\n")
         }
 
