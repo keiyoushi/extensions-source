@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.madokami
 
+import android.annotation.SuppressLint
 import android.content.SharedPreferences
 import android.text.InputType
 import androidx.preference.EditTextPreference
@@ -17,23 +18,31 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.zip.readZipEntry
+import keiyoushi.zip.zipDirectory
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Credentials
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.buffer
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Calendar
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
-import java.util.concurrent.ConcurrentHashMap
 
 @Source
 abstract class Madokami :
@@ -41,27 +50,75 @@ abstract class Madokami :
     ConfigurableSource {
     override val supportsLatest = false
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    @SuppressLint("NewApi")
+    private val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ROOT)
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    private val relatedCache = ConcurrentHashMap<String, List<SManga>>()
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor { chain ->
-            val credential = Credentials.basic(preferences.getString("username", "")!!, preferences.getString("password", "")!!)
             val authenticatedRequest = chain.request().newBuilder()
-                .header("Authorization", credential)
+                .header("Authorization", getAuthCredential())
                 .build()
             val response = chain.proceed(authenticatedRequest)
             if (response.code == 401) {
+                response.close()
                 throw IOException("You are currently logged out.\nGo to Extensions > Details to input your credentials.")
             }
             response
         }
+        addInterceptor { chain ->
+            val request = chain.request()
+            val url = request.url
+            val fragment = url.fragment
+
+            if (fragment != null && (url.encodedPath.endsWith(".zip", true) || url.encodedPath.endsWith(".cbz", true))) {
+                val parts = fragment.split("|")
+                if (parts.size == 4) {
+                    val zipUrl = url.newBuilder().fragment(null).build().toString()
+                    val entry = keiyoushi.zip.Entry(
+                        name = parts[0],
+                        method = parts[1].toInt(),
+                        compressedSize = parts[2].toLong(),
+                        localHeaderOffset = parts[3].toLong(),
+                    )
+
+                    val source = network.client.readZipEntry(zipUrl, entry, request.headers)
+                    val mediaType = getMediaType(entry.name)
+
+                    return@addInterceptor Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(source.buffer().asResponseBody(mediaType))
+                        .build()
+                }
+            }
+            chain.proceed(request)
+        }
     }
+
+    private fun getAuthCredential(): String {
+        val username = preferences.getString("username", "")!!
+        val password = preferences.getString("password", "")!!
+
+        if (username.isBlank() || password.isBlank()) {
+            throw IOException("Username or password cannot be empty.\nGo to Extensions > Details to input your credentials.")
+        }
+
+        return Credentials.basic(username, password)
+    }
+
+    private fun getAuthHeaders() = headers.newBuilder().set("Authorization", getAuthCredential()).build()
+
+    private fun getMediaType(name: String) = when {
+        name.endsWith(".png", true) -> "image/png"
+        name.endsWith(".webp", true) -> "image/webp"
+        name.endsWith(".gif", true) -> "image/gif"
+        name.endsWith(".avif", true) -> "image/avif"
+        else -> "image/jpeg"
+    }.toMediaType()
 
     override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/recent").use { response ->
         val document = response.asJsoup()
@@ -103,7 +160,7 @@ abstract class Madokami :
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
-        if (isArchiveUrl(url.toString())) return null
+        if (isArchiveUrl(url)) return null
 
         val manga = SManga.create().apply {
             setUrlWithoutDomain(url.toString())
@@ -119,9 +176,6 @@ abstract class Madokami :
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val cached = relatedCache[manga.url]
-        if (cached != null) return cached
-
         val detailsUrl = getMangaDetailsUrl(manga)
         val chaptersUrl = (baseUrl + "/" + manga.url.trimStart('/')).toHttpUrl()
 
@@ -130,35 +184,40 @@ abstract class Madokami :
             val related = parseRelatedManga(document, detailsUrl.toString()).toMutableList()
 
             if (detailsUrl != chaptersUrl) {
-                mangaFromUrl(detailsUrl.toString())?.let { related.add(it) }
+                mangaFromUrl(detailsUrl)?.let { related.add(it) }
             }
 
             var current = chaptersUrl
             while (current.pathSize > detailsUrl.pathSize) {
                 current = current.newBuilder().removePathSegment(current.pathSize - 1).build()
                 if (current != detailsUrl) {
-                    mangaFromUrl(current.toString())?.let { related.add(it) }
+                    mangaFromUrl(current)?.let { related.add(it) }
                 }
             }
 
-            related.distinctBy { it.url }.also { relatedCache[manga.url] = it }
+            related.distinctBy { it.url }
         }
     }
 
     private fun mangaFromElement(element: Element): SManga? = mangaFromUrl(element.absUrl("href"))
 
     private fun mangaFromUrl(url: String): SManga? {
-        if (url.isEmpty() || isArchiveUrl(url)) return null
+        if (url.isEmpty()) return null
         val httpUrl = try {
             url.toHttpUrl()
         } catch (_: Exception) {
             return null
         }
-        val segments = httpUrl.pathSegments
+        return mangaFromUrl(httpUrl)
+    }
+
+    private fun mangaFromUrl(url: HttpUrl): SManga? {
+        if (isArchiveUrl(url)) return null
+        val segments = url.pathSegments
         if (segments.isEmpty()) return null
 
         return SManga.create().apply {
-            setUrlWithoutDomain(url)
+            setUrlWithoutDomain(url.toString())
             description = segments.last()
             var i = segments.lastIndex
             while (i > 0 && segments[i].startsWith("!")) {
@@ -180,7 +239,6 @@ abstract class Madokami :
         if (fetchDetails && fetchChapters && detailsUrl == chaptersUrl) {
             client.get(detailsUrl).use { response ->
                 val document = response.asJsoup()
-                relatedCache[manga.url] = parseRelatedManga(document, detailsUrl.toString())
                 return@coroutineScope SMangaUpdate(
                     manga = parseMangaDetails(document).apply {
                         this.url = manga.url
@@ -193,22 +251,7 @@ abstract class Madokami :
 
         val detailsDeferred = if (fetchDetails) {
             async {
-                client.get(detailsUrl).use { it ->
-                    val document = it.asJsoup()
-                    val related = parseRelatedManga(document, detailsUrl.toString()).toMutableList()
-                    if (detailsUrl != chaptersUrl) {
-                        mangaFromUrl(detailsUrl.toString())?.let { related.add(it) }
-                    }
-                    var current = chaptersUrl
-                    while (current.pathSize > detailsUrl.pathSize) {
-                        current = current.newBuilder().removePathSegment(current.pathSize - 1).build()
-                        if (current != detailsUrl) {
-                            mangaFromUrl(current.toString())?.let { related.add(it) }
-                        }
-                    }
-                    relatedCache[manga.url] = related.distinctBy { it.url }
-                    parseMangaDetails(document)
-                }
+                client.get(detailsUrl).use { parseMangaDetails(it.asJsoup()) }
             }
         } else {
             null
@@ -284,30 +327,51 @@ abstract class Madokami :
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/${manga.url.trimStart('/')}"
 
-    private fun parseChapterList(document: Document): List<SChapter> = document.select("table#index-table > tbody > tr > td:nth-child(6) > a").map { element ->
-        val el = element.parent()!!.parent()!!
+    private fun parseChapterList(document: Document): List<SChapter> = document.select("table#index-table > tbody > tr").mapNotNull { row ->
+        val fileLink = row.selectFirst("td:nth-child(1) a") ?: return@mapNotNull null
+        val fileName = fileLink.text()
+        val readerLink = row.selectFirst("td:nth-child(6) a")
+        val isZip = fileName.endsWith(".zip", true) || fileName.endsWith(".cbz", true)
+
+        if (!isZip && readerLink == null) return@mapNotNull null
+
         SChapter.create().apply {
-            url = "/reader" + el.select("td:nth-child(6) a").attr("abs:href")
-                .substringAfter("/reader")
-            name = el.select("td:nth-child(1) a").text()
-            val date = el.select("td:nth-child(3)").text()
-            date_upload = if (date.endsWith("ago")) {
-                val splitDate = date.split(" ")
-                val cal = Calendar.getInstance()
-                val amount = splitDate[0].toInt()
-                when {
-                    splitDate[1].startsWith("min") -> cal.add(Calendar.MINUTE, -amount)
-                    splitDate[1].startsWith("sec") -> cal.add(Calendar.SECOND, -amount)
-                    splitDate[1].startsWith("hour") -> cal.add(Calendar.HOUR, -amount)
-                }
-                cal.time.time
+            url = if (isZip) {
+                fileLink.absUrl("href").substringAfter(baseUrl)
             } else {
-                dateFormat.tryParse(date)
+                "/reader" + readerLink!!.absUrl("href").substringAfter("/reader")
             }
+            name = fileName
+            date_upload = parseChapterDate(row.select("td:nth-child(3)").text())
         }
     }.reversed()
 
+    @SuppressLint("NewApi")
+    private fun parseChapterDate(dateString: String): Long {
+        if (dateString.endsWith("ago")) {
+            val splitDate = dateString.split(" ")
+            val amount = splitDate[0].toLongOrNull() ?: return 0L
+            val now = OffsetDateTime.now(ZoneOffset.UTC)
+            val result = when {
+                splitDate[1].startsWith("min") -> now.minusMinutes(amount)
+                splitDate[1].startsWith("sec") -> now.minusSeconds(amount)
+                splitDate[1].startsWith("hour") -> now.minusHours(amount)
+                else -> now
+            }
+            return result.toInstant().toEpochMilli()
+        }
+        return try {
+            LocalDateTime.parse(dateString, dateTimeFormatter).toInstant(ZoneOffset.UTC).toEpochMilli()
+        } catch (_: Exception) {
+            0L
+        }
+    }
+
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        if (chapter.url.endsWith(".zip", true) || chapter.url.endsWith(".cbz", true)) {
+            return getZipPageList(chapter)
+        }
+
         require(chapter.url.startsWith("/")) { "Refresh chapter list" }
         return client.get(baseUrl + chapter.url).use { response ->
             val document = response.asJsoup()
@@ -326,6 +390,26 @@ abstract class Madokami :
                 Page(index, url = pageUrl, imageUrl = pageUrl)
             }
         }
+    }
+
+    private suspend fun getZipPageList(chapter: SChapter): List<Page> = withContext(Dispatchers.IO) {
+        val url = baseUrl + chapter.url
+        val directory = network.client.zipDirectory(url, getAuthHeaders())
+
+        directory.entries
+            .filter { isImage(it.name) }
+            .sortedBy { it.name }
+            .mapIndexed { index, entry ->
+                // Store entry metadata in fragment to avoid re-reading CD per page
+                val fragment = "${entry.name}|${entry.method}|${entry.compressedSize}|${entry.localHeaderOffset}"
+                val pageUrl = url.toHttpUrl().newBuilder().fragment(fragment).build().toString()
+                Page(index, url = pageUrl, imageUrl = pageUrl)
+            }
+    }
+
+    private fun isImage(name: String): Boolean {
+        val lower = name.lowercase(Locale.ROOT)
+        return lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") || lower.endsWith(".gif") || lower.endsWith(".webp") || lower.endsWith(".avif")
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -349,7 +433,16 @@ abstract class Madokami :
     }
 
     private fun isArchiveUrl(url: String): Boolean {
-        val path = url.toHttpUrl().encodedPath.lowercase(Locale.ROOT)
+        val httpUrl = try {
+            url.toHttpUrl()
+        } catch (_: Exception) {
+            return ARCHIVE_EXTENSIONS.any { url.lowercase(Locale.ROOT).endsWith(it) }
+        }
+        return isArchiveUrl(httpUrl)
+    }
+
+    private fun isArchiveUrl(url: HttpUrl): Boolean {
+        val path = url.encodedPath.lowercase(Locale.ROOT)
         return ARCHIVE_EXTENSIONS.any { path.endsWith(it) }
     }
 }
