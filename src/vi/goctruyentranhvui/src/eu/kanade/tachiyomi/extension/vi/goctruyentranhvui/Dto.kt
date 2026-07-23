@@ -10,6 +10,14 @@ class ResultDto<T>(
 )
 
 @Serializable
+class CategoryDto(
+    private val id: String,
+    private val name: String,
+) {
+    fun toOption() = Option(name, id)
+}
+
+@Serializable
 class ChapterDto(
     private val comicId: String,
     private val numberChapter: String,

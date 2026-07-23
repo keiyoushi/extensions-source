@@ -1,89 +1,48 @@
 package eu.kanade.tachiyomi.extension.en.weebcentral
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.tryParse
+import keiyoushi.source.KeiSource
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Element
-import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 @Source
-abstract class WeebCentral : HttpSource() {
+abstract class WeebCentral : KeiSource() {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
-    override val supportsLatest = true
-
-    override val client = network.client.newBuilder()
-        .rateLimit(1, 2.seconds) { it.host == baseUrlHost }
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        rateLimit(1, 2.seconds) { it.host == baseUrlHost }
     }
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
-        page,
-        "",
-        defaultFilterList(SortFilter("Popularity")),
-    )
-
-    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", defaultFilterList(SortFilter("Popularity")))
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(
-        page,
-        "",
-        defaultFilterList(SortFilter("Latest Updates")),
-    )
-
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", defaultFilterList(SortFilter("Latest Updates")))
 
     // =============================== Search ===============================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrlHost) {
-                throw Exception("Unsupported url")
-            }
-            val pathSegments = url.pathSegments
-            if (pathSegments.size < 3) {
-                throw Exception("Unsupported url")
-            }
-            return fetchSearchManga(page, "$URL_SEARCH_PREFIX${pathSegments[1]}/${pathSegments[2]}", filters)
-        }
-        val pathSegment = query.takeIf { it.startsWith(URL_SEARCH_PREFIX) }
-            ?.removePrefix(URL_SEARCH_PREFIX)
-            ?: return super.fetchSearchManga(page, query, filters)
-
-        return client.newCall(mangaDetailsRequest(SManga.create().apply { url = "/series/$pathSegment" }))
-            .asObservableSuccess()
-            .map { MangasPage(listOf(mangaDetailsParse(it).apply { initialized = true }), false) }
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val filterList = filters.ifEmpty { getFilterList() }
         val url = "$baseUrl/search/data".toHttpUrl().newBuilder().apply {
             addQueryParameter("text", query.replace(excludedSearchCharacters, " ").trim())
@@ -95,11 +54,7 @@ abstract class WeebCentral : HttpSource() {
             addQueryParameter("display_mode", "Full Display")
         }.build()
 
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(url).asJsoup()
         val mangas = document.select("article > section > a").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.sourceImg()
@@ -111,47 +66,121 @@ abstract class WeebCentral : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    // =============================== Filters ==============================
-
-    override fun getFilterList(): FilterList = defaultFilterList(SortFilter())
-
-    // =========================== Manga Details ============================
-
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val document = response.asJsoup()
-
-        with(document.select("section[x-data] > section")[0]) {
-            thumbnail_url = sourceImg()
-            author = select("ul > li:has(strong:contains(Author)) > span > a").joinToString { it.text() }
-            genre = select("ul > li:has(strong:contains(Tag),strong:contains(Type)) a").joinToString { it.text() }
-            status = selectFirst("ul > li:has(strong:contains(Status)) > a").parseStatus()
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrlHost || url.pathSegments.size < 3) {
+            return null
         }
 
-        with(document.select("section[x-data] > section")[1]) {
-            title = selectFirst("h1")!!.text()
+        val manga = SManga.create().apply {
+            this.url = "/series/${url.pathSegments[1]}/${url.pathSegments[2]}"
+        }
 
-            description = buildString {
-                selectFirst("li:has(strong:contains(Description)) > p")?.text()?.let {
-                    append(it.replace("NOTE: ", "\n\nNOTE: "))
-                }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+            .manga
+            .apply {
+                initialized = true
+            }
+    }
 
-                val relatedSeries = select("li:has(strong:contains(Related Series)) li")
-                if (relatedSeries.isNotEmpty()) {
-                    append("\n\nRelated Series(s):")
-                    relatedSeries.forEach { series ->
-                        append("\n• ${series.text()}")
+    // =============================== Filters ==============================
+
+    override fun getFilterList(data: JsonElement?): FilterList = defaultFilterList(SortFilter())
+
+    // =========================== Manga Updates ============================
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val (manga, chapters) = coroutineScope {
+            val mangaD = async { if (fetchDetails) getMangaDetails(manga) else manga }
+            val chaptersD = async { if (fetchChapters) getChapterList(manga) else chapters }
+            mangaD.await() to chaptersD.await()
+        }
+
+        return SMangaUpdate(manga, chapters)
+    }
+
+    private suspend fun getMangaDetails(manga: SManga): SManga {
+        val document = client.get(baseUrl + manga.url).asJsoup()
+
+        return SManga.create().apply {
+            with(document.select("section[x-data] > section")[0]) {
+                thumbnail_url = sourceImg()
+                author = select("ul > li:has(strong:contains(Author)) > span > a").joinToString { it.text() }
+                genre = select("ul > li:has(strong:contains(Tag),strong:contains(Type)) a").joinToString { it.text() }
+                status = selectFirst("ul > li:has(strong:contains(Status)) > a").parseStatus()
+            }
+
+            with(document.select("section[x-data] > section")[1]) {
+                title = selectFirst("h1")!!.text()
+
+                description = buildString {
+                    selectFirst("li:has(strong:contains(Description)) > p")?.text()?.let {
+                        append(it.replace("NOTE: ", "\n\nNOTE: "))
+                    }
+
+                    val relatedSeries = select("li:has(strong:contains(Related Series)) li")
+                    if (relatedSeries.isNotEmpty()) {
+                        append("\n\nRelated Series(s):")
+                        relatedSeries.forEach { series ->
+                            val link = series.selectFirst("a")!!
+                            val relation = series.selectFirst("span")?.text().orEmpty()
+                            append("\n- [${link.text()}](${link.attr("abs:href")}) $relation".trimEnd())
+                        }
+                    }
+
+                    val alternateTitles = select("li:has(strong:contains(Associated Name)) li")
+                    if (alternateTitles.isNotEmpty()) {
+                        append("\n\nAssociated Name(s):")
+                        alternateTitles.forEach { append("\n- ${it.text()}") }
+                    }
+
+                    val trackers = document.select("li:has(strong:contains(Track)) span[data-tip] > a")
+                    if (trackers.isNotEmpty()) {
+                        append("\n\nTracker(s):")
+                        trackers.forEach { tracker ->
+                            val name = tracker.parent()!!.attr("data-tip")
+                            append("\n- [$name](${tracker.attr("abs:href")})")
+                        }
                     }
                 }
+            }
 
-                val alternateTitles = select("li:has(strong:contains(Associated Name)) li")
-                if (alternateTitles.isNotEmpty()) {
-                    append("\n\nAssociated Name(s):")
-                    alternateTitles.forEach { append("\n• ${it.text()}") }
-                }
+            setUrlWithoutDomain(document.location())
+        }
+    }
+
+    // =========================== Related Manga ============================
+
+    override val supportsRelatedMangas get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val document = client.get(baseUrl + manga.url).asJsoup()
+
+        val currentId = document.location().toHttpUrl().pathSegments[1]
+        val coverTemplate = document.sourceImg()
+
+        val relatedSeries = document.select("li:has(strong:contains(Related Series)) li > a").map { element ->
+            SManga.create().apply {
+                val seriesId = element.attr("abs:href").toHttpUrl().pathSegments[1]
+                title = element.text()
+                thumbnail_url = coverTemplate?.replace(currentId, seriesId)
+                setUrlWithoutDomain(element.attr("abs:href"))
             }
         }
 
-        setUrlWithoutDomain(document.location())
+        val recommendations = document.select("section:has(> h2 strong:contains(Recommendations)) li.glide__slide > a").map { element ->
+            SManga.create().apply {
+                thumbnail_url = element.sourceImg()
+                title = element.selectFirst("div.truncate")!!.text()
+                setUrlWithoutDomain(element.attr("abs:href"))
+            }
+        }
+
+        return relatedSeries + recommendations
     }
 
     private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
@@ -162,25 +191,17 @@ abstract class WeebCentral : HttpSource() {
         else -> SManga.UNKNOWN
     }
 
-    // ============================== Chapters ==============================
+    private suspend fun getChapterList(manga: SManga): List<SChapter> {
+        val seriesId = (baseUrl + manga.url).toHttpUrl().pathSegments[1]
+        val url = "$baseUrl/series/$seriesId/full-chapter-list"
 
-    override fun chapterListRequest(manga: SManga): Request {
-        val url = (baseUrl + manga.url).toHttpUrl().newBuilder().apply {
-            removePathSegment(2)
-            addPathSegment("full-chapter-list")
-        }.build()
-
-        return GET(url, headers)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+        val document = client.get(url).asJsoup()
         return document.select("div[x-data] > a").map { element ->
             SChapter.create().apply {
                 name = element.selectFirst("span.flex > span")!!.text()
                 setUrlWithoutDomain(element.attr("abs:href"))
                 element.selectFirst("time[datetime]")?.also {
-                    date_upload = dateFormat.tryParse(it.attr("datetime"))
+                    date_upload = Instant.parseOrNull(it.attr("datetime"))?.toEpochMilliseconds() ?: 0L
                 }
                 element.selectFirst("svg")?.attr("stroke")?.also { stroke ->
                     scanlator = when (stroke) {
@@ -195,7 +216,7 @@ abstract class WeebCentral : HttpSource() {
 
     // =============================== Pages ================================
 
-    override fun pageListRequest(chapter: SChapter): Request {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         val newUrl = (baseUrl + chapter.url)
             .toHttpUrlOrNull()
             ?.newBuilder()
@@ -205,19 +226,12 @@ abstract class WeebCentral : HttpSource() {
             ?.build()
             ?.toString()
             ?: (baseUrl + chapter.url)
-        return GET(newUrl, headers)
-    }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+        val document = client.get(newUrl).asJsoup()
         return document.select("section[x-data~=scroll] > img").mapIndexed { index, element ->
             Page(index, imageUrl = element.attr("abs:src"))
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val imgHeaders = headersBuilder().apply {
@@ -249,7 +263,6 @@ abstract class WeebCentral : HttpSource() {
         // The related "&limit=" query parameter of the api is currently non functional
         // and always returns 32 entries per request
         const val FETCH_LIMIT = 32
-        const val URL_SEARCH_PREFIX = "id:"
 
         private val excludedSearchCharacters = "[!#:(),-]".toRegex()
     }

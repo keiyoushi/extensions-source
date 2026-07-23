@@ -1,33 +1,43 @@
 package eu.kanade.tachiyomi.extension.vi.medamtruyen
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
 
 @Source
-abstract class MeDamTruyen : HttpSource() {
-    override val supportsLatest = true
+abstract class MeDamTruyen : KeiSource() {
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        addInterceptor(thumbnailFallbackInterceptor)
+        rateLimit(3)
+    }
 
     private val thumbnailFallbackInterceptor = Interceptor { chain ->
         val request = chain.request()
@@ -45,20 +55,10 @@ abstract class MeDamTruyen : HttpSource() {
         chain.proceed(fallbackRequest)
     }
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(thumbnailFallbackInterceptor)
-        .rateLimit(3)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get(baseUrl).asJsoup()
         val mangas = document.select("#day-charts .sidebar-comic-block")
             .mapNotNull(::popularMangaFromElement)
             .distinctBy { it.url }
@@ -79,58 +79,46 @@ abstract class MeDamTruyen : HttpSource() {
 
     // ============================== Latest ================================
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/truyen-moi-cap-nhat/".toHttpUrl().newBuilder()
             .addQueryParameter("trang", page.toString())
             .build()
 
-        return GET(url, headers)
+        return parseBrowsePage(client.get(url))
     }
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseBrowsePage(response)
 
     // ============================== Search ================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
-            val url = "$baseUrl/wp-admin/admin-ajax.php".toHttpUrl().newBuilder().build()
             val formBody = FormBody.Builder()
                 .add("action", "searchtax")
                 .add("keyword", query)
                 .build()
 
-            return POST(url.toString(), headers, formBody)
+            return parseSearchApiResponse(client.post("$baseUrl/wp-admin/admin-ajax.php", body = formBody))
         }
 
-        val filterList = filters.ifEmpty { getFilterList() }
-        val genre = filterList.firstInstanceOrNull<GenreFilter>()?.toUriPart()
-        if (genre != null) {
-            val url = "$baseUrl/the-loai/$genre/".toHttpUrl().newBuilder()
+        val filterPath = filters.firstInstanceOrNull<GenreFilter>()?.toUriPart()
+            ?: filters.firstInstanceOrNull<GroupFilter>()?.toUriPart()
+            ?: filters.firstInstanceOrNull<AuthorFilter>()?.toUriPart()
+        if (filterPath != null) {
+            val url = baseUrl.toHttpUrl().newBuilder()
+                .addEncodedPathSegments(filterPath.trim('/'))
                 .addQueryParameter("trang", page.toString())
                 .build()
 
-            return GET(url, headers)
+            return parseBrowsePage(client.get(url))
         }
 
-        return latestUpdatesRequest(page)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val isAjaxSearch = response.request.url.encodedPath.endsWith("/wp-admin/admin-ajax.php")
-        return if (isAjaxSearch) {
-            parseSearchApiResponse(response)
-        } else {
-            parseBrowsePage(response)
-        }
+        return getLatestUpdates(page)
     }
 
     private fun parseSearchApiResponse(response: Response): MangasPage {
-        val searchResponse = runCatching {
-            response.parseAs<SearchResponse>()
-        }.getOrNull() ?: return MangasPage(emptyList(), hasNextPage = false)
+        val searchResponse = response.parseAs<SearchResponse>()
 
         val mangas = searchResponse.data.mapNotNull { result ->
-            val mangaLink = result.link?.takeIf { TRUYEN_PATH_REGEX.containsMatchIn(it) } ?: return@mapNotNull null
+            val mangaLink = result.link?.takeIf { truyenPathRegex.containsMatchIn(it) } ?: return@mapNotNull null
             val mangaTitle = result.title ?: return@mapNotNull null
 
             SManga.create().apply {
@@ -167,46 +155,92 @@ abstract class MeDamTruyen : HttpSource() {
     }
 
     private fun resolveSearchThumbnailUrl(url: String?): String? {
-        if (url.isNullOrBlank() || !url.contains(THUMB_LOW_SIZE)) {
+        if (url.isNullOrBlank() || !url.contains(thumbLowSize)) {
             return url
         }
 
-        val removed = url.replace(THUMB_LOW_SIZE, "")
-        val replaced = url.replace(THUMB_LOW_SIZE, THUMB_HIGH_SIZE)
+        val removed = url.replace(thumbLowSize, "")
+        val replaced = url.replace(thumbLowSize, thumbHighSize)
         thumbFallbackMap[removed] = replaced
         return removed
     }
 
     // ============================== Details ===============================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+
+        val pathSegments = url.pathSegments.filter { it.isNotEmpty() }
+        val isChapterUrl = pathSegments.size == 1 &&
+            "-chap-" in pathSegments.single().lowercase(Locale.ROOT)
+        val detailUrl = if (pathSegments.firstOrNull() == "truyen") {
+            url
+        } else if (isChapterUrl) {
+            client.get(url).asJsoup()
+                .selectFirst("a[href*=/truyen/]:matchesOwn(^DS\\. Chương$), a[href*=/truyen/]")
+                ?.absUrl("href")
+                ?.toHttpUrl()
+                ?: return null
+        } else {
+            return null
+        }
+
+        if (detailUrl.pathSegments.firstOrNull() != "truyen" || detailUrl.pathSegments.getOrNull(1).isNullOrEmpty()) {
+            return null
+        }
+
+        val manga = SManga.create().apply {
+            setUrlWithoutDomain(detailUrl.encodedPath)
+        }
+        return fetchMangaUpdate(manga, emptyList(), true, false).manga.apply {
+            initialized = true
+        }
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(
+            manga = parseMangaDetails(document, manga),
+            chapters = parseChapterList(document),
+        )
+    }
+
+    private fun parseMangaDetails(document: Document, manga: SManga): SManga = SManga.create().apply {
+        setUrlWithoutDomain(manga.url)
         val infoRows = document.select("div.comic-desc-list ul.list-unstyled li")
 
-        return SManga.create().apply {
-            title = document.selectFirst("h2.comic-title")!!.text()
-            thumbnail_url = document.selectFirst("div.comic-desc-list meta[itemprop=image]")
-                ?.absUrl("content")
-                ?.takeIf { it.isNotEmpty() }
-                ?: document.selectFirst("div.comic-info-img img, div.chapter-item-img img")?.absUrl("src")
-            author = extractInfoValue(infoRows, "Tác giả")
-            status = parseStatus(document.selectFirst("span.comic-stt")?.text())
-            description = parseDescription(document)
-        }
+        title = document.selectFirst("h2.comic-title")!!.text()
+        thumbnail_url = document.selectFirst("div.comic-desc-list meta[itemprop=image]")
+            ?.absUrl("content")
+            ?.takeIf { it.isNotEmpty() }
+            ?: document.selectFirst("div.comic-info-img img, div.chapter-item-img img")?.absUrl("src")
+        author = extractInfoValue(infoRows, "Tác giả")
+        genre = document.select("div.comic-desc-list a[href*=/the-loai/]")
+            .joinToString { it.text() }
+            .ifEmpty { null }
+        status = parseStatus(document.selectFirst("span.comic-stt")?.text())
+        description = parseDescription(document)
     }
 
     private fun extractInfoValue(infoRows: List<Element>, label: String): String? = infoRows.firstOrNull { row ->
         row.selectFirst("strong")?.text()?.contains(label, ignoreCase = true) == true
-    }?.ownText()?.takeIf { it.isNotBlank() }
+    }?.ownText()?.takeIf { it.isNotEmpty() }
 
-    private fun parseStatus(statusText: String?): Int = when {
-        statusText == null -> SManga.UNKNOWN
-        statusText.contains("Đang tiến hành", ignoreCase = true) -> SManga.ONGOING
-        statusText.contains("Trọn bộ", ignoreCase = true) -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
+    private fun parseStatus(statusText: String?): Int {
+        val status = statusText?.lowercase(Locale.ROOT) ?: return SManga.UNKNOWN
+        return when {
+            "đang tiến hành" in status -> SManga.ONGOING
+            "trọn bộ" in status -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
     }
 
-    private fun parseDescription(document: org.jsoup.nodes.Document): String? {
+    private fun parseDescription(document: Document): String? {
         val firstParagraph = document.selectFirst("div.hide-long-text p")
             ?.text()
             ?.substringBefore("— Xem Thêm —")
@@ -222,12 +256,9 @@ abstract class MeDamTruyen : HttpSource() {
 
     // ============================== Chapters ==============================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("div.chapter-list div.chapter-item")
-            .mapNotNull(::chapterFromElement)
-            .distinctBy { it.url }
-    }
+    private fun parseChapterList(document: Document): List<SChapter> = document.select("div.chapter-list div.chapter-item")
+        .mapNotNull(::chapterFromElement)
+        .distinctBy { it.url }
 
     private fun chapterFromElement(element: Element): SChapter? {
         val linkElement = element.selectFirst("a.chapter-link[href*=-chap-]") ?: return null
@@ -241,44 +272,46 @@ abstract class MeDamTruyen : HttpSource() {
                 ?.let(::parseChapterDate)
                 ?: 0L
 
-            CHAPTER_NUMBER_REGEX.find(name)?.value?.replace(",", ".")?.toFloatOrNull()?.let {
+            chapterNumberRegex.find(name)?.value?.replace(",", ".")?.toFloatOrNull()?.let {
                 chapter_number = it
             }
         }
     }
 
     private fun normalizeChapterName(rawChapterName: String): String {
-        val chapterMatch = CHAPTER_NAME_REGEX.find(rawChapterName) ?: return rawChapterName
+        val chapterMatch = chapterNameRegex.find(rawChapterName) ?: return rawChapterName
         return chapterMatch.value
-            .replace(CHAPTER_WORD_REGEX, "Chap")
-            .replace(MULTI_SPACE_REGEX, " ")
+            .replace(chapterWordRegex, "Chap")
+            .replace(multiSpaceRegex, " ")
     }
 
     private fun parseChapterDate(chapterMeta: String): Long {
-        val dateString = CHAPTER_DATE_REGEX.find(chapterMeta)?.value ?: return 0L
-        return CHAPTER_DATE.tryParse(dateString)
+        val dateString = chapterDateRegex.find(chapterMeta)?.value ?: return 0L
+        return runCatching {
+            LocalDate.parse(dateString, chapterDateFormat)
+                .atStartOfDay(dateZone)
+                .toInstant()
+                .toEpochMilli()
+        }.getOrDefault(0L)
     }
 
     // ============================== Pages =================================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val html = response.body.string()
-        if (PASSWORD_FORM_REGEX.containsMatchIn(html)) {
-            throw Exception(PASSWORD_WEBVIEW_MESSAGE)
-        }
-
-        val imageUrls = ImageDecryptor.extractImageUrls(html, response.request.url.toString())
-        if (imageUrls.isEmpty()) {
-            throw Exception(NO_IMAGES_MESSAGE)
-        }
-
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get(getChapterUrl(chapter))
         val chapterUrl = response.request.url.toString()
+        val html = response.use { it.body.string() }
+        if (passwordFormRegex.containsMatchIn(html)) {
+            throw Exception(passwordWebviewMessage)
+        }
+
+        val imageUrls = ImageDecryptor.extractImageUrls(html, chapterUrl)
+        if (imageUrls.isEmpty()) return emptyList()
+
         return imageUrls.mapIndexed { index, imageUrl ->
-            Page(index, chapterUrl, imageUrl)
+            Page(index, url = chapterUrl, imageUrl = imageUrl)
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val imageHeaders = headers.newBuilder()
@@ -290,33 +323,66 @@ abstract class MeDamTruyen : HttpSource() {
 
     // ============================== Filters ===============================
 
-    override fun getFilterList(): FilterList = getFilters()
+    override val supportsFilterFetching get() = true
 
-    companion object {
-        private const val THUMB_LOW_SIZE = "-150x150"
-        private const val THUMB_HIGH_SIZE = "-720x970"
-        private const val PASSWORD_WEBVIEW_MESSAGE = "Vui lòng nhập mật khẩu của chương này qua webview"
-        private const val NO_IMAGES_MESSAGE = "Không tìm thấy hình ảnh"
-
-        private val TRUYEN_PATH_REGEX = Regex("""/truyen/""", RegexOption.IGNORE_CASE)
-        private val CHAPTER_NAME_REGEX = Regex(
-            """chap\s*\d+(?:[.,]\d+)?(?:\s*:\s*.+)?""",
-            RegexOption.IGNORE_CASE,
-        )
-        private val CHAPTER_WORD_REGEX = Regex("""chap""", RegexOption.IGNORE_CASE)
-        private val CHAPTER_NUMBER_REGEX = Regex("""\d+(?:[.,]\d+)?""")
-        private val CHAPTER_DATE_REGEX = Regex("""\d{2}/\d{2}/\d{2,4}""")
-        private val MULTI_SPACE_REGEX = Regex("""\s+""")
-        private val PASSWORD_FORM_REGEX = Regex(
-            """post-password-form|name=['"]post_password['"]""",
-            RegexOption.IGNORE_CASE,
-        )
-        private val thumbFallbackMap = ConcurrentHashMap<String, String>()
-
-        private val CHAPTER_DATE by lazy {
-            SimpleDateFormat("dd/MM/yy", Locale.ROOT).apply {
-                timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
-            }
-        }
+    override suspend fun fetchFilterData() = client.get(baseUrl).asJsoup().let { document ->
+        FilterData(
+            genres = parseFilterOptions(document, "#genre-tab"),
+            groups = parseFilterOptions(document, "#team-tab"),
+            authors = parseFilterOptions(document, "#artist-tab"),
+        ).toJsonElement()
     }
+
+    override fun getFilterList(data: JsonElement?): FilterList = getFilters(data?.parseAs<FilterData>())
+
+    private fun parseFilterOptions(document: Document, selector: String): List<FilterOption> = document.select("$selector a[href]").mapNotNull { element ->
+        val name = element.text().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+        val path = element.absUrl("href").toHttpUrl().encodedPath
+        FilterOption(name, path)
+    }.distinctBy { it.path }
+
+    // =============================== Related ==============================
+
+    override val supportsRelatedMangas get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val relatedList = document.select("h3")
+            .firstOrNull { it.text().equals("Truyện Liên Quan", ignoreCase = true) }
+            ?.parent()
+            ?.nextElementSibling()
+            ?: return emptyList()
+
+        return relatedList.select("div.comic-block").mapNotNull { element ->
+            val link = element.selectFirst("a.comic-block-link[href*=/truyen/]") ?: return@mapNotNull null
+            val title = element.selectFirst("h3.comic-block-title")?.text() ?: return@mapNotNull null
+
+            SManga.create().apply {
+                setUrlWithoutDomain(link.absUrl("href"))
+                this.title = title
+                thumbnail_url = element.selectFirst("img.koi-img")?.absUrl("src")
+            }
+        }.distinctBy { it.url }
+    }
+
+    private val thumbLowSize = "-150x150"
+    private val thumbHighSize = "-720x970"
+    private val passwordWebviewMessage = "Vui lòng nhập mật khẩu của chương này qua webview"
+
+    private val truyenPathRegex = Regex("""/truyen/""", RegexOption.IGNORE_CASE)
+    private val chapterNameRegex = Regex(
+        """chap\s*\d+(?:[.,]\d+)?(?:\s*:\s*.+)?""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val chapterWordRegex = Regex("""chap""", RegexOption.IGNORE_CASE)
+    private val chapterNumberRegex = Regex("""\d+(?:[.,]\d+)?""")
+    private val chapterDateRegex = Regex("""\d{2}/\d{2}/\d{2}""")
+    private val multiSpaceRegex = Regex("""\s+""")
+    private val passwordFormRegex = Regex(
+        """post-password-form|name=['"]post_password['"]""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val thumbFallbackMap = ConcurrentHashMap<String, String>()
+    private val dateZone = ZoneId.of("Asia/Ho_Chi_Minh")
+    private val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ROOT)
 }

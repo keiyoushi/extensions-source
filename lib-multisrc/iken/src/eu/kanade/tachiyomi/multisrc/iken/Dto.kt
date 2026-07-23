@@ -2,15 +2,13 @@ package eu.kanade.tachiyomi.multisrc.iken
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Instant
 
 @Serializable
 class SearchResponse(
@@ -21,6 +19,16 @@ class SearchResponse(
 @Serializable
 class MangaDto(
     val post: Manga,
+)
+
+@Serializable
+class ChapterDto(
+    val post: ChapterPost,
+)
+
+@Serializable
+class ChapterPost(
+    val chapters: List<Chapter>,
 )
 
 @Serializable
@@ -87,7 +95,7 @@ class Manga(
     }.trim()
 
     private fun getStatus() = when (seriesStatus) {
-        "ONGOING", "COMING_SOON" -> SManga.ONGOING
+        "ONGOING", "COMING_SOON", "MASS_RELEASED" -> SManga.ONGOING
         "COMPLETED" -> SManga.COMPLETED
         "CANCELLED", "DROPPED" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
@@ -138,7 +146,7 @@ class Chapter(
         val seriesSlug = (mangaSlug ?: mangaPost?.slug)!!
         url = "/series/$seriesSlug/$slug#$id"
         name = "${prefix}Chapter $number$suffix"
-        date_upload = dateFormat.tryParse(createdAt)
+        date_upload = Instant.parseOrNull(createdAt)?.toEpochMilliseconds() ?: 0L
         scanlator = createdBy?.name
         memo = buildJsonObject {
             put("seriesSlug", seriesSlug)
@@ -171,5 +179,3 @@ class PageParseDto(
     val url: String,
     val order: Int? = null,
 )
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)

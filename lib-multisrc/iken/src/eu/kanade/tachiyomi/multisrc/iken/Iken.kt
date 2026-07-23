@@ -21,9 +21,9 @@ import keiyoushi.utils.int
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
@@ -66,6 +66,11 @@ abstract class Iken :
      * Whether image URLs should be sorted by their filenames
      */
     protected open val sortPagesByFilename = false
+
+    /**
+     * Whether to use standalone chapters endpoint than manga object
+     */
+    protected open val useChaptersApi = false
 
     // ============================== Popular ==============================
 
@@ -221,17 +226,20 @@ abstract class Iken :
 
     // ============================== Details ==============================
 
+    private suspend fun getMangaDetails(slug: String): Manga {
+        val mangaUrl = "$apiUrl/api/post?postSlug=$slug"
+        val response = client.get(mangaUrl)
+        val data = response.parseAs<MangaDto>().post
+        if (data.isNovel) throw IOException("Novels are unsupported")
+        updateViews(data.id)
+        return data
+    }
+
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.pathSegments.size >= 2) {
             val slug = url.pathSegments[1]
-            val manga = SManga.create().apply {
-                this.url = slug
-                memo = buildJsonObject {
-                    put("slug", slug)
-                }
-            }
-
-            return fetchMangaUpdate(manga, emptyList(), true, true).manga.apply {
+            val details = getMangaDetails(slug)
+            return details.toSManga().apply {
                 initialized = true
             }
         }
@@ -250,22 +258,29 @@ abstract class Iken :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
+    ): SMangaUpdate = coroutineScope {
         val slug = manga.url.substringBeforeLast("#")
-        val response = client.get("$apiUrl/api/post?postSlug=$slug")
+        val id = manga.url.substringAfterLast("#")
 
-        val data = response.parseAs<MangaDto>().post
+        if (useChaptersApi) {
+            val mangaDeferred = async { if (fetchDetails) getMangaDetails(slug).toSManga() else manga }
+            val chaptersDeferred = async {
+                if (fetchChapters) {
+                    val response = client.get("$apiUrl/api/chapters?postId=$id")
+                    val chapterData = response.parseAs<ChapterDto>().post
+                    chapterData.chapters.filter { it.isVisible() }.map { it.toSChapter(slug) }
+                } else {
+                    chapters
+                }
+            }
+            SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
+        } else {
+            val details = getMangaDetails(slug)
+            val updatedManga = details.toSManga()
 
-        assert(!data.isNovel) { "Novels are unsupported" }
-
-        updateViews(data.id)
-
-        return SMangaUpdate(
-            manga = data.toSManga(),
-            chapters = data.chapters.filter { it.isVisible() }.map {
-                it.toSChapter(data.slug)
-            },
-        )
+            val updatedChapters = details.chapters.filter { it.isVisible() }.map { it.toSChapter(details.slug) }
+            SMangaUpdate(updatedManga, updatedChapters)
+        }
     }
 
     // ========================= Related Manga =========================

@@ -1,26 +1,25 @@
 package eu.kanade.tachiyomi.extension.en.yaoihot
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
 import java.util.Calendar
 
 @Source
-abstract class YaoiHot : HttpSource() {
-
-    override val supportsLatest = true
+abstract class YaoiHot : KeiSource() {
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("manga")
             if (page > 1) {
@@ -30,13 +29,11 @@ abstract class YaoiHot : HttpSource() {
             addQueryParameter("orderby", "views")
         }.build()
 
-        return GET(url, headers)
+        return parseMangaList(client.get(url))
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = parseMangaList(response)
-
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("manga")
             if (page > 1) {
@@ -46,13 +43,11 @@ abstract class YaoiHot : HttpSource() {
             addQueryParameter("orderby", "modified")
         }.build()
 
-        return GET(url, headers)
+        return parseMangaList(client.get(url))
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaList(response)
-
     // =============================== Search ===============================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
                 if (page > 1) {
@@ -72,10 +67,24 @@ abstract class YaoiHot : HttpSource() {
             }
         }.build()
 
-        return GET(url, headers)
+        return parseMangaList(client.get(url))
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = parseMangaList(response)
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "manga") {
+            val slug = url.pathSegments[1]
+            val manga = SManga.create().apply {
+                this.url = "/manga/$slug/"
+            }
+            return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+                .manga
+                .apply {
+                    initialized = true
+                    this.url = "/manga/$slug"
+                }
+        }
+        return null
+    }
 
     private fun parseMangaList(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -94,43 +103,43 @@ abstract class YaoiHot : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    // =========================== Manga Details ============================
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    // =========================== Manga Updates ============================
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url).asJsoup()
 
-        return SManga.create().apply {
+        val manga = SManga.create().apply {
             title = document.selectFirst(".manga-title")!!.text()
             author = document.selectFirst(".author-line")?.text()?.substringAfter("Author:")?.trim()
             description = document.selectFirst(".summary-content")?.text()
             genre = document.select(".genre-tag").joinToString { it.text() }
             thumbnail_url = document.selectFirst(".manga-cover-img")?.attr("abs:src")
         }
-    }
 
-    // ============================== Chapters ==============================
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-
-        return document.select(".chapters-list .chapter-item").map { element ->
+        val chapters = document.select(".chapters-list .chapter-item").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.attr("abs:href"))
                 name = element.selectFirst(".chapter-title")!!.text()
                 date_upload = element.selectFirst(".chapter-date")?.text()?.let { parseRelativeDate(it) } ?: 0L
             }
         }
+
+        return SMangaUpdate(manga, chapters)
     }
 
     // =============================== Pages ================================
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(baseUrl + chapter.url).asJsoup()
 
         return document.select(".reader-page img").mapIndexed { index, img ->
             val imgUrl = img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
             Page(index, imageUrl = imgUrl)
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
     private fun parseRelativeDate(dateStr: String): Long {
