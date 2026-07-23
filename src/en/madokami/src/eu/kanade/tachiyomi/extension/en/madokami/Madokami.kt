@@ -335,21 +335,37 @@ abstract class Madokami :
 
             if (!isSupportedChapter(fileName, readerLink)) return@mapNotNull null
 
+            val (formattedName, scanlatorName, year) = extractInfo(fileName)
+
+            val isZipOrCbz = fileName.endsWith(".zip", true) || fileName.endsWith(".cbz", true)
+
             SChapter.create().apply {
-                url = if (readerLink == null) {
+                url = if (isZipOrCbz || readerLink == null) {
                     fileLink.absUrl("href").substringAfter(baseUrl)
                 } else {
                     "/reader" + readerLink.absUrl("href").substringAfter("/reader")
                 }
-                name = normalizeName(fileName)
-                date_upload = parseChapterDate(row.select("td:nth-child(3)").text())
+                name = formattedName
+                scanlator = scanlatorName
+                val tableDate = parseChapterDate(row.select("td:nth-child(3)").text())
+                date_upload = if (year != null) {
+                    try {
+                        OffsetDateTime.of(year.toInt(), 1, 1, 0, 0, 0, 0, ZoneOffset.UTC).toInstant().toEpochMilli()
+                    } catch (_: Exception) {
+                        tableDate
+                    }
+                } else {
+                    tableDate
+                }
             }
         }.reversed()
     }
 
     private fun isSupportedChapter(fileName: String, readerLink: Element?): Boolean = fileName.endsWith(".zip", true) || fileName.endsWith(".cbz", true) || readerLink != null
 
-    private fun normalizeName(name: String): String {
+    private data class ChapterInfo(val name: String, val scanlator: String?, val year: String?)
+
+    private fun extractInfo(name: String): ChapterInfo {
         val fileName = name.substringBeforeLast(".").replace("_", " ")
         val volMatch = VOLUME_REGEX.find(fileName)
         val chMatch = CHAPTER_REGEX.find(fileName)
@@ -363,22 +379,46 @@ abstract class Madokami :
             vol != null -> "Vol. $vol"
             else -> {
                 val rawMatch = RAW_NUMBER_REGEX.find(fileName)
-                if (rawMatch != null) "Ch. ${rawMatch.groupValues[1]}" else name
+                if (rawMatch != null) "Ch. ${rawMatch.groupValues[1]}" else fileName
             }
         }
 
-        val metadata = METADATA_REGEX.findAll(fileName)
-            .map { it.groupValues[1] }
-            .filter { tag ->
-                val lowerTag = tag.lowercase()
-                if (FIX_REGEX.matches(lowerTag)) return@filter true
-                val tagVol = VOLUME_REGEX.find(tag)?.groupValues?.get(1)
-                val tagCh = CHAPTER_REGEX.find(tag)?.groupValues?.get(1)
-                (tagVol == null || tagVol != vol) && (tagCh == null || tagCh != ch)
-            }
-            .joinToString(" ") { if (vol != null || FIX_REGEX.matches(it.lowercase())) "($it)" else "[$it]" }
+        val allTags = METADATA_REGEX.findAll(fileName).map { it.groupValues[1] }.toList()
+        val scanlators = mutableListOf<String>()
+        val infoTags = mutableListOf<String>()
+        var foundYear: String? = null
 
-        return if (metadata.isNotEmpty()) "$baseName $metadata" else baseName
+        for (tag in allTags) {
+            val lowerTag = tag.lowercase()
+
+            val tagVol = VOLUME_REGEX.find(tag)?.groupValues?.get(1)
+            val tagCh = CHAPTER_REGEX.find(tag)?.groupValues?.get(1)
+            if ((tagVol != null && tagVol == vol) || (tagCh != null && tagCh == ch)) continue
+
+            if (FIX_REGEX.matches(lowerTag)) {
+                infoTags.add("($tag)")
+                continue
+            }
+
+            if (YEAR_REGEX.matches(tag)) {
+                foundYear = tag
+                continue
+            }
+
+            if (METADATA_WORDS.any { lowerTag.contains(it) }) {
+                infoTags.add(if (vol != null) "($tag)" else "[$tag]")
+                continue
+            }
+
+            scanlators.add(tag)
+        }
+
+        val scanlatorString = scanlators.takeIf { it.isNotEmpty() }?.joinToString(", ")
+        val infoString = infoTags.takeIf { it.isNotEmpty() }?.joinToString(" ")
+
+        val finalName = if (infoString != null) "$baseName $infoString" else baseName
+
+        return ChapterInfo(finalName, scanlatorString, foundYear)
     }
 
     @SuppressLint("NewApi")
@@ -416,7 +456,7 @@ abstract class Madokami :
             files.mapIndexed { index, file ->
                 val url = HttpUrl.Builder()
                     .scheme("https")
-                    .host("manga.madokami.al")
+                    .host(baseUrl)
                     .addPathSegments("reader/image")
                     .addQueryParameter("path", path)
                     .addQueryParameter("file", file.jsonPrimitive.content)
@@ -474,10 +514,14 @@ abstract class Madokami :
         private val ARCHIVE_EXTENSIONS = listOf(".zip", ".cbz", ".rar", ".cbr", ".7z", ".cb7", ".tar", ".cbt")
         private val UNSUPPORTED_EXTENSIONS = listOf(".epub", ".pdf", ".txt")
         private val VOLUME_REGEX = Regex("""(?i)\b(?:v|vol)(?:\.|ume)?\s?(\d+)\b""")
-        private val CHAPTER_REGEX = Regex("""(?i)\b(?:c|ch)(?:\.|apter)?\s?(\d+(?:-\d+)?)\b""")
-        private val RAW_NUMBER_REGEX = Regex("""\b(\d{3,})\b""")
+        private val CHAPTER_REGEX = Regex("""(?i)\b(?:c|ch)(?:\.|apter)?\s?(\d+(?:[.\-x]\d+)*)\b""")
+        private val RAW_NUMBER_REGEX = Regex("""\b(\d{3,}(?:[.\-x]\d+)*)\b""")
         private val METADATA_REGEX = Regex("""[\[(]([^])]+)[])]""")
-        private val FIX_REGEX = Regex("""(?i)f\d+""")
+        private val YEAR_REGEX = Regex("""\b(19|20)\d{2}\b""")
+        private val FIX_REGEX = Regex("""(?i)f\d*""")
+        private val METADATA_WORDS = setOf(
+            "digital", "dig", "omnibus", "edition", "pre", "magazine", "raw", "raws", "NA", "web",
+        )
     }
 
     private fun isArchiveUrl(url: String): Boolean {
