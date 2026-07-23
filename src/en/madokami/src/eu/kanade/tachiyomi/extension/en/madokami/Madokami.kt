@@ -394,7 +394,14 @@ abstract class Madokami :
 
     private suspend fun getZipPageList(chapter: SChapter): List<Page> = withContext(Dispatchers.IO) {
         val url = baseUrl + chapter.url
-        val directory = network.client.zipDirectory(url, getAuthHeaders())
+        val directory = try {
+            network.client.zipDirectory(url, getAuthHeaders())
+        } catch (e: IOException) {
+            if (e.message?.contains("Content-Range") == true) {
+                throw IOException("Refresh episode list and try again", e)
+            }
+            throw e
+        }
 
         directory.entries
             .filter { isImage(it.name) }
