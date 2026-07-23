@@ -75,7 +75,10 @@ class ChapterInfo(
     @SerialName("created_at") private val createdAt: String? = null,
     @SerialName("is_premium") private val isPremium: Boolean = false,
     @SerialName("free_at") private val freeAt: String? = null,
+    private val series: SeriesSlugDto? = null,
 ) {
+    val seriesSlug: String? get() = series?.slug
+
     fun toSChapter(seriesSlug: String) = SChapter.create().apply {
         val chapterName = title?.takeIf { it.isNotBlank() }
             ?: chapterNumber?.toString()?.removeSuffix(".0")?.let { "Chapter $it" }
@@ -100,6 +103,11 @@ class ChapterInfo(
 }
 
 @Serializable
+class SeriesSlugDto(
+    val slug: String,
+)
+
+@Serializable
 class GenreInfo(
     val name: String,
 )
@@ -108,5 +116,13 @@ class GenreInfo(
 class PageInfo(
     @SerialName("image_url") val imageUrl: String,
 )
+
+fun SManga.updateSeriesSlug(slug: String) {
+    if (slug.isNotEmpty()) {
+        this.memo = buildJsonObject {
+            put("slug", slug)
+        }
+    }
+}
 
 fun String.toAbsoluteUrl(baseUrl: String) = if (this.startsWith("/")) baseUrl + this else this

@@ -166,7 +166,7 @@ abstract class WebdexScans :
             async {
                 val url = "$supabaseUrl/chapters".toHttpUrl().newBuilder()
                     .addQueryParameter("series_id", "eq.${manga.url}")
-                    .addQueryParameter("select", "id,chapter_number,title,slug,created_at,is_premium,free_at")
+                    .addQueryParameter("select", "id,chapter_number,title,slug,created_at,is_premium,free_at,series(slug)")
                     .addQueryParameter("order", "chapter_number.desc")
                     .build()
                 client.get(url, supabaseHeaders).parseAs<List<ChapterInfo>>()
@@ -176,11 +176,18 @@ abstract class WebdexScans :
         }
 
         val series = seriesDeferred?.await()
-        val newManga = series?.toSManga(baseUrl) ?: manga
-        val seriesSlug = series?.slug ?: manga.memo["slug"]?.string ?: ""
+        val chapterInfos = chaptersDeferred?.await()
 
-        val updatedChapters = if (fetchChapters) {
-            val chapterInfos = chaptersDeferred?.await() ?: emptyList()
+        val seriesSlug = series?.slug
+            ?: chapterInfos?.firstOrNull()?.seriesSlug
+            ?: manga.memo["slug"]?.string
+            ?: ""
+
+        val newManga = (series?.toSManga(baseUrl) ?: manga).apply {
+            updateSeriesSlug(seriesSlug)
+        }
+
+        val updatedChapters = if (fetchChapters && chapterInfos != null) {
             val showPremium = preferences.getBoolean(PREF_SHOW_PREMIUM, false)
             val filtered = if (showPremium) {
                 chapterInfos
