@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.text.InputType
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -111,6 +112,20 @@ abstract class Madokami :
     }
 
     private fun getAuthHeaders() = headers.newBuilder().set("Authorization", getAuthCredential()).build()
+
+    private val customMetadataRegex: Regex? by lazy {
+        val raw = preferences.getString("metadata_words", "") ?: ""
+        if (raw.isBlank()) {
+            null
+        } else {
+            val words = raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            if (words.isEmpty()) {
+                null
+            } else {
+                Regex("""(?i)\b(?:${words.joinToString("|") { Regex.escape(it) }})\b""")
+            }
+        }
+    }
 
     private fun getMediaType(name: String) = when {
         name.endsWith(".png", true) -> "image/png"
@@ -347,15 +362,22 @@ abstract class Madokami :
                 }
                 name = formattedName
                 scanlator = scanlatorName
+
                 val tableDate = parseChapterDate(row.select("td:nth-child(3)").text())
-                date_upload = if (year != null) {
+                val fileDate = if (year != null) {
                     try {
                         OffsetDateTime.of(year.toInt(), 1, 1, 0, 0, 0, 0, ZoneOffset.UTC).toInstant().toEpochMilli()
                     } catch (_: Exception) {
-                        tableDate
+                        0L
                     }
                 } else {
-                    tableDate
+                    0L
+                }
+
+                date_upload = if (preferences.getBoolean("prefer_upload_date", false)) {
+                    if (tableDate != 0L) tableDate else fileDate
+                } else {
+                    if (fileDate != 0L) fileDate else tableDate
                 }
             }
         }.reversed()
@@ -370,16 +392,17 @@ abstract class Madokami :
         val volMatch = VOLUME_REGEX.find(fileName)
         val chMatch = CHAPTER_REGEX.find(fileName)
 
-        val vol = volMatch?.groupValues?.get(1)
-        val ch = chMatch?.groupValues?.get(1)
+        val vol = volMatch?.groupValues?.get(1)?.replace("x", ".")
+        val ch = chMatch?.groupValues?.get(1)?.replace("x", ".")
 
         val baseName = when {
             ch != null && vol != null -> "Ch. $ch (Vol. $vol)"
             ch != null -> "Ch. $ch"
             vol != null -> "Vol. $vol"
             else -> {
-                val rawMatch = RAW_NUMBER_REGEX.find(fileName)
-                if (rawMatch != null) "Ch. ${rawMatch.groupValues[1]}" else fileName
+                val fileNameNoTags = fileName.replace(METADATA_REGEX, " ")
+                val rawMatch = RAW_NUMBER_REGEX.findAll(fileNameNoTags).lastOrNull()
+                if (rawMatch != null) "Ch. ${rawMatch.groupValues[1].replace("x", ".")}" else fileName
             }
         }
 
@@ -391,8 +414,8 @@ abstract class Madokami :
         for (tag in allTags) {
             val lowerTag = tag.lowercase()
 
-            val tagVol = VOLUME_REGEX.find(tag)?.groupValues?.get(1)
-            val tagCh = CHAPTER_REGEX.find(tag)?.groupValues?.get(1)
+            val tagVol = VOLUME_REGEX.find(tag)?.groupValues?.get(1)?.replace("x", ".")
+            val tagCh = CHAPTER_REGEX.find(tag)?.groupValues?.get(1)?.replace("x", ".")
             if ((tagVol != null && tagVol == vol) || (tagCh != null && tagCh == ch)) continue
 
             if (FIX_REGEX.matches(lowerTag)) {
@@ -405,8 +428,8 @@ abstract class Madokami :
                 continue
             }
 
-            if (METADATA_WORDS.any { lowerTag.contains(it) }) {
-                infoTags.add(if (vol != null) "($tag)" else "[$tag]")
+            if (METADATA_WORDS_REGEX.containsMatchIn(lowerTag) || customMetadataRegex?.containsMatchIn(lowerTag) == true) {
+                infoTags.add("($tag)")
                 continue
             }
 
@@ -508,20 +531,34 @@ abstract class Madokami :
                 it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             }
         }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = "prefer_upload_date"
+            title = "Prefer Date Uploaded"
+            summary = "Defaults to use date from filename (Year)"
+            setDefaultValue(true)
+        }.let(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = "metadata_words"
+            title = "Additional Metadata Words"
+            summary = "Comma-separated list of words to treat as metadata instead of scanlators"
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT
+            }
+        }.let(screen::addPreference)
     }
 
     companion object {
         private val ARCHIVE_EXTENSIONS = listOf(".zip", ".cbz", ".rar", ".cbr", ".7z", ".cb7", ".tar", ".cbt")
         private val UNSUPPORTED_EXTENSIONS = listOf(".epub", ".pdf", ".txt")
-        private val VOLUME_REGEX = Regex("""(?i)\b(?:v|vol)(?:\.|ume)?\s?(\d+)\b""")
+        private val VOLUME_REGEX = Regex("""(?i)\b(?:v|vol)(?:\.|ume)?\s?(\d+(?:[.\-x]\d+)*)\b""")
         private val CHAPTER_REGEX = Regex("""(?i)\b(?:c|ch)(?:\.|apter)?\s?(\d+(?:[.\-x]\d+)*)\b""")
-        private val RAW_NUMBER_REGEX = Regex("""\b(\d{3,}(?:[.\-x]\d+)*)\b""")
+        private val RAW_NUMBER_REGEX = Regex("""\b(\d+(?:[.\-x]\d+)*)\b""")
         private val METADATA_REGEX = Regex("""[\[(]([^])]+)[])]""")
         private val YEAR_REGEX = Regex("""\b(19|20)\d{2}\b""")
         private val FIX_REGEX = Regex("""(?i)f\d*""")
-        private val METADATA_WORDS = setOf(
-            "digital", "dig", "omnibus", "edition", "pre", "magazine", "raw", "raws", "NA", "web",
-        )
+        private val METADATA_WORDS_REGEX = Regex("""(?i)\b(?:end|digital|dig|omnibus|edition|pre|magazine|raws?|na|web)\b""")
     }
 
     private fun isArchiveUrl(url: String): Boolean {
