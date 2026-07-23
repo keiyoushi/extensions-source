@@ -64,7 +64,7 @@ abstract class GocTruyenTranh : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/danh-sach/truyen-hot?page=$page"
 
-        return parseMangaPage(client.get(url, headers))
+        return parseMangaPage(client.get(url))
     }
 
     // =============================== Latest ===============================
@@ -72,7 +72,7 @@ abstract class GocTruyenTranh : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/danh-sach/truyen-moi-cap-nhat?page=$page"
 
-        return parseMangaPage(client.get(url, headers))
+        return parseMangaPage(client.get(url))
     }
 
     // =============================== Search ===============================
