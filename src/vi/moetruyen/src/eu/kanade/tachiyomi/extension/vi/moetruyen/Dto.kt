@@ -3,6 +3,12 @@ package eu.kanade.tachiyomi.extension.vi.moetruyen
 import kotlinx.serialization.Serializable
 
 @Serializable
+class GenreOption(
+    val name: String,
+    val id: String,
+)
+
+@Serializable
 class PageAccessRequest(
     val pageIndexes: List<Int>,
     val pageAccessProof: PageAccessProof? = null,
@@ -19,16 +25,14 @@ class PageAccessProof(
 
 @Serializable
 class PageAccessResponse(
-    val ok: Boolean,
-    val pages: List<PageAccessEntry> = emptyList(),
-    val maxWindow: Int = 5,
+    val pages: List<PageAccessEntry>,
 )
 
 @Serializable
 class PageAccessEntry(
     val pageIndex: Int,
-    val storageKey: String = "",
-    val downloadUrl: String = "",
+    val storageKey: String,
+    val downloadUrl: String,
     val grant: ImgxGrant? = null,
 )
 
@@ -36,7 +40,6 @@ class PageAccessEntry(
 class ImgxGrant(
     val version: Int? = null,
     val algorithm: String? = null,
-    val contentAlgorithm: String? = null,
     val imageId: String? = null,
     val issuedAt: Long? = null,
     val expiresAt: Long? = null,
