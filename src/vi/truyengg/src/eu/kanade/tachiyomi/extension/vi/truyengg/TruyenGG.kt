@@ -120,7 +120,7 @@ abstract class TruyenGG : KeiSource() {
 
         return SMangaUpdate(
             parseMangaDetails(document),
-            parseChapterList(document)
+            parseChapterList(document),
         )
     }
 
