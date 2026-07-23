@@ -1,24 +1,24 @@
 package eu.kanade.tachiyomi.multisrc.zmanga
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-abstract class ZManga : HttpSource() {
+abstract class ZManga : KeiSource() {
 
     protected open val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
 
@@ -26,7 +26,14 @@ abstract class ZManga : HttpSource() {
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/advanced-search/${pagePathSegment(page)}?order=popular")
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/advanced-search/${pagePathSegment(page)}?order=popular").asJsoup()
+        val mangas = document.select(popularMangaSelector()).map { element ->
+            popularMangaFromElement(element)
+        }
+        val hasNextPage = document.select(popularMangaNextPageSelector()).isNotEmpty()
+        return MangasPage(mangas, hasNextPage)
+    }
 
     open fun popularMangaSelector() = "div.flexbox2-item"
 
@@ -38,27 +45,10 @@ abstract class ZManga : HttpSource() {
 
     open fun popularMangaNextPageSelector() = "div.pagination .next"
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(popularMangaSelector()).map { element ->
-            popularMangaFromElement(element)
-        }
-        val hasNextPage = document.select(popularMangaNextPageSelector()).isNotEmpty()
-        return MangasPage(mangas, hasNextPage)
-    }
-
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/advanced-search/${pagePathSegment(page)}?order=update")
-
-    open fun latestUpdatesSelector() = popularMangaSelector()
-
-    open fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    open fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get("$baseUrl/advanced-search/${pagePathSegment(page)}?order=update").asJsoup()
         val mangas = document.select(latestUpdatesSelector()).map { element ->
             latestUpdatesFromElement(element)
         }
@@ -66,48 +56,60 @@ abstract class ZManga : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
+    open fun latestUpdatesSelector() = popularMangaSelector()
+
+    open fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+
+    open fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        var url = "$baseUrl/advanced-search/${pagePathSegment(page)}".toHttpUrl().newBuilder()
-        url.addQueryParameter("title", query)
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
-            when (filter) {
-                is AuthorFilter -> {
-                    url.addQueryParameter("author", filter.state)
-                }
-                is YearFilter -> {
-                    url.addQueryParameter("yearx", filter.state)
-                }
-                is StatusFilter -> {
-                    val status = when (filter.state) {
-                        Filter.TriState.STATE_INCLUDE -> "completed"
-                        Filter.TriState.STATE_EXCLUDE -> "ongoing"
-                        else -> ""
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val filterList = if (filters.isEmpty()) getFilterList(null) else filters
+        val isProjectPage = filterList.filterIsInstance<ProjectFilter>().any { it.toUriPart() == "project-filter-on" }
+
+        val document = if (isProjectPage) {
+            client.get("$baseUrl$projectPageString/page/$page".toHttpUrl()).asJsoup()
+        } else {
+            val url = "$baseUrl/advanced-search/${pagePathSegment(page)}".toHttpUrl().newBuilder()
+            url.addQueryParameter("title", query)
+            filterList.forEach { filter ->
+                when (filter) {
+                    is AuthorFilter -> {
+                        url.addQueryParameter("author", filter.state)
                     }
-                    url.addQueryParameter("status", status)
-                }
-                is TypeFilter -> {
-                    url.addQueryParameter("type", filter.toUriPart())
-                }
-                is OrderByFilter -> {
-                    url.addQueryParameter("order", filter.toUriPart())
-                }
-                is GenreList -> {
-                    filter.state
-                        .filter { it.state }
-                        .forEach { url.addQueryParameter("genre[]", it.id) }
-                }
-                // if site has project page, default value "hasProjectPage" = false
-                is ProjectFilter -> {
-                    if (filter.toUriPart() == "project-filter-on") {
-                        url = "$baseUrl$projectPageString/page/$page".toHttpUrl().newBuilder()
+                    is YearFilter -> {
+                        url.addQueryParameter("yearx", filter.state)
                     }
+                    is StatusFilter -> {
+                        val status = when (filter.state) {
+                            Filter.TriState.STATE_INCLUDE -> "completed"
+                            Filter.TriState.STATE_EXCLUDE -> "ongoing"
+                            else -> ""
+                        }
+                        url.addQueryParameter("status", status)
+                    }
+                    is TypeFilter -> {
+                        url.addQueryParameter("type", filter.toUriPart())
+                    }
+                    is OrderByFilter -> {
+                        url.addQueryParameter("order", filter.toUriPart())
+                    }
+                    is GenreList -> {
+                        filter.state
+                            .filter { it.state }
+                            .forEach { url.addQueryParameter("genre[]", it.id) }
+                    }
+                    else -> {}
                 }
-                else -> {}
             }
+            client.get(url.build()).asJsoup()
         }
-        return GET(url.build(), headers)
+        val mangas = document.select(searchMangaSelector()).map { element ->
+            searchMangaFromElement(element)
+        }
+        val hasNextPage = document.select(searchMangaNextPageSelector()).isNotEmpty()
+        return MangasPage(mangas, hasNextPage)
     }
 
     open val projectPageString = "/project-list"
@@ -118,18 +120,28 @@ abstract class ZManga : HttpSource() {
 
     open fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(searchMangaSelector()).map { element ->
-            searchMangaFromElement(element)
-        }
-        val hasNextPage = document.select(searchMangaNextPageSelector()).isNotEmpty()
-        return MangasPage(mangas, hasNextPage)
-    }
-
     // ============================== Details ==============================
 
-    override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url).asJsoup()
+
+        val updatedManga = if (fetchDetails) mangaDetailsParse(document) else manga
+
+        val updatedChapters = if (fetchChapters) {
+            document.select(chapterListSelector()).map { element ->
+                chapterFromElement(element)
+            }
+        } else {
+            chapters
+        }
+
+        return SMangaUpdate(updatedManga, updatedChapters)
+    }
 
     open fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         val thumb = document.select("div.series-thumb img")
@@ -175,16 +187,9 @@ abstract class ZManga : HttpSource() {
         date_upload = dateFormat.tryParse(element.select("span.date").text())
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select(chapterListSelector()).map { element ->
-            chapterFromElement(element)
-        }
-    }
-
     // =============================== Pages ===============================
 
-    override fun pageListParse(response: Response): List<Page> = pageListParse(response.asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(baseUrl + chapter.url).asJsoup())
 
     open fun pageListParse(document: Document): List<Page> = document.select("div.reader-area img:not(noscript img)").mapIndexed { i, img ->
         val imgUrl = img.attr("data-lazy-src").takeIf { it.isNotBlank() }
@@ -192,13 +197,11 @@ abstract class ZManga : HttpSource() {
         Page(i, imageUrl = imgUrl)
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // ============================== Filters ==============================
 
     open val hasProjectPage = false
 
-    override fun getFilterList(): FilterList {
+    override fun getFilterList(data: JsonElement?): FilterList {
         val filters = mutableListOf<Filter<*>>(
             Filter.Header("You can combine filter."),
             Filter.Separator(),
