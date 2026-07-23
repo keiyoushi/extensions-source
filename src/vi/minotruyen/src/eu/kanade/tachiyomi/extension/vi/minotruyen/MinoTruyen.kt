@@ -20,7 +20,6 @@ import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -139,24 +138,12 @@ abstract class MinoTruyen : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get("$baseUrl/$category${chapter.url}").asJsoup()
         val chapterId = chapter.url.substringAfterLast('/').toIntOrNull()
-        val embeddedPages = mutableListOf<ReaderPage>()
-        document.extractNextJs<JsonElement>(
-            predicate = { element ->
-                if (element is JsonObject && "chapterId" in element && "images" in element) {
-                    val readerChapter = runCatching { element.parseAs<ReaderChapter>() }.getOrNull()
-                    if (
-                        embeddedPages.isEmpty() &&
-                        readerChapter != null &&
-                        (chapterId == null || readerChapter.chapterId == chapterId)
-                    ) {
-                        readerChapter.images
-                            .sortedBy { it.order }
-                            .mapNotNullTo(embeddedPages) { selectReaderServer(it.servers) }
-                    }
-                }
-                false
-            },
-        )
+        val embeddedPages = document.extractNextJs<ReaderChapter>()
+            ?.takeIf { chapterId == null || it.chapterId == chapterId }
+            ?.images
+            .orEmpty()
+            .sortedBy { it.order }
+            .mapNotNull { selectReaderServer(it.servers) }
 
         val pages = embeddedPages.ifEmpty {
             val encrypted = encryptedDataRegex.find(document.html())?.groupValues?.get(1)
@@ -262,7 +249,7 @@ abstract class MinoTruyen : KeiSource() {
         resolvedApiUrl?.let { return it }
 
         val resolved = runCatching {
-            client.get("$apiUrlDefault/books?take=1&category=$category").use { }
+            client.get("$apiUrlDefault/books?take=1&category=$category").close()
             apiUrlDefault
         }.getOrElse {
             val document = client.get(baseUrl).asJsoup()

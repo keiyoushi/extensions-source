@@ -96,7 +96,7 @@ class BookDetail(
         url = "/books/$bookId"
         title = info.title.trim()
         thumbnail_url = resolveThumbnailUrl(cover?.imageUrl, baseUrl)
-        author = authors.joinToString { it.name }
+        author = authors.mapNotNull { it.author?.name }.joinToString()
         description = this@BookDetail.description
         genre = tags.joinToString { it.name }
     }
@@ -127,7 +127,10 @@ class BookInfo(val title: String)
 class Cover(val imageUrl: String)
 
 @Serializable
-class Author(val name: String)
+class Author(val author: AuthorInfo? = null)
+
+@Serializable
+class AuthorInfo(val name: String? = null)
 
 @Serializable
 class Tag(val name: String)
