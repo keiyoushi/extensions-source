@@ -4,27 +4,26 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class PizzaResultsDto(
+class PizzaResultsDto(
     val comics: List<PizzaComicDto> = emptyList(),
 )
 
 @Serializable
-data class PizzaResultDto(
+class PizzaResultDto(
     val comic: PizzaComicDto? = null,
 )
 
 @Serializable
-data class PizzaReaderDto(
+class PizzaReaderDto(
     val chapter: PizzaChapterDto? = null,
-    val comic: PizzaComicDto? = null,
 )
 
 @Serializable
-data class PizzaComicDto(
+class PizzaComicDto(
     val artist: String? = null,
-    val author: String = "",
+    val author: String? = null,
     val chapters: List<PizzaChapterDto> = emptyList(),
-    val description: String = "",
+    val description: String? = null,
     val genres: List<PizzaGenreDto> = emptyList(),
     @SerialName("last_chapter") val lastChapter: PizzaChapterDto? = null,
     val status: String? = null,
@@ -34,12 +33,12 @@ data class PizzaComicDto(
 )
 
 @Serializable
-data class PizzaGenreDto(
+class PizzaGenreDto(
     val name: String = "",
 )
 
 @Serializable
-data class PizzaChapterDto(
+class PizzaChapterDto(
     val chapter: Int? = null,
     @SerialName("full_title") val fullTitle: String = "",
     val pages: List<String> = emptyList(),
@@ -50,6 +49,6 @@ data class PizzaChapterDto(
 )
 
 @Serializable
-data class PizzaTeamDto(
+class PizzaTeamDto(
     val name: String = "",
 )

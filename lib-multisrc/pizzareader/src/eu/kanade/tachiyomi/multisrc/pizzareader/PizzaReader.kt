@@ -1,48 +1,40 @@
 package eu.kanade.tachiyomi.multisrc.pizzareader
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import okhttp3.Headers
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-abstract class PizzaReader : HttpSource() {
+abstract class PizzaReader : KeiSource() {
 
     protected open val apiPath: String = "/api"
 
-    protected open val dateParser: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.ITALY)
+    protected open val dateParser: SimpleDateFormat =
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.ITALY)
 
     override val supportsLatest = true
 
     open val apiUrl by lazy { "$baseUrl$apiPath" }
 
-    protected open val json: Json by injectLazy()
-
-    override fun headersBuilder() = Headers.Builder().apply {
-        add("Referer", baseUrl)
+    protected open val pizzaHeaders by lazy {
+        headers.newBuilder()
+            .set("Referer", baseUrl)
+            .build()
     }
 
-    override fun popularMangaRequest(page: Int) = GET("$apiUrl/comics", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = json.decodeFromString<PizzaResultsDto>(response.body.string())
-
-        val comicList = result.comics
-            .map(::popularMangaFromObject)
-
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val result = client.newCall(GET("$apiUrl/comics", pizzaHeaders)).await()
+            .parseAs<PizzaResultsDto>()
+        val comicList = result.comics.map(::popularMangaFromObject)
         return MangasPage(comicList, hasNextPage = false)
     }
 
@@ -52,55 +44,62 @@ abstract class PizzaReader : HttpSource() {
         url = comic.url
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = json.decodeFromString<PizzaResultsDto>(response.body.string())
-
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val result = client.newCall(GET("$apiUrl/comics", pizzaHeaders)).await()
+            .parseAs<PizzaResultsDto>()
         val comicList = result.comics
             .filter { comic -> comic.lastChapter != null }
             .sortedByDescending { comic -> comic.lastChapter!!.publishedOn }
             .map(::popularMangaFromObject)
             .take(10)
-
         return MangasPage(comicList, hasNextPage = false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val searchUrl = "$apiUrl/search/".toHttpUrl().newBuilder()
             .addPathSegment(query)
             .toString()
-
-        return GET(searchUrl, headers)
+        val result = client.newCall(GET(searchUrl, pizzaHeaders)).await()
+            .parseAs<PizzaResultsDto>()
+        val comicList = result.comics.map(::popularMangaFromObject)
+        return MangasPage(comicList, hasNextPage = false)
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val result = if (fetchDetails || fetchChapters) {
+            client.newCall(GET(apiUrl + manga.url, pizzaHeaders)).await()
+                .parseAs<PizzaResultDto>()
+        } else {
+            null
+        }
 
-    // Workaround to allow "Open in browser" to use the real URL
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(chapterListRequest(manga)).asObservableSuccess()
-        .map { mangaDetailsParse(it).apply { initialized = true } }
+        val sManga = if (fetchDetails) {
+            val comic = result!!.comic!!
+            SManga.create().apply {
+                title = comic.title
+                author = comic.author
+                artist = comic.artist
+                description = comic.description
+                genre = comic.genres.joinToString(", ") { it.name }
+                status = comic.status?.toStatus() ?: SManga.UNKNOWN
+                thumbnail_url = comic.thumbnail
+            }
+        } else {
+            manga
+        }
 
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val result = json.decodeFromString<PizzaResultDto>(response.body.string())
-        val comic = result.comic!!
+        val sChapters = if (fetchChapters) {
+            result!!.comic!!.chapters.map(::chapterFromObject)
+        } else {
+            chapters
+        }
 
-        title = comic.title
-        author = comic.author
-        artist = comic.artist
-        description = comic.description
-        genre = comic.genres.joinToString(", ") { it.name }
-        status = comic.status?.toStatus() ?: SManga.UNKNOWN
-        thumbnail_url = comic.thumbnail
-    }
-
-    override fun chapterListRequest(manga: SManga) = GET(apiUrl + manga.url, headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val result = json.decodeFromString<PizzaResultDto>(response.body.string())
-        val comic = result.comic!!
-
-        return comic.chapters
-            .map(::chapterFromObject)
+        return SMangaUpdate(sManga, sChapters)
     }
 
     protected open fun chapterFromObject(chapter: PizzaChapterDto): SChapter = SChapter.create().apply {
@@ -113,20 +112,16 @@ abstract class PizzaReader : HttpSource() {
         url = chapter.url
     }
 
-    override fun pageListRequest(chapter: SChapter) = GET(apiUrl + chapter.url, headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val result = json.decodeFromString<PizzaReaderDto>(response.body.string())
-
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val result = client.newCall(GET(apiUrl + chapter.url, pizzaHeaders)).await()
+            .parseAs<PizzaReaderDto>()
         return result.chapter!!.pages.mapIndexed { i, page -> Page(i, "", page) }
     }
-
-    override fun imageUrlParse(response: Response): String = ""
 
     protected open fun String.toDate(): Long = runCatching { dateParser.parse(this)?.time }
         .getOrNull() ?: 0L
 
-    protected open fun String.toStatus(): Int = when (substring(0, 7)) {
+    protected open fun String.toStatus(): Int = when (take(7)) {
         "In cors" -> SManga.ONGOING
         "On goin" -> SManga.ONGOING
         "Complet" -> SManga.COMPLETED
