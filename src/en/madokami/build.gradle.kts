@@ -18,6 +18,7 @@ keiyoushi {
     deeplink {
         path("/Manga/..*")
         path("/Raws/..*")
+        path("/Artbooks/..*")
         path("/reader/..*")
     }
 }
