@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.goctruyentranhvui
 
+import android.text.InputType
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -23,6 +24,7 @@ import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -33,12 +35,9 @@ import kotlin.text.isNotBlank
 abstract class GocTruyenTranhVui :
     KeiSource(),
     ConfigurableSource {
-
-    override val name: String = "Goc Truyen Tranh Vui"
-
     private val apiUrl get() = "$baseUrl/api/v2"
 
-    private val preferences by lazy { getPreferences() }
+    private val preferences = getPreferences()
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(3)
@@ -65,10 +64,6 @@ abstract class GocTruyenTranhVui :
 
                 token?.let {
                     header("Authorization", it)
-                }
-
-                if (request.method == "POST") {
-                    header("Origin", baseUrl)
                 }
             }.build(),
         )
@@ -124,15 +119,8 @@ abstract class GocTruyenTranhVui :
         return MangasPage(res.result.data.map { it.toSManga(baseUrl) }, hasNextPage)
     }
 
-    override suspend fun getMangasByUrl(url: HttpUrl, page: Int): MangasPage {
-        if (url.host != baseUrl.toHttpUrl().host) {
-            throw Exception("Tên miền không được hỗ trợ")
-        }
-        return super.getMangasByUrl(url, page)
-    }
-
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.host != baseUrl.toHttpUrlOrNull()?.host) return null
         if (url.pathSegments.size < 2 || url.pathSegments[0] != "truyen") return null
         return parseMangaDetails(client.get(url).asJsoup(), url)
     }
@@ -150,27 +138,43 @@ abstract class GocTruyenTranhVui :
         val mangaId = manga.url.substringBefore(':')
         val slug = manga.url.substringAfter(':')
 
-        suspend fun requestChapters(): List<SChapter>? {
-            val chapterUrl = "$baseUrl/api/comic/$mangaId/chapter?limit=-1"
-            return client.get(chapterUrl, xhrHeaders).use { response ->
-                parseChapterList(response, slug)
+        // 1. Xử lý Details (chỉ gọi request khi fetchDetails = true)
+        var updatedDetails: SManga? = null
+        var hasFetchedMangaUrl = false
+
+        if (fetchDetails) {
+            updatedDetails = client.get(mangaUrl).use { response ->
+                parseMangaDetails(response.asJsoup(), response.request.url)
             }
+            hasFetchedMangaUrl = true
         }
 
-        val details = client.get(mangaUrl).use { response ->
-            parseMangaDetails(response.asJsoup(), response.request.url)
-        }
-
-        val chaptersList = requestChapters() ?: run {
-            // Nếu chưa fetch details ở trên thì gọi mồi để làm mới cookie
-            if (!fetchDetails) {
-                client.get(mangaUrl).close()
+        // 2. Xử lý Chapters (chỉ gọi request khi fetchChapters = true)
+        val updatedChapters = if (fetchChapters) {
+            suspend fun requestChapters(): List<SChapter>? {
+                val chapterUrl = "$baseUrl/api/comic/$mangaId/chapter?limit=-1"
+                return client.get(chapterUrl, xhrHeaders).use { response ->
+                    parseChapterList(response, slug)
+                }
             }
-            // Thử lần 2 sau khi đã làm mới cookie
-            requestChapters() ?: throw Exception("Phiên làm việc hết hạn. Không thể tải danh sách chương!")
+
+            // Thử lấy chapters lần 1
+            requestChapters() ?: run {
+                // Nếu chưa từng gọi mangaUrl ở bước fetchDetails thì mới gọi mồi cookie ở đây
+                if (!hasFetchedMangaUrl) {
+                    client.get(mangaUrl).close()
+                }
+                // Thử lại lần 2 sau khi mồi/làm mới cookie
+                requestChapters() ?: throw Exception("Phiên làm việc hết hạn. Không thể tải danh sách chương!")
+            }
+        } else {
+            chapters
         }
 
-        return SMangaUpdate(details, chaptersList)
+        return SMangaUpdate(
+            manga = updatedDetails ?: manga,
+            chapters = updatedChapters,
+        )
     }
 
     private fun parseMangaDetails(document: Document, requestUrl: HttpUrl): SManga = SManga.create().apply {
@@ -305,8 +309,9 @@ abstract class GocTruyenTranhVui :
             title = "Authorization Token"
             summary = "Enter token manually"
             dialogTitle = "Authorization Token"
-            val currentToken = preferences.getString(CUSTOM_TOKEN, null)
-            currentToken?.let { dialogMessage = if (it.isNotEmpty()) "Token: $it" else "Only show manually entered token, do not show token from WebView" }
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
             setOnPreferenceChangeListener { _, newValue ->
                 val token = newValue as String
                 tokenCache = token.takeIf(String::isNotBlank)
