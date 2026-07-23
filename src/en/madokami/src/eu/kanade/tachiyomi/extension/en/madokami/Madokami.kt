@@ -327,24 +327,58 @@ abstract class Madokami :
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/${manga.url.trimStart('/')}"
 
-    private fun parseChapterList(document: Document): List<SChapter> = document.select("table#index-table > tbody > tr").mapNotNull { row ->
-        val fileLink = row.selectFirst("td:nth-child(1) a") ?: return@mapNotNull null
-        val fileName = fileLink.text()
-        val readerLink = row.selectFirst("td:nth-child(6) a")
-        val isZip = fileName.endsWith(".zip", true) || fileName.endsWith(".cbz", true)
+    private fun parseChapterList(document: Document): List<SChapter> {
+        return document.select("table#index-table > tbody > tr").mapNotNull { row ->
+            val fileLink = row.selectFirst("td:nth-child(1) a") ?: return@mapNotNull null
+            val fileName = fileLink.text()
+            val readerLink = row.selectFirst("td:nth-child(6) a")
+            val isZip = fileName.endsWith(".zip", true) || fileName.endsWith(".cbz", true)
 
-        if (!isZip && readerLink == null) return@mapNotNull null
+            if (!isZip && readerLink == null) return@mapNotNull null
 
-        SChapter.create().apply {
-            url = if (isZip) {
-                fileLink.absUrl("href").substringAfter(baseUrl)
-            } else {
-                "/reader" + readerLink!!.absUrl("href").substringAfter("/reader")
+            SChapter.create().apply {
+                url = if (isZip) {
+                    fileLink.absUrl("href").substringAfter(baseUrl)
+                } else {
+                    "/reader" + readerLink!!.absUrl("href").substringAfter("/reader")
+                }
+                name = normalizeName(fileName)
+                date_upload = parseChapterDate(row.select("td:nth-child(3)").text())
             }
-            name = fileName
-            date_upload = parseChapterDate(row.select("td:nth-child(3)").text())
+        }.reversed()
+    }
+
+    private fun normalizeName(name: String): String {
+        val fileName = name.substringBeforeLast(".")
+        val volMatch = VOLUME_REGEX.find(fileName)
+        val chMatch = CHAPTER_REGEX.find(fileName)
+
+        val vol = volMatch?.groupValues?.get(1)
+        val ch = chMatch?.groupValues?.get(1)
+
+        val baseName = when {
+            ch != null && vol != null -> "Ch. $ch (Vol. $vol)"
+            ch != null -> "Ch. $ch"
+            vol != null -> "Vol. $vol"
+            else -> {
+                val rawMatch = RAW_NUMBER_REGEX.find(fileName)
+                if (rawMatch != null) "Ch. ${rawMatch.groupValues[1]}" else name
+            }
         }
-    }.reversed()
+
+        val metadata = METADATA_REGEX.findAll(fileName)
+            .map { it.groupValues[1] }
+            .filter { tag ->
+                val lowerTag = tag.lowercase()
+                if (FIX_REGEX.matches(lowerTag)) return@filter true
+                val tagVol = VOLUME_REGEX.find(tag)?.groupValues?.get(1)
+                val tagCh = CHAPTER_REGEX.find(tag)?.groupValues?.get(1)
+                (tagVol == null || tagVol != vol) && (tagCh == null || tagCh != ch)
+            }
+            .joinToString(" ") { if (vol != null || FIX_REGEX.matches(it.lowercase())) "($it)" else "[$it]" }
+
+        return if (metadata.isNotEmpty()) "$baseName $metadata" else baseName
+    }
 
     @SuppressLint("NewApi")
     private fun parseChapterDate(dateString: String): Long {
@@ -437,6 +471,11 @@ abstract class Madokami :
 
     companion object {
         private val ARCHIVE_EXTENSIONS = listOf(".zip", ".cbz", ".rar", ".cbr", ".7z", ".cb7", ".tar", ".cbt")
+        private val VOLUME_REGEX = Regex("""(?i)\b(?:v|vol)(?:\.|ume)?\s?(\d+)\b""")
+        private val CHAPTER_REGEX = Regex("""(?i)\b(?:c|ch)(?:\.|apter)?\s?(\d+(?:-\d+)?)\b""")
+        private val RAW_NUMBER_REGEX = Regex("""\b(\d{3,})\b""")
+        private val METADATA_REGEX = Regex("""[\[(]([^])]+)[])]""")
+        private val FIX_REGEX = Regex("""(?i)f\d+""")
     }
 
     private fun isArchiveUrl(url: String): Boolean {
