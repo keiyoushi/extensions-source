@@ -182,7 +182,7 @@ abstract class MangaKSource :
 
         val chaptersDeferred = async {
             if (fetchChapters) {
-                val id = manga.memo?.get("id")?.jsonPrimitive?.contentOrNull ?: run {
+                val id = manga.memo["id"]?.jsonPrimitive?.contentOrNull ?: run {
                     val dto = nextJsDataDeferred.await()
                     dto.pageProps?.initialManga?.id
                         ?: throw IllegalStateException("Could not find manga ID for migration for: $detailsUrl")
@@ -228,8 +228,9 @@ abstract class MangaKSource :
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val blacklist = getBlacklist()
+        val genres = getGenreList(data, blacklist)
 
-        return FilterList(
+        val filters = mutableListOf<Filter<*>>(
             SortFilter(),
             ContentRatingFilter(),
             StatusFilter(),
@@ -238,10 +239,12 @@ abstract class MangaKSource :
             Filter.Separator(),
             AuthorFilter(),
             MinChapterFilter(),
-            Filter.Separator(),
-            // Filter.Header("Genres"),
-            GenreList(getGenreList(data, blacklist)),
         )
+        if (genres.isNotEmpty()) {
+            filters.add(Filter.Separator())
+            filters.add(GenreList(genres))
+        }
+        return FilterList(filters)
     }
 
     // ============================= Utilities =============================

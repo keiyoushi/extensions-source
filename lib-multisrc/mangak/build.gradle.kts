@@ -1,5 +1,3 @@
-
-
 plugins {
     alias(kei.plugins.multisrc)
 }
