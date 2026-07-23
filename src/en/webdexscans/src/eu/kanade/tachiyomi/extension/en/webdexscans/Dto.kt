@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
-import java.time.OffsetDateTime
+import kotlin.time.Instant
 
 @Serializable
 class SearchSeriesDto(
@@ -44,7 +44,7 @@ class SeriesInfo(
         this.author = this@SeriesInfo.author
         this.artist = this@SeriesInfo.artist
         this.description = this@SeriesInfo.description?.let {
-            val html = Jsoup.parseBodyFragment(it)
+            val html = Jsoup.parseBodyFragment(it, baseUrl)
             whitespaceRegex.replace(html.wholeText(), "\n\n").trim()
         }
         this.status = when (this@SeriesInfo.status?.lowercase()) {
@@ -78,13 +78,14 @@ class ChapterInfo(
             ?: "Chapter"
         this.name = if (isPremium()) "🔒 $chapterName" else chapterName
         this.url = "/series/$seriesSlug/$slug"
-        this.date_upload = createdAt?.let(OffsetDateTime::parse)?.toInstant()?.toEpochMilli() ?: 0L
+        this.chapter_number = chapterNumber ?: -1f
+        this.date_upload = createdAt?.let { Instant.parseOrNull(it) }?.toEpochMilliseconds() ?: 0L
     }
 
     fun isPremium(): Boolean {
-        val now = OffsetDateTime.now()
-        val freeAt = freeAt?.let(OffsetDateTime::parse)
-        return isPremium && freeAt?.isAfter(now) ?: true
+        if (!isPremium) return false
+        val freeAtInstant = freeAt?.let { Instant.parseOrNull(it) } ?: return true
+        return freeAtInstant.toEpochMilliseconds() > System.currentTimeMillis()
     }
 }
 

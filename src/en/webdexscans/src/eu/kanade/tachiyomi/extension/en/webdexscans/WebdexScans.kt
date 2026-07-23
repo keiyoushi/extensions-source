@@ -113,12 +113,13 @@ abstract class WebdexScans :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "series") {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.getOrNull(0) != "series") {
             return null
         }
 
+        val slug = url.pathSegments.getOrNull(1) ?: return null
         val manga = SManga.create().apply {
-            this.url = "/series/${url.pathSegments[1]}"
+            this.url = "/series/$slug"
         }
 
         return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
