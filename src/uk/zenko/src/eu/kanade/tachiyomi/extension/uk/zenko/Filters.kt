@@ -24,15 +24,14 @@ internal abstract class MultiValueFilter(
     name = name,
     state = values.map { MultiValueOption(it.first, it.second) },
 ) {
-    val selectedValues: List<String> get() = state.filter { it.state && it.value.isNotEmpty() }.map { it.value }
-    val checked get() = selectedValues.takeIf { it.isNotEmpty() }
+    val checked: List<String>? get() = state.filter { it.state && it.value.isNotEmpty() }.map { it.value }.takeIf { it.isNotEmpty() }
 }
 
 class TriStateFilter(name: String, val id: String) : Filter.TriState(name)
 
 abstract class TriStateGroup(
     name: String,
-    val options: List<Pair<String, String>>,
+    options: List<Pair<String, String>>,
 ) : Filter.Group<TriStateFilter>(
     name,
     options.map { TriStateFilter(it.first, it.second) },
@@ -101,6 +100,17 @@ internal class TranslationStatusFilter : MultiValueFilter("Статус пере
     }
 }
 
+internal class StatusFilter : MultiValueFilter("Статус тайтлу", statuses) {
+    companion object {
+        val statuses = listOf(
+            "Скоро" to "COMING_SOON",
+            "Видається" to "ONGOING",
+            "Призупинено" to "PAUSED",
+            "Завершено" to "FINISHED",
+        )
+    }
+}
+
 internal class AgeFilter(blockedAge: Set<String>) : MultiValueFilter("Вікові обмеження", age) {
     init {
         if (blockedAge.isNotEmpty()) {
@@ -122,9 +132,11 @@ internal class AgeFilter(blockedAge: Set<String>) : MultiValueFilter("Віков
 
 internal class GenresFilter(blockedGenres: Set<String>) : TriStateGroup("Жанри", genres) {
     init {
-        state.forEach { filter ->
-            if (blockedGenres.contains(filter.id)) {
-                filter.state = 2
+        if (blockedGenres.isNotEmpty()) {
+            state.forEach { filter ->
+                if (blockedGenres.contains(filter.id)) {
+                    filter.state = 2
+                }
             }
         }
     }
