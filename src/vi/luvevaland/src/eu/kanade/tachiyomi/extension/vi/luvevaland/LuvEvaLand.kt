@@ -1,63 +1,38 @@
 package eu.kanade.tachiyomi.extension.vi.luvevaland
 
-import android.content.SharedPreferences
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
-import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 
 @Source
-abstract class LuvEvaLand :
-    HttpSource(),
-    ConfigurableSource {
-
-    override val supportsLatest = true
-
-    private val preferences: SharedPreferences = getPreferences()
-
-    override val client = network.client.newBuilder()
-        .rateLimit(3)
-        .build()
-
-    // Strip "wv" from User-Agent so Google login works in this source.
-    // Google deny login when User-Agent contains the WebView token.
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .apply {
-            build()["user-agent"]?.let { userAgent ->
-                set("user-agent", removeWebViewToken(userAgent))
-            }
-        }
-
-    private fun removeWebViewToken(userAgent: String): String = userAgent.replace(WEBVIEW_TOKEN_REGEX, ")")
+abstract class LuvEvaLand : KeiSource() {
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/truyen-tranh", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val response = client.get("$baseUrl/truyen-tranh")
         val document = response.asJsoup()
 
         val mangas = document.select("#total-tab-content .comic-item")
@@ -71,7 +46,7 @@ abstract class LuvEvaLand :
         val mangaLinkElement = element.select("a[href*=/truyen-tranh/]")
             .firstOrNull {
                 val href = it.absUrl("href")
-                href.isNotEmpty() && !CHAPTER_URL_REGEX.containsMatchIn(href)
+                href.isNotEmpty() && !chapterUrlRegex.containsMatchIn(href)
             }
             ?: return null
 
@@ -86,15 +61,11 @@ abstract class LuvEvaLand :
 
     // ============================== Latest ================================
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/danh-sach-chuong-moi-cap-nhat".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-
-        return GET(url, headers)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
+        val response = client.get(url)
         val document = response.asJsoup()
 
         val mangas = document.select(".home__lg-book .book-vertical__item")
@@ -110,7 +81,7 @@ abstract class LuvEvaLand :
             ?: return null
 
         val mangaUrl = mangaLinkElement.absUrl("href")
-        if (!MANGA_PATH_REGEX.containsMatchIn(mangaUrl)) return null
+        if (!mangaPathRegex.containsMatchIn(mangaUrl)) return null
 
         val mangaTitle = element.selectFirst(".book__lg-title a")!!.text()
 
@@ -123,37 +94,20 @@ abstract class LuvEvaLand :
 
     // ============================== Search ================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotBlank()) {
-            val url = "$baseUrl/tim-kiem".toHttpUrl().newBuilder()
-                .addQueryParameter("page", page.toString())
-                .addQueryParameter("s", query)
-                .build()
-            return GET(url, headers)
-        }
-
-        val tagSlug = filters.firstInstanceOrNull<TagFilter>()?.toSlug()
-        if (tagSlug != null) {
-            val url = "$baseUrl/the-loai/$tagSlug".toHttpUrl().newBuilder()
-                .addQueryParameter("page", page.toString())
-                .build()
-            return GET(url, headers)
-        }
-
-        return GET("$baseUrl/tim-kiem?page=$page", headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$baseUrl/tim-kiem".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+            addQueryParameter("comic_type", "1")
+            if (query.isNotEmpty()) addQueryParameter("s", query)
+            filters.firstInstanceOrNull<TagFilter>()?.state
+                ?.filter { it.state }
+                ?.forEach { addQueryParameter("genres[]", it.id) }
+        }.build()
+        val response = client.get(url)
         val document = response.asJsoup()
-        val requestUrl = response.request.url.toString()
-
-        val mangas = if (requestUrl.contains("/the-loai/")) {
-            document.select(".book-vertical__item")
-                .mapNotNull(::latestMangaFromElement)
-        } else {
-            document.select("table.book__list tr.book__list-item")
-                .mapNotNull(::searchMangaFromRow)
-        }.distinctBy { it.url }
+        val mangas = document.select("table.book__list tr.book__list-item")
+            .mapNotNull(::searchMangaFromRow)
+            .distinctBy { it.url }
 
         val hasNextPage = document.selectFirst("ul.pagination a[rel=next]") != null
         return MangasPage(mangas, hasNextPage)
@@ -162,7 +116,7 @@ abstract class LuvEvaLand :
     private fun searchMangaFromRow(element: Element): SManga? {
         val linkElement = element.selectFirst("td.book__list-name a[href], td.book__list-image a[href]") ?: return null
         val mangaUrl = linkElement.absUrl("href")
-        if (!MANGA_PATH_REGEX.containsMatchIn(mangaUrl)) return null
+        if (!mangaPathRegex.containsMatchIn(mangaUrl)) return null
 
         val mangaTitle = element.selectFirst("td.book__list-name a")!!.text()
 
@@ -175,8 +129,32 @@ abstract class LuvEvaLand :
 
     // ============================== Details ===============================
 
-    override fun mangaDetailsParse(response: Response): SManga {
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "truyen-tranh") return null
+
+        val slug = url.pathSegments.getOrNull(1) ?: return null
+        val manga = SManga.create().apply {
+            title = slug
+            setUrlWithoutDomain("/truyen-tranh/$slug")
+        }
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val response = client.get("$baseUrl${manga.url}")
         val document = response.asJsoup()
+        return SMangaUpdate(
+            manga = parseMangaDetails(document, manga),
+            chapters = parseChapterList(document),
+        )
+    }
+
+    private fun parseMangaDetails(document: Document, manga: SManga): SManga {
         val detailElement = document.selectFirst(".book__detail-container, .book__detail-contain, .comic-info")
         val titleElement = detailElement?.selectFirst(".book__detail-name, .comic-name-detail, .comic-name")
             ?: document.selectFirst(".book__detail-name, .comic-name-detail, .comic-name")
@@ -184,6 +162,7 @@ abstract class LuvEvaLand :
             ?: document.selectFirst(".book__detail-image img[alt], .comic-image img[alt]")
 
         return SManga.create().apply {
+            setUrlWithoutDomain(manga.url)
             title = titleElement!!.text()
             thumbnail_url = normalizeThumbnail(extractImageUrl(thumbnailElement))
             author = detailElement?.selectFirst(".book__detail-text:matchesOwn((?i)^\\s*Tác giả:) a, .comic-author a")
@@ -212,38 +191,24 @@ abstract class LuvEvaLand :
         return introElement?.text()?.ifEmpty { null }
     }
 
-    private fun parseStatus(statusText: String?): Int = when {
-        statusText == null -> SManga.UNKNOWN
-        statusText.contains("đang tiến hành", ignoreCase = true) -> SManga.ONGOING
-        statusText.contains("hoàn thành", ignoreCase = true) -> SManga.COMPLETED
-        statusText.contains("truyện full", ignoreCase = true) -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
+    private fun parseStatus(statusText: String?): Int {
+        val status = statusText?.lowercase() ?: return SManga.UNKNOWN
+        return when {
+            "đang tiến hành" in status -> SManga.ONGOING
+            "hoàn thành" in status || "truyện full" in status -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
     }
 
     // ============================== Chapters ==============================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        var document = response.asJsoup()
-        var chapterRows = extractChapterRows(document)
-
-        if (chapterRows.isEmpty() && response.request.url.encodedPath.contains("/un-lock")) {
-            val unlockUrl = response.request.url.queryParameter("link")
-            if (!unlockUrl.isNullOrBlank()) {
-                val targetUrl = if (unlockUrl.startsWith("http")) unlockUrl else baseUrl + unlockUrl
-                client.newCall(GET(targetUrl, headers)).execute().use { unlockResponse ->
-                    document = unlockResponse.asJsoup()
-                    chapterRows = extractChapterRows(document)
-                }
-            }
-        }
-
-        val rowChapters = chapterRows
+    private fun parseChapterList(document: Document): List<SChapter> {
+        val rowChapters = extractChapterRows(document)
             .mapNotNull(::chapterFromRow)
             .sortedByDescending { it.first }
             .map { it.second }
 
-        if (rowChapters.isNotEmpty()) return rowChapters
-        return emptyList()
+        return rowChapters
     }
 
     private fun extractChapterRows(document: Document): List<Element> = document
@@ -253,39 +218,39 @@ abstract class LuvEvaLand :
     private fun chapterFromRow(element: Element): Pair<Int, SChapter>? {
         val chapterNameElement = element.selectFirst("td.list-chapter__name a, td:first-child a") ?: return null
 
-        val chapterLinkElement = element.selectFirst("a[href*=/chap], a[href*=/chuong], a[href*=/chapter], a[href*=/mo-khoa/chap]") ?: return null
+        val chapterLinkElement = element.selectFirst("a[href*=/chap], a[href*=/chuong], a[href*=/chapter]") ?: return null
         val chapterUrl = chapterLinkElement.absUrl("href")
-        if (!CHAPTER_URL_REGEX.containsMatchIn(chapterUrl)) return null
+        if (!chapterUrlRegex.containsMatchIn(chapterUrl)) return null
 
         val chapterName = chapterNameElement.ownText().ifEmpty { chapterNameElement.text() }
 
-        val isLocked =
-            chapterNameElement.attr("href").startsWith("javascript") ||
-                element.selectFirst("td.list-chapter__cost img[src*=lock], td.list-chapter__cost img[alt*=khóa], td.list-chapter__cost .chapter-icon") != null
-
         val chapterOrder = element.attr("data-order").toIntOrNull()
-            ?: CHAPTER_NUMBER_REGEX.find(chapterUrl)?.groupValues?.get(1)?.toIntOrNull()
+            ?: chapterNumberRegex.find(chapterUrl)?.groupValues?.get(1)?.toIntOrNull()
             ?: 0
 
         val chapterDate = element.selectFirst("td.list-chapter__date, td:last-child")
             ?.text()
-            ?.let { DATE_FORMAT.tryParse(it) }
+            ?.let(::parseDate)
             ?: 0L
 
         return chapterOrder to SChapter.create().apply {
-            name = if (isLocked && !isAutoUnlockEnabled) "🔒 $chapterName" else chapterName
+            name = chapterName
             setUrlWithoutDomain(chapterUrl)
             date_upload = chapterDate
         }
     }
 
+    private fun parseDate(date: String): Long = runCatching {
+        LocalDate.parse(date, dateFormat)
+            .atStartOfDay(dateZone)
+            .toInstant()
+            .toEpochMilli()
+    }.getOrDefault(0L)
+
     // ============================== Pages =================================
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter)).asObservable().map { response ->
-        parsePageList(response, chapter.url)
-    }
-
-    private fun parsePageList(response: Response, chapterUrl: String): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get("$baseUrl${chapter.url}")
         val document = response.asJsoup()
 
         val images = document.select("#view-chapter img, #chapter-content img, .chapter-content img, .reading-content img, .content-chapter img, .box-chapter-content img")
@@ -296,76 +261,8 @@ abstract class LuvEvaLand :
             return images.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
         }
 
-        if (isAutoUnlockEnabled) {
-            return buildPageListFromPattern(chapterUrl)
-        }
-
-        throw Exception(LOGIN_WEBVIEW_MESSAGE)
+        throw Exception("Không tìm thấy hình ảnh cho chương này")
     }
-
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
-
-    /**
-     * Build page list by probing predictable CDN image URLs.
-     * Extracts manga slug from the chapter URL and probes common CDN patterns
-     * with HEAD requests until a non-image response.
-     */
-    private fun buildPageListFromPattern(chapterUrl: String): List<Page> {
-        val mangaSlug = MANGA_SLUG_REGEX.find(chapterUrl)?.groupValues?.get(1)
-            ?: throw Exception("Không tìm thấy slug truyện")
-        val chapterNum = CHAPTER_NUMBER_REGEX.find(chapterUrl)?.groupValues?.get(1)?.toIntOrNull()
-            ?: throw Exception("Không tìm thấy số chương")
-
-        val cdnInfo = probeCdnPattern(mangaSlug, chapterNum)
-            ?: throw Exception("Không tìm thấy hình ảnh CDN cho chương này")
-
-        val pages = mutableListOf<Page>()
-        var index = 1
-
-        while (index <= 200) {
-            val imageUrl = "${cdnInfo.basePath}/${cdnInfo.chapterPrefix}$chapterNum/$index.${cdnInfo.extension}"
-            val headRequest = Request.Builder().url(imageUrl).head().build()
-            val isImage = client.newCall(headRequest).execute().use {
-                it.isSuccessful && it.header("Content-Type")?.startsWith("image/") == true
-            }
-
-            if (!isImage) break
-
-            pages.add(Page(index - 1, imageUrl = imageUrl))
-            index++
-        }
-
-        if (pages.isEmpty()) {
-            throw Exception("Không tìm thấy hình ảnh cho chương khóa")
-        }
-
-        return pages
-    }
-
-    private data class CdnInfo(
-        val basePath: String,
-        val chapterPrefix: String,
-        val extension: String,
-    )
-
-    private fun probeCdnPattern(mangaSlug: String, chapterNum: Int): CdnInfo? {
-        val patterns = listOf(
-            CdnInfo("$CDN_BASE_URL/$mangaSlug", "c", "png"),
-            CdnInfo("$CDN_BASE_URL/$mangaSlug", "c", "jpg"),
-            CdnInfo("$CDN_BASE_URL/$mangaSlug", "", "png"),
-            CdnInfo("$CDN_BASE_URL/$mangaSlug", "", "jpg"),
-        )
-
-        return patterns.firstOrNull { cdnInfo ->
-            val testUrl = "${cdnInfo.basePath}/${cdnInfo.chapterPrefix}$chapterNum/1.${cdnInfo.extension}"
-            val headRequest = Request.Builder().url(testUrl).head().build()
-            client.newCall(headRequest).execute().use {
-                it.isSuccessful && it.header("Content-Type")?.startsWith("image/") == true
-            }
-        }
-    }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Helpers ===============================
 
@@ -380,44 +277,29 @@ abstract class LuvEvaLand :
 
     private fun normalizeThumbnail(url: String?): String? {
         if (url == null) return null
-        return url.replace(THUMBNAIL_SIZE_REGEX, "")
+        return url.replace(thumbnailSizeRegex, "")
     }
 
     // ============================== Filters ===============================
 
-    override fun getFilterList(): FilterList = getFilters()
+    override val supportsFilterFetching get() = true
 
-    // ============================== Settings ==============================
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = KEY_AUTO_UNLOCK_CHAPTERS
-            title = "Tự mở khóa chương"
-            summary = "Có thể gây chậm hoặc crash cân nhắc khi sử dụng."
-            setDefaultValue(false)
-        }.let(screen::addPreference)
-    }
-
-    private val isAutoUnlockEnabled: Boolean
-        get() = preferences.getBoolean(KEY_AUTO_UNLOCK_CHAPTERS, false)
-
-    companion object {
-        private const val LOGIN_WEBVIEW_MESSAGE = "Vui lòng đăng nhập vào tài khoản phù hợp để xem chương này"
-
-        private const val KEY_AUTO_UNLOCK_CHAPTERS = "autoUnlockChapters"
-
-        private val WEBVIEW_TOKEN_REGEX = Regex("""\;\s*wv\)""")
-        private val MANGA_PATH_REGEX = Regex("""/truyen-tranh/""")
-        private const val CDN_BASE_URL = "https://picevaland.xyz/cloud"
-        private val MANGA_SLUG_REGEX = Regex("""/truyen-tranh/([^/.]+)""")
-        private val CHAPTER_URL_REGEX = Regex("""/(?:chap|chuong|chapter|mo-khoa/chap)""", RegexOption.IGNORE_CASE)
-        private val CHAPTER_NUMBER_REGEX = Regex("""/(?:chap|chuong|chapter)-([0-9]+)""", RegexOption.IGNORE_CASE)
-        private val THUMBNAIL_SIZE_REGEX = Regex("""-[0-9]+x[0-9]+(?=\.(?:jpe?g|png|webp)$)""")
-
-        private val DATE_FORMAT by lazy {
-            SimpleDateFormat("dd/MM/yyyy", Locale.ROOT).apply {
-                timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
-            }
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-kiem").asJsoup()
+        .select("select[name='genres[]'] option[value]")
+        .mapNotNull { option ->
+            val id = option.attr("value").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val name = option.text().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            GenreOption(name, id)
         }
-    }
+        .distinctBy { it.id }
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList = getFilters(data?.parseAs<List<GenreOption>>())
+
+    private val mangaPathRegex = Regex("""/truyen-tranh/""")
+    private val chapterUrlRegex = Regex("""/(?:chap|chuong|chapter)""", RegexOption.IGNORE_CASE)
+    private val chapterNumberRegex = Regex("""/(?:chap|chuong|chapter)-([0-9]+)""", RegexOption.IGNORE_CASE)
+    private val thumbnailSizeRegex = Regex("""-[0-9]+x[0-9]+(?=\.(?:jpe?g|png|webp)$)""")
+    private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
+    private val dateZone = ZoneId.of("Asia/Ho_Chi_Minh")
 }
