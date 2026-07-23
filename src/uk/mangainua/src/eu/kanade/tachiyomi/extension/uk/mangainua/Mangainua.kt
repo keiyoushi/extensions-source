@@ -3,8 +3,6 @@ package eu.kanade.tachiyomi.extension.uk.mangainua
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -12,77 +10,70 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.getValue
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Mangainua :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    // Info
+
     override val supportsLatest = true
-
     private val preferences by getPreferencesLazy()
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Origin", "$baseUrl/")
-        .add("Referer", "$baseUrl/")
-
-    override val client = network.client.newBuilder()
-        .rateLimit(1, 2.seconds)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        rateLimit(1, 2.seconds) { it.encodedPath.contains("/ajax/") }
+        rateLimit(5) { it.host == baseUrlHost }
+    }
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int) = makeSearchRequest("news_read;desc", page)
-
-    override fun popularMangaParse(response: Response) = mangaParse(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = makeSearchRequest("news_read;desc", page)
 
     // ============================== Latest ======================================
-    override fun latestUpdatesRequest(page: Int) = makeSearchRequest("date;desc", page)
-
-    override fun latestUpdatesParse(response: Response) = mangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = makeSearchRequest("date;desc", page)
 
     // ============================== Search ======================================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = makeSearchRequest(null, page, query, filters)
-
-    override fun searchMangaParse(response: Response) = mangaParse(response, true)
-
-    private fun makeSearchRequest(sortBy: String? = null, page: Int, query: String = "", filters: FilterList? = null): Request {
-        // Search by title
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotEmpty()) {
-            if (query.length < 3) {
-                throw Exception("Запит має містити щонайменше 3 символи / The query must contain at least 3 characters")
+            if (query.length < 3) throw Exception("Запит має містити щонайменше 3 символи / The query must contain at least 3 characters")
+            val url = "$baseUrl/index.php?do=search"
+            val body = FormBody.Builder()
+                .add("do", "search")
+                .add("subaction", "search")
+                .add("full_search", "1")
+                .add("story", query)
+                .add("search_start", page.toString())
+                .add("result_from", (1 + 12 * (page - 1)).toString())
+                .build()
+
+            client.post(url, body).use { response ->
+                return mangaParse(response, true)
             }
-
-            return POST(
-                "$baseUrl/index.php?do=search",
-                body = FormBody.Builder()
-                    .add("do", "search")
-                    .add("subaction", "search")
-                    .add("full_search", "1")
-                    .add("story", query)
-                    .add("search_start", page.toString())
-                    .add("result_from", (1 + 12 * (page - 1)).toString())
-                    .build(),
-                headers = headers,
-            )
         }
+        return makeSearchRequest(null, page, filters)
+    }
 
-        // Search by filters
+    // ============================== Search Utilities ======================================
+    private suspend fun makeSearchRequest(sortBy: String? = null, page: Int, filters: FilterList? = null): MangasPage {
         val url = "$baseUrl/filter".toHttpUrl().newBuilder().apply {
             filters?.forEach { filter ->
                 when (filter) {
@@ -107,7 +98,9 @@ abstract class Mangainua :
             if (page > 1) addPathSegments("page/$page/")
         }.build()
 
-        return GET(url, headers)
+        client.get(url).use { response ->
+            return mangaParse(response, false)
+        }
     }
 
     private fun mangaParse(response: Response, fromSearch: Boolean = false): MangasPage {
@@ -123,13 +116,13 @@ abstract class Mangainua :
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun mangaFromElement(element: Element, ignoredTags: Set<String>): SManga? = SManga.create().apply {
+    private fun mangaFromElement(element: Element, ignoredTags: Set<String>? = emptySet()): SManga? = SManga.create().apply {
         // If there is no img, it's (probably) deleted manga, but site still shows it in search results
         // Example: https://manga.in.ua/filter/sort=nameukr;asc/
         element.selectFirst("img") ?: return null
 
         // Hide manga by tags in Settings
-        if (hideChaptersByTag && ignoredTags.isNotEmpty()) {
+        if (hideChaptersByTag && ignoredTags?.isNotEmpty() == true) {
             val mangaTags = element.select("div.card__category a").eachText()
             if (mangaTags.any { it in ignoredTags }) {
                 return null
@@ -144,31 +137,49 @@ abstract class Mangainua :
     }
 
     // ============================== Manga Details ======================================
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get("$baseUrl${manga.url}").asJsoup()
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
-        title = document.selectFirst("span.UAName")!!.ownText()
-        description = document.selectFirst("div.item__full-description p")?.wholeText()
-        thumbnail_url = document.selectFirst("div.item__full-sidebar--poster img")?.imgAttr()
-        status = when (document.getInfoElement("Статус перекладу:")?.text()) {
-            "Триває" -> SManga.ONGOING
-            "Заморожено" -> SManga.ON_HIATUS
-            "Покинуто" -> SManga.CANCELLED
-            "Закінчений" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+        val mangaNew = if (fetchDetails) {
+            SManga.create().apply {
+                title = document.selectFirst("span.UAName")!!.ownText()
+                description = document.selectFirst("div.item__full-description p")?.wholeText()
+                thumbnail_url = document.selectFirst("div.item__full-sidebar--poster img")?.imgAttr()
+                status = when (document.getInfoElement("Статус перекладу:")?.text()) {
+                    "Триває" -> SManga.ONGOING
+                    "Заморожено" -> SManga.ON_HIATUS
+                    "Покинуто" -> SManga.CANCELLED
+                    "Закінчений" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
+                genre = buildList {
+                    add(document.getInfoElement("Тип:")?.text())
+                    addAll(document.getInfoElement("Жанри:")?.select("a")?.eachText().orEmpty())
+                }.joinToString()
+            }
+        } else {
+            manga
         }
-        genre = buildList {
-            add(document.getInfoElement("Тип:")?.text())
-            addAll(document.getInfoElement("Жанри:")?.select("a")?.eachText().orEmpty())
-        }.joinToString()
-    }
 
+        val chaptersNew = if (fetchChapters) {
+            getChaptersList(document)
+        } else {
+            chapters
+        }
+
+        return SMangaUpdate(mangaNew, chaptersNew)
+    }
     private fun Document.getInfoElement(text: String): Element? = selectFirst("div.item__full-sideba--header:has(div:containsOwn($text)) span.item__full-sidebar--description")
 
     // ============================== Chapters ======================================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val newResponse = getAjaxChapters(response)
+    private suspend fun getChaptersList(document: Document): List<SChapter> {
+        val newResponse = getAjaxChapters(document)
         return newResponse.asJsoup().select("div.ltcitems").asReversed().mapNotNull { element ->
             val urlElement = element.selectFirst("a") ?: return@mapNotNull null // Skip if no URL element
             val chapterName = urlElement.ownText().trim()
@@ -183,7 +194,9 @@ abstract class Mangainua :
             SChapter.create().apply {
                 setUrlWithoutDomain(urlElement.attr("abs:href"))
                 scanlator = element.attr("translate").takeUnless(String::isBlank) ?: urlElement.text().substringAfter("від:").trim()
-                date_upload = parseDate(element.child(0).ownText())
+                date_upload = runCatching {
+                    LocalDate.parse(element.child(0).ownText(), dateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+                }.getOrDefault(0L)
                 chapter_number = chapterNumber.toFloatOrNull() ?: 0f
                 name = when {
                     chapterName.contains("Альтернативний") -> "Том $volumeNumber. Розділ $chapterNumber"
@@ -193,8 +206,7 @@ abstract class Mangainua :
         }
     }
 
-    private fun getAjaxChapters(response: Response): Response {
-        val document = response.asJsoup()
+    private suspend fun getAjaxChapters(document: Document): Response {
         val userHash = document.parseUserHash()
         val endpoint = "engine/ajax/controller.php?mod=load_chapters"
         val userHashQuery = document.parseUserHashQuery(endpoint)
@@ -210,20 +222,19 @@ abstract class Mangainua :
             .add(userHashQuery, userHash)
             .build()
 
-        return client.newCall(POST("$baseUrl/$endpoint", ajaxHeaders(), newBody))
-            .execute()
+        return client.post("$baseUrl/$endpoint", ajaxHeaders(), newBody)
     }
 
     // ============================== Images ======================================
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = getAjaxImages(response)
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val data = client.get("$baseUrl${chapter.url}")
+        val document = getAjaxImages(data)
         return document.asJsoup().select("li img").mapIndexed { index, element ->
             Page(index, imageUrl = element.attr("data-src"))
         }
     }
 
-    private fun getAjaxImages(response: Response): Response {
+    private suspend fun getAjaxImages(response: Response): Response {
         val document = response.asJsoup()
         val userHash = document.parseUserHash()
         val endpoint = "engine/ajax/controller.php?mod=load_chapters_image"
@@ -231,11 +242,8 @@ abstract class Mangainua :
         val newsId = document.selectFirst("div#comics")!!.attr("data-news_id")
         val url = "$baseUrl/$endpoint&news_id=$newsId&action=show&$userHashQuery=$userHash"
 
-        return client.newCall(GET(url, ajaxHeaders()))
-            .execute()
+        return client.get(url, ajaxHeaders())
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Utilities ======================================
 
@@ -249,7 +257,7 @@ abstract class Mangainua :
         return hash.ifEmpty { throw Exception("Couldn't find user hash") }
     }
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Фільтри не застосовуються під час пошуку за назвою"),
         CategoriesFilter(),
         StatusFilter(),
@@ -276,7 +284,7 @@ abstract class Mangainua :
         else -> absUrl("src")
     }
 
-    private fun ignoreTags(): Set<String> = preferences.getStringSet(SITE_TAGS_PREF, emptySet<String>())!!
+    private fun ignoreTags(): Set<String> = preferences.getStringSet(SITE_TAGS_PREF, emptySet()) ?: emptySet()
     private val hideChaptersByTag = preferences.getBoolean(SITE_TAGS_SEARCH, false)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -311,8 +319,7 @@ abstract class Mangainua :
     }
 
     companion object {
-        private val dateFormatSite = SimpleDateFormat("dd.MM.yyyy", Locale.ROOT)
-        private fun parseDate(dateStr: String?): Long = dateFormatSite.tryParse(dateStr)
+        private val dateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.ROOT)
         private const val SITE_LOGIN_HASH = "site_login_hash"
         private const val SITE_TAGS_PREF = "site_hidden_tags"
         private const val SITE_TAGS_PREF_TITLE = "Приховані категорії"
