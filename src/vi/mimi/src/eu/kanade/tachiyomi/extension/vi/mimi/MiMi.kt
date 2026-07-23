@@ -164,12 +164,17 @@ abstract class MiMi : KeiSource() {
     override fun getFilterList(data: JsonElement?): FilterList {
         val genreList = data?.parseAs<List<GenreDto>>()?.sortedBy { it.name } ?: emptyList()
         return FilterList(
-            SortByFilter(),
-            TextField("Parody", "parody"),
-            TextField("Nhân vật", "character"),
-            Filter.Header("ID Tác giả (chỉ nhập số)"),
-            TextField("ID Tác giả", "author"),
-            GenresFilter(genreList),
+            buildList {
+                add(SortByFilter())
+                add(TextField("Parody", "parody"))
+                add(TextField("Nhân vật", "character"))
+                add(Filter.Header("ID Tác giả (chỉ nhập số)"))
+                add(TextField("ID Tác giả", "author"))
+
+                if (genreList.isNotEmpty()) {
+                    add(GenresFilter(genreList))
+                }
+            },
         )
     }
 }
