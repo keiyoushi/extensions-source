@@ -253,7 +253,7 @@ class ChapterDto(
                 // Extract group tags in chapter title
                 CHAPTER_GROUP_REGEX.matchEntire(METADATA_REGEX.replace(title.trim(), ""))?.let { match ->
                     val groupTag = match.groups[1]?.value ?: match.groups[2]?.value
-                    append(" ($groupTag)")
+                    groupTag?.let { append(" ($it)") }
                 }
             }
         }
