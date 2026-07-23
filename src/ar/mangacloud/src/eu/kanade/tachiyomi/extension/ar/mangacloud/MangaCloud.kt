@@ -13,6 +13,7 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
@@ -203,16 +204,11 @@ abstract class MangaCloud : KeiSource() {
 
     // ============================== Filters =============================
 
-    override fun getFilterList(data: kotlinx.serialization.json.JsonElement?) = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         SortFilter("ترتيب حسب", sortingList),
         StatusFilter("الحالة", statusList),
         GenreFilter("التصنيف", genreList),
     )
-
-    // ============================== Related =============================
-
-    override val supportsRelatedMangas get() = false
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
 
     // ============================== State ===============================
 

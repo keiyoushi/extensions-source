@@ -19,7 +19,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.GraphQLErrorInterceptor
+import keiyoushi.utils.GraphQLException
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLBody
@@ -27,6 +27,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseGraphQLAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.string
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -46,7 +47,6 @@ abstract class AllManga :
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         interceptors().removeAll { it.javaClass.simpleName == "CloudflareInterceptor" }
-        addInterceptor(GraphQLErrorInterceptor())
         rateLimit(1) { it.host == apiDomain }
     }
 
@@ -155,17 +155,37 @@ abstract class AllManga :
             variables = MangaUpdateVariables(mangaId, "manga@$mangaId"),
         )
 
-        client.post(apiUrl, payload).use { response ->
-            val data = response.parseGraphQLAs<MangaUpdateData>()
-            val chapterDetails = data.chapterList.associateBy { it.chapterNum.content }
-
-            return SMangaUpdate(
-                manga = data.manga.toSManga(),
-                chapters = data.manga.availableChaptersDetail.sub.map { chapterNum ->
-                    chapterDetails[chapterNum]!!.toSChapter(mangaId, mangaSlug, legacy)
-                },
-            )
+        var data: MangaUpdateData? = null
+        var lastError: Exception? = null
+        var retryDelay = RETRY_DELAY_MS
+        for (attempt in 0..MAX_RETRIES) {
+            if (attempt > 0) delay(retryDelay)
+            try {
+                val result = client.post(apiUrl, payload).parseGraphQLAs<MangaUpdateData>()
+                if (result.manga != null) {
+                    data = result
+                    break
+                }
+                retryDelay += RETRY_DELAY_MS
+            } catch (e: GraphQLException) {
+                // "Too many requests, please try again in N seconds."
+                lastError = e
+                val requested = retryAfterRegex.find(e.message.orEmpty())
+                    ?.groupValues?.get(1)?.toLongOrNull()?.times(1000L)
+                retryDelay = requested ?: (retryDelay + RETRY_DELAY_MS)
+            }
         }
+
+        val manga = data?.manga
+            ?: throw (lastError ?: Exception("Unable to fetch manga details"))
+        val chapterDetails = data.chapterList.associateBy { it.chapterNum.content }
+
+        return SMangaUpdate(
+            manga = manga.toSManga(),
+            chapters = manga.availableChaptersDetail.sub.map { chapterNum ->
+                chapterDetails[chapterNum]!!.toSChapter(mangaId, mangaSlug, legacy)
+            },
+        )
     }
 
     override val supportsRelatedMangas get() = true
@@ -200,13 +220,7 @@ abstract class AllManga :
 
         val data = client.post(apiUrl, payload).parseGraphQLAs<RelatedData>()
 
-        val result = (data.mangasWithIds.orEmpty() + data.search?.edges.orEmpty() + data.fewerGenresSearch?.edges.orEmpty())
-            .distinctBy { it.id }
-            .map(SearchManga::toSManga)
-
-        if (result.size > 1 || genres.size <= 1) return result
-
-        return data.fewerGenresSearch?.edges.orEmpty()
+        return (data.mangasWithIds.orEmpty() + data.search?.edges.orEmpty() + data.fewerGenresSearch?.edges.orEmpty())
             .distinctBy { it.id }
             .map(SearchManga::toSManga)
     }
@@ -371,6 +385,9 @@ abstract class AllManga :
 }
 
 private const val LIMIT = 20
+private const val MAX_RETRIES = 5
+private const val RETRY_DELAY_MS = 1000L
+private val retryAfterRegex = Regex("""again in (\d+)\s*second""")
 val urlRegex = Regex("^https?://.*")
 private const val IMAGE_CDN = "https://wp.youtube-anime.com"
 private val imageQualityRegex = Regex("^https?://([^#]+)")

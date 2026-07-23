@@ -36,6 +36,24 @@ internal class SearchDto(
 }
 
 @Serializable
+internal class HomeMangaDto(
+    @SerialName("manga_key")
+    private val mangaKey: String,
+    @SerialName("display_name")
+    private val displayName: String,
+    private val status: String,
+    @SerialName("cover_image")
+    private val coverImage: String,
+) {
+    fun toSManga(): SManga = SManga.create().apply {
+        url = mangaKey
+        title = displayName
+        thumbnail_url = coverImage
+        status = this@HomeMangaDto.status.toStatus()
+    }
+}
+
+@Serializable
 internal class MangaDto(
     @SerialName("manga_key")
     private val mangaKey: String,
