@@ -42,7 +42,7 @@ class ApiSearchResults(
 class ApiMangaSearchItem(
     val title: String,
     val slug: String,
-    val image: String,
+    val image: String?,
 )
 
 // Manga Details + Chapters

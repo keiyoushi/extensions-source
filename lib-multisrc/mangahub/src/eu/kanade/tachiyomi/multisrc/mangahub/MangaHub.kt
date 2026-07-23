@@ -18,10 +18,8 @@ import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseGraphQLAs
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -38,7 +36,6 @@ import okhttp3.Response
 import java.io.IOException
 import java.net.URLEncoder
 import kotlin.random.Random
-import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
 
@@ -167,7 +164,7 @@ abstract class MangaHub : KeiSource() {
             SManga.create().apply {
                 url = "/manga/${it.slug}"
                 title = it.title
-                thumbnail_url = "$baseThumbCdnUrl/${it.image}"
+                thumbnail_url = it.image?.takeIf(String::isNotBlank)?.let { image -> "$baseThumbCdnUrl/$image" }
             }
         }
 
@@ -236,7 +233,7 @@ abstract class MangaHub : KeiSource() {
         author = this@toSManga.author
         artist = this@toSManga.artist
         genre = genres
-        thumbnail_url = "$baseThumbCdnUrl/$image"
+        thumbnail_url = image?.takeIf(String::isNotBlank)?.let { image -> "$baseThumbCdnUrl/$image" }
         status = when (this@toSManga.status) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
@@ -292,7 +289,7 @@ abstract class MangaHub : KeiSource() {
 
         // We'll update the cookie here to match the browser's "recently" opened chapter.
         // This mimics how the browser works and gives us more chance to receive a valid API key upon refresh
-        val now = Clock.System.now()
+        val now = System.currentTimeMillis()
         val baseHttpUrl = baseUrl.toHttpUrl()
         val recently = buildJsonObject {
             putJsonObject(now.toString()) {
@@ -304,17 +301,13 @@ abstract class MangaHub : KeiSource() {
         val recentlyCookie = Cookie.Builder()
             .domain(baseHttpUrl.host)
             .name("recently")
-            .value(
-                withContext(Dispatchers.IO) {
-                    URLEncoder.encode(recently, "utf-8")
-                },
-            )
-            .expiresAt(now.plus(60.days).toEpochMilliseconds()) // +2 months
+            .value(URLEncoder.encode(recently, "utf-8"))
+            .expiresAt(now.plus(60.days.inWholeMilliseconds))
             .build()
 
         client.cookieJar.saveFromResponse(baseHttpUrl, listOf(recentlyCookie))
 
-        // Best-effort logging to further increase the chance of a valid API key; don't block page loading on it
+        // Best-effort logging to further increase the chance of a valid API key
         logChapterView(slug, chapterObject.chapterNumber)
 
         return pages.images.mapIndexed { i, page ->
@@ -322,7 +315,7 @@ abstract class MangaHub : KeiSource() {
         }
     }
 
-    // Mimics the browser logging a chapter view. Fire-and-forget on OkHttp's dispatcher.
+    // Mimics the browser logging a chapter view
     private fun logChapterView(slug: String, chapterNumber: Float) {
         GET("https://api.ipify.org?format=json").enqueue { ipResponse ->
             val ip = ipResponse.parseAs<PublicIPResponse>().ip
@@ -352,7 +345,6 @@ abstract class MangaHub : KeiSource() {
         Order("Completed", "COMPLETED"),
     )
 
-    // Genres are scraped from the site's search page since there is no filter API
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
