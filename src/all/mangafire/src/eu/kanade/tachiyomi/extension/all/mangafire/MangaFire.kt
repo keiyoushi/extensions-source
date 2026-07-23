@@ -180,6 +180,16 @@ abstract class MangaFire :
         }
 
         chapters
+            .let {
+                if (mergeChapters) {
+                    it.sortedBy { chapter ->
+                        val isOfficial = chapter.scanlator!!.lowercase() == "official"
+                        if (preferOfficial) !isOfficial else isOfficial
+                    }.distinctBy { it.chapter_number }.sortedByDescending { it.chapter_number }
+                } else {
+                    it
+                }
+            }
     }
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
@@ -247,6 +257,12 @@ abstract class MangaFire :
     private val showAsVolumes: Boolean
         get() = preferences.getBoolean(PREF_SHOW_AS_VOLUMES, false)
 
+    private val mergeChapters: Boolean
+        get() = preferences.getBoolean(PREF_MERGE_CHAPTERS, false)
+
+    private val preferOfficial: Boolean
+        get() = preferences.getBoolean(PREF_PREFER_OFFICIAL, true)
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_SHOW_AS_VOLUMES
@@ -254,10 +270,31 @@ abstract class MangaFire :
             summary = SUMMARY_MSG
             setDefaultValue(false)
         }.also(screen::addPreference)
+
+        val mergeChaptersPref = SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_MERGE_CHAPTERS
+            title = "Merge duplicate chapters"
+            summary = SUMMARY_MSG
+            setDefaultValue(false)
+        }.also { screen.addPreference(it) }
+
+        val preferOfficialPref = SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_PREFER_OFFICIAL
+            title = "Prefer official chapters"
+            setDefaultValue(true)
+            setEnabled(mergeChapters)
+        }.also { screen.addPreference(it) }
+
+        mergeChaptersPref.setOnPreferenceChangeListener { _, newValue ->
+            preferOfficialPref.setEnabled(newValue as Boolean)
+            true
+        }
     }
 
     companion object {
         private const val PREF_SHOW_AS_VOLUMES = "show_as_volumes"
+        private const val PREF_MERGE_CHAPTERS = "merge_chapters"
+        private const val PREF_PREFER_OFFICIAL = "prefer_official"
         private const val SUMMARY_MSG = "Requires Chapter List Refresh to Apply"
     }
 }
