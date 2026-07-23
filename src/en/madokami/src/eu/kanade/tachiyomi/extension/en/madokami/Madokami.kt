@@ -349,7 +349,7 @@ abstract class Madokami :
     }
 
     private fun normalizeName(name: String): String {
-        val fileName = name.substringBeforeLast(".")
+        val fileName = name.substringBeforeLast(".").replace("_", " ")
         val volMatch = VOLUME_REGEX.find(fileName)
         val chMatch = CHAPTER_REGEX.find(fileName)
 
