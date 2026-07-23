@@ -332,21 +332,22 @@ abstract class Madokami :
             val fileLink = row.selectFirst("td:nth-child(1) a") ?: return@mapNotNull null
             val fileName = fileLink.text()
             val readerLink = row.selectFirst("td:nth-child(6) a")
-            val isZip = fileName.endsWith(".zip", true) || fileName.endsWith(".cbz", true)
 
-            if (!isZip && readerLink == null) return@mapNotNull null
+            if (!isSupportedChapter(fileName, readerLink)) return@mapNotNull null
 
             SChapter.create().apply {
-                url = if (isZip) {
+                url = if (readerLink == null) {
                     fileLink.absUrl("href").substringAfter(baseUrl)
                 } else {
-                    "/reader" + readerLink!!.absUrl("href").substringAfter("/reader")
+                    "/reader" + readerLink.absUrl("href").substringAfter("/reader")
                 }
                 name = normalizeName(fileName)
                 date_upload = parseChapterDate(row.select("td:nth-child(3)").text())
             }
         }.reversed()
     }
+
+    private fun isSupportedChapter(fileName: String, readerLink: Element?): Boolean = fileName.endsWith(".zip", true) || fileName.endsWith(".cbz", true) || readerLink != null
 
     private fun normalizeName(name: String): String {
         val fileName = name.substringBeforeLast(".").replace("_", " ")
@@ -471,6 +472,7 @@ abstract class Madokami :
 
     companion object {
         private val ARCHIVE_EXTENSIONS = listOf(".zip", ".cbz", ".rar", ".cbr", ".7z", ".cb7", ".tar", ".cbt")
+        private val UNSUPPORTED_EXTENSIONS = listOf(".epub", ".pdf", ".txt")
         private val VOLUME_REGEX = Regex("""(?i)\b(?:v|vol)(?:\.|ume)?\s?(\d+)\b""")
         private val CHAPTER_REGEX = Regex("""(?i)\b(?:c|ch)(?:\.|apter)?\s?(\d+(?:-\d+)?)\b""")
         private val RAW_NUMBER_REGEX = Regex("""\b(\d{3,})\b""")
@@ -482,13 +484,14 @@ abstract class Madokami :
         val httpUrl = try {
             url.toHttpUrl()
         } catch (_: Exception) {
-            return ARCHIVE_EXTENSIONS.any { url.lowercase(Locale.ROOT).endsWith(it) }
+            val lower = url.lowercase(Locale.ROOT)
+            return ARCHIVE_EXTENSIONS.any { lower.endsWith(it) } || UNSUPPORTED_EXTENSIONS.any { lower.endsWith(it) }
         }
         return isArchiveUrl(httpUrl)
     }
 
     private fun isArchiveUrl(url: HttpUrl): Boolean {
         val path = url.encodedPath.lowercase(Locale.ROOT)
-        return ARCHIVE_EXTENSIONS.any { path.endsWith(it) }
+        return ARCHIVE_EXTENSIONS.any { path.endsWith(it) } || UNSUPPORTED_EXTENSIONS.any { path.endsWith(it) }
     }
 }
