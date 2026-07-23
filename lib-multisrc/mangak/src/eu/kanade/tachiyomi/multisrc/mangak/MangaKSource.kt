@@ -22,6 +22,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -30,8 +32,7 @@ abstract class MangaKSource :
     KeiSource(),
     ConfigurableSource {
 
-    override val supportsLatest = true
-
+    override val supportsFilterFetching = true
     protected open val apiUrl: String
         get() = "https://api." + baseUrl.toHttpUrl().host
 
@@ -68,7 +69,7 @@ abstract class MangaKSource :
             }
         }.build()
 
-        val response = client.get(url, headers)
+        val response = client.get(url)
         val dto = response.parseAs<SearchResponseDto>()
         return MangasPage(dto.items.map { it.toSManga() }, dto.hasNext)
     }
@@ -87,7 +88,7 @@ abstract class MangaKSource :
             }
         }.build()
 
-        val response = client.get(url, headers)
+        val response = client.get(url)
         val dto = response.parseAs<SearchResponseDto>()
         return MangasPage(dto.items.map { it.toSManga() }, dto.hasNext)
     }
@@ -139,7 +140,7 @@ abstract class MangaKSource :
             if (excludedGenres.isNotEmpty()) addQueryParameter("exclude", excludedGenres.joinToString(","))
         }.build()
 
-        val response = client.get(url, headers)
+        val response = client.get(url)
         val dto = response.parseAs<SearchResponseDto>()
         return MangasPage(dto.items.map { it.toSManga() }, dto.hasNext)
     }
@@ -163,7 +164,7 @@ abstract class MangaKSource :
 
         // Lazy deferred ensures NextJS data is fetched at most ONCE across both jobs
         val nextJsDataDeferred = async(start = CoroutineStart.LAZY) {
-            val response = client.get(detailsUrl, headers)
+            val response = client.get(detailsUrl)
             response.extractNextJs<NextJsDto> {
                 it is JsonObject && "pageProps" in it
             } ?: throw IllegalStateException("Could not extract Next.js data for: $detailsUrl")
@@ -181,19 +182,10 @@ abstract class MangaKSource :
 
         val chaptersDeferred = async {
             if (fetchChapters) {
-                val idFromUrl = manga.url.substringAfterLast("#", "")
-                val idFromDesc = manga.description?.let { desc ->
-                    MANGA_ID_REGEX.find(desc)?.groupValues?.get(1)?.trim()
-                }
-
-                val id = when {
-                    idFromUrl.isNotBlank() -> idFromUrl
-                    !idFromDesc.isNullOrBlank() -> idFromDesc
-                    else -> {
-                        val dto = nextJsDataDeferred.await()
-                        dto.pageProps?.initialManga?.id
-                            ?: throw IllegalStateException("Could not find manga ID for migration for: $detailsUrl")
-                    }
+                val id = manga.memo?.get("id")?.jsonPrimitive?.contentOrNull ?: run {
+                    val dto = nextJsDataDeferred.await()
+                    dto.pageProps?.initialManga?.id
+                        ?: throw IllegalStateException("Could not find manga ID for migration for: $detailsUrl")
                 }
 
                 fetchChaptersByApiId(id)
@@ -207,7 +199,7 @@ abstract class MangaKSource :
 
     private suspend fun fetchChaptersByApiId(id: String): List<SChapter> {
         val url = "$apiUrl/titles/$id/chapters?cv=${System.currentTimeMillis()}"
-        val response = client.get(url, headers)
+        val response = client.get(url)
         val chapterList = response.parseAs<ChapterListResponseDto>().chapters
 
         return chapterList.sortedByDescending { it.chapterNumber ?: 0f }
@@ -218,13 +210,12 @@ abstract class MangaKSource :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val response = client.get(chapterUrl, headers)
+        val response = client.get(chapterUrl)
         val dto = response.extractNextJs<NextJsDto> {
             it is JsonObject && "pageProps" in it
         }
 
-        val images = dto?.pageProps?.initialChapter?.images
-            ?: throw IllegalStateException("Could not find chapter images for: $chapterUrl")
+        val images = dto?.pageProps?.initialChapter?.images ?: return emptyList()
 
         return images.mapIndexed { index, url ->
             Page(index, imageUrl = url)
@@ -232,6 +223,8 @@ abstract class MangaKSource :
     }
 
     // ============================== Filters ==============================
+
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres").parseAs<JsonElement>()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val blacklist = getBlacklist()
@@ -246,8 +239,8 @@ abstract class MangaKSource :
             AuthorFilter(),
             MinChapterFilter(),
             Filter.Separator(),
-            Filter.Header("Genres"),
-            GenreList(getGenreList(blacklist)),
+            // Filter.Header("Genres"),
+            GenreList(getGenreList(data, blacklist)),
         )
     }
 
@@ -278,6 +271,5 @@ abstract class MangaKSource :
         private const val WINDOW_WEEK = "week"
 
         private val IMAGE_FALLBACK_REGEX = "rx\\.qvzr[a-z]\\.org".toRegex()
-        private val MANGA_ID_REGEX = """Manga ID:\s*(.+)""".toRegex(RegexOption.IGNORE_CASE)
     }
 }

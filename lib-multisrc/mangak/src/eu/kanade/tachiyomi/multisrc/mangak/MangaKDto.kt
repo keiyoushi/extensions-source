@@ -4,6 +4,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.time.Instant
 
 @Serializable
@@ -30,7 +32,10 @@ class MangaItemDto(
     fun toSManga() = SManga.create().apply {
         title = name
         thumbnail_url = cover
-        url = "${this@MangaItemDto.url}#$id"
+        url = "${this@MangaItemDto.url}"
+        memo = buildJsonObject {
+            put("id", id)
+        }
     }
 }
 
@@ -90,21 +95,16 @@ class InitialMangaDto(
     fun toSManga(mangaUrl: String? = null) = SManga.create().apply {
         title = name
         author = authors?.joinToString { it.name }
-        description = buildString {
-            if (!summary.isNullOrBlank()) {
-                append(summary).append("\n\n")
-            }
-            append("Manga ID: ").append(id)
-        }
+        description = summary
         genre = genres?.joinToString { it.name }
         status = this@InitialMangaDto.status.toStatus()
         thumbnail_url = cover
 
         // Preserve original URL or use internal URL + ID tag
-        url = when {
-            !mangaUrl.isNullOrBlank() -> mangaUrl
-            !this@InitialMangaDto.url.isNullOrBlank() -> "${this@InitialMangaDto.url}#$id"
-            else -> "#$id"
+        url = mangaUrl.takeUnless { it.isNullOrBlank() }
+            ?: this@InitialMangaDto.url.orEmpty()
+        memo = buildJsonObject {
+            put("id", id)
         }
     }
 }
