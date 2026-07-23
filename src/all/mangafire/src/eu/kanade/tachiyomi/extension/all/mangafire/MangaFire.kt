@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.mangafire
 
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -49,11 +50,12 @@ abstract class MangaFire :
     // ============================== Popular ==============================
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/api/titles".toHttpUrl().newBuilder()
-            .addQueryParameter("order[views_30d]", "desc")
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("limit", "50")
-            .build()
+        val url = "$baseUrl/api/titles".toHttpUrl().newBuilder().apply {
+            addQueryParameter("order[views_30d]", "desc")
+            addQueryParameter("page", page.toString())
+            addQueryParameter("limit", "50")
+            ContentRatingFilter(contentRating).addToUri(this)
+        }.build()
         return GET(url, headers)
     }
 
@@ -66,11 +68,12 @@ abstract class MangaFire :
     // ============================== Latest ===============================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/api/titles".toHttpUrl().newBuilder()
-            .addQueryParameter("order[chapter_updated_at]", "desc")
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("limit", "50")
-            .build()
+        val url = "$baseUrl/api/titles".toHttpUrl().newBuilder().apply {
+            addQueryParameter("order[chapter_updated_at]", "desc")
+            addQueryParameter("page", page.toString())
+            addQueryParameter("limit", "50")
+            ContentRatingFilter(contentRating).addToUri(this)
+        }.build()
         return GET(url, headers)
     }
 
@@ -224,6 +227,8 @@ abstract class MangaFire :
     // ============================== Filters ==============================
 
     override fun getFilterList() = FilterList(
+        ContentRatingFilter(contentRating),
+        Filter.Separator(),
         TypeFilter(),
         Filter.Separator(),
         GenreModeFilter(),
@@ -254,6 +259,9 @@ abstract class MangaFire :
 
     // ========================= Preferences =========================
 
+    private val contentRating: Set<String>
+        get() = preferences.getStringSet(CONTENT_RATING_PREF, emptySet()) ?: emptySet()
+
     private val showAsVolumes: Boolean
         get() = preferences.getBoolean(PREF_SHOW_AS_VOLUMES, false)
 
@@ -264,6 +272,21 @@ abstract class MangaFire :
         get() = preferences.getBoolean(PREF_PREFER_OFFICIAL, true)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        MultiSelectListPreference(screen.context).apply {
+            key = CONTENT_RATING_PREF
+            title = "Content Rating (All by default)"
+            entries = CONTENT_RATINGS.map { it.replaceFirstChar { c -> c.uppercase() } }.toTypedArray()
+            entryValues = CONTENT_RATINGS.toTypedArray()
+            summary = contentRating.joinToString { it.replaceFirstChar { c -> c.uppercase() } }
+            setDefaultValue(emptySet<String>())
+            setOnPreferenceChangeListener { _, values ->
+                @Suppress("UNCHECKED_CAST")
+                val selected = values as Set<String>
+                this.summary = selected.joinToString { it.replaceFirstChar { c -> c.uppercase() } }
+                true
+            }
+        }.let(screen::addPreference)
+
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_SHOW_AS_VOLUMES
             title = "Prefer Volume Release"
@@ -292,6 +315,7 @@ abstract class MangaFire :
     }
 
     companion object {
+        private const val CONTENT_RATING_PREF = "pref_content_rating"
         private const val PREF_SHOW_AS_VOLUMES = "show_as_volumes"
         private const val PREF_MERGE_CHAPTERS = "merge_chapters"
         private const val PREF_PREFER_OFFICIAL = "prefer_official"
