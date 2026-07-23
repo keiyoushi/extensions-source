@@ -39,7 +39,7 @@ abstract class TruyenQQ : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/truyen-yeu-thich" + if (page > 1) "/trang-$page" else ""
 
-        return parseMangaPage(client.get(url, headers))
+        return parseMangaPage(client.get(url))
     }
 
     // =============================== Latest ===============================
@@ -47,7 +47,7 @@ abstract class TruyenQQ : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/truyen-moi-cap-nhat" + if (page > 1) "/trang-$page" else ""
 
-        return parseMangaPage(client.get(url, headers))
+        return parseMangaPage(client.get(url))
     }
 
     // =============================== Search ===============================
@@ -86,7 +86,7 @@ abstract class TruyenQQ : KeiSource() {
             }
         }.build()
 
-        return parseMangaPage(client.get(url, headers))
+        return parseMangaPage(client.get(url))
     }
 
     private fun parseMangaPage(response: Response): MangasPage {
@@ -120,10 +120,11 @@ abstract class TruyenQQ : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        client.get(getMangaUrl(manga), headers).use { response ->
-            val document = response.asJsoup()
-            return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
-        }
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(
+            parseMangaDetails(document),
+            parseChapterList(document),
+        )
     }
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
@@ -169,7 +170,7 @@ abstract class TruyenQQ : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val cacheControl = CacheControl.FORCE_NETWORK
-        client.get(getChapterUrl(chapter), headers, cacheControl).use { response ->
+        client.get(getChapterUrl(chapter), cacheControl).use { response ->
             return response.asJsoup()
                 .select(".page-chapter img:not([src*='stress.gif'])")
                 .mapIndexed { idx, it ->
