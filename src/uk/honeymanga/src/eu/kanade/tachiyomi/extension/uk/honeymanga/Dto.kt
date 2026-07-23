@@ -25,10 +25,13 @@ class ResponseData(
     private val title: String,
     private val type: String,
     private val genres: List<String>? = emptyList(),
+    private val adult: String,
 ) {
-    fun toSManga(baseUrl: String, imageUrl: String, blockedTypes: Set<String>? = emptySet(), blockedGenres: Set<String>? = emptySet()): SManga? {
+    fun toSManga(baseUrl: String, imageUrl: String, blockedTypes: Set<String>? = emptySet(), blockedGenres: Set<String>? = emptySet(), contentShown: String? = null): SManga? {
         if (blockedTypes?.contains(type) == true) return null
         if (blockedGenres?.intersect(genres?.toSet().orEmpty())?.isNotEmpty() == true) return null
+        if (contentShown == "IN" && adult != "18+") return null
+        if (contentShown == "NOT_IN" && adult == "18+") return null
 
         // Temporary solution: one of the translation teams left site and renamed all their manga, deleting all images in chapters
         // Link to that team page: https://honey-manga.com.ua/team/e0fc2dda-2547-4822-8c5a-3c6eb34f1da3

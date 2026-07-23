@@ -61,8 +61,9 @@ abstract class HoneyManga :
             client.get(url).use { response ->
                 val blockedGenres = blockGenres()
                 val blockedTypes = blockTypes()
+                val contentShown = contentType()
                 val result = response.parseAs<List<ResponseData>>()
-                val mangas = result.mapNotNull { it.toSManga(baseUrl, IMAGE_STORAGE_URL, blockedTypes, blockedGenres) }
+                val mangas = result.mapNotNull { it.toSManga(baseUrl, IMAGE_STORAGE_URL, blockedTypes, blockedGenres, contentShown) }
                 return MangasPage(mangas, false) // search by Name doesn't have pages
             }
         }
