@@ -4,31 +4,31 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
 import kotlin.time.Instant
 
 @Serializable
 class SearchSeriesDto(
+    private val id: String,
     private val title: String,
     private val slug: String,
     @SerialName("cover_url") private val coverUrl: String? = null,
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
         this.title = this@SearchSeriesDto.title
-        this.url = "/series/$slug"
+        this.url = id
         this.thumbnail_url = coverUrl?.toAbsoluteUrl(baseUrl)
+        this.memo = buildJsonObject {
+            put("slug", slug)
+        }
     }
 }
 
 @Serializable
-class SeriesPayload(
-    val initialSeries: SeriesInfo,
-    val initialChapters: List<ChapterInfo>? = null,
-    val initialGenres: List<GenreInfo>? = null,
-)
-
-@Serializable
 class SeriesInfo(
+    val id: String,
     val slug: String,
     private val title: String,
     private val description: String? = null,
@@ -36,10 +36,11 @@ class SeriesInfo(
     private val author: String? = null,
     private val artist: String? = null,
     private val status: String? = null,
+    private val genres: List<GenreInfo>? = null,
 ) {
-    fun toSManga(baseUrl: String, genres: List<GenreInfo>?) = SManga.create().apply {
+    fun toSManga(baseUrl: String) = SManga.create().apply {
         this.title = this@SeriesInfo.title
-        this.url = "/series/$slug"
+        this.url = id
         this.thumbnail_url = coverUrl?.toAbsoluteUrl(baseUrl)
         this.author = this@SeriesInfo.author
         this.artist = this@SeriesInfo.artist
@@ -55,7 +56,9 @@ class SeriesInfo(
             else -> SManga.UNKNOWN
         }
         this.genre = genres?.joinToString { it.name }
-        this.initialized = true
+        this.memo = buildJsonObject {
+            put("slug", slug)
+        }
     }
 
     companion object {
@@ -65,6 +68,7 @@ class SeriesInfo(
 
 @Serializable
 class ChapterInfo(
+    val id: String,
     private val title: String? = null,
     private val slug: String,
     @SerialName("chapter_number") private val chapterNumber: Float? = null,
@@ -76,10 +80,16 @@ class ChapterInfo(
         val chapterName = title?.takeIf { it.isNotBlank() }
             ?: chapterNumber?.toString()?.removeSuffix(".0")?.let { "Chapter $it" }
             ?: "Chapter"
-        this.name = if (isPremium()) "🔒 $chapterName" else chapterName
-        this.url = "/series/$seriesSlug/$slug"
+        val locked = isPremium()
+        this.name = if (locked) "🔒 $chapterName" else chapterName
+        this.url = id
         this.chapter_number = chapterNumber ?: -1f
         this.date_upload = createdAt?.let { Instant.parseOrNull(it) }?.toEpochMilliseconds() ?: 0L
+        this.memo = buildJsonObject {
+            put("slug", slug)
+            put("seriesSlug", seriesSlug)
+            put("isLocked", locked)
+        }
     }
 
     fun isPremium(): Boolean {
@@ -92,11 +102,6 @@ class ChapterInfo(
 @Serializable
 class GenreInfo(
     val name: String,
-)
-
-@Serializable
-class PagesPayload(
-    val initialPages: List<PageInfo>,
 )
 
 @Serializable
