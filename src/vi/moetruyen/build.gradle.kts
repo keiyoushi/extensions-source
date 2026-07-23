@@ -6,9 +6,13 @@ plugins {
 
 keiyoushi {
     name = "MoeTruyen"
-    versionCode = 7
+    versionCode = 8
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
+
+    deeplink {
+        path("/manga/.*")
+    }
 
     source {
         lang = "vi"
@@ -19,8 +23,4 @@ keiyoushi {
             )
         }
     }
-}
-
-dependencies {
-    implementation(project(":lib:cookieinterceptor"))
 }
