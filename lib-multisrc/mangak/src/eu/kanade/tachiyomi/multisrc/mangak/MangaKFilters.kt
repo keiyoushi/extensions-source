@@ -4,7 +4,6 @@ import eu.kanade.tachiyomi.source.model.Filter
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 class Genre(name: String, val value: String, state: Int = Filter.TriState.STATE_IGNORE) : Filter.TriState(name, state)
@@ -113,8 +112,11 @@ private fun parseGenres(data: JsonElement?): List<Pair<String, String>>? {
         ?: return null
 
     return jsonArray.mapNotNull { element ->
-        val obj = element.jsonObject
-        val name = obj["name"]?.jsonPrimitive?.content ?: return@mapNotNull null
+        val obj = element as? JsonObject ?: return@mapNotNull null
+        val name = obj["name"]?.jsonPrimitive?.content
+            ?: obj["label"]?.jsonPrimitive?.content
+            ?: obj["title"]?.jsonPrimitive?.content
+            ?: return@mapNotNull null
 
         val value = obj["slug"]?.jsonPrimitive?.content
             ?: obj["id"]?.jsonPrimitive?.content

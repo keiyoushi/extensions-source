@@ -108,15 +108,19 @@ abstract class MangaKSource :
             }
 
             val includedGenres = mutableListOf<String>()
-            val excludedGenres = mutableListOf<String>()
+            val excludedGenres = getBlacklist().toMutableSet()
 
             filters.forEach { filter ->
                 when (filter) {
                     is GenreList -> {
                         filter.state.forEach { genre ->
                             when (genre.state) {
-                                Filter.TriState.STATE_INCLUDE -> includedGenres.add(genre.value)
+                                Filter.TriState.STATE_INCLUDE -> {
+                                    includedGenres.add(genre.value)
+                                    excludedGenres.remove(genre.value)
+                                }
                                 Filter.TriState.STATE_EXCLUDE -> excludedGenres.add(genre.value)
+                                Filter.TriState.STATE_IGNORE -> {}
                             }
                         }
                     }
@@ -224,11 +228,16 @@ abstract class MangaKSource :
 
     // ============================== Filters ==============================
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres").parseAs<JsonElement>()
+    override suspend fun fetchFilterData(): JsonElement {
+        val json = client.get("$apiUrl/genres").parseAs<JsonElement>()
+        preferences.edit().putString(PREF_GENRES_CACHE_KEY, json.toString()).apply()
+        return json
+    }
 
     override fun getFilterList(data: JsonElement?): FilterList {
+        val genreData = data ?: getCachedGenreData()
         val blacklist = getBlacklist()
-        val genres = getGenreList(data, blacklist)
+        val genres = getGenreList(genreData, blacklist)
 
         val filters = mutableListOf<Filter<*>>(
             SortFilter(),
@@ -249,14 +258,26 @@ abstract class MangaKSource :
 
     // ============================= Utilities =============================
 
+    private fun getCachedGenreData(): JsonElement? {
+        val cachedString = preferences.getString(PREF_GENRES_CACHE_KEY, null)
+        return cachedString?.let { str ->
+            runCatching { str.parseAs<JsonElement>() }.getOrNull()
+        }
+    }
+
     private fun getBlacklist(): Set<String> = preferences.getStringSet(PREF_BLACKLIST_KEY, emptySet()) ?: emptySet()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val genres = getGenreList()
+        val cachedData = getCachedGenreData()
+        val genres = getGenreList(cachedData)
         val blacklistPref = MultiSelectListPreference(screen.context).apply {
             key = PREF_BLACKLIST_KEY
             title = "Global Genre Blacklist"
-            summary = "Select genres to always exclude from search and browse results."
+            summary = if (genres.isEmpty()) {
+                "Open search filters in the browse screen once to load and sync genres."
+            } else {
+                "Select genres to always exclude from search and browse results."
+            }
             entries = genres.map { it.name }.toTypedArray()
             entryValues = genres.map { it.value }.toTypedArray()
             setDefaultValue(emptySet<String>())
@@ -266,6 +287,7 @@ abstract class MangaKSource :
 
     companion object {
         private const val PREF_BLACKLIST_KEY = "pref_blacklist"
+        private const val PREF_GENRES_CACHE_KEY = "pref_genres_cache"
         private const val FALLBACK_IMAGE_HOST = "rx.rzyn.net"
         private const val DEFAULT_PAGE_LIMIT = "24"
         private const val QUERY_LENGTH_LIMIT = 50
