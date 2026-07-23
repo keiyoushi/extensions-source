@@ -1,26 +1,33 @@
 package eu.kanade.tachiyomi.extension.vi.minotruyen
 
 import android.util.Base64
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.lib.cryptoaes.CryptoAES
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
 import java.nio.charset.StandardCharsets
 
 @Source
-abstract class MinoTruyen : HttpSource() {
+abstract class MinoTruyen : KeiSource() {
 
     private val category: String
         get() = when {
@@ -29,126 +36,130 @@ abstract class MinoTruyen : HttpSource() {
             else -> "manga"
         }
 
-    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
+    private var resolvedApiUrl: String? = null
 
-    override val supportsLatest = true
-
-    private val apiUrl by lazy { resolveApiUrl() }
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    private val apiHeaders by lazy { headersBuilder().add("Origin", baseUrl).build() }
-
-    override val client by lazy {
-        network.client.newBuilder()
-            .addInterceptor(ImageInterceptor())
-            .rateLimit(3) { it.host == apiUrlHost }
-            .build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        addInterceptor(ImageInterceptor())
+        rateLimit(3)
     }
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/books/side-home".toHttpUrl().newBuilder()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "${getApiUrl()}/books".toHttpUrl().newBuilder()
+            .addQueryParameter("take", "24")
+            .addQueryParameter("page", page.toString())
             .addQueryParameter("category", category)
             .build()
-        return GET(url, apiHeaders)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<SideHomeResponse>()
-        return MangasPage(result.toSMangaList(baseUrl), false)
+        val result = client.get(url).parseAs<BooksResponse>()
+        return MangasPage(result.toSMangaList(baseUrl), result.hasNextPage(page))
     }
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/books".toHttpUrl().newBuilder()
-            .addQueryParameter("take", "24")
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("category", category)
-            .build()
-        return GET(url, apiHeaders)
-    }
+    override val supportsLatest = false
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseAs<BooksResponse>()
-        val mangaList = result.toSMangaList(baseUrl)
-        val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
-        val take = response.request.url.queryParameter("take")?.toIntOrNull() ?: 24
-        val hasNextPage = result.countBook?.let { currentPage * take < it } ?: mangaList.isNotEmpty()
-        return MangasPage(mangaList, hasNextPage)
-    }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getPopularManga(page)
 
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$apiUrl/books".toHttpUrl().newBuilder()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "${getApiUrl()}/books".toHttpUrl().newBuilder()
             .addQueryParameter("take", "24")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("category", category)
 
-        if (query.isNotBlank()) {
+        if (query.isNotEmpty()) {
             url.addQueryParameter("q", query)
         }
 
-        return GET(url.build(), apiHeaders)
-    }
+        filters.firstInstanceOrNull<GenreFilter>()
+            ?.selectedValues()
+            ?.forEach { url.addQueryParameter("includeTags", it) }
 
-    override fun searchMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
+        val result = client.get(url.build()).parseAs<BooksResponse>()
+        val mangaList = result.toSMangaList(baseUrl)
+        return MangasPage(mangaList, result.hasNextPage(page))
+    }
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val bookId = manga.url.substringAfterLast("/")
-        return GET("$apiUrl/books/$bookId", apiHeaders)
-    }
-
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/$category${manga.url}"
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val result = response.parseAs<BookDetailResponse>()
-        return result.toSManga(baseUrl)
-    }
-
-    // ============================= Chapters ==============================
-
-    override fun chapterListRequest(manga: SManga): Request {
-        val bookId = manga.url.substringAfterLast("/")
-        val url = "$apiUrl/chapters/$bookId".toHttpUrl().newBuilder()
-            .addQueryParameter("order", "desc")
-            .addQueryParameter("take", "5000")
-            .build()
-        return GET(url, apiHeaders)
-    }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/$category${chapter.url}"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAs<ChaptersResponse>()
-        return result.toSChapterList()
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+
+        val categoryIndex = url.pathSegments.indexOfFirst { it in categories }
+        if (categoryIndex == -1 || url.pathSegments.getOrNull(categoryIndex + 1) != "books") return null
+
+        val bookId = url.pathSegments.getOrNull(categoryIndex + 2)?.toIntOrNull() ?: return null
+        val manga = SManga.create().apply { setUrlWithoutDomain("/books/$bookId") }
+        return fetchMangaUpdate(manga, emptyList(), true, false).manga
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val bookId = manga.url.substringAfterLast("/")
+        val apiUrl = getApiUrl()
+        val mangaDeferred = if (fetchDetails) {
+            async {
+                client.get("$apiUrl/books/$bookId")
+                    .parseAs<BookDetailResponse>()
+                    .toSManga(baseUrl)
+            }
+        } else {
+            null
+        }
+        val chaptersDeferred = if (fetchChapters) {
+            async {
+                val url = "$apiUrl/books/$bookId/chapters".toHttpUrl().newBuilder()
+                    .addQueryParameter("order", "desc")
+                    .build()
+                client.get(url).parseAs<ChaptersResponse>().toSChapterList(bookId)
+            }
+        } else {
+            null
+        }
+
+        SMangaUpdate(
+            manga = mangaDeferred?.await() ?: manga,
+            chapters = chaptersDeferred?.await() ?: chapters,
+        )
     }
 
     // =============================== Pages ===============================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/$category${chapter.url}", headers)
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get("$baseUrl/$category${chapter.url}").asJsoup()
+        val chapterId = chapter.url.substringAfterLast('/').toIntOrNull()
+        val embeddedPages = document.extractNextJs<ReaderChapter>()
+            ?.takeIf { chapterId == null || it.chapterId == chapterId }
+            ?.images
+            .orEmpty()
+            .sortedBy { it.order }
+            .mapNotNull { selectReaderServer(it.servers) }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val html = response.body.string()
+        val pages = embeddedPages.ifEmpty {
+            val encrypted = encryptedDataRegex.find(document.html())?.groupValues?.get(1)
+                ?: return emptyList()
 
-        val encrypted = ENCRYPTED_DATA_REGEX.find(html)?.groupValues?.get(1)
-            ?: return emptyList()
+            val encData = encrypted.substringAfter(":")
 
-        val encData = encrypted.substringAfter(":")
+            val decrypted = CryptoAES.decrypt(encData, aesKey)
+            if (decrypted.isBlank()) return emptyList()
 
-        val decrypted = CryptoAES.decrypt(encData, AES_KEY)
-        if (decrypted.isBlank()) return emptyList()
+            val servers = decrypted.parseAs<List<ChapterServer>>()
 
-        val servers = decrypted.parseAs<List<ChapterServer>>()
-
-        val selectedServer = selectImageServer(servers) ?: return emptyList()
-        val pages = selectedServer.content
+            selectLegacyServer(servers)?.content?.map { page ->
+                ReaderPage(page.imageUrl, page.drmData)
+            } ?: return emptyList()
+        }
 
         return pages.mapIndexed { index, page ->
             val normalizedImageUrl = normalizeImageUrl(page.imageUrl)
@@ -158,7 +169,7 @@ abstract class MinoTruyen : HttpSource() {
                 ?.let { strips ->
                     val map = strips.joinToString(",") { "${it.destY}-${it.height}" }
                     normalizedImageUrl.toHttpUrl().newBuilder()
-                        .fragment("$DRM_FRAGMENT_PREFIX$map")
+                        .fragment("$drmFragmentPrefix$map")
                         .build()
                         .toString()
                 }
@@ -168,7 +179,12 @@ abstract class MinoTruyen : HttpSource() {
         }
     }
 
-    private fun selectImageServer(servers: List<ChapterServer>): ChapterServer? {
+    private fun selectReaderServer(servers: List<ReaderPage>): ReaderPage? = servers.firstOrNull { page ->
+        val host = normalizeImageUrl(page.imageUrl).toHttpUrlOrNull()?.host.orEmpty()
+        host.isNotEmpty() && !host.contains("ibyteimg.com", ignoreCase = true)
+    } ?: servers.firstOrNull()
+
+    private fun selectLegacyServer(servers: List<ChapterServer>): ChapterServer? {
         val candidates = servers.filter { it.content.isNotEmpty() }
         if (candidates.isEmpty()) return null
 
@@ -189,18 +205,18 @@ abstract class MinoTruyen : HttpSource() {
     private fun decodeDrmMap(drmData: String): List<StripInfo> {
         val encrypted = Base64.decode(drmData, Base64.DEFAULT)
 
-        val key = DRM_XOR_KEY.toByteArray(StandardCharsets.US_ASCII)
+        val key = drmXorKey.toByteArray(StandardCharsets.US_ASCII)
         val plainBytes = ByteArray(encrypted.size)
         for (i in encrypted.indices) {
             plainBytes[i] = (encrypted[i].toInt() xor key[i % key.size].toInt()).toByte()
         }
 
         val plain = plainBytes.toString(StandardCharsets.UTF_8)
-        if (!plain.startsWith(DRM_MAP_PREFIX)) {
+        if (!plain.startsWith(drmMapPrefix)) {
             return emptyList()
         }
 
-        return plain.removePrefix(DRM_MAP_PREFIX)
+        return plain.removePrefix(drmMapPrefix)
             .split('|')
             .mapNotNull { token ->
                 val dy = token.substringBefore('-').toIntOrNull()
@@ -213,51 +229,50 @@ abstract class MinoTruyen : HttpSource() {
             }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    // ============================== Filters ==============================
+
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val url = "${getApiUrl()}/books/tags".toHttpUrl().newBuilder()
+            .addQueryParameter("take", "50")
+            .addQueryParameter("category", category)
+            .build()
+        return client.get(url).parseAs<TagsResponse>().data.tags.toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList = getFilters(data?.parseAs<List<TagOption>>())
 
     // ============================= Utilities =============================
 
-    private fun resolveApiUrl(): String {
-        val baseClient = network.client
+    private suspend fun getApiUrl(): String {
+        resolvedApiUrl?.let { return it }
 
-        try {
-            val request = Request.Builder()
-                .url("$API_URL_DEFAULT/books?take=1&category=$category")
-                .head()
-                .headers(headers)
-                .build()
-            baseClient.newCall(request).execute().use { }
-            return API_URL_DEFAULT
-        } catch (_: Exception) {}
+        val resolved = runCatching {
+            client.get("$apiUrlDefault/books?take=1&category=$category").close()
+            apiUrlDefault
+        }.getOrElse {
+            val document = client.get(baseUrl).asJsoup()
+            document.select("script[src*=chunks]").firstNotNullOfOrNull { script ->
+                runCatching {
+                    val text = client.get(script.absUrl("src")).use { it.body.string() }
+                    apiUrlRegex.find(text)?.groupValues?.get(1)?.let { "$it/api" }
+                }.getOrNull()
+            } ?: apiUrlDefault
+        }
 
-        try {
-            val response = baseClient.newCall(GET(baseUrl, headers)).execute()
-            val doc = response.asJsoup()
-
-            for (script in doc.select("script[src*=chunks]")) {
-                try {
-                    val text = baseClient.newCall(GET(script.absUrl("src"), headers)).execute().use { it.body.string() }
-                    API_URL_REGEX.find(text)?.groupValues?.get(1)?.let {
-                        return "$it/api"
-                    }
-                } catch (_: Exception) {
-                    continue
-                }
-            }
-        } catch (_: Exception) {}
-
-        return API_URL_DEFAULT
+        resolvedApiUrl = resolved
+        return resolved
     }
 
-    companion object {
-        private val API_URL_REGEX = Regex("""NEXT_PUBLIC_API_URL\W+"(https?://[^"]+)"""")
-        private const val API_URL_DEFAULT = "https://api.cloudkk-v1.xyz/api"
-        private const val AES_KEY = "GCERKSmf28E6nWwrnR8Lz4f7TacKpzMy7aK0rxSB"
-        private val ENCRYPTED_DATA_REGEX = Regex("""([a-f0-9]{32}:U2FsdGVk[A-Za-z0-9+/=]+)""")
-        private const val DRM_XOR_KEY = "3141592653589793"
-        private const val DRM_MAP_PREFIX = "#mino-v1|"
-        private const val DRM_FRAGMENT_PREFIX = "mino:"
-    }
+    private val categories = setOf("manga", "comics", "hentai")
+    private val apiUrlRegex = Regex("""NEXT_PUBLIC_API_URL\W+"(https?://[^"]+)"""")
+    private val apiUrlDefault = "https://api.cloudkk-v1.xyz/api"
+    private val aesKey = "GCERKSmf28E6nWwrnR8Lz4f7TacKpzMy7aK0rxSB"
+    private val encryptedDataRegex = Regex("""([a-f0-9]{32}:U2FsdGVk[A-Za-z0-9+/=]+)""")
+    private val drmXorKey = "3141592653589793"
+    private val drmMapPrefix = "#mino-v1|"
+    private val drmFragmentPrefix = "mino:"
 }
 
 data class StripInfo(
