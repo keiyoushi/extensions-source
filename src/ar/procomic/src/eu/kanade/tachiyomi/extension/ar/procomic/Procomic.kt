@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.procomic
 
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -65,8 +64,6 @@ abstract class Procomic : KeiSource() {
         val sortFilter = filters.filterIsInstance<SortFilter>().firstOrNull()
         val yearFilter = filters.filterIsInstance<YearFilter>().firstOrNull()
         val statusFilter = filters.filterIsInstance<StatusFilter>().firstOrNull()
-        val genreFilter = filters.filterIsInstance<GenreFilter>().firstOrNull()
-        val tagFilter = filters.filterIsInstance<TagFilter>().firstOrNull()
         val effectiveSort = sortFilter?.selected ?: "popular"
         val endpoint = if (isCatalog) "api/public/content" else "api/public/series/search"
         val url = baseUrl.toHttpUrl().newBuilder()
@@ -80,18 +77,15 @@ abstract class Procomic : KeiSource() {
                 typeFilter?.selected?.also { addQueryParameter("type", it) }
                 yearFilter?.selected?.also { addQueryParameter("year", it) }
                 statusFilter?.selected?.also { addQueryParameter("status", it) }
-                genreFilter?.checked?.forEach { addQueryParameter("genre", it) }
-                tagFilter?.checked?.forEach { addQueryParameter("tag", it) }
             }
             .build()
         val request = GET(url, headers).newBuilder().cacheControl(CacheControl.FORCE_NETWORK).build()
         val data = client.newCall(request).await().parseAs<SearchResponse>(json)
         MangasPage(
             data.data.filter { it.type in SUPPORTED_TYPES }.map { it.toSManga() },
-            data.meta?.hasNextPage() ?: false,
+            data.meta?.let { it.totalPages != null && it.currentPage != null && it.totalPages > it.currentPage } ?: false,
         )
-    } catch (e: Exception) {
-        Log.e("Procomic", "searchApi failed: $e", e)
+    } catch (_: Exception) {
         MangasPage(emptyList(), false)
     }
 
@@ -146,7 +140,7 @@ abstract class Procomic : KeiSource() {
             artist = meta.artist
             author = meta.author
             description = buildString {
-                description?.let { append(it.trim(), "\n\n") }
+                this@toSManga.description?.let { append(it.trim(), "\n\n") }
                 val extras = buildList {
                     meta.originalTitle?.also { add(it) }
                     meta.altTitles?.forEach { add(it) }
@@ -211,8 +205,6 @@ abstract class Procomic : KeiSource() {
         SortFilter(),
         YearFilter(),
         StatusFilter(),
-        GenreFilter(CategoriesCache.getGenres(this)),
-        TagFilter(CategoriesCache.getTags(this)),
     )
 
     companion object {
