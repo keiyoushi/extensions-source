@@ -242,3 +242,13 @@ internal class TranslationFilter :
             "Призупинено" to "Призупинено",
         ),
     )
+
+internal class ContentTypeFilter :
+    SelectFilter(
+        "Тип контенту",
+        listOf(
+            "Весь контент, без обмежень" to "all",
+            "Без контенту 18+" to "NOT_IN",
+            "Лише 18+" to "IN",
+        ),
+    )
