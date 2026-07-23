@@ -1,17 +1,16 @@
 package eu.kanade.tachiyomi.extension.en.mangakakalot
 
 import eu.kanade.tachiyomi.multisrc.mangabox.MangaBox
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Dispatcher
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
@@ -59,32 +58,30 @@ abstract class Mangakakalot : MangaBox() {
         maxRequestsPerHost = 3
     }
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .dispatcher(imageHeavyDispatcher)
-        .connectTimeout(30.seconds)
-        .readTimeout(60.seconds)
-        .writeTimeout(30.seconds)
-        .rateLimit(2, 1.seconds)
-        .build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        dispatcher(imageHeavyDispatcher)
+        connectTimeout(30.seconds)
+        readTimeout(60.seconds)
+        writeTimeout(30.seconds)
+        rateLimit(2, 1.seconds)
+    }
 
     /* ================================
      * Manga Details
      * ================================ */
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
+    override fun getMangaUrl(manga: SManga): String {
         val currentSlug = manga.url.substringAfterLast("/")
-        val targetUrl = if (currentSlug.matches(idSlugRegex)) {
+        if (currentSlug.matches(idSlugRegex)) {
             val newSlug = titleToSlug(manga.title)
-            "$baseUrl/manga/$newSlug"
+            return "$baseUrl/manga/$newSlug"
         } else {
-            "$baseUrl${manga.url}"
+            return "$baseUrl${manga.url}"
         }
-
-        return GET(targetUrl, headers)
     }
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        val manga = super.mangaDetailsParse(document)
+    override fun parseMangaDetails(document: Document): SManga {
+        val manga = super.parseMangaDetails(document)
         val pageUrl = document.location().toHttpUrlOrNull()
         val actualSlug = pageUrl
             ?.pathSegments
@@ -99,7 +96,7 @@ abstract class Mangakakalot : MangaBox() {
      * Chapter List
      * ================================ */
 
-    override fun chapterListRequest(manga: SManga): Request {
+    override suspend fun chapterListResponse(manga: SManga): Response {
         val currentSlug = manga.url.substringAfterLast("/")
         val isIdSlug = currentSlug.matches(idSlugRegex)
         val apiSlug = if (isIdSlug) {
@@ -111,10 +108,10 @@ abstract class Mangakakalot : MangaBox() {
         }
 
         val apiUrl = "$baseUrl/api/manga/$apiSlug/chapters?limit=-1"
-        return GET(apiUrl, headers)
+        return client.get(apiUrl, headers)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    override fun parseChapterList(response: Response): List<SChapter> {
         val slug = response.request.url.pathSegments
             .dropWhile { it != "manga" }
             .getOrNull(1)
