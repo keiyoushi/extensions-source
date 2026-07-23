@@ -36,8 +36,8 @@ import java.time.Instant as JavaInstant
 abstract class KiraKira :
     KeiSource(),
     ConfigurableSource {
-    private val apiUrl = "https://api.${baseUrl.toHttpUrl().host}"
-    private val imageUrl = "https://images.${baseUrl.toHttpUrl().host}"
+    private val apiUrl get() = "https://api.${baseUrl.toHttpUrl().host}"
+    private val imageUrl get() = "https://images.${baseUrl.toHttpUrl().host}"
 
     private val apiHeaders: Headers
         get() = headersBuilder()
