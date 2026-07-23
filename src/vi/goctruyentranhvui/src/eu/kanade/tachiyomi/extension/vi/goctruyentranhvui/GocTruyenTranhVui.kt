@@ -115,8 +115,9 @@ abstract class GocTruyenTranhVui :
 
     private fun parseMangaPage(response: Response): MangasPage {
         val res = response.parseAs<ResultDto<ListingDto>>()
-        val hasNextPage = res.result.next
-        return MangasPage(res.result.data.map { it.toSManga(baseUrl) }, hasNextPage)
+        val result = res.result ?: throw Exception(res.errorMessage ?: "Lỗi tải danh sách")
+        val hasNextPage = result.next
+        return MangasPage(result.data.map { it.toSManga(baseUrl) }, hasNextPage)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -173,11 +174,9 @@ abstract class GocTruyenTranhVui :
         val result = client.get("$baseUrl/api/comic/$mangaId/chapter?limit=-1", xhrHeaders)
             .parseAs<ResultDto<ChapterListDto>>()
 
-        if (result.result.chapters.isEmpty()) {
-            throw Exception("Có thể: Phiên làm việc đã hết hạn, vui lòng tải lại.")
-        }
+        val chapters = result.result?.chapters ?: throw Exception(result.errorMessage ?: "Phiên làm việc đã hết hạn, vui lòng tải lại.")
 
-        return result.result.chapters.map { it.toSChapter(slug) }
+        return chapters.map { it.toSChapter(slug) }
     }
 
     private fun parseStatus(status: String?) = when {
