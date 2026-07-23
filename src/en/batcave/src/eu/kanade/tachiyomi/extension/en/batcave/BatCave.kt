@@ -133,8 +133,8 @@ abstract class BatCave : HttpSource() {
             title = document.selectFirst("header.page__header h1")!!.text()
             thumbnail_url = document.selectFirst("div.page__poster img")?.absUrl("src")
             description = document.selectFirst("div.page__text")?.text()
-            author = document.selectFirst(".page__list > li:has(> div:contains(Writer))")?.ownText()
-            artist = document.selectFirst(".page__list > li:has(> div:contains(Artist))")?.ownText()
+            author = document.selectFirst(".page__list > li:has(> div:contains(Writer)) > a")?.text()?.takeIf { it.isNotBlank() }
+            artist = document.selectFirst(".page__list > li:has(> div:contains(Artist)) > a")?.text()?.takeIf { it.isNotBlank() }
             genre = buildList {
                 document.select("div.page__tags a").mapTo(this) { it.text() }
                 add("Comic")
@@ -210,7 +210,7 @@ abstract class BatCave : HttpSource() {
 
     override fun getFilterList(): FilterList {
         val filters: MutableList<Filter<*>> = mutableListOf(
-            Filter.Header("Doesn't work with text search"),
+            Filter.Header("Filters don't work with text search"),
             SortFilter(),
             YearFilter(),
         )
