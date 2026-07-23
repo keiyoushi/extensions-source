@@ -4,86 +4,49 @@ import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
 abstract class FoolSlide :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-
-    protected open val urlModifier: String = ""
 
     override val supportsLatest = true
 
-    private val json by lazy { Injekt.get<Json>() }
+    protected open val urlModifier = ""
 
-    open fun popularMangaSelector() = "div.group"
-
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl$urlModifier/directory/$page/", headers)
-
-    private val latestUpdatesUrls = mutableSetOf<String>()
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        val mangas = document.select(latestUpdatesSelector()).map { element ->
-            latestUpdatesFromElement(element)
-        }
-
-        val hasNextPage = latestUpdatesNextPageSelector()?.let { selector ->
-            document.select(selector).first() != null
-        } ?: false
-
-        val newMangas = mangas.distinctBy { it.url }.filter {
-            latestUpdatesUrls.add(it.url)
-        }
-
-        return MangasPage(newMangas, hasNextPage)
-    }
-
-    open fun latestUpdatesSelector() = "div.group"
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        if (page == 1) latestUpdatesUrls.clear()
-        return GET("$baseUrl$urlModifier/latest/$page/")
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        val mangas = document.select(popularMangaSelector()).map { element ->
-            popularMangaFromElement(element)
-        }
-
-        val hasNextPage = popularMangaNextPageSelector().let { selector ->
-            document.select(selector).first() != null
-        }
-
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val request = GET("$baseUrl$urlModifier/directory/$page/", headers)
+        val document = client.newCall(request).await().asJsoup()
+        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
+        val hasNextPage = popularMangaNextPageSelector().let { selector -> document.select(selector).first() != null }
         return MangasPage(mangas, hasNextPage)
     }
+
+    open fun popularMangaSelector() = "div.group"
 
     open fun popularMangaFromElement(element: Element) = SManga.create().apply {
         element.select("a[title]").first()!!.let {
@@ -95,6 +58,22 @@ abstract class FoolSlide :
         }
     }
 
+    open fun popularMangaNextPageSelector() = "div.next"
+
+    protected val latestUpdatesUrls = mutableSetOf<String>()
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        if (page == 1) latestUpdatesUrls.clear()
+        val request = GET("$baseUrl$urlModifier/latest/$page/", headers)
+        val document = client.newCall(request).await().asJsoup()
+        val mangas = document.select(latestUpdatesSelector()).map { latestUpdatesFromElement(it) }
+        val hasNextPage = latestUpdatesNextPageSelector()?.let { selector -> document.select(selector).first() != null } ?: false
+        val newMangas = mangas.distinctBy { it.url }.filter { latestUpdatesUrls.add(it.url) }
+        return MangasPage(newMangas, hasNextPage)
+    }
+
+    open fun latestUpdatesSelector() = "div.group"
+
     open fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         element.select("a[title]").first()!!.let {
             setUrlWithoutDomain(it.attr("href"))
@@ -102,60 +81,72 @@ abstract class FoolSlide :
         }
     }
 
-    open fun popularMangaNextPageSelector() = "div.next"
-
     open fun latestUpdatesNextPageSelector(): String? = "div.next"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val searchHeaders = headersBuilder().add("Content-Type", "application/x-www-form-urlencoded").build()
         val form = FormBody.Builder().add("search", query).build()
-        return POST("$baseUrl$urlModifier/search/", searchHeaders, form)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        val mangas = document.select(searchMangaSelector()).map { element ->
-            searchMangaFromElement(element)
-        }
-
-        val hasNextPage = searchMangaNextPageSelector().let { selector ->
-            document.select(selector).first() != null
-        }
-
+        val request = POST("$baseUrl$urlModifier/search/", searchHeaders, form)
+        val document = client.newCall(request).await().asJsoup()
+        val mangas = document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
+        val hasNextPage = searchMangaNextPageSelector().let { selector -> document.select(selector).first() != null }
         return MangasPage(mangas, hasNextPage)
     }
 
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList()
+
     open fun searchMangaSelector() = "div.group"
 
-    open fun searchMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
+    open fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         element.select("a[title]").first()!!.let {
-            manga.setUrlWithoutDomain(it.attr("href"))
-            manga.title = it.text()
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.text()
         }
-        return manga
     }
 
     open fun searchMangaNextPageSelector() = "a:has(span.next)"
 
-    override fun mangaDetailsRequest(manga: SManga) = allowAdult(super.mangaDetailsRequest(manga))
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document: Document? = if (fetchDetails || fetchChapters) {
+            val request = allowAdult(GET(baseUrl + manga.url, headers))
+            client.newCall(request).await().asJsoup()
+        } else {
+            null
+        }
+
+        val sManga = if (fetchDetails) {
+            mangaDetailsParse(document!!).apply { url = manga.url }
+        } else {
+            manga
+        }
+
+        val sChapters = if (fetchChapters) {
+            document!!.select(chapterListSelector()).map { chapterFromElement(it) }
+        } else {
+            chapters
+        }
+
+        return SMangaUpdate(sManga, sChapters)
+    }
 
     protected open val mangaDetailsInfoSelector = "div.info"
 
     // if there's no image on the details page, get the first page of the first chapter
-    protected fun getDetailsThumbnail(document: Document, urlSelector: String = chapterUrlSelector): String? = document.select("div.thumbnail img, table.thumb img").firstOrNull()?.attr("abs:src")
+    protected suspend fun getDetailsThumbnail(document: Document, urlSelector: String = chapterUrlSelector): String? = document.select("div.thumbnail img, table.thumb img").firstOrNull()?.attr("abs:src")
         ?: document.select(chapterListSelector()).lastOrNull()?.select(urlSelector)?.attr("abs:href")
-            ?.let { url -> client.newCall(allowAdult(GET(url))).execute() }
-            ?.use { response -> pageListParse(response).firstOrNull()?.imageUrl }
+            ?.let { url -> client.newCall(allowAdult(GET(url, headers))).await() }
+            ?.use { response -> pageListParse(response.asJsoup()).firstOrNull()?.imageUrl }
 
-    override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
-
-    open fun mangaDetailsParse(document: Document) = SManga.create().apply {
+    open suspend fun mangaDetailsParse(document: Document) = SManga.create().apply {
         document.select(mangaDetailsInfoSelector).firstOrNull()?.html()?.let { infoHtml ->
-            author = Regex("""(?i)(Author|Autore)</b>:\s?([^\n<]*)[\n<]""").find(infoHtml)?.groupValues?.get(2)
-            artist = Regex("""Artist</b>:\s?([^\n<]*)[\n<]""").find(infoHtml)?.groupValues?.get(1)
-            description = Regex("""(?i)(Synopsis|Description|Trama)</b>:\s?([^\n<]*)[\n<]""").find(infoHtml)?.groupValues?.get(2)
+            author = Regex("(?i)(Author|Autore)</b>:\\s?([^\\n<]*)[\\n<]").find(infoHtml)?.groupValues?.get(2)
+            artist = Regex("Artist</b>:\\s?([^\\n<]*)[\\n<]").find(infoHtml)?.groupValues?.get(1)
+            description = Regex("(?i)(Synopsis|Description|Trama)</b>:\\s?([^\\n<]*)[\\n<]").find(infoHtml)?.groupValues?.get(2)
         }
         thumbnail_url = getDetailsThumbnail(document)
     }
@@ -163,16 +154,9 @@ abstract class FoolSlide :
     protected open val allowAdult: Boolean
         get() = preferences.getBoolean("adult", true)
 
-    private fun allowAdult(request: Request): Request {
+    protected open fun allowAdult(request: Request): Request {
         val form = FormBody.Builder().add("adult", allowAdult.toString()).build()
         return POST(request.url.toString(), headers, form)
-    }
-
-    override fun chapterListRequest(manga: SManga) = allowAdult(super.chapterListRequest(manga))
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select(chapterListSelector()).map { chapterFromElement(it) }
     }
 
     open fun chapterListSelector() = "div.group div.element, div.list div.element"
@@ -226,9 +210,7 @@ abstract class FoolSlide :
             }
         }
 
-        relativeDate?.timeInMillis?.let {
-            return it
-        }
+        relativeDate?.timeInMillis?.let { return it }
 
         var result = DATE_FORMAT_1.parseOrNull(date)
 
@@ -243,7 +225,6 @@ abstract class FoolSlide :
         for (dateFormat in DATE_FORMATS_WITH_ORDINAL_SUFFIXES_NO_YEAR) {
             if (result == null) {
                 result = dateFormat.parseOrNull(date)
-
                 if (result != null) {
                     // Result parsed but no year, copy current year over
                     result = Calendar.getInstance().apply {
@@ -270,7 +251,6 @@ abstract class FoolSlide :
 
         val number = trimmedDate[0].toIntOrNull() ?: return null
         val unit = trimmedDate[1].removeSuffix("s") // Remove 's' suffix
-
         val now = Calendar.getInstance()
 
         // Map English unit to Java unit
@@ -284,9 +264,7 @@ abstract class FoolSlide :
             "second", "sec" -> Calendar.SECOND
             else -> return null
         }
-
         now.add(javaUnit, -number)
-
         return now.timeInMillis
     }
 
@@ -295,14 +273,16 @@ abstract class FoolSlide :
         return if (time == 0L) null else Date(time)
     }
 
-    override fun pageListRequest(chapter: SChapter) = allowAdult(super.pageListRequest(chapter))
-
-    override fun pageListParse(response: Response): List<Page> = pageListParse(response.asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val request = allowAdult(GET(baseUrl + chapter.url, headers))
+        val document = client.newCall(request).await().asJsoup()
+        return pageListParse(document)
+    }
 
     open fun pageListParse(document: Document): List<Page> {
         val doc = document.toString()
         val jsonStr = doc.substringAfter("var pages = ").substringBefore(";")
-        val pages = json.parseToJsonElement(jsonStr).jsonArray
+        val pages = jsonInstance.parseToJsonElement(jsonStr).jsonArray
         return pages.mapIndexed { i, jsonEl ->
             // Create dummy element to resolve relative URL
             val absUrl = document.createElement("a")
@@ -312,8 +292,6 @@ abstract class FoolSlide :
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     protected val preferences by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -321,7 +299,6 @@ abstract class FoolSlide :
             key = "adult"
             summary = "Show adult content"
             setDefaultValue(true)
-
             setOnPreferenceChangeListener { _, newValue ->
                 preferences.edit().putBoolean(key, newValue as Boolean).commit()
             }
