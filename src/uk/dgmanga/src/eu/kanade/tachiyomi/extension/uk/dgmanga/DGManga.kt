@@ -106,7 +106,6 @@ abstract class DGManga :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-
         val mangaAsync = async {
             if (fetchDetails) {
                 val url = "$apiUrl/titles/${manga.url}"
