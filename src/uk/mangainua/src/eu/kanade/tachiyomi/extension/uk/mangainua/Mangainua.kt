@@ -36,9 +36,8 @@ abstract class Mangainua :
     KeiSource(),
     ConfigurableSource {
 
-    override val supportsLatest = true
     private val preferences by getPreferencesLazy()
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+    private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(1, 2.seconds) { it.encodedPath.contains("/ajax/") }
