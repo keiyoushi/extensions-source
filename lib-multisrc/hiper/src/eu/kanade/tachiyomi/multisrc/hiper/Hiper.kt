@@ -208,10 +208,10 @@ abstract class Hiper :
         return "$baseUrl/$mangaPath/$slug/${chapter.getNumber()}".removeSuffix(".0")
     }
 
-    protected open suspend fun getChapterList(manga: SManga): List<SChapter> {
+    protected open suspend fun getChapterList(manga: SManga): List<SChapter>? {
         val mangaId = manga.memo.getLongOrNull("mangaId")
             ?: manga.url.substringAfterLast("#").toLongOrNull() // Fallback for old manga URLs
-            ?: throw IOException("Refresh chapter list")
+            ?: return null
 
         val input = buildJsonObject {
             putJsonObject("0") {
@@ -263,10 +263,18 @@ abstract class Hiper :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val updatedManga = if (fetchDetails) getMangaDetails(manga) else null
-        val updatedChapters = if (fetchChapters) getChapterList(manga) else null
+        var updatedManga = if (fetchDetails) getMangaDetails(manga)!! else manga
+        val updatedChapters = if (fetchChapters) {
+            getChapterList(updatedManga) ?: run {
+                // Auto migrate
+                updatedManga = getMangaDetails(manga)!!
+                getChapterList(updatedManga)
+            }!!
+        } else {
+            chapters
+        }
 
-        return SMangaUpdate(updatedManga ?: manga, updatedChapters ?: chapters)
+        return SMangaUpdate(updatedManga, updatedChapters)
     }
 
     // ============================ Related manga ==============================
@@ -478,7 +486,7 @@ abstract class Hiper :
         .substringBefore("/")
         .substringBefore("#")
         .takeIf(String::isNotBlank)
-        ?: throw IOException("Refresh chapter list")
+        ?: throw IOException("Migrate from $name to $name")
 
     fun SChapter.getNumber() = if (chapter_number > 0) {
         chapter_number
