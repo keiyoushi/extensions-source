@@ -23,6 +23,9 @@ abstract class KomikNesia : HttpSource() {
     private val apiUrl = "https://api-be.komiknesia.my.id/api"
     override val supportsLatest = true
 
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+
     private var genresList: List<Pair<String, String>> = emptyList()
     private var genresFetched: Boolean = false
     private var fetchGenresAttempts: Int = 0
@@ -123,6 +126,11 @@ abstract class KomikNesia : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val payload = response.parseAs<PayloadDto<PageListDto>>()
+        // Lock exception disabled: the backend API allows reading locked chapters without login,
+        // so we don't throw an error when loading page images.
+        // if (payload.data.images.isEmpty()) {
+        //     throw java.io.IOException("Chapter terbaru dapat dibaca setelah login melalui WebView, atau tunggu hingga 2 jam dari rilis untuk membaca tanpa login.")
+        // }
         return payload.data.images.mapIndexed { idx, img ->
             Page(idx, imageUrl = img)
         }
