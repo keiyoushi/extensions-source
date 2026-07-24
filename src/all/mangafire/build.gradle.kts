@@ -8,12 +8,16 @@ keiyoushi {
     name = "MangaFire"
     versionCode = 27
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     listOf("en", "es", "es-419", "fr", "ja", "pt", "pt-BR").forEach {
         source {
             lang = it
             baseUrl = "https://mangafire.to"
         }
+    }
+
+    deeplink {
+        path("/title/..*")
     }
 }
