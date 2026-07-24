@@ -67,13 +67,19 @@ abstract class MantaComics :
         return parseSearchManga(client.get(url))
     }
 
-    private fun parseSearchManga(response: Response) = response.parseAs<MantaResponse<List<Series<Title>>>>().data.map {
-        SManga.create().apply {
-            title = it.asString(lang)
-            url = it.id.toString()
-            thumbnail_url = it.image.toString()
-        }
-    }.let { MangasPage(it, false) }
+    private fun parseSearchManga(response: Response) = response.parseAs<MantaResponse<List<Series<Title>>>>().data
+        .map { it.toSManga(lang) }
+        .let { MangasPage(it, false) }
+
+    // =========================== Related Manga ============================
+
+    override val supportsRelatedMangas get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val seriesUrl = "$apiUrl/front/v1/series/${manga.url}?lang=$lang"
+        val related = client.get(seriesUrl).parseAs<MantaResponse<RelatedSeries>>().data
+        return related.relatedSeriesList.map { it.toSManga(lang) }
+    }
 
     // =========================== Manga Details / Chapters ============================
 
