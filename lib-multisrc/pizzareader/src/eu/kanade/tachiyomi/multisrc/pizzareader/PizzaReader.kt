@@ -1,38 +1,25 @@
 package eu.kanade.tachiyomi.multisrc.pizzareader
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Instant
 
 abstract class PizzaReader : KeiSource() {
 
     protected open val apiPath: String = "/api"
 
-    protected open val dateParser: SimpleDateFormat =
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.ITALY)
-
-    override val supportsLatest = true
-
-    open val apiUrl by lazy { "$baseUrl$apiPath" }
-
-    protected open val pizzaHeaders by lazy {
-        headers.newBuilder()
-            .set("Referer", baseUrl)
-            .build()
-    }
+    open val apiUrl get() = "$baseUrl$apiPath"
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val result = client.newCall(GET("$apiUrl/comics", pizzaHeaders)).await()
+        val result = client.get("$apiUrl/comics")
             .parseAs<PizzaResultsDto>()
         val comicList = result.comics.map(::popularMangaFromObject)
         return MangasPage(comicList, hasNextPage = false)
@@ -45,7 +32,7 @@ abstract class PizzaReader : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val result = client.newCall(GET("$apiUrl/comics", pizzaHeaders)).await()
+        val result = client.get("$apiUrl/comics")
             .parseAs<PizzaResultsDto>()
         val comicList = result.comics
             .filter { comic -> comic.lastChapter != null }
@@ -59,7 +46,7 @@ abstract class PizzaReader : KeiSource() {
         val searchUrl = "$apiUrl/search/".toHttpUrl().newBuilder()
             .addPathSegment(query)
             .toString()
-        val result = client.newCall(GET(searchUrl, pizzaHeaders)).await()
+        val result = client.get(searchUrl)
             .parseAs<PizzaResultsDto>()
         val comicList = result.comics.map(::popularMangaFromObject)
         return MangasPage(comicList, hasNextPage = false)
@@ -71,33 +58,21 @@ abstract class PizzaReader : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val result = if (fetchDetails || fetchChapters) {
-            client.newCall(GET(apiUrl + manga.url, pizzaHeaders)).await()
-                .parseAs<PizzaResultDto>()
-        } else {
-            null
+        val result = client.get(apiUrl + manga.url)
+            .parseAs<PizzaResultDto>()
+
+        val comic = result.comic!!
+        val sManga = SManga.create().apply {
+            title = comic.title
+            author = comic.author
+            artist = comic.artist
+            description = comic.description
+            genre = comic.genres.joinToString(", ") { it.name }
+            status = comic.status?.toStatus() ?: SManga.UNKNOWN
+            thumbnail_url = comic.thumbnail
         }
 
-        val sManga = if (fetchDetails) {
-            val comic = result!!.comic!!
-            SManga.create().apply {
-                title = comic.title
-                author = comic.author
-                artist = comic.artist
-                description = comic.description
-                genre = comic.genres.joinToString(", ") { it.name }
-                status = comic.status?.toStatus() ?: SManga.UNKNOWN
-                thumbnail_url = comic.thumbnail
-            }
-        } else {
-            manga
-        }
-
-        val sChapters = if (fetchChapters) {
-            result!!.comic!!.chapters.map(::chapterFromObject)
-        } else {
-            chapters
-        }
+        val sChapters = comic.chapters.map(::chapterFromObject)
 
         return SMangaUpdate(sManga, sChapters)
     }
@@ -113,13 +88,12 @@ abstract class PizzaReader : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val result = client.newCall(GET(apiUrl + chapter.url, pizzaHeaders)).await()
+        val result = client.get(apiUrl + chapter.url)
             .parseAs<PizzaReaderDto>()
         return result.chapter!!.pages.mapIndexed { i, page -> Page(i, "", page) }
     }
 
-    protected open fun String.toDate(): Long = runCatching { dateParser.parse(this)?.time }
-        .getOrNull() ?: 0L
+    protected open fun String.toDate(): Long = Instant.parseOrNull(this)?.toEpochMilliseconds() ?: 0L
 
     protected open fun String.toStatus(): Int = when (take(7)) {
         "In cors" -> SManga.ONGOING
