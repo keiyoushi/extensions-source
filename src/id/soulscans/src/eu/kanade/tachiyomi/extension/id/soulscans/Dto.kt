@@ -24,6 +24,8 @@ class MangaDto(
     @SerialName("poster_image_url") private val posterImageUrl: String? = null,
     @SerialName("comic_status") private val comicStatus: String? = null,
     @SerialName("comic_subtype") private val comicSubtype: String? = null,
+    @SerialName("author_name") private val authorName: String? = null,
+    @SerialName("artist_name") private val artistName: String? = null,
     private val genres: List<GenreDto> = emptyList(),
     val units: List<UnitDto> = emptyList(),
 ) {
@@ -31,6 +33,8 @@ class MangaDto(
         url = "/comic/$slug"
         title = this@MangaDto.title
         thumbnail_url = posterImageUrl
+        author = authorName
+        artist = artistName
 
         // Status parsing
         status = when (comicStatus?.lowercase()) {
@@ -69,7 +73,14 @@ class UnitDto(
 ) {
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
         url = "/comic/$mangaSlug/chapter/$slug"
-        name = title
+
+        val chapterNumberClean = number.removeSuffix(".00").removeSuffix(".0")
+        name = if (title.startsWith("Chapter", ignoreCase = true)) {
+            title
+        } else {
+            "Chapter $chapterNumberClean"
+        }
+
         date_upload = runCatching {
             Instant.parse(createdAt).toEpochMilli()
         }.getOrDefault(0L)

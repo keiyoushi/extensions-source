@@ -100,6 +100,10 @@ abstract class SoulScans : KeiSource() {
                         val value = filter.toUriPart()
                         if (value.isNotEmpty()) addQueryParameter("reading_format", value)
                     }
+                    is GenreFilter -> {
+                        val value = filter.toUriPart()
+                        if (value.isNotEmpty()) addQueryParameter("genre", value)
+                    }
                     is SortFilter -> {
                         val sortValue = filter.toSortPart()
                         val apiSortValue = if (sortValue == "az" || sortValue == "za") "latest" else sortValue
@@ -115,12 +119,6 @@ abstract class SoulScans : KeiSource() {
                     }
                     is PublisherFilter -> {
                         if (filter.state.isNotEmpty()) addQueryParameter("publisher", filter.state)
-                    }
-                    is GenreGroup -> {
-                        val selected = filter.state.filter { it.state }.map { it.slug }
-                        if (selected.isNotEmpty()) {
-                            addQueryParameter("genre", selected.joinToString(","))
-                        }
                     }
                     else -> {}
                 }
@@ -205,18 +203,18 @@ abstract class SoulScans : KeiSource() {
     // ============================== FILTERS ==============================
 
     override fun getFilterList(data: kotlinx.serialization.json.JsonElement?): FilterList = FilterList(
+        SortFilter(),
         StatusFilter(),
         TypeFilter(),
         ColorFilter(),
         ReadingFilter(),
+        GenreFilter(),
         Filter.Separator(),
-        SortFilter(),
+        Filter.Header("Semua filter di atas maupun di bawah bisa dikombinasikan termasuk pencarian teks."),
         Filter.Separator(),
         AuthorFilter(),
         ArtistFilter(),
         PublisherFilter(),
-        Filter.Separator(),
-        GenreGroup(genreList),
     )
 
     // ============================== HELPERS & UTILITIES ==============================
