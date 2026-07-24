@@ -126,13 +126,13 @@ class VolumesListDto(
 
 @Serializable
 class ChaptersListDto(
-    val name: String,
-    val slug: String,
+    private val name: String,
+    private val slug: String,
     private val volumeOrder: Float,
-    val number: Float,
-    val updatedDate: String? = null,
+    private val number: Float,
+    private val updatedDate: String? = null,
     private val createdDate: String? = null,
-    val translationTeams: List<Tags>? = emptyList(),
+    private val translationTeams: List<Tags>? = emptyList(),
 ) {
     fun toSChapter(chapterSlug: String) = SChapter.create().apply {
         val vol = volumeOrder.toString().removeSuffix(".0")

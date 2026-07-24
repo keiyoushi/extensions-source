@@ -14,4 +14,8 @@ keiyoushi {
         lang = "uk"
         baseUrl = "https://faust-web.com"
     }
+
+    deeplink {
+        path("/manga/..*")
+    }
 }

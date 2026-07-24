@@ -25,6 +25,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.util.Calendar
@@ -109,6 +110,17 @@ abstract class Faust :
             val mangas = data.titles.map { it.toSManga() }
             return MangasPage(mangas, (data.totalPages > data.page))
         }
+    }
+
+    // =========================== Deeplink ============================
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "manga") {
+            val tmpManga = SManga.create().apply {
+                this.url = url.pathSegments[1]
+            }
+            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        }
+        return null
     }
 
     // ============================== Manga / Manga ===============================
