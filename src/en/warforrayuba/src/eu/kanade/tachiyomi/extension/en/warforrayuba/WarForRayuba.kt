@@ -2,34 +2,37 @@ package eu.kanade.tachiyomi.extension.en.warforrayuba
 
 import android.os.Build
 import eu.kanade.tachiyomi.AppInfo
+import eu.kanade.tachiyomi.extension.en.warforrayuba.dto.GithubFileDto
 import eu.kanade.tachiyomi.extension.en.warforrayuba.dto.PageDto
 import eu.kanade.tachiyomi.extension.en.warforrayuba.dto.RoundDto
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
-import kotlinx.serialization.decodeFromString
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
+import okhttp3.OkHttpClient
 
 @Source
-abstract class WarForRayuba : HttpSource() {
+abstract class WarForRayuba : KeiSource() {
 
     override val supportsLatest = false
 
-    override val client = network.client.newBuilder()
-        .rateLimit(4)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        rateLimit(4)
+    }
+
+    override fun Headers.Builder.configureHeaders() = apply {
+        add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:86.0) Gecko/20100101 Firefox/86.0 ")
+        set("Referer", baseUrl)
+    }
 
     private val json = Json {
         isLenient = true
@@ -49,77 +52,55 @@ abstract class WarForRayuba : HttpSource() {
         )
     }.build()
 
-    override fun headersBuilder() = Headers.Builder().apply {
-        add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:86.0) Gecko/20100101 Firefox/86.0 ")
-        add("Referer", baseUrl)
-    }
-
-    override fun popularMangaRequest(page: Int) = GET("https://github.com/xrabohrok/WarMap/tree/main/tools", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        val mangas = document.select("#repo-content-pjax-container .Details div[role=row] div[role=rowheader] a[href*='.json']").map { element ->
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val response = client.get("https://api.github.com/repos/xrabohrok/WarMap/contents/tools").parseAs<List<GithubFileDto>>()
+        val mangaList = response.filter { it.name.endsWith(".json") }.map {
             SManga.create().apply {
-                val githubRawUrl = "https://raw.githubusercontent.com/xrabohrok/WarMap/" + element.attr("abs:href").replace(".*(?=main)".toRegex(), "")
-                val githubData: RoundDto = json.decodeFromString(
-                    client.newCall(GET(githubRawUrl, headers)).execute().body.string(),
-                )
-
-                title = githubData.title
-                thumbnail_url = githubData.cover
-                url = githubRawUrl
+                title = it.name
+                url = it.downloadUrl
             }
         }
-
-        return MangasPage(mangas, false)
+        return MangasPage(mangaList, false)
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(apiMangaDetailsRequest(manga))
-        .asObservableSuccess()
-        .map { response ->
-            mangaDetailsParse(response).apply { initialized = true }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(emptyList(), false)
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val roundDto = client.get(manga.url).parseAs<RoundDto>(json)
+
+        val manga = SManga.create().apply {
+            title = roundDto.title
+            description = roundDto.description
+            thumbnail_url = roundDto.cover
+            author = roundDto.author
+            artist = roundDto.artist
         }
 
-    private fun apiMangaDetailsRequest(manga: SManga): Request = GET(manga.url, headers)
+        val chapters = roundDto.chapters.map { (number, chapter) ->
+            SChapter.create().apply {
+                url = "https://cubari.moe" + chapter.groups.primary
+                chapter_number = number.toFloat()
+                name = number.toString() + " " + chapter.title
+                date_upload = chapter.last_updated
+            }
+        }.reversed()
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl, headers)
-
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val githubData: RoundDto = json.decodeFromString(response.body.string())
-
-        thumbnail_url = githubData.cover
-        status = SManga.UNKNOWN
-        author = githubData.author
-        artist = githubData.artist
-        title = githubData.title
-        description = githubData.description
+        return SMangaUpdate(manga, chapters)
     }
 
-    override fun chapterListRequest(manga: SManga): Request = GET(manga.url, headers)
+    override fun getMangaUrl(manga: SManga): String = baseUrl
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val responseJson: RoundDto = json.decodeFromString(response.body.string())
+    override fun getChapterUrl(chapter: SChapter): String = chapter.url
 
-        val chapterList: MutableList<SChapter> = ArrayList()
-        responseJson.chapters.forEach { (number, chapter) ->
-            chapterList.add(
-                SChapter.create().apply {
-                    url = "https://cubari.moe" + chapter.groups.primary
-                    chapter_number = number.toFloat()
-                    name = number.toString() + " " + chapter.title
-                    date_upload = chapter.last_updated
-                },
-            )
-        }
-
-        return chapterList.reversed()
-    }
-
-    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, cubariHeaders)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val chapterData: List<PageDto> = json.decodeFromString(response.body.string())
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterData = client.get(chapter.url, cubariHeaders).parseAs<List<PageDto>>(json)
 
         val pageList = chapterData.mapIndexed { index, page ->
             Page(index, page.src.slice(0..page.src.lastIndexOf(".")), page.src)
@@ -127,16 +108,4 @@ abstract class WarForRayuba : HttpSource() {
 
         return pageList
     }
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 }
