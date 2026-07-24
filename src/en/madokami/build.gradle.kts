@@ -6,12 +6,19 @@ plugins {
 
 keiyoushi {
     name = "Madokami"
-    versionCode = 14
+    versionCode = 15
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "en"
         baseUrl = "https://manga.madokami.al"
+    }
+
+    deeplink {
+        path("/Manga/..*")
+        path("/Raws/..*")
+        path("/Artbooks/..*")
+        path("/reader/..*")
     }
 }
