@@ -4,6 +4,8 @@ import eu.kanade.tachiyomi.network.GET
 import keiyoushi.utils.readLongLittleEndian
 import keiyoushi.utils.readUIntLittleEndian
 import keiyoushi.utils.readUShortLittleEndian
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -316,6 +318,16 @@ fun OkHttpClient.zipDirectory(url: String, headers: Headers): ZipDirectory {
     val response = newCall(GET(url, headers).newBuilder().header("Range", "bytes=-$MAX_EOCD_SEARCH").build()).execute()
     val total = response.header("Content-Range")?.substringAfterLast("/")?.toLongOrNull() ?: throw IOException("Missing or invalid Content-Range")
     return readZipDirectory(response.body.bytes(), total) { rangeSource(url, headers, it) }
+}
+
+/**
+ * Fetches and parses a remote ZIP's central directory over HTTP range requests.
+ * (Suspend equivalent)
+ */
+suspend fun OkHttpClient.zipDirectoryAsync(url: String, headers: Headers): ZipDirectory = withContext(Dispatchers.IO) {
+    val response = newCall(GET(url, headers).newBuilder().header("Range", "bytes=-$MAX_EOCD_SEARCH").build()).execute()
+    val total = response.header("Content-Range")?.substringAfterLast("/")?.toLongOrNull() ?: throw IOException("Missing or invalid Content-Range")
+    readZipDirectory(response.body.bytes(), total) { rangeSource(url, headers, it) }
 }
 
 /**

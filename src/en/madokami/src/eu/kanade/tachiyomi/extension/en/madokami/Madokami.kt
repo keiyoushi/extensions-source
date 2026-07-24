@@ -19,11 +19,9 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.zip.readZipEntry
-import keiyoushi.zip.zipDirectory
-import kotlinx.coroutines.Dispatchers
+import keiyoushi.zip.zipDirectoryAsync
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Credentials
@@ -114,19 +112,17 @@ abstract class Madokami :
 
     private fun getAuthHeaders() = headers.newBuilder().set("Authorization", getAuthCredential()).build()
 
-    private val customMetadataRegex: Regex? by lazy {
-        val raw = preferences.getString(PREF_METADATA_WORDS_KEY, "") ?: ""
-        if (raw.isBlank()) {
-            null
-        } else {
+    private val customMetadataRegex: Regex?
+        get() {
+            val raw = preferences.getString(PREF_METADATA_WORDS_KEY, "") ?: ""
+            if (raw.isBlank()) return null
             val words = raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-            if (words.isEmpty()) {
+            return if (words.isEmpty()) {
                 null
             } else {
                 Regex("""(?i)\b(?:${words.joinToString("|") { Regex.escape(it) }})\b""")
             }
         }
-    }
 
     private fun getMediaType(name: String) = when {
         name.endsWith(".png", true) -> "image/png"
@@ -495,10 +491,10 @@ abstract class Madokami :
         }
     }
 
-    private suspend fun getZipPageList(chapter: SChapter): List<Page> = withContext(Dispatchers.IO) {
+    private suspend fun getZipPageList(chapter: SChapter): List<Page> {
         val url = baseUrl + chapter.url
         val directory = try {
-            client.zipDirectory(url, getAuthHeaders())
+            client.zipDirectoryAsync(url, getAuthHeaders())
         } catch (e: IOException) {
             if (e.message?.contains("Content-Range") == true) {
                 throw IOException("Refresh episode list and try again", e)
@@ -506,7 +502,7 @@ abstract class Madokami :
             throw e
         }
 
-        directory.entries
+        return directory.entries
             .filter { isImage(it.name) }
             .sortedBy { it.name }
             .mapIndexed { index, entry ->
