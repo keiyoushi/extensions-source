@@ -10,11 +10,12 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
@@ -99,24 +100,27 @@ abstract class AHottie : KeiSource() {
     ): SMangaUpdate {
         val document = client.get(baseUrl + manga.url).asJsoup()
 
-        val updatedManga = if (fetchDetails) mangaDetailsParse(document) else manga
+        val updatedManga = mangaDetailsParse(document)
 
-        val updatedChapters = if (fetchChapters) {
-            listOf(
-                SChapter.create().apply {
-                    val link = document.selectFirst("link[rel=canonical]") ?: throw Exception("Chapter link not found")
-                    setUrlWithoutDomain(link.absUrl("href"))
-                    chapter_number = 0F
-                    name = "GALLERY"
-                    date_upload = DATE_FORMAT.tryParse(document.selectFirst("time")?.text())
-                },
-            )
-        } else {
-            chapters
-        }
+        val updatedChapters = listOf(
+            SChapter.create().apply {
+                val link = document.selectFirst("link[rel=canonical]") ?: throw Exception("Chapter link not found")
+                setUrlWithoutDomain(link.absUrl("href"))
+                chapter_number = 0F
+                name = "GALLERY"
+                date_upload = document.selectFirst("time")?.text()?.let { parseDate(it) } ?: 0L
+            },
+        )
 
         return SMangaUpdate(updatedManga, updatedChapters)
     }
+
+    private fun parseDate(dateStr: String): Long = runCatching {
+        LocalDate.parse(dateStr, DATE_FORMATTER)
+            .atStartOfDay()
+            .toInstant(ZoneOffset.UTC)
+            .toEpochMilli()
+    }.getOrDefault(0L)
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
@@ -141,6 +145,6 @@ abstract class AHottie : KeiSource() {
     }
 
     companion object {
-        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+        private val DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH)
     }
 }
