@@ -78,9 +78,6 @@ abstract class HoneyManga :
     private suspend fun makeCatalogRequest(page: Int, sortBy: String, filters: FilterList? = null): MangasPage {
         val searchFilters = mutableListOf<SearchFilter>()
         val setSearchSort = SearchSort(sortBy = sortBy, sortOrder = "DESC")
-        val blockedTypes = blockTypes()
-        val blockedGenres = blockGenres()
-        val contentShown = contentType()
 
         filters?.forEach { filter ->
             when (filter) {
@@ -107,16 +104,21 @@ abstract class HoneyManga :
             }
         }
 
-        // Add ignored genres and types from preferences if it's not set by Filters (Popular/Latest tab)
-        if (filters.isNullOrEmpty() && blockedTypes.isNotEmpty() && !searchFilters.any { it.filterBy == "type" && it.filterOperator == "NOT_IN" }) {
-            searchFilters.add(SearchFilter("type", "NOT_IN", blockedTypes.toList()))
-        }
-        if (filters.isNullOrEmpty() && blockedGenres.isNotEmpty() && !searchFilters.any { it.filterBy == "genres" && it.filterOperator == "NOT_IN" }) {
-            searchFilters.add(SearchFilter("genres", "NOT_IN", blockedGenres.toList()))
-        }
+        // Add ignored genres and types from preferences to Popular/Latest tab
+        if (filters == null) {
+            val blockedTypes = blockTypes()
+            val blockedGenres = blockGenres()
+            val contentShown = contentType()
 
-        if (filters.isNullOrEmpty() && contentShown != "all" && !searchFilters.any { it.filterBy == "adult" }) {
-            searchFilters.add(SearchFilter("adult", contentShown, listOf("18+")))
+            if (blockedTypes.isNotEmpty() && !searchFilters.any { it.filterBy == "type" && it.filterOperator == "NOT_IN" }) {
+                searchFilters.add(SearchFilter("type", "NOT_IN", blockedTypes.toList()))
+            }
+            if (blockedGenres.isNotEmpty() && !searchFilters.any { it.filterBy == "genres" && it.filterOperator == "NOT_IN" }) {
+                searchFilters.add(SearchFilter("genres", "NOT_IN", blockedGenres.toList()))
+            }
+            if (contentShown != "all" && !searchFilters.any { it.filterBy == "adult" }) {
+                searchFilters.add(SearchFilter("adult", contentShown, listOf("18+")))
+            }
         }
 
         val body = SearchRequestBody(
