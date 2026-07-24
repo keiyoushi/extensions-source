@@ -30,7 +30,31 @@ open class CheckBoxFilter(
     }
 }
 
-class PublisherFilter(values: List<Pair<String, Int>>) : CheckBoxFilter("Publisher", "p", values)
+class PublisherFilter(values: List<Pair<String, Int>>) :
+    Filter.Group<CheckBoxFilter>(
+        "Publisher",
+        values.groupBy { (name, _) ->
+            val c = name.firstOrNull()?.uppercase()
+
+            when {
+                c == null || c !in "A".."Z" -> "0-9"
+                else -> c
+            }
+        }.map { (letter, chunk) ->
+            CheckBoxFilter(letter, "", chunk)
+        },
+    ),
+    UrlPartFilter {
+
+    override fun addFilterToUrl(url: StringBuilder): Boolean {
+        val selected = state.flatMap { child ->
+            child.state.filter { it.state }.map { it.value }
+        }
+        if (selected.isEmpty()) return false
+        url.append("p=").append(selected.joinToString(",")).append("/")
+        return true
+    }
+}
 
 class GenreFilter(values: List<Pair<String, Int>>) : CheckBoxFilter("Genre", "g", values)
 

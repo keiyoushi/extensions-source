@@ -6,12 +6,16 @@ plugins {
 
 keiyoushi {
     name = "BatCave"
-    versionCode = 7
+    versionCode = 8
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "en"
         baseUrl = "https://batcave.biz"
+    }
+
+    deeplink {
+        path("/..*")
     }
 }
