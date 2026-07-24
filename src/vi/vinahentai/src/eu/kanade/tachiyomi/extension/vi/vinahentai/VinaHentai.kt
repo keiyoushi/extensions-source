@@ -240,9 +240,11 @@ abstract class VinaHentai : KeiSource() {
     }
 
     // ============================== Pages =================================
-    private val baseDomain = baseUrl.removePrefix("https://").removePrefix("http://")
-    private val imageUrlRegex
-        get() = Regex("""https://vnht\.${Regex.escape(baseDomain)}/manga-images/[^"'\s\\]+""")
+    private val imageUrlRegex: Regex
+        get() {
+            val baseDomain = baseUrl.removePrefix("https://").removePrefix("http://")
+            return Regex("""https://vnht\.${Regex.escape(baseDomain)}/manga-images/[^"'\s\\]+""")
+        }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val body = client.get(getChapterUrl(chapter)).use { it.body.string() }
