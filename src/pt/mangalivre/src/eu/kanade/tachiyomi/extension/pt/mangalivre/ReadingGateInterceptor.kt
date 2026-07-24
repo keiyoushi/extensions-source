@@ -26,38 +26,33 @@ class ReadingGateInterceptor(
         if (request.url.host != baseUrlHost) {
             return chain.proceed(request)
         }
-        return proceedDecrypted(chain, request, seedRetried = false, decryptReloaded = false)
+        return proceedDecrypted(chain, request, seedRetried = false)
     }
 
     private fun proceedDecrypted(
         chain: Interceptor.Chain,
         request: Request,
         seedRetried: Boolean,
-        decryptReloaded: Boolean,
     ): Response {
         val response = chain.proceed(request.withSignature(forceRefresh = seedRetried))
 
-        if (response.code == 403) {
-            if (seedRetried) return response
+        if (response.code == 403 && !seedRetried) {
             response.close()
-            return proceedDecrypted(chain, request, seedRetried = true, decryptReloaded)
+            return proceedDecrypted(chain, request, seedRetried = true)
         }
 
         val dataKey = response.headers["x-toon-datakey"] ?: return response
 
         val contentType = response.body.contentType()
-        val decrypted = decryptor.decrypt(response.body.string(), dataKey)
-        if (decrypted != null) {
-            return response.newBuilder()
-                .body(decrypted.toResponseBody(contentType))
-                .build()
-        }
-
-        response.close()
-        if (decryptReloaded) throw IOException(NON_JSON_MESSAGE)
+        val cipherWrapperBody = response.body.string()
         val readerPath = request.tag(ReaderPath::class.java)?.path ?: "/"
-        decryptor.reloadConstants(readerPath)
-        return proceedDecrypted(chain, request, seedRetried, decryptReloaded = true)
+        val decrypted = decryptor.decrypt(cipherWrapperBody, dataKey)
+            ?: decryptor.reloadConstantsAndDecrypt(readerPath, cipherWrapperBody, dataKey)
+            ?: throw IOException(NON_JSON_MESSAGE)
+
+        return response.newBuilder()
+            .body(decrypted.toResponseBody(contentType))
+            .build()
     }
 
     private fun Request.withSignature(forceRefresh: Boolean): Request = newBuilder()
