@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.ja.kisslove
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,8 +29,14 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 @Source
-abstract class KissLove : HttpSource() {
-    override val supportsLatest = true
+class KissLove(
+    override val id: Long,
+    override val name: String,
+    override val baseUrl: String,
+    override val lang: String,
+    override val supportsLatest: Boolean = true,
+) : HttpSource(),
+    ConfigurableSource {
 
     private val intl = Intl(
         Locale.getDefault().language,
@@ -33,6 +44,7 @@ abstract class KissLove : HttpSource() {
         lang,
         this::class.java.classLoader!!,
     )
+    private val preferences: SharedPreferences = getPreferences()
     private var cachedGenres: List<CheckBoxFilter>? = null
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -45,7 +57,7 @@ abstract class KissLove : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<List<Manga>>()
-        val mangas = result.map { it.toSManga() }
+        val mangas = result.map { it.toSManga(preferences.getBoolean(USE_ROMAJI_PREF, true)) }
         return MangasPage(mangas, false)
     }
 
@@ -62,7 +74,7 @@ abstract class KissLove : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = response.parseAs<PagedManga>()
-        val mangas = result.items.map { it.toSManga() }
+        val mangas = result.items.map { it.toSManga(preferences.getBoolean(USE_ROMAJI_PREF, true)) }
         val hasNextPage = result.currentPage < result.totalPages
         return MangasPage(mangas, hasNextPage)
     }
@@ -82,7 +94,6 @@ abstract class KissLove : HttpSource() {
                     }
 
                     is StatusFilter -> addQueryParameter("status", filter.toUriPart())
-
                     else -> {}
                 }
             }
@@ -90,12 +101,7 @@ abstract class KissLove : HttpSource() {
         return GET(url, sigAppend())
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<ListPagedManga>()
-        val mangas = result.items.map { it.toSManga() }
-        val hasNextPage = result.currentPage < result.totalPages
-        return MangasPage(mangas, hasNextPage)
-    }
+    override fun searchMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
@@ -107,7 +113,7 @@ abstract class KissLove : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<Manga>()
-        return result.toSManga()
+        return result.toSManga(preferences.getBoolean(USE_ROMAJI_PREF, true))
     }
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
@@ -239,5 +245,15 @@ abstract class KissLove : HttpSource() {
             "h2.klimv1.xyz" to "j2.jfimv2.xyz",
             "h4.klimv1.xyz" to "j4.jfimv2.xyz",
         )
+        const val USE_ROMAJI_PREF = "USE_ROMAJI_PREF"
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = USE_ROMAJI_PREF
+            title = intl["useRomajiTitle"]
+            summary = intl["useRomajiSummary"]
+            setDefaultValue(true)
+        }.let(screen::addPreference)
     }
 }
