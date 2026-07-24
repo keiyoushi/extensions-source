@@ -27,7 +27,7 @@ class ResponseData(
     private val genres: List<String>? = emptyList(),
     private val adult: String,
 ) {
-    fun toSManga(baseUrl: String, imageUrl: String, blockedTypes: Set<String>? = emptySet(), blockedGenres: Set<String>? = emptySet(), contentShown: String? = null): SManga? {
+    fun toSManga(imageUrl: String, blockedTypes: Set<String>? = emptySet(), blockedGenres: Set<String>? = emptySet(), contentShown: String? = null): SManga? {
         if (blockedTypes?.contains(type) == true) return null
         if (blockedGenres?.intersect(genres?.toSet().orEmpty())?.isNotEmpty() == true) return null
         if (contentShown == "IN" && adult != "18+") return null
@@ -41,7 +41,7 @@ class ResponseData(
         return SManga.create().apply {
             title = this@ResponseData.title
             thumbnail_url = "$imageUrl/$posterId"
-            url = "$baseUrl/book/$id"
+            url = id // old format: "$baseUrl/book/$id"
         }
     }
 }
@@ -60,10 +60,10 @@ class CompleteMangaDto(
     private val titleStatus: String? = null,
     private val adult: String? = null,
 ) {
-    fun toSManga(baseUrl: String, imageUrl: String): SManga = SManga.create().apply {
+    fun toSManga(imageUrl: String): SManga = SManga.create().apply {
         title = this@CompleteMangaDto.title
         thumbnail_url = "$imageUrl/$posterId"
-        url = "$baseUrl/book/$id"
+        url = id // old format: "$baseUrl/book/$id"
         description = this@CompleteMangaDto.description
         genre = buildList {
             adult?.takeIf { it == "18+" }?.let { add(it) }
@@ -98,12 +98,12 @@ class ChapterResponseList(
     private val lastUpdated: String,
     private val isMonetized: Boolean,
 ) {
-    fun toSChapter(baseUrl: String, hideLocked: Boolean): SChapter? {
+    fun toSChapter(hideLocked: Boolean): SChapter? {
         if (hideLocked && isMonetized) return null
         val prefix = if (isMonetized) "\uD83D\uDD12 " else ""
         val suffix = if (subChapterNum == 0) "" else ".$subChapterNum"
         return SChapter.create().apply {
-            url = "$baseUrl/read/$id/$mangaId"
+            url = id // old format: "$baseUrl/read/$id/$mangaId"
             name = "${prefix}Том $volume - Розділ $chapterNum$suffix"
             chapter_number = if (subChapterNum == 0) {
                 chapterNum.toFloat()
@@ -113,6 +113,7 @@ class ChapterResponseList(
             date_upload = Instant.parseOrNull(lastUpdated)?.toEpochMilliseconds() ?: 0L
             memo = buildJsonObject {
                 put("locked", isMonetized)
+                put("mangaId", mangaId)
             }
         }
     }

@@ -20,6 +20,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.boolean
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -32,9 +33,11 @@ import okhttp3.OkHttpClient
 abstract class HoneyManga :
     KeiSource(),
     ConfigurableSource {
-    private val apiUrlHost by lazy { API_URL.toHttpUrl().host }
-
-    override val supportsLatest = true
+    private val domain get() = baseUrl.toHttpUrl().host
+    private val apiUrlHost get() = "data.api.$domain"
+    private val apiUrl get() = "https://data.api.$domain"
+    private val searchApiUrl get() = "https://search.api.$domain/v2/manga/pattern"
+    private val imgUrl = "https://hmvolumestorage.b-cdn.net/public-resources"
 
     private val preferences by getPreferencesLazy()
 
@@ -54,7 +57,7 @@ abstract class HoneyManga :
             if (query.length < 3) {
                 throw Exception("Запит має містити щонайменше 3 символи / The query must contain at least 3 characters")
             }
-            val url = "$SEARCH_API_URL/v2/manga/pattern".toHttpUrl().newBuilder()
+            val url = searchApiUrl.toHttpUrl().newBuilder()
                 .addQueryParameter("query", query)
                 .build()
 
@@ -63,7 +66,7 @@ abstract class HoneyManga :
                 val blockedTypes = blockTypes()
                 val contentShown = contentType()
                 val result = response.parseAs<List<ResponseData>>()
-                val mangas = result.mapNotNull { it.toSManga(baseUrl, IMAGE_STORAGE_URL, blockedTypes, blockedGenres, contentShown) }
+                val mangas = result.mapNotNull { it.toSManga(imgUrl, blockedTypes, blockedGenres, contentShown) }
                 return MangasPage(mangas, false) // search by Name doesn't have pages
             }
         }
@@ -123,9 +126,9 @@ abstract class HoneyManga :
             filters = searchFilters.ifEmpty { null },
         ).toJsonRequestBody()
 
-        client.post("$API_URL/v2/manga/cursor-list", body).use { response ->
+        client.post("$apiUrl/v2/manga/cursor-list", body).use { response ->
             val result = response.parseAs<CatalogResponseDto>()
-            val mangas = result.data.mapNotNull { it.toSManga(baseUrl, IMAGE_STORAGE_URL) }
+            val mangas = result.data.mapNotNull { it.toSManga(imgUrl) }
             return MangasPage(mangas, result.hasNextPage)
         }
     }
@@ -144,7 +147,11 @@ abstract class HoneyManga :
     }
 
     // =========================== Manga Details ============================
-    override fun getMangaUrl(manga: SManga): String = manga.url
+    override fun getMangaUrl(manga: SManga): String = if (manga.url.contains("/book/")) { // old url compatibility
+        manga.url
+    } else {
+        "$baseUrl/book/${manga.url}"
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -152,13 +159,17 @@ abstract class HoneyManga :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        val mangaId = manga.url.substringAfterLast('/')
+        val mangaId = if (manga.url.contains("/book/")) { // old url compatibility
+            manga.url.substringAfterLast('/')
+        } else {
+            manga.url
+        }
 
         val mangaAsync = async {
             if (fetchDetails) {
-                val url = "$API_URL/manga/$mangaId"
+                val url = "$apiUrl/manga/$mangaId"
                 val data = client.get(url).use { it.parseAs<CompleteMangaDto>() }
-                data.toSManga(baseUrl, IMAGE_STORAGE_URL)
+                data.toSManga(imgUrl)
             } else {
                 manga
             }
@@ -172,10 +183,10 @@ abstract class HoneyManga :
                     pageSize = 10000,
                     sortOrder = "DESC",
                 ).toJsonRequestBody()
-                val chaptersUrl = "$API_URL/v2/chapter/cursor-list"
+                val chaptersUrl = "$apiUrl/v2/chapter/cursor-list"
                 val data = client.post(chaptersUrl, body).use { it.parseAs<ChapterResponse>().data }
                 val hideLocked = hideLocked()
-                data.mapNotNull { it.toSChapter(baseUrl, hideLocked) }
+                data.mapNotNull { it.toSChapter(hideLocked) }
             } else {
                 chapters
             }
@@ -185,12 +196,22 @@ abstract class HoneyManga :
     }
 
     // =============================== Pages ================================
+    override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.contains("/read/")) { // old url compatibility
+        chapter.url
+    } else {
+        "$baseUrl/read/${chapter.url}/${chapter.memo["mangaId"]!!.string}"
+    }
+
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val hideLocked = hideLocked()
         if (!hideLocked && chapter.memo["locked"]?.boolean == true) throw Exception("Розділ лише для меценатів.")
-        val chapterId = chapter.url.substringBeforeLast('/').substringAfterLast('/')
-        val url = "$API_URL/chapter/frames/$chapterId"
-        return client.get(url).use { it.parseAs<ChapterPages>().toPageList(IMAGE_STORAGE_URL) }
+        val chapterId = if (chapter.url.contains("/read/")) { // old url compatibility
+            chapter.url.substringBeforeLast('/').substringAfterLast('/')
+        } else {
+            chapter.url
+        }
+        val url = "$apiUrl/chapter/frames/$chapterId"
+        return client.get(url).use { it.parseAs<ChapterPages>().toPageList(imgUrl) }
     }
 
     // ============================= Filters ==============================
@@ -209,9 +230,6 @@ abstract class HoneyManga :
 
     // ============================= Utilities ==============================
     companion object {
-        private const val API_URL = "https://data.api.honey-manga.com.ua"
-        private const val SEARCH_API_URL = "https://search.api.honey-manga.com.ua"
-        private const val IMAGE_STORAGE_URL = "https://hmvolumestorage.b-cdn.net/public-resources"
         private const val DEFAULT_PAGE_SIZE = 30
         private const val GENRES_PREF = "pref_genres_exclude"
         private const val GENRES_PREF_TITLE = "Приховані жанри"
