@@ -35,7 +35,7 @@ abstract class SoulScans : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("type", "COMIC")
-            .addQueryParameter("limit", "50")
+            .addQueryParameter("limit", "20")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("sort", "popular")
             .addQueryParameter("order", "desc")
@@ -55,7 +55,7 @@ abstract class SoulScans : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$apiUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("type", "COMIC")
-            .addQueryParameter("limit", "50")
+            .addQueryParameter("limit", "20")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("sort", "latest")
             .addQueryParameter("order", "desc")
@@ -75,7 +75,7 @@ abstract class SoulScans : KeiSource() {
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("type", "COMIC")
-            addQueryParameter("limit", "50")
+            addQueryParameter("limit", "20")
             addQueryParameter("page", page.toString())
 
             if (query.isNotBlank()) {
