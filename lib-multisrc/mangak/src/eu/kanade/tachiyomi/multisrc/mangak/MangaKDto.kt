@@ -127,3 +127,21 @@ private fun String?.toStatus() = when (this?.lowercase()) {
     "cancelled" -> SManga.CANCELLED
     else -> SManga.UNKNOWN
 }
+
+@Serializable
+class GenreResponseDto(
+    val data: GenreDataDto? = null,
+) {
+    val genres: List<GenreItemDto> get() = data?.items.orEmpty()
+}
+
+@Serializable
+class GenreDataDto(
+    val items: List<GenreItemDto> = emptyList(),
+)
+
+@Serializable
+class GenreItemDto(
+    val name: String,
+    val slug: String,
+)

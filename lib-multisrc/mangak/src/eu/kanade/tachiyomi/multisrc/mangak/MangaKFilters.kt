@@ -1,10 +1,8 @@
 package eu.kanade.tachiyomi.multisrc.mangak
 
 import eu.kanade.tachiyomi.source.model.Filter
-import kotlinx.serialization.json.JsonArray
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 class Genre(name: String, val value: String, state: Int = Filter.TriState.STATE_IGNORE) : Filter.TriState(name, state)
 
@@ -90,38 +88,16 @@ class DemographicFilter :
     )
 
 fun getGenreList(data: JsonElement? = null, blacklist: Set<String> = emptySet()): List<Genre> {
-    val pairs = parseGenres(data) ?: emptyList()
+    val items = data
+        ?.let { runCatching { it.parseAs<GenreResponseDto>() }.getOrNull() }
+        ?.genres
+        .orEmpty()
 
-    return pairs.map { (name, value) ->
+    return items.map { item ->
         Genre(
-            name = name,
-            value = value,
-            state = if (value in blacklist) Filter.TriState.STATE_EXCLUDE else Filter.TriState.STATE_IGNORE,
+            name = item.name,
+            value = item.slug,
+            state = if (item.slug in blacklist) Filter.TriState.STATE_EXCLUDE else Filter.TriState.STATE_IGNORE,
         )
     }
-}
-
-private fun parseGenres(data: JsonElement?): List<Pair<String, String>>? {
-    if (data == null) return null
-
-    val rootObj = data as? JsonObject
-    val jsonArray = (rootObj?.get("data") as? JsonObject)?.get("items") as? JsonArray
-        ?: (rootObj?.get("items") as? JsonArray)
-        ?: (rootObj?.get("data") as? JsonArray)
-        ?: (data as? JsonArray)
-        ?: return null
-
-    return jsonArray.mapNotNull { element ->
-        val obj = element as? JsonObject ?: return@mapNotNull null
-        val name = obj["name"]?.jsonPrimitive?.content
-            ?: obj["label"]?.jsonPrimitive?.content
-            ?: obj["title"]?.jsonPrimitive?.content
-            ?: return@mapNotNull null
-
-        val value = obj["slug"]?.jsonPrimitive?.content
-            ?: obj["id"]?.jsonPrimitive?.content
-            ?: name.lowercase().replace(" ", "-")
-
-        Pair(name, value)
-    }.takeIf { it.isNotEmpty() }
 }

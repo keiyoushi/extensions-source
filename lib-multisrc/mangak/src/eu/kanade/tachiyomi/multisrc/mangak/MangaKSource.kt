@@ -228,17 +228,10 @@ abstract class MangaKSource :
 
     // ============================== Filters ==============================
 
-    // Mirrored into our own prefs since setupPreferenceScreen can't read the framework's internal filter cache
-    override suspend fun fetchFilterData(): JsonElement {
-        val json = client.get("$apiUrl/genres").parseAs<JsonElement>()
-        preferences.edit().putString(PREF_GENRES_CACHE_KEY, json.toString()).apply()
-        return json
-    }
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres").parseAs<JsonElement>()
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val genreData = data ?: getCachedGenreData()
-        val blacklist = getBlacklist()
-        val genres = getGenreList(genreData, blacklist)
+        val genres = getGenreList(data, getBlacklist())
 
         val filters = mutableListOf<Filter<*>>(
             SortFilter(),
@@ -259,18 +252,10 @@ abstract class MangaKSource :
 
     // ============================= Utilities =============================
 
-    private fun getCachedGenreData(): JsonElement? {
-        val cachedString = preferences.getString(PREF_GENRES_CACHE_KEY, null)
-        return cachedString?.let { str ->
-            runCatching { str.parseAs<JsonElement>() }.getOrNull()
-        }
-    }
-
     private fun getBlacklist(): Set<String> = preferences.getStringSet(PREF_BLACKLIST_KEY, emptySet()) ?: emptySet()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val cachedData = getCachedGenreData()
-        val genres = getGenreList(cachedData)
+        val genres = getFilterList().filterIsInstance<GenreList>().firstOrNull()?.state.orEmpty()
         val blacklistPref = MultiSelectListPreference(screen.context).apply {
             key = PREF_BLACKLIST_KEY
             title = "Global Genre Blacklist"
@@ -288,7 +273,6 @@ abstract class MangaKSource :
 
     companion object {
         private const val PREF_BLACKLIST_KEY = "pref_blacklist"
-        private const val PREF_GENRES_CACHE_KEY = "pref_genres_cache"
         private const val FALLBACK_IMAGE_HOST = "rx.rzyn.net"
         private const val DEFAULT_PAGE_LIMIT = "24"
         private const val QUERY_LENGTH_LIMIT = 50
