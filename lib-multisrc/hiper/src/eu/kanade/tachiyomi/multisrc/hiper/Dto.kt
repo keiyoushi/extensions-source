@@ -3,12 +3,10 @@ package eu.kanade.tachiyomi.multisrc.hiper
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Instant
 
 @Serializable
 class WrapperContent(
@@ -60,7 +58,7 @@ class ChapterDto(
     fun toSChapter(mangaPath: String) = SChapter.create().apply {
         name = buildChapterName()
         chapter_number = number
-        date_upload = dateFormat.tryParse(createdAt)
+        date_upload = Instant.parseOrNull(createdAt)?.toEpochMilliseconds() ?: 0L
         url = "$mangaPath/$number"
     }
 
@@ -74,7 +72,6 @@ class ChapterDto(
     private val labelNumber: String get() = "Chapter ${number.toString().replace(".0", "")}"
 
     companion object {
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
         private val NUMBER_REGEX = """\d+""".toRegex()
     }
 }

@@ -6,12 +6,12 @@ plugins {
 
 keiyoushi {
     name = "KomikNesia"
-    versionCode = 1
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
+    versionCode = 2
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
     source {
         lang = "id"
-        baseUrl = "https://02.komiknesia.asia"
+        baseUrl = "https://v1.komiknesiaku.com"
     }
 }

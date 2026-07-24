@@ -34,35 +34,53 @@ class MangaLivreDecryptor(
     }.getOrNull()
 
     fun reloadConstants(readerPath: String) {
-        val now = System.currentTimeMillis()
         synchronized(this) {
+            val now = System.currentTimeMillis()
             if (now - lastReloadAt < RELOAD_COOLDOWN_MS) return
+            val reloaded = runCatching {
+                val indexJsUrl = client.newCall(GET(baseUrl + readerPath, headers)).execute()
+                    .asJsoup()
+                    .selectFirst("script[src*=index]")
+                    ?.absUrl("src")
+                    ?: return@runCatching null
+                client.newCall(GET(indexJsUrl, headers)).execute().use { it.body.string() }
+                    .extractConstants()
+            }.getOrNull() ?: return
+
+            constants = reloaded
             lastReloadAt = now
         }
-        runCatching {
-            val indexJsUrl = client.newCall(GET(baseUrl + readerPath, headers)).execute()
-                .asJsoup()
-                .selectFirst("script[src*=index]")
-                ?.absUrl("src")
-            if (indexJsUrl != null) {
-                val js = client.newCall(GET(indexJsUrl, headers)).execute().use { it.body.string() }
-                val direct = DIRECT_CONSTANTS_REGEX.find(js)
-                val legacy = EV_CONSTANTS_REGEX.find(js)
-                val hostPart = direct?.groupValues?.get(1)
-                    ?: ENV_HOST_REGEX.find(js)?.groupValues?.get(1)
-                    ?: legacy?.groupValues?.get(1)
-                val antibotPart = if (direct != null) {
-                    ""
-                } else {
-                    ENV_ANTIBOT_REGEX.find(js)?.groupValues?.get(1) ?: legacy?.groupValues?.get(2)
-                }
-                val encKey = direct?.groupValues?.get(2)
-                    ?: ENV_ENCRYPTION_REGEX.find(js)?.groupValues?.get(1)
-                    ?: legacy?.groupValues?.get(3)
-                if (hostPart != null && antibotPart != null && encKey != null) {
-                    constants = Constants(hostPart, antibotPart, encKey)
-                }
-            }
+    }
+
+    private fun String.extractConstants(): Constants? {
+        extractDirectConstants()?.let { return it }
+        val legacy = EV_CONSTANTS_REGEX.find(this)
+        val hostPart = ENV_HOST_REGEX.find(this)?.groupValues?.get(1) ?: legacy?.groupValues?.get(1)
+        val antibotPart = ENV_ANTIBOT_REGEX.find(this)?.groupValues?.get(1) ?: legacy?.groupValues?.get(2)
+        val encKey = ENV_ENCRYPTION_REGEX.find(this)?.groupValues?.get(1) ?: legacy?.groupValues?.get(3)
+        return if (hostPart != null && antibotPart != null && encKey != null) {
+            Constants(hostPart, antibotPart, encKey)
+        } else {
+            null
+        }
+    }
+
+    private fun String.extractDirectConstants(): Constants? {
+        val hashIndex = indexOf(SHA256_MARKER).takeIf { it >= 0 } ?: return null
+        val functionStart = lastIndexOf("=>{", hashIndex).takeIf { it >= 0 }
+            ?: maxOf(0, hashIndex - PASSWORD_FUNCTION_WINDOW)
+        val returnIndex = lastIndexOf("return", hashIndex).takeIf { it > functionStart } ?: return null
+        val hashInputSuffix = STRING_LITERAL_REGEX.findAll(substring(functionStart, returnIndex))
+            .map { it.groupValues[1] }
+            .filter { it.length > 2 }
+            .joinToString("")
+        val encryptionKey = STRING_LITERAL_REGEX.find(substring(returnIndex, hashIndex))
+            ?.groupValues?.get(1)
+            .orEmpty()
+        return if (hashInputSuffix.isNotEmpty() && encryptionKey.isNotEmpty()) {
+            Constants(hashInputSuffix, "", encryptionKey)
+        } else {
+            null
         }
     }
 
@@ -109,15 +127,15 @@ class MangaLivreDecryptor(
     }
 
     companion object {
-        private const val DEFAULT_HOSTNAME_PART = "toonlivre.net::v9p6_2x8_j"
-        private const val DEFAULT_ANTIBOT_PART = ""
-        private const val DEFAULT_ENC_KEY = "Celestial-Raven-Invoke9"
+        private const val DEFAULT_HOSTNAME_PART = "toonlivre.net::w3"
+        private const val DEFAULT_ANTIBOT_PART = "r7_5m2_k"
+        private const val DEFAULT_ENC_KEY = "Phantom-Tide-Harvest8"
 
         private const val RELOAD_COOLDOWN_MS = 30_000L
+        private const val PASSWORD_FUNCTION_WINDOW = 2_000
+        private const val SHA256_MARKER = ".SHA256("
+        private val STRING_LITERAL_REGEX = Regex("""["']([^"']*)["']""")
 
-        private val DIRECT_CONSTANTS_REGEX = Regex(
-            """getUTCDate\(\)\)\.padStart\(2,"0"\)\}`\s*\+\s*"([^"]+)"\s*;\s*return\s*"([^"]+)"\s*\+\s*[\w$.]+\.SHA256\(""",
-        )
         private val EV_CONSTANTS_REGEX = Regex(
             """toISOString\(\)\.split\("T"\)\[0]\s*,\s*\w+\s*=\s*"([^"]+)"\s*,\s*\w+\s*=\s*"([^"]+)"\s*,\s*\w+\s*=\s*"([^"]+)""",
         )
