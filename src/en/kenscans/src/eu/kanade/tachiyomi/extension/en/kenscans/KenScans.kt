@@ -4,6 +4,4 @@ import eu.kanade.tachiyomi.multisrc.iken.Iken
 import keiyoushi.annotation.Source
 
 @Source
-abstract class KenScans : Iken() {
-    override val useChaptersApi = true
-}
+abstract class KenScans : Iken()

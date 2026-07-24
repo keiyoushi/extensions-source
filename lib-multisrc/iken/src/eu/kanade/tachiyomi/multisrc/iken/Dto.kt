@@ -18,6 +18,7 @@ class SearchResponse(
 
 @Serializable
 class MangaDto(
+    val totalChapterCount: Int? = null,
     val post: Manga,
 )
 
