@@ -161,12 +161,40 @@ abstract class MantaComics :
             headers
         }
 
-        client.get(url, headers).use {
-            return it.parseAs<MantaResponse<Episode>>().data.cutImages?.mapIndexed { idx, img ->
-                Page(idx, "", img.toString())
-            } ?: emptyList()
+        client.get(url, headers).use { response ->
+            val images = response.parseAs<MantaResponse<Episode>>().data.cutImages.orEmpty()
+                .map { it.toString() }
+            // Locked chapters return real preview images followed by "just-black.jpg" placeholders.
+            val previewImages = images.filterNot { it.contains(BLACK_IMAGE_MARKER) }
+
+            val pages = previewImages.mapIndexed { idx, img ->
+                Page(idx, "", img)
+            }.toMutableList()
+
+            if (previewImages.size < images.size) {
+                pages.add(Page(pages.size, "", previewEndImageUrl))
+            }
+            return pages
         }
     }
+
+    private val previewEndImageUrl: String
+        get() {
+            val heading: String
+            val subHeading: String
+            if (lang == "es") {
+                heading = "Fin de la vista previa del capítulo"
+                subHeading = "Compra e inicia sesión con WebView y borra la caché del capítulo para leer completo"
+            } else {
+                heading = "End of chapter preview"
+                subHeading = "Purchase and login via webview and clear chapter cache to read full"
+            }
+            return "https://fakeimg.ryd.tools/1500x2126/f4f4f4/222222/".toHttpUrl().newBuilder()
+                .addQueryParameter("text", "$heading\n\n$subHeading")
+                .addQueryParameter("font_size", "58")
+                .build()
+                .toString()
+        }
 
     // ============================ Preferences =============================
 
@@ -199,5 +227,6 @@ abstract class MantaComics :
 
     companion object {
         private const val PREF_SHOW_LOCKED = "show_locked_chapters"
+        private const val BLACK_IMAGE_MARKER = "just-black.jpg"
     }
 }
