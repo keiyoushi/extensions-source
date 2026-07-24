@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Ken Scans"
-    versionCode = 11
+    versionCode = 10
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "iken"
