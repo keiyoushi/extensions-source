@@ -8,7 +8,7 @@ import java.time.Instant
 
 @Serializable
 class SearchResultDto(
-    val items: List<MangaDto> = emptyList(),
+    @SerialName("data") val items: List<MangaDto> = emptyList(),
     val page: Int,
     val limit: Int,
     val total: Int,
@@ -18,10 +18,10 @@ class SearchResultDto(
 @Serializable
 class MangaDto(
     private val id: String,
-    private val title: String,
+    val title: String,
     private val slug: String,
-    @SerialName("synopsis") private val description: String? = null,
-    @SerialName("poster_image_url") private val thumbnail_url: String? = null,
+    private val synopsis: String? = null,
+    @SerialName("poster_image_url") private val posterImageUrl: String? = null,
     @SerialName("comic_status") private val comicStatus: String? = null,
     @SerialName("comic_subtype") private val comicSubtype: String? = null,
     private val genres: List<GenreDto> = emptyList(),
@@ -30,7 +30,7 @@ class MangaDto(
     fun toSManga() = SManga.create().apply {
         url = "/comic/$slug"
         title = this@MangaDto.title
-        thumbnail_url = this@MangaDto.thumbnail_url
+        thumbnail_url = posterImageUrl
 
         // Status parsing
         status = when (comicStatus?.lowercase()) {
@@ -47,7 +47,7 @@ class MangaDto(
             genreList.add(it)
         }
         genre = genreList.joinToString()
-        description = this@MangaDto.description
+        description = synopsis
     }
 }
 
