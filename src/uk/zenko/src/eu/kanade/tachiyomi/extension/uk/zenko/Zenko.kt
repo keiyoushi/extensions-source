@@ -29,12 +29,11 @@ import java.util.Calendar
 abstract class Zenko :
     KeiSource(),
     ConfigurableSource {
-    private val domain by lazy { baseUrl.toHttpUrl().host }
-    private val apiUrl by lazy { "https://api.$domain" }
-    private val imgUrl by lazy { "https://storage.$domain" }
-    private val apiUrlHost by lazy { "api.$domain" }
+    private val domain get() = baseUrl.toHttpUrl().host
+    private val apiUrl get() = "https://api.$domain"
+    private val imgUrl get() = "https://storage.$domain"
+    private val apiUrlHost get() = "api.$domain"
 
-    override val supportsLatest = true
     private val preferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
