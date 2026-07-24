@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.extension.uk.honeymanga
 
+import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,81 +11,73 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.boolean
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import kotlin.collections.emptySet
-import kotlin.collections.ifEmpty
+import okhttp3.OkHttpClient
 
 @Source
 abstract class HoneyManga :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    private val apiurlHost by lazy { API_URL.toHttpUrl().host }
-
-    override val supportsLatest = true
+    private val domain get() = baseUrl.toHttpUrl().host
+    private val apiUrlHost get() = "data.api.$domain"
+    private val apiUrl get() = "https://data.api.$domain"
+    private val searchApiUrl get() = "https://search.api.$domain/v2/manga/pattern"
+    private val imgUrl = "https://hmvolumestorage.b-cdn.net/public-resources"
 
     private val preferences by getPreferencesLazy()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Origin", "$baseUrl/")
-        .add("Referer", "$baseUrl/")
-
-    override val client = network.client.newBuilder()
-        .rateLimit(10) { it.host == apiurlHost }
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        rateLimit(10) { it.host == apiUrlHost }
+    }
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int) = makeCatalogRequest(page, "likes")
-
-    override fun popularMangaParse(response: Response) = parseAsCatalogResponse(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = makeCatalogRequest(page, "likes")
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int) = makeCatalogRequest(page, "lastUpdated")
-
-    override fun latestUpdatesParse(response: Response) = parseAsCatalogResponse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = makeCatalogRequest(page, "lastUpdated")
 
     // =============================== Search ===============================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotEmpty()) {
             if (query.length < 3) {
-                throw UnsupportedOperationException("Запит має містити щонайменше 3 символи / The query must contain at least 3 characters")
+                throw Exception("Запит має містити щонайменше 3 символи / The query must contain at least 3 characters")
             }
-            val url = "$SEARCH_API_URL/v2/manga/pattern".toHttpUrl().newBuilder()
+            val url = searchApiUrl.toHttpUrl().newBuilder()
                 .addQueryParameter("query", query)
                 .build()
-            return GET(url, headers)
+
+            client.get(url).use { response ->
+                val blockedGenres = blockGenres()
+                val blockedTypes = blockTypes()
+                val contentShown = contentType()
+                val result = response.parseAs<List<ResponseData>>()
+                val mangas = result.mapNotNull { it.toSManga(imgUrl, blockedTypes, blockedGenres, contentShown) }
+                return MangasPage(mangas, false) // search by Name doesn't have pages
+            }
         }
 
         return makeCatalogRequest(page, "likes", filters)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val blockedGenres = blockGenres()
-        val blockedTypes = blockTypes()
-
-        val url = response.request.url
-        if (url.queryParameter("query") != null) {
-            val result = response.parseAs<List<ResponseData>>()
-            val mangas = result.mapNotNull { it.toSManga(baseUrl, IMAGE_STORAGE_URL, blockedTypes, blockedGenres) }
-            return MangasPage(mangas, false) // search by Name doesn't have pages
-        }
-
-        return parseAsCatalogResponse(response)
-    }
-
     // =============================== Latest/Popular/Search Utilities ===============================
-    private fun makeCatalogRequest(page: Int, sortBy: String, filters: FilterList? = null): Request {
+    private suspend fun makeCatalogRequest(page: Int, sortBy: String, filters: FilterList? = null): MangasPage {
         val searchFilters = mutableListOf<SearchFilter>()
         val setSearchSort = SearchSort(sortBy = sortBy, sortOrder = "DESC")
-        val blockedTypes = blockTypes()
-        val blockedGenres = blockGenres()
 
         filters?.forEach { filter ->
             when (filter) {
@@ -107,16 +99,26 @@ abstract class HoneyManga :
                     filter.active?.let { searchFilters.add(SearchFilter("type", "NOT_IN", it)) }
                 }
                 is TypeFilter -> filter.selected?.let { searchFilters.add(SearchFilter("type", "EQUAL", listOf(it))) }
+                is ContentTypeFilter -> filter.selected?.takeIf { it != "all" }?.let { searchFilters.add(SearchFilter("adult", it, listOf("18+"))) }
                 else -> {}
             }
         }
 
-        // Add ignored genres and types from preferences if it's not set by Filters (Popular/Latest tab)
-        if (filters.isNullOrEmpty() && blockedTypes.isNotEmpty() && !searchFilters.any { it.filterBy == "type" && it.filterOperator == "NOT_IN" }) {
-            searchFilters.add(SearchFilter("type", "NOT_IN", blockedTypes.toList()))
-        }
-        if (filters.isNullOrEmpty() && blockedGenres.isNotEmpty() && !searchFilters.any { it.filterBy == "genres" && it.filterOperator == "NOT_IN" }) {
-            searchFilters.add(SearchFilter("genres", "NOT_IN", blockedGenres.toList()))
+        // Add ignored genres and types from preferences to Popular/Latest tab
+        if (filters == null) {
+            val blockedTypes = blockTypes()
+            val blockedGenres = blockGenres()
+            val contentShown = contentType()
+
+            if (blockedTypes.isNotEmpty() && !searchFilters.any { it.filterBy == "type" && it.filterOperator == "NOT_IN" }) {
+                searchFilters.add(SearchFilter("type", "NOT_IN", blockedTypes.toList()))
+            }
+            if (blockedGenres.isNotEmpty() && !searchFilters.any { it.filterBy == "genres" && it.filterOperator == "NOT_IN" }) {
+                searchFilters.add(SearchFilter("genres", "NOT_IN", blockedGenres.toList()))
+            }
+            if (contentShown != "all" && !searchFilters.any { it.filterBy == "adult" }) {
+                searchFilters.add(SearchFilter("adult", contentShown, listOf("18+")))
+            }
         }
 
         val body = SearchRequestBody(
@@ -126,60 +128,96 @@ abstract class HoneyManga :
             filters = searchFilters.ifEmpty { null },
         ).toJsonRequestBody()
 
-        return POST("$API_URL/v2/manga/cursor-list", headers, body)
+        client.post("$apiUrl/v2/manga/cursor-list", body).use { response ->
+            val result = response.parseAs<CatalogResponseDto>()
+            val mangas = result.data.mapNotNull { it.toSManga(imgUrl) }
+            return MangasPage(mangas, result.hasNextPage)
+        }
     }
 
-    private fun parseAsCatalogResponse(response: Response): MangasPage {
-        val result = response.parseAs<CatalogResponseDto>()
-        val mangas = result.data.mapNotNull { it.toSManga(baseUrl, IMAGE_STORAGE_URL) }
-        return MangasPage(mangas, result.hasNextPage)
+    // =========================== Deeplink ============================
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "book") {
+            val tmpManga = SManga.create().apply {
+                this.url = url.pathSegments[1]
+            }
+
+            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        }
+
+        return null
     }
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val mangaId = manga.url.substringAfterLast('/')
-        val url = "$API_URL/manga/$mangaId"
-        return GET(url, headers)
+    override fun getMangaUrl(manga: SManga): String = if (manga.url.contains("/book/")) { // old url compatibility
+        manga.url
+    } else {
+        "$baseUrl/book/${manga.url}"
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        val mangaId = manga.url.substringAfterLast('/')
-        return "$baseUrl/book/$mangaId"
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val mangaId = if (manga.url.contains("/book/")) { // old url compatibility
+            manga.url.substringAfterLast('/')
+        } else {
+            manga.url
+        }
+
+        val mangaAsync = async {
+            if (fetchDetails) {
+                val url = "$apiUrl/manga/$mangaId"
+                val data = client.get(url).use { it.parseAs<CompleteMangaDto>() }
+                data.toSManga(imgUrl)
+            } else {
+                manga
+            }
+        }
+
+        val chaptersAsync = async {
+            if (fetchChapters) {
+                val body = ChapterRequestBody(
+                    mangaId = mangaId,
+                    page = 1,
+                    pageSize = 10000,
+                    sortOrder = "DESC",
+                ).toJsonRequestBody()
+                val chaptersUrl = "$apiUrl/v2/chapter/cursor-list"
+                val data = client.post(chaptersUrl, body).use { it.parseAs<ChapterResponse>().data }
+                val hideLocked = hideLocked()
+                data.mapNotNull { it.toSChapter(hideLocked) }
+            } else {
+                chapters
+            }
+        }
+
+        SMangaUpdate(mangaAsync.await(), chaptersAsync.await())
     }
-
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<CompleteMangaDto>().toSManga(baseUrl, IMAGE_STORAGE_URL)
-
-    // ============================== Chapters ==============================
-    override fun chapterListRequest(manga: SManga): Request {
-        val body = ChapterRequestBody(
-            mangaId = manga.url.substringAfterLast('/'),
-            page = 1,
-            pageSize = 10000,
-            sortOrder = "DESC",
-        ).toJsonRequestBody()
-        return POST("$API_URL/v2/chapter/cursor-list", headers, body)
-    }
-
-    override fun getChapterUrl(chapter: SChapter): String {
-        val url = chapter.url.substringAfter("read/")
-        return "$baseUrl/read/$url"
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<ChapterResponse>().data.mapNotNull { it.toSChapter(baseUrl) }
 
     // =============================== Pages ================================
-    override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringBeforeLast('/').substringAfterLast('/')
-        val url = "$API_URL/chapter/frames/$chapterId"
-        return GET(url, headers)
+    override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.contains("/read/")) { // old url compatibility
+        chapter.url
+    } else {
+        "$baseUrl/read/${chapter.url}/${chapter.memo["mangaId"]!!.string}"
     }
 
-    override fun pageListParse(response: Response): List<Page> = response.parseAs<ChapterPages>().toPageList(IMAGE_STORAGE_URL)
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val hideLocked = hideLocked()
+        if (!hideLocked && chapter.memo["locked"]?.boolean == true) throw Exception("Розділ лише для меценатів.")
+        val chapterId = if (chapter.url.contains("/read/")) { // old url compatibility
+            chapter.url.substringBeforeLast('/').substringAfterLast('/')
+        } else {
+            chapter.url
+        }
+        val url = "$apiUrl/chapter/frames/$chapterId"
+        return client.get(url).use { it.parseAs<ChapterPages>().toPageList(imgUrl) }
+    }
 
     // ============================= Filters ==============================
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         OrderBy(),
         TypeFilter(),
         HideTypeFilter(blockTypes()),
@@ -189,13 +227,11 @@ abstract class HoneyManga :
         TagsFilter(),
         StatusFilter(),
         TranslationFilter(),
+        ContentTypeFilter(),
     )
 
     // ============================= Utilities ==============================
     companion object {
-        private const val API_URL = "https://data.api.honey-manga.com.ua"
-        private const val SEARCH_API_URL = "https://search.api.honey-manga.com.ua"
-        private const val IMAGE_STORAGE_URL = "https://hmvolumestorage.b-cdn.net/public-resources"
         private const val DEFAULT_PAGE_SIZE = 30
         private const val GENRES_PREF = "pref_genres_exclude"
         private const val GENRES_PREF_TITLE = "Приховані жанри"
@@ -204,12 +240,19 @@ abstract class HoneyManga :
         private const val TYPE_PREF_TITLE = "Приховані категорії"
         private const val TYPE_PREF_DIALOG = "Виберіть категорії які потрібно сховати"
         private const val DEFAULT_TYPE_BLOCK = "Новела"
+        private const val CONTENT_PREF = "pref_content_type"
+        private const val CONTENT_PREF_TITLE = "Виберіть тип контенту для відображення"
+        private const val HIDE_LOCKED_CHAPTERS = "hide_locked_chapters"
+        private const val HIDE_LOCKED_CHAPTERS_TITLE = "Приховувати платні розділи"
+        private const val HIDE_LOCKED_CHAPTERS_SUM = "Може викликати помилки при оновленні. Будуть відмічені іконкою: \uD83D\uDD12"
     }
 
     // ============================ Preferences =============================
 
-    private fun blockGenres(): Set<String> = preferences.getStringSet(GENRES_PREF, emptySet<String>())!!
-    private fun blockTypes(): Set<String> = preferences.getStringSet(TYPE_PREF, setOf(DEFAULT_TYPE_BLOCK))!!
+    private fun blockGenres(): Set<String> = preferences.getStringSet(GENRES_PREF, emptySet()) ?: emptySet()
+    private fun blockTypes(): Set<String> = preferences.getStringSet(TYPE_PREF, setOf(DEFAULT_TYPE_BLOCK)) ?: setOf(DEFAULT_TYPE_BLOCK)
+    private fun contentType(): String = preferences.getString(CONTENT_PREF, "all") ?: "all"
+    private fun hideLocked(): Boolean = preferences.getBoolean(HIDE_LOCKED_CHAPTERS, true)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         MultiSelectListPreference(screen.context).apply {
@@ -245,6 +288,22 @@ abstract class HoneyManga :
                 this.summary = selected.joinToString()
                 true
             }
+        }.let(screen::addPreference)
+
+        ListPreference(screen.context).apply {
+            key = CONTENT_PREF
+            title = CONTENT_PREF_TITLE
+            entries = arrayOf("Весь контент, без обмежень", "Без контенту 18+", "Лише 18+")
+            entryValues = arrayOf("all", "NOT_IN", "IN")
+            summary = "%s"
+            setDefaultValue("all")
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_CHAPTERS
+            title = HIDE_LOCKED_CHAPTERS_TITLE
+            summary = HIDE_LOCKED_CHAPTERS_SUM
+            setDefaultValue(true)
         }.let(screen::addPreference)
     }
 }

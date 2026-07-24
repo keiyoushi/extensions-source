@@ -18,7 +18,7 @@ class TriStateFilter(name: String, val id: String) : Filter.TriState(name)
 
 abstract class TriStateGroup(
     name: String,
-    val options: List<String>,
+    options: List<String>,
 ) : Filter.Group<TriStateFilter>(
     name,
     options.map { TriStateFilter(it, it) },
@@ -64,9 +64,11 @@ internal class OrderBy :
 
 internal class GenresFilter(blockedGenres: Set<String>) : TriStateGroup("Жанри", options) {
     init {
-        state.forEach { filter ->
-            if (blockedGenres.contains(filter.id)) {
-                filter.state = 2
+        if (blockedGenres.isNotEmpty()) {
+            state.forEach { filter ->
+                if (blockedGenres.contains(filter.id)) {
+                    filter.state = 2
+                }
             }
         }
     }
@@ -138,9 +140,11 @@ internal class TypeFilter :
 
 internal class HideTypeFilter(blockedTypes: Set<String>) : MultiValueFilter("Тип (приховати)", options) {
     init {
-        state.forEach { filter ->
-            if (blockedTypes.contains(filter.value)) {
-                filter.state = true
+        if (blockedTypes.isNotEmpty()) {
+            state.forEach { filter ->
+                if (blockedTypes.contains(filter.value)) {
+                    filter.state = true
+                }
             }
         }
     }
@@ -240,5 +244,15 @@ internal class TranslationFilter :
             "Перекладається" to "Перекладається",
             "Покинуто" to "Покинуто",
             "Призупинено" to "Призупинено",
+        ),
+    )
+
+internal class ContentTypeFilter :
+    SelectFilter(
+        "Тип контенту",
+        listOf(
+            "Весь контент, без обмежень" to "all",
+            "Без контенту 18+" to "NOT_IN",
+            "Лише 18+" to "IN",
         ),
     )
