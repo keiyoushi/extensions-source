@@ -25,11 +25,11 @@ class CatalogResponseDto(
 
 @Serializable
 class SearchResponseTitlesDto(
-    @SerialName("_id") val id: String,
-    val title: String,
-    val cover: String,
-    val genres: Array<String> = arrayOf(),
-    val type: String? = null,
+    @SerialName("_id") private val id: String,
+    private val title: String,
+    private val cover: String,
+    private val genres: Array<String> = arrayOf(),
+    private val type: String? = null,
 ) {
     fun toSManga(ignoredGenres: Set<String>): SManga? = SManga.create().apply {
         // Hide manga by genres in Settings
@@ -91,13 +91,13 @@ class SMangaStaffDto(
 @Serializable
 class ChapterResponseDto(
     @SerialName("_id") val id: String,
-    val title: String,
-    val chapterNumber: Float,
-    val volumeNumber: Int,
-    val chapterName: String? = null,
-    val createdAt: String? = null,
-    val updatedAt: String? = null,
-    val teams: List<SMangaStaffDto>? = null,
+    private val title: String,
+    private val chapterNumber: Float,
+    private val volumeNumber: Int,
+    private val chapterName: String? = null,
+    private val createdAt: String? = null,
+    private val updatedAt: String? = null,
+    private val teams: List<SMangaStaffDto>? = null,
 ) {
     fun toSChapter() = SChapter.create().apply {
         val vol = volumeNumber.toString().removeSuffix(".0")
