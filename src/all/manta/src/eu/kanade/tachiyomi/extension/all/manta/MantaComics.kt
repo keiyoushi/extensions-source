@@ -20,7 +20,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Response
 
 @Source
@@ -34,30 +33,17 @@ abstract class MantaComics :
 
     override val supportsLatest = false
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = this
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val url = request.url
-            val cookies = network.client.cookieJar.loadForRequest(url)
-            val token = cookies.find { it.name == "token" }?.value
-
-            if (token != null) {
-                val newRequest = request.newBuilder()
-                    .header("Authorization", "Bearer $token")
-                    .build()
-                chain.proceed(newRequest)
-            } else {
-                chain.proceed(request)
-            }
-        }
-
     override fun Headers.Builder.configureHeaders(): Headers.Builder = this
         .set("Origin", apiUrl)
         .set("Accept-Language", lang)
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = "$apiUrl/manta/v1/search/series?cat=New&lang=$lang".fetch(::parseSearchManga)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "$apiUrl/manta/v1/search/series?cat=New&lang=$lang"
+
+        return parseSearchManga(client.get(url))
+    }
 
     // =============================== Latest ===============================
 
@@ -77,7 +63,8 @@ abstract class MantaComics :
                 addQueryParameter(key, value)
             }
         }.build()
-        return url.fetch(::parseSearchManga)
+
+        return parseSearchManga(client.get(url))
     }
 
     private fun parseSearchManga(response: Response) = response.parseAs<MantaResponse<List<Series<Title>>>>().data.map {
@@ -147,9 +134,29 @@ abstract class MantaComics :
     // ============================= Page List ==============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val url = "$apiUrl/front/v1/episodes/${chapter.url}?lang=$lang"
-        return url.fetch { response ->
-            response.parseAs<MantaResponse<Episode>>().data.cutImages?.mapIndexed { idx, img ->
+        val url = "$apiUrl/front/v1/episodes/${chapter.url}?lang=$lang".toHttpUrl()
+
+        var token = client.cookieJar.loadForRequest(url)
+            .firstOrNull { it.name == "token" }?.value
+        if (token != null) {
+            val headers = headersBuilder()
+                .set("Authorization", "Bearer $token")
+                .build()
+
+            token = client.get("$apiUrl/manta/v1/login", headers)
+                .parseAs<MantaResponse<Token>>().data.token
+        }
+
+        val headers = if (token != null) {
+            headersBuilder()
+                .set("Authorization", "Bearer $token")
+                .build()
+        } else {
+            headers
+        }
+
+        client.get(url, headers).use {
+            return it.parseAs<MantaResponse<Episode>>().data.cutImages?.mapIndexed { idx, img ->
                 Page(idx, "", img.toString())
             } ?: emptyList()
         }
@@ -183,17 +190,6 @@ abstract class MantaComics :
     override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.url}"
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/episodes/${chapter.url}"
-
-    private suspend fun <R> String.fetch(parse: (Response) -> R): R {
-        val res = client.get(this, headers, ensureSuccess = false)
-        if (res.isSuccessful) {
-            return parse(res)
-        }
-        val err = res.parseAs<MantaResponse<Unit>>().status.toString()
-        throw Exception(err)
-    }
-
-    private suspend fun <R> HttpUrl.fetch(parse: (Response) -> R): R = toString().fetch(parse)
 
     companion object {
         private const val PREF_SHOW_LOCKED = "show_locked_chapters"

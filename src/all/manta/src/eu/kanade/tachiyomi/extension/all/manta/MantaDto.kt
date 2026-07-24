@@ -151,3 +151,8 @@ class Status(
 ) {
     override fun toString() = "$description: $message"
 }
+
+@Serializable
+class Token(
+    val token: String,
+)
