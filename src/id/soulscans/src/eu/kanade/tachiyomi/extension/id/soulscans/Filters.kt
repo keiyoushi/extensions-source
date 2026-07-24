@@ -1,0 +1,136 @@
+package eu.kanade.tachiyomi.extension.id.soulscans
+
+import eu.kanade.tachiyomi.source.model.Filter
+
+open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    fun toUriPart() = vals[state].second
+}
+
+class StatusFilter :
+    UriPartFilter(
+        "Status",
+        arrayOf(
+            "All" to "",
+            "Ongoing" to "ONGOING",
+            "Completed" to "COMPLETED",
+            "Hiatus" to "HIATUS",
+        ),
+    )
+
+class TypeFilter :
+    UriPartFilter(
+        "Type",
+        arrayOf(
+            "All" to "",
+            "Manga" to "MANGA",
+            "Manhwa" to "MANHWA",
+            "Manhua" to "MANHUA",
+        ),
+    )
+
+class ColorFilter :
+    UriPartFilter(
+        "Color",
+        arrayOf(
+            "All" to "",
+            "Full Color" to "FULL_COLOR",
+            "B&W" to "BW",
+        ),
+    )
+
+class ReadingFilter :
+    UriPartFilter(
+        "Reading",
+        arrayOf(
+            "All" to "",
+            "Vertical Scroll" to "VERTICAL_SCROLL",
+            "Page" to "PAGE",
+        ),
+    )
+
+class GenreFilter :
+    UriPartFilter(
+        "Genre",
+        arrayOf("All" to "") + arrayOf(
+            "Action" to "action",
+            "Adult" to "adult",
+            "Adventure" to "adventure",
+            "Comedy" to "comedy",
+            "Crime" to "crime",
+            "Crossdressing" to "crossdressing",
+            "Cultivation" to "cultivation",
+            "Demon" to "demon",
+            "Demons" to "demons",
+            "Drama" to "drama",
+            "Ecchi" to "ecchi",
+            "Fantas" to "fantas",
+            "Fantasy" to "fantasy",
+            "Gender Bender" to "gender-bender",
+            "Girls Love" to "girls-love",
+            "Harem" to "harem",
+            "Historical" to "historical",
+            "Horror" to "horror",
+            "Isekai" to "isekai",
+            "Josei" to "josei",
+            "Magic" to "magic",
+            "Martial Arts" to "martial-arts",
+            "Mature" to "mature",
+            "Medical" to "medical",
+            "Military" to "military",
+            "Mystery" to "mystery",
+            "One Shot" to "one-shot",
+            "Project" to "project",
+            "Regression" to "regression",
+            "Reincarnation" to "reincarnation",
+            "Reverse Harem" to "reverse-harem",
+            "Romance" to "romance",
+            "School" to "school",
+            "School Life" to "school-life",
+            "Sci Fi" to "sci-fi",
+            "Seinen" to "seinen",
+            "Shoujo" to "shoujo",
+            "Shoujo Ai" to "shoujo-ai",
+            "Shounen" to "shounen",
+            "Slice Of Life" to "slice-of-life",
+            "Smut" to "smut",
+            "Supernatural" to "supernatural",
+            "Survival" to "survival",
+            "Thriller" to "thriller",
+            "Webtoon" to "webtoon",
+            "Webtoons" to "webtoons",
+            "Wuxia" to "wuxia",
+            "Xianxia" to "xianxia",
+        ),
+    )
+
+class SortFilter :
+    Filter.Sort(
+        "Sort By",
+        arrayOf(
+            "Latest Update",
+            "Created Date",
+            "Top Views",
+            "Top Rate",
+            "Top Bookmark",
+            "Title A-Z",
+            "Title Z-A",
+        ),
+        Selection(0, ascending = false),
+    ) {
+    fun toSortPart() = when (state?.index) {
+        0 -> "latest"
+        1 -> "new"
+        2 -> "views"
+        3 -> "rate"
+        4 -> "bookmark"
+        5 -> "az"
+        6 -> "za"
+        else -> "latest"
+    }
+
+    fun toOrderPart() = if (state?.ascending == true) "asc" else "desc"
+}
+
+class AuthorFilter : Filter.Text("Author")
+class ArtistFilter : Filter.Text("Artist")
+class PublisherFilter : Filter.Text("Publisher")
