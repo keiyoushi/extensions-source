@@ -11,9 +11,9 @@ class StatusFilter :
         "Status",
         arrayOf(
             "All" to "",
-            "Ongoing" to "ongoing",
-            "Completed" to "completed",
-            "Hiatus" to "hiatus",
+            "Ongoing" to "ONGOING",
+            "Completed" to "COMPLETED",
+            "Hiatus" to "HIATUS",
         ),
     )
 
@@ -22,9 +22,9 @@ class TypeFilter :
         "Type",
         arrayOf(
             "All" to "",
-            "Manga" to "manga",
-            "Manhwa" to "manhwa",
-            "Manhua" to "manhua",
+            "Manga" to "MANGA",
+            "Manhwa" to "MANHWA",
+            "Manhua" to "MANHUA",
         ),
     )
 
@@ -33,8 +33,8 @@ class ColorFilter :
         "Color",
         arrayOf(
             "All" to "",
-            "Full Color" to "Full Color",
-            "B&W" to "B&W",
+            "Full Color" to "FULL_COLOR",
+            "B&W" to "BW",
         ),
     )
 
@@ -43,28 +43,38 @@ class ReadingFilter :
         "Reading",
         arrayOf(
             "All" to "",
-            "Vertical Scroll" to "Vertical Scroll",
-            "Page" to "Page",
+            "Vertical Scroll" to "VERTICAL_SCROLL",
+            "Page" to "PAGE",
         ),
     )
 
 class SortFilter :
     Filter.Sort(
         "Sort By",
-        arrayOf("Latest", "Popular", "Project"),
+        arrayOf(
+            "Latest Update",
+            "Created Date",
+            "Top Views",
+            "Top Rate",
+            "Top Bookmark",
+            "Title A-Z",
+            "Title Z-A",
+        ),
         Selection(0, ascending = false),
     ) {
     fun toSortPart() = when (state?.index) {
         0 -> "latest"
-        1 -> "popular"
-        2 -> "project"
+        1 -> "new"
+        2 -> "views"
+        3 -> "rate"
+        4 -> "bookmark"
+        5 -> "az"
+        6 -> "za"
         else -> "latest"
     }
 
     fun toOrderPart() = if (state?.ascending == true) "asc" else "desc"
 }
-
-class ProjectOnlyFilter : Filter.CheckBox("Project Only", false)
 
 class AuthorFilter : Filter.Text("Author")
 class ArtistFilter : Filter.Text("Artist")

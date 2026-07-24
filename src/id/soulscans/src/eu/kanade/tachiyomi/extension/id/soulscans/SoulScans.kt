@@ -102,12 +102,10 @@ abstract class SoulScans : KeiSource() {
                     }
                     is SortFilter -> {
                         val sortValue = filter.toSortPart()
-                        if (sortValue.isNotEmpty()) addQueryParameter("sort", sortValue)
+                        val apiSortValue = if (sortValue == "az" || sortValue == "za") "latest" else sortValue
+                        if (apiSortValue.isNotEmpty()) addQueryParameter("sort", apiSortValue)
                         val orderValue = filter.toOrderPart()
                         if (orderValue.isNotEmpty()) addQueryParameter("order", orderValue)
-                    }
-                    is ProjectOnlyFilter -> {
-                        if (filter.state) addQueryParameter("project_only", "1")
                     }
                     is AuthorFilter -> {
                         if (filter.state.isNotEmpty()) addQueryParameter("author", filter.state)
@@ -132,8 +130,18 @@ abstract class SoulScans : KeiSource() {
         val response = client.get(url)
         val result = response.parseAs<SearchResultDto>()
 
+        val sortFilter = filters.filterIsInstance<SortFilter>().firstOrNull()
+        val sortValue = sortFilter?.toSortPart()
+
+        var mangas = result.items.map { it.toSManga() }
+        if (sortValue == "az") {
+            mangas = mangas.sortedBy { it.title }
+        } else if (sortValue == "za") {
+            mangas = mangas.sortedByDescending { it.title }
+        }
+
         return MangasPage(
-            mangas = result.items.map { it.toSManga() },
+            mangas = mangas,
             hasNextPage = result.page < result.totalPages,
         )
     }
@@ -203,7 +211,6 @@ abstract class SoulScans : KeiSource() {
         ReadingFilter(),
         Filter.Separator(),
         SortFilter(),
-        ProjectOnlyFilter(),
         Filter.Separator(),
         AuthorFilter(),
         ArtistFilter(),
