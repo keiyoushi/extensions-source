@@ -12,6 +12,8 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -130,18 +132,33 @@ abstract class MiMi : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
+    ): SMangaUpdate = coroutineScope {
         val id = manga.url.substringAfterLast("/")
 
-        val details = client.get("$apiUrl/manga/$id").use {
-            it.parseAs<MangaDto>().toSManga()
+        val detailsDeferred = if (fetchDetails) {
+            async {
+                client.get("$apiUrl/manga/$id").use {
+                    it.parseAs<MangaDto>().toSManga()
+                }
+            }
+        } else {
+            null
         }
 
-        val chaptersList = client.get("$apiUrl/manga/$id/chapters").use { response ->
-            response.parseAs<List<ChapterDto>>().map { it.toSChapter(id) }
+        val chaptersDeferred = if (fetchChapters) {
+            async {
+                client.get("$apiUrl/manga/$id/chapters").use { response ->
+                    response.parseAs<List<ChapterDto>>().map { it.toSChapter(id) }
+                }
+            }
+        } else {
+            null
         }
 
-        return SMangaUpdate(details, chaptersList)
+        SMangaUpdate(
+            manga = detailsDeferred?.await() ?: manga,
+            chapters = chaptersDeferred?.await() ?: chapters,
+        )
     }
 
     // =============================== Pages ================================
