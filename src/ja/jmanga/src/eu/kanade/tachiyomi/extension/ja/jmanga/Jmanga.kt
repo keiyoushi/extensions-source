@@ -10,8 +10,6 @@ import okhttp3.Request
 @Source
 abstract class Jmanga : MangaReader() {
 
-
-
     // =============================== Search ===============================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
