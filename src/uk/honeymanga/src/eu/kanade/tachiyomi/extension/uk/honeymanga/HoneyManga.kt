@@ -139,7 +139,7 @@ abstract class HoneyManga :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "book") {
             val tmpManga = SManga.create().apply {
-                this.url = url.toString()
+                this.url = url.toString().substringAfter("book/").substringBefore("/")
             }
 
             return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
