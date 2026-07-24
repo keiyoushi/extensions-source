@@ -17,7 +17,6 @@ class SearchResultDto(
 
 @Serializable
 class MangaDto(
-    private val id: String,
     val title: String,
     private val slug: String,
     private val synopsis: String? = null,
@@ -30,13 +29,12 @@ class MangaDto(
     val units: List<UnitDto> = emptyList(),
 ) {
     fun toSManga() = SManga.create().apply {
-        url = "/comic/$slug"
+        url = "/manga/$slug/"
         title = this@MangaDto.title
         thumbnail_url = posterImageUrl
         author = authorName
         artist = artistName
 
-        // Status parsing
         status = when (comicStatus?.lowercase()) {
             "ongoing" -> SManga.ONGOING
             "completed", "complete" -> SManga.COMPLETED
@@ -44,27 +42,22 @@ class MangaDto(
             else -> SManga.UNKNOWN
         }
 
-        // Genre list construction
-        val genreList = mutableListOf<String>()
-        genres.forEach { genreList.add(it.name) }
-        comicSubtype?.lowercase()?.replaceFirstChar { it.uppercase() }?.let {
-            genreList.add(it)
-        }
-        genre = genreList.joinToString()
+        genre = buildList {
+            addAll(genres.map { it.name })
+            comicSubtype?.lowercase()?.replaceFirstChar { it.uppercase() }?.let { add(it) }
+        }.joinToString()
+
         description = synopsis
     }
 }
 
 @Serializable
 class GenreDto(
-    private val id: String,
-    private val slug: String,
     val name: String,
 )
 
 @Serializable
 class UnitDto(
-    private val id: String,
     private val number: String,
     @SerialName("sort_number") val sortNumber: String,
     val slug: String,
@@ -94,15 +87,11 @@ class ChapterPageResponseDto(
 
 @Serializable
 class ChapterDto(
-    val id: String,
-    val slug: String,
-    val title: String,
     val pages: List<PageDto> = emptyList(),
 )
 
 @Serializable
 class PageDto(
-    val id: String,
     @SerialName("page_number") val pageNumber: Int,
     @SerialName("image_url") val imageUrl: String,
 )

@@ -11,10 +11,12 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 
 @Source
@@ -128,7 +130,7 @@ abstract class SoulScans : KeiSource() {
         val response = client.get(url)
         val result = response.parseAs<SearchResultDto>()
 
-        val sortFilter = filters.filterIsInstance<SortFilter>().firstOrNull()
+        val sortFilter = filters.firstInstanceOrNull<SortFilter>()
         val sortValue = sortFilter?.toSortPart()
 
         var mangas = result.items.map { it.toSManga() }
@@ -225,14 +227,17 @@ abstract class SoulScans : KeiSource() {
     }
 
     private fun parseChapterUrl(chapterUrl: String): Pair<String, String>? {
-        val parts = chapterUrl.removePrefix("/").removeSuffix("/").split("/")
-        if (parts.size >= 4 && parts[parts.size - 4] == "comic" && parts[parts.size - 2] == "chapter") {
-            return Pair(parts[parts.size - 3], parts[parts.size - 1])
+        val fullUrl = if (chapterUrl.startsWith("http")) chapterUrl else "$baseUrl/${chapterUrl.removePrefix("/")}"
+        val url = fullUrl.toHttpUrlOrNull() ?: return null
+        val pathSegments = url.pathSegments
+
+        if (pathSegments.size >= 4 && pathSegments[pathSegments.size - 4] == "comic" && pathSegments[pathSegments.size - 2] == "chapter") {
+            return Pair(pathSegments[pathSegments.size - 3], pathSegments[pathSegments.size - 1])
         }
-        if (parts.size >= 3 && parts[parts.size - 2] == "chapter") {
-            return Pair(parts[parts.size - 3], parts[parts.size - 1])
+        if (pathSegments.size >= 3 && pathSegments[pathSegments.size - 2] == "chapter") {
+            return Pair(pathSegments[pathSegments.size - 3], pathSegments[pathSegments.size - 1])
         }
-        val lastSegment = parts.last()
+        val lastSegment = pathSegments.lastOrNull { it.isNotBlank() } ?: return null
         val match = CHAPTER_URL_REGEX.matchEntire(lastSegment)
         if (match != null) {
             val mangaSlug = match.groupValues[1]
