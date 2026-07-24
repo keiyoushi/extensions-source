@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.madokami
 
-import android.annotation.SuppressLint
 import android.content.SharedPreferences
 import android.text.InputType
 import androidx.preference.EditTextPreference
@@ -30,6 +29,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Credentials
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -51,7 +51,6 @@ abstract class Madokami :
     ConfigurableSource {
     override val supportsLatest = false
 
-    @SuppressLint("NewApi")
     private val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ROOT)
 
     private val preferences: SharedPreferences by getPreferencesLazy()
@@ -68,41 +67,43 @@ abstract class Madokami :
             }
             response
         }
-        addInterceptor { chain ->
-            val request = chain.request()
-            val url = request.url
-            val fragment = url.fragment
+        addInterceptor(::zipRangeInterceptor)
+    }
 
-            if (fragment != null && (url.encodedPath.endsWith(".zip", true) || url.encodedPath.endsWith(".cbz", true))) {
-                val parts = fragment.split("|")
-                if (parts.size == 4) {
-                    val zipUrl = url.newBuilder().fragment(null).build().toString()
-                    val entry = keiyoushi.zip.Entry(
-                        name = parts[0],
-                        method = parts[1].toInt(),
-                        compressedSize = parts[2].toLong(),
-                        localHeaderOffset = parts[3].toLong(),
-                    )
+    private fun zipRangeInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val url = request.url
+        val fragment = url.fragment
 
-                    val source = network.client.readZipEntry(zipUrl, entry, request.headers)
-                    val mediaType = getMediaType(entry.name)
+        if (fragment != null && (url.encodedPath.endsWith(".zip", true) || url.encodedPath.endsWith(".cbz", true))) {
+            val parts = fragment.split("|")
+            if (parts.size == 4) {
+                val zipUrl = url.newBuilder().fragment(null).build().toString()
+                val entry = keiyoushi.zip.Entry(
+                    name = parts[0],
+                    method = parts[1].toInt(),
+                    compressedSize = parts[2].toLong(),
+                    localHeaderOffset = parts[3].toLong(),
+                )
 
-                    return@addInterceptor Response.Builder()
-                        .request(request)
-                        .protocol(Protocol.HTTP_1_1)
-                        .code(200)
-                        .message("OK")
-                        .body(source.buffer().asResponseBody(mediaType))
-                        .build()
-                }
+                val source = client.readZipEntry(zipUrl, entry, request.headers)
+                val mediaType = getMediaType(entry.name)
+
+                return Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(source.buffer().asResponseBody(mediaType))
+                    .build()
             }
-            chain.proceed(request)
         }
+        return chain.proceed(request)
     }
 
     private fun getAuthCredential(): String {
-        val username = preferences.getString("username", "")!!
-        val password = preferences.getString("password", "")!!
+        val username = preferences.getString(PREF_USERNAME_KEY, "")!!
+        val password = preferences.getString(PREF_PASSWORD_KEY, "")!!
 
         if (username.isBlank() || password.isBlank()) {
             throw IOException("Username or password cannot be empty.\nGo to Extensions > Details to input your credentials.")
@@ -114,7 +115,7 @@ abstract class Madokami :
     private fun getAuthHeaders() = headers.newBuilder().set("Authorization", getAuthCredential()).build()
 
     private val customMetadataRegex: Regex? by lazy {
-        val raw = preferences.getString("metadata_words", "") ?: ""
+        val raw = preferences.getString(PREF_METADATA_WORDS_KEY, "") ?: ""
         if (raw.isBlank()) {
             null
         } else {
@@ -374,7 +375,7 @@ abstract class Madokami :
                     0L
                 }
 
-                date_upload = if (preferences.getBoolean("prefer_upload_date", false)) {
+                date_upload = if (preferences.getBoolean(PREF_PREFER_UPLOAD_DATE_KEY, false)) {
                     if (tableDate != 0L) tableDate else fileDate
                 } else {
                     if (fileDate != 0L) fileDate else tableDate
@@ -383,7 +384,12 @@ abstract class Madokami :
         }.reversed()
     }
 
-    private fun isSupportedChapter(fileName: String, readerLink: Element?): Boolean = fileName.endsWith(".zip", true) || fileName.endsWith(".cbz", true) || readerLink != null
+    private fun isSupportedChapter(fileName: String, readerLink: Element?): Boolean {
+        val isZipOrCbz = fileName.endsWith(".zip", true) || fileName.endsWith(".cbz", true)
+        val isUnsupported = UNSUPPORTED_EXTENSIONS.any { fileName.endsWith(it, true) }
+
+        return isZipOrCbz || (readerLink != null && !isUnsupported)
+    }
 
     private data class ChapterInfo(val name: String, val scanlator: String?, val year: String?)
 
@@ -444,7 +450,6 @@ abstract class Madokami :
         return ChapterInfo(finalName, scanlatorString, foundYear)
     }
 
-    @SuppressLint("NewApi")
     private fun parseChapterDate(dateString: String): Long {
         if (dateString.endsWith("ago")) {
             val splitDate = dateString.split(" ")
@@ -493,7 +498,7 @@ abstract class Madokami :
     private suspend fun getZipPageList(chapter: SChapter): List<Page> = withContext(Dispatchers.IO) {
         val url = baseUrl + chapter.url
         val directory = try {
-            network.client.zipDirectory(url, getAuthHeaders())
+            client.zipDirectory(url, getAuthHeaders())
         } catch (e: IOException) {
             if (e.message?.contains("Content-Range") == true) {
                 throw IOException("Refresh episode list and try again", e)
@@ -519,12 +524,12 @@ abstract class Madokami :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
-            key = "username"
+            key = PREF_USERNAME_KEY
             title = "Username"
         }.let(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
-            key = "password"
+            key = PREF_PASSWORD_KEY
             title = "Password"
 
             setOnBindEditTextListener {
@@ -533,32 +538,20 @@ abstract class Madokami :
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
-            key = "prefer_upload_date"
+            key = PREF_PREFER_UPLOAD_DATE_KEY
             title = "Prefer Date Uploaded"
             summary = "Defaults to use date from filename (Year)"
             setDefaultValue(true)
         }.let(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
-            key = "metadata_words"
+            key = PREF_METADATA_WORDS_KEY
             title = "Additional Metadata Words"
             summary = "Comma-separated list of words to treat as metadata instead of scanlators"
             setOnBindEditTextListener {
                 it.inputType = InputType.TYPE_CLASS_TEXT
             }
         }.let(screen::addPreference)
-    }
-
-    companion object {
-        private val ARCHIVE_EXTENSIONS = listOf(".zip", ".cbz", ".rar", ".cbr", ".7z", ".cb7", ".tar", ".cbt")
-        private val UNSUPPORTED_EXTENSIONS = listOf(".epub", ".pdf", ".txt")
-        private val VOLUME_REGEX = Regex("""(?i)\b(?:v|vol)(?:\.|ume)?\s?(\d+(?:[.\-x]\d+)*)\b""")
-        private val CHAPTER_REGEX = Regex("""(?i)\b(?:c|ch)(?:\.|apter)?\s?(\d+(?:[.\-x]\d+)*)\b""")
-        private val RAW_NUMBER_REGEX = Regex("""\b(\d+(?:[.\-x]\d+)*)\b""")
-        private val METADATA_REGEX = Regex("""[\[(]([^])]+)[])]""")
-        private val YEAR_REGEX = Regex("""\b(19|20)\d{2}\b""")
-        private val FIX_REGEX = Regex("""(?i)f\d*""")
-        private val METADATA_WORDS_REGEX = Regex("""(?i)\b(?:end|digital|dig|omnibus|edition|pre|magazine|raws?|na|web)\b""")
     }
 
     private fun isArchiveUrl(url: String): Boolean {
@@ -574,5 +567,22 @@ abstract class Madokami :
     private fun isArchiveUrl(url: HttpUrl): Boolean {
         val path = url.encodedPath.lowercase(Locale.ROOT)
         return ARCHIVE_EXTENSIONS.any { path.endsWith(it) } || UNSUPPORTED_EXTENSIONS.any { path.endsWith(it) }
+    }
+
+    companion object {
+        private const val PREF_USERNAME_KEY = "username"
+        private const val PREF_PASSWORD_KEY = "password"
+        private const val PREF_PREFER_UPLOAD_DATE_KEY = "prefer_upload_date"
+        private const val PREF_METADATA_WORDS_KEY = "metadata_words"
+
+        private val ARCHIVE_EXTENSIONS = listOf(".zip", ".cbz", ".rar", ".cbr", ".7z", ".cb7", ".tar", ".cbt")
+        private val UNSUPPORTED_EXTENSIONS = listOf(".epub", ".pdf", ".txt")
+        private val VOLUME_REGEX = Regex("""(?i)\b(?:v|vol)(?:\.|ume)?\s?(\d+(?:[.\-x]\d+)*)\b""")
+        private val CHAPTER_REGEX = Regex("""(?i)\b(?:c|ch)(?:\.|apter)?\s?(\d+(?:[.\-x]\d+)*)\b""")
+        private val RAW_NUMBER_REGEX = Regex("""\b(\d+(?:[.\-x]\d+)*)\b""")
+        private val METADATA_REGEX = Regex("""[\[(]([^])]+)[])]""")
+        private val YEAR_REGEX = Regex("""\b(19|20)\d{2}\b""")
+        private val FIX_REGEX = Regex("""(?i)f\d*""")
+        private val METADATA_WORDS_REGEX = Regex("""(?i)\b(?:end|digital|dig|omnibus|edition|pre|magazine|raws?|na|web)\b""")
     }
 }
