@@ -1,50 +1,23 @@
 package eu.kanade.tachiyomi.extension.vi.vinahentai
 
 import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.Response
+import kotlinx.serialization.Serializable
 
-fun getFilters(genres: List<Pair<String, String>>): FilterList = FilterList(
-    buildList {
-        add(Filter.Header("Nhấn 'Làm mới' để làm mới thể loại"))
-        if (genres.isNotEmpty()) {
-            add(GenreFilter(genres))
-        }
-        add(SortFilter())
-        add(StatusFilter())
-    },
+@Serializable
+internal class GenreOption(
+    val name: String,
+    val slug: String,
 )
 
-fun parseGenresFromHtml(response: Response): List<Pair<String, String>> {
-    val document = response.asJsoup()
-    val seenSlugs = mutableSetOf<String>()
-
-    return document.select("a[href*=/genres/]")
-        .mapNotNull { element ->
-            val slug = element.attr("href")
-                .substringAfter("/genres/")
-                .substringBefore("?")
-                .substringBefore("/")
-            val name = element.text().trim()
-            if (slug.isNotEmpty() && name.isNotEmpty() && seenSlugs.add(slug)) {
-                Pair(name, slug)
-            } else {
-                null
-            }
-        }
-        .sortedBy { it.first.lowercase() }
-}
-
-class GenreFilter(private val genres: List<Pair<String, String>>) :
+internal class GenreFilter(private val genres: List<GenreOption>) :
     Filter.Select<String>(
         "Thể loại",
-        arrayOf("Tất cả") + genres.map { it.first }.toTypedArray(),
+        arrayOf("Tất cả", *genres.map { it.name }.toTypedArray()),
     ) {
-    val selected get() = if (state == 0) null else genres[state - 1].second
+    val selected get() = if (state == 0) null else genres.getOrNull(state - 1)?.slug
 }
 
-class SortFilter :
+internal class SortFilter :
     Filter.Select<String>(
         "Sắp xếp theo",
         arrayOf("Mới cập nhật", "Xem nhiều", "Đánh giá cao", "Cũ nhất"),
@@ -57,7 +30,7 @@ class SortFilter :
     }
 }
 
-class StatusFilter :
+internal class StatusFilter :
     Filter.Select<String>(
         "Tình trạng",
         arrayOf("Tất cả", "Đang tiến hành", "Đã hoàn thành"),
