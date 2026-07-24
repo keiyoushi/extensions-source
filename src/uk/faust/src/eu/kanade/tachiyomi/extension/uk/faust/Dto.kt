@@ -20,6 +20,7 @@ private fun mangaType(type: String?): String = when (type) {
     else -> "ЧЗХ"
 }
 
+// ============================== Search ===============================
 @Serializable
 class SearchRequestBody(
     var searchQuery: String? = null,
@@ -40,6 +41,7 @@ class SearchRequestBody(
     var excludeTagIds: JsonArray? = null,
 )
 
+// ============================== DTO ===============================
 @Serializable
 class SearchResponseDto(
     val page: Int = 0,
@@ -76,6 +78,7 @@ class SMangaDto(
     private val bookmarksCount: Int? = 0,
     private val englishName: String? = "",
     private val votesCount: Int? = 0,
+    val volumes: List<VolumesListDto>,
 ) {
     fun toSManga() = SManga.create().apply {
         url = slug
@@ -114,12 +117,6 @@ class Tags(
 )
 
 @Serializable
-class ChapterResponseDto(
-    val slug: String,
-    val volumes: List<VolumesListDto>,
-)
-
-@Serializable
 class VolumesListDto(
     val chapters: List<ChaptersListDto>,
 )
@@ -134,7 +131,7 @@ class ChaptersListDto(
     private val createdDate: String? = null,
     private val translationTeams: List<Tags>? = emptyList(),
 ) {
-    fun toSChapter(chapterSlug: String) = SChapter.create().apply {
+    fun toSChapter(mangaSlug: String) = SChapter.create().apply {
         val vol = volumeOrder.toString().removeSuffix(".0")
         val chp = number.toString().removeSuffix(".0")
         val time = updatedDate ?: createdDate ?: ""
@@ -142,7 +139,7 @@ class ChaptersListDto(
             this@ChaptersListDto.name.contains("Розділ") -> "Том $vol ${this@ChaptersListDto.name}"
             else -> "Том $vol Розділ $chp ${this@ChaptersListDto.name}"
         }
-        url = "$slug/$chapterSlug"
+        url = "$slug/$mangaSlug"
         date_upload = Instant.parseOrNull(time)?.toEpochMilliseconds() ?: 0L
         chapter_number = number
         scanlator = translationTeams?.joinToString { it.name }
@@ -160,6 +157,7 @@ class ResponseImagesList(
     val pageNumber: Int,
 )
 
+// ============================== Filters DTO ===============================
 @Serializable
 class GenreListPageDto(
     val items: List<GenreDto>,

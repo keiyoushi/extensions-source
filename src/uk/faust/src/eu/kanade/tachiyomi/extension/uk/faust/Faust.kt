@@ -131,27 +131,20 @@ abstract class Faust :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val mangaAsync = async {
-            if (fetchDetails) {
-                val url = "$apiUrl/titles/${manga.url}"
-                client.get(url).use { it.parseAs<SMangaDto>() }.toSManga()
-            } else {
-                manga
-            }
+    ): SMangaUpdate {
+        val url = "$apiUrl/titles/${manga.url}"
+        client.get(url).use { response ->
+            val data = response.parseAs<SMangaDto>()
+            val manga = data.toSManga()
+            val chapters = data.volumes
+                .flatMap {
+                    it.chapters.map { chapter ->
+                        chapter.toSChapter(manga.url)
+                    }
+                }
+                .reversed()
+            return SMangaUpdate(manga, chapters)
         }
-
-        val chaptersAsync = async {
-            if (fetchChapters) {
-                val chaptersUrl = "$apiUrl/titles/${manga.url}"
-                val data = client.get(chaptersUrl).use { it.parseAs<ChapterResponseDto>() }
-                data.volumes.flatMap { it.chapters.map { chapter -> chapter.toSChapter(data.slug) } }.reversed()
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(mangaAsync.await(), chaptersAsync.await())
     }
 
     // ============================== Manga / Chapters ===============================
