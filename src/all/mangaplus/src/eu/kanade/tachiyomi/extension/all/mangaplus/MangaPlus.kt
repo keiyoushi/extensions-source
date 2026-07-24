@@ -17,6 +17,7 @@ import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
@@ -305,21 +306,21 @@ abstract class MangaPlus :
             return response
         }
 
-        val keyStream = encryptionKey.chunked(2).map { it.toInt(16) }.toIntArray()
+        val keyStream = encryptionKey.decodeHex()
         val contentType = (response.headers["Content-Type"] ?: "image/jpeg").toMediaTypeOrNull()
         val body = response.body.source()
 
         val decrypted = object : okio.Source by body {
             private var index = 0
+            private val buffer = Buffer()
 
             override fun read(sink: Buffer, byteCount: Long): Long {
-                val buffer = Buffer()
                 val read = body.read(buffer, byteCount)
                 if (read == -1L) return -1L
 
                 val bytes = buffer.readByteArray()
                 for (i in bytes.indices) {
-                    bytes[i] = (bytes[i].toInt() xor keyStream[index++ % keyStream.size]).toByte()
+                    bytes[i] = (bytes[i].toInt() xor (keyStream[index++ % keyStream.size].toInt() and 0xFF)).toByte()
                 }
                 sink.write(bytes)
                 return read
