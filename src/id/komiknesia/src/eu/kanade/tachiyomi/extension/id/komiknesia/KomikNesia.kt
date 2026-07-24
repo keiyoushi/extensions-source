@@ -126,9 +126,8 @@ abstract class KomikNesia : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val payload = response.parseAs<PayloadDto<PageListDto>>()
-        if (payload.data.images.isEmpty()) {
-            throw java.io.IOException("Chapter terbaru dapat dibaca setelah login melalui WebView, atau tunggu hingga 2 jam dari rilis untuk membaca tanpa login.")
-        }
+        // Lock exception disabled: the backend API allows reading locked chapters without login,
+        // so we don't throw an error when loading page images.
         return payload.data.images.mapIndexed { idx, img ->
             Page(idx, imageUrl = img)
         }

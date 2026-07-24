@@ -75,8 +75,11 @@ class ChapterDto(
     fun toSChapter() = SChapter.create().apply {
         url = slug
         val releaseTime = (scheduledReleaseAt?.time ?: createdAt?.time ?: 0L) * 1000L
-        val isLocked = releaseTime > 0L && (System.currentTimeMillis() - releaseTime < 2 * 60 * 60 * 1000L)
-        name = if (isLocked) "🔒 $title" else title
+        // Lock logic disabled: despite being marked as premium/locked on the website,
+        // locked chapters can still be fetched directly from the backend API without authorization.
+        // val isLocked = releaseTime > 0L && (System.currentTimeMillis() - releaseTime < 2 * 60 * 60 * 1000L)
+        // name = if (isLocked) "🔒 $title" else title
+        name = title
         chapter_number = number.toFloatOrNull() ?: -1f
         date_upload = releaseTime
     }
