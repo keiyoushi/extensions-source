@@ -27,6 +27,7 @@ import kotlin.time.Duration.Companion.seconds
 abstract class RizzComic : MangaThemesiaAlt() {
     override val mangaUrlDirectory = "/series"
     override val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH)
+    override val pageSelector = "div#readerarea > img"
 
     override val client = super.client.newBuilder()
         .addInterceptor { chain ->
