@@ -144,7 +144,7 @@ abstract class GocTruyenTranhVui :
         }
 
         SMangaUpdate(
-            manga = if (fetchDetails) newManga else manga,
+            manga = newManga,
             chapters = newChapters,
         )
     }
