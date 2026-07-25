@@ -432,7 +432,7 @@ abstract class GroupLe :
                 }
             }
             if (!imageUrl.contains("://")) {
-                imageUrl = "https://$imageUrl"
+                imageUrl = "https:$imageUrl"
             }
             if (imageUrl.contains("one-way.work")) {
                 // domain that does not need a token
