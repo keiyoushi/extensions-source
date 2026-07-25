@@ -11,6 +11,12 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -201,7 +207,29 @@ abstract class ZManga : KeiSource() {
 
     open val hasProjectPage = false
 
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrl/advanced-search/").asJsoup()
+        return buildJsonArray {
+            document.select("div.custom-checkbox input[name=\"genre[]\"]").forEach { element ->
+                buildJsonObject {
+                    put("id", element.attr("value"))
+                    put("name", element.nextElementSibling()?.text() ?: element.attr("id"))
+                }.let(::add)
+            }
+        }
+    }
+
     override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.jsonArray?.map {
+            val jsonObject = it.jsonObject
+            Tag(
+                jsonObject["id"]!!.jsonPrimitive.content,
+                jsonObject["name"]!!.jsonPrimitive.content,
+            )
+        } ?: emptyList()
+
         val filters = mutableListOf<Filter<*>>(
             Filter.Header("You can combine filter."),
             Filter.Separator(),
@@ -210,7 +238,7 @@ abstract class ZManga : KeiSource() {
             StatusFilter(),
             TypeFilter(),
             OrderByFilter(),
-            GenreList(getGenreList()),
+            if (genres.isEmpty()) Filter.Header("Press 'Reset' to attempt to fetch genres") else GenreList(genres),
         )
         if (hasProjectPage) {
             filters.addAll(
