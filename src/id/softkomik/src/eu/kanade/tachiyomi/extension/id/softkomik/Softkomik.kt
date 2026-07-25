@@ -15,14 +15,17 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
-import okhttp3.Headers
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.Injekt
@@ -33,7 +36,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 @Source
-abstract class Softkomik : HttpSource() {
+abstract class Softkomik : KeiSource() {
     override val supportsLatest = true
 
     // session cache by URL/page route.
@@ -44,46 +47,41 @@ abstract class Softkomik : HttpSource() {
         .add("rsc", "1")
         .build()
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(::imageInterceptor)
-        .addInterceptor(::apiAuthInterceptor)
-        .build()
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("Origin", baseUrl)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        addInterceptor(::imageInterceptor)
+        addInterceptor(::apiAuthInterceptor)
+    }
 
     // ======================== Popular ========================
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/komik/library".toHttpUrl().newBuilder()
             .addQueryParameter("sortBy", "popular")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, rscHeaders)
+        val response = client.get(url, rscHeaders)
+        return parseSearchManga(response)
     }
 
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
-
     // ======================== Latest ========================
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/komik/library".toHttpUrl().newBuilder()
             .addQueryParameter("sortBy", "newKomik")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, rscHeaders)
+        val response = client.get(url, rscHeaders)
+        return parseSearchManga(response)
     }
 
-    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
-
     // ======================== Search ========================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotEmpty()) {
             val url = "$apiUrl/komik".toHttpUrl().newBuilder()
                 .addQueryParameter("name", query)
                 .addQueryParameter("search", "true")
                 .addQueryParameter("limit", "20")
                 .addQueryParameter("page", page.toString())
-            return GET(url.build(), headers)
+            val response = client.get(url.build(), headers)
+            return parseSearchManga(response)
         }
 
         val url = "$baseUrl/komik/library".toHttpUrl().newBuilder()
@@ -105,10 +103,11 @@ abstract class Softkomik : HttpSource() {
             }
         }
 
-        return GET(url.build(), rscHeaders)
+        val response = client.get(url.build(), rscHeaders)
+        return parseSearchManga(response)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
+    private fun parseSearchManga(response: Response): MangasPage {
         val libData = if (response.request.url.toString().contains(apiUrl)) {
             response.parseAs<LibDataDto>()
         } else {
@@ -125,63 +124,81 @@ abstract class Softkomik : HttpSource() {
         return MangasPage(mangas, libData.page < libData.maxPage)
     }
 
-    // ======================== Details ========================
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/${manga.url}", rscHeaders)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val manga = response.extractNextJs<MangaDetailsDto>()
-            ?: throw Exception("Could not find manga details")
-
-        val slug = response.request.url.pathSegments.lastOrNull()!!
-        return SManga.create().apply {
-            setUrlWithoutDomain(slug)
-            title = manga.title
-            author = manga.author
-            description = manga.sinopsis
-            genre = manga.Genre?.joinToString()
-            status = when (manga.status?.lowercase()) {
-                "ongoing" -> SManga.ONGOING
-                "tamat" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host == baseUrl.toHttpUrl().host) {
+            val slug = url.pathSegments.firstOrNull() ?: return null
+            if (slug.isNotEmpty() && slug != "komik" && slug != "akun" && slug != "api") {
+                val manga = SManga.create().apply {
+                    setUrlWithoutDomain(slug)
+                }
+                return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
             }
-            thumbnail_url = "$coverUrl/${manga.gambar.removePrefix("/")}"
         }
+        return null
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        var parsedManga: SManga? = null
+        var parsedChapters: List<SChapter>? = null
+
+        if (fetchDetails) {
+            val response = client.get(getMangaUrl(manga), rscHeaders)
+            val detailsDto = response.extractNextJs<MangaDetailsDto>()
+                ?: throw Exception("Could not find manga details")
+            parsedManga = SManga.create().apply {
+                setUrlWithoutDomain(manga.url)
+                title = detailsDto.title
+                author = detailsDto.author
+                description = detailsDto.sinopsis
+                genre = detailsDto.Genre?.joinToString()
+                status = when (detailsDto.status?.lowercase()) {
+                    "ongoing" -> SManga.ONGOING
+                    "tamat" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
+                thumbnail_url = "$coverUrl/${detailsDto.gambar.removePrefix("/")}"
+            }
+        }
+
+        if (fetchChapters) {
+            // isRequiredLogin manga with genre ecchi or mature
+            val isRequiredLogin = requiredLoginGenres.any { keyword ->
+                manga.genre.orEmpty().contains(keyword, ignoreCase = true)
+            }
+            var url = "$apiUrl/komik/${manga.url}/chapter?limit=9999999"
+            if (isRequiredLogin) {
+                url += requiredLoginFragment
+            }
+            val response = client.get(url, headers)
+            val dto = response.parseAs<ChapterListDto>()
+            val isRequiredLoginFragment = response.request.url.fragment?.contains(requiredLoginSuffix) == true
+            parsedChapters = dto.chapter.map { chapter ->
+                val chapterNumStr = chapter.chapter
+                val chapterNum = chapterNumStr.substringBefore(".").toFloatOrNull() ?: -1f
+                val displayNum = formatChapterDisplay(chapterNumStr)
+                var chapterUrl = "/${manga.url}/chapter/$chapterNumStr"
+                if (isRequiredLoginFragment) {
+                    chapterUrl += requiredLoginFragment
+                }
+                SChapter.create().apply {
+                    this.url = chapterUrl
+                    this.name = "Chapter $displayNum"
+                    this.chapter_number = chapterNum
+                }
+            }.sortedByDescending { it.chapter_number }
+        }
+
+        return SMangaUpdate(parsedManga ?: manga, parsedChapters ?: chapters)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"
 
-    // ======================== Chapters ========================
-    override fun chapterListRequest(manga: SManga): Request {
-        // isRequiredLogin manga with genre ecchi or mature
-        val isRequiredLogin = requiredLoginGenres.any { keyword ->
-            manga.genre.orEmpty().contains(keyword, ignoreCase = true)
-        }
-        var url = "$apiUrl/komik/${manga.url}/chapter?limit=9999999"
-        if (isRequiredLogin) {
-            url += requiredLoginFragment
-        }
-        return GET(url, headers)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val dto = response.parseAs<ChapterListDto>()
-        val slug = response.request.url.pathSegments[1]
-        val isRequiredLogin = response.request.url.fragment?.contains(requiredLoginSuffix) == true
-        return dto.chapter.map { chapter ->
-            val chapterNumStr = chapter.chapter
-            val chapterNum = chapterNumStr.substringBefore(".").toFloatOrNull() ?: -1f
-            val displayNum = formatChapterDisplay(chapterNumStr)
-            var chapterUrl = "/$slug/chapter/$chapterNumStr"
-            if (isRequiredLogin) {
-                chapterUrl += requiredLoginFragment
-            }
-            SChapter.create().apply {
-                url = chapterUrl
-                name = "Chapter $displayNum"
-                chapter_number = chapterNum
-            }
-        }.sortedByDescending { it.chapter_number }
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     private fun formatChapterDisplay(chapterStr: String): String {
         val parts = chapterStr.split(".")
@@ -199,17 +216,16 @@ abstract class Softkomik : HttpSource() {
     }
 
     // ======================== Pages ========================
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", rscHeaders)
-
-    override fun pageListParse(response: Response): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get(getChapterUrl(chapter), rscHeaders)
         val isRequiredLogin = response.request.url.fragment?.contains(requiredLoginSuffix) == true
         val data = response.extractNextJs<ChapterPageDataDto>()
             ?: throw Exception("Could not find chapter data")
 
         val imageSrc = data.imageSrc.ifEmpty {
             val slug = response.request.url.pathSegments[0]
-            val chapter = response.request.url.pathSegments[2]
-            val urlApi = "$apiUrl/komik/$slug/chapter/$chapter/imgs/${data._id}"
+            val chapterNum = response.request.url.pathSegments[2]
+            val urlApi = "$apiUrl/komik/$slug/chapter/$chapterNum/imgs/${data._id}"
 
             val token = getBearerTokenFromCookie()
             if (token == null && isRequiredLogin) {
@@ -224,9 +240,8 @@ abstract class Softkomik : HttpSource() {
                 headers
             }
 
-            client.newCall(GET(urlApi, authHeaders)).execute().use {
-                it.parseAs<ChapterPageImagesDto>().imageSrc
-            }
+            val res = client.get(urlApi, authHeaders)
+            res.parseAs<ChapterPageImagesDto>().imageSrc
         }
 
         // for manga/manhwa that requires login, the API still returns 200 but with empty image list.
@@ -240,8 +255,6 @@ abstract class Softkomik : HttpSource() {
             Page(i, imageUrl = "$imageBaseUrl/${img.removePrefix("/")}")
         }
     }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
@@ -408,6 +421,7 @@ abstract class Softkomik : HttpSource() {
                 .any { it.name == "zEm983" || it.name == "AhyyL" }
 
             if (!hasCookies) {
+                // Fallback to synchronous block, since this is in okhttp interceptor
                 client.newCall(GET(baseUrl, headers)).execute().close()
                 client.newCall(GET("$baseUrl/api/me", apiHeaders)).execute().close()
             }
@@ -434,7 +448,7 @@ abstract class Softkomik : HttpSource() {
     private fun resolveWebViewChapterSegment(url: HttpUrl): String? {
         val segments = url.pathSegments
         val chapterIndex = segments.indexOf("chapter")
-        val rawChapter = if (chapterIndex != -1) segments.getOrNull(chapterIndex + 1) else return null
+        val rawChapter = if (chapterIndex != -1) segments.getOrNull(chapterIndex + 1) else null
 
         val chapterNumber = rawChapter?.toIntOrNull()
         return if (chapterNumber != null && chapterNumber < 100) {
@@ -517,7 +531,7 @@ abstract class Softkomik : HttpSource() {
             .ifEmpty { null }
     }
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Filter.Header("Filter tidak bisa digabungkan dengan pencarian teks."),
         Filter.Separator(),
         SortFilter(),
@@ -526,6 +540,7 @@ abstract class Softkomik : HttpSource() {
         GenreFilter(),
         MinChapterFilter(),
     )
+
     private val requiredLoginSuffix = "login-required"
     private val requiredLoginFragment = "#$requiredLoginSuffix"
     private val requiredLoginGenres = listOf("ecchi", "mature")
