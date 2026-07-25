@@ -10,19 +10,18 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 abstract class ZManga : KeiSource() {
 
-    protected open val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
-
-    override val supportsLatest = true
+    protected open val dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
 
     // ============================== Popular ==============================
 
@@ -65,15 +64,14 @@ abstract class ZManga : KeiSource() {
     // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val filterList = if (filters.isEmpty()) getFilterList(null) else filters
-        val isProjectPage = filterList.filterIsInstance<ProjectFilter>().any { it.toUriPart() == "project-filter-on" }
+        val isProjectPage = filters.filterIsInstance<ProjectFilter>().any { it.toUriPart() == "project-filter-on" }
 
-        val document = if (isProjectPage) {
+        val document = if (query.isBlank() && isProjectPage) {
             client.get("$baseUrl$projectPageString/page/$page".toHttpUrl()).asJsoup()
         } else {
             val url = "$baseUrl/advanced-search/${pagePathSegment(page)}".toHttpUrl().newBuilder()
             url.addQueryParameter("title", query)
-            filterList.forEach { filter ->
+            filters.forEach { filter ->
                 when (filter) {
                     is AuthorFilter -> {
                         url.addQueryParameter("author", filter.state)
@@ -130,14 +128,10 @@ abstract class ZManga : KeiSource() {
     ): SMangaUpdate {
         val document = client.get(baseUrl + manga.url).asJsoup()
 
-        val updatedManga = if (fetchDetails) mangaDetailsParse(document) else manga
+        val updatedManga = mangaDetailsParse(document)
 
-        val updatedChapters = if (fetchChapters) {
-            document.select(chapterListSelector()).map { element ->
-                chapterFromElement(element)
-            }
-        } else {
-            chapters
+        val updatedChapters = document.select(chapterListSelector()).map { element ->
+            chapterFromElement(element)
         }
 
         return SMangaUpdate(updatedManga, updatedChapters)
@@ -184,7 +178,13 @@ abstract class ZManga : KeiSource() {
     open fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.attr("abs:href"))
         name = element.select("span").first()!!.ownText()
-        date_upload = dateFormat.tryParse(element.select("span.date").text())
+        date_upload = parseDate(element.select("span.date").text())
+    }
+
+    protected open fun parseDate(dateString: String): Long = try {
+        LocalDate.parse(dateString, dateFormatter).atStartOfDay(ZoneId.systemDefault()).toEpochSecond() * 1000
+    } catch (_: Exception) {
+        0L
     }
 
     // =============================== Pages ===============================
