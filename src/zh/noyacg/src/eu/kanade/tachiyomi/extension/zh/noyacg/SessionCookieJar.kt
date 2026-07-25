@@ -9,5 +9,4 @@ class SessionCookieJar(private val homeUrl: HttpUrl, private val cookieJar: Cook
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) = cookieJar.saveFromResponse(url, cookies)
 
     override fun loadForRequest(url: HttpUrl) = cookieJar.loadForRequest(if (url.host.startsWith("api")) homeUrl else url)
-
 }
