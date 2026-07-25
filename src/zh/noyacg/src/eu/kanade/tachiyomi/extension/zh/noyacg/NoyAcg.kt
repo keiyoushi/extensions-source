@@ -27,8 +27,8 @@ import kotlinx.serialization.json.put
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 
@@ -38,7 +38,9 @@ abstract class NoyAcg :
     ConfigurableSource {
 
     private val pref by getPreferencesLazy()
-    private val imgBaseUrl get() = pref.getString(IMG_HOSTING_PREF, "https://img.noymanga.com")!!
+    private val imgBaseUrl get() = baseUrl.replace("api", "img")
+
+    override fun getHomeUrl() = "https://beta.noyteam.online"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         getPreferencesInternal(screen.context).forEach(screen::addPreference)
@@ -50,6 +52,7 @@ abstract class NoyAcg :
     }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
+        cookieJar(SessionCookieJar(getHomeUrl().toHttpUrl(), network.client.cookieJar))
         addNetworkInterceptor { chain ->
             val resp = chain.proceed(chain.request())
             resp.takeUnless {
@@ -110,9 +113,9 @@ abstract class NoyAcg :
 
     // Manga & Chapters
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
+    override fun getMangaUrl(manga: SManga) = "${getHomeUrl()}/manga/${manga.url}"
 
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/reader/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter) = "${getHomeUrl()}/reader/${chapter.url}"
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? = url.pathSegments.last().toIntOrNull()?.let {
         val comic = client.get("$baseUrl/api/v4/book/$it?comment=false").parseManga()
@@ -159,6 +162,8 @@ abstract class NoyAcg :
         return SMangaUpdate(sManga, sChapters)
     }
 
+    override val supportsRelatedMangas = true
+
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val comic = client.get("$baseUrl/api/v4/book/${manga.url}?comment=false").parseManga()
         return comic.recommend.map { it.toSManga(imgBaseUrl) }
@@ -170,8 +175,5 @@ abstract class NoyAcg :
         Page(it, imageUrl = "/${chapter.url}/${it + 1}.webp")
     }
 
-    override fun imageRequest(page: Page): Request {
-        val imgBaseUrl = pref.getString(IMG_HOSTING_PREF, "https://img.noymanga.com")!!
-        return GET(imgBaseUrl + page.imageUrl, headers)
-    }
+    override fun imageRequest(page: Page) = GET(imgBaseUrl + page.imageUrl, headers)
 }

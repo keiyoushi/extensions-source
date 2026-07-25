@@ -11,8 +11,14 @@ keiyoushi {
     libVersion = "1.6"
 
     source {
-        lang = "zh"
-        baseUrl = "https://beta.noyteam.online"
+        lang = "zh-Hant"
+        baseUrl {
+            mirrors(
+                "https://api.noyteam.online",
+                "https://api.noymanga.com",
+                "https://api.noy.asia",
+            )
+        }
     }
 
     deeplink {
