@@ -14,7 +14,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.array
-import keiyoushi.utils.getObjectOrNull
+import keiyoushi.utils.getObject
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.int
@@ -27,8 +27,10 @@ import kotlinx.serialization.json.put
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import java.io.IOException
 
 @Source
 abstract class NoyAcg :
@@ -47,12 +49,22 @@ abstract class NoyAcg :
         add("allow-adult", pref.getString(ADULT_PREF, "both")!!)
     }
 
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addNetworkInterceptor { chain ->
+            val resp = chain.proceed(chain.request())
+            resp.takeUnless {
+                it.header("Content-Type")?.contains("application/json") == true &&
+                    (it.header("Content-Encoding") == null || it.header("Content-Length") == "18")
+            } ?: resp.use { throw IOException("請在 WebView 中登入") }
+        }
+    }
+
     private fun Response.parseManga(): MangaDetailDto {
         val jsonObject = parseAs<JsonObject>()
         val status = jsonObject.getStringOrNull("status") ?: "error"
-        val book = jsonObject.getObjectOrNull("book")
-        val info = book?.get("info")?.parseAs<MangaDto>()
-        val recommend = book?.get("recommend")?.parseAs<List<RecommendMangaDto>>()
+        val book = jsonObject.getObject("book")
+        val info = book["info"]!!.parseAs<MangaDto>()
+        val recommend = book["recommend"]!!.parseAs<List<RecommendMangaDto>>()
         val categories = jsonObject["chapters"]?.obj?.get("categories")?.array?.map { it.parseAs<CategoryDto>() } ?: emptyList()
         val chaptersMap = mutableMapOf<Int, List<ChapterDto>>()
         jsonObject["chapters"]?.obj?.get("data")?.obj?.forEach { (key, value) ->
@@ -64,9 +76,8 @@ abstract class NoyAcg :
 
     private fun mangaPageParse(response: Response, page: Int): MangasPage {
         val result = response.parseAs<ListingPageDto>()
-        if (result.status != "ok") throw Exception("請在 WebView 中登入")
-        val mangas = result.data!!.map { it.toSManga(imgBaseUrl) }
-        return MangasPage(mangas, page * LISTING_PAGE_SIZE < result.count!!)
+        val mangas = result.data.map { it.toSManga(imgBaseUrl) }
+        return MangasPage(mangas, page * LISTING_PAGE_SIZE < result.count)
     }
 
     // Popular
@@ -103,12 +114,9 @@ abstract class NoyAcg :
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/reader/${chapter.url}"
 
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        return url.pathSegments.last().toIntOrNull()?.let {
-            val comic = client.get("$baseUrl/api/v4/book/$it?comment=false").parseManga()
-            if (comic.status != "ok") throw Exception("請在 WebView 中登入")
-            comic.book!!.toSManga(imgBaseUrl)
-        }
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = url.pathSegments.last().toIntOrNull()?.let {
+        val comic = client.get("$baseUrl/api/v4/book/$it?comment=false").parseManga()
+        comic.book.toSManga(imgBaseUrl)
     }
 
     override suspend fun fetchMangaUpdate(
@@ -119,12 +127,11 @@ abstract class NoyAcg :
     ): SMangaUpdate {
         val response = client.get("$baseUrl/api/v4/book/${manga.url}?comment=false")
         val comic = response.parseManga()
-        if (comic.status != "ok") throw Exception("請在 WebView 中登入")
 
-        val sManga = comic.book!!.toSManga(imgBaseUrl)
+        val sManga = comic.book.toSManga(imgBaseUrl)
 
         val mangaId = response.request.url.pathSegments.last()
-        val sChapters = if (comic.chapters!!.isEmpty()) {
+        val sChapters = if (comic.chapters.isEmpty()) {
             listOf(
                 SChapter.create().apply {
                     url = mangaId
@@ -154,7 +161,7 @@ abstract class NoyAcg :
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val comic = client.get("$baseUrl/api/v4/book/${manga.url}?comment=false").parseManga()
-        return comic.recommend?.map { it.toSManga(imgBaseUrl) } ?: emptyList()
+        return comic.recommend.map { it.toSManga(imgBaseUrl) }
     }
 
     // Pages

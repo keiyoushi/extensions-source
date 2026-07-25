@@ -17,15 +17,15 @@ fun String.formatAuthors() = split(" ").joinToString { name ->
 @Serializable
 class ListingPageDto(
     val status: String,
-    @JsonNames("info", "data") val data: List<MangaDto>?,
-    @JsonNames("len", "count") val count: Int?,
+    @JsonNames("info", "data") val data: List<MangaDto>,
+    @JsonNames("len", "count") val count: Int,
 )
 
 class MangaDetailDto(
     val status: String,
-    val book: MangaDto?,
-    val recommend: List<RecommendMangaDto>?,
-    val chapters: Map<String, List<ChapterDto>>?,
+    val book: MangaDto,
+    val recommend: List<RecommendMangaDto>,
+    val chapters: Map<String, List<ChapterDto>>,
 )
 
 @Serializable
