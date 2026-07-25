@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.time.Instant
+import kotlin.time.Instant
 
 @Serializable
 class SearchResultDto(
@@ -74,9 +74,7 @@ class UnitDto(
             "Chapter $chapterNumberClean"
         }
 
-        date_upload = runCatching {
-            Instant.parse(createdAt).toEpochMilli()
-        }.getOrDefault(0L)
+        date_upload = Instant.parseOrNull(createdAt)?.toEpochMilliseconds() ?: 0L
     }
 }
 
