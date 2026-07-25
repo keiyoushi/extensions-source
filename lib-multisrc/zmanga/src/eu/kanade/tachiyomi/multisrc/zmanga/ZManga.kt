@@ -198,9 +198,8 @@ abstract class ZManga : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(baseUrl + chapter.url).asJsoup())
 
     open fun pageListParse(document: Document): List<Page> = document.select("div.reader-area img:not(noscript img)").mapIndexed { i, img ->
-        val imgUrl = img.attr("data-lazy-src").takeIf { it.isNotBlank() }
-            ?: img.attr("abs:src")
-        Page(i, imageUrl = imgUrl)
+        val urlStr = img.attr("data-lazy-src").ifBlank { img.attr("src") }.replace("\\", "")
+        Page(i, imageUrl = img.attr("src", urlStr).attr("abs:src"))
     }
 
     // ============================== Filters ==============================
