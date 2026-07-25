@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.hentainexus
 
+import android.content.SharedPreferences
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,6 +18,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -28,8 +33,12 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Source
-abstract class HentaiNexus : HttpSource() {
+abstract class HentaiNexus :
+    HttpSource(),
+    ConfigurableSource {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val supportsLatest = true
 
@@ -163,6 +172,12 @@ abstract class HentaiNexus : HttpSource() {
         )
     }
 
+    private fun imageField() = when (preferences.getString(PREF_IMAGE_FORMAT, "source")) {
+        "avif" -> "image_avif"
+        "webp" -> "image_fallback"
+        else -> "image_source"
+    }
+
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val script = document.selectFirst("script:containsData(initReader)")?.data()
@@ -170,9 +185,13 @@ abstract class HentaiNexus : HttpSource() {
         val encoded = script.substringAfter("initReader(\"").substringBefore("\",")
         val data = Utils.decryptData(encoded)
 
+        val field = imageField()
+
         return json.parseToJsonElement(data).jsonArray
             .filter { it.jsonObject["type"]!!.jsonPrimitive.content == "image" }
-            .mapIndexed { i, it -> Page(i, imageUrl = (it.jsonObject["image"] ?: it.jsonObject["image_fallback"])!!.jsonPrimitive.content) }
+            .mapIndexed { i, it ->
+                Page(i, imageUrl = (it.jsonObject[field] ?: it.jsonObject["image_fallback"])!!.jsonPrimitive.content)
+            }
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
@@ -198,8 +217,20 @@ abstract class HentaiNexus : HttpSource() {
         OffsetPageFilter(),
     )
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = PREF_IMAGE_FORMAT
+            title = "Image Quality"
+            entries = arrayOf("Original", "WebP", "AVIF")
+            entryValues = arrayOf("source", "webp", "avif")
+            summary = "%s\nOriginal quality requires a user account. WebP is used as a fallback."
+            setDefaultValue("source")
+        }.also(screen::addPreference)
+    }
+
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
         const val POPULAR_NOW_PATH = "/explore/hot"
+        private const val PREF_IMAGE_FORMAT = "pref_image_format"
     }
 }
