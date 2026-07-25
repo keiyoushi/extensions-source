@@ -12,6 +12,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -29,9 +30,9 @@ abstract class LumosKomik : KeiSource() {
 
     private val dateFormatters by lazy {
         listOf(
-            java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.US),
-            java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy", Locale.US),
-            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US),
+            java.text.SimpleDateFormat("dd/MM/yyyy", Locale.US),
+            java.text.SimpleDateFormat("dd-MM-yyyy", Locale.US),
+            java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US),
         )
     }
 
@@ -310,9 +311,8 @@ abstract class LumosKomik : KeiSource() {
         }
 
         for (formatter in dateFormatters) {
-            try {
-                return java.time.LocalDate.parse(dateStr, formatter).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
-            } catch (_: Exception) {}
+            val parsedTime = formatter.tryParse(dateStr)
+            if (parsedTime != 0L) return parsedTime
         }
 
         return 0L
