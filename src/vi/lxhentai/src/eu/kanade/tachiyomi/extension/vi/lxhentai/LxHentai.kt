@@ -14,10 +14,14 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getArrayOrNull
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -202,37 +206,31 @@ abstract class LxHentai : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = "$baseUrl${chapter.url}"
-        var token = ""
-        var imageUrls = emptyList<String>()
 
-        for (attempt in 1..2) {
-            try {
-                runWebView(timeout = 45.seconds) {
-                    loadWithOverviewMode = true
-                    useWideViewPort = true
-                    userAgent = headers["User-Agent"]!!
+        val (token, imageUrls) = try {
+            runWebView<Pair<String, List<String>>>(timeout = 60.seconds) {
+                loadWithOverviewMode = true
+                useWideViewPort = true
+                userAgent = headers["User-Agent"]!!
 
-                    poll(1.seconds) {
-                        evaluateJs(
-                            """(function(){
-                                var b=document.querySelector('.swal2-confirm');
-                                if(b && !b.disabled && b.textContent.includes('tiếp tục')) b.click();
-                            })()""",
-                        )
-
-                        evaluateJs(checkAndDecodeScript) { value ->
-                            val parsed = parseTokenResult(value) ?: return@evaluateJs
-                            token = parsed.first
-                            imageUrls = parsed.second
-                            resolve(Unit)
-                        }
-                    }
-
-                    loadUrl(chapterUrl)
+                onPageStarted {
+                    evaluateJs(fetchHookScript)
                 }
 
-                if (token.isNotEmpty() && imageUrls.isNotEmpty()) break
-            } catch (_: WebViewTimeoutException) {}
+                poll(1.seconds) {
+                    evaluateJs(decodeUrlsScript) { value ->
+                        val parsed = parseTokenResult(value.orEmpty())
+                        if (parsed == null) {
+                            return@evaluateJs
+                        }
+                        resolve(parsed)
+                    }
+                }
+
+                loadUrl(chapterUrl)
+            }
+        } catch (_: WebViewTimeoutException) {
+            "" to emptyList()
         }
 
         val urls = imageUrls.filter { it.isNotBlank() }
@@ -245,24 +243,33 @@ abstract class LxHentai : KeiSource() {
     }
 
     private fun parseTokenResult(value: String): Pair<String, List<String>>? {
-        val cleaned = value.trim().removeSurrounding("\"").removeSurrounding("'")
-        if (cleaned.isEmpty() || cleaned == "null" || cleaned == "[]") return null
+        if (value.isBlank()) return null
 
+        //   JS returns: {"token":"abc","urls":["url1"]}
+        //   callback gets: "{\"token\":\"abc\",\"urls\":[\"url1\"]}"  (escaped)
         return try {
-            val json = cleaned
-                .removePrefix("Object {").removeSuffix("}")
-                .replace("Object {", "{")
-            val tokenMatch = Regex(""""token"\s*:\s*\"([^\"]*)\"""").find(json)
-            val urlsMatch = Regex(""""urls"\s*:\s*\[([^\]]*)\]""").find(json)
+            val jsonStr = try {
+                value.parseAs<String>()
+            } catch (_: Exception) {
+                value.trim().let { s ->
+                    val inner = if (s.startsWith("\"") && s.endsWith("\"")) {
+                        s.substring(1, s.length - 1)
+                    } else {
+                        s.removeSurrounding("'")
+                    }
+                    inner.replace("\\\"", "\"").replace("\\\\", "\\")
+                }
+            }
 
-            val t = tokenMatch?.groupValues?.get(1) ?: return null
-            val urlsRaw = urlsMatch?.groupValues?.get(1) ?: return null
+            if (jsonStr.isBlank() || jsonStr == "null" || jsonStr == "[]") return null
 
-            val urls = Regex(""""([^"]*http[^"]*)"""").findAll(urlsRaw)
-                .map { it.groupValues[1] }
-                .toList()
+            val json = jsonStr.parseAs<JsonObject>()
+            val token = json.getStringOrNull("token").orEmpty()
+            val urls = json.getArrayOrNull("urls")
+                ?.mapNotNull { it.stringOrNull }
+                .orEmpty()
 
-            if (t.isNotEmpty() && urls.isNotEmpty()) t to urls else null
+            if (token.isNotEmpty() && urls.isNotEmpty()) token to urls else null
         } catch (_: Exception) {
             null
         }
@@ -324,63 +331,12 @@ abstract class LxHentai : KeiSource() {
 
     private val backgroundUrlRegex = Regex("""background-image:\s*url\(['"]?([^'")]+)""", RegexOption.IGNORE_CASE)
     private val genreSlugRegex = Regex("""toggleGenre\('([^']+)'\)""")
-    private val checkAndDecodeScript = """(function(){
-        try {
-            var b = document.querySelector('.swal2-confirm');
-            if (b && !b.disabled && b.textContent.indexOf('tiếp tục') >= 0) b.click();
-            var t = window.actionToken;
-            if (!t || typeof t !== 'string' || t.length === 0) return JSON.stringify({token:'',urls:[]});
-            var scripts = document.querySelectorAll('script:not([src])');
-            var target = null;
-            for (var i = 0; i < scripts.length; i++) {
-                var txt = scripts[i].textContent;
-                if (txt.indexOf('[\"KGZ1') >= 0 || txt.indexOf('=\\[\"KGZ1') >= 0) {
-                    target = txt;
-                    break;
-                }
-            }
-            if (!target) return JSON.stringify({token:t,urls:[]});
-            var b64Match = target.match(/=\\[((?:\"[A-Za-z0-9+/=]{20,}\",?\s*)+)\]/);
-            if (!b64Match) return JSON.stringify({token:t,urls:[]});
-            var parts = b64Match[1].match(/\"([^\"]+)\"/g);
-            if (!parts) return JSON.stringify({token:t,urls:[]});
-            var joined = parts.map(function(s){return s.replace(/\"/g,'');}).join('');
-            var raw = atob(joined);
-            var layer1;
-            try { layer1 = decodeURIComponent(escape(raw)); } catch(e2) { layer1 = raw; }
-            var key2Match = layer1.match(/var _\\w+='([0-9a-f]{20,})'/);
-            if (!key2Match) return JSON.stringify({token:t,urls:[]});
-            var key2 = key2Match[1];
-            var arrRe = /var _\\w+=\\[((?:-?\\d+,?)*)\\]/g;
-            var combined = [];
-            var m;
-            while ((m = arrRe.exec(layer1)) !== null) {
-                var nums = m[1].split(',').filter(function(s){return s.length>0;}).map(Number);
-                combined = combined.concat(nums);
-            }
-            if (combined.length === 0) return JSON.stringify({token:t,urls:[]});
-            var decoded = '';
-            for (var i = 0; i < combined.length; i++) {
-                decoded += String.fromCharCode((combined[i] ^ key2.charCodeAt(i % key2.length)) & 0xFF);
-            }
-            var key3Match = decoded.match(/var _\\w+=\"([0-9a-f]{20,})\"/);
-            if (!key3Match) return JSON.stringify({token:t,urls:[]});
-            var key3 = key3Match[1];
-            var jsonB64Match = decoded.match(/var _\\w+=\"([A-Za-z0-9+/=]{50,})\"/);
-            if (!jsonB64Match) return JSON.stringify({token:t,urls:[]});
-            var jsonArr = JSON.parse(atob(jsonB64Match[1]));
-            var urls = [];
-            for (var j = 0; j < jsonArr.length; j++) {
-                var item;
-                try { item = decodeURIComponent(escape(atob(jsonArr[j]))); }
-                catch(e3) { item = atob(jsonArr[j]); }
-                var url = '';
-                for (var k = 0; k < item.length; k++) {
-                    url += String.fromCharCode((item.charCodeAt(k) ^ key3.charCodeAt(k % key3.length)) & 0xFF);
-                }
-                if (url.indexOf('http') === 0 && urls.indexOf(url) < 0) urls.push(url);
-            }
-            return JSON.stringify({token:t,urls:urls});
-        } catch(e) { return JSON.stringify({token:'',urls:[]}); }
-    })()"""
+    private val fetchHookScript by lazy {
+        javaClass.getResource("/assets/fetch_hook.js")?.readText()
+            ?: throw IllegalStateException("fetch_hook.js not found in assets")
+    }
+    private val decodeUrlsScript by lazy {
+        javaClass.getResource("/assets/decode_urls.js")?.readText()
+            ?: throw IllegalStateException("decode_urls.js not found in assets")
+    }
 }
