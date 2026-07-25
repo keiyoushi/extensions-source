@@ -6,12 +6,18 @@ plugins {
 
 keiyoushi {
     name = "Seikowo"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "vi"
-        baseUrl = "https://seikowo-app.blogspot.com"
+        baseUrl {
+            custom("https://seikowo-app.blogspot.com")
+        }
+    }
+
+    deeplink {
+        path("/.*")
     }
 }
