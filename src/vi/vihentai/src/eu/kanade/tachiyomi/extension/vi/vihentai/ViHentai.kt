@@ -184,8 +184,10 @@ abstract class ViHentai : HttpSource() {
         val csrfToken = LIVEWIRE_TOKEN_REGEX.find(html)?.groupValues?.get(1)
             ?: throw IOException("Password: CSRF token not found")
 
-        val password = PASSWORD_REGEX.find(html)?.groupValues?.get(1)
-            ?: throw IOException("Password: password not found")
+        // The gate normally pre-fills its own input via inline JS (scraped by
+        // PASSWORD_REGEX), but that value isn't always present/parseable — fall back
+        // to the site's known static community password instead of failing outright.
+        val password = PASSWORD_REGEX.find(html)?.groupValues?.get(1) ?: KNOWN_GATE_PASSWORD
 
         val wireData = wireDataStr.parseAs<JsonObject>()
         val fingerprint = wireData["fingerprint"]!!.jsonObject
@@ -295,5 +297,6 @@ abstract class ViHentai : HttpSource() {
         private val WIRE_INITIAL_DATA_REGEX = Regex("""wire:initial-data="([^"]+)"""")
         private val LIVEWIRE_TOKEN_REGEX = Regex("""livewire_token\s*=\s*'([^']+)'""")
         private val PASSWORD_REGEX = Regex("""input\.value\s*=\s*'([^']+)'""")
+        private const val KNOWN_GATE_PASSWORD = "lothanhchiton"
     }
 }
