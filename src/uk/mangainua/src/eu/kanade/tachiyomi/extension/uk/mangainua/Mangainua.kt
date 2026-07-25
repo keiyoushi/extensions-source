@@ -135,6 +135,16 @@ abstract class Mangainua :
         thumbnail_url = element.selectFirst("img")?.imgAttr()
     }
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "mangas") {
+            val tmpManga = SManga.create().apply {
+                this.url = url.encodedPath
+            }
+            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        }
+        return null
+    }
+
     // ============================== Manga Details ======================================
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -142,11 +152,13 @@ abstract class Mangainua :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val newUrl = manga.url
+        val document = client.get("${baseUrl}$newUrl").asJsoup()
 
         val mangaNew = if (fetchDetails) {
             SManga.create().apply {
-                title = document.selectFirst("span.UAName")!!.ownText()
+                url = newUrl
+                title = document.selectFirst("span.UAname")!!.ownText()
                 description = document.selectFirst("div.item__full-description p")?.wholeText()
                 thumbnail_url = document.selectFirst("div.item__full-sidebar--poster img")?.imgAttr()
                 status = when (document.getInfoElement("Статус перекладу:")?.text()) {

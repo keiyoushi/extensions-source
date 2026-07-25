@@ -15,4 +15,8 @@ keiyoushi {
         lang = "uk"
         baseUrl = "https://manga.in.ua"
     }
+
+    deeplink {
+        path("/mangas/..*")
+    }
 }
