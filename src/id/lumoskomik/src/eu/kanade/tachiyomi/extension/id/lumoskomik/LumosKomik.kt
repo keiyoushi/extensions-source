@@ -15,9 +15,13 @@ import keiyoushi.source.KeiSource
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
 
@@ -25,6 +29,14 @@ import java.util.Locale
 abstract class LumosKomik : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
+
+    private val dateFormatters by lazy {
+        listOf(
+            DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.US),
+            DateTimeFormatter.ofPattern("dd-MM-yyyy", Locale.US),
+            DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US),
+        )
+    }
 
     // ============================== Popular ===============================
 
@@ -122,7 +134,12 @@ abstract class LumosKomik : KeiSource() {
         val dataSr = document.selectFirst("#synopsis-wrapper [data-sr]")?.attr("data-sr")
         description = if (!dataSr.isNullOrEmpty()) {
             try {
-                String(Base64.decode(dataSr, Base64.DEFAULT), Charsets.UTF_8)
+                val decodedBytes = Base64.decode(dataSr, Base64.DEFAULT)
+                if (decodedBytes != null) {
+                    String(decodedBytes, Charsets.UTF_8)
+                } else {
+                    document.selectFirst("#synopsis-wrapper [data-sr]")?.text()
+                }
             } catch (_: Exception) {
                 document.selectFirst("#synopsis-wrapper [data-sr]")?.text()
             }
@@ -217,22 +234,26 @@ abstract class LumosKomik : KeiSource() {
 
     // ============================== Utilities =============================
 
-    private fun normalizeMangaUrl(url: String): String {
-        val path = url.removeSuffix("/")
-        val slug = path.substringAfterLast("/")
+    private fun normalizeMangaUrl(url: String?): String {
+        val path = url.orEmpty()
+        val httpUrl = path.toHttpUrlOrNull()
+            ?: if (path.startsWith("/")) "$baseUrl$path".toHttpUrlOrNull() else "$baseUrl/$path".toHttpUrlOrNull()
+        val slug = httpUrl?.pathSegments?.lastOrNull { it.isNotEmpty() }.orEmpty()
         return "/comic/$slug"
     }
 
-    private fun normalizeChapterUrl(url: String): String {
-        val path = url.removeSuffix("/")
-        val segments = path.split("/")
-        if (segments.size >= 4 && segments[1] == "komik") {
-            val slug = segments[2]
-            val chapterSlug = segments[3]
+    private fun normalizeChapterUrl(url: String?): String {
+        val path = url.orEmpty()
+        val httpUrl = path.toHttpUrlOrNull()
+            ?: if (path.startsWith("/")) "$baseUrl$path".toHttpUrlOrNull() else "$baseUrl/$path".toHttpUrlOrNull()
+        val segments = httpUrl?.pathSegments?.filter { it.isNotEmpty() }.orEmpty()
+        if (segments.size >= 3 && segments[0] == "komik") {
+            val slug = segments[1]
+            val chapterSlug = segments[2]
             return "/read/$slug/$chapterSlug"
         }
-        val slug = segments.getOrNull(segments.size - 2) ?: ""
-        val chapterSlug = segments.lastOrNull() ?: ""
+        val slug = segments.getOrNull(segments.size - 2).orEmpty()
+        val chapterSlug = segments.lastOrNull().orEmpty()
         return "/read/$slug/$chapterSlug"
     }
 
@@ -242,7 +263,7 @@ abstract class LumosKomik : KeiSource() {
 
     private fun parseDate(dateStr: String?): Long {
         if (dateStr.isNullOrBlank()) return 0L
-        val dateLower = dateStr.lowercase().trim()
+        val dateLower = dateStr.lowercase()
         if (dateLower.contains("lalu") || dateLower.contains("baru saja") || dateLower.contains("sekarang")) {
             return parseRelativeDate(dateLower)
         }
@@ -266,15 +287,9 @@ abstract class LumosKomik : KeiSource() {
             }
         }
 
-        val formatters = listOf(
-            java.text.SimpleDateFormat("dd/MM/yyyy", Locale.US),
-            java.text.SimpleDateFormat("dd-MM-yyyy", Locale.US),
-            java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US),
-        )
-        for (formatter in formatters) {
+        for (formatter in dateFormatters) {
             try {
-                val parsed = formatter.parse(dateStr)
-                if (parsed != null) return parsed.time
+                return LocalDate.parse(dateStr, formatter).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
             } catch (_: Exception) {}
         }
 
