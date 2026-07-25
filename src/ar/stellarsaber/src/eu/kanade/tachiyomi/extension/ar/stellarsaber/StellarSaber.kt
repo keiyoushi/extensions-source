@@ -1,51 +1,58 @@
 package eu.kanade.tachiyomi.extension.ar.stellarsaber
 
 import android.util.Base64
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.buffer
+import okio.cipherSource
 import org.jsoup.nodes.Document
-import rx.Observable
-import java.util.Calendar
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 @Source
-abstract class StellarSaber : HttpSource() {
-
-    override val client = super.client.newBuilder()
-        .addInterceptor(::imageInterceptor)
-        .build()
-
-    override val supportsLatest = true
-
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+abstract class StellarSaber : KeiSource() {
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::imageInterceptor)
 
     private fun Int.pageNumber() = if (this > 1) "page/$this/" else ""
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga/${page.pageNumber()}?sort=rating", headers)
+    // ------------------- Popular / Latest -------------------
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val response = client.get("$baseUrl/manga/${page.pageNumber()}?sort=rating")
 
+        return parseMangaListPage(response.asJsoup())
+    }
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val response = client.get("$baseUrl/manga/${page.pageNumber()}?sort=latest")
+
+        return parseMangaListPage(response.asJsoup())
+    }
+
+    private fun parseMangaListPage(document: Document): MangasPage {
         val entries = document.select(".card-grid .card").map { element ->
             SManga.create().apply {
                 title = element.selectFirst(".card__title")!!.text()
@@ -61,80 +68,84 @@ abstract class StellarSaber : HttpSource() {
         return MangasPage(entries, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga/${page.pageNumber()}?sort=latest", headers)
+    // ------------------- Search -------------------
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host == baseUrl.toHttpUrl().host && url.pathSegments.size >= 2) {
-                val manga = SManga.create().apply {
-                    setUrlWithoutDomain(query)
-                }
-                return fetchMangaDetails(manga).map {
-                    it.url = manga.url
-                    it.initialized = true
-
-                    MangasPage(listOf(it), false)
-                }
-            }
-
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.size < 2) {
             throw Exception("Unsupported url")
         }
 
-        fetchNonce()
+        val manga = SManga.create().apply { setUrlWithoutDomain(url.toString()) }
 
-        return super.fetchSearchManga(page, query, filters)
+        return fetchMangaUpdate(manga, emptyList(), true, false).manga.apply {
+            this.url = manga.url
+            initialized = true
+        }
     }
 
-    private var nonce: String? = null
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val nonce = fetchNonce()
 
-    @Synchronized
-    private fun fetchNonce(document: Document? = null): String {
-        if (nonce != null) return nonce!!
+        val body = MultipartBody.Builder().apply {
+            setType(MultipartBody.FORM)
+            addFormDataPart("action", "flavor_ajax_filter_content")
+            addFormDataPart("nonce", nonce)
+            addFormDataPart("page", page.toString())
+            addFormDataPart("keyword", query)
+        }.build()
 
-        val doc = document ?: client.newCall(
-            GET("$baseUrl/manga/", headers),
-        ).execute().use { it.asJsoup() }
-
-        val script = doc.selectFirst("#flavor-ajax-js-extra")?.data()
-            ?: error("Nonce script not found")
-
-        nonce = script.extract("nonce\":\"", '"')
-
-        return nonce ?: error("Unable to extract nonce")
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val body = MultipartBody.Builder().setType(MultipartBody.FORM)
-            .addFormDataPart("action", "flavor_ajax_filter_content")
-            .addFormDataPart("nonce", fetchNonce())
-            .addFormDataPart("page", page.toString())
-            .addFormDataPart("keyword", query)
-            .build()
-
-        return POST("$baseUrl/wp-admin/admin-ajax.php", headers, body)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
+        val response = client.post("$baseUrl/wp-admin/admin-ajax.php", body)
         val data = response.parseAs<SearchResponse>()
 
         val entries = data.data.results
             .filterNot { it.type in listOf("novel", "anime") }
-            .map { it.toSManga() }
+            .map { result ->
+                SManga.create().apply {
+                    setUrlWithoutDomain(result.url)
+                    title = result.title
+                    thumbnail_url = result.cover
+                }
+            }
 
         return MangasPage(entries, true)
     }
 
-    private fun MangaDto.toSManga(): SManga = SManga.create().apply {
-        setUrlWithoutDomain(this@toSManga.url)
-        title = this@toSManga.title
-        thumbnail_url = this@toSManga.cover
+    private var nonce: String? = null
+
+    private fun fetchNonce(document: Document): String {
+        nonce?.let { return it }
+
+        val script = document.selectFirst("#flavor-ajax-js-extra")?.data()
+            ?: error("Nonce script not found")
+
+        return script.extract("nonce\":\"", '"').also { nonce = it }
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val element = response.asJsoup().selectFirst(".detail-content")!!
+    private suspend fun fetchNonce(): String {
+        nonce?.let { return it }
+
+        val document = client.get("$baseUrl/manga/").asJsoup()
+        return fetchNonce(document)
+    }
+
+    // ------------------- details & chapters -------------------
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url).asJsoup()
+
+        val updatedManga = parseMangaDetails(document)
+        val updatedChapters = parseChapterList(document)
+
+        return SMangaUpdate(updatedManga, updatedChapters)
+    }
+
+    private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
+        val element = document.selectFirst(".detail-content")!!
 
         title = element.select(".detail-info__title").text()
         thumbnail_url = element.selectFirst(".detail-poster img")?.absUrl("src")
@@ -162,77 +173,94 @@ abstract class StellarSaber : HttpSource() {
         }
     }
 
-    private fun parseRelativeDate(date: String?): Long {
-        date ?: return 0L
-        val number = numberRegex.find(date)?.value?.toIntOrNull()
-        val cal = Calendar.getInstance()
+    private fun parseChapterList(document: Document): List<SChapter> = document.select(".volume-group").flatMap { volume ->
+        val volumeName = volume.selectFirst(".volume-group__label")?.text()
 
-        if (number == null) {
-            return when {
-                date.contains("دقيقة") -> cal.apply { add(Calendar.MINUTE, -1) }.timeInMillis
-                date.contains("دقيقتين") -> cal.apply { add(Calendar.MINUTE, -2) }.timeInMillis
-                date.contains("ساعة") -> cal.apply { add(Calendar.HOUR, -1) }.timeInMillis
-                date.contains("ساعتين") -> cal.apply { add(Calendar.HOUR, -2) }.timeInMillis
-                date.contains("يوم") && !date.contains("يومين") -> cal.timeInMillis
-                date.contains("يومين") -> cal.apply { add(Calendar.DAY_OF_MONTH, -2) }.timeInMillis
-                date.contains("أسبوع") && !date.contains("أسبوعين") -> cal.apply { add(Calendar.DAY_OF_MONTH, -7) }.timeInMillis
-                date.contains("أسبوعين") -> cal.apply { add(Calendar.DAY_OF_MONTH, -14) }.timeInMillis
-                date.contains("شهر") && !date.contains("شهرين") -> cal.apply { add(Calendar.MONTH, -1) }.timeInMillis
-                date.contains("شهرين") -> cal.apply { add(Calendar.MONTH, -2) }.timeInMillis
-                date.contains("سنة") -> cal.apply { add(Calendar.YEAR, -1) }.timeInMillis
-                date.contains("سنتين") -> cal.apply { add(Calendar.YEAR, -2) }.timeInMillis
-                else -> 0L
-            }
-        }
+        volume.select(".chapter-item").map { element ->
+            SChapter.create().apply {
+                setUrlWithoutDomain(element.absUrl("href"))
 
-        return when {
-            date.contains("دقيقة") || date.contains("دقائق") -> cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
-            date.contains("ساعة") || date.contains("ساعات") -> cal.apply { add(Calendar.HOUR, -number) }.timeInMillis
-            date.contains("يوم") || date.contains("أيام") -> cal.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
-            date.contains("أسبوع") || date.contains("أسابيع") -> cal.apply { add(Calendar.DAY_OF_MONTH, -number * 7) }.timeInMillis
-            date.contains("شهر") || date.contains("أشهر") -> cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
-            else -> 0L
-        }
-    }
+                val title = element.selectFirst(".chapter-item__title")?.text()!!
+                val number = element.selectFirst(".chapter-item__number")?.text().orEmpty()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-
-        return document.select(".volume-group").flatMap { volume ->
-            val volumeName = volume.selectFirst(".volume-group__label")?.text()
-
-            volume.select(".chapter-item").map { element ->
-                SChapter.create().apply {
-                    setUrlWithoutDomain(element.absUrl("href"))
-
-                    val title = element.selectFirst(".chapter-item__title")?.text()!!
-                    val number = element.selectFirst(".chapter-item__number")?.text().orEmpty()
-
-                    name = buildString {
-                        if (!volumeName.isNullOrEmpty()) {
-                            append("$volumeName - ")
-                        }
-
-                        if (number.isNullOrEmpty() && title.contains(number).not()) {
-                            append("$number: ")
-                        }
-
-                        append(title)
+                name = buildString {
+                    if (!volumeName.isNullOrEmpty()) {
+                        append("$volumeName - ")
                     }
 
-                    date_upload = parseRelativeDate(element.selectFirst(".chapter-item__date")?.text())
-                    scanlator = element.selectFirst(".chapter-item__team")?.text()
+                    if (number.isNullOrEmpty() && title.contains(number).not()) {
+                        append("$number: ")
+                    }
+
+                    append(title)
                 }
+
+                date_upload = parseRelativeDate(element.selectFirst(".chapter-item__date")?.text())
+                scanlator = element.selectFirst(".chapter-item__team")?.text()
             }
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    private fun parseRelativeDate(date: String?): Long {
+        date ?: return 0L
+        val number = NUMBER_REGEX.find(date)?.value?.toIntOrNull()
+        val now = System.currentTimeMillis()
+
+        val duration: Duration = if (number == null) {
+            when {
+                date.contains("دقيقتين") -> 2.minutes
+                date.contains("دقيقة") -> 1.minutes
+                date.contains("ساعتين") -> 2.hours
+                date.contains("ساعة") -> 1.hours
+                date.contains("يومين") -> 2.days
+                date.contains("يوم") -> 1.days
+                date.contains("أسبوعين") -> 14.days
+                date.contains("أسبوع") -> 7.days
+                date.contains("شهرين") -> 60.days
+                date.contains("شهر") -> 30.days
+                date.contains("سنتين") -> 730.days
+                date.contains("سنة") -> 365.days
+                else -> return 0L
+            }
+        } else {
+            when {
+                date.contains("دقيقة") || date.contains("دقائق") -> number.minutes
+                date.contains("ساعة") || date.contains("ساعات") -> number.hours
+                date.contains("يوم") || date.contains("أيام") -> number.days
+                date.contains("أسبوع") || date.contains("أسابيع") -> (number * 7).days
+                date.contains("شهر") || date.contains("أشهر") -> (number * 30).days
+                date.contains("سنة") || date.contains("سنوات") -> (number * 365).days
+                else -> return 0L
+            }
+        }
+
+        return now - duration.inWholeMilliseconds
+    }
+
+    // ------------------- Pages -------------------
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(baseUrl + chapter.url).asJsoup()
+
         val key = fetchCdnKey(document)
 
         return document.select("img.reader__page[data-cdn-url]")
             .mapIndexed { index, img -> Page(index, imageUrl = img.attr("abs:data-cdn-url") + "#$key") }
+    }
+
+    private suspend fun fetchCdnKey(document: Document): String {
+        val script = document.selectFirst("script:containsData(flavorReaderData)")?.data()
+            ?: error("Script not found")
+
+        val formBody = FormBody.Builder()
+            .add("action", "flavor_cdn_get_key")
+            .add("nonce", script.extract("cdnNonce: '", '\''))
+            .add("chapter_id", script.extract("chapterId: ", ','))
+            .build()
+
+        val response = client.post("$baseUrl/wp-admin/admin-ajax.php", formBody)
+
+        return response.parseAs<CdnKeyResponse>().data.key
     }
 
     private fun String.extract(startKey: String, endChar: Char): String {
@@ -246,23 +274,6 @@ abstract class StellarSaber : HttpSource() {
         return this.substring(valueStart, valueEnd)
     }
 
-    private fun fetchCdnKey(document: Document): String {
-        val script = document.selectFirst("script:containsData(flavorReaderData)")?.data()
-            ?: error("Script not found")
-
-        val formBody = FormBody.Builder()
-            .add("action", "flavor_cdn_get_key")
-            .add("nonce", script.extract("cdnNonce: '", '\''))
-            .add("chapter_id", script.extract("chapterId: ", ','))
-            .build()
-
-        return client.newCall(
-            POST("$baseUrl/wp-admin/admin-ajax.php", headers, formBody),
-        ).execute().use { response ->
-            response.parseAs<CdnKeyResponse>().data.key
-        }
-    }
-
     private fun imageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
@@ -271,29 +282,27 @@ abstract class StellarSaber : HttpSource() {
             ?: return response
 
         val keyBytes = Base64.decode(fragment, Base64.DEFAULT)
-        val encryptedBytes = response.body.bytes()
 
-        val iv = encryptedBytes.copyOfRange(0, 12)
-        val encrypted = encryptedBytes.copyOfRange(12, encryptedBytes.size)
+        val source = response.body.source()
+        val iv = source.readByteArray(12)
 
-        val decrypted = Cipher.getInstance("AES/GCM/NoPadding").run {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
             init(
                 Cipher.DECRYPT_MODE,
                 SecretKeySpec(keyBytes, "AES"),
                 GCMParameterSpec(128, iv),
             )
-            doFinal(encrypted)
         }
 
+        val cipherSource = source.cipherSource(cipher)
+
         return response.newBuilder()
-            .body(decrypted.toResponseBody(JPEG_MEDIA_TYPE))
+            .body(cipherSource.buffer().asResponseBody(JPEG_MEDIA_TYPE, -1))
             .build()
     }
 
     companion object {
-        private val numberRegex = Regex("""(\d+)""")
+        private val NUMBER_REGEX = Regex("""(\d+)""")
         private val JPEG_MEDIA_TYPE = "image/jpeg".toMediaType()
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

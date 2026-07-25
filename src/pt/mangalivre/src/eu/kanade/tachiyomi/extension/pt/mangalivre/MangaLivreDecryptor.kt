@@ -15,12 +15,6 @@ import java.security.MessageDigest
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-/**
- * Decrypts the {"<dataKey>": "<ciphertext>"} bodies the API returns (Rabbit cipher, CryptoJS
- * "Salted__" framing). Passphrase is ENC_KEY + MD5(dateUTC + HOST + ANTIBOT)[0..8]; the date
- * rotates daily and the three constants rotate in the site's bundle, so they're re-extracted from
- * the live bundle at runtime ([reloadConstants]) with the hardcoded values as fallback.
- */
 class MangaLivreDecryptor(
     private val baseUrl: String,
     private val client: OkHttpClient,
@@ -29,7 +23,7 @@ class MangaLivreDecryptor(
 
     @Volatile private var constants = Constants(DEFAULT_HOSTNAME_PART, DEFAULT_ANTIBOT_PART, DEFAULT_ENC_KEY)
 
-    @Volatile private var lastReloadAt = 0L
+    private var lastReloadAt = 0L
 
     private data class Constants(val hostPart: String, val antibotPart: String, val encKey: String)
 
@@ -39,24 +33,54 @@ class MangaLivreDecryptor(
         decryptRabbit(ciphertext, derivePassword()).takeIf { it.isValidJson() }
     }.getOrNull()
 
-    fun reloadConstants() {
-        val now = System.currentTimeMillis()
+    fun reloadConstants(readerPath: String) {
         synchronized(this) {
+            val now = System.currentTimeMillis()
             if (now - lastReloadAt < RELOAD_COOLDOWN_MS) return
+            val reloaded = runCatching {
+                val indexJsUrl = client.newCall(GET(baseUrl + readerPath, headers)).execute()
+                    .asJsoup()
+                    .selectFirst("script[src*=index]")
+                    ?.absUrl("src")
+                    ?: return@runCatching null
+                client.newCall(GET(indexJsUrl, headers)).execute().use { it.body.string() }
+                    .extractConstants()
+            }.getOrNull() ?: return
+
+            constants = reloaded
             lastReloadAt = now
         }
-        runCatching {
-            val indexJsUrl = client.newCall(GET(baseUrl, headers)).execute()
-                .asJsoup()
-                .selectFirst("script[src*=index]")
-                ?.absUrl("src")
-            if (indexJsUrl != null) {
-                val js = client.newCall(GET(indexJsUrl, headers)).execute().body.string()
-                EV_CONSTANTS_REGEX.find(js)?.let { match ->
-                    // Order matters: host, antibot, encKey.
-                    constants = Constants(match.groupValues[1], match.groupValues[2], match.groupValues[3])
-                }
-            }
+    }
+
+    private fun String.extractConstants(): Constants? {
+        extractDirectConstants()?.let { return it }
+        val legacy = EV_CONSTANTS_REGEX.find(this)
+        val hostPart = ENV_HOST_REGEX.find(this)?.groupValues?.get(1) ?: legacy?.groupValues?.get(1)
+        val antibotPart = ENV_ANTIBOT_REGEX.find(this)?.groupValues?.get(1) ?: legacy?.groupValues?.get(2)
+        val encKey = ENV_ENCRYPTION_REGEX.find(this)?.groupValues?.get(1) ?: legacy?.groupValues?.get(3)
+        return if (hostPart != null && antibotPart != null && encKey != null) {
+            Constants(hostPart, antibotPart, encKey)
+        } else {
+            null
+        }
+    }
+
+    private fun String.extractDirectConstants(): Constants? {
+        val hashIndex = indexOf(SHA256_MARKER).takeIf { it >= 0 } ?: return null
+        val functionStart = lastIndexOf("=>{", hashIndex).takeIf { it >= 0 }
+            ?: maxOf(0, hashIndex - PASSWORD_FUNCTION_WINDOW)
+        val returnIndex = lastIndexOf("return", hashIndex).takeIf { it > functionStart } ?: return null
+        val hashInputSuffix = STRING_LITERAL_REGEX.findAll(substring(functionStart, returnIndex))
+            .map { it.groupValues[1] }
+            .filter { it.length > 2 }
+            .joinToString("")
+        val encryptionKey = STRING_LITERAL_REGEX.find(substring(returnIndex, hashIndex))
+            ?.groupValues?.get(1)
+            .orEmpty()
+        return if (hashInputSuffix.isNotEmpty() && encryptionKey.isNotEmpty()) {
+            Constants(hashInputSuffix, "", encryptionKey)
+        } else {
+            null
         }
     }
 
@@ -77,11 +101,11 @@ class MangaLivreDecryptor(
     private fun derivePassword(date: String = LocalDate.now(ZoneOffset.UTC).toString()): String {
         val c = constants
         val toHash = "$date${c.hostPart}${c.antibotPart}"
-        val md5Part = MessageDigest.getInstance("MD5")
+        val hashPart = MessageDigest.getInstance("SHA-256")
             .digest(toHash.toByteArray())
             .joinToString("") { "%02x".format(it) }
             .substring(0, 8)
-        return c.encKey + md5Part
+        return c.encKey + hashPart
     }
 
     private fun evpBytesToKey(password: ByteArray, salt: ByteArray, keyLen: Int = 16, ivLen: Int = 8): Pair<ByteArray, ByteArray> {
@@ -103,18 +127,21 @@ class MangaLivreDecryptor(
     }
 
     companion object {
-        // Fallback only (current at build time); [reloadConstants] refreshes from the live bundle.
-        private const val DEFAULT_HOSTNAME_PART = "toonlivre.net::v8"
-        private const val DEFAULT_ANTIBOT_PART = "t81_4v21_b1"
-        private const val DEFAULT_ENC_KEY = "Sprang-Unkind-Unframed0"
+        private const val DEFAULT_HOSTNAME_PART = "toonlivre.net::w3"
+        private const val DEFAULT_ANTIBOT_PART = "r7_5m2_k"
+        private const val DEFAULT_ENC_KEY = "Phantom-Tide-Harvest8"
 
         private const val RELOAD_COOLDOWN_MS = 30_000L
+        private const val PASSWORD_FUNCTION_WINDOW = 2_000
+        private const val SHA256_MARKER = ".SHA256("
+        private val STRING_LITERAL_REGEX = Regex("""["']([^"']*)["']""")
 
-        // Matches the bundle's ev() password builder; minified var names vary, so match them as \w+
-        // and capture the three literals in declaration order (host, antibot, encKey).
         private val EV_CONSTANTS_REGEX = Regex(
             """toISOString\(\)\.split\("T"\)\[0]\s*,\s*\w+\s*=\s*"([^"]+)"\s*,\s*\w+\s*=\s*"([^"]+)"\s*,\s*\w+\s*=\s*"([^"]+)""",
         )
+        private val ENV_HOST_REGEX = Regex("""VITE_HOSTNAME_PART\s*:\s*"([^"]+)"""")
+        private val ENV_ANTIBOT_REGEX = Regex("""VITE_ANTIBOT\s*:\s*"([^"]+)"""")
+        private val ENV_ENCRYPTION_REGEX = Regex("""VITE_ENCRYPTION_KEY\s*:\s*"([^"]+)"""")
     }
 }
 
