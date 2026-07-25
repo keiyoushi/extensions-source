@@ -136,13 +136,7 @@ abstract class Faust :
         client.get(url).use { response ->
             val data = response.parseAs<SMangaDto>()
             val manga = data.toSManga()
-            val chapters = data.volumes
-                .flatMap {
-                    it.chapters.map { chapter ->
-                        chapter.toSChapter(manga.url)
-                    }
-                }
-                .reversed()
+            val chapters = data.makeSChapters(manga.url).reversed()
             return SMangaUpdate(manga, chapters)
         }
     }

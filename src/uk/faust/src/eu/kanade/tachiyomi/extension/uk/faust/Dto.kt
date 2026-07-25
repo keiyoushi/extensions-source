@@ -20,6 +20,14 @@ private fun mangaType(type: String?): String = when (type) {
     else -> "ЧЗХ"
 }
 
+private fun ageBracket(type: String?): String? = when (type) {
+    "FitForAll" -> "0+"
+    "ThirteenPlus" -> "13+"
+    "SixteenPlus" -> "16+"
+    "AdultsOnly" -> "18+"
+    else -> null
+}
+
 // ============================== Search ===============================
 @Serializable
 class SearchRequestBody(
@@ -68,17 +76,18 @@ class SMangaDto(
     private val coverImageUrl: String,
     private val description: String? = null,
     private val slug: String,
-    private val artists: List<Person>? = emptyList(),
-    private val authors: List<Person>? = emptyList(),
+    private val artists: List<Person>? = null,
+    private val authors: List<Person>? = null,
     private val mangaType: String? = null,
-    private val tags: List<Tags>? = emptyList(),
-    private val genres: List<Tags>? = emptyList(),
+    private val ageBracket: String? = null,
+    private val tags: List<Tags>? = null,
+    private val genres: List<Tags>? = null,
     private val translationStatus: String? = null,
     private val averageRating: Float? = 0.0F,
     private val bookmarksCount: Int? = 0,
     private val englishName: String? = "",
     private val votesCount: Int? = 0,
-    val volumes: List<VolumesListDto>,
+    private val volumes: List<VolumesListDto>? = null,
 ) {
     fun toSManga() = SManga.create().apply {
         url = slug
@@ -92,6 +101,7 @@ class SMangaDto(
         artist = artists?.joinToString { "${it.firstName} ${it.lastName}".trim() }?.takeIf { it.isNotBlank() }
         author = authors?.joinToString { "${it.firstName} ${it.lastName}".trim() }?.takeIf { it.isNotBlank() }
         genre = buildList {
+            ageBracket(ageBracket)?.let { add(it) }
             add(mangaType(mangaType))
             genres?.map { it.name }?.let { addAll(it) }
             tags?.map { it.name }?.let { addAll(it) }
@@ -101,6 +111,11 @@ class SMangaDto(
             "Translated" -> SManga.COMPLETED
             "Active" -> SManga.ONGOING
             else -> SManga.UNKNOWN
+        }
+    }
+    fun makeSChapters(mangaSlug: String) = volumes.orEmpty().flatMap {
+        it.chapters.map { chapter ->
+            chapter.toSChapter(mangaSlug)
         }
     }
 }
