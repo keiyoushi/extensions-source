@@ -19,9 +19,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.LocalDate
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
 
@@ -32,9 +29,9 @@ abstract class LumosKomik : KeiSource() {
 
     private val dateFormatters by lazy {
         listOf(
-            DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.US),
-            DateTimeFormatter.ofPattern("dd-MM-yyyy", Locale.US),
-            DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US),
+            java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.US),
+            java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy", Locale.US),
+            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US),
         )
     }
 
@@ -118,10 +115,12 @@ abstract class LumosKomik : KeiSource() {
     }
 
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
-        val linkEl = element.selectFirst("a.htg-card-cover") ?: element.selectFirst("a[href*=/comic/]")!!
+        val linkEl: Element = element.selectFirst("a.htg-card-cover") ?: element.selectFirst("a[href*=/comic/]")!!
         setUrlWithoutDomain(linkEl.absUrl("href"))
-        title = element.selectFirst("h3")!!.text()
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        val titleEl: Element = element.selectFirst("h3")!!
+        title = titleEl.text()
+        val imgEl: Element? = element.selectFirst("img")
+        thumbnail_url = imgEl?.absUrl("src")
     }
 
     // ============================== Details ===============================
@@ -129,30 +128,38 @@ abstract class LumosKomik : KeiSource() {
     private fun mangaDetailsParse(document: Document, manga: SManga): SManga = SManga.create().apply {
         val path = normalizeMangaUrl(manga.url)
         setUrlWithoutDomain(path)
-        title = document.selectFirst("h1")?.text() ?: manga.title
+        val h1El: Element? = document.selectFirst("h1")
+        title = h1El?.text() ?: manga.title
 
-        val dataSr = document.selectFirst("#synopsis-wrapper [data-sr]")?.attr("data-sr")
+        val dataSrEl: Element? = document.selectFirst("#synopsis-wrapper [data-sr]")
+        val dataSr: String? = dataSrEl?.attr("data-sr")
         description = if (!dataSr.isNullOrEmpty()) {
             try {
                 val decodedBytes = Base64.decode(dataSr, Base64.DEFAULT)
                 if (decodedBytes != null) {
                     String(decodedBytes, Charsets.UTF_8)
                 } else {
-                    document.selectFirst("#synopsis-wrapper [data-sr]")?.text()
+                    val fallbackEl: Element? = document.selectFirst("#synopsis-wrapper [data-sr]")
+                    fallbackEl?.text()
                 }
             } catch (_: Exception) {
-                document.selectFirst("#synopsis-wrapper [data-sr]")?.text()
+                val fallbackEl: Element? = document.selectFirst("#synopsis-wrapper [data-sr]")
+                fallbackEl?.text()
             }
         } else {
-            document.selectFirst("#synopsis-wrapper")?.text()
+            val fallbackEl: Element? = document.selectFirst("#synopsis-wrapper")
+            fallbackEl?.text()
         }
 
         genre = document.select("a[href*=genre=]").joinToString { it.text() }.ifEmpty { null }
 
-        author = document.selectFirst("div:has(span:contains(Author)) > span:last-child")?.text()
-        artist = document.selectFirst("div:has(span:contains(Artist)) > span:last-child")?.text()
+        val authorEl: Element? = document.selectFirst("div:has(span:contains(Author)) > span:last-child")
+        author = authorEl?.text()
+        val artistEl: Element? = document.selectFirst("div:has(span:contains(Artist)) > span:last-child")
+        artist = artistEl?.text()
 
-        val statusStr = document.selectFirst("div:has(div:contains(Status)) > div:last-child")?.text()?.lowercase()
+        val statusEl: Element? = document.selectFirst("div:has(div:contains(Status)) > div:last-child")
+        val statusStr = statusEl?.text()?.lowercase()
         status = when (statusStr) {
             "ongoing" -> SManga.ONGOING
             "completed", "tamat" -> SManga.COMPLETED
@@ -160,8 +167,14 @@ abstract class LumosKomik : KeiSource() {
             else -> SManga.UNKNOWN
         }
 
-        thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
-            ?: document.selectFirst("img[src*=/cover_], img[fetchpriority=high]")?.absUrl("src")
+        val metaEl: Element? = document.selectFirst("meta[property=og:image]")
+        val ogImage = metaEl?.attr("content")
+        thumbnail_url = if (!ogImage.isNullOrEmpty()) {
+            ogImage
+        } else {
+            val imgEl: Element? = document.selectFirst("img[src*=/cover_], img[fetchpriority=high]")
+            imgEl?.absUrl("src")
+        }
     }
 
     // ============================== Chapters ==============================
@@ -175,10 +188,11 @@ abstract class LumosKomik : KeiSource() {
             val chapterSlug = href.removeSuffix("/").substringAfterLast("/")
             SChapter.create().apply {
                 url = "/read/$slug/$chapterSlug"
-                name = element.selectFirst("span.font-semibold")?.text()
-                    ?: element.selectFirst("span")!!.text()
+                val nameEl: Element = element.selectFirst("span.font-semibold") ?: element.selectFirst("span")!!
+                name = nameEl.text()
 
-                val dateStr = element.selectFirst("span.tabular-nums")?.text()
+                val dateEl: Element? = element.selectFirst("span.tabular-nums")
+                val dateStr = dateEl?.text()
                 date_upload = parseDate(dateStr)
 
                 val numberStr = chapterSlug.substringAfter("chapter-")
@@ -238,7 +252,11 @@ abstract class LumosKomik : KeiSource() {
         val path = url.orEmpty()
         val httpUrl = path.toHttpUrlOrNull()
             ?: if (path.startsWith("/")) "$baseUrl$path".toHttpUrlOrNull() else "$baseUrl/$path".toHttpUrlOrNull()
-        val slug = httpUrl?.pathSegments?.lastOrNull { it.isNotEmpty() }.orEmpty()
+        val slug = if (httpUrl != null) {
+            httpUrl.pathSegments.lastOrNull { it.isNotEmpty() } ?: ""
+        } else {
+            ""
+        }
         return "/comic/$slug"
     }
 
@@ -246,14 +264,18 @@ abstract class LumosKomik : KeiSource() {
         val path = url.orEmpty()
         val httpUrl = path.toHttpUrlOrNull()
             ?: if (path.startsWith("/")) "$baseUrl$path".toHttpUrlOrNull() else "$baseUrl/$path".toHttpUrlOrNull()
-        val segments = httpUrl?.pathSegments?.filter { it.isNotEmpty() }.orEmpty()
+        val segments = if (httpUrl != null) {
+            httpUrl.pathSegments.filter { it.isNotEmpty() }
+        } else {
+            emptyList()
+        }
         if (segments.size >= 3 && segments[0] == "komik") {
             val slug = segments[1]
             val chapterSlug = segments[2]
             return "/read/$slug/$chapterSlug"
         }
-        val slug = segments.getOrNull(segments.size - 2).orEmpty()
-        val chapterSlug = segments.lastOrNull().orEmpty()
+        val slug = segments.getOrNull(segments.size - 2) ?: ""
+        val chapterSlug = segments.lastOrNull() ?: ""
         return "/read/$slug/$chapterSlug"
     }
 
@@ -289,7 +311,7 @@ abstract class LumosKomik : KeiSource() {
 
         for (formatter in dateFormatters) {
             try {
-                return LocalDate.parse(dateStr, formatter).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+                return java.time.LocalDate.parse(dateStr, formatter).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
             } catch (_: Exception) {}
         }
 
