@@ -209,7 +209,7 @@ abstract class Softkomik : HttpSource() {
         val imageSrc = data.imageSrc.ifEmpty {
             val slug = response.request.url.pathSegments[0]
             val chapter = response.request.url.pathSegments[2]
-            val urlApi = "$apiUrl/komik/$slug/chapter/$chapter/img/${data._id}"
+            val urlApi = "$apiUrl/komik/$slug/chapter/$chapter/imgs/${data._id}"
 
             val token = getBearerTokenFromCookie()
             if (token == null && isRequiredLogin) {
@@ -359,15 +359,15 @@ abstract class Softkomik : HttpSource() {
         val slug = if (komikIndex != -1) segments.getOrNull(komikIndex + 1) else null
         // chapter list API $apiUrl/komik/${manga.url}/chapter?limit=9999999
         val isChapterListRequest = komikIndex != -1 && segments.getOrNull(komikIndex + 2) == "chapter"
-        // chapter image API $apiUrl/komik/${manga.url}/chapter/${chapter}/img/${data._id}
-        val isChapterImageRequest = isChapterListRequest && segments.contains("img")
+        // chapter image API $apiUrl/komik/${manga.url}/chapter/${chapter}/imgs/${data._id}
+        val isChapterImageRequest = isChapterListRequest && (segments.contains("imgs") || segments.contains("img"))
 
         val sessionKey = if (isChapterImageRequest) sessionKeyChapterImage else sessionKeyChapterList
 
         val sessionApiUrl = if (isChapterImageRequest) {
-            "$baseUrl/api/session/chapter"
+            "$baseUrl/api/session/chapter/oioa"
         } else {
-            "$baseUrl/api/session/amsnuy"
+            "$baseUrl/api/session/iuiuiwqw"
         }
         val webViewUrl = if (isChapterImageRequest) {
             val chapterSegment = resolveWebViewChapterSegment(url)
@@ -405,7 +405,7 @@ abstract class Softkomik : HttpSource() {
 
             val hasCookies = client.cookieJar
                 .loadForRequest(baseUrl.toHttpUrl())
-                .any { it.name == "zEm9be" || it.name == "AhyyL" }
+                .any { it.name == "zEm983" || it.name == "AhyyL" }
 
             if (!hasCookies) {
                 client.newCall(GET(baseUrl, headers)).execute().close()
@@ -464,8 +464,8 @@ abstract class Softkomik : HttpSource() {
 
                 wv.settings.javaScriptEnabled = true
                 wv.settings.domStorageEnabled = true
-                wv.settings.loadsImagesAutomatically = false
-                wv.settings.blockNetworkImage = true
+                wv.settings.loadsImagesAutomatically = true
+                wv.settings.blockNetworkImage = false
                 wv.settings.userAgentString = headers["User-Agent"]
 
                 wv.webViewClient = object : WebViewClient() {
@@ -547,7 +547,7 @@ abstract class Softkomik : HttpSource() {
     // Clean garabage at trailing of signature and token
     fun Request.withHeaders(session: SessionDto): Request = this.newBuilder()
         .header("X-Token", session.token.cleanB64())
-        .header("X-Sign", session.sign.take(64))
+        .header("X-Sign", session.sign.substringBefore("|oiq&").take(64))
         .build()
 
     fun String.cleanB64(): String = substringBefore('=').let { it -> it + "=".repeat((4 - (it.length % 4)) % 4) }
