@@ -11,21 +11,24 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
-import java.text.ParseException
-import java.text.SimpleDateFormat
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.Locale
 
 @Source
 abstract class FourKHD : KeiSource() {
-    override val supportsLatest = true
-
-    private val apiUrl = "$baseUrl/index.php".toHttpUrl()
+    private val apiUrl get() = "$baseUrl/index.php".toHttpUrl()
     private val pageSize = 20
 
     // ========================= Popular =========================
@@ -57,15 +60,6 @@ abstract class FourKHD : KeiSource() {
     // ========================= Search =========================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        deeplinkSlugFromQuery(query)?.let { slug ->
-            val requestUrl = apiUrl.newBuilder()
-                .addQueryParameter("rest_route", "/wp/v2/posts")
-                .addQueryParameter("slug", slug)
-                .addQueryParameter("_embed", "1")
-                .build()
-            return postsToMangaPage(client.get(requestUrl))
-        }
-
         val builder = apiUrl.newBuilder()
             .addQueryParameter("rest_route", "/wp/v2/posts")
             .addQueryParameter("page", page.toString())
@@ -110,36 +104,31 @@ abstract class FourKHD : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(postByPathRequestUrl(manga.url))
+        val response = client.get(postByPathRequestUrl(manga.url, manga.memo))
         val post = parseSinglePost(response) ?: throw Exception("Missing post details from API")
 
-        val updatedManga = if (fetchDetails) {
-            val id = post.id
-            val title = post.titleText() ?: throw Exception("Missing title for post id=$id")
-            SManga.create().apply {
-                val path = post.linkPath()
-                this.title = title
-                genre = post.genreText()
-                thumbnail_url = post.thumbnailUrl()
-                status = SManga.COMPLETED
-                setUrlWithoutDomain(path.appendPostId(id))
-            }
-        } else {
-            manga
+        val id = post.id
+        val title = post.titleText() ?: throw Exception("Missing title for post id=$id")
+
+        val updatedManga = SManga.create().apply {
+            val path = post.linkPath()
+            this.title = title
+            genre = post.genreText()
+            thumbnail_url = post.thumbnailUrl()
+            status = SManga.COMPLETED
+            setUrlWithoutDomain(path)
+            memo = buildJsonObject { put("post_id", id) }
         }
 
-        val updatedChapters = if (fetchChapters) {
-            listOf(
-                SChapter.create().apply {
-                    setUrlWithoutDomain(post.linkPath().appendPostId(post.id))
-                    chapter_number = 1f
-                    name = "Gallery"
-                    date_upload = parseDate(post.date)
-                },
-            )
-        } else {
-            chapters
-        }
+        val updatedChapters = listOf(
+            SChapter.create().apply {
+                setUrlWithoutDomain(post.linkPath())
+                memo = buildJsonObject { put("post_id", post.id) }
+                chapter_number = 1f
+                name = "Gallery"
+                date_upload = parseDate(post.date)
+            },
+        )
 
         return SMangaUpdate(updatedManga, updatedChapters)
     }
@@ -151,7 +140,7 @@ abstract class FourKHD : KeiSource() {
     // ========================= Pages =========================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(postByPathRequestUrl(chapter.url))
+        val response = client.get(postByPathRequestUrl(chapter.url, chapter.memo))
         val apiImageUrls = parseSinglePost(response)
             ?.contentRendered()
             ?.let(::extractImageUrlsFromHtml)
@@ -162,9 +151,10 @@ abstract class FourKHD : KeiSource() {
         }
     }
 
-    private fun postByPathRequestUrl(path: String): HttpUrl {
+    private fun postByPathRequestUrl(path: String, memo: JsonElement? = null): HttpUrl {
         val fullUrl = (baseUrl + path).toHttpUrl()
         val postId = fullUrl.queryParameter(POST_ID_QUERY)?.toIntOrNull()
+            ?: memo?.jsonObject?.get("post_id")?.jsonPrimitive?.intOrNull
         val slug = slugFromPath(fullUrl.encodedPath)
 
         val route = if (postId != null) "/wp/v2/posts/$postId" else "/wp/v2/posts"
@@ -215,12 +205,12 @@ abstract class FourKHD : KeiSource() {
         val title = titleText() ?: throw Exception("Missing title for post id=$id")
 
         return SManga.create().apply {
-            val pathWithId = path.appendPostId(id)
             this.title = title
             thumbnail_url = thumbnailUrl()
             genre = genreText()
             status = SManga.COMPLETED
-            setUrlWithoutDomain(pathWithId)
+            setUrlWithoutDomain(path)
+            memo = buildJsonObject { put("post_id", id) }
             initialized = true
         }
     }
@@ -277,14 +267,6 @@ abstract class FourKHD : KeiSource() {
 
         if (!slugSegment.endsWith(".html")) return null
         return slugSegment.substringBefore(".html").takeIf { it.isNotBlank() }
-    }
-
-    private fun String.appendPostId(id: Int): String {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .encodedPath(this)
-            .addQueryParameter(POST_ID_QUERY, id.toString())
-            .build()
-        return url.toString().removePrefix(baseUrl)
     }
 
     private fun extractImageUrlsFromHtml(html: String): List<String> {
@@ -350,14 +332,16 @@ abstract class FourKHD : KeiSource() {
 
     private fun isImageUrl(url: String): Boolean = IMAGE_URL_REGEX.containsMatchIn(url)
 
-    private fun parseDate(dateString: String?): Long = try {
-        DATE_FORMAT.parse(dateString.orEmpty())?.time ?: 0L
-    } catch (_: ParseException) {
-        0L
+    private fun parseDate(dateString: String?): Long {
+        if (dateString.isNullOrBlank()) return 0L
+        return try {
+            LocalDateTime.parse(dateString).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        } catch (_: Exception) {
+            0L
+        }
     }
 
     companion object {
-        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH)
         private val IMAGE_URL_REGEX = Regex("\\.(?:jpe?g|png|webp|gif|avif)(?:$|\\?)", RegexOption.IGNORE_CASE)
         private val SLUG_PATH_REGEX = Regex("/([^/]+)\\.html(?:/\\d+)?/?$")
         private val CONTENT_PATH_REGEX = Regex("^/content/", RegexOption.IGNORE_CASE)
