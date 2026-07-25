@@ -246,10 +246,11 @@ abstract class VinaHentai : HttpSource() {
 
     // =============================== Pages ================================
 
-    private val imageUrlRegex by lazy {
-        val baseDomain = baseUrl.removePrefix("https://").removePrefix("http://")
-        Regex("""https://cdn\.${Regex.escape(baseDomain)}/manga-images/[^"'\s\\]+""")
-    }
+    // Don't anchor to a specific image subdomain (e.g. "cdn.") - the site has already
+    // rotated it once (cdn.vinahentai.club -> vnht.vinahentai.blog), silently breaking
+    // every page fetch since the regex then matched nothing. The "/manga-images/" path
+    // segment is the actually stable part.
+    private val imageUrlRegex = Regex("""https://[^"'\s\\]+/manga-images/[^"'\s\\]+""")
 
     override fun pageListParse(response: Response): List<Page> {
         val body = response.body.string()
