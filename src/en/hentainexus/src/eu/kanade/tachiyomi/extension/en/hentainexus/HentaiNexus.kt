@@ -21,35 +21,28 @@ import keiyoushi.utils.array
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.get
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
-import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class HentaiNexus :
     KeiSource(),
     ConfigurableSource {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+    private val baseUrlHost = baseUrl.toHttpUrl().host
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val supportsLatest = true
-
-    private val json: Json by injectLazy()
-
     // Images on this site go through the free Jetpack Photon CDN.
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(1) { it.host == baseUrlHost }
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Referer", "$baseUrl/")
 
     private fun parseResponse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -110,19 +103,22 @@ abstract class HentaiNexus :
             SChapter.create().apply {
                 url = "/read/$id"
                 name = "Chapter"
-                date_upload = dateFormat.tryParse(dateUploadStr)
+                date_upload =
+                    runCatching {
+                        LocalDate.parse(dateUploadStr, dateFormat).atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
+                    }.getOrDefault(0L)
             },
         )
 
         return SMangaUpdate(manga, chapters)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseResponse(client.get(baseUrl + (if (page > 1) "/page/$page" else ""), headers))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseResponse(client.get(baseUrl + (if (page > 1) "/page/$page" else "")))
 
     override suspend fun getPopularManga(page: Int): MangasPage = if (page > 1) {
         getSearchMangaList(page - 1, "sort:popular", getFilterList())
     } else {
-        parseResponse(client.get(baseUrl + POPULAR_NOW_PATH, headers))
+        parseResponse(client.get(baseUrl + POPULAR_NOW_PATH))
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = if (query.startsWith(PREFIX_ID_SEARCH)) {
@@ -130,7 +126,7 @@ abstract class HentaiNexus :
         MangasPage(
             listOf(
                 parseMangaResponse(
-                    client.get("$baseUrl/view/$id", headers),
+                    client.get("$baseUrl/view/$id"),
                 ).manga.apply { url = "/view/$id" },
             ),
             false,
@@ -143,14 +139,14 @@ abstract class HentaiNexus :
             }
             addQueryParameter("q", (combineQuery(filters) + query).trim())
         }.build()
-        parseResponse(client.get(url, headers))
+        parseResponse(client.get(url))
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val id = url.pathSegments.getOrNull(1)
             ?: throw Exception("Unsupported url")
         return parseMangaResponse(
-            client.get("$baseUrl/view/$id", headers),
+            client.get("$baseUrl/view/$id"),
         ).manga.apply { this.url = "/view/$id" }
     }
 
@@ -159,12 +155,12 @@ abstract class HentaiNexus :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = parseMangaResponse(client.get("$baseUrl${manga.url}", headers))
+    ): SMangaUpdate = parseMangaResponse(client.get("$baseUrl${manga.url}"))
 
     private val tagCountRegex = Regex("""\s*\([\d,]+\)$""")
 
     private val dateFormat by lazy {
-        SimpleDateFormat("dd MMMM yyyy", Locale.US)
+        DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.US)
     }
 
     private fun imageFormatPref() = preferences.getString(PREF_IMAGE_FORMAT, "source")!!
@@ -176,7 +172,7 @@ abstract class HentaiNexus :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}", headers).asJsoup()
+        val document = client.get("$baseUrl${chapter.url}").asJsoup()
 
         val script = document.selectFirst("script:containsData(initReader)")?.data()
             ?: throw Exception("Could not find initReader script; the page structure may have changed")
@@ -184,8 +180,8 @@ abstract class HentaiNexus :
         val encoded = script.substringAfter("initReader(\"").substringBefore("\",")
         val data = Utils.decryptData(encoded)
 
-        val images = json.parseToJsonElement(data).array
-            .filter { it["type"]?.jsonPrimitive?.content == "image" }
+        val images = data.parseAs<JsonElement>().array
+            .filter { it["type"]?.string == "image" }
 
         if (images.isEmpty()) {
             return emptyList()
@@ -200,7 +196,7 @@ abstract class HentaiNexus :
         }
 
         return images.mapIndexed { i, page ->
-            Page(i, imageUrl = page[field]?.jsonPrimitive?.content)
+            Page(i, imageUrl = page[field]!!.string)
         }
     }
 
