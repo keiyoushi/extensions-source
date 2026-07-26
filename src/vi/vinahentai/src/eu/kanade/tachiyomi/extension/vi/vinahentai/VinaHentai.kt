@@ -239,12 +239,13 @@ abstract class VinaHentai : KeiSource() {
         return calendar.timeInMillis
     }
 
-    // ============================== Pages =================================
-    private val imageUrlRegex: Regex
-        get() {
-            val baseDomain = baseUrl.removePrefix("https://").removePrefix("http://")
-            return Regex("""https://vnht\.${Regex.escape(baseDomain)}/manga-images/[^"'\s\\]+""")
-        }
+    // =============================== Pages ================================
+
+    // Don't anchor to a specific image subdomain (e.g. "cdn.") - the site has already
+    // rotated it once (cdn.vinahentai.club -> vnht.vinahentai.blog), silently breaking
+    // every page fetch since the regex then matched nothing. The "/manga-images/" path
+    // segment is the actually stable part.
+    private val imageUrlRegex = Regex("""https://[^"'\s\\]+/manga-images/[^"'\s\\]+""")
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val body = client.get(getChapterUrl(chapter)).use { it.body.string() }

@@ -9,7 +9,11 @@ import keiyoushi.utils.readIntBigEndian
 import keiyoushi.utils.readIntLittleEndian
 import keiyoushi.utils.stringOrNull
 import kotlinx.serialization.json.JsonElement
+import okhttp3.CacheControl
 import okhttp3.Headers
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import java.security.MessageDigest
 import java.time.LocalDate
@@ -21,73 +25,243 @@ class MangaLivreDecryptor(
     private val headers: Headers,
 ) {
 
-    @Volatile private var constants = Constants(DEFAULT_HOSTNAME_PART, DEFAULT_ANTIBOT_PART, DEFAULT_ENC_KEY)
+    private val baseUrlHost = baseUrl.toHttpUrl().host
+
+    @Volatile private var constants = Constants(DEFAULT_HASH_INPUT_SUFFIX, DEFAULT_ENC_KEY)
 
     private var lastReloadAt = 0L
 
-    private data class Constants(val hostPart: String, val antibotPart: String, val encKey: String)
+    private data class Constants(val hashInputSuffix: String, val encKey: String)
 
-    fun decrypt(cipherWrapperBody: String, dataKey: String): String? = runCatching {
-        val ciphertext = cipherWrapperBody.parseAs<JsonElement>()[dataKey]?.stringOrNull
-            ?: return@runCatching null
-        decryptRabbit(ciphertext, derivePassword()).takeIf { it.isValidJson() }
+    private class Payload(val salt: ByteArray, val ciphertext: ByteArray)
+
+    fun decrypt(cipherWrapperBody: String, dataKey: String): String? = cipherWrapperBody.toPayload(dataKey)?.decrypt(constants)
+
+    fun reloadConstantsAndDecrypt(readerPath: String, cipherWrapperBody: String, dataKey: String): String? {
+        val payload = cipherWrapperBody.toPayload(dataKey) ?: return null
+        synchronized(this) {
+            payload.decrypt(constants)?.let { return it }
+
+            val now = System.currentTimeMillis()
+            if (now - lastReloadAt < RELOAD_COOLDOWN_MS) return null
+            lastReloadAt = now
+
+            for (scriptUrl in fetchScriptUrls(readerPath)) {
+                val reloaded = fetchScript(scriptUrl)?.extractConstants(payload) ?: continue
+                constants = reloaded
+                return payload.decrypt(reloaded)
+            }
+        }
+        return null
+    }
+
+    private fun fetchScriptUrls(readerPath: String): List<HttpUrl> = runCatching {
+        val request = GET(baseUrl + readerPath, headers).newBuilder()
+            .cacheControl(CacheControl.FORCE_NETWORK)
+            .build()
+        client.newCall(request).execute().use { it.asJsoup() }
+            .select("script[src]")
+            .mapNotNull { it.absUrl("src").toHttpUrlOrNull() }
+            .filter { it.host == baseUrlHost }
+            .distinct()
+            .sortedBy { if (it.pathSegments.last().startsWith(BUNDLE_NAME_PREFIX)) 0 else 1 }
+            .take(MAX_BUNDLE_CANDIDATES)
+    }.getOrDefault(emptyList())
+
+    private fun fetchScript(scriptUrl: HttpUrl): String? = runCatching {
+        client.newCall(GET(scriptUrl, headers)).execute().use { response ->
+            response.takeIf { it.isSuccessful }?.body?.string()
+        }
     }.getOrNull()
 
-    fun reloadConstants(readerPath: String) {
-        val now = System.currentTimeMillis()
-        synchronized(this) {
-            if (now - lastReloadAt < RELOAD_COOLDOWN_MS) return
-            lastReloadAt = now
+    private fun String.extractConstants(payload: Payload): Constants? {
+        for (values in constantValueVariants()) {
+            values.asConstantCandidates()
+                .firstOrNull { payload.looksDecryptable(it) && payload.decrypt(it) != null }
+                ?.let { return it }
         }
-        runCatching {
-            val indexJsUrl = client.newCall(GET(baseUrl + readerPath, headers)).execute()
-                .asJsoup()
-                .selectFirst("script[src*=index]")
-                ?.absUrl("src")
-            if (indexJsUrl != null) {
-                val js = client.newCall(GET(indexJsUrl, headers)).execute().use { it.body.string() }
-                val direct = DIRECT_CONSTANTS_REGEX.find(js)
-                val legacy = EV_CONSTANTS_REGEX.find(js)
-                val hostPart = direct?.groupValues?.get(1)
-                    ?: ENV_HOST_REGEX.find(js)?.groupValues?.get(1)
-                    ?: legacy?.groupValues?.get(1)
-                val antibotPart = if (direct != null) {
-                    ""
-                } else {
-                    ENV_ANTIBOT_REGEX.find(js)?.groupValues?.get(1) ?: legacy?.groupValues?.get(2)
+        return legacyConstants()?.takeIf { payload.decrypt(it) != null }
+    }
+
+    /**
+     * Ordered value lists to build candidate constants from, cheapest first.
+     *
+     * The scopes around the hash call cover constants kept as plain literals. Obfuscated ones do
+     * not need an anchor at all: values that decode to printable ASCII are rare enough to be
+     * collected from the whole script, so the recovery survives the call site being rewritten.
+     */
+    private fun String.constantValueVariants(): Sequence<List<String>> = sequence {
+        for (call in SHA256_CALL_REGEX.findAll(this@constantValueVariants).take(MAX_SHA256_CALL_SITES)) {
+            yieldAll(scopeValues(call.range.first))
+        }
+        yield(decodedValues())
+    }
+
+    private fun String.legacyConstants(): Constants? {
+        val legacy = EV_CONSTANTS_REGEX.find(this)
+        val hostPart = ENV_HOST_REGEX.find(this)?.groupValues?.get(1)
+            ?: legacy?.groupValues?.get(1)
+            ?: return null
+        val antibotPart = ENV_ANTIBOT_REGEX.find(this)?.groupValues?.get(1)
+            ?: legacy?.groupValues?.get(2)
+            ?: return null
+        val encKey = ENV_ENCRYPTION_REGEX.find(this)?.groupValues?.get(1)
+            ?: legacy?.groupValues?.get(3)
+            ?: return null
+        return Constants(hostPart + antibotPart, encKey)
+    }
+
+    private fun String.scopeValues(hashIndex: Int): List<List<String>> {
+        val searchStart = maxOf(0, hashIndex - FUNCTION_SEARCH_WINDOW)
+        val arrowBlock = ARROW_BLOCK_REGEX.findAll(substring(searchStart, hashIndex)).lastOrNull()
+        val openingBrace = arrowBlock?.range?.last?.plus(searchStart)
+        val scopeStart = openingBrace?.plus(1) ?: searchStart
+        val scopeEnd = openingBrace?.let { findMatchingBrace(it) }
+            ?: minOf(length, hashIndex + FUNCTION_TAIL_WINDOW)
+        val scope = substring(scopeStart, scopeEnd)
+
+        val values = buildList {
+            STRING_LITERAL_REGEX.findAll(scope).forEach { match ->
+                add(match.range.first to match.groupValues[1].ifEmpty { match.groupValues[2] })
+            }
+            BYTE_SEQUENCE_REGEX.findAll(scope).forEach { match ->
+                match.decodeByteSequence()?.let { add(match.range.first to it) }
+            }
+        }.inSourceOrder()
+
+        // Candidates are built from contiguous runs, so a decoded value cannot simply be appended
+        // next to its encoded form. Each decoding is a separate ordered variant.
+        return listOf(values, values.map { it.decodeHexAscii() ?: it })
+            .map { it.asConstantValues() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+    }
+
+    private fun String.decodedValues(): List<String> = buildList {
+        HEX_LITERAL_REGEX.findAll(this@decodedValues).forEach { match ->
+            match.groupValues[1].ifEmpty { match.groupValues[2] }
+                .decodeHexAscii()
+                ?.let { add(match.range.first to it) }
+        }
+        BYTE_SEQUENCE_REGEX.findAll(this@decodedValues).forEach { match ->
+            match.decodeByteSequence()?.let { add(match.range.first to it) }
+        }
+    }.inSourceOrder().asConstantValues()
+
+    private fun List<Pair<Int, String>>.inSourceOrder(): List<String> = sortedBy { it.first }.map { it.second }
+
+    private fun List<String>.asConstantValues(): List<String> = filter { it.isConstantCandidate() }.distinct().take(MAX_CONSTANT_VALUES)
+
+    private fun String.findMatchingBrace(openingBrace: Int): Int? {
+        var depth = 0
+        var quote: Char? = null
+        var escaped = false
+
+        for (index in openingBrace until length) {
+            val char = this[index]
+            if (quote != null) {
+                when {
+                    escaped -> escaped = false
+                    char == '\\' -> escaped = true
+                    char == quote -> quote = null
                 }
-                val encKey = direct?.groupValues?.get(2)
-                    ?: ENV_ENCRYPTION_REGEX.find(js)?.groupValues?.get(1)
-                    ?: legacy?.groupValues?.get(3)
-                if (hostPart != null && antibotPart != null && encKey != null) {
-                    constants = Constants(hostPart, antibotPart, encKey)
+                continue
+            }
+
+            when (char) {
+                '\'', '"', '`' -> quote = char
+                '{' -> depth++
+                '}' -> if (--depth == 0) return index
+            }
+        }
+        return null
+    }
+
+    private fun MatchResult.decodeByteSequence(): String? {
+        val tokens = groupValues[1].split(',')
+        val codes = tokens.mapNotNull { token ->
+            val trimmed = token.trim()
+            val code = if (trimmed.startsWith("0x", ignoreCase = true)) {
+                trimmed.drop(2).toIntOrNull(16)
+            } else {
+                trimmed.toIntOrNull()
+            }
+            code?.takeIf { it in PRINTABLE_ASCII_RANGE }
+        }
+        return codes.takeIf { it.size == tokens.size }
+            ?.map(Int::toChar)
+            ?.joinToString("")
+    }
+
+    private fun String.isConstantCandidate(): Boolean = length in MIN_CONSTANT_LENGTH..MAX_CONSTANT_LENGTH && all { it.code in PRINTABLE_ASCII_RANGE }
+
+    private fun String.decodeHexAscii(): String? {
+        if (length < MIN_HEX_LENGTH || length % 2 != 0) return null
+        val codes = chunked(2).map { it.toIntOrNull(16) ?: return null }
+        return codes.takeIf { it.all { code -> code in PRINTABLE_ASCII_RANGE } }
+            ?.map(Int::toChar)
+            ?.joinToString("")
+    }
+
+    private fun List<String>.asConstantCandidates(): Sequence<Constants> = sequence {
+        for (start in indices) {
+            for (end in start until size) {
+                val hashInputSuffix = subList(start, end + 1).joinToString("")
+                for (keyIndex in indices) {
+                    if (keyIndex in start..end) continue
+                    yield(Constants(hashInputSuffix, this@asConstantCandidates[keyIndex]))
                 }
             }
         }
     }
 
-    private fun String.isValidJson(): Boolean = runCatching { parseAs<JsonElement>() }.isSuccess
-
-    private fun decryptRabbit(ciphertextB64: String, password: String): String {
+    private fun String.toPayload(dataKey: String): Payload? = runCatching {
+        val ciphertextB64 = parseAs<JsonElement>()[dataKey]?.stringOrNull ?: return null
         val encrypted = Base64.decode(ciphertextB64, Base64.DEFAULT)
-        val salt = encrypted.copyOfRange(8, 16)
-        val ciphertext = encrypted.copyOfRange(16, encrypted.size)
+        Payload(encrypted.copyOfRange(8, 16), encrypted.copyOfRange(16, encrypted.size))
+    }.getOrNull()
 
-        val (key, iv) = evpBytesToKey(password.toByteArray(), salt)
-        val plaintext = ciphertext.copyOf()
-        Rabbit().apply { setup(key, iv) }.crypt(plaintext)
-
-        return String(plaintext, Charsets.UTF_8)
+    private fun Payload.decrypt(constants: Constants): String? {
+        val today = LocalDate.now(ZoneOffset.UTC)
+        for (offset in DATE_OFFSETS) {
+            val plaintext = String(decryptRabbit(derivePassword(today.plusDays(offset), constants)), Charsets.UTF_8)
+            if (plaintext.isValidJson()) return plaintext
+        }
+        return null
     }
 
-    private fun derivePassword(date: String = LocalDate.now(ZoneOffset.UTC).toString()): String {
-        val c = constants
-        val toHash = "$date${c.hostPart}${c.antibotPart}"
+    private fun Payload.looksDecryptable(constants: Constants): Boolean {
+        val today = LocalDate.now(ZoneOffset.UTC)
+        return DATE_OFFSETS.any { offset ->
+            decryptRabbit(derivePassword(today.plusDays(offset), constants), PREVIEW_LENGTH).looksLikeJson()
+        }
+    }
+
+    private fun Payload.decryptRabbit(password: String, maxBytes: Int = Int.MAX_VALUE): ByteArray {
+        val (key, iv) = evpBytesToKey(password.toByteArray(), salt)
+        val plaintext = ciphertext.copyOf(minOf(maxBytes, ciphertext.size))
+        Rabbit().apply { setup(key, iv) }.crypt(plaintext)
+        return plaintext
+    }
+
+    private fun ByteArray.looksLikeJson(): Boolean {
+        val start = indexOfFirst { !it.isJsonWhitespace() }.takeIf { it >= 0 } ?: return false
+        return (this[start] == '{'.code.toByte() || this[start] == '['.code.toByte()) && all { it.isJsonText() }
+    }
+
+    private fun Byte.isJsonWhitespace(): Boolean = toInt() in JSON_WHITESPACE
+
+    private fun Byte.isJsonText(): Boolean = (toInt() and 0xFF) >= 0x20 || isJsonWhitespace()
+
+    private fun String.isValidJson(): Boolean = runCatching { parseAs<JsonElement>() }.isSuccess
+
+    private fun derivePassword(date: LocalDate, constants: Constants): String {
+        val toHash = "$date${constants.hashInputSuffix}"
         val hashPart = MessageDigest.getInstance("SHA-256")
             .digest(toHash.toByteArray())
             .joinToString("") { "%02x".format(it) }
             .substring(0, 8)
-        return c.encKey + hashPart
+        return constants.encKey + hashPart
     }
 
     private fun evpBytesToKey(password: ByteArray, salt: ByteArray, keyLen: Int = 16, ivLen: Int = 8): Pair<ByteArray, ByteArray> {
@@ -109,15 +283,31 @@ class MangaLivreDecryptor(
     }
 
     companion object {
-        private const val DEFAULT_HOSTNAME_PART = "toonlivre.net::v9p6_2x8_j"
-        private const val DEFAULT_ANTIBOT_PART = ""
-        private const val DEFAULT_ENC_KEY = "Celestial-Raven-Invoke9"
+        private const val DEFAULT_HASH_INPUT_SUFFIX = "toonlivre.net::y8q2_4k9_w"
+        private const val DEFAULT_ENC_KEY = "Vortex-Blade-Nexus4"
 
         private const val RELOAD_COOLDOWN_MS = 30_000L
-
-        private val DIRECT_CONSTANTS_REGEX = Regex(
-            """getUTCDate\(\)\)\.padStart\(2,"0"\)\}`\s*\+\s*"([^"]+)"\s*;\s*return\s*"([^"]+)"\s*\+\s*[\w$.]+\.SHA256\(""",
+        private const val FUNCTION_SEARCH_WINDOW = 4_000
+        private const val FUNCTION_TAIL_WINDOW = 1_000
+        private const val MAX_BUNDLE_CANDIDATES = 8
+        private const val MAX_SHA256_CALL_SITES = 8
+        private const val MAX_CONSTANT_VALUES = 12
+        private const val MIN_CONSTANT_LENGTH = 3
+        private const val MAX_CONSTANT_LENGTH = 128
+        private const val MIN_HEX_LENGTH = 6
+        private const val PREVIEW_LENGTH = 64
+        private const val BUNDLE_NAME_PREFIX = "index-"
+        private val PRINTABLE_ASCII_RANGE = 0x20..0x7E
+        private val JSON_WHITESPACE = listOf(0x09, 0x0A, 0x0D, 0x20)
+        private val DATE_OFFSETS = longArrayOf(0, -1, 1)
+        private val ARROW_BLOCK_REGEX = Regex("""=>\s*\{""")
+        private val SHA256_CALL_REGEX = Regex("""(?:\.|\[\s*["'])SHA256""")
+        private val STRING_LITERAL_REGEX = Regex(""""([^"\\]*)"|'([^'\\]*)'""")
+        private val HEX_LITERAL_REGEX = Regex(""""([\da-fA-F]{$MIN_HEX_LENGTH,})"|'([\da-fA-F]{$MIN_HEX_LENGTH,})'""")
+        private val BYTE_SEQUENCE_REGEX = Regex(
+            """(?:\[\s*|\(\s*)((?:(?:0[xX][\da-fA-F]+|\d{1,3})\s*,\s*){2,}(?:0[xX][\da-fA-F]+|\d{1,3}))\s*[\])]""",
         )
+
         private val EV_CONSTANTS_REGEX = Regex(
             """toISOString\(\)\.split\("T"\)\[0]\s*,\s*\w+\s*=\s*"([^"]+)"\s*,\s*\w+\s*=\s*"([^"]+)"\s*,\s*\w+\s*=\s*"([^"]+)""",
         )

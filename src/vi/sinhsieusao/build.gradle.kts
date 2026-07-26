@@ -6,14 +6,18 @@ plugins {
 
 keiyoushi {
     name = "SinhSieuSao"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "vi"
         baseUrl {
             custom("https://sinhsieusao.com")
         }
+    }
+
+    deeplink {
+        path("/works/..*")
     }
 }

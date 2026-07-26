@@ -20,7 +20,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Response
 
 @Source
@@ -34,30 +33,17 @@ abstract class MantaComics :
 
     override val supportsLatest = false
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = this
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val url = request.url
-            val cookies = network.client.cookieJar.loadForRequest(url)
-            val token = cookies.find { it.name == "token" }?.value
-
-            if (token != null) {
-                val newRequest = request.newBuilder()
-                    .header("Authorization", "Bearer $token")
-                    .build()
-                chain.proceed(newRequest)
-            } else {
-                chain.proceed(request)
-            }
-        }
-
     override fun Headers.Builder.configureHeaders(): Headers.Builder = this
         .set("Origin", apiUrl)
         .set("Accept-Language", lang)
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = "$apiUrl/manta/v1/search/series?cat=New&lang=$lang".fetch(::parseSearchManga)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "$apiUrl/manta/v1/search/series?cat=New&lang=$lang"
+
+        return parseSearchManga(client.get(url))
+    }
 
     // =============================== Latest ===============================
 
@@ -77,16 +63,23 @@ abstract class MantaComics :
                 addQueryParameter(key, value)
             }
         }.build()
-        return url.fetch(::parseSearchManga)
+
+        return parseSearchManga(client.get(url))
     }
 
-    private fun parseSearchManga(response: Response) = response.parseAs<MantaResponse<List<Series<Title>>>>().data.map {
-        SManga.create().apply {
-            title = it.asString(lang)
-            url = it.id.toString()
-            thumbnail_url = it.image.toString()
-        }
-    }.let { MangasPage(it, false) }
+    private fun parseSearchManga(response: Response) = response.parseAs<MantaResponse<List<Series<Title>>>>().data
+        .map { it.toSManga(lang) }
+        .let { MangasPage(it, false) }
+
+    // =========================== Related Manga ============================
+
+    override val supportsRelatedMangas get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val seriesUrl = "$apiUrl/front/v1/series/${manga.url}?lang=$lang"
+        val related = client.get(seriesUrl).parseAs<MantaResponse<RelatedSeries>>().data
+        return related.relatedSeriesList.map { it.toSManga(lang) }
+    }
 
     // =========================== Manga Details / Chapters ============================
 
@@ -147,13 +140,61 @@ abstract class MantaComics :
     // ============================= Page List ==============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val url = "$apiUrl/front/v1/episodes/${chapter.url}?lang=$lang"
-        return url.fetch { response ->
-            response.parseAs<MantaResponse<Episode>>().data.cutImages?.mapIndexed { idx, img ->
-                Page(idx, "", img.toString())
-            } ?: emptyList()
+        val url = "$apiUrl/front/v1/episodes/${chapter.url}?lang=$lang".toHttpUrl()
+
+        var token = client.cookieJar.loadForRequest(url)
+            .firstOrNull { it.name == "token" }?.value
+        if (token != null) {
+            val headers = headersBuilder()
+                .set("Authorization", "Bearer $token")
+                .build()
+
+            token = client.get("$apiUrl/manta/v1/login", headers)
+                .parseAs<MantaResponse<Token>>().data.token
+        }
+
+        val headers = if (token != null) {
+            headersBuilder()
+                .set("Authorization", "Bearer $token")
+                .build()
+        } else {
+            headers
+        }
+
+        client.get(url, headers).use { response ->
+            val images = response.parseAs<MantaResponse<Episode>>().data.cutImages.orEmpty()
+                .map { it.toString() }
+            // Locked chapters return real preview images followed by "just-black.jpg" placeholders.
+            val previewImages = images.filterNot { it.contains(BLACK_IMAGE_MARKER) }
+
+            val pages = previewImages.mapIndexed { idx, img ->
+                Page(idx, "", img)
+            }.toMutableList()
+
+            if (previewImages.size < images.size) {
+                pages.add(Page(pages.size, "", previewEndImageUrl))
+            }
+            return pages
         }
     }
+
+    private val previewEndImageUrl: String
+        get() {
+            val heading: String
+            val subHeading: String
+            if (lang == "es") {
+                heading = "Fin de la vista previa del capítulo"
+                subHeading = "Compra e inicia sesión con WebView y borra la caché del capítulo para leer completo"
+            } else {
+                heading = "End of chapter preview"
+                subHeading = "Purchase and login via webview and clear chapter cache to read full"
+            }
+            return "https://fakeimg.ryd.tools/1500x2126/f4f4f4/222222/".toHttpUrl().newBuilder()
+                .addQueryParameter("text", "$heading\n\n$subHeading")
+                .addQueryParameter("font_size", "58")
+                .build()
+                .toString()
+        }
 
     // ============================ Preferences =============================
 
@@ -184,18 +225,8 @@ abstract class MantaComics :
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/episodes/${chapter.url}"
 
-    private suspend fun <R> String.fetch(parse: (Response) -> R): R {
-        val res = client.get(this, headers, ensureSuccess = false)
-        if (res.isSuccessful) {
-            return parse(res)
-        }
-        val err = res.parseAs<MantaResponse<Unit>>().status.toString()
-        throw Exception(err)
-    }
-
-    private suspend fun <R> HttpUrl.fetch(parse: (Response) -> R): R = toString().fetch(parse)
-
     companion object {
         private const val PREF_SHOW_LOCKED = "show_locked_chapters"
+        private const val BLACK_IMAGE_MARKER = "just-black.jpg"
     }
 }

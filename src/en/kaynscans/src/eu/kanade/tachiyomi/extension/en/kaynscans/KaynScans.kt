@@ -6,5 +6,4 @@ import keiyoushi.annotation.Source
 @Source
 abstract class KaynScans : Iken() {
     override val sortPagesByFilename = true
-    override val useChaptersApi = true
 }
