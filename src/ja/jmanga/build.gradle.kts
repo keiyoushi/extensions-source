@@ -14,7 +14,7 @@ keiyoushi {
     source {
         lang = "ja"
         baseUrl {
-            custom("https://jmanga.bike")
+            custom("https://jmanga.care")
         }
     }
 }
