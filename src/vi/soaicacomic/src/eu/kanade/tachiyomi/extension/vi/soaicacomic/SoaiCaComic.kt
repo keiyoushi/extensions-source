@@ -30,17 +30,17 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.concurrent.ConcurrentHashMap
 
 @Source
 abstract class SoaiCaComic : KeiSource() {
 
-    override val supportsLatest = true
-
     private val thumbnailFallbackInterceptor = Interceptor { chain ->
         val request = chain.request()
         val response = chain.proceed(request)
-        val fallbackUrl = thumbFallbackMap.remove(request.url.toString()) ?: return@Interceptor response
+        val fallbackUrl = request.url.fragment
+            ?.takeIf { it.startsWith(thumbnailFallbackFragmentPrefix) }
+            ?.removePrefix(thumbnailFallbackFragmentPrefix)
+            ?: return@Interceptor response
 
         if (response.code != 401 && response.code != 404) {
             return@Interceptor response
@@ -194,8 +194,10 @@ abstract class SoaiCaComic : KeiSource() {
 
         val removed = url.replace("-150x150", "")
         val replaced = url.replace("-150x150", "-720x970")
-        thumbFallbackMap[removed] = replaced
-        return removed
+        return removed.toHttpUrl().newBuilder()
+            .fragment("$thumbnailFallbackFragmentPrefix$replaced")
+            .build()
+            .toString()
     }
 
     private fun archiveMangaFromElement(element: Element): SManga? {
@@ -393,6 +395,6 @@ abstract class SoaiCaComic : KeiSource() {
     private val chapterWordRegex = Regex("chap", RegexOption.IGNORE_CASE)
     private val multiSpaceRegex = Regex("\\s+")
     private val passwordFieldRegex = Regex("name=\\\"post_password\\\"|name=post_password")
-    private val thumbFallbackMap = ConcurrentHashMap<String, String>()
+    private val thumbnailFallbackFragmentPrefix = "fallback-url:"
     private val passwordWebviewMessage = "Vui lòng nhập mật khẩu của chương này qua webview"
 }
