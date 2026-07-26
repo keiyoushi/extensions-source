@@ -6,12 +6,18 @@ plugins {
 
 keiyoushi {
     name = "Panomic"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "vi"
-        baseUrl = "https://panomic1.info"
+        baseUrl {
+            custom("https://panomic2.info")
+        }
+    }
+
+    deeplink {
+        path("/truyen/..*")
     }
 }
