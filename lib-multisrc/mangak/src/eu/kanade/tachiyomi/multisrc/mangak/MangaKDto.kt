@@ -1,11 +1,12 @@
-package eu.kanade.tachiyomi.extension.en.mangabuddy
+package eu.kanade.tachiyomi.multisrc.mangak
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlin.time.Instant
 
 @Serializable
 class SearchResponseDto(
@@ -31,7 +32,10 @@ class MangaItemDto(
     fun toSManga() = SManga.create().apply {
         title = name
         thumbnail_url = cover
-        url = "${this@MangaItemDto.url}#$id"
+        url = "${this@MangaItemDto.url}"
+        memo = buildJsonObject {
+            put("id", id)
+        }
     }
 }
 
@@ -59,16 +63,16 @@ class ChapterItemDto(
     @SerialName("updated_at") private val updatedAt: String? = null,
     @SerialName("chapter_number") val chapterNumber: Float? = null,
 ) {
-    fun toSChapter(dateFormat: SimpleDateFormat) = SChapter.create().apply {
+    fun toSChapter() = SChapter.create().apply {
         url = this@ChapterItemDto.url
         name = this@ChapterItemDto.name
-        date_upload = dateFormat.tryParse(updatedAt)
+        date_upload = updatedAt?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: 0L
     }
 }
 
 @Serializable
 class NextJsDto(
-    val pageProps: PagePropsDto,
+    val pageProps: PagePropsDto? = null,
 )
 
 @Serializable
@@ -86,19 +90,23 @@ class InitialMangaDto(
     private val genres: List<EntityDto>? = null,
     private val status: String? = null,
     private val cover: String? = null,
+    private val url: String? = null,
 ) {
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(mangaUrl: String? = null) = SManga.create().apply {
         title = name
         author = authors?.joinToString { it.name }
-        description = buildString {
-            if (!summary.isNullOrBlank()) {
-                append(summary).append("\n\n")
-            }
-            append("Manga ID: ").append(id)
-        }
+        description = summary
         genre = genres?.joinToString { it.name }
         status = this@InitialMangaDto.status.toStatus()
         thumbnail_url = cover
+
+        url = mangaUrl.takeUnless { it.isNullOrBlank() }
+            ?: this@InitialMangaDto.url?.takeUnless { it.isBlank() }
+            ?: error("Missing manga URL for id: $id")
+
+        memo = buildJsonObject {
+            put("id", id)
+        }
     }
 }
 
@@ -119,3 +127,21 @@ private fun String?.toStatus() = when (this?.lowercase()) {
     "cancelled" -> SManga.CANCELLED
     else -> SManga.UNKNOWN
 }
+
+@Serializable
+class GenreResponseDto(
+    val data: GenreDataDto? = null,
+) {
+    val genres: List<GenreItemDto> get() = data?.items.orEmpty()
+}
+
+@Serializable
+class GenreDataDto(
+    val items: List<GenreItemDto> = emptyList(),
+)
+
+@Serializable
+class GenreItemDto(
+    val name: String,
+    val slug: String,
+)
