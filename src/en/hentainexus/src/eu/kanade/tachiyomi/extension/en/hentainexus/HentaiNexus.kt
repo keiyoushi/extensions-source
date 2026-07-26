@@ -163,7 +163,7 @@ abstract class HentaiNexus :
         DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.US)
     }
 
-    private fun imageFormatPref() = preferences.getString(PREF_IMAGE_FORMAT, "source")!!
+    private fun imageFormatPref() = preferences.getString(PREF_IMAGE_FORMAT, "webp")!!
 
     private fun imageField(format: String) = when (format) {
         "source" -> "image_source"
