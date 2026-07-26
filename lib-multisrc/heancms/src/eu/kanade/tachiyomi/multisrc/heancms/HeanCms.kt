@@ -4,8 +4,6 @@ import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -13,24 +11,26 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.lib.i18n.Intl
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import kotlin.concurrent.thread
 
 abstract class HeanCms :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     protected open val apiUrl: String
@@ -38,70 +38,50 @@ abstract class HeanCms :
 
     protected val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val supportsLatest = true
-
-    protected open val useNewQueryEndpoint = false
-
-    protected open val useNewChapterEndpoint = false
-
-    protected open val enableLogin = false
-
     /**
-     * Custom Json instance to make usage of `encodeDefaults`,
-     * which is not enabled on the injected instance of the app.
+     * Whether the source supports login and gated (paid) chapters behind a bearer token.
      */
-    protected val json: Json = Json {
-        ignoreUnknownKeys = true
-        explicitNulls = false
-        encodeDefaults = true
-    }
-
-    protected val intl = Intl(
-        language = lang,
-        baseLanguage = "en",
-        availableLanguages = setOf("en", "pt-BR", "es"),
-        classLoader = this::class.java.classLoader!!,
-    )
+    protected open val enableLogin = false
 
     protected open val coverPath: String = ""
 
-    protected open val cdnUrl = apiUrl
+    protected open val cdnUrl: String
+        get() = apiUrl
 
     protected open val mangaSubDirectory: String = "series"
 
-    protected open val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZZZZZ", Locale.US)
+    protected open val latestSortBy = "desc"
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Origin", baseUrl)
-        .add("Referer", "$baseUrl/")
-
-    private fun authHeaders(): Headers {
-        val builder = headersBuilder()
-        if (enableLogin && preferences.user.isNotEmpty() && preferences.password.isNotEmpty()) {
-            val tokenData = preferences.tokenData
-            val token = if (tokenData.isExpired(tokenExpiredAtDateFormat)) {
-                getToken()
-            } else {
-                tokenData.token
-            }
-            if (token != null) {
-                builder.add("Authorization", "Bearer $token")
-            }
+    private suspend fun authHeaders(): Headers {
+        if (!enableLogin || preferences.user.isEmpty() || preferences.password.isEmpty()) {
+            return headers
         }
-        return builder.build()
+
+        val tokenData = preferences.tokenData
+        val token = if (tokenData.isExpired()) {
+            getToken()
+        } else {
+            tokenData.token
+        }
+
+        return if (token != null) {
+            headers.newBuilder().add("Authorization", "Bearer $token").build()
+        } else {
+            headers
+        }
     }
 
-    private fun getToken(): String? {
+    private suspend fun getToken(): String? {
         val body = FormBody.Builder()
             .add("email", preferences.user)
             .add("password", preferences.password)
             .build()
 
-        val response = client.newCall(POST("$apiUrl/login", headers, body)).execute()
+        val response = client.post("$apiUrl/login", headers, body, ensureSuccess = false)
 
         if (!response.isSuccessful) {
             val result = response.parseAs<HeanCmsErrorsDto>()
-            val message = result.errors?.firstOrNull()?.message ?: intl["login_failed_unknown_error"]
+            val message = result.errors?.firstOrNull()?.message ?: "Unknown error occurred while logging in"
 
             throw Exception(message)
         }
@@ -113,79 +93,23 @@ abstract class HeanCms :
         return result.token
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/query".toHttpUrl().newBuilder()
-            .addQueryParameter("query_string", "")
-            .addQueryParameter(if (useNewQueryEndpoint) "status" else "series_status", "All")
-            .addQueryParameter("order", "desc")
-            .addQueryParameter("orderBy", "total_views")
-            .addQueryParameter("series_type", "Comic")
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("perPage", "12")
-            .addQueryParameter("tags_ids", "[]")
-            .addQueryParameter("adult", "true")
+    // ============================== Popular ==============================
 
-        return GET(url.build(), headers)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = queryUrlBuilder(page, "", status = "All", order = "desc", orderBy = "total_views", tagIds = "[]")
+        return parseSearchMangaList(client.get(url))
     }
 
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
+    // ============================== Latest ===============================
 
-    protected open val latestSortBy = "desc"
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/query".toHttpUrl().newBuilder()
-            .addQueryParameter("query_string", "")
-            .addQueryParameter(if (useNewQueryEndpoint) "status" else "series_status", "All")
-            .addQueryParameter("order", latestSortBy)
-            .addQueryParameter("orderBy", "latest")
-            .addQueryParameter("series_type", "Comic")
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("perPage", "12")
-            .addQueryParameter("tags_ids", "[]")
-            .addQueryParameter("adult", "true")
-
-        return GET(url.build(), headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = queryUrlBuilder(page, "", status = "All", order = latestSortBy, orderBy = "latest", tagIds = "[]")
+        return parseSearchMangaList(client.get(url))
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    // ============================== Search ===============================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrl.toHttpUrl().host) {
-                throw Exception("Unsupported url")
-            }
-            val slug = url.pathSegments.getOrNull(1)
-                ?: throw Exception("Unsupported url")
-            return fetchSearchManga(page, "$SEARCH_PREFIX$slug", filters)
-        }
-
-        if (!query.startsWith(SEARCH_PREFIX)) {
-            return super.fetchSearchManga(page, query, filters)
-        }
-
-        val slug = query.substringAfter(SEARCH_PREFIX)
-        val manga = SManga.create().apply {
-            val mangaId = getIdBySlug(slug)
-            url = "/$mangaSubDirectory/$slug#$mangaId"
-        }
-
-        return fetchMangaDetails(manga).map { MangasPage(listOf(it), false) }
-    }
-
-    private fun getIdBySlug(slug: String): Int {
-        val result = runCatching {
-            val response = client.newCall(GET("$apiUrl/series/$slug", headers)).execute()
-            val json = response.body.string()
-
-            val seriesDetail = json.parseAs<HeanCmsSeriesDto>()
-
-            seriesDetail.id
-        }
-        return result.getOrNull() ?: throw Exception(intl.format("id_not_found_error", slug))
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val sortByFilter = filters.firstInstanceOrNull<SortByFilter>()
         val statusFilter = filters.firstInstanceOrNull<StatusFilter>()
 
@@ -194,24 +118,39 @@ abstract class HeanCms :
             .map(Genre::id)
             .joinToString(",", prefix = "[", postfix = "]")
 
-        val url = "$apiUrl/query".toHttpUrl().newBuilder()
-            .addQueryParameter("query_string", query)
-            .addQueryParameter(if (useNewQueryEndpoint) "status" else "series_status", statusFilter?.selected?.value ?: "All")
-            .addQueryParameter("order", if (sortByFilter?.state?.ascending == true) "asc" else "desc")
-            .addQueryParameter("orderBy", sortByFilter?.selected ?: "total_views")
-            .addQueryParameter("series_type", "Comic")
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("perPage", "12")
-            .addQueryParameter("tags_ids", tagIds)
-            .addQueryParameter("adult", "true")
+        val url = queryUrlBuilder(
+            page = page,
+            query = query,
+            status = statusFilter?.selected?.value ?: "All",
+            order = if (sortByFilter?.state?.ascending == true) "asc" else "desc",
+            orderBy = sortByFilter?.selected ?: "total_views",
+            tagIds = tagIds,
+        )
 
-        return GET(url.build(), headers)
+        return parseSearchMangaList(client.get(url))
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val json = response.body.string()
+    private fun queryUrlBuilder(
+        page: Int,
+        query: String,
+        status: String,
+        order: String,
+        orderBy: String,
+        tagIds: String,
+    ): HttpUrl = "$apiUrl/query".toHttpUrl().newBuilder()
+        .addQueryParameter("query_string", query)
+        .addQueryParameter("status", status)
+        .addQueryParameter("order", order)
+        .addQueryParameter("orderBy", orderBy)
+        .addQueryParameter("series_type", "Comic")
+        .addQueryParameter("page", page.toString())
+        .addQueryParameter("perPage", "12")
+        .addQueryParameter("tags_ids", tagIds)
+        .addQueryParameter("adult", "true")
+        .build()
 
-        val result = json.parseAs<HeanCmsQuerySearchDto>()
+    private fun parseSearchMangaList(response: Response): MangasPage {
+        val result = response.parseAs<HeanCmsQuerySearchDto>()
         val mangaList = result.data.map {
             it.toSManga(cdnUrl, coverPath, mangaSubDirectory)
         }
@@ -219,226 +158,185 @@ abstract class HeanCms :
         return MangasPage(mangaList, result.meta?.hasNextPage() ?: false)
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        val seriesSlug = manga.url
-            .substringAfterLast("/")
-            .substringBefore("#")
+    // ============================== Filters ==============================
 
-        return "$baseUrl/$mangaSubDirectory/$seriesSlug"
-    }
+    override val supportsFilterFetching get() = true
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        if (!manga.url.contains("#")) {
-            throw Exception(intl.format("url_changed_error", name, name))
-        }
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/tags").parseAs()
 
-        val seriesSlug = manga.url.substringAfterLast("/").substringBefore("#")
-
-        val apiHeaders = headersBuilder()
-            .add("Accept", ACCEPT_JSON)
-            .build()
-
-        return GET("$apiUrl/series/$seriesSlug", apiHeaders)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val mangaStatus = response.request.url.fragment?.toIntOrNull() ?: SManga.UNKNOWN
-
-        val result = runCatching { response.parseAs<HeanCmsSeriesDto>() }
-
-        val seriesResult = result.getOrNull()
-            ?: throw Exception(intl.format("url_changed_error", name, name))
-
-        val seriesDetails = seriesResult.toSManga(cdnUrl, coverPath, mangaSubDirectory)
-
-        return seriesDetails.apply {
-            status = status.takeUnless { it == SManga.UNKNOWN }
-                ?: mangaStatus
-        }
-    }
-
-    override fun chapterListRequest(manga: SManga): Request {
-        if (useNewChapterEndpoint) {
-            if (!manga.url.contains("#")) {
-                throw Exception(intl.format("url_changed_error", name, name))
-            }
-
-            val seriesId = manga.url.substringAfterLast("#")
-            val seriesSlug = manga.url.substringAfterLast("/").substringBefore("#")
-
-            val url = "$apiUrl/chapter/query".toHttpUrl().newBuilder()
-                .addQueryParameter("page", "1")
-                .addQueryParameter("perPage", PER_PAGE_CHAPTERS.toString())
-                .addQueryParameter("series_id", seriesId)
-                .fragment(seriesSlug)
-
-            return GET(url.build(), headers)
-        }
-
-        return mangaDetailsRequest(manga)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val showPaidChapters = preferences.showPaidChapters
-
-        if (useNewChapterEndpoint) {
-            val apiHeaders = headersBuilder()
-                .add("Accept", ACCEPT_JSON)
-                .build()
-
-            val seriesId = response.request.url.queryParameter("series_id")
-
-            val seriesSlug = response.request.url.fragment!!
-
-            var result = response.parseAs<HeanCmsChapterPayloadDto>()
-
-            val currentTimestamp = System.currentTimeMillis()
-
-            val chapterList = mutableListOf<HeanCmsChapterDto>()
-
-            chapterList.addAll(result.data)
-
-            var page = 2
-            while (result.meta.hasNextPage()) {
-                val url = "$apiUrl/chapter/query".toHttpUrl().newBuilder()
-                    .addQueryParameter("page", page.toString())
-                    .addQueryParameter("perPage", PER_PAGE_CHAPTERS.toString())
-                    .addQueryParameter("series_id", seriesId)
-                    .build()
-
-                val nextResponse = client.newCall(GET(url, apiHeaders)).execute()
-                result = nextResponse.parseAs<HeanCmsChapterPayloadDto>()
-                chapterList.addAll(result.data)
-                page++
-            }
-
-            return chapterList
-                .filter { it.price == 0 || showPaidChapters }
-                .map { it.toSChapter(seriesSlug, mangaSubDirectory, dateFormat) }
-                .filter { it.date_upload <= currentTimestamp }
-        }
-
-        val result = response.parseAs<HeanCmsSeriesDto>()
-
-        val currentTimestamp = System.currentTimeMillis()
-
-        return result.seasons.orEmpty()
-            .flatMap { it.chapters.orEmpty() }
-            .filter { it.price == 0 || showPaidChapters }
-            .map { it.toSChapter(result.slug, mangaSubDirectory, dateFormat) }
-            .filter { it.date_upload <= currentTimestamp }
-    }
-
-    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBeforeLast("#")
-
-    override fun pageListRequest(chapter: SChapter) = GET(apiUrl + chapter.url.replace("/$mangaSubDirectory/", "/chapter/"), authHeaders())
-
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<HeanCmsPagePayloadDto>()
-
-        if (result.isPaywalled() && result.chapter.chapterData == null) {
-            throw Exception(intl["paid_chapter_error"])
-        }
-
-        return if (useNewChapterEndpoint) {
-            result.chapter.chapterData?.images.orEmpty().mapIndexed { i, img ->
-                Page(i, imageUrl = img.toAbsoluteUrl())
-            }
-        } else {
-            result.data.orEmpty().mapIndexed { i, img ->
-                Page(i, imageUrl = img.toAbsoluteUrl())
-            }
-        }
-    }
-
-    protected open fun String.toAbsoluteUrl(): String = if (startsWith("https://") || startsWith("http://")) this else "$cdnUrl/$coverPath$this"
-
-    override fun fetchImageUrl(page: Page): Observable<String> = Observable.just(page.imageUrl!!)
-
-    override fun imageUrlParse(response: Response): String = ""
-
-    override fun imageRequest(page: Page): Request {
-        val imageHeaders = headersBuilder()
-            .add("Accept", ACCEPT_IMAGE)
-            .build()
-
-        return GET(page.imageUrl!!, imageHeaders)
-    }
-
-    protected open fun getStatusList(): List<Status> = listOf(
-        Status(intl["status_all"], "All"),
-        Status(intl["status_ongoing"], "Ongoing"),
-        Status(intl["status_onhiatus"], "Hiatus"),
-        Status(intl["status_dropped"], "Dropped"),
-        Status(intl["status_completed"], "Completed"),
-        Status(intl["status_canceled"], "Canceled"),
-    )
-
-    protected open fun getSortProperties(): List<SortProperty> = listOf(
-        SortProperty(intl["sort_by_title"], "title"),
-        SortProperty(intl["sort_by_views"], "total_views"),
-        SortProperty(intl["sort_by_latest"], "latest"),
-        SortProperty(intl["sort_by_created_at"], "created_at"),
-    )
-
-    private var genresList: List<Genre> = emptyList()
-    private var fetchFiltersAttempts = 0
-    private var filtersState = FiltersState.NOT_FETCHED
-
-    private fun fetchFilters() {
-        if (filtersState != FiltersState.NOT_FETCHED || fetchFiltersAttempts >= 3) return
-        filtersState = FiltersState.FETCHING
-        fetchFiltersAttempts++
-        thread {
-            try {
-                val response = client.newCall(GET("$apiUrl/tags", headers)).execute()
-                val genres = json.decodeFromString<List<HeanCmsGenreDto>>(response.body.string())
-
-                genresList = genres.map { Genre(it.name, it.id) }
-
-                filtersState = FiltersState.FETCHED
-            } catch (e: Throwable) {
-                filtersState = FiltersState.NOT_FETCHED
-            }
-        }
-    }
-
-    override fun getFilterList(): FilterList {
-        fetchFilters()
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<List<HeanCmsGenreDto>>()?.map { Genre(it.name, it.id) }
 
         val filters = mutableListOf<Filter<*>>(
-            StatusFilter(intl["status_filter_title"], getStatusList()),
-            SortByFilter(intl["sort_by_filter_title"], getSortProperties()),
+            StatusFilter("Status", getStatusList()),
+            SortByFilter("Sort By", getSortProperties()),
         )
 
-        if (filtersState == FiltersState.FETCHED) {
-            filters += listOfNotNull(
-                GenreFilter(intl["genre_filter_title"], genresList),
-            )
-        } else {
-            filters += listOf(
-                Filter.Separator(),
-                Filter.Header(intl["genre_missing_warning"]),
-            )
+        if (!genres.isNullOrEmpty()) {
+            filters += GenreFilter("Genres", genres)
         }
 
         return FilterList(filters)
     }
 
+    protected open fun getStatusList(): List<Status> = listOf(
+        Status("All", "All"),
+        Status("Ongoing", "Ongoing"),
+        Status("On hiatus", "Hiatus"),
+        Status("Dropped", "Dropped"),
+        Status("Completed", "Completed"),
+        Status("Canceled", "Canceled"),
+    )
+
+    protected open fun getSortProperties(): List<SortProperty> = listOf(
+        SortProperty("Title", "title"),
+        SortProperty("Views", "total_views"),
+        SortProperty("Latest", "latest"),
+        SortProperty("Created at", "created_at"),
+    )
+
+    // ============================== Related ==============================
+
+    override val supportsRelatedMangas get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val genreNames = manga.genre?.split(", ")
+            ?.filter(String::isNotBlank)?.toSet().orEmpty()
+
+        val filters = getFilterList()
+        val genreFilter = filters.firstInstanceOrNull<GenreFilter>()?.apply {
+            state.forEach { it.state = it.name in genreNames }
+        }
+
+        val result = if (genreFilter?.state?.any { it.state } == true) {
+            getSearchMangaList(1, "", filters)
+        } else {
+            val author = manga.author?.trim().orEmpty()
+            if (author.isEmpty()) return emptyList()
+            getSearchMangaList(1, author, FilterList())
+        }
+
+        return result.mangas
+    }
+
+    // ============================== Details ==============================
+
+    private suspend fun fetchSeries(slug: String): HeanCmsSeriesDto {
+        val apiHeaders = headers.newBuilder().add("Accept", ACCEPT_JSON).build()
+        return client.get("$apiUrl/series/$slug", apiHeaders).parseAs()
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) {
+            throw Exception("Unsupported URL")
+        }
+
+        val slug = url.pathSegments.getOrNull(1)
+            ?: throw Exception("Unsupported URL")
+
+        return fetchSeries(slug)
+            .toSManga(cdnUrl, coverPath, mangaSubDirectory)
+            .apply { initialized = true }
+    }
+
+    override fun getMangaUrl(manga: SManga): String {
+        val seriesSlug = manga.url.substringAfterLast("/").substringBefore("#")
+        return "$baseUrl/$mangaSubDirectory/$seriesSlug"
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        if (!manga.url.contains("#")) {
+            throw Exception("The URL of the series has changed. Migrate from $name to $name to update the URL")
+        }
+
+        val slug = manga.url.substringAfterLast("/").substringBefore("#")
+        val seriesId = manga.url.substringAfterLast("#")
+
+        val mangaDeferred = async {
+            if (fetchDetails) fetchSeries(slug).toSManga(cdnUrl, coverPath, mangaSubDirectory) else manga
+        }
+        val chaptersDeferred = async {
+            if (fetchChapters) fetchChapters(seriesId, slug) else chapters
+        }
+
+        SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
+    }
+
+    private suspend fun fetchChapters(seriesId: String, seriesSlug: String): List<SChapter> {
+        val showPaidChapters = preferences.showPaidChapters
+        val currentTimestamp = System.currentTimeMillis()
+        val apiHeaders = headers.newBuilder().add("Accept", ACCEPT_JSON).build()
+
+        val chapterList = mutableListOf<HeanCmsChapterDto>()
+        var page = 1
+        var hasNextPage: Boolean
+        do {
+            val url = "$apiUrl/chapter/query".toHttpUrl().newBuilder()
+                .addQueryParameter("page", page.toString())
+                .addQueryParameter("perPage", PER_PAGE_CHAPTERS.toString())
+                .addQueryParameter("series_id", seriesId)
+                .build()
+
+            val result = client.get(url, apiHeaders).parseAs<HeanCmsChapterPayloadDto>()
+            chapterList.addAll(result.data)
+            hasNextPage = result.meta.hasNextPage()
+            page++
+        } while (hasNextPage)
+
+        return chapterList
+            .filter { it.price == 0 || showPaidChapters }
+            .map { it.toSChapter(seriesSlug, mangaSubDirectory) }
+            .filter { it.date_upload <= currentTimestamp }
+    }
+
+    // ============================== Pages ==============================
+
+    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBeforeLast("#")
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val url = apiUrl + chapter.url.replace("/$mangaSubDirectory/", "/chapter/")
+        val result = client.get(url, authHeaders()).parseAs<HeanCmsPagePayloadDto>()
+
+        if (result.isPaywalled() && result.chapter.chapterData == null) {
+            throw Exception("Paid chapter unavailable.")
+        }
+
+        return result.chapter.chapterData?.images.orEmpty().mapIndexed { i, img ->
+            Page(i, imageUrl = img.toAbsoluteUrl())
+        }
+    }
+
+    protected open fun String.toAbsoluteUrl(): String = if (startsWith("https://") || startsWith("http://")) this else "$cdnUrl/$coverPath$this"
+
+    override fun imageRequest(page: Page): Request {
+        val imageHeaders = headers.newBuilder()
+            .add("Accept", ACCEPT_IMAGE)
+            .build()
+
+        return Request.Builder().url(page.imageUrl!!).headers(imageHeaders).build()
+    }
+
+    // ============================== Preferences ==============================
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = SHOW_PAID_CHAPTERS_PREF
-            title = intl["pref_show_paid_chapter_title"]
-            summaryOn = intl["pref_show_paid_chapter_summary_on"]
-            summaryOff = intl["pref_show_paid_chapter_summary_off"]
+            title = "Display paid chapters"
+            summaryOn = "Paid chapters will appear."
+            summaryOff = "Only free chapters will be displayed."
             setDefaultValue(SHOW_PAID_CHAPTERS_DEFAULT)
         }.also(screen::addPreference)
 
         if (enableLogin) {
             EditTextPreference(screen.context).apply {
                 key = USER_PREF
-                title = intl["pref_username_title"]
-                summary = intl["pref_credentials_summary"]
+                title = "Username/Email"
+                summary = "Ignored if empty."
                 setDefaultValue("")
 
                 setOnPreferenceChangeListener { _, _ ->
@@ -449,8 +347,8 @@ abstract class HeanCms :
 
             EditTextPreference(screen.context).apply {
                 key = PASSWORD_PREF
-                title = intl["pref_password_title"]
-                summary = intl["pref_credentials_summary"]
+                title = "Password"
+                summary = "Ignored if empty."
                 setDefaultValue("")
 
                 setOnPreferenceChangeListener { _, _ ->
@@ -460,14 +358,6 @@ abstract class HeanCms :
             }.also(screen::addPreference)
         }
     }
-
-    protected inline fun <reified T> Response.parseAs(): T = use {
-        it.body.string().parseAs()
-    }
-
-    protected inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
-
-    protected inline fun <reified R> List<*>.firstInstanceOrNull(): R? = filterIsInstance<R>().firstOrNull()
 
     private val SharedPreferences.showPaidChapters: Boolean
         get() = getBoolean(SHOW_PAID_CHAPTERS_PREF, SHOW_PAID_CHAPTERS_DEFAULT)
@@ -481,21 +371,17 @@ abstract class HeanCms :
     private var SharedPreferences.tokenData: HeanCmsTokenPayloadDto
         get() {
             val jsonString = getString(TOKEN_PREF, "{}")!!
-            return json.decodeFromString(jsonString)
+            return jsonString.parseAs()
         }
         set(data) {
-            edit().putString(TOKEN_PREF, json.encodeToString(data)).apply()
+            edit().putString(TOKEN_PREF, data.toJsonString()).apply()
         }
-
-    private enum class FiltersState { NOT_FETCHED, FETCHING, FETCHED }
 
     companion object {
         private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         private const val ACCEPT_JSON = "application/json, text/plain, */*"
 
         private const val PER_PAGE_CHAPTERS = 1000
-
-        const val SEARCH_PREFIX = "slug:"
 
         private const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
         private const val SHOW_PAID_CHAPTERS_DEFAULT = false
@@ -504,7 +390,5 @@ abstract class HeanCms :
         private const val PASSWORD_PREF = "pref_password"
 
         private const val TOKEN_PREF = "pref_token"
-
-        private val tokenExpiredAtDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
     }
 }
