@@ -9,15 +9,16 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
+import java.io.IOException
 
 class ImageInterceptor : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val fragment = request.url.fragment ?: return chain.proceed(request)
-        if (!fragment.startsWith(FRAGMENT_PREFIX)) return chain.proceed(request)
+        if (!fragment.startsWith(fragmentPrefix)) return chain.proceed(request)
 
-        val strips = parseStripMap(fragment.removePrefix(FRAGMENT_PREFIX))
+        val strips = parseStripMap(fragment.removePrefix(fragmentPrefix))
         val response = chain.proceed(request)
         if (!response.isSuccessful || strips.isEmpty()) return response
 
@@ -26,36 +27,46 @@ class ImageInterceptor : Interceptor {
 
         val scrambled = body.byteStream().use { stream ->
             BitmapFactory.decodeStream(stream)
-        } ?: return chain.proceed(request)
+        } ?: throw IOException("Failed to decode scrambled image")
 
-        val unscrambled = Bitmap.createBitmap(scrambled.width, scrambled.height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(unscrambled)
-
-        var srcY = 0
-        for ((destY, height) in strips) {
-            if (srcY >= scrambled.height || destY >= unscrambled.height) break
-
-            val drawHeight = minOf(height, scrambled.height - srcY, unscrambled.height - destY)
-            if (drawHeight <= 0) {
-                srcY += height
-                continue
-            }
-
-            val srcRect = Rect(0, srcY, scrambled.width, srcY + drawHeight)
-            val dstRect = Rect(0, destY, unscrambled.width, destY + drawHeight)
-            canvas.drawBitmap(scrambled, srcRect, dstRect, null)
-            srcY += height
+        val unscrambled = try {
+            Bitmap.createBitmap(scrambled.width, scrambled.height, Bitmap.Config.ARGB_8888)
+        } catch (error: Throwable) {
+            scrambled.recycle()
+            throw error
         }
 
-        val output = Buffer()
-        unscrambled.compress(Bitmap.CompressFormat.JPEG, 90, output.outputStream())
+        return try {
+            val canvas = Canvas(unscrambled)
 
-        scrambled.recycle()
-        unscrambled.recycle()
+            var srcY = 0
+            for ((destY, height) in strips) {
+                if (srcY >= scrambled.height || destY >= unscrambled.height) break
 
-        return response.newBuilder()
-            .body(output.asResponseBody(mediaType))
-            .build()
+                val drawHeight = minOf(height, scrambled.height - srcY, unscrambled.height - destY)
+                if (drawHeight <= 0) {
+                    srcY += height
+                    continue
+                }
+
+                val srcRect = Rect(0, srcY, scrambled.width, srcY + drawHeight)
+                val dstRect = Rect(0, destY, unscrambled.width, destY + drawHeight)
+                canvas.drawBitmap(scrambled, srcRect, dstRect, null)
+                srcY += height
+            }
+
+            val output = Buffer()
+            if (!unscrambled.compress(Bitmap.CompressFormat.JPEG, 90, output.outputStream())) {
+                throw IOException("Failed to encode unscrambled image")
+            }
+
+            response.newBuilder()
+                .body(output.asResponseBody(mediaType))
+                .build()
+        } finally {
+            scrambled.recycle()
+            unscrambled.recycle()
+        }
     }
 
     private fun parseStripMap(value: String): List<Pair<Int, Int>> = value.split(',')
@@ -69,7 +80,5 @@ class ImageInterceptor : Interceptor {
             }
         }
 
-    companion object {
-        private const val FRAGMENT_PREFIX = "mino:"
-    }
+    private val fragmentPrefix = "mino:"
 }

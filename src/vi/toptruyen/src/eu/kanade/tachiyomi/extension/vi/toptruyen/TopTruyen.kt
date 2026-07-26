@@ -87,6 +87,66 @@ abstract class TopTruyen :
 
     override val genresSelector = ".categories-detail ul.nav li:not(.active) a"
 
+    override fun getFilterList(): FilterList {
+        if (genreList.isEmpty()) {
+            genreList = listOf(
+                Pair(null, "Tất cả"),
+                Pair("action", "Action"),
+                Pair("truong-thanh", "Adult"),
+                Pair("phieu-luu", "Adventure"),
+                Pair("anime", "Anime"),
+                Pair("chuyen-sinh", "Chuyển Sinh"),
+                Pair("comedy", "Comedy"),
+                Pair("nau-an", "Cooking"),
+                Pair("comic", "Comic"),
+                Pair("co-dai", "Cổ Đại"),
+                Pair("drama", "Drama"),
+                Pair("dam-my", "Đam Mỹ"),
+                Pair("ecchi", "Ecchi"),
+                Pair("fantasy", "Fantasy"),
+                Pair("harem", "Harem"),
+                Pair("historical", "Historical"),
+                Pair("horror", "Horror"),
+                Pair("live-action", "Live action"),
+                Pair("manga", "Manga"),
+                Pair("manhua", "Manhua"),
+                Pair("manhwa", "Manhwa"),
+                Pair("martial-arts", "Martial Arts"),
+                Pair("mature", "Mature"),
+                Pair("mystery", "Mystery"),
+                Pair("mecha", "Mecha"),
+                Pair("ngon-tinh", "Ngôn Tình"),
+                Pair("one-shot", "One shot"),
+                Pair("psychological", "Psychological"),
+                Pair("romance", "Romance"),
+                Pair("school-life", "School Life"),
+                Pair("shoujo", "Shoujo"),
+                Pair("shoujo-ai", "Shoujo Ai"),
+                Pair("shounen", "Shounen"),
+                Pair("slice-of-life", "Slice of Life"),
+                Pair("seinen", "Seinen"),
+                Pair("smut", "Smut"),
+                Pair("sci-fi", "Sci-fi"),
+                Pair("soft-yaoi", "Soft Yaoi"),
+                Pair("soft-yuri", "Soft Yuri"),
+                Pair("sports", "Sports"),
+                Pair("supernatural", "Supernatural"),
+                Pair("josei", "Josei"),
+                Pair("thieu-nhi", "Thiếu Nhi"),
+                Pair("trinh-tham", "Trinh Thám"),
+                Pair("truyen-mau", "Truyện Màu"),
+                Pair("tragedy", "Tragedy"),
+                Pair("webtoon", "Webtoon"),
+                Pair("xuyen-khong", "Xuyên Không"),
+                Pair("gender-bender", "Gender Bender"),
+                Pair("yuri", "Yuri"),
+                Pair("he-thong", "Hệ Thống"),
+                Pair("yaoi", "Yaoi"),
+            )
+        }
+        return super.getFilterList()
+    }
+
     // Configurable, automatic change domain
     private val preferences: SharedPreferences = getPreferences()
     private var hasCheckedRedirect = false

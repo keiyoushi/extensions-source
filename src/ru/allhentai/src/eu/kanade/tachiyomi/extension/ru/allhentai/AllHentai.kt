@@ -7,7 +7,7 @@ import keiyoushi.annotation.Source
 @Source
 abstract class AllHentai : GroupLe() {
 
-    override val isNeedAuth = true
+    override val isNeedAuth get() = baseUrl != "https://x.ahen.me"
 
     override fun getFilterList() = FilterList(
         OrderBy(),
