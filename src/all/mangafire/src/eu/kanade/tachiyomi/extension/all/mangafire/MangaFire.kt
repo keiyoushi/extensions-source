@@ -87,14 +87,22 @@ abstract class MangaFire :
 
     // ============================== Search ===============================
 
+    private val authorIdCache = object : LinkedHashMap<String, String?>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String?>?) = size > 20
+    }
+
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val authorQuery = filters.firstInstanceOrNull<AuthorFilter>()?.state.orEmpty()
         var authorId: String? = null
 
         if (authorQuery.isNotBlank()) {
-            val tags = client.get("$baseUrl/api/tags?keyword=$authorQuery").parseAs<TagResponse>()
-
-            authorId = tags.data.firstOrNull { it.type == "author" || it.type == "artist" }?.id?.toString()
+            authorId = authorIdCache.getOrPut(authorQuery) {
+                val tagUrl = "$baseUrl/api/tags".toHttpUrl().newBuilder().apply {
+                    addQueryParameter("keyword", authorQuery)
+                }.build()
+                val tags = client.get(tagUrl).parseAs<TagResponse>()
+                tags.data.firstOrNull { it.type == "author" || it.type == "artist" }?.id?.toString()
+            }
 
             if (authorId == null) {
                 return MangasPage(emptyList(), false)
@@ -134,20 +142,11 @@ abstract class MangaFire :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
+    ): SMangaUpdate = coroutineScope {
         val hid = getHid(manga.url)
-
-        return if (fetchDetails && fetchChapters) {
-            coroutineScope {
-                val detailsDeferred = async { fetchMangaDetails(hid) }
-                val chaptersDeferred = async { fetchChapters(manga) }
-                SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
-            }
-        } else {
-            val updatedManga = if (fetchDetails) fetchMangaDetails(hid) else manga
-            val updatedChapters = if (fetchChapters) fetchChapters(manga) else chapters
-            SMangaUpdate(updatedManga, updatedChapters)
-        }
+        val detailsDeferred = async { if (fetchDetails) fetchMangaDetails(hid) else manga }
+        val chaptersDeferred = async { if (fetchChapters) fetchChapters(manga) else chapters }
+        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
     }
 
     private suspend fun fetchMangaDetails(hid: String): SManga = client.get("$baseUrl/api/titles/$hid").parseAs<MangaDetailsResponse>().data.toSManga()
