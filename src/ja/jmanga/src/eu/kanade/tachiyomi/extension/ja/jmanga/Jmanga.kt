@@ -10,6 +10,7 @@ import okhttp3.Request
 @Source
 abstract class Jmanga : MangaReader() {
 
+    // =============================== Search ===============================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
@@ -26,4 +27,12 @@ abstract class Jmanga : MangaReader() {
 
         return GET(url, headers)
     }
+
+    // ============================== Chapters ==============================
+
+    override val chapterIdSelect = "ja-chaps"
+
+    // =============================== Pages ================================
+
+    override fun getAjaxUrl(id: String): String = "$baseUrl/json/chapter?mode=vertical&id=$id"
 }
