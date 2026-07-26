@@ -201,7 +201,7 @@ abstract class VinaHentai : KeiSource() {
 
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
-            chapters = if (fetchChapters) fetchChapters(document) else chapters,
+            chapters = fetchChapters(document),
         )
     }
 
