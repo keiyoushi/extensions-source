@@ -1,13 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.softkomik
 
-import android.annotation.SuppressLint
-import android.app.Application
-import android.os.Handler
-import android.os.Looper
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -19,21 +11,23 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.boolean
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebViewBlocking
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.net.URLDecoder
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Softkomik : KeiSource() {
@@ -43,7 +37,7 @@ abstract class Softkomik : KeiSource() {
     private val sessionsByUrlKey = ConcurrentHashMap<String, SessionDto>()
     private var bearerToken: BearerTokenDto? = null
 
-    private val rscHeaders = headersBuilder()
+    private val rscHeaders get() = headersBuilder()
         .add("rsc", "1")
         .build()
 
@@ -80,7 +74,7 @@ abstract class Softkomik : KeiSource() {
                 .addQueryParameter("search", "true")
                 .addQueryParameter("limit", "20")
                 .addQueryParameter("page", page.toString())
-            val response = client.get(url.build(), headers)
+            val response = client.get(url.build())
             return parseSearchManga(response)
         }
 
@@ -174,21 +168,20 @@ abstract class Softkomik : KeiSource() {
             if (isRequiredLogin) {
                 url += requiredLoginFragment
             }
-            val response = client.get(url, headers)
+            val response = client.get(url)
             val dto = response.parseAs<ChapterListDto>()
-            val isRequiredLoginFragment = response.request.url.fragment?.contains(requiredLoginSuffix) == true
             parsedChapters = dto.chapter.map { chapter ->
                 val chapterNumStr = chapter.chapter
                 val chapterNum = chapterNumStr.substringBefore(".").toFloatOrNull() ?: -1f
                 val displayNum = formatChapterDisplay(chapterNumStr)
-                var chapterUrl = "/${manga.url}/chapter/$chapterNumStr"
-                if (isRequiredLoginFragment) {
-                    chapterUrl += requiredLoginFragment
-                }
+                val chapterUrl = "/${manga.url}/chapter/$chapterNumStr"
                 SChapter.create().apply {
                     this.url = chapterUrl
                     this.name = "Chapter $displayNum"
                     this.chapter_number = chapterNum
+                    this.memo = buildJsonObject {
+                        put("isRequiredLogin", isRequiredLogin)
+                    }
                 }
             }.sortedByDescending { it.chapter_number }
         }
@@ -218,7 +211,7 @@ abstract class Softkomik : KeiSource() {
     // ======================== Pages ========================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val response = client.get(getChapterUrl(chapter), rscHeaders)
-        val isRequiredLogin = response.request.url.fragment?.contains(requiredLoginSuffix) == true
+        val isRequiredLogin = chapter.memo["isRequiredLogin"]?.boolean == true
         val data = response.extractNextJs<ChapterPageDataDto>()
             ?: throw Exception("Could not find chapter data")
 
@@ -324,7 +317,7 @@ abstract class Softkomik : KeiSource() {
         }
 
         val route = resolveSessionRoute(request.url)
-        val apiSession = getSession(route)
+        val apiSession = getSession(route, chain.call())
         val newRequest = request.withHeaders(apiSession)
 
         var response = chain.proceed(newRequest)
@@ -332,7 +325,7 @@ abstract class Softkomik : KeiSource() {
 
         // Fallback to webivew just in case credentials were still invalid
         response.close()
-        val webviewSession = getSessionViaWebView(route)
+        val webviewSession = getSessionViaWebView(route, chain.call())
         return chain.proceed(request.withHeaders(webviewSession))
     }
 
@@ -405,7 +398,7 @@ abstract class Softkomik : KeiSource() {
         )
     }
 
-    private fun getSession(route: SessionRoute): SessionDto {
+    private fun getSession(route: SessionRoute, call: okhttp3.Call): SessionDto {
         sessionsByUrlKey[route.key]?.takeIf { it.ex > System.currentTimeMillis() }?.let { return it }
 
         synchronized(this) {
@@ -441,7 +434,7 @@ abstract class Softkomik : KeiSource() {
             // call fails (commonly with HTTP 404), fall back to capturing the session
             // headers that the site's own JavaScript sends from a live WebView — that
             // path survives URL changes without an extension update.
-            return getSessionViaWebView(route)
+            return getSessionViaWebView(route, call)
         }
     }
 
@@ -461,63 +454,35 @@ abstract class Softkomik : KeiSource() {
     // because softkomik often changes their api session url,
     // if the request fails, we can try to get session from WebView by loading the manga detail page,
     // which will automatically trigger the chapter list API that carries the session token in the header, and we can intercept that request to get the session token.
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun getSessionViaWebView(route: SessionRoute): SessionDto {
+    private fun getSessionViaWebView(route: SessionRoute, call: okhttp3.Call): SessionDto {
         val webViewUrl = route.webViewUrl
         synchronized(this) {
-            val latch = CountDownLatch(1)
-            var capturedToken: String? = null
-            var capturedSign: String? = null
+            return runWebViewBlocking<SessionDto>(call, timeout = 15.seconds) {
+                userAgent = headers["User-Agent"]!!
+                blockImages = false
 
-            val handler = Handler(Looper.getMainLooper())
-            var webView: WebView? = null
-
-            handler.post {
-                val wv = WebView(Injekt.get<Application>())
-                webView = wv
-
-                wv.settings.javaScriptEnabled = true
-                wv.settings.domStorageEnabled = true
-                wv.settings.loadsImagesAutomatically = true
-                wv.settings.blockNetworkImage = false
-                wv.settings.userAgentString = headers["User-Agent"]
-
-                wv.webViewClient = object : WebViewClient() {
-                    override fun shouldInterceptRequest(
-                        view: WebView,
-                        request: WebResourceRequest,
-                    ): WebResourceResponse? {
-                        val url = request.url.toString()
-
-                        // Intercept the chapter list API call — it always carries X-Token & X-Sign
-                        if (url.contains(apiUrl)) {
-                            val token = request.requestHeaders["X-Token"]
-                            val sign = request.requestHeaders["X-Sign"]
-
-                            if (!token.isNullOrEmpty() && !sign.isNullOrEmpty()) {
-                                capturedToken = token
-                                capturedSign = sign
-                                latch.countDown()
-                            }
+                interceptRequest { request ->
+                    val url = request.url.toString()
+                    if (url.contains(apiUrl)) {
+                        val token = request.requestHeaders["X-Token"]
+                        val sign = request.requestHeaders["X-Sign"]
+                        if (!token.isNullOrEmpty() && !sign.isNullOrEmpty()) {
+                            resolve(
+                                SessionDto(
+                                    token = token,
+                                    sign = sign,
+                                    ex = System.currentTimeMillis() + TimeUnit.HOURS.toMillis(2),
+                                ),
+                            )
                         }
-                        return super.shouldInterceptRequest(view, request)
                     }
+                    null
                 }
 
-                // Load manga detail page, JS will automatically fire the chapter list API
-                wv.loadUrl(webViewUrl)
+                loadUrl(webViewUrl)
+            }.also {
+                sessionsByUrlKey[route.key] = it
             }
-
-            latch.await(15, TimeUnit.SECONDS)
-            handler.post { webView?.destroy() }
-
-            val token = capturedToken ?: throw Exception("Gagal mendapatkan session. Coba lagi.")
-            val sign = capturedSign ?: throw Exception("Gagal mendapatkan session. Coba lagi.")
-
-            // Based on response session API, expire the session in 2 hours.
-            val newSession = SessionDto(token = token, sign = sign, ex = System.currentTimeMillis() + TimeUnit.HOURS.toMillis(2))
-            sessionsByUrlKey[route.key] = newSession
-            return newSession
         }
     }
 
