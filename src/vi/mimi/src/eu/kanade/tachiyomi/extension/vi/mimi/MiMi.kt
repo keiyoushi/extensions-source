@@ -127,6 +127,14 @@ abstract class MiMi : KeiSource() {
 
     // =========================== Manga Details ============================
 
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val mangaId = chapter.url.substringBefore('/')
+        val chapterId = chapter.url.substringAfter('/')
+        return "$baseUrl/manga/$mangaId/chapter/$chapterId"
+    }
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
