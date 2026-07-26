@@ -6,14 +6,14 @@ plugins {
 
 keiyoushi {
     name = "VinaHentai"
-    versionCode = 11
+    versionCode = 12
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
     source {
         lang = "vi"
         baseUrl {
-            custom("https://vinahentai.club")
+            custom("https://vinahentai.blog")
         }
     }
 }
