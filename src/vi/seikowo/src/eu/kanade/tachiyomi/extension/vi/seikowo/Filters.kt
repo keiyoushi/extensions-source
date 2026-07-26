@@ -20,42 +20,6 @@ private val sortOptions = arrayOf(
     Option("Most Comments", "popular"),
 )
 
-private val genreOptions = arrayOf(
-    Option("All Genres", null),
-    Option("Adaptation", "Adaptation"),
-    Option("Adventure", "Adventure"),
-    Option("Animals", "Animals"),
-    Option("Crossdressing", "Crossdressing"),
-    Option("Delinquents", "Delinquents"),
-    Option("Genderswap", "Genderswap"),
-    Option("Ghosts", "Ghosts"),
-    Option("Monster Girls", "Monster Girls"),
-    Option("Ninja", "Ninja"),
-    Option("Office Workers", "Office Workers"),
-    Option("Psychological", "Psychological"),
-    Option("Reincarnation", "Reincarnation"),
-    Option("Romance", "Romance"),
-    Option("Survival", "Survival"),
-    Option("Thriller", "Thriller"),
-    Option("Time Travel", "Time Travel"),
-    Option("action", "action"),
-    Option("aliens", "aliens"),
-    Option("comedy", "comedy"),
-    Option("drama", "drama"),
-    Option("fantasy", "fantasy"),
-    Option("harem", "harem"),
-    Option("horror", "horror"),
-    Option("isekai", "isekai"),
-    Option("manga", "manga"),
-    Option("martial arts", "martial arts"),
-    Option("monsters", "monsters"),
-    Option("mystery", "mystery"),
-    Option("school life", "school life"),
-    Option("slice of life", "slice of life"),
-    Option("supernatural", "supernatural"),
-    Option("tragedy", "tragedy"),
-)
-
 class StatusFilter :
     Filter.Select<String>(
         "Status",
@@ -74,11 +38,13 @@ class SortByFilter :
         get() = sortOptions[state].value ?: "updated"
 }
 
-class GenreFilter :
+class GenreFilter(genres: List<String>) :
     Filter.Select<String>(
         "Genres",
-        genreOptions.map { it.displayName }.toTypedArray(),
+        arrayOf("All Genres", *genres.toTypedArray()),
     ) {
     val selectedValue: String?
-        get() = genreOptions[state].value
+        get() = genreValues[state]
+
+    private val genreValues = listOf(null) + genres
 }

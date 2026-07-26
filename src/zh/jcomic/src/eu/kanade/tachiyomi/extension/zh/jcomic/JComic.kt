@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.jcomic
 
+import android.util.Base64
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -43,7 +44,6 @@ abstract class JComic : KeiSource() {
     }
 
     // Customize
-
     companion object {
         val SIZE_REGEX = Regex("\\((\\d+)\\)")
         val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINESE)
@@ -110,10 +110,6 @@ abstract class JComic : KeiSource() {
     }
 
     // Manga & Chapter
-    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
-
-    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
-
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -164,7 +160,7 @@ abstract class JComic : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val response = client.get(baseUrl + chapter.url)
         return response.asJsoup().select(".comic-thumb").mapIndexed { i, img ->
-            Page(i, imageUrl = img.attr("src"))
+            Page(i, imageUrl = String(Base64.decode(img.attr("data-locked").removePrefix("JCOMIC_TRAP_").reversed(), Base64.NO_WRAP)))
         }
     }
 }

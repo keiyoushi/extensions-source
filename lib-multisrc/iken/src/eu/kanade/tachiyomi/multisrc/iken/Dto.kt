@@ -18,6 +18,7 @@ class SearchResponse(
 
 @Serializable
 class MangaDto(
+    val totalChapterCount: Int? = null,
     val post: Manga,
 )
 
@@ -135,10 +136,13 @@ class Chapter(
     private val isTimeLocked: Boolean? = false,
     private val mangaPost: MangaPostDto? = null,
     private val createdBy: CreatorDto? = null,
+    private val price: Int? = 0,
+    private val chapterPurchased: Boolean? = false,
 ) {
+
     fun isAccessible() = isAccessible
 
-    fun isLocked() = (isLocked == true) || (isTimeLocked == true)
+    fun isLocked() = (isLocked == true) || (isTimeLocked == true) || (chapterPurchased == false && price != 0)
 
     fun toSChapter(mangaSlug: String?) = SChapter.create().apply {
         val prefix = if (!isAccessible()) "🔒 " else ""

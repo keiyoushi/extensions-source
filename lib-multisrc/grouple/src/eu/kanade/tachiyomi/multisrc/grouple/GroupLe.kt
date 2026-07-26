@@ -412,31 +412,33 @@ abstract class GroupLe :
         val endIndex = html.indexOf(");", beginIndex)
         val trimmedHtml = html.substring(beginIndex, endIndex)
 
-        val p = Pattern.compile("'.*?','.*?',\".*?\"")
+        val p = Pattern.compile("""\[['"](.*?)['"],['"](.*?)['"],['"](.*?)['"].*?]""")
         val m = p.matcher(trimmedHtml)
 
         val pages = mutableListOf<Page>()
 
         var i = 0
         while (m.find()) {
-            val urlParts = m.group().replace("[\"\']+".toRegex(), "").split(',')
-            var url = if (urlParts[1].isEmpty() && urlParts[2].startsWith("/static/")) {
-                baseUrl + urlParts[2]
+            val host = m.group(1) ?: ""
+            val middle = m.group(2) ?: ""
+            val end = m.group(3) ?: ""
+            var imageUrl = if (middle.isBlank() && end.startsWith("/static/")) {
+                baseUrl + end
             } else {
-                if (urlParts[1].endsWith("/manga/")) {
-                    urlParts[0] + urlParts[2]
+                if (middle.endsWith("/manga/")) {
+                    host + end
                 } else {
-                    urlParts[1] + urlParts[0] + urlParts[2]
+                    middle + host + end
                 }
             }
-            if (!url.contains("://")) {
-                url = "https:$url"
+            if (!imageUrl.contains("://")) {
+                imageUrl = "https:$imageUrl"
             }
-            if (url.contains("one-way.work")) {
+            if (imageUrl.contains("one-way.work")) {
                 // domain that does not need a token
-                url = url.substringBefore("?")
+                imageUrl = imageUrl.substringBefore("?")
             }
-            pages.add(Page(i++, imageUrl = url.replace("//resh", "//h")))
+            pages.add(Page(i++, imageUrl = imageUrl.replace("//resh", "//h")))
         }
         return pages
     }

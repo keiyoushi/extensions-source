@@ -1,89 +1,70 @@
 package eu.kanade.tachiyomi.extension.vi.sinhsieusao
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
-import java.util.concurrent.ConcurrentHashMap
+import okhttp3.OkHttpClient
 
 @Source
-abstract class SinhSieuSao : HttpSource() {
+abstract class SinhSieuSao : KeiSource() {
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
-    override val supportsLatest = true
-
-    override val client = network.client.newBuilder()
-        .rateLimit(3)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("Accept", "application/json")
-
-    private val workToMangaId = ConcurrentHashMap<Int, Int>()
-    private val albumIds = ConcurrentHashMap<Int, Int>()
+    override fun Headers.Builder.configureHeaders() = add("Accept", "application/json")
 
     // ============================== Popular =======================================
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/api/v1/works/top".toHttpUrl().newBuilder()
             .addQueryParameter("period", "monthly")
             .build()
-        return GET(url, headers)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<TopWorksResponse>()
-        val mangas = result.items.map {
-            it.toSManga().apply { thumbnail_url = "$baseUrl${it.coverUrl}" }
-        }
+        val result = client.get(url).parseAs<TopWorksResponse>()
+        val mangas = result.items.map { it.toSManga(baseUrl) }
         return MangasPage(mangas, false)
     }
 
     // ============================== Latest ========================================
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/api/v1/works".toHttpUrl().newBuilder()
             .addQueryParameter("items", "20")
             .addQueryParameter("page", page.toString())
             .build()
-        return GET(url, headers)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = response.parseAs<WorksResponse>()
-        val mangas = result.items.map {
-            it.toSManga().apply { thumbnail_url = "$baseUrl${it.coverUrl}" }
-        }
+        val result = client.get(url).parseAs<WorksResponse>()
+        val mangas = result.items.map { it.toSManga(baseUrl) }
         val hasNextPage = result.meta.pagy.page < result.meta.pagy.pages
         return MangasPage(mangas, hasNextPage)
     }
 
     // ============================== Search ========================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val filterList = filters.ifEmpty { getFilterList() }
-
-        val kindFilter = filterList.firstInstanceOrNull<KindFilter>()
-        val sortFilter = filterList.firstInstanceOrNull<SortFilter>()
-        val tagsFilter = filterList.firstInstanceOrNull<TagsFilter>()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val kindFilter = filters.firstInstanceOrNull<KindFilter>()
+        val sortFilter = filters.firstInstanceOrNull<SortFilter>()
+        val tagsFilter = filters.firstInstanceOrNull<TagsFilter>()
 
         val url = "$baseUrl/api/v1/works".toHttpUrl().newBuilder()
             .addQueryParameter("items", "20")
             .addQueryParameter("page", page.toString())
 
-        if (query.isNotBlank()) {
+        if (query.isNotEmpty()) {
             url.addQueryParameter("q", query)
         }
 
@@ -117,159 +98,124 @@ abstract class SinhSieuSao : HttpSource() {
             }
         }
 
-        return GET(url.build(), headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<WorksResponse>()
-        val mangas = result.items.map {
-            it.toSManga().apply { thumbnail_url = "$baseUrl${it.coverUrl}" }
-        }
+        val result = client.get(url.build()).parseAs<WorksResponse>()
+        val mangas = result.items.map { it.toSManga(baseUrl) }
         val hasNextPage = result.meta.pagy.page < result.meta.pagy.pages
         return MangasPage(mangas, hasNextPage)
     }
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "works") return null
+
+        val workId = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
+        return fetchWork(workId.toString()).toSManga(baseUrl).apply { initialized = true }
+    }
+
     // ============================== Details =======================================
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = "$baseUrl/api/v1/works/${manga.url}".toHttpUrl()
-        return GET(url, headers)
-    }
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val work = response.parseAs<WorkDto>()
-        when (work.kind) {
-            "manga" -> work.workableId?.let { workToMangaId[work.id] = it }
-            "album" -> work.workableId?.let { albumIds[work.id] = it }
-        }
-        return work.toSManga().apply { thumbnail_url = "$baseUrl${work.coverUrl}" }
-    }
-
-    // ============================== Chapters ======================================
-
-    override fun chapterListRequest(manga: SManga): Request {
-        val workId = manga.url
-        val albumId = albumIds[workId.toIntOrNull()]
-        if (albumId != null) {
-            return GET("$baseUrl/api/v1/albums/$albumId?limit=200&offset=0&photos_sort=oldest".toHttpUrl(), headers)
-        }
-        val mangaId = workToMangaId[workId.toIntOrNull()]
-            ?: fetchMangaId(workId)
-        val url = "$baseUrl/api/v1/mangas/$mangaId".toHttpUrl()
-        return GET(url, headers)
-    }
-
-    private fun fetchMangaId(workId: String): Int {
-        val url = "$baseUrl/api/v1/works/$workId".toHttpUrl()
-        val work = client.newCall(GET(url, headers)).execute().parseAs<WorkDto>()
-        when (work.kind) {
-            "manga" -> work.workableId?.let { workToMangaId[work.id] = it }
-            "album" -> work.workableId?.let { albumIds[work.id] = it }
-        }
-        return work.workableId ?: work.id
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val url = response.request.url.toString()
-
-        // Some works (album/oneshot) don't have chapters — they show images directly.
-        // Create a placeholder "Oneshot".
-        if (url.contains("/albums/")) {
-            val album = response.parseAs<AlbumResponse>()
-            return listOf(
-                SChapter.create().apply {
-                    this.url = "album:${album.id}"
-                    name = "Oneshot"
-                    chapter_number = 1f
-                    date_upload = DATE_FORMAT.tryParse(album.createdAt)
-                },
-            )
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val work = fetchWork(manga.url)
+        val updatedChapters = if (fetchChapters) {
+            when (work.kind) {
+                "album" -> fetchAlbumChapters(work.workableId ?: work.id, work.id)
+                else -> fetchMangaChapters(work.workableId ?: work.id, work.id)
+            }
+        } else {
+            chapters
         }
 
-        val manga = response.parseAs<MangaDto>()
-        return manga.chapters
-            .filter { it.processingStatus == "processed" }
-            .sortedByDescending { it.order }
-            .map(ChapterDto::toSChapter)
+        return SMangaUpdate(work.toSManga(baseUrl), updatedChapters)
+    }
+
+    private suspend fun fetchWork(workId: String): WorkDto = client.get("$baseUrl/api/v1/works/$workId").parseAs()
+
+    private suspend fun fetchMangaChapters(mangaId: Int, workId: Int): List<SChapter> = client.get("$baseUrl/api/v1/mangas/$mangaId")
+        .parseAs<MangaDto>()
+        .chapters
+        .filter { it.processingStatus == "processed" }
+        .sortedByDescending { it.order }
+        .map { it.toSChapter(workId) }
+
+    private suspend fun fetchAlbumChapters(albumId: Int, workId: Int): List<SChapter> {
+        val album = client.get(albumUrl(albumId)).parseAs<AlbumResponse>()
+        return listOf(album.toSChapter(workId))
     }
 
     // ============================== Pages =========================================
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val chapterUrl = chapter.url
-
-        if (chapterUrl.startsWith("album:")) {
-            val albumId = chapterUrl.removePrefix("album:")
-            val url = "$baseUrl/api/v1/albums/$albumId?limit=200&offset=0&photos_sort=oldest".toHttpUrl()
-            return GET(url, headers)
-        }
-
-        val chapterId = chapterUrl
-        val url = "$baseUrl/api/v1/chapters/$chapterId".toHttpUrl()
-        return GET(url, headers)
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val url = response.request.url.toString()
-
-        if (url.contains("/albums/")) {
-            val album = response.parseAs<AlbumResponse>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        if (chapter.url.startsWith("album:")) {
+            val albumId = chapter.url.removePrefix("album:").substringBefore(':').toInt()
+            val album = client.get(albumUrl(albumId)).parseAs<AlbumResponse>()
             return album.photos
                 .sortedBy { it.order }
                 .mapIndexed { index, photo ->
                     val imageUrl = baseUrl + photo.imageUrl
-                    Page(index, imageUrl, imageUrl)
+                    Page(index, imageUrl = imageUrl)
                 }
         }
 
-        val chapter = response.parseAs<ChapterDetailDto>()
-        return chapter.pages
+        val chapterId = chapter.url.substringAfterLast('/')
+        val chapterDetails = client.get("$baseUrl/api/v1/chapters/$chapterId")
+            .parseAs<ChapterDetailDto>()
+        return chapterDetails.pages
             .sortedBy { it.order }
             .mapIndexed { index, page ->
                 val imageUrl = baseUrl + page.imageUrl
-                Page(index, imageUrl, imageUrl)
+                Page(index, imageUrl = imageUrl)
             }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/works/${manga.url}"
+
+    override fun getChapterUrl(chapter: SChapter): String = when {
+        chapter.url.startsWith("album:") && chapter.url.count { it == ':' } == 2 ->
+            "$baseUrl/works/${chapter.url.substringAfterLast(':')}"
+        chapter.url.startsWith("album:") -> baseUrl
+        chapter.url.startsWith("/works/") -> baseUrl + chapter.url
+        else -> "$baseUrl/chapters/${chapter.url}"
+    }
 
     // ============================== Filters =======================================
 
-    private var genreList: List<GenreItem> = emptyList()
+    override val supportsFilterFetching = true
 
-    override fun getFilterList(): FilterList {
-        fetchGenreListIfNeeded()
-        return if (genreList.isEmpty()) {
+    override suspend fun fetchFilterData(): JsonElement = coroutineScope {
+        val firstPage = fetchTagsPage(1)
+        val remainingPages = (2..firstPage.meta.pagy.pages)
+            .map { page -> async { fetchTagsPage(page) } }
+            .awaitAll()
+        val tags = (listOf(firstPage) + remainingPages)
+            .flatMap { result -> result.items.map { GenreItem(it.name, it.slug) } }
+
+        tags.toJsonElement()
+    }
+
+    private suspend fun fetchTagsPage(page: Int): TagsResponse {
+        val url = "$baseUrl/api/v1/tags".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .build()
+        return client.get(url).parseAs()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<List<GenreItem>>().orEmpty()
+
+        return if (genres.isEmpty()) {
             FilterList(KindFilter(), SortFilter())
         } else {
             FilterList(
                 KindFilter(),
-                TagsFilter(genreList),
+                TagsFilter(genres),
                 SortFilter(),
             )
         }
     }
 
-    private fun fetchGenreListIfNeeded() {
-        if (genreList.isNotEmpty()) return
-        genreList = try {
-            val tags = mutableListOf<GenreItem>()
-            var page = 1
-            var totalPages = 1
-            do {
-                val url = "$baseUrl/api/v1/tags".toHttpUrl().newBuilder()
-                    .addQueryParameter("page", page.toString())
-                    .build()
-                val result = client.newCall(GET(url, headers)).execute().use { response ->
-                    response.parseAs<TagsResponse>()
-                }
-                tags.addAll(result.items.map { GenreItem(it.id, it.name, it.slug) })
-                totalPages = result.meta.pagy.pages
-                page++
-            } while (page <= totalPages)
-            tags
-        } catch (_: Exception) {
-            emptyList()
-        }
-    }
+    private fun albumUrl(albumId: Int) = "$baseUrl/api/v1/albums/$albumId?limit=200&offset=0&photos_sort=oldest"
 }
