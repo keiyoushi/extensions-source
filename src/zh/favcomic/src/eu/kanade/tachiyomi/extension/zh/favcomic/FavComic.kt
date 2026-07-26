@@ -102,38 +102,30 @@ abstract class FavComic :
     ): SMangaUpdate {
         val doc = client.get(baseUrl + manga.url).asJsoup()
 
-        val sManga = if (fetchDetails) {
-            val img = doc.selectFirst(".comic_cover_box > .flex_box > img")!!
-            val note = doc.selectFirst(".translation_agency_box")?.text()
-            SManga.create().apply {
-                setUrlWithoutDomain(doc.location())
-                title = doc.selectFirst(".comic_title")!!.text()
-                thumbnail_url = "${img.absUrl("data-src")}#${img.hasClass("encrypted-image")}"
-                author = doc.selectFirst(".author")!!.text()
-                description = doc.selectFirst(".intro_box > .txt")!!.text().substringAfter("作品介绍：") + (note?.let { "\n\n*$it*" } ?: "")
-                status = when (doc.selectFirst(".state_box > span:nth-of-type(2)")?.text()) {
-                    "连载中" -> SManga.ONGOING
-                    "完结" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-                genre = doc.select(".tag_box a").joinToString(transform = Element::text)
+        val img = doc.selectFirst(".comic_cover_box > .flex_box > img")!!
+        val note = doc.selectFirst(".translation_agency_box")?.text()
+        val sManga = SManga.create().apply {
+            setUrlWithoutDomain(doc.location())
+            title = doc.selectFirst(".comic_title")!!.text()
+            thumbnail_url = "${img.absUrl("data-src")}#${img.hasClass("encrypted-image")}"
+            author = doc.selectFirst(".author")!!.text()
+            description = doc.selectFirst(".intro_box > .txt")!!.text().substringAfter("作品介绍：") + (note?.let { "\n\n*$it*" } ?: "")
+            status = when (doc.selectFirst(".state_box > span:nth-of-type(2)")?.text()) {
+                "连载中" -> SManga.ONGOING
+                "完结" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
             }
-        } else {
-            manga
+            genre = doc.select(".tag_box a").joinToString(transform = Element::text)
         }
 
-        val sChapters = if (fetchChapters) {
-            doc.select(".catalog_box a").map { a ->
-                val price = a.selectFirst("span:last-child")?.text()?.toFloatOrNull()
-                SChapter.create().apply {
-                    setUrlWithoutDomain(a.absUrl("href"))
-                    name = (price?.let { "\uD83E\uDE99 " } ?: "") + a.selectFirst(".title")!!.text()
-                    scanlator = price?.let { "￥$price" }
-                }
-            }.reversed()
-        } else {
-            chapters
-        }
+        val sChapters = doc.select(".catalog_box a").map { a ->
+            val price = a.selectFirst("span:last-child")?.text()?.toFloatOrNull()
+            SChapter.create().apply {
+                setUrlWithoutDomain(a.absUrl("href"))
+                name = (price?.let { "\uD83E\uDE99 " } ?: "") + a.selectFirst(".title")!!.text()
+                scanlator = price?.let { "￥$price" }
+            }
+        }.reversed()
 
         return SMangaUpdate(sManga, sChapters)
     }
