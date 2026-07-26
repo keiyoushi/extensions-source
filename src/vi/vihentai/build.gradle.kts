@@ -6,12 +6,12 @@ plugins {
 
 keiyoushi {
     name = "ViHentai"
-    versionCode = 6
+    versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
     source {
         lang = "vi"
-        baseUrl = "https://vi-hentai.pro"
+        baseUrl = "https://vi-hentai.moe"
     }
 }
