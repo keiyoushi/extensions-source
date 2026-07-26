@@ -6,12 +6,18 @@ plugins {
 
 keiyoushi {
     name = "ThienThaiTruyen"
-    versionCode = 5
+    versionCode = 6
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "vi"
-        baseUrl = "https://thienthaitruyen11.com"
+        baseUrl {
+            custom("https://thienthaitruyen12.com")
+        }
+    }
+
+    deeplink {
+        path("/truyen-tranh/..*")
     }
 }

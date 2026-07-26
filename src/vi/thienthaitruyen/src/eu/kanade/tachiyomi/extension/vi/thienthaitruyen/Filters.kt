@@ -2,11 +2,20 @@ package eu.kanade.tachiyomi.extension.vi.thienthaitruyen
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import kotlinx.serialization.Serializable
 
-fun getFilters(): FilterList = FilterList(
-    GenreFilter(),
-    StatusFilter(),
-    SortFilter(),
+fun getFilters(genres: List<GenreOption>?): FilterList = FilterList(
+    buildList {
+        genres?.takeIf(List<GenreOption>::isNotEmpty)?.let { add(GenreFilter(it)) }
+        add(StatusFilter())
+        add(SortFilter())
+    },
+)
+
+@Serializable
+class GenreOption(
+    val name: String,
+    val value: String,
 )
 
 class UriPart(
@@ -24,34 +33,9 @@ open class UriPartFilter(
         get() = entries[state].value
 }
 
-class GenreFilter :
-    UriPartFilter(
-        "Thể loại",
-        arrayOf(
-            UriPart("All", null),
-            UriPart("Adult", "adult"),
-            UriPart("Ecchi", "ecchi"),
-            UriPart("Harem", "harem"),
-            UriPart("Hentai", "hentai"),
-            UriPart("Manhwa", "manhwa"),
-            UriPart("Smut", "smut"),
-            UriPart("Truyện Tranh 18+", "truyen-tranh-18"),
-            UriPart("Webtoon", "webtoon"),
-            UriPart("Manhua", "manhua"),
-            UriPart("Mature", "mature"),
-            UriPart("Manga", "manga"),
-            UriPart("Thiên Thai", "thien-thai"),
-            UriPart("Ntr", "ntr"),
-            UriPart("Ngực Lớn", "nguc-lon"),
-            UriPart("Milf", "milf"),
-            UriPart("Đam Mỹ", "dam-my"),
-            UriPart("Manhwa 18+", "manhwa-18"),
-            UriPart("Yuri", "yuri"),
-            UriPart("Yaoi", "yaoi"),
-            UriPart("Big Ass", "big-ass"),
-            UriPart("Blowjob", "blowjob"),
-        ),
-    )
+class Genre(name: String, val value: String) : Filter.CheckBox(name)
+
+class GenreFilter(genres: List<GenreOption>) : Filter.Group<Genre>("Thể loại", genres.map { Genre(it.name, it.value) })
 
 class StatusFilter :
     UriPartFilter(
