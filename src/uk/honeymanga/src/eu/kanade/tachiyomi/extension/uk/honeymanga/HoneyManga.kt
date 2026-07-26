@@ -233,7 +233,7 @@ abstract class HoneyManga :
 
     // ============================= Utilities ==============================
     companion object {
-        private val cleanSearch = """[^\p{L}\s]""".toRegex()
+        private val cleanSearch = """[^\p{L}\d\s]""".toRegex()
         private const val DEFAULT_PAGE_SIZE = 30
         private const val GENRES_PREF = "pref_genres_exclude"
         private const val GENRES_PREF_TITLE = "Приховані жанри"
