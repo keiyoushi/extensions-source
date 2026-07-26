@@ -1,6 +1,7 @@
 package keiyoushi.zip
 
 import eu.kanade.tachiyomi.network.GET
+import keiyoushi.network.get
 import keiyoushi.utils.readLongLittleEndian
 import keiyoushi.utils.readUIntLittleEndian
 import keiyoushi.utils.readUShortLittleEndian
