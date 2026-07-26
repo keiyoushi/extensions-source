@@ -249,7 +249,9 @@ abstract class Iken :
         )
 
     // Switch to chapters endpoint if any Manga chapters mismatch was detected
-    private var useChaptersApi = false
+    private var useChaptersApi: Boolean
+        get() = preferences.getBoolean(USE_CHAPTERS_API_PREF_KEY, false)
+        set(value) = preferences.edit().putBoolean(USE_CHAPTERS_API_PREF_KEY, value).apply()
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -377,6 +379,7 @@ abstract class Iken :
 
     companion object {
         const val SHOW_LOCKED_CHAPTER_PREF_KEY = "pref_show_locked_chapters"
+        const val USE_CHAPTERS_API_PREF_KEY = "pref_use_chapters_api"
         val NUMBER_REGEX = Regex("\\d+")
     }
 }
