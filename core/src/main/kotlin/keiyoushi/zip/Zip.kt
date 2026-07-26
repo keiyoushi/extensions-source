@@ -5,8 +5,6 @@ import keiyoushi.network.get
 import keiyoushi.utils.readLongLittleEndian
 import keiyoushi.utils.readUIntLittleEndian
 import keiyoushi.utils.readUShortLittleEndian
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
