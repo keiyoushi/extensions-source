@@ -324,8 +324,9 @@ fun OkHttpClient.zipDirectory(url: String, headers: Headers): ZipDirectory {
  * Fetches and parses a remote ZIP's central directory over HTTP range requests.
  * (Suspend equivalent)
  */
-suspend fun OkHttpClient.zipDirectoryAsync(url: String, headers: Headers): ZipDirectory = withContext(Dispatchers.IO) {
-    val response = newCall(GET(url, headers).newBuilder().header("Range", "bytes=-$MAX_EOCD_SEARCH").build()).execute()
+suspend fun OkHttpClient.zipDirectoryAsync(url: String, headers: Headers): ZipDirectory {
+    val rangeHeaders = headers.newBuilder().set("Range", "bytes=-$MAX_EOCD_SEARCH").build()
+    val response = this.get(url, rangeHeaders)
     val total = response.header("Content-Range")?.substringAfterLast("/")?.toLongOrNull() ?: throw IOException("Missing or invalid Content-Range")
     readZipDirectory(response.body.bytes(), total) { rangeSource(url, headers, it) }
 }
