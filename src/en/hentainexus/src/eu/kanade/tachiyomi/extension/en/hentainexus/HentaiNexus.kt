@@ -172,26 +172,40 @@ abstract class HentaiNexus :
         )
     }
 
-    private fun imageField() = when (preferences.getString(PREF_IMAGE_FORMAT, "source")) {
+    private fun imageFormatPref() = preferences.getString(PREF_IMAGE_FORMAT, "source")!!
+
+    private fun imageField(format: String) = when (format) {
+        "source" -> "image_source"
         "avif" -> "image_avif"
-        "webp" -> "image_fallback"
-        else -> "image_source"
+        else -> "image_fallback"
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val script = document.selectFirst("script:containsData(initReader)")?.data()
             ?: throw Exception("Could not find initReader script; the page structure may have changed")
+
         val encoded = script.substringAfter("initReader(\"").substringBefore("\",")
         val data = Utils.decryptData(encoded)
 
-        val field = imageField()
+        val images = json.parseToJsonElement(data).jsonArray
+            .filter { it.jsonObject["type"]?.jsonPrimitive?.content == "image" }
 
-        return json.parseToJsonElement(data).jsonArray
-            .filter { it.jsonObject["type"]!!.jsonPrimitive.content == "image" }
-            .mapIndexed { i, it ->
-                Page(i, imageUrl = (it.jsonObject[field] ?: it.jsonObject["image_fallback"])!!.jsonPrimitive.content)
-            }
+        if (images.isEmpty()) {
+            return emptyList()
+        }
+
+        val format = imageFormatPref()
+        val field = imageField(format)
+
+        if (images.first().jsonObject[field] == null) {
+            val label = IMAGE_FORMATS[format] ?: format
+            throw Exception("Selected quality '$label' is not available. Login or select another quality.")
+        }
+
+        return images.mapIndexed { i, page ->
+            Page(i, imageUrl = page.jsonObject.getValue(field).jsonPrimitive.content)
+        }
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
@@ -221,10 +235,10 @@ abstract class HentaiNexus :
         ListPreference(screen.context).apply {
             key = PREF_IMAGE_FORMAT
             title = "Image Quality"
-            entries = arrayOf("Original", "WebP", "AVIF")
-            entryValues = arrayOf("source", "webp", "avif")
-            summary = "%s\nOriginal quality requires a user account. WebP is used as a fallback."
-            setDefaultValue("source")
+            entries = IMAGE_FORMATS.values.toTypedArray()
+            entryValues = IMAGE_FORMATS.keys.toTypedArray()
+            summary = "%s\nOriginal quality requires a user account."
+            setDefaultValue("webp")
         }.also(screen::addPreference)
     }
 
@@ -232,5 +246,11 @@ abstract class HentaiNexus :
         const val PREFIX_ID_SEARCH = "id:"
         const val POPULAR_NOW_PATH = "/explore/hot"
         private const val PREF_IMAGE_FORMAT = "pref_image_format"
+
+        private val IMAGE_FORMATS = linkedMapOf(
+            "source" to "Original",
+            "webp" to "WebP",
+            "avif" to "AVIF",
+        )
     }
 }
