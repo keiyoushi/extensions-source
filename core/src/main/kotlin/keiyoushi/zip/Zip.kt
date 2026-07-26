@@ -327,7 +327,7 @@ suspend fun OkHttpClient.zipDirectoryAsync(url: String, headers: Headers): ZipDi
     val rangeHeaders = headers.newBuilder().set("Range", "bytes=-$MAX_EOCD_SEARCH").build()
     val response = this.get(url, rangeHeaders)
     val total = response.header("Content-Range")?.substringAfterLast("/")?.toLongOrNull() ?: throw IOException("Missing or invalid Content-Range")
-    readZipDirectory(response.body.bytes(), total) { rangeSource(url, headers, it) }
+    return readZipDirectory(response.body.bytes(), total) { rangeSource(url, headers, it) }
 }
 
 /**
