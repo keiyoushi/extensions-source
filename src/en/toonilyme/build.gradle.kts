@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Toonily.me"
-    versionCode = 2
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
     theme = "mangak"
     libVersion = "1.6"
