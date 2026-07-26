@@ -133,8 +133,8 @@ abstract class Truyen18 : KeiSource() {
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
         return SMangaUpdate(
-            manga = if (fetchDetails) parseMangaDetails(document, manga) else manga,
-            chapters = if (fetchChapters) parseChapterList(document) else chapters,
+            manga = parseMangaDetails(document, manga),
+            chapters = parseChapterList(document),
         )
     }
 
