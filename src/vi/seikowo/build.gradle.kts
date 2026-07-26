@@ -12,9 +12,7 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl {
-            custom("https://seikowo-app.blogspot.com")
-        }
+        baseUrl = "https://seikowo-app.blogspot.com"
     }
 
     deeplink {

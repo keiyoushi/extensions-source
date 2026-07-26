@@ -13,13 +13,17 @@ import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.get
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -184,6 +188,10 @@ abstract class Seikowo : KeiSource() {
 
     private fun toCatalogueEntry(entry: FeedEntryDto): CatalogueEntry? {
         val metadata = parseMetadata(entry.content?.value) ?: return null
+        val postId = entry.id?.value
+            ?.substringAfterLast("post-", missingDelimiterValue = "")
+            ?.takeIf { it.isNotEmpty() }
+            ?: return null
         val title = metadata.title
 
         val absoluteUrl = entry.link
@@ -195,6 +203,7 @@ abstract class Seikowo : KeiSource() {
         val relativeUrl = toRelativeUrl(absoluteUrl) ?: return null
 
         return CatalogueEntry(
+            postId = postId,
             title = decodeHtmlEntities(title),
             url = relativeUrl,
             thumbnailUrl = metadata.coverImage ?: entry.thumbnail?.url,
@@ -252,11 +261,7 @@ abstract class Seikowo : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get("$baseUrl${manga.url}")
-        val body = response.use { it.body.string() }
-        val postId = postIdRegex.find(body)?.groupValues?.getOrNull(1)
-            ?: postIdFallbackRegex.find(body)?.groupValues?.getOrNull(1)
-            ?: throw Exception("Cannot find post ID")
+        val postId = manga.memo["postId"]?.string ?: fetchPostId(manga.url)
 
         val entry = fetchFeedEntry(postId)
         val metadata = parseMetadata(entry.content?.value)
@@ -271,6 +276,7 @@ abstract class Seikowo : KeiSource() {
             thumbnail_url = metadata.coverImage
             status = parseStatus(metadata.status)
             genre = metadata.tags?.joinToString()?.let(::decodeHtmlEntities)
+            memo = buildJsonObject { put("postId", JsonPrimitive(postId)) }
         }
 
         val seriesId = metadata.seriesId
@@ -310,6 +316,13 @@ abstract class Seikowo : KeiSource() {
             }
 
         return SMangaUpdate(updatedManga, updatedChapters)
+    }
+
+    private suspend fun fetchPostId(mangaUrl: String): String {
+        val body = client.get("$baseUrl$mangaUrl").use { it.body.string() }
+        return postIdRegex.find(body)?.groupValues?.getOrNull(1)
+            ?: postIdFallbackRegex.find(body)?.groupValues?.getOrNull(1)
+            ?: throw Exception("Cannot find post ID")
     }
 
     private fun parseMetadata(content: String?): SeriesMetadataDto? {
