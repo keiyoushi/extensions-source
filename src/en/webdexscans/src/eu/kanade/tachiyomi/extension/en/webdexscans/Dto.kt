@@ -44,9 +44,13 @@ class SeriesInfo(
         this.thumbnail_url = coverUrl?.toAbsoluteUrl(baseUrl)
         this.author = this@SeriesInfo.author
         this.artist = this@SeriesInfo.artist
-        this.description = this@SeriesInfo.description?.let {
-            val html = Jsoup.parseBodyFragment(it, baseUrl)
-            whitespaceRegex.replace(html.wholeText(), "\n\n").trim()
+        this.description = this@SeriesInfo.description?.let { raw ->
+            val cleanHtml = blockTagRegex.replace(raw, "\n")
+            Jsoup.parseBodyFragment(cleanHtml).wholeText()
+                .replace('\u00a0', ' ')
+                .replace(trimLinesRegex, "\n")
+                .replace(multiNewlineRegex, "\n\n")
+                .trim()
         }
         this.status = when (this@SeriesInfo.status?.lowercase()) {
             "ongoing" -> SManga.ONGOING
@@ -62,7 +66,9 @@ class SeriesInfo(
     }
 
     companion object {
-        private val whitespaceRegex = Regex("""([ \u00a0\t\r]*\n){3,}""")
+        private val blockTagRegex = Regex("""(?i)</(?:p|div|h[1-6])>""")
+        private val trimLinesRegex = Regex("""[ \t\r]*\n[ \t\r]*""")
+        private val multiNewlineRegex = Regex("""\n{3,}""")
     }
 }
 
