@@ -18,7 +18,6 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -48,8 +47,6 @@ abstract class TuiTruyen : KeiSource() {
         addInterceptor(imgxInterceptor())
         rateLimit(3)
     }
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Referer", "$baseUrl/")
 
     // ============================== Popular ===============================
 
@@ -392,7 +389,8 @@ abstract class TuiTruyen : KeiSource() {
         }
 
         val webp = response.body.use {
-            ImageDecryptor.decrypt(source.readByteArray(), grant, entry.storageKey)
+            source.request(Long.MAX_VALUE)
+            ImageDecryptor.decrypt(source.buffer.readByteArray(), grant, entry.storageKey)
         }
         response.newBuilder()
             .body(webp.toResponseBody("image/webp".toMediaType()))
