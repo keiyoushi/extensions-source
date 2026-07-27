@@ -93,6 +93,17 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
         )
     (REPO_JAR_DIR / jar.name).write_bytes(jar.read_bytes())
 
+    badging = subprocess.check_output(
+        [aapt(), "dump", "--include-meta-data", "badging", apk]
+    ).decode()
+    application_icon = APPLICATION_ICON_320_REGEX.search(badging).group(1)
+    with (
+        ZipFile(apk) as z,
+        z.open(application_icon) as i,
+        (REPO_ICON_DIR / f"{package_name}.png").open("wb") as f,
+    ):
+        f.write(i.read())
+
     new_extensions.append(
         index_pb2.Extension(
             name=info["name"],
