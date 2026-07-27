@@ -104,7 +104,7 @@ abstract class ZetTruyen : KeiSource() {
 
         val detailsDeferred = if (fetchDetails) {
             async {
-                client.get("$baseUrl${manga.url}").use { response ->
+                client.get(getMangaUrl(manga)).use { response ->
                     parseMangaDetails(response.asJsoup())
                 }
             }
