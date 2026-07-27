@@ -6,6 +6,7 @@ import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.Cookie
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -37,14 +38,28 @@ class ReadingGateInterceptor(
             return chain.proceed(request)
         }
 
-        val chapter = CHAPTER_PATH_REGEX.find(request.url.encodedPath)
+        val chapterKey = request.url.chapterKey()
             ?: return chain.proceed(request)
 
-        val (mangaId, chapterId) = chapter.destructured
-        val token = routeToken("$mangaId/$chapterId", request.headers)
+        val token = routeToken(chapterKey, request.headers)
             ?: throw IOException(BLOCKED_MESSAGE)
 
         return chain.proceed(request.newBuilder().header(ROUTE_TOKEN, token).build())
+    }
+
+    /** Matches `/api/mangas/{mangaId}/chapters/{chapterId}`, the only gated endpoint. */
+    private fun HttpUrl.chapterKey(): String? {
+        val segments = pathSegments
+
+        if (segments.size != CHAPTER_SEGMENTS ||
+            segments[0] != "api" ||
+            segments[1] != "mangas" ||
+            segments[3] != "chapters"
+        ) {
+            return null
+        }
+
+        return "${segments[2]}/${segments[4]}"
     }
 
     /** Retries once with freshly read parameters, since a refusal usually means they rotated. */
@@ -120,11 +135,11 @@ class ReadingGateInterceptor(
 
     companion object {
         private const val ROUTE_TOKEN = "x-toon-route-token"
+        private const val CHAPTER_SEGMENTS = 5
         private const val COOKIE_LIFETIME = 5 * 60 * 1000L
         private const val EXPIRY_MARGIN = 30 * 1000L
         private const val BLOCKED_MESSAGE =
             "O site recusou a liberação do capítulo. Abra a fonte na WebView e tente de novo."
-        private val CHAPTER_PATH_REGEX = Regex("""/api/mangas/([^/]+)/chapters/([^/?]+)""")
         private val SCRIPT_REGEX = Regex("""/assets/index-[\w.\-]+\.js""")
     }
 }
