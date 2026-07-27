@@ -1,29 +1,15 @@
 import gzip
 import html
 import json
-import os
 import re
-import subprocess
 import sys
-from functools import cache
 from pathlib import Path
-from zipfile import ZipFile
 
 from google.protobuf import json_format
 
 import index_pb2
 
-APPLICATION_ICON_320_REGEX = re.compile(
-    r"^application-icon-320:'([^']+)'", re.MULTILINE
-)
 LANGUAGE_REGEX = re.compile(r"tachiyomi-([^.]+)")
-
-
-@cache
-def aapt() -> Path:
-    *_, build_tools = (Path(os.environ["ANDROID_HOME"]) / "build-tools").iterdir()
-    return build_tools / "aapt"
-
 
 # Artifacts downloaded from the build jobs: one APK per extension plus the source metadata JSON
 # emitted by each assembleRelease.
@@ -91,17 +77,6 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
             f"{package_name}: no release jar found under {info_file.parent}"
         )
     (REPO_JAR_DIR / jar.name).write_bytes(jar.read_bytes())
-
-    badging = subprocess.check_output(
-        [aapt(), "dump", "--include-meta-data", "badging", apk]
-    ).decode()
-    application_icon = APPLICATION_ICON_320_REGEX.search(badging).group(1)
-    with (
-        ZipFile(apk) as z,
-        z.open(application_icon) as i,
-        (REPO_ICON_DIR / f"{package_name}.png").open("wb") as f,
-    ):
-        f.write(i.read())
 
     new_extensions.append(
         index_pb2.Extension(
