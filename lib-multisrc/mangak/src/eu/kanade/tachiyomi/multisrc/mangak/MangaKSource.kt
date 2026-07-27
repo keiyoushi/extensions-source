@@ -17,7 +17,6 @@ import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
@@ -166,18 +165,21 @@ abstract class MangaKSource :
     ): SMangaUpdate = coroutineScope {
         val detailsUrl = getMangaUrl(manga)
 
-        // Lazy deferred ensures NextJS data is fetched at most ONCE across both jobs
-        val nextJsDataDeferred = async(start = CoroutineStart.LAZY) {
+        val needsNextJsData = fetchDetails ||
+            (fetchChapters && manga.memo["id"]?.jsonPrimitive?.contentOrNull == null)
+
+        val nextJsData = if (needsNextJsData) {
             val response = client.get(detailsUrl)
             response.extractNextJs<NextJsDto> {
                 it is JsonObject && "pageProps" in it
             } ?: throw IllegalStateException("Could not extract Next.js data for: $detailsUrl")
+        } else {
+            null
         }
 
         val detailsDeferred = async {
             if (fetchDetails) {
-                val dto = nextJsDataDeferred.await()
-                dto.pageProps?.initialManga?.toSManga(manga.url)
+                nextJsData?.pageProps?.initialManga?.toSManga(manga.url)
                     ?: throw IllegalStateException("Could not find manga details for: $detailsUrl")
             } else {
                 manga
@@ -186,11 +188,9 @@ abstract class MangaKSource :
 
         val chaptersDeferred = async {
             if (fetchChapters) {
-                val id = manga.memo["id"]?.jsonPrimitive?.contentOrNull ?: run {
-                    val dto = nextJsDataDeferred.await()
-                    dto.pageProps?.initialManga?.id
-                        ?: throw IllegalStateException("Could not find manga ID for migration for: $detailsUrl")
-                }
+                val id = manga.memo["id"]?.jsonPrimitive?.contentOrNull
+                    ?: nextJsData?.pageProps?.initialManga?.id
+                    ?: throw IllegalStateException("Could not find manga ID for migration for: $detailsUrl")
 
                 fetchChaptersByApiId(id)
             } else {
