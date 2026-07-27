@@ -2,11 +2,8 @@ package eu.kanade.tachiyomi.extension.ar.kawiimanga
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Serializable
 class MangaList(
@@ -32,13 +29,15 @@ class Manga(
         url = slug
         title = this@Manga.title
         thumbnail_url = coverUrl
-        author = this@Manga.author?.takeUnless { it.isEmpty() }
-        artist = this@Manga.artist?.takeUnless { it.isEmpty() }
+        author = this@Manga.author.takeIfValid()
+        artist = this@Manga.artist.takeIfValid()
         description = this@Manga.description?.takeUnless { it.isEmpty() }
         genre = getGenres()
         status = getStatus()
         initialized = true
     }
+
+    private fun String?.takeIfValid(): String? = this?.takeUnless { it.isBlank() || it.equals("unknown", true) }
 
     private fun getStatus() = when (status) {
         "ongoing", "coming_soon" -> SManga.ONGOING
@@ -72,7 +71,7 @@ class Chapter(
             append("الفصل $number")
             if (this.toString() != title) append(" - $title")
         }
-        date_upload = dateFormat.tryParse(createdAt)
+        date_upload = Instant.parseOrNull(createdAt)?.toEpochMilliseconds() ?: 0L
     }
 }
 
@@ -80,7 +79,3 @@ class Chapter(
 class Pages(
     val pages: List<String>,
 )
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
