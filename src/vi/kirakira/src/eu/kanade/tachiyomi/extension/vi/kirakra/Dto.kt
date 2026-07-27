@@ -1,32 +1,61 @@
 package eu.kanade.tachiyomi.extension.vi.kirakira
 
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
 class ComicListDto(
     val comics: List<ComicDto> = emptyList(),
-    val current_page: Int = 1,
-    val total_pages: Int = 1,
-)
+    @SerialName("current_page") private val currentPage: Int = 1,
+    @SerialName("total_pages") private val totalPages: Int = 1,
+) {
+    fun toMangasPage(): MangasPage {
+        val mangas = comics.mapNotNull { comic ->
+            if (comic.type.equals("novel", ignoreCase = true)) return@mapNotNull null
+            val slug = comic.id ?: return@mapNotNull null
+
+            SManga.create().apply {
+                title = comic.title
+                url = "/comics/$slug"
+                thumbnail_url = comic.thumbnail?.ifBlank { null } ?: comic.bannerImageUrl?.ifBlank { null }
+            }
+        }
+
+        return MangasPage(mangas, currentPage < totalPages)
+    }
+}
 
 @Serializable
 class ComicDto(
     val id: String? = null,
     val title: String,
     val thumbnail: String? = null,
-    val banner_image_url: String? = null,
+    @SerialName("banner_image_url") val bannerImageUrl: String? = null,
+    val type: String? = null,
 )
 
 @Serializable
 class ComicDetailsDto(
-    val id: String? = null,
     val title: String,
     val thumbnail: String? = null,
-    val banner_image_url: String? = null,
+    @SerialName("banner_image_url") val bannerImageUrl: String? = null,
     val description: String? = null,
+    val authors: String? = null,
     val status: String? = null,
     val genres: List<GenreDto> = emptyList(),
     val chapters: List<ChapterDto> = emptyList(),
+)
+
+@Serializable
+class GenreListDto(
+    val data: GenreListDataDto,
+)
+
+@Serializable
+class GenreListDataDto(
+    val genres: List<GenreDto> = emptyList(),
 )
 
 @Serializable
@@ -52,12 +81,10 @@ class ChapterPagesDto(
 
 @Serializable
 class PageImageDto(
-    val page: Int? = null,
     val src: String? = null,
 )
 
 @Serializable
 class ApiErrorDto(
-    val status: Int? = null,
     val message: String? = null,
 )

@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Inmortal Scan"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
 
     source {
         lang = "es"
-        baseUrl = "https://scanimnortal.com"
+        baseUrl = "https://scan-inmortal.com"
     }
 }

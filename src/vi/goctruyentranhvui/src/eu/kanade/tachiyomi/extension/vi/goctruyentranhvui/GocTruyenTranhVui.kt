@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.extension.vi.goctruyentranhvui
 
+import android.text.InputType
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,64 +17,56 @@ import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getLocalStorage
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import kotlin.text.isNotBlank
 
 @Source
-abstract class GocTruyenTranhVui : KeiSource() {
-
+abstract class GocTruyenTranhVui :
+    KeiSource(),
+    ConfigurableSource {
     private val apiUrl get() = "$baseUrl/api/v2"
 
-    // ============================== Client ================================
+    private val preferences = getPreferences()
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(authInterceptor())
-        .rateLimit(3)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        rateLimit(3)
+        addInterceptor(::authInterceptor)
+    }
 
     private val xhrHeaders: Headers
         get() = headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")
-            .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
-            .add("Accept-Language", "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7")
-            .add("Cache-Control", "max-age=0")
-            .add("Sec-Ch-Ua-Mobile", "?1")
-            .add("Sec-Ch-Ua-Platform", "\"Android\"")
-            .add("Sec-Fetch-Dest", "document")
-            .add("Sec-Fetch-Mode", "navigate")
-            .add("Sec-Fetch-Site", "same-origin")
-            .add("Sec-Fetch-User", "?1")
-            .add("Upgrade-Insecure-Requests", "1")
             .build()
 
-    // ============================== Auth ==================================
+    private fun authInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
 
-    private var cachedAuthToken: String? = null
-    private var authChecked = false
+        if (!request.url.encodedPath.startsWith("/api/")) {
+            return chain.proceed(request)
+        }
 
-    private suspend fun loadAuthToken() {
-        if (authChecked) return
-        authChecked = true
-        cachedAuthToken = getLocalStorage(baseUrl, "Authorization")
-            ?.takeIf { it.isNotBlank() }
-    }
+        val token = tokenCache
 
-    private fun authInterceptor() = Interceptor { chain ->
-        val original = chain.request()
-        val request = original.newBuilder().apply {
-            if (original.url.encodedPath.startsWith("/api/")) {
-                cachedAuthToken?.let { header("Authorization", it) }
-            }
-        }.build()
-        chain.proceed(request)
+        return chain.proceed(
+            request.newBuilder().apply {
+                header("X-Requested-With", "XMLHttpRequest")
+
+                token?.let {
+                    header("Authorization", it)
+                }
+            }.build(),
+        )
     }
 
     // ============================== Popular ===============================
@@ -85,7 +81,7 @@ abstract class GocTruyenTranhVui : KeiSource() {
         ),
     )
 
-    // ============================== Latest ================================
+    // =============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(
         page,
@@ -97,13 +93,10 @@ abstract class GocTruyenTranhVui : KeiSource() {
         ),
     )
 
-    // ============================== Search ================================
+    // =============================== Search ===============================
 
-    override suspend fun getSearchMangaList(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): MangasPage {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        getToken()
         val url = apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("search")
             addQueryParameter("p", (page - 1).toString())
@@ -121,49 +114,42 @@ abstract class GocTruyenTranhVui : KeiSource() {
     }
 
     private fun parseMangaPage(response: Response): MangasPage {
-        val result = response.parseAs<ResultDto<ListingDto>>().result
-        return MangasPage(result.data.map { it.toSManga(baseUrl) }, result.next)
+        val res = response.parseAs<ResultDto<ListingDto>>()
+        val result = res.result ?: throw Exception(res.errorMessage ?: "Lỗi tải danh sách")
+        val hasNextPage = result.next
+        return MangasPage(result.data.map { it.toSManga(baseUrl) }, hasNextPage)
     }
 
-    // ============================== Details + Chapters ====================
-
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.host != baseUrl.toHttpUrlOrNull()?.host) return null
         if (url.pathSegments.size < 2 || url.pathSegments[0] != "truyen") return null
-
         return parseMangaDetails(client.get(url).asJsoup(), url)
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/truyen/${manga.url.substringAfter(':')}"
+    // =========================== Manga Details ============================
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val detailUrl = getMangaUrl(manga).toHttpUrl()
-        val mangaDeferred = if (fetchDetails) {
-            async {
-                val document = client.get(detailUrl).asJsoup()
-                parseMangaDetails(document, detailUrl)
-            }
+    ): SMangaUpdate = client.get(getMangaUrl(manga).toHttpUrl()).use { response ->
+        val document = response.asJsoup()
+        val newManga = parseMangaDetails(document, response.request.url)
+
+        val newChapters = if (fetchChapters) {
+            parseChapterList(newManga)
         } else {
-            null
-        }
-        val chaptersDeferred = if (fetchChapters) {
-            async { fetchChapters(manga) }
-        } else {
-            null
+            chapters
         }
 
         SMangaUpdate(
-            mangaDeferred?.await() ?: manga,
-            chaptersDeferred?.await() ?: chapters,
+            manga = newManga,
+            chapters = newChapters,
         )
     }
 
-    private fun parseMangaDetails(document: Document, url: HttpUrl): SManga = SManga.create().apply {
+    private fun parseMangaDetails(document: Document, requestUrl: HttpUrl): SManga = SManga.create().apply {
         title = document.select(".v-card-title").text()
         genre = document.select(".group-content > .v-chip-link").joinToString { it.text() }
         thumbnail_url = document.selectFirst("img.image")?.absUrl("src")
@@ -172,75 +158,107 @@ abstract class GocTruyenTranhVui : KeiSource() {
         description = document.select(".v-card-text").joinToString { it.wholeText().trim() }
 
         val script = document.select("script").firstOrNull { it.data().contains("const comic = {") }?.data()
-        val id = script?.let { comicIdRegex.find(it)?.groupValues?.get(1) }
+        val id = script?.let { COMIC_ID_REGEX.find(it)?.groupValues?.get(1) }
             ?: document.selectFirst("#comic-id-comment")?.attr("value")
-        val nameEn = script?.let { comicNameEnRegex.find(it)?.groupValues?.get(1) }
-            ?: url.pathSegments.getOrNull(1)
+        val nameEn = script?.let { COMIC_NAME_EN_REGEX.find(it)?.groupValues?.get(1) }
+            ?: requestUrl.pathSegments.getOrNull(1)
 
         if (id != null && nameEn != null) {
             setUrlWithoutDomain("$id:$nameEn")
         }
     }
 
-    private suspend fun fetchChapters(manga: SManga): List<SChapter> {
+    private suspend fun parseChapterList(manga: SManga): List<SChapter> {
         val mangaId = manga.url.substringBefore(':')
         val slug = manga.url.substringAfter(':')
         val result = client.get("$baseUrl/api/comic/$mangaId/chapter?limit=-1", xhrHeaders)
             .parseAs<ResultDto<ChapterListDto>>()
 
-        if (result.result.chapters.isEmpty()) {
-            throw Exception("Có thể: Phiên làm việc đã hết hạn, vui lòng tải lại.")
-        }
+        val chapters = result.result?.chapters ?: throw Exception(result.errorMessage ?: "Phiên làm việc đã hết hạn, vui lòng tải lại.")
 
-        return result.result.chapters.map { it.toSChapter(slug) }
+        return chapters.map { it.toSChapter(slug) }
     }
 
-    private fun parseStatus(status: String?): Int = when {
+    private fun parseStatus(status: String?) = when {
         status == null -> SManga.UNKNOWN
-        status.lowercase().contains("đang thực hiện") -> SManga.ONGOING
-        status.lowercase().contains("hoàn thành") -> SManga.COMPLETED
+        status.contains("Đang thực hiện", ignoreCase = true) -> SManga.ONGOING
+        status.contains("Hoàn thành", ignoreCase = true) -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        val slug = chapter.url.substringAfter("/truyen/").substringBefore("/chuong-")
-        val numberChapter = chapter.url.substringAfter("/chuong-").substringBefore("#")
-        return "$baseUrl/truyen/$slug/chuong-$numberChapter"
-    }
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/truyen/${manga.url.substringAfter(':')}"
 
-    // ============================== Pages =================================
+    // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        loadAuthToken()
+        getToken()
+        val url = chapter.url
+        val slug = url.substringAfter("/truyen/").substringBefore("/chuong-")
+        val numberChapter = url.substringAfter("/chuong-").substringBefore("#")
+        val comicId = url.substringAfter("#")
 
-        val slug = chapter.url.substringAfter("/truyen/").substringBefore("/chuong-")
-        val numberChapter = chapter.url.substringAfter("/chuong-").substringBefore("#")
-        val comicId = chapter.url.substringAfter("#")
         val body = FormBody.Builder()
             .add("comicId", comicId)
             .add("chapterNumber", numberChapter)
             .add("nameEn", slug)
             .build()
 
-        val imageList = client.post("$baseUrl/api/chapter/loadAll", xhrHeaders, body)
-            .parseAs<ResultDto<ImageListDto>>()
-            .result
-            .data
+        suspend fun requestImages(): List<Page>? {
+            return client.post("$baseUrl/api/chapter/loadAll", body).use { response ->
+                val result = runCatching { response.parseAs<ResultDto<ImageListDto>>() }.getOrNull()
+                val imageList = result?.result?.data ?: return@use null
 
-        if (imageList.isNullOrEmpty()) {
-            throw Exception("Chưa đăng nhập trong WebView. Hoặc không có ảnh!")
+                imageList.mapIndexed { i, imgUrl ->
+                    val finalUrl = if (imgUrl.startsWith("/image/")) {
+                        baseUrl + imgUrl
+                    } else {
+                        imgUrl
+                    }
+                    Page(i, imageUrl = finalUrl)
+                }
+            }
+        }
+        // Thử lần 1
+        var pages = requestImages()
+        // Nếu thất bại (do hết hạn cookie/phiên làm việc)
+        if (pages == null) {
+            // Gọi "mồi" đến trang chi tiết để làm mới cookie
+            val mangaUrl = "$baseUrl/truyen/$slug"
+            client.get(mangaUrl).close()
+            // Thử lần 2 sau khi đã có cookie mới
+            pages = requestImages()
         }
 
-        return imageList.mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = if (imageUrl.startsWith("/image/")) baseUrl + imageUrl else imageUrl)
-        }
+        return pages ?: throw Exception("Chưa đăng nhập trong WebView. Hoặc không có ảnh!")
+    }
+
+    private var tokenCache: String? = null
+    private var tokenChecked = false
+
+    private suspend fun getToken(): String? {
+        if (tokenChecked) return tokenCache
+
+        preferences.getString(CUSTOM_TOKEN, null)
+            ?.takeIf(String::isNotBlank)
+            ?.also {
+                tokenCache = it
+                tokenChecked = true
+                return it
+            }
+
+        tokenCache = runCatching { getLocalStorage(baseUrl, "Authorization") }.getOrNull()
+            ?.takeIf(String::isNotBlank)
+        tokenChecked = true
+        return tokenCache
     }
 
     // ============================== Filters ===============================
-
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/category", xhrHeaders).parseAs()
+    override suspend fun fetchFilterData(): JsonElement {
+        getToken()
+        return client.get("$baseUrl/api/category", xhrHeaders).parseAs()
+    }
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data
@@ -249,17 +267,39 @@ abstract class GocTruyenTranhVui : KeiSource() {
             .orEmpty()
             .map(CategoryDto::toOption)
 
-        val filters = mutableListOf<FilterGroup>(
+        val filters = mutableListOf(
             StatusList(getStatusList()),
             SortByList(getSortByList()),
         )
-        if (genres.isNotEmpty()) filters += GenreList(genres)
+
+        if (genres.isNotEmpty()) {
+            filters += GenreList(genres)
+        }
 
         return FilterList(filters)
     }
 
-    // ============================== Constants =============================
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = CUSTOM_TOKEN
+            title = "Authorization Token"
+            summary = "Enter token manually"
+            dialogTitle = "Authorization Token"
+            setOnBindEditTextListener {
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+            setOnPreferenceChangeListener { _, newValue ->
+                val token = newValue as String
+                tokenCache = token.takeIf(String::isNotBlank)
+                tokenChecked = true
+                true
+            }
+        }.also(screen::addPreference)
+    }
 
-    private val comicIdRegex = Regex("""id:\s*"([^"]+)"""")
-    private val comicNameEnRegex = Regex("""nameEn:\s*`([^`]+)`""")
+    companion object {
+        private const val CUSTOM_TOKEN = "custom_token"
+        private val COMIC_ID_REGEX = Regex("""id:\s*"([^"]+)"""")
+        private val COMIC_NAME_EN_REGEX = Regex("""nameEn:\s*`([^`]+)`""")
+    }
 }

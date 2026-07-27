@@ -4,16 +4,14 @@ import eu.kanade.tachiyomi.multisrc.heancms.HeanCms
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 
 @Source
 abstract class OmegaScans : HeanCms() {
-    private val apiUrlHost by lazy { apiUrl.toHttpUrl().host }
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        val apiUrlHost = apiUrl.toHttpUrl().host
+        rateLimit(1) { it.host == apiUrlHost }
+    }
 
-    override val client = super.client.newBuilder()
-        .rateLimit(1) { it.host == apiUrlHost }
-        .build()
-
-    override val useNewChapterEndpoint = true
-    override val useNewQueryEndpoint = true
     override val enableLogin = true
 }

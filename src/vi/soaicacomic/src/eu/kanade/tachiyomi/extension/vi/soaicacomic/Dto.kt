@@ -7,7 +7,7 @@ import kotlinx.serialization.json.jsonPrimitive
 
 @Serializable
 class SearchResponse(
-    val data: List<SearchResultDto> = emptyList(),
+    val data: List<SearchResultDto>,
 )
 
 @Serializable

@@ -6,12 +6,18 @@ plugins {
 
 keiyoushi {
     name = "TruyenHentaiz"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "vi"
-        baseUrl = "https://truyenhentaiz.net"
+        baseUrl {
+            custom("https://truyenhentaiz.net")
+        }
+    }
+
+    deeplink {
+        path("/..*\\.html")
     }
 }

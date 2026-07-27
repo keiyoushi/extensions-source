@@ -1,71 +1,75 @@
 package eu.kanade.tachiyomi.extension.vi.moetruyensuicao
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.get
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
+import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import java.util.concurrent.ConcurrentHashMap
+import okhttp3.ResponseBody
+import okio.BufferedSource
+import okio.buffer
+import okio.source
+import java.io.ByteArrayInputStream
+import java.util.Collections
+import java.util.LinkedHashMap
 
 @Source
-abstract class MoeTruyenSuiCao : HttpSource() {
+abstract class MoeTruyenSuiCao : KeiSource() {
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        addInterceptor(imgxInterceptor())
+        rateLimit(3)
+    }
 
-    override val supportsLatest = true
-
-    private val imgxGrants = ConcurrentHashMap<String, PageAccessEntry>()
-
-    override val client = network.client.newBuilder()
-        .addInterceptor(imgxInterceptor())
-        .rateLimit(3)
-        .build()
-
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("Origin", "https://moetruyen.net")
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
+        set("Origin", "https://moetruyen.net")
+    }
 
     // ============================== Popular =======================================
 
-    override fun popularMangaRequest(page: Int): Request {
+    override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/v2/manga/top".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", "20")
             .addQueryParameter("sort_by", "views")
             .addQueryParameter("time", "all_time")
             .build()
-        return GET(url, headers)
+        return parseMangaList(client.get(url))
     }
-
-    override fun popularMangaParse(response: Response): MangasPage = parseMangaList(response)
 
     // ============================== Latest ========================================
 
-    override fun latestUpdatesRequest(page: Int): Request {
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/v2/manga".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", "20")
             .addQueryParameter("sort", "updated_at")
             .build()
-        return GET(url, headers)
+        return parseMangaList(client.get(url))
     }
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaList(response)
 
     // ============================== Search ========================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/v2/manga".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", "20")
@@ -74,9 +78,7 @@ abstract class MoeTruyenSuiCao : HttpSource() {
                 addQueryParameter("q", query)
             }
 
-            val filterList = filters.ifEmpty { getFilterList() }
-
-            filterList.forEach { filter ->
+            filters.forEach { filter ->
                 when (filter) {
                     is StatusFilter -> filter.toApiValue()?.let { addQueryParameter("status", it) }
                     is SortFilter -> addQueryParameter("sort", filter.toApiValue())
@@ -95,50 +97,55 @@ abstract class MoeTruyenSuiCao : HttpSource() {
                 }
             }
         }.build()
-        return GET(url, headers)
+        return parseMangaList(client.get(url))
     }
-
-    override fun searchMangaParse(response: Response): MangasPage = parseMangaList(response)
 
     // ============================== Details =======================================
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
         val mangaId = manga.url
-        val url = "$baseUrl/v2/manga/$mangaId".toHttpUrl().newBuilder()
+        val detailsUrl = "$baseUrl/v2/manga/$mangaId".toHttpUrl().newBuilder()
             .addQueryParameter("include", "genres")
             .build()
-        return GET(url, headers)
+
+        val detailsDeferred = if (fetchDetails) {
+            async {
+                val result = client.get(detailsUrl).parseAs<ApiResponse<MangaItem>>()
+                (result.data ?: throw Exception("Manga not found")).toSManga()
+            }
+        } else {
+            null
+        }
+        val chaptersDeferred = if (fetchChapters) {
+            async {
+                val result = client.get("$baseUrl/v2/manga/$mangaId/chapters/aggregate")
+                    .parseAs<ApiResponse<ChapterListData>>()
+                result.data?.chapters
+                    ?.filter { it.access == "public" }
+                    ?.map { it.toSChapter() }
+                    .orEmpty()
+            }
+        } else {
+            null
+        }
+
+        SMangaUpdate(
+            manga = detailsDeferred?.await() ?: manga,
+            chapters = chaptersDeferred?.await() ?: chapters,
+        )
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val result = response.parseAs<ApiResponse<MangaItem>>()
-        return (result.data ?: throw Exception("Manga not found")).toSManga()
-    }
-
-    override fun getMangaUrl(manga: SManga): String {
-        val mangaId = manga.url
-        return "$baseUrl/manga/$mangaId"
-    }
-
-    // ============================== Chapters ======================================
-
-    override fun chapterListRequest(manga: SManga): Request {
-        val mangaId = manga.url
-        val url = "$baseUrl/v2/manga/$mangaId/chapters/aggregate".toHttpUrl().newBuilder()
-            .build()
-        return GET(url, headers)
-    }
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.parseAs<ApiResponse<ChapterListData>>()
-        val data = result.data ?: return emptyList()
-        return data.chapters.filter { it.access == "public" }.map { it.toSChapter() }
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
     // ============================== Pages =========================================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val result = response.parseAs<ApiResponse<ChapterReaderData>>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val result = client.get("$baseUrl${chapter.url}").parseAs<ApiResponse<ChapterReaderData>>()
         val data = result.data ?: throw Exception("Chapter not found")
         val chapterId = data.chapter.id
         val pageCount = data.pageUrls.size
@@ -154,7 +161,7 @@ abstract class MoeTruyenSuiCao : HttpSource() {
         }
     }
 
-    private fun fetchPagesWithGrants(chapterId: Int, pageCount: Int): List<Page> {
+    private suspend fun fetchPagesWithGrants(chapterId: Int, pageCount: Int): List<Page> {
         val pages = mutableListOf<Page>()
         val batchSize = 5
 
@@ -164,17 +171,11 @@ abstract class MoeTruyenSuiCao : HttpSource() {
 
             val body = PageAccessRequest(pageIndexes = indices).toJsonRequestBody()
             val url = "$baseUrl/v2/chapters/$chapterId/page-access"
-
-            val request = Request.Builder()
-                .url(url)
-                .post(body)
-                .headers(headers)
-                .header("Accept", "application/json")
+            val accessHeaders = headers.newBuilder()
+                .set("Accept", "application/json")
                 .build()
-
-            val pageAccess = client.newCall(request).execute().use {
-                it.parseAs<ApiResponse<PageAccessData>>()
-            }
+            val pageAccess = client.post(url, accessHeaders, body)
+                .parseAs<ApiResponse<PageAccessData>>()
 
             val accessData = pageAccess.data ?: throw Exception("Failed to get page access")
 
@@ -199,57 +200,59 @@ abstract class MoeTruyenSuiCao : HttpSource() {
         }
 
         val response = chain.proceed(request)
-        val imgxData = response.body.bytes()
+        val source = response.body.source()
 
-        if (imgxData.size <= 13 ||
-            imgxData[0] != 0x49.toByte() || imgxData[1] != 0x4D.toByte() ||
-            imgxData[2] != 0x47.toByte() || imgxData[3] != 0x58.toByte()
+        if (!source.request(14) ||
+            source.buffer[0] != 0x49.toByte() || source.buffer[1] != 0x4D.toByte() ||
+            source.buffer[2] != 0x47.toByte() || source.buffer[3] != 0x58.toByte()
         ) {
-            return@Interceptor response.newBuilder()
-                .body(imgxData.toResponseBody(response.body.contentType()))
-                .build()
+            return@Interceptor response
         }
 
-        val webp = ImageDecryptor.decrypt(imgxData, entry.grant, entry.storageKey)
+        val webp = response.body.use {
+            ImageDecryptor.decrypt(source.readByteArray(), entry.grant, entry.storageKey)
+        }
 
         response.newBuilder()
             .body(webp.toResponseBody("image/webp".toMediaType()))
             .build()
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    private fun DecryptedImage.toResponseBody(mediaType: MediaType): ResponseBody = object : ResponseBody() {
+        override fun contentType(): MediaType = mediaType
+
+        override fun contentLength(): Long = size.toLong()
+
+        override fun source(): BufferedSource = ByteArrayInputStream(data, offset, size).source().buffer()
+    }
 
     // ============================== Filters =======================================
 
-    private var genreList: List<GenreItem> = emptyList()
+    override val supportsFilterFetching get() = true
 
-    override fun getFilterList(): FilterList {
-        fetchGenreListIfNeeded()
-        return if (genreList.isEmpty()) {
-            FilterList(
-                Filter.Header("Không thể tải danh sách thể loại"),
-            )
-        } else {
-            FilterList(
-                GenreFilter(genreList),
-                StatusFilter(),
-                SortFilter(),
-            )
-        }
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/v2/genres")
+        .parseAs<JsonElement>()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data["data"]?.parseAs<List<GenreItem>>().orEmpty()
+        val filters = mutableListOf<Filter<*>>()
+        if (genres.isNotEmpty()) filters += GenreFilter(genres)
+        filters += StatusFilter()
+        filters += SortFilter()
+        return FilterList(filters)
     }
 
-    private fun fetchGenreListIfNeeded() {
-        if (genreList.isNotEmpty()) return
-        genreList = try {
-            val url = "$baseUrl/v2/genres".toHttpUrl()
-            client.newCall(GET(url, headers)).execute().use { response ->
-                response.parseAs<ListApiResponse<GenreListItem>>().data
-                    .map { GenreItem(it.id, it.name) }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            emptyList()
-        }
+    // =============================== Related ======================================
+
+    override val supportsRelatedMangas get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val url = "$baseUrl/v2/manga/${manga.url}/recommendations".toHttpUrl().newBuilder()
+            .addQueryParameter("include", "genres")
+            .build()
+        return client.get(url).parseAs<ListApiResponse<MangaItem>>().data
+            .filter { it.id.toString() != manga.url }
+            .map { it.toSManga() }
     }
 
     // ============================== Utilities =====================================
@@ -260,5 +263,15 @@ abstract class MoeTruyenSuiCao : HttpSource() {
         val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
         val hasNextPage = result.meta?.pagination?.let { page < it.totalPages } ?: false
         return MangasPage(mangas, hasNextPage)
+    }
+
+    private val imgxGrants = Collections.synchronizedMap(
+        object : LinkedHashMap<String, PageAccessEntry>(IMGX_GRANT_CACHE_SIZE, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PageAccessEntry>?): Boolean = size > IMGX_GRANT_CACHE_SIZE
+        },
+    )
+
+    private companion object {
+        const val IMGX_GRANT_CACHE_SIZE = 500
     }
 }

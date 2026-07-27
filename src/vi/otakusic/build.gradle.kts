@@ -6,12 +6,19 @@ plugins {
 
 keiyoushi {
     name = "Otakusic"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "vi"
-        baseUrl = "https://otakusic.com"
+        baseUrl {
+            custom("https://otakusic.com")
+        }
+    }
+
+    deeplink {
+        path("/chi-tiet/..*")
+        path("/doc-truyen/..*")
     }
 }
