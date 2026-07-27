@@ -32,10 +32,8 @@ abstract class MangaLivre :
 
     override val supportsLatest: Boolean = true
 
-    private val decryptor = MangaLivreDecryptor(baseUrl, network.client, headers)
-
     override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(ReadingGateInterceptor(baseUrl, network.client, decryptor))
+        .addInterceptor(ReadingGateInterceptor(baseUrl, network.client))
         .rateLimit(2, 1.seconds) { it.host == baseUrlHost }
         .build()
 
@@ -125,12 +123,8 @@ abstract class MangaLivre :
     // ============================== Pages =======================================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val readerPath = chapter.url.substringBeforeLast("#")
         val ref = chapter.url.substringAfterLast("#").parseAs<ChapterReferenceDto>()
         return GET("$apiUrl/mangas/${ref.mangaId}/chapters/${ref.chapterId}", headers)
-            .newBuilder()
-            .tag(ReadingGateInterceptor.ReaderPath::class.java, ReadingGateInterceptor.ReaderPath(readerPath))
-            .build()
     }
 
     override fun pageListParse(response: Response): List<Page> = response.parseJson<PageDto>().toPageList()
