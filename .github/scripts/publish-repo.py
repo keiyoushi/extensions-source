@@ -28,7 +28,7 @@ REPO_ICON_DIR.unlink(missing_ok=True)
 
 APK_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions@repo/apk"
 JAR_BASE_URL = "https://raw.githubusercontent.com/keiyoushi/extensions/repo/jar"
-ICON_URL_FORMAT = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions-source@main/src/{module}/res/mipmap-xhdpi/ic_launcher.png"
+ICON_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions-source@main"
 
 to_delete: list[str] = json.loads(sys.argv[1])
 
@@ -45,6 +45,21 @@ for module in to_delete:
 # source-info JSON emitted by its assembleRelease task (see GenerateSourceInfoTask); its APK is a
 # sibling in the same build dir. aapt reads the icon out of the APK
 new_extensions: list[index_pb2.Extension] = []
+
+SOURCE_DIR = Path(__file__).resolve().parents[2]
+
+
+def get_icon_url(module: str, theme: str | None) -> str:
+    module_icon = f"src/{module.replace('.', '/')}/res/mipmap-xhdpi/ic_launcher.png"
+    if (SOURCE_DIR / module_icon).exists():
+        return f"{ICON_BASE_URL}/{module_icon}"
+
+    if theme:
+        theme_icon = f"lib-multisrc/{theme}/res/mipmap-xhdpi/ic_launcher.png"
+        if (SOURCE_DIR / theme_icon).exists():
+            return f"{ICON_BASE_URL}/{theme_icon}"
+
+    return f"{ICON_BASE_URL}/core/src/main/res/mipmap-xhdpi/ic_launcher.png"
 
 for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
     with info_file.open(encoding="utf-8") as f:
@@ -73,7 +88,7 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
             resources=index_pb2.Resources(
                 apkUrl=f"{APK_BASE_URL}/{apk_name}",
                 jarUrl=f"{JAR_BASE_URL}/{jar.name}",
-                iconUrl=ICON_URL_FORMAT.format(module=info["module"].replace(".", "/")),
+                iconUrl=get_icon_url(info["module"], info.get("theme")),
             ),
             extensionLib=info["extensionLib"],
             versionCode=info["versionCode"],
