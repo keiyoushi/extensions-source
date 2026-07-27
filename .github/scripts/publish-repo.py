@@ -59,19 +59,20 @@ for module in to_delete:
 new_extensions: list[index_pb2.Extension] = []
 
 SOURCE_DIR = Path(__file__).resolve().parents[2]
+ICON_FILE = "res/mipmap-xhdpi/ic_launcher.png"
 
 
 def get_icon_url(module: str, theme: str | None) -> str:
-    module_icon = f"src/{module.replace('.', '/')}/res/mipmap-xhdpi/ic_launcher.png"
+    module_icon = f"src/{module.replace('.', '/')}/{ICON_FILE}"
     if (SOURCE_DIR / module_icon).exists():
         return f"{ICON_BASE_URL}/{module_icon}"
 
     if theme:
-        theme_icon = f"lib-multisrc/{theme}/res/mipmap-xhdpi/ic_launcher.png"
+        theme_icon = f"lib-multisrc/{theme}/{ICON_FILE}"
         if (SOURCE_DIR / theme_icon).exists():
             return f"{ICON_BASE_URL}/{theme_icon}"
 
-    return f"{ICON_BASE_URL}/core/src/main/res/mipmap-xhdpi/ic_launcher.png"
+    return f"{ICON_BASE_URL}/core/src/main/{ICON_FILE}"
 
 for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
     with info_file.open(encoding="utf-8") as f:
