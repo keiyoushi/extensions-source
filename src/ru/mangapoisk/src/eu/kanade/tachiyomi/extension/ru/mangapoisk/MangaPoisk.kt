@@ -208,7 +208,7 @@ abstract class MangaPoisk : KeiSource() {
 
     // =========================== Utilities ============================
     private fun Element.imgAttr(): String = when {
-        hasAttr("data-src") -> absUrl("data-src")
+        hasAttr("data-src") && absUrl("data-src").isNotBlank() -> absUrl("data-src")
         else -> absUrl("src")
     }
 
