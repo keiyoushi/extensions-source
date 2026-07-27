@@ -27,11 +27,9 @@ abstract class InmortalScan : Madara() {
 
     override fun popularMangaNextPageSelector() = "a:contains(Siguiente)"
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/$mangaSubString/?catalog_page=$page&catalog_order=updated", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/$mangaSubString/?catalog_page=$page&catalog_order=updated", headers)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        GET("$baseUrl/$mangaSubString/?catalog_page=$page&catalog_search=$query", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/$mangaSubString/?catalog_page=$page&catalog_search=$query", headers)
 
     override fun searchMangaSelector() = popularMangaSelector()
 
