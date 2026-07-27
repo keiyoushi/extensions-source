@@ -12,10 +12,9 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.encodeToJsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -108,7 +107,7 @@ abstract class Masonry : KeiSource() {
             }.let {
                 listOf(Tag("", "")) + it
             }
-        return jsonInstance.encodeToJsonElement(tags)
+        return tags.toJsonElement()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
