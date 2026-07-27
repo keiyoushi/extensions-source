@@ -347,8 +347,7 @@ abstract class TruyenTVN : KeiSource() {
 
     private fun Element.extractImageUrl(): String = absUrl("src").ifEmpty { absUrl("data-src") }
 
-    private fun JsonObject.withMangaId(mangaId: String): JsonObject =
-        JsonObject(this + ("mangaId" to mangaId.toJsonElement()))
+    private fun JsonObject.withMangaId(mangaId: String): JsonObject = JsonObject(this + ("mangaId" to mangaId.toJsonElement()))
 
     private fun buildPagedUrl(path: String, page: Int): String = if (page > 1) {
         "$baseUrl$path/page/$page"
