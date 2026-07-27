@@ -6,14 +6,18 @@ plugins {
 
 keiyoushi {
     name = "VinaHentai"
-    versionCode = 12
+    versionCode = 13
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "vi"
         baseUrl {
             custom("https://vinahentai.blog")
         }
+    }
+
+    deeplink {
+        path("/truyen-hentai/..*")
     }
 }
