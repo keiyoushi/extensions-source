@@ -51,6 +51,11 @@ abstract class ViHentai :
             val response = chain.proceed(request)
 
             if (request.url.host != baseUrl.toHttpUrl().host) return@addInterceptor response
+            val contentType = response.body.contentType()
+            val isHtml = contentType?.let {
+                (it.type == "text" && it.subtype == "html") || it.subtype == "xhtml+xml"
+            } == true
+            if (!isHtml) return@addInterceptor response
 
             val body = response.peekBody(Long.MAX_VALUE).string()
             if (!body.contains("wire:initial-data") || !body.contains("enter-secret")) {
