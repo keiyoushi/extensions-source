@@ -14,11 +14,13 @@ import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -136,9 +138,18 @@ abstract class TruyenTVN : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
-        val mangaId = document.selectFirst("input#post_manga_id")?.attr("value")
-        val updatedManga = if (fetchDetails) parseMangaDetails(document, manga, mangaId) else manga
+        val cachedMangaId = manga.memo["mangaId"]?.stringOrNull
+        val document = if (fetchDetails || (fetchChapters && cachedMangaId == null)) {
+            client.get(getMangaUrl(manga)).asJsoup()
+        } else {
+            null
+        }
+        val mangaId = cachedMangaId ?: document?.selectFirst("input#post_manga_id")?.attr("value")
+        val updatedManga = when {
+            fetchDetails -> parseMangaDetails(checkNotNull(document), manga, mangaId)
+            mangaId != null && cachedMangaId == null -> manga.apply { memo = memo.withMangaId(mangaId) }
+            else -> manga
+        }
         val updatedChapters = if (fetchChapters && mangaId != null) fetchChapterList(mangaId) else chapters
         return SMangaUpdate(updatedManga, updatedChapters)
     }
@@ -155,6 +166,7 @@ abstract class TruyenTVN : KeiSource() {
             genre = document.select("#genres-tags-container a[href]").joinToString { it.text() }
             status = parseStatus(document.selectFirst("span:has(i[title='Trạng thái'])")?.text())
             description = document.selectFirst("#synopsisText")?.text()
+            mangaId?.let { memo = manga.memo.withMangaId(it) }
         }
     }
 
@@ -334,6 +346,9 @@ abstract class TruyenTVN : KeiSource() {
     }
 
     private fun Element.extractImageUrl(): String = absUrl("src").ifEmpty { absUrl("data-src") }
+
+    private fun JsonObject.withMangaId(mangaId: String): JsonObject =
+        JsonObject(this + ("mangaId" to mangaId.toJsonElement()))
 
     private fun buildPagedUrl(path: String, page: Int): String = if (page > 1) {
         "$baseUrl$path/page/$page"
