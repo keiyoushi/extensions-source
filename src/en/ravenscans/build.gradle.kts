@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Raven Scans"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "mangathemesia"
 
     source {
         lang = "en"
-        baseUrl = "https://ravenscans.org"
+        baseUrl = "https://ravenscans.net"
     }
 }

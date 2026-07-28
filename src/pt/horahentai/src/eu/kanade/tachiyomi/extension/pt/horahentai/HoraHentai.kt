@@ -21,6 +21,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import kotlin.time.Instant
 
 @Source
@@ -91,6 +92,11 @@ abstract class HoraHentai : KeiSource() {
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
 
+        val galleries = document.select("div.galeriaTabItem")
+        val date = document.selectFirst("meta[property=article:published_time]")
+            ?.attr("content")
+            .toTimestamp()
+
         val updatedManga = SManga.create().apply {
             url = manga.url
             title = document.selectFirst("h1.post-titulo")!!.text()
@@ -99,27 +105,57 @@ abstract class HoraHentai : KeiSource() {
             genre = document.select("ul.post-itens a[href*=/category/] .postTagNome, ul.post-itens a[href*=/tag/] .postTagNome")
                 .joinToString { it.text() }
             status = SManga.COMPLETED
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            // Galleries are a series that can still receive chapters, unlike a single post.
+            update_strategy = if (galleries.isEmpty()) UpdateStrategy.ONLY_FETCH_ONCE else UpdateStrategy.ALWAYS_UPDATE
         }
 
-        val chapter = SChapter.create().apply {
-            url = manga.url
-            name = "Capítulo"
-            chapter_number = 1F
-            date_upload = document.selectFirst("meta[property=article:published_time]")
-                ?.attr("content")
-                .toTimestamp()
+        val chapters = when {
+            galleries.isEmpty() -> listOf(
+                SChapter.create().apply {
+                    url = manga.url
+                    name = "Capítulo"
+                    chapter_number = 1F
+                    date_upload = date
+                },
+            )
+            else -> galleries.mapNotNull { it.toSChapter(manga.url, date) }.reversed()
         }
 
-        return SMangaUpdate(updatedManga, listOf(chapter))
+        return SMangaUpdate(updatedManga, chapters)
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
-        .select("ul.post-fotos li img")
-        .mapIndexed { index, img ->
+    private fun Element.toSChapter(mangaUrl: String, date: Long): SChapter? {
+        val galleryId = selectFirst("div.galeriaConteudo[id~=^galeria-\\d+$]")?.id() ?: return null
+        val label = selectFirst(".galeriaTabCapitulo")?.text().orEmpty()
+        val chapterTitle = selectFirst(".galeriaTabTitulo")?.text().orEmpty()
+
+        return SChapter.create().apply {
+            // Every gallery lives on the same page, so the anchor is what makes a chapter unique.
+            url = "$mangaUrl#$galleryId"
+            name = when {
+                label.isEmpty() -> chapterTitle.ifEmpty { "Capítulo" }
+                chapterTitle.isEmpty() -> label
+                else -> "$label: $chapterTitle"
+            }
+            chapter_number = CHAPTER_NUMBER_REGEX.find(label)?.groupValues?.get(1)?.toFloatOrNull() ?: -1F
+            date_upload = date
+        }
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val galleryId = chapter.url.substringAfter('#', "")
+        val document = client.get(baseUrl + chapter.url.substringBefore('#')).asJsoup()
+
+        val images = when {
+            galleryId.isEmpty() -> document.select("ul.post-fotos li img")
+            else -> document.select("div.galeriaConteudo#$galleryId img")
+        }
+
+        return images.mapIndexed { index, img ->
             val imageUrl = img.absUrl("data-src").ifEmpty { img.absUrl("src") }
             Page(index, imageUrl = imageUrl)
         }
+    }
 
     override val supportsFilterFetching get() = true
 
@@ -152,4 +188,8 @@ abstract class HoraHentai : KeiSource() {
     }
 
     private fun String?.toTimestamp(): Long = this?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: 0L
+
+    companion object {
+        private val CHAPTER_NUMBER_REGEX = Regex("""(\d+(?:\.\d+)?)""")
+    }
 }

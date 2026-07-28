@@ -1,66 +1,40 @@
 package eu.kanade.tachiyomi.extension.zh.favcomic
 
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
 @Source
 abstract class FavComic :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
-    override val supportsLatest = true
-
     private val pref by getPreferencesLazy()
-
-    override val client = super.client.newBuilder().addInterceptor(ImageDecryptInterceptor()).build()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         preferencesInternal(screen.context).forEach(screen::addPreference)
     }
 
-    // Popular Page
+    override fun OkHttpClient.Builder.configureClient() = apply { addInterceptor(ImageDecryptInterceptor()) }
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/rank".toHttpUrl().newBuilder()
-            .addQueryParameter("range", pref.getString(PREF_RANK_TYPE, "1"))
-            .addQueryParameter("comicType", pref.getString(PREF_MANGA_TYPE, "boy-1")!!.substringAfter('-'))
-            .addQueryParameter("vip", "0")
-        return GET(url.build())
-    }
-
-    override fun popularMangaParse(response: Response) = response.asJsoup().let { doc ->
-        val mangas = doc.select(".rank_item > a").map { a ->
-            val img = a.selectFirst(".cover > img")!!
-            SManga.create().apply {
-                setUrlWithoutDomain(a.absUrl("href"))
-                thumbnail_url = "${img.absUrl("data-src")}#${img.hasClass("encrypted-image")}"
-                title = img.attr("alt")
-                author = a.selectFirst(".author")!!.text()
-                description = a.selectFirst(".brief")!!.text()
-            }
-        }
-        MangasPage(mangas, false)
-    }
-
-    // Latest Page
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/${pref.getString(PREF_MANGA_TYPE, "boy-1")!!.substringBefore('-')}?page=$page")
-
-    override fun latestUpdatesParse(response: Response) = response.asJsoup().let { doc ->
+    private fun mangasPageParse(response: Response): MangasPage {
+        val doc = response.asJsoup()
         val mangas = doc.select(".cover_box > a").map { a ->
             val img = a.selectFirst(".cover")!!
             SManga.create().apply {
@@ -70,17 +44,44 @@ abstract class FavComic :
             }
         }
         val e = doc.selectFirst(".pagination_box > .content_box > div:nth-last-child(2) > a")!!
-        MangasPage(mangas, !e.hasClass("active"))
+        return MangasPage(mangas, !e.hasClass("active"))
     }
 
-    // Search Page
+    // Popular
 
-    override fun getFilterList() = buildFilterList()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "$baseUrl/rank".toHttpUrl().newBuilder()
+            .addQueryParameter("range", pref.getString(PREF_RANK_TYPE, "1"))
+            .addQueryParameter("comicType", pref.getString(PREF_MANGA_TYPE, "boy-1")!!.substringAfter('-'))
+            .addQueryParameter("vip", "0")
+            .build()
+        val mangas = client.get(url).asJsoup().select(".rank_item > a").map { a ->
+            val img = a.selectFirst(".cover > img")!!
+            SManga.create().apply {
+                setUrlWithoutDomain(a.absUrl("href"))
+                thumbnail_url = "${img.absUrl("data-src")}#${img.hasClass("encrypted-image")}"
+                title = img.attr("alt")
+                author = a.selectFirst(".author")!!.text()
+                description = a.selectFirst(".brief")!!.text()
+            }
+        }
+        return MangasPage(mangas, false)
+    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    // Updates
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = "$baseUrl/${pref.getString(PREF_MANGA_TYPE, "boy-1")!!.substringBefore('-')}?page=$page"
+        return mangasPageParse(client.get(url))
+    }
+
+    // Search
+
+    override fun getFilterList(data: JsonElement?) = buildFilterList()
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val mangaTypeFilter = filters.firstInstance<MangaTypeFilter>()
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment(mangaTypeFilter.toString())
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment(mangaTypeFilter.toString())
             .addQueryParameter("keyword", query)
             .addQueryParameter("origin", filters[2].toString())
             .addQueryParameter("finished", filters[3].toString())
@@ -88,18 +89,22 @@ abstract class FavComic :
             .addQueryParameter("sort", filters[5].toString())
             .addQueryParameter("page", page.toString())
         filters.firstInstance<TagGroup>().getTag(mangaTypeFilter.state)?.run { url.addQueryParameter("tag", this) }
-
-        return GET(url.build())
+        return mangasPageParse(client.get(url.build()))
     }
 
-    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
+    // Manga & Chapters
 
-    // Manga Detail Page
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val doc = client.get(baseUrl + manga.url).asJsoup()
 
-    override fun mangaDetailsParse(response: Response) = response.asJsoup().let { doc ->
         val img = doc.selectFirst(".comic_cover_box > .flex_box > img")!!
         val note = doc.selectFirst(".translation_agency_box")?.text()
-        SManga.create().apply {
+        val sManga = SManga.create().apply {
             setUrlWithoutDomain(doc.location())
             title = doc.selectFirst(".comic_title")!!.text()
             thumbnail_url = "${img.absUrl("data-src")}#${img.hasClass("encrypted-image")}"
@@ -112,36 +117,30 @@ abstract class FavComic :
             }
             genre = doc.select(".tag_box a").joinToString(transform = Element::text)
         }
-    }
 
-    // Catalog Page
-
-    override fun chapterListParse(response: Response) = response.asJsoup().let { doc ->
-        doc.select(".catalog_box a").map { a ->
-            val note = a.selectFirst("span:last-child")?.text()?.toFloatOrNull()
+        val sChapters = doc.select(".catalog_box a").map { a ->
+            val price = a.selectFirst("span:last-child")?.text()?.toFloatOrNull()
             SChapter.create().apply {
                 setUrlWithoutDomain(a.absUrl("href"))
-                name = (note?.let { "\uD83E\uDE99 " } ?: "") + a.selectFirst(".title")!!.text()
-                scanlator = note?.let { "￥$note" }
+                name = (price?.let { "\uD83E\uDE99 " } ?: "") + a.selectFirst(".title")!!.text()
+                scanlator = price?.let { "￥$price" }
             }
-        }
-    }.reversed()
+        }.reversed()
 
-    // Manga View Page
+        return SMangaUpdate(sManga, sChapters)
+    }
 
-    override fun pageListParse(response: Response) = response.asJsoup().let { doc ->
+    // Pages
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val doc = client.get(baseUrl + chapter.url).asJsoup()
         when (doc.selectFirst(".comic_chapter_box")!!.attr("code")) {
             "1" -> throw Exception("此话需在 WebView 中登录才能看")
             "3" -> throw Exception("金币不足，请充值")
             "4" -> throw Exception("请在 WebView 中付费解锁此话")
             "444" -> throw Exception("免费额度已用完，明天零点重置")
-            else -> doc.select("#content > img").mapIndexed { i, img ->
-                Page(i, imageUrl = "${img.absUrl("data-src")}#${img.hasClass("encrypted-image")}")
-            }
+        }
+        return doc.select("#content > img").mapIndexed { i, img ->
+            Page(i, imageUrl = "${img.absUrl("data-src")}#${img.hasClass("encrypted-image")}")
         }
     }
-
-    // Image
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }

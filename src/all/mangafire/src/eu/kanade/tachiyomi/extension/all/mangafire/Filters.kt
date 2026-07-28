@@ -42,6 +42,27 @@ open class UriTriSelectFilter(
     }
 }
 
+val CONTENT_RATINGS = listOf("safe", "suggestive", "erotica", "pornographic")
+
+class ContentRatingFilter(
+    defaultRatings: Set<String>,
+    ratings: List<Pair<String, String>> = CONTENT_RATINGS.map {
+        it.replaceFirstChar { c -> c.uppercase() } to it
+    },
+) : UriMultiSelectFilter(
+    "Content Rating",
+    "content_rating[]",
+    ratings.map { it.first to it.second }.toTypedArray(),
+) {
+    init {
+        state.forEach { option ->
+            if (option.value in defaultRatings) {
+                option.state = true
+            }
+        }
+    }
+}
+
 class TypeFilter :
     UriMultiSelectFilter(
         "Type",

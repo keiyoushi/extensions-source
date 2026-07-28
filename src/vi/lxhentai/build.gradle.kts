@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "LXManga"
-    versionCode = 33
+    versionCode = 34
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         id = 6495630445796108150L
@@ -19,7 +19,6 @@ keiyoushi {
     }
 
     deeplink {
-        host("lxmanga.space")
         path("/truyen/..*")
     }
 }

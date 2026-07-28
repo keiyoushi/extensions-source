@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "OkyyKomik"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "zeistmanga"
 
     source {
         lang = "id"
-        baseUrl = "http://www.okyykomik.my.id"
+        baseUrl = "https://www.okyykomik.my.id"
     }
 }
