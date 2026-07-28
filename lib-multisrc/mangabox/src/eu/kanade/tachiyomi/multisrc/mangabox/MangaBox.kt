@@ -1,12 +1,10 @@
 package eu.kanade.tachiyomi.multisrc.mangabox
 
 import android.annotation.SuppressLint
-import android.app.Application
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import android.widget.Toast
 import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangabox.imagesize.ImageSize
@@ -43,8 +41,6 @@ import okio.Buffer
 import okio.IOException
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import kotlin.time.Instant
 
 abstract class MangaBox :
@@ -192,6 +188,10 @@ abstract class MangaBox :
         // If all CDNs fail, throw an error
         throw IOException("All CDN attempts failed.")
     }
+
+    // The origin header causes cache misses on Cloudflare,
+    // which significantly increases response time
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Origin")
 
     open val popularUrlPath = "manga-list/hot-manga?page="
 
@@ -460,13 +460,6 @@ abstract class MangaBox :
 
                 for ((url, deferredSize) in imageUrls.zip(deferredSizes)) {
                     val size = deferredSize.await()
-                    if (size == null) {
-                        Toast.makeText(
-                            Injekt.get<Application>(),
-                            "Failed to get image size for $url",
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                    }
                     val prev = imageList.lastOrNull()
                     val prevSize = prev?.size
                     if (
