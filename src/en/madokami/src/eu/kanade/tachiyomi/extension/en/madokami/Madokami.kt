@@ -24,7 +24,6 @@ import keiyoushi.zip.zipDirectoryAsync
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.jsonPrimitive
 import net.greypanther.natsort.CaseInsensitiveSimpleNaturalComparator
 import okhttp3.Credentials
 import okhttp3.HttpUrl
