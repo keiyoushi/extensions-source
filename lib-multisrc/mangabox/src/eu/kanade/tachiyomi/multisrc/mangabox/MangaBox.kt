@@ -24,9 +24,12 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.stringOrNull
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -293,8 +296,11 @@ abstract class MangaBox :
 
     private fun mangaFromElement(element: Element, urlSelector: String = "h3 a"): SManga = SManga.create().apply {
         val urlElement = element.selectFirst(urlSelector)!!
-        url = urlElement.attr("abs:href")
-            .substringAfter(baseUrl) // intentionally not using setUrlWithoutDomain
+        val fullUrl = urlElement.attr("abs:href")
+        memo = buildJsonObject {
+            put("fullUrl", fullUrl)
+        }
+        url = fullUrl.substringAfter(baseUrl) // intentionally not using setUrlWithoutDomain
         title = urlElement.text()
         thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
     }
@@ -311,11 +317,12 @@ abstract class MangaBox :
 
     open val altName = "Alternative Name: "
 
-    override fun getMangaUrl(manga: SManga): String = if (manga.url.startsWith("http")) {
-        manga.url
-    } else {
-        super.getMangaUrl(manga)
-    }
+    override fun getMangaUrl(manga: SManga): String = manga.memo["fullUrl"]?.stringOrNull
+        ?: if (manga.url.startsWith("http")) {
+            manga.url
+        } else {
+            super.getMangaUrl(manga)
+        }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? = parseMangaDetails(
         client.get(url).asJsoup(),
@@ -373,7 +380,7 @@ abstract class MangaBox :
     // ============================= Chapters ==============================
 
     open suspend fun chapterListResponse(manga: SManga): Response {
-        val slug = manga.url.split("/").last()
+        val slug = getMangaUrl(manga).toHttpUrl().pathSegments.last()
         return client.get("${apiChapterListUrl.replace("__SLUG__", slug)}?limit=-1")
     }
 
