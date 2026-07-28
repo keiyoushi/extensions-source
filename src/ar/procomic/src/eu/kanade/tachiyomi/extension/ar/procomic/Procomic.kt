@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ar.procomic
 
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -14,6 +15,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import okhttp3.CacheControl
 import okhttp3.Headers
@@ -37,19 +39,21 @@ abstract class Procomic : KeiSource() {
         )
     }
 
+    private val json = Json { ignoreUnknownKeys = true }
+
     override fun Headers.Builder.configureHeaders() = apply {
-        set("Accept-Encoding", "gzip") // ponytail: only gzip is reliably handled
+        // Let OkHttp handle Accept-Encoding and transparent decompression
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val filters = getFilterList()
-        filters.filterIsInstance<SortFilter>().firstOrNull()?.state = 0 // ponytail: "popular" is default
+        filters.filterIsInstance<SortFilter>().firstOrNull()?.state = 0
         return searchApi(page, filters)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val filters = getFilterList()
-        filters.filterIsInstance<SortFilter>().firstOrNull()?.state = 2 // "latest_chapter"
+        filters.filterIsInstance<SortFilter>().firstOrNull()?.state = 2
         return searchApi(page, filters)
     }
 
@@ -60,6 +64,9 @@ abstract class Procomic : KeiSource() {
         val typeFilter = filters.filterIsInstance<TypeFilter>().firstOrNull()
         val sortFilter = filters.filterIsInstance<SortFilter>().firstOrNull()
         val yearFilter = filters.filterIsInstance<YearFilter>().firstOrNull()
+        val statusFilter = filters.filterIsInstance<StatusFilter>().firstOrNull()
+        val genreFilter = filters.filterIsInstance<GenreFilter>().firstOrNull()
+        val tagFilter = filters.filterIsInstance<TagFilter>().firstOrNull()
         val effectiveSort = sortFilter?.selected ?: "popular"
         val endpoint = if (isCatalog) "api/public/content" else "api/public/series/search"
         val url = baseUrl.toHttpUrl().newBuilder()
@@ -72,16 +79,19 @@ abstract class Procomic : KeiSource() {
                 if (!isCatalog) addQueryParameter("search", query)
                 typeFilter?.selected?.also { addQueryParameter("type", it) }
                 yearFilter?.selected?.also { addQueryParameter("year", it) }
+                statusFilter?.selected?.also { addQueryParameter("status", it) }
+                genreFilter?.checked?.forEach { addQueryParameter("genre", it) }
+                tagFilter?.checked?.forEach { addQueryParameter("tag", it) }
             }
             .build()
         val request = GET(url, headers).newBuilder().cacheControl(CacheControl.FORCE_NETWORK).build()
-        val response = client.newCall(request).await()
-        val data = response.parseAs<SearchResponse>()
+        val data = client.newCall(request).await().parseAs<SearchResponse>(json)
         MangasPage(
             data.data.filter { it.type in SUPPORTED_TYPES }.map { it.toSManga() },
             data.meta?.hasNextPage() ?: false,
         )
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        Log.e("Procomic", "searchApi failed: $e", e)
         MangasPage(emptyList(), false)
     }
 
@@ -119,7 +129,7 @@ abstract class Procomic : KeiSource() {
 
     private suspend fun fetchApiManga(type: String, id: String): ApiManga {
         val url = "$baseUrl/api/public/$type/$id"
-        return client.newCall(GET(url, headers)).await().parseAs()
+        return client.newCall(GET(url, headers)).await().parseAs<ApiManga>(json)
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -131,7 +141,7 @@ abstract class Procomic : KeiSource() {
 
     private fun ApiManga.toSManga(): SManga = SManga.create().apply {
         url = "/series/$type/$id/$slug"
-        title = title
+        title = this@toSManga.title
         metadata?.let { meta ->
             artist = meta.artist
             author = meta.author
@@ -173,7 +183,7 @@ abstract class Procomic : KeiSource() {
 
     private fun SearchItem.toSManga(): SManga = SManga.create().apply {
         url = "/series/$type/$id/$slug"
-        title = title
+        title = this@toSManga.title
         thumbnail_url = (coverImageApp?.desktop ?: coverImage)?.let {
             if (it.startsWith("/")) "$baseUrl$it" else it
         }
@@ -200,6 +210,9 @@ abstract class Procomic : KeiSource() {
         TypeFilter(),
         SortFilter(),
         YearFilter(),
+        StatusFilter(),
+        GenreFilter(CategoriesCache.getGenres(this)),
+        TagFilter(CategoriesCache.getTags(this)),
     )
 
     companion object {
