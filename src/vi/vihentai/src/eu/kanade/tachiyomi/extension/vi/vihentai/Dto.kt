@@ -1,43 +1,36 @@
 package eu.kanade.tachiyomi.extension.vi.vihentai
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
-class SyncInputRequestDto(
-    val fingerprint: JsonObject,
-    val serverMemo: JsonObject,
-    val updates: List<SyncInputUpdateDto>,
+class LivewireInitialData(
+    val fingerprint: JsonElement,
+    val serverMemo: JsonElement,
 )
 
 @Serializable
-class SyncInputUpdateDto(
+class LivewireRequest(
+    val fingerprint: JsonElement,
+    val serverMemo: JsonElement,
+    val updates: List<JsonElement>,
+)
+
+@Serializable
+class LivewireUpdate<T>(
     val type: String,
-    val payload: SyncInputPayloadDto,
+    val payload: T,
 )
 
 @Serializable
-class SyncInputPayloadDto(
+class SyncInputPayload(
     val id: String,
     val name: String,
     val value: String,
 )
 
 @Serializable
-class SubmitRequestDto(
-    val fingerprint: JsonObject,
-    val serverMemo: JsonObject,
-    val updates: List<SubmitUpdateDto>,
-)
-
-@Serializable
-class SubmitUpdateDto(
-    val type: String,
-    val payload: SubmitPayloadDto,
-)
-
-@Serializable
-class SubmitPayloadDto(
+class CallMethodPayload(
     val id: String,
     val method: String,
     val params: List<String>,
