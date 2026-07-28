@@ -14,11 +14,13 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -197,7 +199,11 @@ abstract class YuriNeko : KeiSource() {
     }
 
     // ============================== Details ===============================
-    private suspend fun fetchMangaDetails(mangaId: String, mangaUrl: String): SManga {
+    private suspend fun fetchMangaDetails(
+        mangaId: String,
+        mangaUrl: String,
+        existingMemo: JsonObject = JsonObject(emptyMap()),
+    ): SManga {
         val details = client.get("$apiUrl/mangas/$mangaId").parseAs<MangaDetailsDto>()
 
         val authors = details.linkedAuthors.map(LinkedPersonDto::name).joinToString()
@@ -213,6 +219,7 @@ abstract class YuriNeko : KeiSource() {
             status = parseStatus(details.status)
             description = details.description?.let(::htmlToText)
             thumbnail_url = cdnImageUrl(details.thumbnailUrl)
+            memo = existingMemo.withMangaId(mangaId)
         }
     }
 
@@ -229,12 +236,18 @@ abstract class YuriNeko : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val mangaId = "$baseUrl${manga.url}".toHttpUrl().mangaIdOrNull()
+        val cachedMangaId = manga.memo["mangaId"]?.stringOrNull
+        val mangaId = cachedMangaId
+            ?: "$baseUrl${manga.url}".toHttpUrl().mangaIdOrNull()
             ?: extractMangaIdFromDocument(client.get("$baseUrl${manga.url}").asJsoup())
             ?: throw IllegalArgumentException("Không tìm thấy manga id từ URL: ${manga.url}")
         return coroutineScope {
             val updatedManga = async {
-                if (fetchDetails) fetchMangaDetails(mangaId, "/manga/$mangaId") else manga
+                when {
+                    fetchDetails -> fetchMangaDetails(mangaId, "/manga/$mangaId", manga.memo)
+                    cachedMangaId == null -> manga.apply { memo = memo.withMangaId(mangaId) }
+                    else -> manga
+                }
             }
             val updatedChapters = async {
                 if (fetchChapters) fetchAllChapters(mangaId) else chapters
@@ -247,6 +260,7 @@ abstract class YuriNeko : KeiSource() {
         setUrlWithoutDomain("/manga/${manga.id}")
         title = manga.title
         thumbnail_url = cdnImageUrl(manga.thumbnailUrl)
+        memo = memo.withMangaId(manga.id)
     }
 
     private fun parseStatus(status: String?): Int = when (status) {
@@ -442,14 +456,15 @@ abstract class YuriNeko : KeiSource() {
             ?: pathSegments.firstOrNull(uuidRegex::matches)
     }
 
+    private fun JsonObject.withMangaId(mangaId: String): JsonObject = JsonObject(this + ("mangaId" to mangaId.toJsonElement()))
+
     // =============================== Related ================================
 
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val mangaId = "$baseUrl${manga.url}"
-            .toHttpUrl()
-            .mangaIdOrNull()
+        val mangaId = manga.memo["mangaId"]?.stringOrNull
+            ?: "$baseUrl${manga.url}".toHttpUrl().mangaIdOrNull()
             ?: throw IllegalArgumentException("Không tìm thấy manga id từ URL: ${manga.url}")
         val related = client.get("$apiUrl/mangas/$mangaId/related").parseAs<List<MangaDto>>()
         return related.map(::mangaFromDto)
