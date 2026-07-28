@@ -512,7 +512,7 @@ abstract class MangaBox :
 
     override fun imageRequest(page: Page): Request = GET(
         page.imageUrl!!,
-        headersBuilder().build(), // Headers are sometimes not added for image requests for some reason
+        headers, // Headers are sometimes not added for image requests for some reason
     )
         .newBuilder()
         .tag(MangaBoxFallBackTag::class.java, MangaBoxFallBackTag())
