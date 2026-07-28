@@ -67,9 +67,9 @@ abstract class YuriGarden :
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(authInterceptor())
-            .addInterceptor(loginRequiredInterceptor())
-            .addInterceptor(ImageDescrambler())
-            .rateLimit(15, 1.minutes) { it.host == apiHost }
+        addInterceptor(loginRequiredInterceptor())
+        addInterceptor(ImageDescrambler())
+        rateLimit(15, 1.minutes) { it.host == apiHost }
     }
 
     private val apiHeaders: Headers
