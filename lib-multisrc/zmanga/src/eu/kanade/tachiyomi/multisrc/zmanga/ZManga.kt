@@ -10,12 +10,12 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.get
+import keiyoushi.utils.string
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -222,10 +222,9 @@ abstract class ZManga : KeiSource() {
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.jsonArray?.map {
-            val jsonObject = it.jsonObject
             Tag(
-                jsonObject["id"]!!.jsonPrimitive.content,
-                jsonObject["name"]!!.jsonPrimitive.content,
+                it["id"]!!.string,
+                it["name"]!!.string,
             )
         } ?: emptyList()
 
@@ -237,7 +236,7 @@ abstract class ZManga : KeiSource() {
             StatusFilter(),
             TypeFilter(),
             OrderByFilter(),
-            if (genres.isEmpty()) Filter.Header("Press 'Reset' to attempt to fetch genres") else GenreList(genres),
+            GenreList(genres),
         )
         if (hasProjectPage) {
             filters.addAll(
