@@ -5,7 +5,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 class ApiResponse(
-    val data: ApiDataResponse,
+    val success: Boolean = false,
+    val data: ApiDataResponse?,
 )
 
 @Serializable
@@ -15,8 +16,8 @@ class ApiDataResponse(
 
 @Serializable
 class ApiChapter(
-    @SerialName("chapter_name") val chapterName: String,
-    @SerialName("chapter_slug") val chapterSlug: String,
-    @SerialName("chapter_num") val chapterNum: Float,
-    @SerialName("updated_at") val updatedAt: String,
+    @SerialName("chapter_name") val chapterName: String?,
+    @SerialName("chapter_slug") val chapterSlug: String?,
+    @SerialName("chapter_num") val chapterNum: Float?,
+    @SerialName("updated_at") val updatedAt: String?,
 )

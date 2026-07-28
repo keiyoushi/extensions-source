@@ -4,18 +4,12 @@ import eu.kanade.tachiyomi.multisrc.mangabox.MangaBox
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import keiyoushi.network.get
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import okhttp3.Dispatcher
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
-import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.TimeZone
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -35,13 +29,6 @@ abstract class Mangakakalot : MangaBox() {
         .replace("[\\s-]+".toRegex(), "-")
         .trim('-')
 
-    private val jsonDateFormat = SimpleDateFormat(
-        "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",
-        Locale.US,
-    ).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-
     /**
      * Resolves download issues for very large chapters (~100+ pages).
      *
@@ -59,6 +46,8 @@ abstract class Mangakakalot : MangaBox() {
     }
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        addInterceptor(::mergeImagesInterceptor)
+        addInterceptor(::useAltCdnInterceptor)
         dispatcher(imageHeavyDispatcher)
         connectTimeout(30.seconds)
         readTimeout(60.seconds)
@@ -71,12 +60,12 @@ abstract class Mangakakalot : MangaBox() {
      * ================================ */
 
     override fun getMangaUrl(manga: SManga): String {
-        val currentSlug = manga.url.substringAfterLast("/")
-        if (currentSlug.matches(idSlugRegex)) {
+        val mangaUrl = super.getMangaUrl(manga)
+        if (manga.url.substringAfterLast('/').matches(idSlugRegex)) {
             val newSlug = titleToSlug(manga.title)
             return "$baseUrl/manga/$newSlug"
         } else {
-            return "$baseUrl${manga.url}"
+            return mangaUrl
         }
     }
 
@@ -96,44 +85,14 @@ abstract class Mangakakalot : MangaBox() {
      * Chapter List
      * ================================ */
 
-    override suspend fun chapterListResponse(manga: SManga): Response {
-        val currentSlug = manga.url.substringAfterLast("/")
+    override suspend fun parseChapterList(manga: SManga): List<SChapter> {
+        val currentSlug = manga.url.substringAfterLast('/')
         val isIdSlug = currentSlug.matches(idSlugRegex)
-        val apiSlug = if (isIdSlug) {
+        if (isIdSlug) {
             val cleanSlug = titleToSlug(manga.title)
             manga.url = "/manga/$cleanSlug"
-            cleanSlug
-        } else {
-            currentSlug
         }
 
-        val apiUrl = "$baseUrl/api/manga/$apiSlug/chapters?limit=-1"
-        return client.get(apiUrl, headers)
-    }
-
-    override fun parseChapterList(response: Response): List<SChapter> {
-        val slug = response.request.url.pathSegments
-            .dropWhile { it != "manga" }
-            .getOrNull(1)
-            ?: return emptyList()
-
-        val result = runCatching {
-            response.parseAs<ChapterResponseDto>()
-        }.getOrElse { return emptyList() }
-
-        if (!result.success) return emptyList()
-
-        return result.data?.chapters.orEmpty().mapNotNull { item ->
-            val chapterSlug = item.slug ?: return@mapNotNull null
-
-            SChapter.create().apply {
-                name = item.name ?: "Chapter"
-                chapter_number = item.num ?: 0f
-                url = "$baseUrl/manga/$slug/$chapterSlug"
-                date_upload = item.updatedAt
-                    ?.let { jsonDateFormat.tryParse(it) }
-                    ?: 0L
-            }
-        }
+        return super.parseChapterList(manga)
     }
 }

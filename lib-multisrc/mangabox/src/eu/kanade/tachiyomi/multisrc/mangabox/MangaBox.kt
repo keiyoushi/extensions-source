@@ -87,7 +87,7 @@ abstract class MangaBox :
         }
     }"
 
-    private fun mergeImagesInterceptor(chain: Interceptor.Chain): Response {
+    protected fun mergeImagesInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val url = request.url
 
@@ -137,7 +137,7 @@ abstract class MangaBox :
         }
     }
 
-    private fun useAltCdnInterceptor(chain: Interceptor.Chain): Response {
+    protected fun useAltCdnInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         request.tag(MangaBoxFallBackTag::class.java) ?: return chain.proceed(request)
         val url = request.url
@@ -380,19 +380,27 @@ abstract class MangaBox :
     // ============================= Chapters ==============================
 
     open suspend fun parseChapterList(manga: SManga): List<SChapter> {
-        val slug = getMangaUrl(manga).toHttpUrl().pathSegments.last()
+        val slug = manga.url.substringAfterLast('/')
         val response = client.get("${apiChapterListUrl.replace("__SLUG__", slug)}?limit=-1")
-        val apiResult = response.parseAs<ApiResponse>()
+        val apiResult = runCatching {
+            response.parseAs<ApiResponse>()
+        }.getOrElse { return emptyList() }
 
-        return apiResult.data.chapters.map { apiChapter ->
+        if (!apiResult.success) return emptyList()
+
+        return apiResult.data?.chapters.orEmpty().mapNotNull { apiChapter ->
+            val chapterSlug = apiChapter.chapterSlug ?: return@mapNotNull null
+
             SChapter.create().apply {
-                name = apiChapter.chapterName
+                name = apiChapter.chapterName ?: "Chapter"
                 url = apiChapterPageUrl
                     .replace("__MANGA__", slug)
-                    .replace("__CHAPTER__", apiChapter.chapterSlug)
-                chapter_number = apiChapter.chapterNum
+                    .replace("__CHAPTER__", chapterSlug)
+                chapter_number = apiChapter.chapterNum ?: 0f
                 scanlator = baseUrl.replace("https://", "")
-                date_upload = Instant.parseOrNull(apiChapter.updatedAt)?.toEpochMilliseconds() ?: 0L
+                date_upload = apiChapter.updatedAt
+                    ?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
+                    ?: 0L
             }
         }
     }
