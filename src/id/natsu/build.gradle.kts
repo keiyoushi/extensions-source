@@ -13,6 +13,8 @@ keiyoushi {
 
     source {
         lang = "id"
-        baseUrl = "https://natsu.one"
+        baseUrl {
+            custom("https://natsu.one")
+        }
     }
 }
