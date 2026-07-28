@@ -1,29 +1,15 @@
 import gzip
 import html
 import json
-import os
 import re
-import subprocess
 import sys
-from functools import cache
 from pathlib import Path
-from zipfile import ZipFile
 
 from google.protobuf import json_format
 
 import index_pb2
 
-APPLICATION_ICON_320_REGEX = re.compile(
-    r"^application-icon-320:'([^']+)'", re.MULTILINE
-)
 LANGUAGE_REGEX = re.compile(r"tachiyomi-([^.]+)")
-
-
-@cache
-def aapt() -> Path:
-    *_, build_tools = (Path(os.environ["ANDROID_HOME"]) / "build-tools").iterdir()
-    return build_tools / "aapt"
-
 
 # Artifacts downloaded from the build jobs: one APK per extension plus the source metadata JSON
 # emitted by each assembleRelease.
@@ -33,14 +19,12 @@ ARTIFACTS_DIR = Path.home() / "apk-artifacts"
 REPO_DIR = Path.cwd()
 REPO_APK_DIR = REPO_DIR / "apk"
 REPO_JAR_DIR = REPO_DIR / "jar"
-REPO_ICON_DIR = REPO_DIR / "icon"
 REPO_APK_DIR.mkdir(parents=True, exist_ok=True)
 REPO_JAR_DIR.mkdir(parents=True, exist_ok=True)
-REPO_ICON_DIR.mkdir(parents=True, exist_ok=True)
 
 APK_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions@repo/apk"
 JAR_BASE_URL = "https://raw.githubusercontent.com/keiyoushi/extensions/repo/jar"
-ICON_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions@repo/icon"
+ICON_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions-source@main"
 
 to_delete: list[str] = json.loads(sys.argv[1])
 
@@ -52,14 +36,27 @@ for module in to_delete:
     for file in REPO_JAR_DIR.glob(f"tachiyomi-{module}-v*.*.*.jar"):
         print(f"removing {file.name}")
         file.unlink(missing_ok=True)
-    for file in REPO_ICON_DIR.glob(f"eu.kanade.tachiyomi.extension.{module}.png"):
-        print(f"removing {file.name}")
-        file.unlink(missing_ok=True)
 
 # Build index entries for the freshly built apks. Each extension's metadata comes from the
 # source-info JSON emitted by its assembleRelease task (see GenerateSourceInfoTask); its APK is a
 # sibling in the same build dir. aapt reads the icon out of the APK
 new_extensions: list[index_pb2.Extension] = []
+
+SOURCE_DIR = Path(__file__).resolve().parents[2]
+ICON_FILE = "res/mipmap-xhdpi/ic_launcher.png"
+
+
+def get_icon_url(module: str, theme: str | None) -> str:
+    module_icon = f"src/{module.replace('.', '/')}/{ICON_FILE}"
+    if (SOURCE_DIR / module_icon).exists():
+        return f"{ICON_BASE_URL}/{module_icon}"
+
+    if theme:
+        theme_icon = f"lib-multisrc/{theme}/{ICON_FILE}"
+        if (SOURCE_DIR / theme_icon).exists():
+            return f"{ICON_BASE_URL}/{theme_icon}"
+
+    return f"{ICON_BASE_URL}/core/src/main/{ICON_FILE}"
 
 for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
     with info_file.open(encoding="utf-8") as f:
@@ -81,17 +78,6 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
         )
     (REPO_JAR_DIR / jar.name).write_bytes(jar.read_bytes())
 
-    badging = subprocess.check_output(
-        [aapt(), "dump", "--include-meta-data", "badging", apk]
-    ).decode()
-    application_icon = APPLICATION_ICON_320_REGEX.search(badging).group(1)
-    with (
-        ZipFile(apk) as z,
-        z.open(application_icon) as i,
-        (REPO_ICON_DIR / f"{package_name}.png").open("wb") as f,
-    ):
-        f.write(i.read())
-
     new_extensions.append(
         index_pb2.Extension(
             name=info["name"],
@@ -99,7 +85,7 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
             resources=index_pb2.Resources(
                 apkUrl=f"{APK_BASE_URL}/{apk_name}",
                 jarUrl=f"{JAR_BASE_URL}/{jar.name}",
-                iconUrl=f"{ICON_BASE_URL}/{package_name}.png",
+                iconUrl=get_icon_url(info["module"], info.get("theme")),
             ),
             extensionLib=info["extensionLib"],
             versionCode=info["versionCode"],

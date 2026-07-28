@@ -26,7 +26,6 @@ import io.github.keiyoushi.gradle.tasks.GenerateKeepRulesTask
 import io.github.keiyoushi.gradle.tasks.GenerateManifestTask
 import io.github.keiyoushi.gradle.tasks.GenerateSourceInfoTask
 import io.github.keiyoushi.gradle.tasks.SignExtensionJarTask
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -296,6 +295,8 @@ class ExtensionPlugin : Plugin<Project> {
             val sourceInfoJsonProvider = versionCodeProvider.zip(versionNameProvider) { code, name ->
                 Json.encodeToString(
                     ExtensionMetadata(
+                        module = applicationIdSuffix,
+                        theme = keiyoushi.theme.orNull,
                         packageName = packageName,
                         name = extName,
                         versionCode = code,
