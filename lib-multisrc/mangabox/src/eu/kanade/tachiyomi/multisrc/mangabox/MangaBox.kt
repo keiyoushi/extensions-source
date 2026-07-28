@@ -439,7 +439,7 @@ abstract class MangaBox :
 
         return if (mergeImages == true) {
             coroutineScope {
-                val headers = Headers.headersOf("Range", WebpSizeGetter.RANGE)
+                val headers = headersBuilder().set("Range", WebpSizeGetter.RANGE).build()
                 val deferredSizes = imageUrls.map { url ->
                     async {
                         try {
