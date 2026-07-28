@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -178,8 +179,9 @@ abstract class InfinityScans : HttpSource() {
     // ============================= Chapters ==============================
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
-        // url: id/slug, ignore slug for api calls
+        // url: id/slug
         val mangaId = manga.url.substringBefore("/")
+        val slug = manga.url.substringAfter("/")
 
         var allChapters = mutableListOf<ChapterEntryDto>()
         var total = 0
@@ -194,17 +196,27 @@ abstract class InfinityScans : HttpSource() {
             page++
         }
 
-        allChapters.map { it.toSChapter("comic/$mangaId") }
+        allChapters.map { it.toSChapter("comic/$mangaId/$slug-$slugHash") }
     }
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
     // =============================== Pages ===============================
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/api/${chapter.url}")
+    override fun pageListRequest(chapter: SChapter): Request {
+        val mangaId = chapter.url.substringAfterLast('/')
+        val chapterId = chapter.url.split("/")[1]
 
-    override fun pageListParse(response: Response): List<Page> = response.parseAs<List<PageEntryDto>>().mapIndexed { index, p ->
-        Page(index, imageUrl = "https://$pageCdnHost/${p.path}")
+        val pageHeaders = headers.newBuilder()
+            .set("next-action", "6059eb844d4cb2658ebbdc562485ac7f318a7c89cb")
+            .build()
+
+        val body = listOf(chapterId, mangaId).toJsonRequestBody()
+        return POST("$baseUrl/${chapter.url}", pageHeaders, body)
     }
+
+    override fun pageListParse(response: Response): List<Page> = response.extractNextJs<List<PageEntryDto>>()?.mapIndexed { index, p ->
+        Page(index, imageUrl = "https://$pageCdnHost/${p.path}")
+    } ?: emptyList()
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
