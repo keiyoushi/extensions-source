@@ -1,58 +1,71 @@
 package eu.kanade.tachiyomi.extension.ar.mangatek
 
-import kotlinx.serialization.KSerializer
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.SerializationException
-import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.descriptors.buildClassSerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonDecoder
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonPrimitive
-
-class WrappedSerializer<T>(val dataSerializer: KSerializer<T>) : KSerializer<Wrapped<T>> {
-    override val descriptor: SerialDescriptor =
-        buildClassSerialDescriptor("Wrapped")
-
-    override fun deserialize(decoder: Decoder): Wrapped<T> {
-        val input = decoder as? JsonDecoder ?: throw SerializationException("Expected Json Decoder")
-        val array = input.decodeJsonElement().jsonArray
-
-        // array[0] is the index, array[1] is the content
-        val index = array[0].jsonPrimitive.int
-        val value = input.json.decodeFromJsonElement(dataSerializer, array[1])
-
-        return Wrapped(index, value)
-    }
-
-    override fun serialize(encoder: Encoder, value: Wrapped<T>) = throw SerializationException("Serialization is not supported")
-}
-
-@Serializable(with = WrappedSerializer::class)
-class Wrapped<T>(
-    val index: Int,
-    val value: T,
-)
+import kotlin.time.Instant
 
 @Serializable
-class MangaWrapper(
-    val manga: Wrapped<MangaData>,
+class MangaDto(
+    val manga: MangaData,
 )
 
 @Serializable
 class MangaData(
+    private val title: String,
+    private val description: String,
+    @SerialName("cover_image")
+    private val cover: String,
+    private val status: String,
+    @SerialName("Tags")
+    private val tags: List<Tag>,
+    private val author: String,
     @SerialName("MangaChapters")
-    val mangaChapters: Wrapped<List<Wrapped<ChapterItem>>>,
-)
+    val chapters: List<Chapter>,
+) {
+
+    fun toSManga(url: String) = SManga.create().apply {
+        this.url = url
+        title = this@MangaData.title
+        description = this@MangaData.description
+        genre = tags.map { it.name }.joinToString()
+        thumbnail_url = cover
+        status = when (this@MangaData.status) {
+            "ongoing" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            "hiatus" -> SManga.ON_HIATUS
+            "cancelled", "dropped" -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
+        author = this@MangaData.author.takeUnless {
+            it.isEmpty() || it.equals("unknown", true)
+        }
+    }
+}
 
 @Serializable
-class ChapterItem(
-    @SerialName("chapter_number") val chapterNumber: Wrapped<String>,
-    val title: Wrapped<String?>,
-    @SerialName("created_at") val createdAt: Wrapped<String?>,
+class Chapter(
+    private val title: String?,
+    @SerialName("chapter_number")
+    private val chapterNumber: String,
+    @SerialName("created_at")
+    private val createdAt: String,
+) {
+    fun toSChapter(mangaSlug: String) = SChapter.create().apply {
+        name = this@Chapter.title?.takeIf {
+            it.isNotBlank()
+        } ?: "Chapter $chapterNumber"
+        url = "/reader/$mangaSlug/$chapterNumber"
+        date_upload = createdAt?.let {
+            Instant.parseOrNull(it)?.toEpochMilliseconds()
+        } ?: 0L
+    }
+}
+
+@Serializable
+class Tag(
+    val name: String,
 )
 
 @Serializable
