@@ -10,16 +10,17 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
-import java.text.SimpleDateFormat
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class NeverScans : KeiSource() {
-    private val dateFormat = SimpleDateFormat("d/M/yyyy", Locale.ENGLISH)
+    private val dateFormatter = DateTimeFormatter.ofPattern("d/M/yyyy", Locale.ENGLISH)
 
     private fun Response.toMangasPage(): MangasPage {
         val doc = this.asJsoup()
@@ -97,9 +98,9 @@ abstract class NeverScans : KeiSource() {
             SChapter.create().apply {
                 setUrlWithoutDomain(a.absUrl("href"))
                 name = a.selectFirst("div[dir=rtl] span")!!.text()
-                date_upload = dateFormat.tryParse(
-                    a.selectFirst("div[dir=rtl] span.tabular")?.text(),
-                )
+                date_upload = runCatching {
+                    LocalDateTime.parse(a.selectFirst("div[dir=rtl] span.tabular")?.text(), dateFormatter).toInstant(ZoneOffset.UTC).toEpochMilli()
+                }.getOrDefault(0L)
             }
         }
 
