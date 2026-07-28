@@ -6,14 +6,16 @@ plugins {
 
 keiyoushi {
     name = "Ikiru"
-    versionCode = 48
+    versionCode = 49
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "natsuid"
 
     source {
         lang = "id"
-        baseUrl = "https://06.ikiru.wtf"
+        baseUrl {
+            custom("https://07.ikiru.wtf")
+        }
         // Formerly "MangaTale"
         id = 1532456597012176985L
     }
