@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Natsu"
-    versionCode = 32
+    versionCode = 33
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "natsuid"
 
     source {
         lang = "id"
-        baseUrl = "https://natsu.tv"
+        baseUrl = "https://natsu.one"
     }
 }
