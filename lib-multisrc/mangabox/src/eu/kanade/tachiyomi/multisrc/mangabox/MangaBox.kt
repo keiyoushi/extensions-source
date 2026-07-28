@@ -379,15 +379,10 @@ abstract class MangaBox :
 
     // ============================= Chapters ==============================
 
-    open suspend fun chapterListResponse(manga: SManga): Response {
+    open suspend fun parseChapterList(manga: SManga): List<SChapter> {
         val slug = getMangaUrl(manga).toHttpUrl().pathSegments.last()
-        return client.get("${apiChapterListUrl.replace("__SLUG__", slug)}?limit=-1")
-    }
-
-    open fun parseChapterList(response: Response): List<SChapter> {
+        val response = client.get("${apiChapterListUrl.replace("__SLUG__", slug)}?limit=-1")
         val apiResult = response.parseAs<ApiResponse>()
-
-        val slug = response.request.url.pathSegments.let { it[it.size - 2] }
 
         return apiResult.data.chapters.map { apiChapter ->
             SChapter.create().apply {
@@ -530,7 +525,7 @@ abstract class MangaBox :
             if (fetchDetails) getMangaByUrl(getMangaUrl(manga).toHttpUrl()) ?: manga else manga
         }
         val chaptersDeferred = async {
-            if (fetchChapters) parseChapterList(chapterListResponse(manga)) else chapters
+            if (fetchChapters) parseChapterList(manga) else chapters
         }
 
         SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
