@@ -194,15 +194,19 @@ abstract class VyvyManga : KeiSource() {
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<List<GenreData>>()?.map { it.toGenre() } ?: emptyList()
 
-        return FilterList(
-            SearchType(),
-            SearchDescription(),
-            AuthorSearchType(),
-            AuthorFilter(),
-            StatusFilter(),
-            SortFilter(),
-            SortType(),
-            GenreFilter(genres),
-        )
+        val filterList = buildList {
+            add(SearchType())
+            add(SearchDescription())
+            add(AuthorSearchType())
+            add(AuthorFilter())
+            add(StatusFilter())
+            add(SortFilter())
+            add(SortType())
+            if (genres.isNotEmpty()) {
+                add(GenreFilter(genres))
+            }
+        }
+
+        return FilterList(filterList)
     }
 }
