@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.ar.procomic
 
 import eu.kanade.tachiyomi.source.model.Filter
-import java.util.Calendar
+import java.time.Year
 
 abstract class SelectFilter<T>(
     name: String,
@@ -49,7 +49,7 @@ class StatusFilter :
         ),
     )
 
-private val currentYear = Calendar.getInstance()[Calendar.YEAR]
+private val currentYear = Year.now().value
 
 class YearFilter :
     SelectFilter<String?>(

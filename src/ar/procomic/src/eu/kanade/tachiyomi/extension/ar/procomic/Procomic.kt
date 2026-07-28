@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.procomic
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,19 +8,19 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.extractNextJsRsc
+import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Instant
 
 @Source
 abstract class Procomic : KeiSource() {
@@ -38,32 +36,29 @@ abstract class Procomic : KeiSource() {
         )
     }
 
-    private val json = Json { ignoreUnknownKeys = true }
-
     override fun Headers.Builder.configureHeaders() = apply {
-        // Let OkHttp handle Accept-Encoding and transparent decompression
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val filters = getFilterList()
-        filters.filterIsInstance<SortFilter>().firstOrNull()?.state = 0
+        filters.firstInstanceOrNull<SortFilter>()?.state = 0
         return searchApi(page, filters)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val filters = getFilterList()
-        filters.filterIsInstance<SortFilter>().firstOrNull()?.state = 2
+        filters.firstInstanceOrNull<SortFilter>()?.state = 2
         return searchApi(page, filters)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = searchApi(page, filters, query)
 
-    private suspend fun searchApi(page: Int, filters: FilterList, query: String = ""): MangasPage = try {
+    private suspend fun searchApi(page: Int, filters: FilterList, query: String = ""): MangasPage {
         val isCatalog = query.isBlank()
-        val typeFilter = filters.filterIsInstance<TypeFilter>().firstOrNull()
-        val sortFilter = filters.filterIsInstance<SortFilter>().firstOrNull()
-        val yearFilter = filters.filterIsInstance<YearFilter>().firstOrNull()
-        val statusFilter = filters.filterIsInstance<StatusFilter>().firstOrNull()
+        val typeFilter = filters.firstInstanceOrNull<TypeFilter>()
+        val sortFilter = filters.firstInstanceOrNull<SortFilter>()
+        val yearFilter = filters.firstInstanceOrNull<YearFilter>()
+        val statusFilter = filters.firstInstanceOrNull<StatusFilter>()
         val effectiveSort = sortFilter?.selected ?: "popular"
         val endpoint = if (isCatalog) "api/public/content" else "api/public/series/search"
         val url = baseUrl.toHttpUrl().newBuilder()
@@ -79,14 +74,11 @@ abstract class Procomic : KeiSource() {
                 statusFilter?.selected?.also { addQueryParameter("status", it) }
             }
             .build()
-        val request = GET(url, headers).newBuilder().cacheControl(CacheControl.FORCE_NETWORK).build()
-        val data = client.newCall(request).await().parseAs<SearchResponse>(json)
-        MangasPage(
+        val data = client.get(url, cacheControl = CacheControl.FORCE_NETWORK).parseAs<SearchResponse>()
+        return MangasPage(
             data.data.filter { it.type in SUPPORTED_TYPES }.map { it.toSManga() },
             data.meta?.let { it.totalPages != null && it.currentPage != null && it.totalPages > it.currentPage } ?: false,
         )
-    } catch (_: Exception) {
-        MangasPage(emptyList(), false)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -123,12 +115,12 @@ abstract class Procomic : KeiSource() {
 
     private suspend fun fetchApiManga(type: String, id: String): ApiManga {
         val url = "$baseUrl/api/public/$type/$id"
-        return client.newCall(GET(url, headers)).await().parseAs<ApiManga>(json)
+        return client.get(url).parseAs<ApiManga>()
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val body = client.newCall(GET(getChapterUrl(chapter), headersBuilder().set("rsc", "1").build())).await().body?.string() ?: return emptyList()
-        return body.extractNextJsRsc<ChapterImages>()?.appImages?.mapIndexed { i, img ->
+        val response = client.get(getChapterUrl(chapter), headersBuilder().set("rsc", "1").build())
+        return response.extractNextJs<ChapterImages>()?.appImages?.mapIndexed { i, img ->
             Page(i, imageUrl = img.mobile ?: img.desktop ?: "")
         } ?: emptyList()
     }
@@ -153,7 +145,7 @@ abstract class Procomic : KeiSource() {
             genre = buildList {
                 add(type.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() })
                 meta.year?.also { add(it) }
-                meta.origin?.also { add(it.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }) }
+                meta.origin?.let { origin -> add(origin.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }) }
                 when (type) {
                     "manga" -> add("مانجا")
                     "manhwa" -> add("مانها")
@@ -189,7 +181,7 @@ abstract class Procomic : KeiSource() {
             append("\u200F")
             if (coins != null && coins > 0) append("🔒 ")
             append("الفصل ")
-            append(chapterNumber.toFloatOrNull()?.let { it.toString().substringBefore(".0") } ?: chapterNumber)
+            append(chapterNumber.toFloatOrNull()?.toString()?.substringBefore(".0") ?: chapterNumber)
             title?.trim()?.takeIf { t -> t.isNotBlank() && t != chapterNumber.trim() && t != chapterNumber }?.let {
                 append(" \u200F- ")
                 append(it)
@@ -197,7 +189,7 @@ abstract class Procomic : KeiSource() {
         }
         scanlator = uploader ?: "\u200B"
         chapter_number = chapterNumber.toFloatOrNull() ?: 0f
-        date_upload = dateFormat.tryParse(createdAt)
+        date_upload = createdAt?.let { Instant.parseOrNull(it) }?.toEpochMilliseconds() ?: 0L
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
@@ -209,6 +201,5 @@ abstract class Procomic : KeiSource() {
 
     companion object {
         private val SUPPORTED_TYPES = setOf("manga", "manhua", "manhwa")
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
     }
 }

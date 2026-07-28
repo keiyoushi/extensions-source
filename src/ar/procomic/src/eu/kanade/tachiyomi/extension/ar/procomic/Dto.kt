@@ -9,13 +9,13 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonTransformingSerializer
 
 @Serializable
-data class SearchResponse(
+class SearchResponse(
     val data: List<SearchItem>,
     val meta: PaginationMeta? = null,
 )
 
 @Serializable
-data class SearchItem(
+class SearchItem(
     val id: Int,
     val title: String,
     val slug: String,
@@ -25,19 +25,19 @@ data class SearchItem(
 )
 
 @Serializable
-data class CoverImageApp(
+class CoverImageApp(
     val mobile: String? = null,
     val desktop: String? = null,
 )
 
 @Serializable
-data class PaginationMeta(
+class PaginationMeta(
     @SerialName("pages") val totalPages: Int? = null,
     @SerialName("page") val currentPage: Int? = null,
 )
 
 @Serializable
-data class ApiManga(
+class ApiManga(
     val id: Int,
     val title: String,
     val slug: String,
@@ -50,7 +50,7 @@ data class ApiManga(
 )
 
 @Serializable
-data class ApiMetadata(
+class ApiMetadata(
     val originalTitle: String? = null,
     val altTitles: List<String>? = null,
     @Serializable(with = StringOrListSerializer::class)
@@ -65,7 +65,7 @@ data class ApiMetadata(
 )
 
 @Serializable
-data class ApiChapter(
+class ApiChapter(
     val id: Int,
     @SerialName("chapter_number") val chapterNumber: String,
     val title: String? = null,
@@ -76,12 +76,12 @@ data class ApiChapter(
 )
 
 @Serializable
-data class ChapterImages(
+class ChapterImages(
     @SerialName("appImages") val appImages: List<AppImage>,
 )
 
 @Serializable
-data class AppImage(
+class AppImage(
     val mobile: String? = null,
     val desktop: String? = null,
 )

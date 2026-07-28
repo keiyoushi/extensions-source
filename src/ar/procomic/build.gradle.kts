@@ -1,19 +1,24 @@
 import io.github.keiyoushi.gradle.api.ContentWarning
-import org.gradle.kotlin.dsl.dependencies
 
 plugins {
     alias(kei.plugins.extension)
 }
 
 keiyoushi {
-    name = "procomic"
+    name = "Procomic"
     versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
-        baseUrl = "https://procomic.pro"
+        baseUrl {
+            mirrors(
+                "Main" to "https://procomic.pro",
+                "Mirror" to "https://procomic.net",
+            )
+        }
         lang = "ar"
+        versionId = 6
     }
 
     deeplink {
