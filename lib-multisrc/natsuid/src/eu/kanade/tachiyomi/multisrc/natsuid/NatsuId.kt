@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.natsuid
 
-import android.util.Log
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,52 +15,39 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import keiyoushi.utils.tryParse
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MultipartBody
-import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.Jsoup
-import java.text.SimpleDateFormat
-import java.util.Locale
 import kotlin.random.Random
+import kotlin.time.Instant
 
-// https://themesinfo.com/natsu_id-theme-wordpress-c8x1c Wordpress Theme Author "Dzul Qurnain"
 abstract class NatsuId : KeiSource() {
 
-    protected open val dateFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
-
-    override val supportsLatest: Boolean = true
-
-    protected open override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = this
-
-    protected open override fun Headers.Builder.configureHeaders(): Headers.Builder = this
-
-    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.popular)
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.latest)
-
-    private val nonceMutex = Mutex()
     private var nonce: String? = null
 
-    private suspend fun getNonce(): String = nonceMutex.withLock {
+    private suspend fun getNonce(): String {
         if (nonce == null) {
             val url = "$baseUrl/wp-admin/admin-ajax.php?type=search_form&action=get_nonce"
-            client.get(url, headers).use { response ->
-                Jsoup.parseBodyFragment(response.body.string())
+            client.get(url).use { response ->
+                nonce = Jsoup.parseBodyFragment(response.body.string())
                     .selectFirst("input[name=search_nonce]")
                     ?.attr("value")
                     ?.takeIf { it.isNotBlank() }
-                    ?.also { nonce = it }
             }
         }
-        nonce ?: throw Exception("Unable to get nonce")
+        return nonce ?: throw Exception("Unable to get nonce")
     }
+
+    override suspend fun getPopularManga(page: Int): MangasPage =
+        getSearchMangaList(page, "", SortFilter.popular)
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage =
+        getSearchMangaList(page, "", SortFilter.latest)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/wp-admin/admin-ajax.php?action=advanced_search"
@@ -98,20 +84,17 @@ abstract class NatsuId : KeiSource() {
             addFormDataPart("query", query.trim())
         }.build()
 
-        return client.post(url, headers, body).use { response ->
-            parseSearchResults(response)
-        }
-    }
-
-    private suspend fun parseSearchResults(response: Response): MangasPage {
+        val response = client.post(url, body)
         val document = Jsoup.parseBodyFragment(response.body.string(), baseUrl)
+        response.close()
+
         val slugs = document.select("div > a[href*=/manga/]:has(> img)").map {
             it.absUrl("href").toHttpUrl().pathSegments[1]
         }.ifEmpty {
             return MangasPage(emptyList(), false)
         }
 
-        val url = "$baseUrl/wp-json/wp/v2/manga".toHttpUrl().newBuilder().apply {
+        val detailsUrl = "$baseUrl/wp-json/wp/v2/manga".toHttpUrl().newBuilder().apply {
             slugs.forEach { slug ->
                 addQueryParameter("slug[]", slug)
             }
@@ -119,7 +102,7 @@ abstract class NatsuId : KeiSource() {
             addQueryParameter("_embed", null)
         }.build()
 
-        val details = client.get(url, headers).parseAs<List<Manga>>(transform = ::transformJsonResponse)
+        val details = client.get(detailsUrl).parseAs<List<Manga>>(transform = ::transformJsonResponse)
             .filterNot { manga ->
                 manga.embedded.getTerms("type").contains("Novel")
             }
@@ -146,7 +129,7 @@ abstract class NatsuId : KeiSource() {
                 .addQueryParameter("_embed", null)
                 .build()
 
-            val mangas = client.get(mangaUrl, headers).parseAs<List<Manga>>(transform = ::transformJsonResponse)
+            val mangas = client.get(mangaUrl).parseAs<List<Manga>>(transform = ::transformJsonResponse)
 
             if (mangas.isEmpty()) return null
             if (mangas[0].embedded.getTerms("type").contains("Novel")) return null
@@ -157,18 +140,25 @@ abstract class NatsuId : KeiSource() {
         return null
     }
 
-    private val descriptionIdRegex = Regex("""ID: (\d+)""")
+    private fun mangaId(manga: SManga): String? {
+        return when {
+            manga.url.startsWith("{") -> manga.url.parseAs<MangaUrl>().id.toString()
+            manga.url.toIntOrNull() != null -> manga.url
+            else -> null
+        }
+    }
 
-    private suspend fun getMangaId(manga: SManga): String {
-        if (manga.url.startsWith("{")) {
-            return manga.url.parseAs<MangaUrl>().id.toString()
+    private fun mangaSlug(manga: SManga): String? {
+        return manga.memo ?: if (manga.url.startsWith("{")) {
+            manga.url.parseAs<MangaUrl>().slug
+        } else {
+            null
         }
-        if (descriptionIdRegex.containsMatchIn(manga.description?.trim().orEmpty())) {
-            return descriptionIdRegex.find(manga.description!!.trim())!!.groupValues[1]
-        }
-        val document = client.get(getMangaUrl(manga), headers).use { it.asJsoup() }
-        return document.selectFirst("#gallery-list")!!.attr("hx-get")
-            .substringAfter("manga_id=").substringBefore("&")
+    }
+
+    override fun getMangaUrl(manga: SManga): String {
+        val slug = mangaSlug(manga) ?: "$baseUrl${manga.url}".toHttpUrl().pathSegments[1]
+        return "$baseUrl/manga/$slug/"
     }
 
     protected open fun chapterListPage(mangaId: String): Int = Random.nextInt(99, 9999)
@@ -180,8 +170,8 @@ abstract class NatsuId : KeiSource() {
             .addQueryParameter("action", "chapter_list")
             .build()
 
-        return client.get(url, headers).use { response ->
-            parseChapterList(response)
+        return client.get(url).use { response ->
+            chapterParse(response)
         }
     }
 
@@ -190,16 +180,15 @@ abstract class NatsuId : KeiSource() {
     protected open val chapterDateSelector = "time"
     protected open val chapterDateAttribute = "datetime"
 
-    private fun parseChapterList(response: Response): List<SChapter> {
+    private fun chapterParse(response: Response): List<SChapter> {
         val document = Jsoup.parseBodyFragment(response.body.string(), baseUrl)
 
         return document.select(chapterListSelector).map {
             SChapter.create().apply {
                 setUrlWithoutDomain(it.absUrl("href"))
                 name = it.selectFirst(chapterNameSelector)!!.ownText()
-                date_upload = dateFormat.tryParse(
-                    it.selectFirst(chapterDateSelector)?.attr(chapterDateAttribute),
-                )
+                date_upload = it.selectFirst(chapterDateSelector)?.attr(chapterDateAttribute)
+                    ?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() } ?: 0L
             }
         }
     }
@@ -210,50 +199,63 @@ abstract class NatsuId : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val id = getMangaId(manga)
-        val appendId = !manga.url.startsWith("{")
+        val id = mangaId(manga)
 
-        val url = "$baseUrl/wp-json/wp/v2/manga/$id?_embed#$appendId"
-        val mangaData = client.get(url, headers).parseAs<Manga>(transform = ::transformJsonResponse)
-        val sManga = mangaData.toSManga(appendId)
+        if (id != null) {
+            return coroutineScope {
+                val detailsDeferred = async {
+                    client.get("$baseUrl/wp-json/wp/v2/manga/$id?_embed#true")
+                        .parseAs<Manga>(transform = ::transformJsonResponse)
+                }
+                val chaptersDeferred = if (fetchChapters) {
+                    async { fetchChapterList(id) }
+                } else {
+                    null
+                }
+
+                val mangaData = detailsDeferred.await()
+                val sChapters = chaptersDeferred?.await() ?: chapters
+
+                SMangaUpdate(mangaData.toSManga(), sChapters)
+            }
+        }
+
+        val doc = client.get(getMangaUrl(manga)).use { it.asJsoup() }
+        val resolvedId = doc.selectFirst("#gallery-list")!!.attr("hx-get")
+            .substringAfter("manga_id=").substringBefore("&")
+
+        val mangaData = client.get("$baseUrl/wp-json/wp/v2/manga/$resolvedId?_embed#true")
+            .parseAs<Manga>(transform = ::transformJsonResponse)
 
         val sChapters = if (fetchChapters) {
-            fetchChapterList(id)
+            fetchChapterList(resolvedId)
         } else {
             chapters
         }
 
-        return SMangaUpdate(sManga, sChapters)
-    }
-
-    override fun getMangaUrl(manga: SManga): String {
-        val slug = if (manga.url.startsWith("{")) {
-            manga.url.parseAs<MangaUrl>().slug
-        } else {
-            "$baseUrl${manga.url}".toHttpUrl().pathSegments[1]
-        }
-
-        return "$baseUrl/manga/$slug/"
+        return SMangaUpdate(mangaData.toSManga(), sChapters)
     }
 
     protected open val pageListSelector = "main .relative section > img"
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), headers).use { response ->
-        response.asJsoup()
-            .select(pageListSelector).mapIndexed { idx, img ->
-                Page(idx, imageUrl = img.absUrl("src"))
-            }
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        return client.get(getChapterUrl(chapter)).use { response ->
+            response.asJsoup()
+                .select(pageListSelector).mapIndexed { idx, img ->
+                    Page(idx, imageUrl = img.absUrl("src"))
+                }
+        }
     }
 
     override val supportsFilterFetching: Boolean = true
 
     override suspend fun fetchFilterData(): JsonElement {
         val url = "$baseUrl/wp-json/wp/v2/genre?per_page=100&page=1&orderby=count&order=desc"
-        return client.get(url, headers).parseAs<JsonElement>(transform = ::transformJsonResponse)
+        return client.get(url).parseAs<JsonElement>(transform = ::transformJsonResponse)
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val filters: MutableList<Filter<*>> = mutableListOf(
+        val filters = mutableListOf<Filter<*>>(
             SortFilter(),
             TypeFilter(),
             StatusFilter(),
@@ -261,30 +263,10 @@ abstract class NatsuId : KeiSource() {
         )
 
         if (data != null) {
-            val terms = try {
-                data.parseAs<List<Term>>()
-            } catch (e: Throwable) {
-                Log.e(name, "Failed to parse genre filters", e)
-                null
-            }
-
-            if (terms != null) {
-                filters.addAll(
-                    listOf(
-                        GenreFilter(
-                            terms.map { it.name to it.slug },
-                        ),
-                        GenreInclusion(),
-                        GenreExclusion(),
-                    ),
-                )
-            } else {
-                filters.add(Filter.Separator())
-                filters.add(Filter.Header("Failed to parse genre filter"))
-            }
-        } else {
-            filters.add(Filter.Separator())
-            filters.add(Filter.Header("Tap 'Reset' to load filters"))
+            val terms = data.parseAs<List<Term>>()
+            filters.add(GenreFilter(terms.map { it.name to it.slug }))
+            filters.add(GenreInclusion())
+            filters.add(GenreExclusion())
         }
 
         return FilterList(filters)

@@ -10,6 +10,9 @@ import okhttp3.Response
 abstract class OkyyKomik : ZeistManga() {
 
     override val supportsLatest = false
+    override val mangaDetailsSelector = "#Blog1"
+    override val mangaDetailsSelectorAuthor = "#extra-info > dl:nth-child(2) dd"
+    override val mangaDetailsSelectorArtist = "#extra-info > dl:nth-child(3) dd"
 
     override fun popularMangaRequest(page: Int): Request = latestUpdatesRequest(page)
     override fun popularMangaParse(response: Response): MangasPage = latestUpdatesParse(response)

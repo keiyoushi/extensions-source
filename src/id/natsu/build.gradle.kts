@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Natsu"
-    versionCode = 33
+    versionCode = 34
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "natsuid"
