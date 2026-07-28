@@ -19,8 +19,12 @@ import okhttp3.Response
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import java.util.Calendar
 import java.util.Locale
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class VyvyManga : KeiSource() {
@@ -59,7 +63,7 @@ abstract class VyvyManga : KeiSource() {
             .addQueryParameter("q", query)
             .addQueryParameter("page", page.toString())
 
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+        filters.forEach { filter ->
             when (filter) {
                 is SearchType -> url.addQueryParameter("search_po", filter.selected)
                 is SearchDescription -> if (filter.state) url.addQueryParameter("check_search_desc", "1")
@@ -162,13 +166,13 @@ abstract class VyvyManga : KeiSource() {
 
     private fun parseRelativeDate(date: String): Long {
         val number = relativeDateRegex.find(date)?.value?.toIntOrNull() ?: return 0L
-        val cal = Calendar.getInstance()
+        val cal = Clock.System.now()
 
         return when {
-            date.contains("day") -> cal.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
-            date.contains("hour") -> cal.apply { add(Calendar.HOUR, -number) }.timeInMillis
-            date.contains("minute") -> cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
-            date.contains("second") -> cal.apply { add(Calendar.SECOND, -number) }.timeInMillis
+            date.contains("day") -> cal.minus(number.days).toEpochMilliseconds()
+            date.contains("hour") -> cal.minus(number.hours).toEpochMilliseconds()
+            date.contains("minute") -> cal.minus(number.minutes).toEpochMilliseconds()
+            date.contains("second") -> cal.minus(number.seconds).toEpochMilliseconds()
             else -> 0L
         }
     }
