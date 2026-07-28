@@ -38,15 +38,13 @@ abstract class NatsuId : KeiSource() {
 
     override val supportsLatest: Boolean = true
 
-    override protected open fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = this
+    protected open override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = this
 
-    override protected open fun Headers.Builder.configureHeaders(): Headers.Builder = this
+    protected open override fun Headers.Builder.configureHeaders(): Headers.Builder = this
 
-    override suspend fun getPopularManga(page: Int): MangasPage =
-        getSearchMangaList(page, "", SortFilter.popular)
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.popular)
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage =
-        getSearchMangaList(page, "", SortFilter.latest)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.latest)
 
     private val nonceMutex = Mutex()
     private var nonce: String? = null
@@ -240,13 +238,11 @@ abstract class NatsuId : KeiSource() {
 
     protected open val pageListSelector = "main .relative section > img"
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        return client.get(getChapterUrl(chapter), headers).use { response ->
-            response.asJsoup()
-                .select(pageListSelector).mapIndexed { idx, img ->
-                    Page(idx, imageUrl = img.absUrl("src"))
-                }
-        }
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), headers).use { response ->
+        response.asJsoup()
+            .select(pageListSelector).mapIndexed { idx, img ->
+                Page(idx, imageUrl = img.absUrl("src"))
+            }
     }
 
     override val supportsFilterFetching: Boolean = true
