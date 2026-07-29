@@ -193,9 +193,13 @@ class ExtensionPlugin : Plugin<Project> {
                 variant.sources.manifests.addStaticManifestFile("AndroidManifest.xml")
                 variant.sources.manifests.addGeneratedManifestFile(manifestTask) { it.outputFile }
 
+                val filenameProvider = versionNameProvider.map { "tachiyomi-$applicationIdSuffix-v$it" }
+
                 variant.outputs.forEach { output ->
                     output.versionCode.set(versionCodeProvider)
                     output.versionName.set(versionNameProvider)
+                    @Suppress("UnstableApiUsage")
+                    output.outputFileName.set(filenameProvider.map { "$it.apk" })
                 }
 
                 if (variant.buildType == "release") {
@@ -206,15 +210,12 @@ class ExtensionPlugin : Plugin<Project> {
                     val createTask = tasks.register<CreateExtensionJarTask>("create${variantName}ExtensionJar") {
                         libraryClasspath.from(externalLibs, bootClasspath)
                         proguardConfigFile.set(layout.buildDirectory.file("outputs/mapping/${variant.name}/configuration.txt"))
-                        @Suppress("UnstableApiUsage")
                         manifestFile.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
-                        @Suppress("UnstableApiUsage")
                         apkDir.set(variant.artifacts.get(SingleArtifact.APK))
                         proguardClasspath.from(proguardConfiguration)
                         outputJar.set(layout.buildDirectory.file("intermediates/extension_jar/${variant.name}/unsigned.jar"))
                     }
 
-                    @Suppress("UnstableApiUsage")
                     variant.artifacts.forScope(ScopedArtifacts.Scope.ALL)
                         .use(createTask)
                         .toGet(
@@ -230,18 +231,13 @@ class ExtensionPlugin : Plugin<Project> {
                         keyAlias.set(signingConfig.keyAlias.orEmpty())
                         keyPassword.set(signingConfig.keyPassword.orEmpty())
                         minSdkVersion.set(kei.versions.android.sdk.min.map { it.toInt() })
-                        val jarName = versionNameProvider.map { "tachiyomi-$applicationIdSuffix-v$it.jar" }
-                        outputJar.set(layout.buildDirectory.file(jarName.map { "outputs/jar/${variant.name}/$it" }))
+                        outputJar.set(layout.buildDirectory.file(filenameProvider.map { "outputs/jar/${variant.name}/$it.jar" }))
                     }
 
                     tasks.matching { it.name == "assemble$variantName" }
                         .configureEach { dependsOn(signTask) }
                 }
             }
-        }
-
-        base {
-            archivesName.set(versionNameProvider.map { "tachiyomi-$applicationIdSuffix-v$it" })
         }
 
         dependencies {
@@ -347,9 +343,5 @@ private fun Project.android(block: ApplicationExtension.() -> Unit) {
 }
 
 private fun Project.androidComponents(block: ApplicationAndroidComponentsExtension.() -> Unit) {
-    extensions.configure(block)
-}
-
-private fun Project.base(block: BasePluginExtension.() -> Unit) {
     extensions.configure(block)
 }
