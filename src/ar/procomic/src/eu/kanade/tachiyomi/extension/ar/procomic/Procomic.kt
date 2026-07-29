@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.ar.procomic
 
+import android.graphics.Bitmap
+import android.graphics.Rect
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -18,7 +20,14 @@ import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import tachiyomi.decoder.ImageDecoder
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.util.Locale
 import kotlin.time.Instant
 
@@ -34,9 +43,33 @@ abstract class Procomic : KeiSource() {
                 listOf("safe_browsing" to "off", "language" to "ar"),
             ),
         )
+        addNetworkInterceptor(
+            Interceptor { chain ->
+                val response = chain.proceed(chain.request())
+                val contentType = response.header("Content-Type") ?: return@Interceptor response
+                if (contentType != "image/avif") return@Interceptor response
+                avifToJpeg(response)
+            },
+        )
     }
 
     override fun Headers.Builder.configureHeaders() = apply {
+    }
+
+    private fun avifToJpeg(response: Response): Response {
+        val bytes = response.body.bytes()
+        val decoder = ImageDecoder.newInstance(ByteArrayInputStream(bytes), false, null) ?: return response
+        val bitmap = decoder.decode(Rect(0, 0, decoder.width, decoder.height), 1) ?: run {
+            decoder.recycle()
+            return response
+        }
+        decoder.recycle()
+        val output = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, output)
+        bitmap.recycle()
+        return response.newBuilder()
+            .body(output.toByteArray().toResponseBody("image/jpeg".toMediaType()))
+            .build()
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
