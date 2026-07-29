@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "MeHentai"
-    versionCode = 6
+    versionCode = 7
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
     theme = "manhwaz"
 
     source {
         lang = "vi"
-        baseUrl = "https://mehentai.blog"
+        baseUrl = "https://mehentai.live"
     }
 }
