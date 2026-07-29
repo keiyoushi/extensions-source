@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
@@ -45,11 +46,11 @@ abstract class JuinJutsuTeamReader : FoolSlide() {
 
     override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
         val document: Document? = if (fetchDetails || fetchChapters) {
-            val request = allowAdult(GET(baseUrl + manga.url, headers)).newBuilder()
-                .removeHeader("If-Modified-Since")
-                .removeHeader("If-None-Match")
+            val requestHeaders = adultHeaders.newBuilder()
+                .removeAll("If-Modified-Since")
+                .removeAll("If-None-Match")
                 .build()
-            client.newCall(request).await().asJsoup()
+            client.get(baseUrl + manga.url, requestHeaders).asJsoup()
         } else {
             null
         }
@@ -72,11 +73,11 @@ abstract class JuinJutsuTeamReader : FoolSlide() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val request = allowAdult(GET(baseUrl + chapter.url, headers)).newBuilder()
-            .removeHeader("If-Modified-Since")
-            .removeHeader("If-None-Match")
+        val requestHeaders = adultHeaders.newBuilder()
+            .removeAll("If-Modified-Since")
+            .removeAll("If-None-Match")
             .build()
-        val document = client.newCall(request).await().asJsoup()
+        val document = client.get(baseUrl + chapter.url, requestHeaders).asJsoup()
         return pageListParse(document)
     }
 }

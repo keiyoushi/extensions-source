@@ -2,9 +2,6 @@ package eu.kanade.tachiyomi.multisrc.foolslide
 
 import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -22,7 +19,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.LocalDate
@@ -104,8 +101,7 @@ abstract class FoolSlide :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val request = allowAdult(GET(baseUrl + manga.url, headers))
-        val document = client.newCall(request).await().asJsoup()
+        val document = client.get(baseUrl + manga.url, adultHeaders).asJsoup()
 
         val sManga = mangaDetailsParse(document).apply { url = manga.url }
         val sChapters = document.select(chapterListSelector()).map { chapterFromElement(it) }
@@ -116,12 +112,12 @@ abstract class FoolSlide :
     protected open val mangaDetailsInfoSelector = "div.info"
 
     // if there's no image on the details page, get the first page of the first chapter
-    protected fun getDetailsThumbnail(document: Document, urlSelector: String = chapterUrlSelector): String? = document.select("div.thumbnail img, table.thumb img").firstOrNull()?.attr("abs:src")
+    protected suspend fun getDetailsThumbnail(document: Document, urlSelector: String = chapterUrlSelector): String? = document.select("div.thumbnail img, table.thumb img").firstOrNull()?.attr("abs:src")
         ?: document.select(chapterListSelector()).lastOrNull()?.select(urlSelector)?.attr("abs:href")
-            ?.let { url -> client.newCall(allowAdult(GET(url, headers))).execute() }
-            ?.use { response -> pageListParse(response.asJsoup()).firstOrNull()?.imageUrl }
+            ?.let { url -> client.get(url, adultHeaders).asJsoup() }
+            ?.let { doc -> pageListParse(doc).firstOrNull()?.imageUrl }
 
-    open fun mangaDetailsParse(document: Document) = SManga.create().apply {
+    open suspend fun mangaDetailsParse(document: Document) = SManga.create().apply {
         document.selectFirst(mangaDetailsInfoSelector)?.let { infoElement ->
             infoElement.select("b").forEach { b ->
                 val text = b.text().lowercase(Locale.ROOT)
@@ -149,9 +145,26 @@ abstract class FoolSlide :
     protected open val allowAdult: Boolean
         get() = preferences.getBoolean("adult", true)
 
-    protected open fun allowAdult(request: Request): Request {
-        val form = FormBody.Builder().add("adult", allowAdult.toString()).build()
-        return POST(request.url.toString(), headers, form)
+    protected val adultHeaders by lazy { headers.newBuilder().add("Adult", "true").build() }
+
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
+        val request = chain.request()
+        if (request.header("Adult") == "true") {
+            val newRequest = if (allowAdult) {
+                val form = FormBody.Builder().add("adult", "true").build()
+                request.newBuilder()
+                    .removeHeader("Adult")
+                    .method("POST", form)
+                    .build()
+            } else {
+                request.newBuilder()
+                    .removeHeader("Adult")
+                    .build()
+            }
+            chain.proceed(newRequest)
+        } else {
+            chain.proceed(request)
+        }
     }
 
     open fun chapterListSelector() = "div.group div.element, div.list div.element"
@@ -239,8 +252,7 @@ abstract class FoolSlide :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val request = allowAdult(GET(baseUrl + chapter.url, headers))
-        val document = client.newCall(request).await().asJsoup()
+        val document = client.get(baseUrl + chapter.url, adultHeaders).asJsoup()
         return pageListParse(document)
     }
 
