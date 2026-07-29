@@ -514,13 +514,13 @@ abstract class MadaraBase : KeiSource() {
     protected class SearchCard(val title: String, val path: String, val thumbnail: String?)
 
     companion object {
-        private val YEAR_WORDS = arrayOf("year", "año", "ano", "năm", "yıl")
-        private val MONTH_WORDS = arrayOf("month", "mes", "tháng", "ay")
-        private val WEEK_WORDS = arrayOf("week", "semana", "tuần", "hafta")
+        private val YEAR_WORDS = arrayOf("year", "año", "ano", "năm", "yıl", "سنة", "سنوات")
+        private val MONTH_WORDS = arrayOf("month", "mes", "tháng", "ay", "شهر", "أشهر", "شهور")
+        private val WEEK_WORDS = arrayOf("week", "semana", "tuần", "hafta", "أسبوع", "أسابيع")
         private val DAY_WORDS = arrayOf("day", "día", "dia", "jour", "hari", "gün", "ngày", "giorni", "أيام", "天")
-        private val HOUR_WORDS = arrayOf("hour", "hora", "heure", "jam", "saat", "giờ", "ore", "ساعة", "小时")
-        private val MINUTE_WORDS = arrayOf("minute", "minuto", "min", "menit", "dakika", "phút", "دقائق")
-        private val SECOND_WORDS = arrayOf("second", "segundo", "sec", "detik", "giây")
+        private val HOUR_WORDS = arrayOf("hour", "hora", "heure", "jam", "saat", "giờ", "ore", "ساعة", "ساعات", "小时")
+        private val MINUTE_WORDS = arrayOf("minute", "minuto", "min", "menit", "dakika", "phút", "دقيقة", "دقائق")
+        private val SECOND_WORDS = arrayOf("second", "segundo", "sec", "detik", "giây", "ثانية", "ثوان")
         private fun String.hexBytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
     }
 }
