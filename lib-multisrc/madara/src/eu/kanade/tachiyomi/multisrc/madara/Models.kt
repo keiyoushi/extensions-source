@@ -13,7 +13,7 @@ class GenreRoute(
     val path: String,
 )
 
-internal fun JsonElement.genreRoutes(): List<GenreRoute> = parseAs()
+internal fun JsonElement?.genreRoutes(): List<GenreRoute> = this?.parseAs<List<GenreRoute>>().orEmpty()
 
 internal fun List<GenreRoute>.toGenreJson(): JsonElement = toJsonElement()
 

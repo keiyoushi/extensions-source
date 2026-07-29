@@ -127,7 +127,7 @@ abstract class MadaraBase : KeiSource() {
             val href = element.attr("abs:href").takeIf(String::isNotBlank) ?: return@mapNotNull null
             val path = href.toHttpUrl().encodedPath
             val name = element.text().takeIf(String::isNotBlank) ?: return@mapNotNull null
-            val slug = path.trimEnd('/').substringAfterLast('/').takeIf(String::isNotBlank) ?: return@mapNotNull null
+            val slug = path.trimEnd('/').substringAfterLast('/').takeIf(String::isNotEmpty) ?: return@mapNotNull null
             GenreRoute(name, slug, path)
         }.distinctBy(GenreRoute::slug).toGenreJson()
     }
@@ -200,7 +200,7 @@ abstract class MadaraBase : KeiSource() {
         description = document.selectFirst(mangaDetailsSelectorDescription)?.let { element ->
             element.select("p").takeIf(List<Element>::isNotEmpty)?.joinToString("\n\n") { it.text() } ?: element.text()
         }
-        document.selectFirst(altNameSelector)?.ownText()?.takeIf { it.isNotBlank() && !isUpdating(it) }?.let { alternative ->
+        document.selectFirst(altNameSelector)?.ownText()?.takeIf { it.isNotEmpty() && !isUpdating(it) }?.let { alternative ->
             description = listOfNotNull(description, "${intl["alt_names_heading"]} $alternative").joinToString("\n\n")
         }
         thumbnail_url = document.selectFirst(mangaDetailsSelectorThumbnail)?.let { processThumbnail(imageFromElement(it)) }
@@ -208,13 +208,13 @@ abstract class MadaraBase : KeiSource() {
         val genres = document.select(mangaDetailsSelectorGenre).mapNotNull { element ->
             val href = element.attr("abs:href").takeIf(String::isNotBlank) ?: return@mapNotNull null
             val path = href.toHttpUrl().encodedPath
-            val slug = path.trimEnd('/').substringAfterLast('/').takeIf(String::isNotBlank) ?: return@mapNotNull null
+            val slug = path.trimEnd('/').substringAfterLast('/').takeIf(String::isNotEmpty) ?: return@mapNotNull null
             GenreRoute(element.text(), slug, path)
         }
         genre = buildList {
             addAll(genres.map(GenreRoute::name))
             addAll(document.select(mangaDetailsSelectorTag).eachText())
-            document.selectFirst(seriesTypeSelector)?.text()?.takeIf(String::isNotBlank)?.let(::add)
+            document.selectFirst(seriesTypeSelector)?.text()?.takeIf(String::isNotEmpty)?.let(::add)
         }.distinctBy(String::lowercase).joinToString().ifBlank { null }
         memo = mangaMemo(
             path = document.location().toHttpUrl().encodedPath,
@@ -310,7 +310,7 @@ abstract class MadaraBase : KeiSource() {
     protected open fun chapterFromElement(element: Element, mangaPath: String): SChapter? {
         val link = element.selectFirst(chapterUrlSelector) ?: return null
         val url = link.attr("abs:href").takeIf(String::isNotBlank) ?: return null
-        val slug = url.toHttpUrl().encodedPath.trimEnd('/').substringAfterLast('/').takeIf(String::isNotBlank) ?: return null
+        val slug = url.toHttpUrl().encodedPath.trimEnd('/').substringAfterLast('/').takeIf(String::isNotEmpty) ?: return null
         return SChapter.create().apply {
             this.url = slug
             name = link.text()
@@ -428,11 +428,28 @@ abstract class MadaraBase : KeiSource() {
 
     protected open fun processThumbnail(url: String?, fromSearch: Boolean = false): String? = url
 
-    protected fun String.getSrcSetImage(): String? = split(',').map { it.trim().substringBefore(' ') }.lastOrNull()
+    protected fun String.getSrcSetImage(): String? {
+        val images = split(',')
+            .map { it.trim().split(WHITESPACE_REGEX, limit = 2) }
+            .filter { it.isNotEmpty() && URL_REGEX.matches(it[0]) }
+        val imagesWithDescriptor = images.mapNotNull { candidate ->
+            candidate.getOrNull(1)?.let(IMAGE_DESCRIPTOR_REGEX::matchEntire)?.groupValues?.get(1)?.toFloatOrNull()?.let {
+                candidate[0] to it
+            }
+        }
+        return imagesWithDescriptor.maxByOrNull { it.second }?.first
+            ?: images.maxOfOrNull { it.first() }
+    }
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = relatedManga(manga)
 
-    protected fun memoGenres(manga: SManga): List<GenreRoute> = manga.memo["genres"]?.genreRoutes().orEmpty()
+    protected fun memoGenres(manga: SManga): List<GenreRoute> = manga.memo["genres"].genreRoutes()
+
+    protected fun relatedGenres(manga: SManga): List<GenreRoute> {
+        val genres = memoGenres(manga)
+        val specificGenres = genres.filterNot { it.slug.lowercase() in GENERIC_GENRES }
+        return specificGenres.ifEmpty { genres }.take(3)
+    }
 
     protected fun mangaId(manga: SManga): String? = manga.url.takeIf { it.all(Char::isDigit) }
         ?: manga.memo["id"]?.jsonPrimitive?.content
@@ -492,7 +509,7 @@ abstract class MadaraBase : KeiSource() {
         if (arrayOf("yesterday", "ontem", "ayer", "يوم واحد").any(normalized::startsWith)) {
             return today.minusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
         }
-        val amount = Regex("(\\d+)").find(normalized)?.groupValues?.get(1)?.toLongOrNull()
+        val amount = NUMBER_REGEX.find(normalized)?.value?.toLongOrNull()
         if (amount != null) {
             val unit = when {
                 YEAR_WORDS.any { it in normalized } -> ChronoUnit.YEARS
@@ -514,6 +531,11 @@ abstract class MadaraBase : KeiSource() {
     protected class SearchCard(val title: String, val path: String, val thumbnail: String?)
 
     companion object {
+        private val GENERIC_GENRES = setOf("manga", "manhwa", "manhua", "webtoon")
+        private val URL_REGEX = Regex("""^https?://[^\s/$.?#].[^\s]*$""")
+        private val WHITESPACE_REGEX = Regex("""\s+""")
+        private val IMAGE_DESCRIPTOR_REGEX = Regex("""^(\d+|\d+\.\d+)[wx]$""")
+        private val NUMBER_REGEX = Regex("\\d+")
         private val YEAR_WORDS = arrayOf("year", "año", "ano", "năm", "yıl", "سنة", "سنوات")
         private val MONTH_WORDS = arrayOf("month", "mes", "tháng", "ay", "شهر", "أشهر", "شهور")
         private val WEEK_WORDS = arrayOf("week", "semana", "tuần", "hafta", "أسبوع", "أسابيع")

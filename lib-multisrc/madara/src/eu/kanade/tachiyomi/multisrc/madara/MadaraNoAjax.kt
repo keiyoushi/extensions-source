@@ -13,6 +13,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
@@ -24,7 +25,7 @@ abstract class MadaraNoAjax : MadaraBase() {
     override suspend fun getLatestUpdates(page: Int) = archivePage(page, "latest")
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val genres = data?.genreRoutes().orEmpty()
+        val genres = data.genreRoutes()
         return FilterList(
             buildList {
                 add(SortFilter(intl["order_by_filter_title"], orderByFilterOptions))
@@ -99,7 +100,13 @@ abstract class MadaraNoAjax : MadaraBase() {
     private suspend fun rssIds(query: String, needed: List<String>): RssIds {
         val values = mutableMapOf<String, String>()
         for (page in 1..20) {
-            val feed = runCatching { client.get(baseUrl.toHttpUrl().newBuilder().addPathSegment("feed").addQueryParameter("post_type", "wp-manga").addQueryParameter("s", query).addQueryParameter("paged", page.toString()).build()).use(::parseRss) }.getOrElse { break }
+            val url = baseUrl.toHttpUrl().newBuilder()
+                .addPathSegment("feed")
+                .addQueryParameter("post_type", "wp-manga")
+                .addQueryParameter("s", query)
+                .addQueryParameter("paged", page.toString())
+                .build()
+            val feed = runCatching { client.get(url).use(::parseRss) }.getOrElse { break }
             feed.forEach { (id, card) -> values[card.path] = id }
             if (needed.all(values::containsKey) || feed.isEmpty()) break
         }
@@ -110,25 +117,30 @@ abstract class MadaraNoAjax : MadaraBase() {
         val document = Jsoup.parse(response.body.string(), baseUrl, Parser.xmlParser())
         return document.select("item").mapNotNull { item ->
             val link = item.selectFirst("link")?.text()?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-            val id = Regex("[?&]p=(\\d+)").find(item.selectFirst("guid")?.text().orEmpty())?.groupValues?.get(1) ?: return@mapNotNull null
+            val id = item.selectFirst("guid")?.text()?.toHttpUrlOrNull()?.queryParameter("p") ?: return@mapNotNull null
             id to SearchCard(item.selectFirst("title")!!.text(), link.toHttpUrl().encodedPath, item.selectFirst("media|content")?.attr("url"))
         }.toMap()
     }
 
     private suspend fun resolvePostId(url: HttpUrl): String? {
-        client.head(url, ensureSuccess = false).use { response -> response.headers.values("Link").firstNotNullOfOrNull { Regex("[?&]p=(\\d+).*rel=\\\"?shortlink\\\"?").find(it)?.groupValues?.get(1) }?.let { return it } }
+        client.head(url, ensureSuccess = false).use { response ->
+            response.headers.values("Link").firstNotNullOfOrNull { it.shortlinkId() }?.let { return it }
+        }
         return client.get(url).use { it.asJsoup().mangaId() }
     }
 
     override suspend fun relatedManga(manga: SManga): List<SManga> = coroutineScope {
         val current = mangaId(manga) ?: return@coroutineScope emptyList()
-        val all = memoGenres(manga)
-        if (all.isEmpty()) return@coroutineScope emptyList()
-        val specific = all.filterNot { it.slug.lowercase() in setOf("manga", "manhwa", "manhua", "webtoon") }
-        val genres = (specific.ifEmpty { all }).take(3)
+        val genres = relatedGenres(manga)
+        if (genres.isEmpty()) return@coroutineScope emptyList()
         val lists = genres.map { genre -> async { archivePage(1, "", genre.path).mangas } }.awaitAll()
         lists.flatten().filterNot { it.url == current }.withIndex().groupBy { it.value.url }.values.sortedWith(compareByDescending<List<IndexedValue<SManga>>> { it.size }.thenBy { it.minOf(IndexedValue<SManga>::index) }).map { it.first().value }.take(PAGE_SIZE)
     }
 
     private class RssIds(val values: Map<String, String>, val complete: Boolean)
+
+    private fun String.shortlinkId(): String? {
+        if (!contains("rel=shortlink", ignoreCase = true) && !contains("rel=\"shortlink\"", ignoreCase = true)) return null
+        return substringAfter('<', "").substringBefore('>', "").toHttpUrlOrNull()?.queryParameter("p")
+    }
 }

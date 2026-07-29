@@ -13,12 +13,18 @@ import okhttp3.FormBody
 private const val PAGE_SIZE = 25
 
 abstract class Madara : MadaraBase() {
-    override suspend fun getPopularManga(page: Int) = ajaxList(page, 0)
-    override suspend fun getLatestUpdates(page: Int) = ajaxList(page, 1)
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = ajaxList(page, 2, query, filters)
+    private enum class BrowseMode {
+        Popular,
+        Latest,
+        Search,
+    }
+
+    override suspend fun getPopularManga(page: Int) = ajaxList(page, BrowseMode.Popular)
+    override suspend fun getLatestUpdates(page: Int) = ajaxList(page, BrowseMode.Latest)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = ajaxList(page, BrowseMode.Search, query, filters)
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val genres = data?.genreRoutes().orEmpty()
+        val genres = data.genreRoutes()
         return FilterList(
             buildList {
                 add(TextFilter(intl["author_filter_title"], "wp-manga-author"))
@@ -37,7 +43,7 @@ abstract class Madara : MadaraBase() {
         )
     }
 
-    private suspend fun ajaxList(page: Int, mode: Int, query: String = "", filters: FilterList = FilterList()): MangasPage {
+    private suspend fun ajaxList(page: Int, mode: BrowseMode, query: String = "", filters: FilterList = FilterList()): MangasPage {
         val body = FormBody.Builder().apply {
             add("action", "madara_load_more")
             add("page", (page - 1).toString())
@@ -53,9 +59,9 @@ abstract class Madara : MadaraBase() {
                 add("vars[meta_query][0][value]", "manga")
             }
             when (mode) {
-                0 -> sort("_wp_manga_views")
-                1 -> sort("_latest_update")
-                else -> addFilters(query, filters, if (filterNonMangaItems) 1 else 0)
+                BrowseMode.Popular -> sort("_wp_manga_views")
+                BrowseMode.Latest -> sort("_latest_update")
+                BrowseMode.Search -> addFilters(query, filters, if (filterNonMangaItems) 1 else 0)
             }
         }.build()
         val mangas = client.post("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, body).use { parseArchive(it.asJsoup()) }
@@ -68,24 +74,24 @@ abstract class Madara : MadaraBase() {
         add("vars[order]", "DESC")
     }
 
-    private fun FormBody.Builder.addFilters(query: String, filters: FilterList, initialMeta: Int) {
+    private fun FormBody.Builder.addFilters(query: String, filters: FilterList, initialMetaQueryIndex: Int) {
         if (query.isNotBlank()) add("vars[s]", query)
-        var meta = initialMeta
-        var tax = 0
+        var metaQueryIndex = initialMetaQueryIndex
+        var taxonomyQueryIndex = 0
         val genres = filters.firstInstanceOrNull<GenreList>()?.state?.filter { it.state }?.map { it.slug }.orEmpty()
         filters.forEach { filter ->
             when (filter) {
                 is TextFilter -> if (filter.state.isNotBlank()) {
-                    add("vars[tax_query][$tax][taxonomy]", filter.taxonomy)
-                    add("vars[tax_query][$tax][field]", "name")
-                    add("vars[tax_query][$tax][terms]", filter.state)
-                    tax++
+                    add("vars[tax_query][$taxonomyQueryIndex][taxonomy]", filter.taxonomy)
+                    add("vars[tax_query][$taxonomyQueryIndex][field]", "name")
+                    add("vars[tax_query][$taxonomyQueryIndex][terms]", filter.state)
+                    taxonomyQueryIndex++
                 }
                 is StatusFilter -> filter.state.filter { it.state }.map { it.slug }.takeIf(List<String>::isNotEmpty)?.let { states ->
-                    add("vars[meta_query][$meta][key]", "_wp_manga_status")
-                    add("vars[meta_query][$meta][compare]", "IN")
-                    states.forEachIndexed { i, state -> add("vars[meta_query][$meta][value][$i]", state) }
-                    meta++
+                    add("vars[meta_query][$metaQueryIndex][key]", "_wp_manga_status")
+                    add("vars[meta_query][$metaQueryIndex][compare]", "IN")
+                    states.forEachIndexed { i, state -> add("vars[meta_query][$metaQueryIndex][value][$i]", state) }
+                    metaQueryIndex++
                 }
                 is SortFilter -> when (filter.key()) {
                     "latest" -> sort("_latest_update")
@@ -109,15 +115,15 @@ abstract class Madara : MadaraBase() {
                     }
                 }
                 is AdultFilter -> if (filter.state != 0) {
-                    add("vars[meta_query][$meta][key]", "manga_adult_content")
-                    add("vars[meta_query][$meta][compare]", if (filter.state == 1) "not exists" else "exists")
-                    meta++
+                    add("vars[meta_query][$metaQueryIndex][key]", "manga_adult_content")
+                    add("vars[meta_query][$metaQueryIndex][compare]", if (filter.state == 1) "not exists" else "exists")
+                    metaQueryIndex++
                 }
-                is GenreConditionFilter -> if (filter.state == 1 && genres.isNotEmpty()) add("vars[tax_query][$tax][operation]", "AND")
+                is GenreConditionFilter -> if (filter.state == 1 && genres.isNotEmpty()) add("vars[tax_query][$taxonomyQueryIndex][operation]", "AND")
                 is GenreList -> if (genres.isNotEmpty()) {
-                    add("vars[tax_query][$tax][taxonomy]", "wp-manga-genre")
-                    add("vars[tax_query][$tax][field]", "slug")
-                    genres.forEachIndexed { i, slug -> add("vars[tax_query][$tax][terms][$i]", slug) }
+                    add("vars[tax_query][$taxonomyQueryIndex][taxonomy]", "wp-manga-genre")
+                    add("vars[tax_query][$taxonomyQueryIndex][field]", "slug")
+                    genres.forEachIndexed { i, slug -> add("vars[tax_query][$taxonomyQueryIndex][terms][$i]", slug) }
                 }
                 else -> Unit
             }
@@ -126,7 +132,7 @@ abstract class Madara : MadaraBase() {
 
     override suspend fun relatedManga(manga: SManga): List<SManga> {
         val id = mangaId(manga) ?: return emptyList()
-        val genres = memoGenres(manga).take(3)
+        val genres = relatedGenres(manga)
         if (genres.isEmpty()) return emptyList()
         val body = FormBody.Builder().apply {
             add("action", "madara_load_more")
