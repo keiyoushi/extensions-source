@@ -19,6 +19,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
+import okhttp3.Headers
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -145,7 +146,7 @@ abstract class FoolSlide :
     protected open val allowAdult: Boolean
         get() = preferences.getBoolean("adult", true)
 
-    protected val adultHeaders by lazy { headers.newBuilder().add("Adult", "true").build() }
+    protected val adultHeaders: Headers get() = headersBuilder().add("Adult", "true").build()
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
         val request = chain.request()

@@ -46,11 +46,7 @@ abstract class JuinJutsuTeamReader : FoolSlide() {
 
     override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
         val document: Document? = if (fetchDetails || fetchChapters) {
-            val requestHeaders = adultHeaders.newBuilder()
-                .removeAll("If-Modified-Since")
-                .removeAll("If-None-Match")
-                .build()
-            client.get(baseUrl + manga.url, requestHeaders).asJsoup()
+            client.get(baseUrl + manga.url, adultHeaders).asJsoup()
         } else {
             null
         }
@@ -73,11 +69,7 @@ abstract class JuinJutsuTeamReader : FoolSlide() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val requestHeaders = adultHeaders.newBuilder()
-            .removeAll("If-Modified-Since")
-            .removeAll("If-None-Match")
-            .build()
-        val document = client.get(baseUrl + chapter.url, requestHeaders).asJsoup()
+        val document = client.get(baseUrl + chapter.url, adultHeaders).asJsoup()
         return pageListParse(document)
     }
 }
