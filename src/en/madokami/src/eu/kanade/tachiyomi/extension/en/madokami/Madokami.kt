@@ -176,7 +176,7 @@ abstract class Madokami :
         if (isArchiveUrl(url)) return null
 
         val manga = SManga.create().apply {
-            setUrlWithoutDomain(url.toString())
+            this.url = url.encodedPath
         }
 
         return try {
@@ -230,7 +230,7 @@ abstract class Madokami :
         if (segments.isEmpty()) return null
 
         return SManga.create().apply {
-            setUrlWithoutDomain(url.toString())
+            this.url = url.encodedPath
             description = segments.last()
             var i = segments.lastIndex
             while (i > 0 && segments[i].startsWith("!")) {
