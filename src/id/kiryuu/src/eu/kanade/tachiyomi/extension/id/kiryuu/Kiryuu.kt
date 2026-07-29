@@ -27,9 +27,7 @@ abstract class Kiryuu : NatsuId() {
             val href = it.absUrl("href")
             if (href.isNotBlank()) {
                 href.toHttpUrl().pathSegments.getOrNull(1)
-            } else {
-                null
-            }
+            } else null
         }.distinct()
 
         if (slugs.isEmpty()) return MangasPage(emptyList(), false)
