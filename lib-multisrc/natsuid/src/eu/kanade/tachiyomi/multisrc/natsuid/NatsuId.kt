@@ -18,6 +18,7 @@ import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MultipartBody
@@ -147,10 +148,13 @@ abstract class NatsuId : KeiSource() {
         }
     }
 
-    private fun mangaSlug(manga: SManga): String? = manga.memo ?: if (manga.url.startsWith("{")) {
-        manga.url.parseAs<MangaUrl>().slug
-    } else {
-        null
+    private fun mangaSlug(manga: SManga): String? {
+        val memo = manga.memo
+        if (memo.isNotEmpty()) {
+            memo["slug"]?.jsonPrimitive?.content?.let { return it }
+        }
+        val url = manga.url
+        return if (url.startsWith("{")) url.parseAs<MangaUrl>().slug else null
     }
 
     override fun getMangaUrl(manga: SManga): String {

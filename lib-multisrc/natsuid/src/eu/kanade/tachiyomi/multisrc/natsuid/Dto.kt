@@ -3,6 +3,8 @@ package eu.kanade.tachiyomi.multisrc.natsuid
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
 
@@ -22,19 +24,20 @@ class Manga(
     @SerialName("_embedded")
     val embedded: Embedded,
 ) {
-    fun toSManga() = SManga.create().also { manga ->
-        manga.url = id.toString()
-        manga.memo = slug
-        manga.title = Parser.unescapeEntities(title.rendered, false)
-        manga.description = Jsoup.parseBodyFragment(content.rendered).wholeText()
-        manga.thumbnail_url = embedded.featuredMedia.firstOrNull()?.sourceUrl
-        manga.author = embedded.getTerms("series-author").joinToString()
-        manga.artist = embedded.getTerms("artist").joinToString()
-        manga.genre = buildSet {
+    fun toSManga(): SManga {
+        val result = SManga.create()
+        result.url = id.toString()
+        result.memo = buildJsonObject { put("slug", slug) }
+        result.title = Parser.unescapeEntities(title.rendered, false)
+        result.description = Jsoup.parseBodyFragment(content.rendered).wholeText()
+        result.thumbnail_url = embedded.featuredMedia.firstOrNull()?.sourceUrl
+        result.author = embedded.getTerms("series-author").joinToString()
+        result.artist = embedded.getTerms("artist").joinToString()
+        result.genre = buildSet {
             addAll(embedded.getTerms("genre"))
             addAll(embedded.getTerms("type"))
         }.joinToString()
-        manga.status = with(embedded.getTerms("status")) {
+        result.status = with(embedded.getTerms("status")) {
             when {
                 contains("Ongoing") -> SManga.ONGOING
                 contains("Completed") -> SManga.COMPLETED
@@ -43,7 +46,8 @@ class Manga(
                 else -> SManga.UNKNOWN
             }
         }
-        manga.initialized = true
+        result.initialized = true
+        return result
     }
 }
 
