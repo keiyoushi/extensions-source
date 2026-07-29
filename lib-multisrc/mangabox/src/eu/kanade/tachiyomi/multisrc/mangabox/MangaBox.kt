@@ -413,8 +413,6 @@ abstract class MangaBox :
         super.getChapterUrl(chapter)
     }
 
-    open suspend fun pageListResponse(chapter: SChapter): Response = client.get(getChapterUrl(chapter))
-
     private fun extractArray(scriptContent: String, regex: Regex): List<String> {
         val match = regex.find(scriptContent)
         return match?.groupValues?.get(1)?.split(",")?.map {
@@ -422,7 +420,8 @@ abstract class MangaBox :
         } ?: emptyList()
     }
 
-    open suspend fun parsePageList(response: Response): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get(getChapterUrl(chapter))
         val document = response.asJsoup()
         val content = document.select("script:containsData(cdns =)").joinToString("\n") { it.data() }
         val cdns = extractArray(content, cdnsRegex) + extractArray(content, backupImageRegex)
@@ -510,8 +509,6 @@ abstract class MangaBox :
             }.toList()
         }
     }
-
-    override suspend fun getPageList(chapter: SChapter): List<Page> = parsePageList(pageListResponse(chapter))
 
     override fun imageRequest(page: Page): Request = GET(
         page.imageUrl!!,
