@@ -1,7 +1,6 @@
 import gzip
 import html
 import json
-import re
 import sys
 from pathlib import Path
 
@@ -66,14 +65,13 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
             f"{package_name}: no release apk found under {info_file.parent}"
         )
 
-    apk_name = apk.name.replace("-release.apk", ".apk")
-    (REPO_APK_DIR / apk_name).write_bytes(apk.read_bytes())
-
     jar = next((info_file.parent / "outputs/jar/release").glob("*.jar"), None)
     if jar is None:
         raise FileNotFoundError(
             f"{package_name}: no release jar found under {info_file.parent}"
         )
+
+    (REPO_APK_DIR / apk.name).write_bytes(apk.read_bytes())
     (REPO_JAR_DIR / jar.name).write_bytes(jar.read_bytes())
 
     new_extensions.append(
@@ -81,7 +79,7 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
             name=info["name"],
             packageName=package_name,
             resources=index_pb2.Resources(
-                apkUrl=f"{APK_BASE_URL}/{apk_name}",
+                apkUrl=f"{APK_BASE_URL}/{apk.name}",
                 jarUrl=f"{JAR_BASE_URL}/{jar.name}",
                 iconUrl=get_icon_url(info["module"], info.get("theme")),
             ),
@@ -134,7 +132,7 @@ with REPO_DIR.joinpath("index.json").open("w", encoding="utf-8") as f:
     )
 
 with REPO_DIR.joinpath("index.pb").open("wb") as f:
-    f.write(gzip.compress(index.SerializeToString()))
+    f.write(gzip.compress(index.SerializeToString(deterministic=True)))
 
 with REPO_DIR.joinpath("index.html").open("w", encoding="utf-8") as f:
     f.write(
