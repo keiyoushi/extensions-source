@@ -26,7 +26,7 @@ class Manga(
 ) {
     fun toSManga(): SManga {
         val result = SManga.create()
-        result.url = id.toString()
+        result.url = """{"id":$id,"slug":"$slug"}"""
         result.memo = buildJsonObject { put("slug", slug) }
         result.title = Parser.unescapeEntities(title.rendered, false)
         result.description = Jsoup.parseBodyFragment(content.rendered).wholeText()
