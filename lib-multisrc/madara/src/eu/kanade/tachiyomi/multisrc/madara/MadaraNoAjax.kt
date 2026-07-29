@@ -121,9 +121,9 @@ abstract class MadaraNoAjax : MadaraBase() {
     }
 
     override suspend fun relatedManga(manga: SManga): List<SManga> = coroutineScope {
-        val resolved = mangaForRelated(manga)
-        val current = mangaId(resolved) ?: return@coroutineScope emptyList()
-        val all = memoGenres(resolved)
+        val current = mangaId(manga) ?: return@coroutineScope emptyList()
+        val all = memoGenres(manga)
+        if (all.isEmpty()) return@coroutineScope emptyList()
         val specific = all.filterNot { it.slug.lowercase() in setOf("manga", "manhwa", "manhua", "webtoon") }
         val genres = (specific.ifEmpty { all }).take(3)
         val lists = genres.map { genre -> async { archivePage(1, "", genre.path).mangas } }.awaitAll()

@@ -332,7 +332,7 @@ abstract class MadaraBase : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val first = client.get(chapterUrl).use { it.asJsoup() }
+        val first = fetchChapterDocument(chapterUrl)
         val document = if (first.selectFirst("#single-pager") != null) {
             client.get(chapterUrl.toHttpUrl().newBuilder().addQueryParameter("style", "list").build()).use { it.asJsoup() }
         } else {
@@ -341,6 +341,8 @@ abstract class MadaraBase : KeiSource() {
         enqueueViewCount(document)
         return parsePages(document)
     }
+
+    protected open suspend fun fetchChapterDocument(chapterUrl: String): Document = client.get(chapterUrl).use { it.asJsoup() }
 
     private fun enqueueViewCount(document: Document) {
         if (!sendViewCount) return
@@ -431,12 +433,6 @@ abstract class MadaraBase : KeiSource() {
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = relatedManga(manga)
 
     protected fun memoGenres(manga: SManga): List<GenreRoute> = manga.memo["genres"]?.genreRoutes().orEmpty()
-
-    protected suspend fun mangaForRelated(manga: SManga): SManga = if (mangaId(manga) == null || memoGenres(manga).isEmpty()) {
-        fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
-    } else {
-        manga
-    }
 
     protected fun mangaId(manga: SManga): String? = manga.url.takeIf { it.all(Char::isDigit) }
         ?: manga.memo["id"]?.jsonPrimitive?.content
