@@ -233,6 +233,7 @@ class ChapterDto(
         mangaId: String? = null,
     ) = SChapter.create().apply {
         name = "Capitulo ${this@ChapterDto.name}"
+        chapter_number = this@ChapterDto.name.toFloatOrNull() ?: -1f
         // URL con slug actual + ID para rastreo cuando el slug cambie
         url =
             if (mangaId != null) {

@@ -93,6 +93,12 @@ abstract class OlympusScanlation :
 
         private const val SLUG_MAP = "slugMap"
 
+        private const val CHAPTER_COUNT_MAP = "chapterCountMap"
+
+        private const val MIN_GUARDED_CHAPTERS = 50
+
+        private const val MIN_ACCEPTED_CHAPTER_PERCENT = 70
+
         private const val TAG = "OlympusScanlation"
 
         private const val CACHE_DURATION_MS = 60 * 60 * 1000L // 1 hour
@@ -141,6 +147,14 @@ abstract class OlympusScanlation :
         }.getOrDefault(emptyMap())
         set(value) {
             edit().putString(SLUG_MAP, json.encodeToString(value)).apply()
+        }
+
+    private var SharedPreferences.chapterCountMap: Map<Int, Int>
+        get() = runCatching {
+            json.decodeFromString<Map<Int, Int>>(getString(CHAPTER_COUNT_MAP, "{}") ?: "{}")
+        }.getOrDefault(emptyMap())
+        set(value) {
+            edit().putString(CHAPTER_COUNT_MAP, json.encodeToString(value)).apply()
         }
 
     @Volatile
@@ -674,6 +688,10 @@ abstract class OlympusScanlation :
         val mangaSlug = resolveSlugForMangaId(parsedId, manga.title)
 
         return paginatedChapterListRequest(mangaSlug, mangaId, 1)
+            .newBuilder()
+            .tag(MangaRefTag::class.java, MangaRefTag(manga))
+            .tag(MangaTitleTag::class.java, MangaTitleTag(manga.title))
+            .build()
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable
@@ -683,7 +701,15 @@ abstract class OlympusScanlation :
             client.newCall(chapterListRequest(manga)).execute().use { response -> chapterListParse(response) }
         }.onErrorReturn { error ->
             Log.w(TAG, "Failed to fetch API chapters for manga ${manga.url}, falling back to HTML", error)
-            fetchChapterListFromHtml(manga)
+            val chapters = fetchChapterListFromHtml(manga)
+            validateChapterList(
+                mangaId = normalizedMangaId(manga.url),
+                slug = UrlUtils.mangaSlugFromUrl(manga.url),
+                chapters = chapters,
+                source = "html-fallback",
+                reportedTotal = null,
+                pagesFetched = 1,
+            )
         }
 
     private fun resolveAndUpdateMangaSlug(manga: SManga) {
@@ -762,6 +788,10 @@ abstract class OlympusScanlation :
                 .substringBefore("/chapters")
         val mangaId = response.request.tag(String::class.java) ?: apiHelper.resolveIdBySlug(slug, cacheManager) ?: slug
         val data = json.decodeFromString<PayloadChapterDto>(body)
+        Log.d(
+            TAG,
+            "Chapter page loaded: mangaId=$mangaId slug=$slug page=1 pageCount=${data.data.size} reportedTotal=${data.meta.total}",
+        )
         var resultSize = data.data.size
         var page = 2
         while (data.meta.total > resultSize) {
@@ -772,6 +802,16 @@ abstract class OlympusScanlation :
                 throw Exception("Error al obtener página $page de capítulos")
             }
             val newData = json.decodeFromString<PayloadChapterDto>(newBody)
+            Log.d(
+                TAG,
+                "Chapter page loaded: mangaId=$mangaId slug=$slug page=$page pageCount=${newData.data.size} reportedTotal=${newData.meta.total}",
+            )
+            if (newData.data.isEmpty()) {
+                throw Exception(
+                    "Olympus chapter pagination stopped with empty page: mangaId=$mangaId slug=$slug " +
+                        "page=$page loaded=$resultSize reportedTotal=${data.meta.total}",
+                )
+            }
             data.data += newData.data
             resultSize += newData.data.size
             page += 1
@@ -785,7 +825,15 @@ abstract class OlympusScanlation :
             chapterNameToIdCache = chapterNameToIdCache + cacheUpdates
         }
 
-        return data.data.map { it.toSChapter(slug, dateFormat, mangaId) }
+        val chapters = data.data.map { it.toSChapter(slug, dateFormat, mangaId) }
+        return validateChapterList(
+            mangaId = mangaId,
+            slug = slug,
+            chapters = chapters,
+            source = "api",
+            reportedTotal = data.meta.total,
+            pagesFetched = page - 1,
+        )
     }
 
     private fun fetchChapterListFromHtml(manga: SManga): List<SChapter> {
@@ -795,7 +843,7 @@ abstract class OlympusScanlation :
 
         val document = client.newCall(GET(pageUrl, headers)).execute().asJsoup()
 
-        return document.select("a[href*=/capitulo/]").mapNotNull { element ->
+        val chapters = document.select("a[href*=/capitulo/]").mapNotNull { element ->
             val href = element.attr("href")
             val chapterId = href.substringAfter("/capitulo/").substringBefore("/")
                 .takeIf { it.isNotEmpty() } ?: return@mapNotNull null
@@ -827,6 +875,55 @@ abstract class OlympusScanlation :
                 }
             }
         }
+        Log.d(TAG, "HTML chapter list loaded: mangaId=$mangaId slug=$slug chapterCount=${chapters.size}")
+        return chapters
+    }
+
+    private fun validateChapterList(
+        mangaId: String,
+        slug: String?,
+        chapters: List<SChapter>,
+        source: String,
+        reportedTotal: Int?,
+        pagesFetched: Int,
+    ): List<SChapter> {
+        val parsedMangaId = parseMangaIdOrNull(mangaId)
+        if (parsedMangaId == null) {
+            Log.d(
+                TAG,
+                "Chapter list accepted without count guard: mangaId=$mangaId slug=$slug " +
+                    "source=$source current=${chapters.size} reportedTotal=$reportedTotal pagesFetched=$pagesFetched",
+            )
+            return chapters
+        }
+
+        val previousCount = preferences.chapterCountMap[parsedMangaId]
+        val maxChapterNumber = chapters.maxOfOrNull { it.chapter_number }
+        Log.d(
+            TAG,
+            "Chapter list summary: mangaId=$parsedMangaId slug=$slug source=$source " +
+                "current=${chapters.size} previous=$previousCount reportedTotal=$reportedTotal " +
+                "pagesFetched=$pagesFetched maxChapterNumber=$maxChapterNumber",
+        )
+
+        if (previousCount != null && previousCount >= MIN_GUARDED_CHAPTERS) {
+            val minimumAccepted = previousCount * MIN_ACCEPTED_CHAPTER_PERCENT / 100
+            if (chapters.size < minimumAccepted) {
+                throw Exception(
+                    "Olympus chapter list looks incomplete: mangaId=$parsedMangaId slug=$slug " +
+                        "source=$source previous=$previousCount current=${chapters.size} " +
+                        "minimumAccepted=$minimumAccepted reportedTotal=$reportedTotal " +
+                        "pagesFetched=$pagesFetched maxChapterNumber=$maxChapterNumber",
+                )
+            }
+        }
+
+        if (chapters.isNotEmpty()) {
+            preferences.chapterCountMap = preferences.chapterCountMap + (parsedMangaId to chapters.size)
+            Log.d(TAG, "Stored good chapter count: mangaId=$parsedMangaId count=${chapters.size} source=$source")
+        }
+
+        return chapters
     }
 
     private fun resolveChapterId(mangaId: String, chapterIdentifier: String, mangaSlug: String): String {
