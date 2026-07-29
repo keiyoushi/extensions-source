@@ -8,8 +8,7 @@ import org.jsoup.nodes.Document
 
 @Source
 abstract class HentaiXDickgirl : Madara() {
-
-    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+    override fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga = super.parseDetails(document, id, preserveUrl).apply {
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 }
