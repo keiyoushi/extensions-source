@@ -62,7 +62,7 @@ abstract class SabrinaOnline : HttpSource() {
                     chapters.add(
                         SChapter.create().apply {
                             setUrlWithoutDomain(a.absUrl("href"))
-                            name = if (hasYear) "${sections[index]}-$chapter" else chapter
+                            name = if (hasYear) "${sections[index]} $chapter" else chapter
                         },
                     )
                 }
