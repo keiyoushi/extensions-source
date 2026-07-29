@@ -6,13 +6,17 @@ plugins {
 
 keiyoushi {
     name = "InfinityScans"
-    versionCode = 11
+    versionCode = 12
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "en"
         baseUrl = "https://infinityscans.org"
         versionId = 2
+    }
+
+    deeplink {
+        path("/comic/..*")
     }
 }
