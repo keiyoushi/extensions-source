@@ -242,40 +242,40 @@ abstract class MangaBox :
 
     // ============================== Search ===============================
 
-    open suspend fun searchMangaResponse(page: Int, query: String, filters: FilterList): Response = if (query.isNotBlank()) {
-        val url = "$baseUrl/$simpleQueryPath".toHttpUrl().newBuilder()
-            .addPathSegment(normalizeSearchQuery(query))
-            .addQueryParameter("page", page.toString())
-            .build()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val response = if (query.isNotBlank()) {
+            val url = "$baseUrl/$simpleQueryPath".toHttpUrl().newBuilder()
+                .addPathSegment(normalizeSearchQuery(query))
+                .addQueryParameter("page", page.toString())
+                .build()
 
-        client.get(url)
-    } else {
-        val url = "$baseUrl/genre".toHttpUrl().newBuilder()
-        var sort: String? = null
-        var status: String? = null
-
-        filters.forEach { filter ->
-            when (filter) {
-                is SortFilter -> sort = filter.toUriPart()
-                is StatusFilter -> status = filter.toUriPart()
-                is GenreFilter -> filter.toUriPart()?.let { url.addPathSegment(it) }
-                else -> {}
-            }
-        }
-
-        val id = if (sort != null && status != null) {
-            FILTER_ID_MAP[Pair(sort, status)]
+            client.get(url)
         } else {
-            null
+            val url = "$baseUrl/genre".toHttpUrl().newBuilder()
+            var sort: String? = null
+            var status: String? = null
+
+            filters.forEach { filter ->
+                when (filter) {
+                    is SortFilter -> sort = filter.toUriPart()
+                    is StatusFilter -> status = filter.toUriPart()
+                    is GenreFilter -> filter.toUriPart()?.let { url.addPathSegment(it) }
+                    else -> {}
+                }
+            }
+
+            val id = if (sort != null && status != null) {
+                FILTER_ID_MAP[Pair(sort, status)]
+            } else {
+                null
+            }
+
+            id?.let { url.addQueryParameter("filter", it) }
+            url.addQueryParameter("page", page.toString())
+
+            client.get(url.build())
         }
 
-        id?.let { url.addQueryParameter("filter", it) }
-        url.addQueryParameter("page", page.toString())
-
-        client.get(url.build())
-    }
-
-    open fun parseSearchManga(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
         val hasNextPage = searchMangaNextPageSelector().let { selector ->
@@ -283,10 +283,6 @@ abstract class MangaBox :
         }
         return MangasPage(mangas, hasNextPage)
     }
-
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = parseSearchManga(
-        searchMangaResponse(page, query, filters),
-    )
 
     open fun searchMangaSelector() = ".panel_story_list .story_item, div.list-truyen-item-wrap, div.list-comic-item-wrap"
 
