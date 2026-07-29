@@ -64,7 +64,7 @@ abstract class Madara : MadaraBase() {
                 BrowseMode.Search -> addFilters(query, filters, if (filterNonMangaItems) 1 else 0)
             }
         }.build()
-        val mangas = client.post("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, body).use { parseArchive(it.asJsoup()) }
+        val mangas = parseArchive(client.post("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, body).asJsoup())
         return MangasPage(mangas, mangas.size == PAGE_SIZE)
     }
 
@@ -150,6 +150,6 @@ abstract class Madara : MadaraBase() {
             add("vars[tax_query][0][field]", "slug")
             genres.forEachIndexed { i, genre -> add("vars[tax_query][0][terms][$i]", genre.slug) }
         }.build()
-        return client.post("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, body).use { parseArchive(it.asJsoup()) }
+        return parseArchive(client.post("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, body).asJsoup())
     }
 }

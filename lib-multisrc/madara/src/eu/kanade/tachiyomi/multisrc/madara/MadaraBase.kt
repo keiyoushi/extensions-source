@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.madara
 
 import android.util.Base64
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -122,7 +123,7 @@ abstract class MadaraBase : KeiSource() {
     protected abstract suspend fun relatedManga(manga: SManga): List<SManga>
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/$mangaSubString/").use { it.asJsoup() }
+        val document = client.get("$baseUrl/$mangaSubString/").asJsoup()
         return document.select("div.genres a[href*='/$genreDirectory/']").mapNotNull { element ->
             val href = element.attr("abs:href").takeIf(String::isNotBlank) ?: return@mapNotNull null
             val path = href.toHttpUrl().encodedPath
@@ -134,7 +135,7 @@ abstract class MadaraBase : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
-        val document = client.get(url).use { it.asJsoup() }
+        val document = client.get(url).asJsoup()
         val id = document.mangaId() ?: return null
         return parseDetails(document, id, preserveUrl = null).apply { initialized = true }
     }
@@ -173,9 +174,7 @@ abstract class MadaraBase : KeiSource() {
         return SMangaUpdate(updated, updatedChapters)
     }
 
-    private suspend fun getDetailsDocument(manga: SManga): Document = getDetailsResponse(manga).use { response ->
-        response.asJsoup().also(::enqueueViewCount)
-    }
+    private suspend fun getDetailsDocument(manga: SManga): Document = getDetailsResponse(manga).asJsoup().also(::enqueueViewCount)
 
     private suspend fun getDetailsResponse(manga: SManga): Response {
         var id = mangaId(manga)
@@ -235,30 +234,32 @@ abstract class MadaraBase : KeiSource() {
 
     private suspend fun fetchAdminAjaxChapters(mangaPath: String, id: String): List<SChapter> {
         val body = FormBody.Builder().add("action", "manga_get_chapters").add("manga", id).build()
-        return client.post("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, body).use {
-            parseChapterList(it.asJsoup(), mangaPath)
-        }
+        return parseChapterList(client.post("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, body).asJsoup(), mangaPath)
     }
 
-    private suspend fun fetchMangaAjaxChapters(mangaPath: String): List<SChapter> = client.post(chapterAjaxUrl(mangaPath), xhrHeaders, FormBody.Builder().build()).use {
-        parseChapterList(it.asJsoup(), mangaPath)
-    }
+    private suspend fun fetchMangaAjaxChapters(mangaPath: String): List<SChapter> = parseChapterList(client.post(chapterAjaxUrl(mangaPath), xhrHeaders, FormBody.Builder().build()).asJsoup(), mangaPath)
 
     private suspend fun fetchPaginatedChapters(mangaPath: String): List<SChapter> {
         val result = mutableListOf<SChapter>()
         var lastUrl: String? = null
         var page = 1
         while (true) {
-            val chapters = client.post(
+            val response = client.post(
                 "${chapterAjaxUrl(mangaPath)}?t=$page",
                 xhrHeaders,
                 FormBody.Builder().build(),
                 ensureSuccess = false,
-            ).use {
-                if (it.code == 404) return result
-                check(it.isSuccessful) { "Chapter page request failed with HTTP ${it.code}" }
-                parseChapterList(it.asJsoup(), mangaPath)
+            )
+            if (response.code == 404) {
+                response.close()
+                return result
             }
+            if (!response.isSuccessful) {
+                val code = response.code
+                response.close()
+                throw HttpException(code)
+            }
+            val chapters = parseChapterList(response.asJsoup(), mangaPath)
             if (chapters.isEmpty() || chapters.last().url == lastUrl) break
             result += chapters
             lastUrl = chapters.last().url
@@ -274,9 +275,7 @@ abstract class MadaraBase : KeiSource() {
             .add("manga_ajax", "1")
             .add("maction", "get_chapters")
             .build()
-        return client.post("$baseUrl/index.php", xhrHeaders, body).use {
-            parseChapterList(it.asJsoup(), mangaPath)
-        }
+        return parseChapterList(client.post("$baseUrl/index.php", xhrHeaders, body).asJsoup(), mangaPath)
     }
 
     private fun chapterAjaxUrl(mangaPath: String) = "$baseUrl${mangaPath.trimEnd('/')}/ajax/chapters/"
@@ -334,7 +333,7 @@ abstract class MadaraBase : KeiSource() {
         val chapterUrl = getChapterUrl(chapter)
         val first = fetchChapterDocument(chapterUrl)
         val document = if (first.selectFirst("#single-pager") != null) {
-            client.get(chapterUrl.toHttpUrl().newBuilder().addQueryParameter("style", "list").build()).use { it.asJsoup() }
+            client.get(chapterUrl.toHttpUrl().newBuilder().addQueryParameter("style", "list").build()).asJsoup()
         } else {
             first
         }
@@ -342,7 +341,7 @@ abstract class MadaraBase : KeiSource() {
         return parsePages(document)
     }
 
-    protected open suspend fun fetchChapterDocument(chapterUrl: String): Document = client.get(chapterUrl).use { it.asJsoup() }
+    protected open suspend fun fetchChapterDocument(chapterUrl: String): Document = client.get(chapterUrl).asJsoup()
 
     private fun enqueueViewCount(document: Document) {
         if (!sendViewCount) return

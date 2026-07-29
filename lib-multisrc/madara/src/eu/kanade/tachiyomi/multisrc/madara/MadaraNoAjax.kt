@@ -47,10 +47,8 @@ abstract class MadaraNoAjax : MadaraBase() {
             if (order.isNotBlank()) addQueryParameter("m_orderby", order)
             if (query.isNotBlank()) addQueryParameter("s", query)
         }.build()
-        return client.get(url).use { response ->
-            val document = response.asJsoup()
-            MangasPage(parseArchive(document), document.selectFirst("div.nav-previous, a.nextpostslink") != null)
-        }
+        val document = client.get(url).asJsoup()
+        return MangasPage(parseArchive(document), document.selectFirst("div.nav-previous, a.nextpostslink") != null)
     }
 
     private suspend fun htmlSearch(page: Int, query: String): MangasPage {
@@ -60,7 +58,7 @@ abstract class MadaraNoAjax : MadaraBase() {
             addQueryParameter("s", query)
             addQueryParameter("post_type", "wp-manga")
         }.build()
-        val document = client.get(url).use { it.asJsoup() }
+        val document = client.get(url).asJsoup()
         val cards = parseSearchCards(document)
         val archiveMangas = parseArchive(document)
         if (archiveMangas.map(::memoPath) == cards.map(SearchCard::path)) {
@@ -106,7 +104,7 @@ abstract class MadaraNoAjax : MadaraBase() {
                 .addQueryParameter("s", query)
                 .addQueryParameter("paged", page.toString())
                 .build()
-            val feed = runCatching { client.get(url).use(::parseRss) }.getOrElse { break }
+            val feed = runCatching { parseRss(client.get(url)) }.getOrElse { break }
             feed.forEach { (id, card) -> values[card.path] = id }
             if (needed.all(values::containsKey) || feed.isEmpty()) break
         }
@@ -126,7 +124,7 @@ abstract class MadaraNoAjax : MadaraBase() {
         client.head(url, ensureSuccess = false).use { response ->
             response.headers.values("Link").firstNotNullOfOrNull { it.shortlinkId() }?.let { return it }
         }
-        return client.get(url).use { it.asJsoup().mangaId() }
+        return client.get(url).asJsoup().mangaId()
     }
 
     override suspend fun relatedManga(manga: SManga): List<SManga> = coroutineScope {
