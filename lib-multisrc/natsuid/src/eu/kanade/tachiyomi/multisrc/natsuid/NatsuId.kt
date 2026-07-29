@@ -138,10 +138,13 @@ abstract class NatsuId : KeiSource() {
         return null
     }
 
-    private fun mangaId(manga: SManga): String? = when {
-        manga.url.startsWith("{") -> manga.url.parseAs<MangaUrl>().id.toString()
-        manga.url.toIntOrNull() != null -> manga.url
-        else -> null
+    private fun mangaId(manga: SManga): String? {
+        val url = manga.url
+        return when {
+            url.startsWith("{") -> url.parseAs<MangaUrl>().id.toString()
+            url.toIntOrNull() != null -> url
+            else -> null
+        }
     }
 
     private fun mangaSlug(manga: SManga): String? = manga.memo ?: if (manga.url.startsWith("{")) {

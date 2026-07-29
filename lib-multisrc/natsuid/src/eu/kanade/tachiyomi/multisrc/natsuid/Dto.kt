@@ -22,19 +22,19 @@ class Manga(
     @SerialName("_embedded")
     val embedded: Embedded,
 ) {
-    fun toSManga() = SManga.create().apply {
-        url = id.toString()
-        memo = slug
-        title = Parser.unescapeEntities(this@Manga.title.rendered, false)
-        description = Jsoup.parseBodyFragment(content.rendered).wholeText()
-        thumbnail_url = embedded.featuredMedia.firstOrNull()?.sourceUrl
-        author = embedded.getTerms("series-author").joinToString()
-        artist = embedded.getTerms("artist").joinToString()
-        genre = buildSet {
+    fun toSManga() = SManga.create().also { manga ->
+        manga.url = id.toString()
+        manga.memo = slug
+        manga.title = Parser.unescapeEntities(title.rendered, false)
+        manga.description = Jsoup.parseBodyFragment(content.rendered).wholeText()
+        manga.thumbnail_url = embedded.featuredMedia.firstOrNull()?.sourceUrl
+        manga.author = embedded.getTerms("series-author").joinToString()
+        manga.artist = embedded.getTerms("artist").joinToString()
+        manga.genre = buildSet {
             addAll(embedded.getTerms("genre"))
             addAll(embedded.getTerms("type"))
         }.joinToString()
-        status = with(embedded.getTerms("status")) {
+        manga.status = with(embedded.getTerms("status")) {
             when {
                 contains("Ongoing") -> SManga.ONGOING
                 contains("Completed") -> SManga.COMPLETED
@@ -43,7 +43,7 @@ class Manga(
                 else -> SManga.UNKNOWN
             }
         }
-        initialized = true
+        manga.initialized = true
     }
 }
 
