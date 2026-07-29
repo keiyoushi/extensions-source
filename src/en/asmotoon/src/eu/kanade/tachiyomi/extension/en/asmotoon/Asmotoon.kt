@@ -35,9 +35,7 @@ abstract class Asmotoon : Keyoapp() {
         .trim('-')
 
     private fun SManga.fix(): SManga = apply {
-        if (url.substringAfterLast('/').matches(OLD_CHAPTER_SLUG_REGEX)) {
-            url = "${url.substringBeforeLast('/')}/${titleToSlug(title)}"
-        }
+        url = url.replace(OLD_CHAPTER_SLUG_REGEX) { titleToSlug(title) }
     }
 
     override fun getMangaUrl(manga: SManga): String = super.getMangaUrl(manga.fix())
@@ -64,6 +62,6 @@ abstract class Asmotoon : Keyoapp() {
     }
 
     companion object {
-        private val OLD_CHAPTER_SLUG_REGEX = "[0-9a-f]{11}".toRegex()
+        private val OLD_CHAPTER_SLUG_REGEX = "(?<=/series/)[0-9a-f]{11}(?=/)".toRegex()
     }
 }
