@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.procomic
 
-import android.graphics.Bitmap
-import android.graphics.Rect
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -16,25 +14,17 @@ import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
-import okhttp3.CacheControl
-import okhttp3.Headers
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import tachiyomi.decoder.ImageDecoder
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.util.Locale
 import kotlin.time.Instant
 
 @Source
 abstract class Procomic : KeiSource() {
-
-    override val supportsLatest = true
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addNetworkInterceptor(
@@ -43,33 +33,6 @@ abstract class Procomic : KeiSource() {
                 listOf("safe_browsing" to "off", "language" to "ar"),
             ),
         )
-        addNetworkInterceptor(
-            Interceptor { chain ->
-                val response = chain.proceed(chain.request())
-                val contentType = response.header("Content-Type") ?: return@Interceptor response
-                if (contentType != "image/avif") return@Interceptor response
-                avifToJpeg(response)
-            },
-        )
-    }
-
-    override fun Headers.Builder.configureHeaders() = apply {
-    }
-
-    private fun avifToJpeg(response: Response): Response {
-        val bytes = response.body.bytes()
-        val decoder = ImageDecoder.newInstance(ByteArrayInputStream(bytes), false, null) ?: return response
-        val bitmap = decoder.decode(Rect(0, 0, decoder.width, decoder.height), 1) ?: run {
-            decoder.recycle()
-            return response
-        }
-        decoder.recycle()
-        val output = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, output)
-        bitmap.recycle()
-        return response.newBuilder()
-            .body(output.toByteArray().toResponseBody("image/jpeg".toMediaType()))
-            .build()
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -107,7 +70,7 @@ abstract class Procomic : KeiSource() {
                 statusFilter?.selected?.also { addQueryParameter("status", it) }
             }
             .build()
-        val data = client.get(url, cacheControl = CacheControl.FORCE_NETWORK).parseAs<SearchResponse>()
+        val data = client.get(url).parseAs<SearchResponse>()
         return MangasPage(
             data.data.filter { it.type in SUPPORTED_TYPES }.map { it.toSManga() },
             data.meta?.let { it.totalPages != null && it.currentPage != null && it.totalPages > it.currentPage } ?: false,
@@ -115,6 +78,9 @@ abstract class Procomic : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) {
+            return null
+        }
         val segs = url.pathSegments
         val off = if (segs.firstOrNull() in listOf("ar", "en")) 1 else 0
         if (segs.size < off + 4 || segs.getOrNull(off) != "series") return null
@@ -123,7 +89,11 @@ abstract class Procomic : KeiSource() {
         val id = segs[off + 2]
         val slug = segs[off + 3]
         return SManga.create().also {
-            it.url = "/series/$type/$id/$slug"
+            it.url = "/$id"
+            it.memo = buildJsonObject {
+                put("type", type)
+                put("slug", slug)
+            }
         }
     }
 
@@ -133,16 +103,15 @@ abstract class Procomic : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val path = manga.url.removePrefix("/series/").split("/")
-        val apiManga = fetchApiManga(path[0], path[1])
-        val smanga = if (fetchDetails) apiManga.toSManga() else manga
-        val chapterList = if (fetchChapters) {
-            (apiManga.chapters ?: emptyList())
-                .filter { it.language == "AR" }
-                .map { it.toSChapter(path[0], path[1], apiManga.slug) }
-        } else {
-            chapters
-        }
+        val id = manga.url.removePrefix("/")
+        val m = manga.memo
+        val type = m["type"]!!.jsonPrimitive.content
+        val apiManga = fetchApiManga(type, id)
+        val smanga = apiManga.toSManga()
+        val chapterList = (apiManga.chapters ?: emptyList())
+            .filter { it.language == "AR" }
+            .map { it.toSChapter(type, id, apiManga.slug) }
+
         return SMangaUpdate(smanga, chapterList)
     }
 
@@ -159,7 +128,11 @@ abstract class Procomic : KeiSource() {
     }
 
     private fun ApiManga.toSManga(): SManga = SManga.create().apply {
-        url = "/series/$type/$id/$slug"
+        url = "/$id"
+        memo = buildJsonObject {
+            put("type", type)
+            put("slug", slug)
+        }
         title = this@toSManga.title
         metadata?.let { meta ->
             artist = meta.artist
@@ -201,15 +174,29 @@ abstract class Procomic : KeiSource() {
     }
 
     private fun SearchItem.toSManga(): SManga = SManga.create().apply {
-        url = "/series/$type/$id/$slug"
+        url = "/$id"
+        memo = buildJsonObject {
+            put("type", type)
+            put("slug", slug)
+        }
         title = this@toSManga.title
         thumbnail_url = (coverImageApp?.desktop ?: coverImage)?.let {
             if (it.startsWith("/")) "$baseUrl$it" else it
         }
     }
+    override fun getChapterUrl(chapter: SChapter): String {
+        val m = chapter.memo
+        return "$baseUrl/series/${m["type"]!!.jsonPrimitive.content}/${m["seriesId"]!!.jsonPrimitive.content}/${m["slug"]!!.jsonPrimitive.content}/${chapter.url.removePrefix("/")}/${m["chapterNumber"]!!.jsonPrimitive.content}"
+    }
 
     private fun ApiChapter.toSChapter(type: String, seriesId: String, slug: String): SChapter = SChapter.create().apply {
-        url = "/series/$type/$seriesId/$slug/$id/$chapterNumber"
+        url = "/$id"
+        memo = buildJsonObject {
+            put("type", type)
+            put("seriesId", seriesId)
+            put("slug", slug)
+            put("chapterNumber", chapterNumber)
+        }
         name = buildString {
             append("\u200F")
             if (coins != null && coins > 0) append("🔒 ")
