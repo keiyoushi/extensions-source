@@ -3,11 +3,9 @@ package eu.kanade.tachiyomi.extension.es.olympusscanlation
 import android.util.Log
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.json.Json
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import uy.kohesive.injekt.injectLazy
-import kotlin.math.min
 
 class ApiHelper(
     private val client: OkHttpClient,
@@ -27,67 +25,16 @@ class ApiHelper(
         val query = title.trim()
         if (query.length < 3) return null
 
-        // Intentar búsqueda rápida por API (aunque actualmente el servidor ignora el parámetro name)
-        val apiMatch = searchByApiName(query, currentId, cacheManager)
-        if (apiMatch != null) return apiMatch
-
-        // Fallback: cargar lista completa y buscar localmente
-        Log.d("OlympusScanlation", "Búsqueda por API falló para '$query', intentando lista completa")
+        Log.d("OlympusScanlation", "Resolviendo manga por lista local/cacheada para '$query'")
         ensureSeriesListLoaded(cacheManager)
         val normalized = query.lowercase()
-        return cacheManager.getCachedSeriesList()
-            ?.firstOrNull { it.name.lowercase() == normalized }
+        val series = cacheManager.getCachedSeriesList()
+        return currentId?.let { id -> series?.firstOrNull { it.id?.toString() == id } }
+            ?: series?.firstOrNull { it.name.lowercase() == normalized }
             ?: cacheManager.getCachedSeriesList()
                 ?.firstOrNull { it.name.lowercase().contains(normalized) }
             ?: cacheManager.getCachedSeriesList()
                 ?.firstOrNull { normalized.contains(it.name.lowercase()) }
-    }
-
-    private fun searchByApiName(
-        query: String,
-        currentId: String?,
-        cacheManager: MangaCacheManager,
-    ): MangaDto? {
-        val apiUrl =
-            "$websiteBaseUrl/api/series"
-                .toHttpUrl()
-                .newBuilder()
-                .addQueryParameter("name", query.substring(0, min(query.length, 40)))
-                .addQueryParameter("type", "comic")
-                .build()
-        return try {
-            val response =
-                client
-                    .newCall(
-                        Request
-                            .Builder()
-                            .url(apiUrl)
-                            .headers(
-                                okhttp3.Headers
-                                    .Builder()
-                                    .apply { headers.forEach { (k, v) -> add(k, v) } }
-                                    .build(),
-                            ).build(),
-                    ).execute()
-            val body = response.body.string()
-            if (response.code == 401 || isErrorPage(response.code, body)) {
-                return null
-            }
-            val series = json.decodeMangaListPayload(body).filter { it.type == "comic" }
-
-            if (currentId != null) {
-                val idMatch = series.firstOrNull { it.id?.toString() == currentId }
-                if (idMatch != null) return idMatch
-            }
-
-            val normalized = query.lowercase()
-            series.firstOrNull { it.name.lowercase() == normalized }
-                ?: series.firstOrNull { it.name.lowercase().contains(normalized) }
-                ?: series.firstOrNull { normalized.contains(it.name.lowercase()) }
-        } catch (e: Exception) {
-            Log.e("OlympusScanlation", "Error en búsqueda API por nombre: ${e.message}")
-            null
-        }
     }
 
     fun resolveMangaById(

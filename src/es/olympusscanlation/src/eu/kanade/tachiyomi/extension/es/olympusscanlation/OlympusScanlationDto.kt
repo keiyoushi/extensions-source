@@ -95,6 +95,7 @@ class MangaDto(
     private val summary: String? = null,
     private val status: MangaStatusDto? = null,
     private val genres: List<FilterDto>? = null,
+    @SerialName("chapter_count") val chapterCount: Int? = null,
 ) {
     fun toSManga(resolvedId: String? = id?.toString()) = SManga.create().apply {
         title = name.trim()

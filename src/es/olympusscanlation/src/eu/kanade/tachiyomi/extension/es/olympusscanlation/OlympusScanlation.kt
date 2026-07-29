@@ -27,7 +27,6 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import kotlin.math.min
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -95,13 +94,16 @@ abstract class OlympusScanlation :
 
         private const val CHAPTER_COUNT_MAP = "chapterCountMap"
 
-        private const val MIN_GUARDED_CHAPTERS = 50
-
         private const val MIN_ACCEPTED_CHAPTER_PERCENT = 70
 
         private const val TAG = "OlympusScanlation"
 
         private const val CACHE_DURATION_MS = 60 * 60 * 1000L // 1 hour
+
+        private val CHAPTER_COUNT_TEXT_REGEX = Regex(
+            "(\\d+)\\s+cap[ií]tulos?\\s+en\\s+total",
+            RegexOption.IGNORE_CASE,
+        )
     }
 
     private val headersMap: Map<String, String>
@@ -175,10 +177,10 @@ abstract class OlympusScanlation :
         }
 
         val comics = try {
-            fetchSeriesListPaginated()
+            fetchSeriesListFromListEndpoint()
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to refresh paginated series list, falling back to homepage slugs", e)
-            // Paginated endpoint failed — fall back to homepage for slug updates only.
+            Log.w(TAG, "Failed to refresh series list, falling back to homepage slugs", e)
+            // List endpoint failed — fall back to homepage for slug updates only.
             // Don't overwrite seriesList so search still works with previously cached data.
             try {
                 val homepageSlugs = fetchHomepageSlugs()
@@ -200,30 +202,13 @@ abstract class OlympusScanlation :
         preferences.slugMap += newSlugMap + fetchHomepageSlugs()
     }
 
-    /** Fetch all comics by paginating through /api/series?page=N */
-    private fun fetchSeriesListPaginated(): List<MangaDto> {
-        var page = 1
-        val allComics = mutableListOf<MangaDto>()
-
-        while (true) {
-            val response = client.newCall(GET("$baseUrl/api/series?page=$page", headers)).execute()
-            if (!response.isSuccessful) {
-                throw Exception("Failed to fetch paginated series page $page: HTTP ${response.code}")
-            }
-            val payload = response.parseAs<PayloadSeriesDto>()
-            val seriesPage = payload.data.series ?: SeriesDto(
-                current_page = payload.data.current_page ?: page,
-                data = payload.data.data.orEmpty(),
-                last_page = payload.data.last_page ?: page,
-            )
-
-            allComics += seriesPage.data.filter { it.type == "comic" }
-
-            if (!seriesPage.hasNextPage()) break
-            page++
+    /** Fetch the cached site catalogue used by the website search dropdown. */
+    private fun fetchSeriesListFromListEndpoint(): List<MangaDto> {
+        val response = client.newCall(GET("$baseUrl/api/series/list", headers)).execute()
+        if (!response.isSuccessful) {
+            throw Exception("Failed to fetch series list: HTTP ${response.code}")
         }
-
-        return allComics
+        return json.decodeMangaListPayload(response.body.string()).filter { it.type == "comic" }
     }
 
     private fun fetchHomepageSlugs(): Map<Int, String> = try {
@@ -262,21 +247,27 @@ abstract class OlympusScanlation :
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        // HTML-first strategy: use /capitulos scraping path
         val updatesUrl =
-            "$baseUrl/capitulos"
+            "$publicApiBaseUrl/api/new-chapters"
                 .toHttpUrl()
                 .newBuilder()
-                .apply {
-                    if (page > 1) addQueryParameter("page", page.toString())
-                }.build()
+                .addQueryParameter("page", page.toString())
+                .build()
         return GET(updatesUrl, headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        // HTML-first strategy: directly use existing scraping helper
-        val page = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
-        return fetchLatestUpdatesByScraping(page)
+        val payload = response.parseAs<NewChaptersDto>()
+        val mangaList = payload.data
+            .filter { it.type == "comic" }
+            .mapNotNull { dto ->
+                val mangaId = dto.id ?: return@mapNotNull null
+                cacheManager.updateMangaCache(dto)
+                preferences.slugMap = preferences.slugMap + (mangaId to dto.slug)
+                dto.toSManga(mangaId.toString())
+            }
+
+        return MangasPage(mangaList, hasNextPage = payload.current_page < payload.last_page)
     }
 
     private fun fetchPopularMangaByScraping(): MangasPage {
@@ -429,15 +420,10 @@ abstract class OlympusScanlation :
             if (query.length < 3) {
                 throw Exception("La búsqueda debe tener al menos 3 caracteres")
             }
-            // Use validated public API endpoint
-            val apiUrl =
-                "$publicApiBaseUrl/api/series"
-                    .toHttpUrl()
-                    .newBuilder()
-                    .addQueryParameter("name", query.substring(0, min(query.length, 40)))
-                    .addQueryParameter("type", "comic")
-                    .build()
-            return GET(apiUrl, headers)
+            return GET("$publicApiBaseUrl/api/series/list", headers)
+                .newBuilder()
+                .tag(String::class.java, "query:$query")
+                .build()
         }
 
         val url = "$publicApiBaseUrl/api/series".toHttpUrl().newBuilder()
@@ -479,10 +465,9 @@ abstract class OlympusScanlation :
             throw Exception("Error en la búsqueda: respuesta HTML inesperada")
         }
 
-        // Manejar el resultado de la búsqueda por ID personalizado
-        val searchId = response.request.tag(String::class.java)?.let { tag ->
-            if (tag.startsWith("id_search:")) tag.substringAfter("id_search:") else null
-        }
+        val requestTag = response.request.tag(String::class.java)
+        val searchId = requestTag?.let { tag -> if (tag.startsWith("id_search:")) tag.substringAfter("id_search:") else null }
+        val searchQuery = requestTag?.let { tag -> if (tag.startsWith("query:")) tag.substringAfter("query:") else null }
 
         if (searchId != null) {
             val seriesList = json.decodeMangaListPayload(body)
@@ -493,6 +478,17 @@ abstract class OlympusScanlation :
             } else {
                 MangasPage(emptyList(), false)
             }
+        }
+        if (searchQuery != null) {
+            val normalizedQuery = searchQuery.trim().lowercase()
+            val mangaList = json.decodeMangaListPayload(body)
+                .filter { it.type == "comic" }
+                .filter { it.name.lowercase().contains(normalizedQuery) }
+                .map { dto ->
+                    cacheManager.updateMangaCache(dto)
+                    dto.toSManga(resolveStableId(dto.slug, dto.name, dto.id?.toString()))
+                }
+            return MangasPage(mangaList, hasNextPage = false)
         }
         if (response.request.url
                 .toString()
@@ -598,6 +594,7 @@ abstract class OlympusScanlation :
     private fun fetchMangaDetailsBySlug(slug: String): SManga {
         val dto = fetchMangaDtoBySlug(slug)
         cacheManager.updateMangaCache(dto)
+        persistChapterCount(dto.id, dto.chapterCount, "fetchMangaDetailsBySlug")
         return dto.toSMangaDetails(resolveStableId(dto.slug, dto.name, dto.id?.toString()))
     }
 
@@ -664,6 +661,7 @@ abstract class OlympusScanlation :
 
         val dto = json.decodeMangaDetailPayload(body)
         cacheManager.updateMangaCache(dto)
+        persistChapterCount(dto.id, dto.chapterCount, "mangaDetailsParse")
         val resolvedId = resolveStableId(dto.slug, dto.name, dto.id?.toString())
         val details = dto.toSMangaDetails(resolvedId)
         updateTaggedMangaUrl(response, dto.slug)
@@ -701,15 +699,17 @@ abstract class OlympusScanlation :
             client.newCall(chapterListRequest(manga)).execute().use { response -> chapterListParse(response) }
         }.onErrorReturn { error ->
             Log.w(TAG, "Failed to fetch API chapters for manga ${manga.url}, falling back to HTML", error)
-            val chapters = fetchChapterListFromHtml(manga)
-            validateChapterList(
+            val (chapters, parsedTotal) = fetchChapterListFromHtml(manga)
+            val validatedChapters = validateChapterList(
                 mangaId = normalizedMangaId(manga.url),
                 slug = UrlUtils.mangaSlugFromUrl(manga.url),
                 chapters = chapters,
                 source = "html-fallback",
-                reportedTotal = null,
+                reportedTotal = parsedTotal,
                 pagesFetched = 1,
             )
+            persistChapterCount(parseMangaIdOrNull(normalizedMangaId(manga.url)), parsedTotal, "html-fallback")
+            validatedChapters
         }
 
     private fun resolveAndUpdateMangaSlug(manga: SManga) {
@@ -746,12 +746,22 @@ abstract class OlympusScanlation :
         val mangaId = preferredMangaId
             ?: apiHelper.resolveIdBySlug(slug, cacheManager)
             ?: throw Exception("Unable to resolve Olympus manga ID for $slug")
-        return fetchChapterListFromHtml(
+        val (chapters, parsedTotal) = fetchChapterListFromHtml(
             SManga.create().apply {
                 title = cacheManager.getMangaTitleById(mangaId) ?: slug
                 url = mangaId
             },
         )
+        val validatedChapters = validateChapterList(
+            mangaId = mangaId,
+            slug = slug,
+            chapters = chapters,
+            source = "html-fallback-internal",
+            reportedTotal = parsedTotal,
+            pagesFetched = 1,
+        )
+        persistChapterCount(parseMangaIdOrNull(mangaId), parsedTotal, "html-fallback-internal")
+        return validatedChapters
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -826,6 +836,7 @@ abstract class OlympusScanlation :
         }
 
         val chapters = data.data.map { it.toSChapter(slug, dateFormat, mangaId) }
+        persistChapterCount(parseMangaIdOrNull(mangaId), data.meta.total, "chapterListParse-api")
         return validateChapterList(
             mangaId = mangaId,
             slug = slug,
@@ -836,12 +847,15 @@ abstract class OlympusScanlation :
         )
     }
 
-    private fun fetchChapterListFromHtml(manga: SManga): List<SChapter> {
+    private fun fetchChapterListFromHtml(manga: SManga): Pair<List<SChapter>, Int?> {
         val mangaId = normalizedMangaId(manga.url)
         val slug = resolveSlugForMangaId(parseMangaId(mangaId), manga.title)
         val pageUrl = "$baseUrl/series/comic-$slug"
 
         val document = client.newCall(GET(pageUrl, headers)).execute().asJsoup()
+
+        val parsedTotal = CHAPTER_COUNT_TEXT_REGEX.find(document.text())
+            ?.groupValues?.getOrNull(1)?.toIntOrNull()
 
         val chapters = document.select("a[href*=/capitulo/]").mapNotNull { element ->
             val href = element.attr("href")
@@ -875,8 +889,21 @@ abstract class OlympusScanlation :
                 }
             }
         }
-        Log.d(TAG, "HTML chapter list loaded: mangaId=$mangaId slug=$slug chapterCount=${chapters.size}")
-        return chapters
+        Log.d(TAG, "HTML chapter list loaded: mangaId=$mangaId slug=$slug chapterCount=${chapters.size} parsedTotal=$parsedTotal")
+        return Pair(chapters, parsedTotal)
+    }
+
+    private fun persistChapterCount(
+        mangaId: Int?,
+        chapterCount: Int?,
+        source: String,
+    ) {
+        if (mangaId == null || chapterCount == null || chapterCount <= 0) return
+        val existing = preferences.chapterCountMap[mangaId]
+        if (existing == null || chapterCount > existing) {
+            preferences.chapterCountMap = preferences.chapterCountMap + (mangaId to chapterCount)
+            Log.d(TAG, "Persisted expected chapter count: mangaId=$mangaId count=$chapterCount source=$source previous=$existing")
+        }
     }
 
     private fun validateChapterList(
@@ -899,27 +926,35 @@ abstract class OlympusScanlation :
 
         val previousCount = preferences.chapterCountMap[parsedMangaId]
         val maxChapterNumber = chapters.maxOfOrNull { it.chapter_number }
+        val maxChapterFloor = maxChapterNumber?.toInt()?.takeIf { it > 0 }
+
+        // Best expected count from all available sources: API reported total, persisted count,
+        // and maximum chapter number seen in the list (as a floor).
+        val bestExpectedCount = listOfNotNull(reportedTotal, previousCount, maxChapterFloor).maxOrNull()
+
         Log.d(
             TAG,
             "Chapter list summary: mangaId=$parsedMangaId slug=$slug source=$source " +
                 "current=${chapters.size} previous=$previousCount reportedTotal=$reportedTotal " +
-                "pagesFetched=$pagesFetched maxChapterNumber=$maxChapterNumber",
+                "bestExpected=$bestExpectedCount pagesFetched=$pagesFetched maxChapterNumber=$maxChapterNumber maxChapterFloor=$maxChapterFloor",
         )
 
-        if (previousCount != null && previousCount >= MIN_GUARDED_CHAPTERS) {
-            val minimumAccepted = previousCount * MIN_ACCEPTED_CHAPTER_PERCENT / 100
-            if (chapters.size < minimumAccepted) {
+        // Guard: reject significantly incomplete lists when we have a reliable expected count.
+        // Skip guard when bestExpectedCount is null (unknown) or <= 1 (one-shots / new series).
+        if (bestExpectedCount != null && bestExpectedCount > 1) {
+            val minimumAccepted = bestExpectedCount * MIN_ACCEPTED_CHAPTER_PERCENT / 100
+            if (minimumAccepted > 1 && chapters.size < minimumAccepted) {
                 throw Exception(
                     "Olympus chapter list looks incomplete: mangaId=$parsedMangaId slug=$slug " +
-                        "source=$source previous=$previousCount current=${chapters.size} " +
-                        "minimumAccepted=$minimumAccepted reportedTotal=$reportedTotal " +
+                        "source=$source bestExpected=$bestExpectedCount current=${chapters.size} " +
+                        "minimumAccepted=$minimumAccepted reportedTotal=$reportedTotal previous=$previousCount " +
                         "pagesFetched=$pagesFetched maxChapterNumber=$maxChapterNumber",
                 )
             }
         }
 
         if (chapters.isNotEmpty()) {
-            preferences.chapterCountMap = preferences.chapterCountMap + (parsedMangaId to chapters.size)
+            persistChapterCount(parsedMangaId, chapters.size, source)
             Log.d(TAG, "Stored good chapter count: mangaId=$parsedMangaId count=${chapters.size} source=$source")
         }
 
