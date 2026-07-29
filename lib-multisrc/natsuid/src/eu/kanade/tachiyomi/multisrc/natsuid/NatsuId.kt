@@ -43,11 +43,9 @@ abstract class NatsuId : KeiSource() {
         return nonce ?: throw Exception("Unable to get nonce")
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage =
-        getSearchMangaList(page, "", SortFilter.popular)
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.popular)
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage =
-        getSearchMangaList(page, "", SortFilter.latest)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.latest)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/wp-admin/admin-ajax.php?action=advanced_search"
@@ -140,20 +138,16 @@ abstract class NatsuId : KeiSource() {
         return null
     }
 
-    private fun mangaId(manga: SManga): String? {
-        return when {
-            manga.url.startsWith("{") -> manga.url.parseAs<MangaUrl>().id.toString()
-            manga.url.toIntOrNull() != null -> manga.url
-            else -> null
-        }
+    private fun mangaId(manga: SManga): String? = when {
+        manga.url.startsWith("{") -> manga.url.parseAs<MangaUrl>().id.toString()
+        manga.url.toIntOrNull() != null -> manga.url
+        else -> null
     }
 
-    private fun mangaSlug(manga: SManga): String? {
-        return manga.memo ?: if (manga.url.startsWith("{")) {
-            manga.url.parseAs<MangaUrl>().slug
-        } else {
-            null
-        }
+    private fun mangaSlug(manga: SManga): String? = manga.memo ?: if (manga.url.startsWith("{")) {
+        manga.url.parseAs<MangaUrl>().slug
+    } else {
+        null
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -238,13 +232,11 @@ abstract class NatsuId : KeiSource() {
 
     protected open val pageListSelector = "main .relative section > img"
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        return client.get(getChapterUrl(chapter)).use { response ->
-            response.asJsoup()
-                .select(pageListSelector).mapIndexed { idx, img ->
-                    Page(idx, imageUrl = img.absUrl("src"))
-                }
-        }
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).use { response ->
+        response.asJsoup()
+            .select(pageListSelector).mapIndexed { idx, img ->
+                Page(idx, imageUrl = img.absUrl("src"))
+            }
     }
 
     override val supportsFilterFetching: Boolean = true
