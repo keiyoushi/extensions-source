@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.infinityscans
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -17,6 +15,7 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.extractNextJsRsc
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
@@ -37,9 +36,9 @@ abstract class InfinityScans : KeiSource() {
 
     private val pageCdnHost = "ch.infinityscans.org"
 
-    private var slugHash = "8f7a9fc97197"
-
-    private val hashRegex = Regex("NEXT_REDIRECT.*https.+?-(\\w+);")
+    private var slugHash: String
+        get() = preferences.getString(PREF_SLUG_HASH, DEFAULT_SLUG_HASH) ?: DEFAULT_SLUG_HASH
+        set(value) = preferences.edit().putString(PREF_SLUG_HASH, value).apply()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(WebviewInterceptor(baseUrl))
@@ -58,6 +57,8 @@ abstract class InfinityScans : KeiSource() {
             add("X-requested-with", "XMLHttpRequest")
         }.build()
 
+    private val preferences by getPreferencesLazy()
+
     // ============================== Popular + Latest ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, SortType.Popularity.value)
@@ -65,8 +66,7 @@ abstract class InfinityScans : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(page, SortType.Latest.value)
 
     private suspend fun getMangaList(page: Int, sort: String): MangasPage {
-        val request = fetchJson("api/comics", page, sort)
-        val response = client.newCall(request).awaitSuccess()
+        val response = client.get("$baseUrl/api/comics?page=$page&sort=$sort", apiHeaders)
         val data = response.parseAs<SearchResultDto>()
         val entries = data.titles.map { it.toSManga(cdnHost) }
         return MangasPage(entries, entries.isNotEmpty())
@@ -75,9 +75,9 @@ abstract class InfinityScans : KeiSource() {
     // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val request = if (query.isBlank()) {
-            val req = fetchJson("api/comics", page - 1, "")
-            val urlBuilder = req.url.newBuilder().apply {
+        val response = if (query.isBlank()) {
+            val url = "$baseUrl/api/comics".toHttpUrl().newBuilder().apply {
+                addQueryParameter("page", page.toString())
                 filters.forEach { filter ->
                     when (filter) {
                         is SortFilter -> filter.selected?.let { addQueryParameter("sort", it) }
@@ -91,13 +91,13 @@ abstract class InfinityScans : KeiSource() {
                         else -> {}
                     }
                 }
-            }
-            GET(urlBuilder.build(), req.headers)
+            }.build()
+            client.get(url, apiHeaders)
         } else {
-            fetchJson("api/search", 0, "", query)
+            val body = SearchRequestBody(search = query).toJsonRequestBody()
+            client.post("$baseUrl/api/search", apiHeaders, body)
         }
 
-        val response = client.newCall(request).awaitSuccess()
         return if (query.isNotEmpty()) {
             val list = response.parseAs<ResponseDto<List<SearchEntryDto>>>().result
             val mangas = list.map { it.toSManga(cdnHost) }
@@ -139,7 +139,7 @@ abstract class InfinityScans : KeiSource() {
         val html = client.get(url, rscHeaders).body.string()
         return runCatching { parseMangaDetails(html) }
             .getOrElse {
-                val newHash = hashRegex.find(html)?.groupValues?.get(1) ?: throw it
+                val newHash = HASH_REGEX.find(html)?.groupValues?.get(1) ?: error("Failed to find slug hash")
                 slugHash = newHash
                 val newHtml = client.get("$baseUrl/comic/${manga.url}-$slugHash", rscHeaders).body.string()
                 parseMangaDetails(newHtml)
@@ -225,8 +225,7 @@ abstract class InfinityScans : KeiSource() {
 
     override suspend fun fetchFilterData(): JsonElement {
         // load genre and author filters
-        val request = fetchJson("api/comics/options", 0, "")
-        val response = client.newCall(request).awaitSuccess()
+        val response = client.get("$baseUrl/api/comics/options", apiHeaders)
         return response.parseAs<FiltersDto>().toJsonElement()
     }
 
@@ -249,26 +248,6 @@ abstract class InfinityScans : KeiSource() {
 
     // ============================= Utilities =============================
 
-    private fun fetchJson(api: String, page: Int, sort: String, query: String? = null): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments(api)
-            .apply {
-                if (page != 0) addQueryParameter("page", page.toString())
-                if (sort.isNotEmpty()) addQueryParameter("sort", sort)
-            }
-            .build()
-        val refHeaders = apiHeaders.newBuilder().apply {
-            set("Referer", url.newBuilder().removePathSegment(0).build().toString())
-        }.build()
-
-        return if (query == null) {
-            GET(url, refHeaders)
-        } else {
-            val body = SearchRequestBody(search = query).toJsonRequestBody()
-            POST(url.toString(), refHeaders, body)
-        }
-    }
-
     private fun String?.parseStatus(): Int = when {
         this == null -> SManga.UNKNOWN
         listOf("ongoing", "publishing").any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
@@ -283,4 +262,10 @@ abstract class InfinityScans : KeiSource() {
     private fun Element.getLinks(name: String): String? = select("div:has(>span:matches($name:)) a")
         .joinToString(transform = Element::text)
         .takeIf { it.isNotEmpty() }
+
+    companion object {
+        private const val DEFAULT_SLUG_HASH = "d806990541c8"
+        private const val PREF_SLUG_HASH = "pref_slug_hash"
+        private val HASH_REGEX = Regex("NEXT_REDIRECT.*https.+?-(\\w+);")
+    }
 }
