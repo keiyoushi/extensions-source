@@ -242,7 +242,7 @@ abstract class Viz :
     private val subcription = Regex("""var $subscriber\s*=\s*(true|false)""")
 
     private suspend fun checkIfIsLoggedIn(): Boolean = try {
-        val document = network.client.get("$baseUrl/account/refresh_login_links").asJsoup()
+        val document = client.get("$baseUrl/account/refresh_login_links").asJsoup()
         loggedIn = document.selectFirst("div#o_account-links-content")
             ?.attr("logged_in")?.toBoolean() ?: false
 
