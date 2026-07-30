@@ -252,7 +252,12 @@ abstract class Hiper :
         val response = client.get(url)
         val element = response.parseAs<List<JsonElement>>().last()
         val chaptersDTO = element["result"]["data"]["json"]!!.parseAs<List<ChapterDto>>()
-        return chaptersDTO.map { it.toSChapter(manga.url) }
+
+        // Make chapter url unique only when needed
+        val seen = mutableSetOf<Float>()
+        return chaptersDTO.map {
+            it.toSChapter(manga.url, !seen.add(it.number))
+        }
     }
 
     // ============================ Manga updates =============================
@@ -304,6 +309,7 @@ abstract class Hiper :
                 putJsonObject("json") {
                     put("seriesSlug", slug)
                     put("chapterNumber", chapter.getNumber())
+                    chapter.memo["chapterId"]?.let { put("chapterId", it) }
                 }
             }
             putJsonObject("3") {

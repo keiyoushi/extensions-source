@@ -51,15 +51,19 @@ class MangaDto(
 
 @Serializable
 class ChapterDto(
+    val id: Long,
     val number: Float,
     val title: String?,
     val createdAt: String,
 ) {
-    fun toSChapter(mangaPath: String) = SChapter.create().apply {
+    fun toSChapter(mangaPath: String, isDuplicate: Boolean = false) = SChapter.create().apply {
         name = buildChapterName()
         chapter_number = number
         date_upload = Instant.parseOrNull(createdAt)?.toEpochMilliseconds() ?: 0L
-        url = "$mangaPath/$number"
+        url = "$mangaPath/" + (if (isDuplicate) "$id" else "$number")
+        memo = buildJsonObject {
+            put("chapterId", id)
+        }
     }
 
     private fun buildChapterName(): String = title?.let {
