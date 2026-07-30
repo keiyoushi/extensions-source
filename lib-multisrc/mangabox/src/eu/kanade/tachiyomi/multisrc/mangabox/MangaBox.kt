@@ -33,6 +33,7 @@ import kotlinx.serialization.json.put
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -86,6 +87,16 @@ abstract class MangaBox :
             else -> ":${this.port}"
         }
     }"
+
+    open fun computeMangaSlug(manga: SManga): String = manga.url.substringAfterLast('/')
+
+    open fun getMangaSlug(manga: SManga): String = manga.memo["slug"]?.stringOrNull
+        ?: computeMangaSlug(manga).also {
+            manga.url = "/manga/$it"
+            manga.memo = buildJsonObject {
+                put("slug", it)
+            }
+        }
 
     protected fun mergeImagesInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -292,11 +303,12 @@ abstract class MangaBox :
 
     private fun mangaFromElement(element: Element, urlSelector: String = "h3 a"): SManga = SManga.create().apply {
         val urlElement = element.selectFirst(urlSelector)!!
-        val fullUrl = urlElement.attr("abs:href")
+        url = urlElement
+            .attr("abs:href")
+            .substringAfter(baseUrl) // intentionally not using setUrlWithoutDomain
         memo = buildJsonObject {
-            put("fullUrl", fullUrl)
+            put("slug", computeMangaSlug(this@apply))
         }
-        url = fullUrl.substringAfter(baseUrl) // intentionally not using setUrlWithoutDomain
         title = urlElement.text()
         thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
     }
@@ -313,12 +325,7 @@ abstract class MangaBox :
 
     open val altName = "Alternative Name: "
 
-    override fun getMangaUrl(manga: SManga): String = manga.memo["fullUrl"]?.stringOrNull
-        ?: if (manga.url.startsWith("http")) {
-            manga.url
-        } else {
-            super.getMangaUrl(manga)
-        }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${getMangaSlug(manga)}"
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? = parseMangaDetails(
         client.get(url).asJsoup(),
@@ -331,6 +338,11 @@ abstract class MangaBox :
     }
 
     open fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
+        document.location().toHttpUrlOrNull()?.let {
+            url = it.toString()
+            getMangaSlug(this) // this updates the url and slug
+        }
+
         val infoElement = document.selectFirst(mangaDetailsMainSelector)
         if (infoElement != null) {
             title = infoElement.selectFirst("h1, h2")!!.text()
@@ -376,7 +388,7 @@ abstract class MangaBox :
     // ============================= Chapters ==============================
 
     open suspend fun parseChapterList(manga: SManga): List<SChapter> {
-        val slug = manga.url.substringAfterLast('/')
+        val slug = getMangaSlug(manga)
         val response = client.get("${apiChapterListUrl.replace("__SLUG__", slug)}?limit=-1")
         val apiResult = runCatching {
             response.parseAs<ApiResponse>()

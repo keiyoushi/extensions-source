@@ -1,14 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.mangakakalot
 
 import eu.kanade.tachiyomi.multisrc.mangabox.MangaBox
-import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.Dispatcher
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
-import org.jsoup.nodes.Document
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
@@ -23,7 +20,6 @@ abstract class Mangakakalot : MangaBox() {
 
     private fun titleToSlug(title: String): String = title
         .lowercase(Locale.ENGLISH)
-        .replace("['']".toRegex(), "")
         .replace("[^a-z0-9\\s-]".toRegex(), "")
         .trim()
         .replace("[\\s-]+".toRegex(), "-")
@@ -55,44 +51,7 @@ abstract class Mangakakalot : MangaBox() {
         rateLimit(2, 1.seconds)
     }
 
-    /* ================================
-     * Manga Details
-     * ================================ */
-
-    override fun getMangaUrl(manga: SManga): String {
-        val mangaUrl = super.getMangaUrl(manga)
-        if (manga.url.substringAfterLast('/').matches(idSlugRegex)) {
-            val newSlug = titleToSlug(manga.title)
-            return "$baseUrl/manga/$newSlug"
-        } else {
-            return mangaUrl
-        }
-    }
-
-    override fun parseMangaDetails(document: Document): SManga {
-        val manga = super.parseMangaDetails(document)
-        val pageUrl = document.location().toHttpUrlOrNull()
-        val actualSlug = pageUrl
-            ?.pathSegments
-            ?.dropWhile { it != "manga" }
-            ?.getOrNull(1)
-            ?: titleToSlug(manga.title)
-        manga.url = "/manga/$actualSlug"
-        return manga
-    }
-
-    /* ================================
-     * Chapter List
-     * ================================ */
-
-    override suspend fun parseChapterList(manga: SManga): List<SChapter> {
-        val currentSlug = manga.url.substringAfterLast('/')
-        val isIdSlug = currentSlug.matches(idSlugRegex)
-        if (isIdSlug) {
-            val cleanSlug = titleToSlug(manga.title)
-            manga.url = "/manga/$cleanSlug"
-        }
-
-        return super.parseChapterList(manga)
+    override fun computeMangaSlug(manga: SManga): String = super.computeMangaSlug(manga).let {
+        if (it.matches(idSlugRegex)) titleToSlug(manga.title) else it
     }
 }
