@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.jeazscans
 
-import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,29 +11,29 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Locale
 
 @Source
+class JeazScansSpanish(
+    override val lang: String,
+    override val id: Long,
+) : JeazScans()
+
 abstract class JeazScans : HttpSource() {
+
+    override val name = "Jeaz Scans"
+
+    override val baseUrl = "https://lectorhub.j5z.xyz"
 
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(2)
         .build()
-
-    private val dateFormat by lazy {
-        SimpleDateFormat("dd MMM, yyyy", Locale.US)
-    }
 
     // The site migrated to custom home sections and PHP routes for search.
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/", headers)
@@ -51,20 +50,22 @@ abstract class JeazScans : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/directorio.php?page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("section:has(h3:contains(Lanzamientos)) .manga-card")
+        val mangas = document.select(".directory-grid a.directory-card[href*='manga.php?id=']")
             .map { element ->
                 SManga.create().apply {
-                    setUrlWithoutDomain(element.selectFirst("a[href*='manga.php?id=']")!!.attr("abs:href"))
-                    title = element.selectFirst("figcaption")!!.text()
-                    thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+                    setUrlWithoutDomain(element.attr("abs:href"))
+                    title = element.selectFirst("h3")!!.let { it.attr("title").ifBlank { it.text() } }
+                    thumbnail_url = element.selectFirst(".directory-cover img")?.attr("abs:src")
                 }
             }
 
-        return MangasPage(mangas, false)
+        val hasNextPage = document.selectFirst(".directory-pagination a[aria-label='Página siguiente']") != null
+
+        return MangasPage(mangas, hasNextPage)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -127,38 +128,10 @@ abstract class JeazScans : HttpSource() {
         }
     }
 
-    private fun parseChapterDate(date: String?): Long {
-        if (date.isNullOrEmpty()) return 0L
-        val lowercaseDate = date.lowercase()
-        return when {
-            lowercaseDate.contains("hace") -> {
-                val number = NUMBER_REGEX.find(lowercaseDate)?.value?.toIntOrNull() ?: return 0L
-                val cal = Calendar.getInstance()
-                when {
-                    lowercaseDate.contains("segundo") -> cal.apply { add(Calendar.SECOND, -number) }.timeInMillis
-                    lowercaseDate.contains("minuto") -> cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
-                    lowercaseDate.contains("hora") -> cal.apply { add(Calendar.HOUR, -number) }.timeInMillis
-                    lowercaseDate.contains("día") || lowercaseDate.contains("dia") -> cal.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
-                    lowercaseDate.contains("semana") -> cal.apply { add(Calendar.WEEK_OF_YEAR, -number) }.timeInMillis
-                    lowercaseDate.contains("mes") -> cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
-                    lowercaseDate.contains("año") -> cal.apply { add(Calendar.YEAR, -number) }.timeInMillis
-                    else -> 0L
-                }
-            }
-            lowercaseDate.contains("ayer") -> {
-                Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -1) }.timeInMillis
-            }
-            lowercaseDate.contains("hoy") -> {
-                Calendar.getInstance().timeInMillis
-            }
-            else -> dateFormat.tryParse(date)
-        }
-    }
-
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val imageElements = document.select(
-            ".page-container img.protected-img, .reader-body img, .reading-content img",
+            "#pagesContainer img.reader-page-image, .page-container img.protected-img, .reader-body img, .reading-content img",
         )
 
         val htmlPages = imageElements.mapNotNull { element ->
@@ -205,63 +178,6 @@ abstract class JeazScans : HttpSource() {
             .mapIndexed { idx, imageUrl -> Page(idx, imageUrl = imageUrl) }
     }
 
-    private fun decodeVerifyToUrl(dataVerify: String): String? {
-        val decoded = runCatching {
-            String(Base64.decode(dataVerify, Base64.DEFAULT))
-        }.getOrNull() ?: return null
-
-        val url = decoded.reversed().trim()
-        if (!url.startsWith("http")) return null
-        return url
-    }
-
-    private fun extractSlugAndCap(document: Document): Pair<String, String>? {
-        val locationUrl = document.location().toHttpUrlOrNull()
-        val slugFromQuery = locationUrl?.queryParameter("manga")?.trim().orEmpty()
-        val capFromQuery = locationUrl?.queryParameter("cap")?.trim().orEmpty()
-        if (slugFromQuery.isNotBlank() && capFromQuery.isNotBlank()) {
-            return slugFromQuery to capFromQuery
-        }
-
-        val fromPath = PATH_SLUG_CAP_REGEX
-            .find(document.location())
-            ?.groupValues
-        if (fromPath != null && fromPath.size >= 3) {
-            return fromPath[1] to fromPath[2]
-        }
-
-        val scriptContent = document.select("script").joinToString("\n") { it.data() + "\n" + it.html() }
-        val slugFromScript = MANGA_SLUG_REGEX
-            .find(scriptContent)
-            ?.groupValues
-            ?.getOrNull(1)
-            .orEmpty()
-        val capFromScript = CAP_INICIAL_REGEX
-            .find(scriptContent)
-            ?.groupValues
-            ?.getOrNull(1)
-            .orEmpty()
-
-        if (slugFromScript.isNotEmpty() && capFromScript.isNotEmpty()) {
-            return slugFromScript to capFromScript
-        }
-
-        return null
-    }
-
-    private fun buildApiUrl(location: String, slug: String, cap: String): String? {
-        val current = location.toHttpUrlOrNull() ?: return null
-
-        return runCatching {
-            current.newBuilder()
-                .encodedPath("/api_lector.php")
-                .setQueryParameter("slug", slug)
-                .setQueryParameter("cap", cap)
-                .build()
-                .toString()
-        }.getOrNull()
-    }
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isBlank()) {
         latestUpdatesRequest(page)
     } else {
@@ -286,10 +202,5 @@ abstract class JeazScans : HttpSource() {
 
     companion object {
         private val SINOPSIS_REGEX = Regex("^SINOPSIS:?\\s*", RegexOption.IGNORE_CASE)
-        private val CHAPTER_NUMBER_REGEX = Regex("capitulo-([0-9.]+)", RegexOption.IGNORE_CASE)
-        private val NUMBER_REGEX = Regex("""\d+""")
-        private val PATH_SLUG_CAP_REGEX = Regex("/leer/([^/]+)/capitulo-([0-9.]+)", RegexOption.IGNORE_CASE)
-        private val MANGA_SLUG_REGEX = Regex("""MANGA_SLUG\s*=\s*["']([^"']+)["']""")
-        private val CAP_INICIAL_REGEX = Regex("""CAP_INICIAL\s*=\s*["']([^"']+)["']""")
     }
 }
