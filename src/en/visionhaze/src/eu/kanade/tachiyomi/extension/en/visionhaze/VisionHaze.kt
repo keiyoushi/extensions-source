@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import okhttp3.HttpUrl
 import java.lang.UnsupportedOperationException
 
 @Source
@@ -20,9 +19,11 @@ abstract class VisionHaze : KeiSource() {
         thumbnail_url = "$baseUrl/_assets/media/banners/banner0.png"
         author = "Yttrium"
         status = SManga.UNKNOWN
-        setUrlWithoutDomain(baseUrl)
+        url = "/"
         initialized = true
     }
+
+    override val supportsLatest: Boolean = false
 
     override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(
         mangas = listOf(manga()),
@@ -31,9 +32,10 @@ abstract class VisionHaze : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = throw UnsupportedOperationException()
-
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = throw UnsupportedOperationException()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(
+        mangas = listOf(manga()),
+        hasNextPage = false,
+    )
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -41,7 +43,11 @@ abstract class VisionHaze : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl/archive/", headers).asJsoup()
+        if (!fetchChapters) {
+            return SMangaUpdate(manga = manga, chapters = emptyList())
+        }
+
+        val document = client.get("$baseUrl/archive/").asJsoup()
         val chapterTitles = document.select(".archive").map {
             it.select("b").text()
         }
@@ -69,10 +75,8 @@ abstract class VisionHaze : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl/${chapter.url}", headers).asJsoup()
-        return document.select(".content img").mapIndexed { index, img ->
-            val imgUrl = img.absUrl("src").ifEmpty { img.attr("src") }
-            Page(index, imageUrl = imgUrl)
-        }
+        val pageNum = chapter.url.substringAfterLast("?p=").toIntOrNull() ?: return emptyList()
+        val pageNumFormatted = pageNum.toString().padStart(3, '0')
+        return listOf(Page(0, imageUrl = "$baseUrl/comic/p$pageNumFormatted.png"))
     }
 }
