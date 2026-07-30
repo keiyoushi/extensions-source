@@ -58,7 +58,7 @@ val SEARCH_QUERY: String = $$"""
     }
 """.trimIndent()
 
-val DETAILS_QUERY: String = $$"""
+val UPDATES_QUERY: String = $$"""
     query($slug: String!) {
         voyce_series(
             where: {
@@ -78,21 +78,7 @@ val DETAILS_QUERY: String = $$"""
             genres(order_by: [{ genre: { title: asc } }]) {
                 genre { title }
             }
-        }
-    }
-""".trimIndent()
 
-val CHAPTERS_QUERY: String = $$"""
-    query($slug: String!) {
-        voyce_series(
-            where: {
-                publish: { _eq: 1 },
-                type: { id: { _in: [2, 4] } },
-                slug: { _eq: $slug }
-            },
-            limit: 1,
-        ) {
-            slug
             chapters(order_by: [{ created_at: desc }]) {
                 id
                 title

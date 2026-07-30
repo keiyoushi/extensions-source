@@ -13,8 +13,6 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.graphQLPost
 import keiyoushi.utils.parseGraphQLAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -113,41 +111,24 @@ abstract class VoyceMe : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val mangaD = async { if (fetchDetails) getMangaDetails(manga) else manga }
-        val chaptersD = async { if (fetchChapters) getChapterList(manga) else chapters }
-        SMangaUpdate(mangaD.await(), chaptersD.await())
-    }
-
-    private suspend fun getMangaDetails(manga: SManga): SManga {
+    ): SMangaUpdate {
         val comicSlug = manga.url.substringAfter("/series/").substringBefore("/")
         val response = client.newCall(
             graphQLPost(
                 GRAPHQL_URL,
                 headersBuilder().set("Referer", baseUrl + manga.url).build(),
-                query = DETAILS_QUERY,
-                variables = DetailsQueryVariables(slug = comicSlug),
-            ),
-        ).awaitSuccess()
-
-        return response.parseGraphQLAs<VoyceMeSeriesCollection>().series.first().toSManga()
-    }
-
-    private suspend fun getChapterList(manga: SManga): List<SChapter> {
-        val comicSlug = manga.url.substringAfter("/series/").substringBefore("/")
-        val response = client.newCall(
-            graphQLPost(
-                GRAPHQL_URL,
-                headersBuilder().set("Referer", baseUrl + manga.url).build(),
-                query = CHAPTERS_QUERY,
+                query = UPDATES_QUERY,
                 variables = ChaptersQueryVariables(slug = comicSlug),
             ),
         ).awaitSuccess()
 
         val comic = response.parseGraphQLAs<VoyceMeSeriesCollection>().series.first()
-        return comic.chapters
-            .map { it.toSChapter(comic.slug) }
-            .distinctBy(SChapter::name)
+        return SMangaUpdate(
+            manga = comic.toSManga(),
+            chapters = comic.chapters
+                .map { it.toSChapter(comic.slug) }
+                .distinctBy(SChapter::name),
+        )
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
