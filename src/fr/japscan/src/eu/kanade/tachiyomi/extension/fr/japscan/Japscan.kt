@@ -13,6 +13,8 @@ import android.view.View
 import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.preference.ListPreference
@@ -49,6 +51,8 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.ByteArrayInputStream
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
@@ -161,6 +165,20 @@ abstract class Japscan :
         private const val DESKTOP_USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                 "(KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+
+        // The reader page pulls in rotating ad/tracker hosts (acscdn.com, jnbhi.com,
+        // usrpubtrk.com, … — they change every few weeks) whose vignette and popunder
+        // modals break the detached descrambler. A blocklist would rot, so allowlist
+        // the handful of origins the reader actually needs and drop everything else.
+        private val ALLOWED_HOSTS = listOf(
+            "japscan.foo",
+            "cdnjs.cloudflare.com",
+            "code.jquery.com",
+            "cdn.jsdelivr.net",
+            "fonts.googleapis.com",
+            "fonts.gstatic.com",
+            "challenges.cloudflare.com",
+        )
         private val prefsEntries = arrayOf("Montrer uniquement les chapitres traduit en Français", "Montrer les chapitres spoiler")
         private val prefsEntryValues = arrayOf("hide", "show")
     }
@@ -567,9 +585,48 @@ abstract class Japscan :
             }
 
             innerWv.webViewClient = object : WebViewClient() {
+                // Called off the UI thread for every subresource — keep it to the
+                // string comparison, no logging in this hot path.
+                override fun shouldInterceptRequest(
+                    view: WebView?,
+                    request: WebResourceRequest,
+                ): WebResourceResponse? {
+                    val host = request.url.host ?: return null
+                    val allowed = ALLOWED_HOSTS.any { host == it || host.endsWith(".$it") }
+                    // Empty stream rather than a null one: a null body makes some WebView
+                    // builds keep the request pending, which would stall the whole capture.
+                    return if (allowed) {
+                        null
+                    } else {
+                        WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
+                    }
+                }
+
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     super.onPageStarted(view, url, favicon)
                     Log.d("Japscan", "[wv-kt] onPageStarted url=$url")
+                    // Both modes: satisfy the reader's anti-adblock check before it runs.
+                    // ~3s after load it looks for `window.aclib` (needs 3+ own keys and 2+
+                    // real functions among runPop/runBanner/runNative) and, if it's missing,
+                    // calls triggerProtection() -> readerArea.replaceChildren(), which wipes
+                    // the descrambled canvases both drivers read. Blocking acscdn.com in
+                    // shouldInterceptRequest is exactly what makes the real aclib absent, so
+                    // this is required alongside the allowlist, not instead of it. Regular
+                    // `function` declarations (not arrows) so `.prototype` is truthy.
+                    view?.evaluateJavascript(
+                        """
+                            (function(){
+                                if (window.aclib) return;
+                                window.aclib = {
+                                    runPop: function runPop(){},
+                                    runBanner: function runBanner(){},
+                                    runNative: function runNative(){},
+                                    runInPagePush: function runInPagePush(){},
+                                    isShowingPop: false,
+                                };
+                            })();
+                        """.trimIndent(),
+                    ) {}
                     // Pierce closed shadow roots BEFORE any reader script runs: the descrambler
                     // composites each chapter page into canvases hosted by `<w-f1db5>` elements
                     // whose shadow root is `attachShadow({ mode: 'closed' })`. Forcing every
