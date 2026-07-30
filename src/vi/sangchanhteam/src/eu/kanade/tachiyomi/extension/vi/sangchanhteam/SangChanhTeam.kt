@@ -170,7 +170,7 @@ abstract class SangChanhTeam : KeiSource() {
         val document = client.get(getMangaUrl(manga)).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
-            chapters = if (fetchChapters) fetchChapterList(document) else emptyList(),
+            chapters = if (fetchChapters) fetchChapterList(document) else chapters,
         )
     }
 
