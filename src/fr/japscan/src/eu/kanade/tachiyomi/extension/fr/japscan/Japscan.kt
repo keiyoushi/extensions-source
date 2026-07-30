@@ -40,6 +40,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import okhttp3.FormBody
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -78,21 +79,22 @@ abstract class Japscan :
         // `https://japscan-cache.local/<absolute-cache-path>`. We can't override
         // fetchImage (final), so an interceptor catches that sentinel host and serves
         // the file bytes synthetically.
+        //
+        // This must short-circuit *before* rateLimit: serving a local file is not a
+        // network request, and letting it fall through would throttle page loads to one
+        // per 2s. Files are left on disk (the reader may request the same page again,
+        // e.g. on retry) and reaped by sweepPageCache on the next fetchPageList.
         .addInterceptor { chain ->
             val req = chain.request()
             if (req.url.host != JAPSCAN_CACHE_HOST) return@addInterceptor chain.proceed(req)
             val path = "/" + req.url.pathSegments.joinToString("/")
-            val file = File(path)
-            val bytes = file.readBytes()
-            try {
-                file.delete()
-            } catch (_: Exception) {}
+            val bytes = runCatching { File(path).readBytes() }.getOrNull()
             Response.Builder()
                 .request(req)
                 .protocol(Protocol.HTTP_1_1)
-                .code(200)
-                .message("OK")
-                .body(bytes.toResponseBody("image/jpeg".toMediaType()))
+                .code(if (bytes != null) 200 else 404)
+                .message(if (bytes != null) "OK" else "Not Found")
+                .body((bytes ?: ByteArray(0)).toResponseBody("image/jpeg".toMediaType()))
                 .build()
         }
         // rateLimit returns a RateLimitBuilder; it must come last as all other
@@ -109,10 +111,6 @@ abstract class Japscan :
             "visibility:hidden",
             "visibility:collapse",
             "content-visibility:hidden",
-            "opacity:0",
-            "filter:opacity(0",
-            "width:0",
-            "height:0",
             "pointer-events:none",
             "clip-path:inset(100%",
             "clip-path:circle(0",
@@ -125,21 +123,35 @@ abstract class Japscan :
         )
 
         // Match styles that visually remove an element while leaving it in the DOM:
+        //  - fully transparent via `opacity` or `filter:opacity()`
+        //  - collapsed via `width` / `height` / `max-width` / `max-height`
         //  - large absolute offset (3+ digits) via top/bottom/left/right or `inset:` shorthand
         //  - `transform: translate / translateX / translateY / translated` with a 3+ digit offset
         //  - `transform: scale(0)` / `scale3d(0,...)` (collapsed to nothing)
         //  - `transform: matrix(0,0,0,0,...)` (also collapsed)
-        //  - `max-width:0` / `max-height:0` (mirror of the existing width:0/height:0 tokens)
+        //
         // 3 digits is enough to be off-screen even with viewport units (200vh, 999vw, …)
         // while still tolerating fine adjustments like top:-1px or right:99px.
-        private val OFFSCREEN_OFFSET_REGEX = Regex(
-            """(?:top|bottom|left|right|inset):-?\d{3,}""" +
+        //
+        // The zero-value alternatives are anchored on both sides, because a substring
+        // match would also fire on values that are perfectly visible and very common on
+        // real rows: `opacity:0.9`, `filter:opacity(0.5)`, `min-width:0`. A false positive
+        // here drops a real chapter, so these must not match loosely. Matched against the
+        // inline style with spaces stripped, hence `;` as the left boundary.
+        private val HIDDEN_STYLE_REGEX = Regex(
+            """(?:^|;)opacity:0(?![.\d])""" +
+                """|filter:opacity\(0(?![.\d])""" +
+                """|(?:^|;)(?:width|height):0(?![.\d])""" +
+                """|max-(?:width|height):0(?![.\d])""" +
+                """|(?:top|bottom|left|right|inset):-?\d{3,}""" +
                 """|transform:translate(?:3d|x|y)?\([^)]*-?\d{3,}""" +
                 """|transform:scale(?:3d|x|y)?\(0[,)]""" +
-                """|transform:matrix\(0,0,0,0""" +
-                """|max-(?:width|height):0""",
+                """|transform:matrix\(0,0,0,0""",
         )
         val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.US)
+
+        // "Chapitre 1100.5: Title" -> 1100.5
+        private val CHAPTER_NUM_REGEX = Regex("""(?i)chapitre\s+([\d.]+)""")
 
         private const val SHOW_SPOILER_CHAPTERS_TITLE = "Les chapitres en Anglais ou non traduit sont upload en tant que \" Spoilers \" sur Japscan"
         private const val SHOW_SPOILER_CHAPTERS = "JAPSCAN_SPOILER_CHAPTERS"
@@ -148,14 +160,19 @@ abstract class Japscan :
         // an OkHttp interceptor (see `client` builder).
         private const val JAPSCAN_CACHE_HOST = "japscan-cache.local"
 
-        // Synthetic viewport used to force-layout the detached WebView. We use a
-        // desktop-class width because the reader picks a "mobile" rendering path
-        // for viewports under ~1280 px wide that only materializes one tile-host
-        // per long page (then lazy-loads more on scroll, which our detached WebView
-        // can't reliably trigger). With a desktop-class width the reader pre-creates
-        // every tile-host upfront, exactly like it does in a real Chrome window —
-        // see live-Chrome inspection: innerWidth=5468 yields 7-8 hosts per long
-        // page; innerWidth=1080 yields 1.
+        // Prefix for the spooled page files in the app cache dir, shared by the writer
+        // (JsInterface.savePage) and the reaper (sweepPageCache).
+        private const val CACHE_FILE_PREFIX = "japscan-"
+
+        // How long fetchPageList waits with zero saved pages before deciding the
+        // WebView driver is wedged rather than merely slow.
+        private const val IDLE_TIMEOUT_MS = 45_000L
+
+        // Synthetic viewport used to force-layout the detached WebView. Must stay
+        // desktop-class: under ~1280 px wide the reader takes a "mobile" path that
+        // materializes one tile-host per long page and lazy-loads the rest on scroll,
+        // which a detached WebView can't reliably trigger. Above it, every tile-host
+        // is created upfront.
         private const val WEBVIEW_VIEWPORT_WIDTH = 1920
         private const val WEBVIEW_VIEWPORT_HEIGHT = 16384
 
@@ -181,6 +198,14 @@ abstract class Japscan :
         )
         private val prefsEntries = arrayOf("Montrer uniquement les chapitres traduit en Français", "Montrer les chapitres spoiler")
         private val prefsEntryValues = arrayOf("hide", "show")
+
+        // Verbose tracing of the WebView drivers. Off by default; flip to true when the
+        // reader breaks and the capture needs to be followed in Logcat.
+        private const val DEBUG = false
+
+        private fun debugLog(message: String) {
+            if (DEBUG) Log.d("Japscan", message)
+        }
     }
 
     private fun chapterListPref() = preferences.getString(SHOW_SPOILER_CHAPTERS, "hide")
@@ -335,38 +360,51 @@ abstract class Japscan :
     }
 
     // Defense in depth: if a honeypot ever slips past the per-row hidden-style
-    // heuristics, its URL number tends to be wildly out of range (e.g. 483181 vs.
-    // real 1181, or 000001..000008 vs. real 1174..1181). Real chapter URL ids are
-    // near-consecutive, so split sorted ids on gaps that are much larger than the
-    // typical spacing and keep only the largest cluster — agnostic to whether the
-    // honeypots sit above or below the real range.
+    // heuristics, its number tends to be wildly out of range (e.g. 483181 vs.
+    // real 1181, or 000001..000008 vs. real 1174..1181). Real chapter numbers are
+    // near-consecutive, so split them on gaps that are much larger than the typical
+    // spacing and drop the clusters that are a clear minority next to the largest —
+    // agnostic to whether the honeypots sit above or below the real range.
+    //
+    // Cluster on chapter_number, NOT on the trailing URL id: Japscan writes
+    // "Chapitre 1100.5" as /11005/, which sits ~9000 away from its neighbours and
+    // would be split off and dropped as an outlier. By chapter number it is 0.5
+    // from 1100 and stays put.
     private fun filterOutlierChapters(chapters: List<SChapter>): List<SChapter> {
-        val withNum = chapters.mapNotNull { ch ->
-            val n = ch.url.trimEnd('/').substringAfterLast('/').toLongOrNull() ?: return@mapNotNull null
-            ch to n
-        }
+        val withNum = chapters.filter { it.chapter_number >= 0f }
         if (withNum.size < 2) return chapters
-        val sorted = withNum.sortedBy { it.second }
-        val gaps = (1 until sorted.size).map { sorted[it].second - sorted[it - 1].second }
-        val medianGap = gaps.sorted()[gaps.size / 2].coerceAtLeast(1L)
+        val sorted = withNum.sortedBy { it.chapter_number }
+        val gaps = (1 until sorted.size).map { sorted[it].chapter_number - sorted[it - 1].chapter_number }
+        val medianGap = gaps.sorted()[gaps.size / 2].coerceAtLeast(1f)
         // Treat a gap as a cluster boundary when it dwarfs the typical spacing.
         // The absolute floor (100) keeps short lists with tiny medians from
         // splitting on noise; the 50x ratio handles dense lists where the
         // median is already large.
-        val threshold = maxOf(medianGap * 50, 100L)
-        val clusters = mutableListOf<MutableList<Pair<SChapter, Long>>>(mutableListOf(sorted[0]))
+        val threshold = maxOf(medianGap * 50, 100f)
+        val clusters = mutableListOf(mutableListOf(sorted[0]))
         for (i in 1 until sorted.size) {
-            if (sorted[i].second - sorted[i - 1].second > threshold) {
+            if (sorted[i].chapter_number - sorted[i - 1].chapter_number > threshold) {
                 clusters.add(mutableListOf())
             }
             clusters.last().add(sorted[i])
         }
         if (clusters.size == 1) return chapters
-        val keep = clusters.maxBy { it.size }.map { it.first }.toSet()
-        return chapters.filter { it in keep }
+        // Only prune when one cluster clearly dominates. On a tie we cannot tell
+        // which side is real (honeypots sit above OR below), and guessing wrong
+        // deletes the entire chapter list — much worse than letting a honeypot
+        // through, since the visibility prune is the primary defense and this is
+        // only a backstop.
+        val largest = clusters.maxOf { it.size }
+        if (clusters.count { it.size == largest } > 1) return chapters
+        // Drop a cluster only if it is a small fraction of the main run. Anything
+        // comparable in size is far more likely a genuine gap in Japscan's catalogue
+        // (a series resuming at a much higher number) than a block of honeypots, and
+        // keeping only the largest cluster would silently delete those real chapters.
+        val keep = clusters.filter { it.size * 4 > largest }.flatten().toSet()
+        return chapters.filter { it.chapter_number < 0f || it in keep }
     }
 
-    private fun extractMangaSlug(url: okhttp3.HttpUrl): String? {
+    private fun extractMangaSlug(url: HttpUrl): String? {
         val segments = url.pathSegments.filter { it.isNotEmpty() }
         val typeIdx = segments.indexOfFirst { it in CHAPTER_PATH_TYPES }
         if (typeIdx == -1 || typeIdx + 1 >= segments.size) return null
@@ -379,7 +417,7 @@ abstract class Japscan :
         if (el.attr("aria-hidden").equals("true", ignoreCase = true)) return true
         val style = el.attr("style").replace(" ", "").lowercase()
         if (HIDDEN_STYLE_TOKENS.any { style.contains(it) }) return true
-        if (OFFSCREEN_OFFSET_REGEX.containsMatchIn(style)) return true
+        if (HIDDEN_STYLE_REGEX.containsMatchIn(style)) return true
         return false
     }
 
@@ -433,7 +471,7 @@ abstract class Japscan :
                 val urlNum = url.trimEnd('/').substringAfterLast('/')
                 if (!urlNum.all { it.isDigit() }) return@filter false
                 if (urlNum.length > 1 && urlNum.startsWith('0')) return@filter false
-                val chapterNum = Regex("""(?i)chapitre\s+([\d.]+)""").find(name)
+                val chapterNum = CHAPTER_NUM_REGEX.find(name)
                     ?.groupValues?.get(1)?.replace(".", "")
                     ?: name.split(Regex("[^0-9.]+")).lastOrNull { it.isNotEmpty() }?.replace(".", "")
                     ?: return@filter false
@@ -456,6 +494,10 @@ abstract class Japscan :
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(foundPair.second)
         chapter.name = foundPair.first
+        // Half-chapters ("Chapitre 1100.5") keep their .5 here, unlike the URL id which
+        // flattens to /11005/. filterOutlierChapters relies on that.
+        chapter.chapter_number = CHAPTER_NUM_REGEX.find(chapter.name)
+            ?.groupValues?.get(1)?.toFloatOrNull() ?: -1f
         chapter.date_upload = element.selectFirst("span")?.text()?.let { parseChapterDate(it) } ?: 0L
         return chapter
     }
@@ -465,6 +507,7 @@ abstract class Japscan :
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val interfaceName = randomString()
         val context = Injekt.get<Application>()
+        sweepPageCache(context.cacheDir)
         val isReader = Exception().stackTrace.any { it.className.contains("reader") }
 
         val handler = Handler(Looper.getMainLooper())
@@ -534,10 +577,7 @@ abstract class Japscan :
         // MUST commit to one driver before any hook is installed.
         val urlSegment = chapter.url.trimStart('/').substringBefore('/').lowercase()
         val isWebtoon = urlSegment == "manhwa" || urlSegment == "manhua"
-        Log.d(
-            "Japscan",
-            "[wv-kt] reader mode hint from URL segment='$urlSegment' → ${if (isWebtoon) "webtoon" else "paginated"}",
-        )
+        debugLog("[wv-kt] reader mode hint from URL segment='$urlSegment' → ${if (isWebtoon) "webtoon" else "paginated"}")
 
         handler.post {
             val innerWv = WebView(context)
@@ -579,7 +619,7 @@ abstract class Japscan :
             // pagination driver's progress is visible during debugging.
             innerWv.webChromeClient = object : WebChromeClient() {
                 override fun onConsoleMessage(msg: ConsoleMessage): Boolean {
-                    Log.d("Japscan", "[wv] ${msg.message()}")
+                    debugLog("[wv] ${msg.message()}")
                     return true
                 }
             }
@@ -604,7 +644,7 @@ abstract class Japscan :
 
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     super.onPageStarted(view, url, favicon)
-                    Log.d("Japscan", "[wv-kt] onPageStarted url=$url")
+                    debugLog("[wv-kt] onPageStarted url=$url")
                     // Both modes: satisfy the reader's anti-adblock check before it runs.
                     // ~3s after load it looks for `window.aclib` (needs 3+ own keys and 2+
                     // real functions among runPop/runBanner/runNative) and, if it's missing,
@@ -646,10 +686,10 @@ abstract class Japscan :
                     // the paginated path uses a separate minimal hook installed in the `else`
                     // branch further down.
                     if (!isWebtoon) {
-                        // Paginated mode: minimal createObjectURL capture, ported verbatim
-                        // from the fix/japscan branch. The descrambler surfaces each
-                        // composited page as a `blob:` URL via URL.createObjectURL —
-                        // capturing the latest one per page-click is enough.
+                        // Paginated mode: minimal createObjectURL capture. The descrambler
+                        // surfaces each composited page as a `blob:` URL via
+                        // URL.createObjectURL — capturing the latest one per page-click
+                        // is enough.
                         view?.evaluateJavascript(
                             $$"""
                                 (function(){
@@ -795,12 +835,10 @@ abstract class Japscan :
                                 // drawImage is detectable via .toString — masked above.
                                 try {
                                     window.__japscanLastDraw = 0;
-                                    window.__japscanDrawCount = 0;
                                     var _drawImage = CanvasRenderingContext2D.prototype.drawImage;
                                     var newDrawImage = function drawImage(){
                                         try {
                                             window.__japscanLastDraw = Date.now();
-                                            window.__japscanDrawCount++;
                                         } catch(e) {}
                                         return _drawImage.apply(this, arguments);
                                     };
@@ -818,8 +856,14 @@ abstract class Japscan :
                                 //   innerWidth/innerHeight, devicePixelRatio,
                                 //   screen.width/height, navigator.platform/maxTouchPoints,
                                 //   matchMedia for (pointer: fine), (hover: hover),
-                                //   and (min-width: <N>px). UA is already set at the
-                                //   WebSettings level.
+                                //   and (min-width: <N>px).
+                                //
+                                // The UA is spoofed HERE, not at the WebSettings level:
+                                // WebSettings keeps the Android UA on purpose so Cloudflare
+                                // doesn't issue a fresh challenge for this request, and only
+                                // the JS-visible navigator.userAgent reads as desktop.
+                                // Anything not in the list above was tried and dropped —
+                                // don't re-add fake plugins/chrome/webdriver on spec.
                                 try {
                                     var defineGetter = function(obj, name, val){
                                         try {
@@ -844,68 +888,6 @@ abstract class Japscan :
                                     // Remove ontouchstart so feature-detect-based mobile
                                     // branches see a non-touch device.
                                     try { delete window.ontouchstart; } catch(e) {}
-
-                                    // Stub window.chrome with the shape a real desktop Chrome has.
-                                    // The descrambler's anti-bot path checks for window.chrome and
-                                    // treats its absence as "this is a headless/automated browser",
-                                    // then renders only 1 tile per page as a defense.
-                                    try {
-                                        if (typeof window.chrome === 'undefined' || !window.chrome.loadTimes) {
-                                            var chromeStub = {
-                                                loadTimes: function loadTimes(){ return {}; },
-                                                csi: function csi(){ return {}; },
-                                                app: { isInstalled: false, InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' }, RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' } },
-                                            };
-                                            mask(chromeStub.loadTimes, 'loadTimes');
-                                            mask(chromeStub.csi, 'csi');
-                                            Object.defineProperty(window, 'chrome', { get: function(){ return chromeStub; }, configurable: true });
-                                        }
-                                    } catch(e) { window.__jlog('[japscan] chrome stub failed: ' + e); }
-
-                                    // Fake plugins/mimeTypes — WebView reports 0 for both, real
-                                    // Chrome reports 5/2. Bot-detection scripts flag length=0.
-                                    try {
-                                        var fakeMime = function(type, suffixes, desc){
-                                            return { type: type, suffixes: suffixes, description: desc, enabledPlugin: null };
-                                        };
-                                        var fakePlugin = function(name, filename, desc, mimes){
-                                            var p = { name: name, filename: filename, description: desc, length: mimes.length };
-                                            for (var i = 0; i < mimes.length; i++) { p[i] = mimes[i]; mimes[i].enabledPlugin = p; }
-                                            return p;
-                                        };
-                                        var pdfMime = fakeMime('application/pdf', 'pdf', 'Portable Document Format');
-                                        var pdfViewerMime = fakeMime('text/pdf', 'pdf', 'Portable Document Format');
-                                        var plugins = [
-                                            fakePlugin('PDF Viewer', 'internal-pdf-viewer', 'Portable Document Format', [pdfMime, pdfViewerMime]),
-                                            fakePlugin('Chrome PDF Viewer', 'internal-pdf-viewer', 'Portable Document Format', [pdfMime, pdfViewerMime]),
-                                            fakePlugin('Chromium PDF Viewer', 'internal-pdf-viewer', 'Portable Document Format', [pdfMime, pdfViewerMime]),
-                                            fakePlugin('Microsoft Edge PDF Viewer', 'internal-pdf-viewer', 'Portable Document Format', [pdfMime, pdfViewerMime]),
-                                            fakePlugin('WebKit built-in PDF', 'internal-pdf-viewer', 'Portable Document Format', [pdfMime, pdfViewerMime]),
-                                        ];
-                                        plugins.length = 5;
-                                        plugins.item = function(i){ return plugins[i] || null; };
-                                        plugins.namedItem = function(n){ for (var i=0;i<plugins.length;i++) if (plugins[i].name===n) return plugins[i]; return null; };
-                                        plugins.refresh = function(){};
-                                        Object.defineProperty(navigator, 'plugins', { get: function(){ return plugins; }, configurable: true });
-
-                                        var mimeTypes = [pdfMime, pdfViewerMime];
-                                        mimeTypes.length = 2;
-                                        mimeTypes.item = function(i){ return mimeTypes[i] || null; };
-                                        mimeTypes.namedItem = function(n){ for (var i=0;i<mimeTypes.length;i++) if (mimeTypes[i].type===n) return mimeTypes[i]; return null; };
-                                        Object.defineProperty(navigator, 'mimeTypes', { get: function(){ return mimeTypes; }, configurable: true });
-                                    } catch(e) { window.__jlog('[japscan] plugins stub failed: ' + e); }
-
-                                    // languages: real Chrome has multiple, WebView has 1.
-                                    try {
-                                        Object.defineProperty(navigator, 'languages', { get: function(){ return ['fr', 'fr-FR', 'en', 'en-US']; }, configurable: true });
-                                        Object.defineProperty(navigator, 'language', { get: function(){ return 'fr'; }, configurable: true });
-                                    } catch(e) {}
-
-                                    // Some bot-detection scripts check navigator.webdriver explicitly;
-                                    // ensure it reads as undefined (default, but defensive).
-                                    try {
-                                        Object.defineProperty(navigator, 'webdriver', { get: function(){ return undefined; }, configurable: true });
-                                    } catch(e) {}
 
                                     var _mm = window.matchMedia.bind(window);
                                     var newMM = function matchMedia(q){
@@ -939,19 +921,24 @@ abstract class Japscan :
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
-                    Log.d("Japscan", "[wv-kt] onPageFinished url=$url")
+                    debugLog("[wv-kt] onPageFinished url=$url")
                     // Force-keep the WebView "alive" so its JS timers don't get suspended while
                     // we're detached. resumeTimers is global to all WebViews in the process.
                     view?.onResume()
                     view?.resumeTimers()
                     if (!isWebtoon) {
-                        // Paginated driver, ported verbatim from the fix/japscan branch.
-                        // Drives the reader through every page via the #block-right /
-                        // #block-left click-zones; the createObjectURL hook installed in
-                        // onPageStarted gives us one blob per page in `__japscanLastBlob`.
+                        // Paginated driver: walks the reader through every page via the
+                        // #block-right / #block-left click-zones; the createObjectURL hook
+                        // installed in onPageStarted leaves one blob per page in
+                        // `__japscanLastBlob`.
                         view?.evaluateJavascript(
                             $$"""
                                 (async function(){
+                                    // onPageFinished fires more than once per load (redirects,
+                                    // iframes, in-page navigations). Without this guard a second
+                                    // driver races the first and saves every page twice.
+                                    if (window.__japscanDriverStarted) return;
+                                    window.__japscanDriverStarted = true;
                                     var sleep = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };
 
                                     async function saveBlobUrl(u){
@@ -1019,10 +1006,14 @@ abstract class Japscan :
 
                                     // The reader pre-renders pages on load (the final pre-render is
                                     // the *last* page, not page 1), so the very first blob the hook
-                                    // sees is unreliable. Wait for things to settle, discard whatever
-                                    // was captured, then bounce next->prev to force a clean page-1
-                                    // render before we start harvesting.
-                                    await sleep(5000);
+                                    // sees is unreliable. Wait for the pre-render to settle, discard
+                                    // whatever was captured, then bounce next->prev to force a clean
+                                    // page-1 render before we start harvesting.
+                                    //
+                                    // waitForBlob already means "a blob arrived and stopped changing
+                                    // for 400ms", which is exactly the settle condition — a fixed
+                                    // sleep was both slower here and too short on a loaded device.
+                                    await waitForBlob(10000);
                                     window.__japscanLastBlob = null;
 
                                     nav(nextBtn, 'ArrowRight');
@@ -1055,7 +1046,7 @@ abstract class Japscan :
                                     }
                                 })();
                             """.trimIndent(),
-                        ) { result -> Log.d("Japscan", "[wv-kt] paginated driver eval result=$result") }
+                        ) { result -> debugLog("[wv-kt] paginated driver eval result=$result") }
                         return
                     }
                     // Webtoon driver: drives the reader through every chapter page and composites
@@ -1065,6 +1056,11 @@ abstract class Japscan :
                     view?.evaluateJavascript(
                         $$"""
                             (async function(){
+                                // onPageFinished fires more than once per load (redirects,
+                                // iframes, in-page navigations). Without this guard a second
+                                // driver races the first and saves every tile twice.
+                                if (window.__japscanDriverStarted) return;
+                                window.__japscanDriverStarted = true;
                                 var sleep = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };
                                 window.__jlog('[japscan] driver start');
 
@@ -1091,47 +1087,41 @@ abstract class Japscan :
                                     }
                                 }
 
-                                // Discover the tile hosts that make up `#d-img-N`. The reader uses
-                                // a custom element (e.g. <b-123e6>, <w-f1db5> — the tag name is
-                                // randomized per series) that exposes the composited tile bitmap
-                                // as `tile.canvas` (an own-property set in the custom element's
-                                // constructor when it has actually rendered).
-                                //
-                                // STRUCTURAL discovery, not readiness: we identify a tile by its
-                                // tag (any hyphenated custom-element tag) that is a direct child
-                                // either of #d-img-N or of #d-img-N > div.cc80466. We deliberately
-                                // do NOT require `.canvas` to exist yet, because the descrambler
-                                // is lazy and only renders tiles after they are scrolled into the
-                                // viewport — chicken-and-egg if we filter on `.canvas` here.
-                                // Walk every node reachable from `root` (including across open and
-                                // recovered-closed shadow roots) and return the unique hyphenated-
-                                // tag custom elements that have a `.canvas` HTMLCanvasElement own-
-                                // property — or, structurally, ANY hyphenated-tag element if no
-                                // `.canvas`-bearing one exists yet (the constructor sets `.canvas`
-                                // only after the descrambler renders).
-                                // Discover tile groups in `#d-img-N`'s subtree. Canvases-first
-                                // approach: walk canvases (works regardless of whether the host
-                                // custom element is exposed in light DOM), group them by their
-                                // shadow-root host, and treat each unique host as one tile.
-                                //
-                                // Returns an array of `{ host, canvases }` records in stable order
-                                // of first appearance. The host is the custom element (whose
-                                // `.canvas` own-property, when set, gives the descrambled bitmap);
-                                // `canvases` is the layered set inside its shadow root.
-                                function discoverTiles(container){
-                                    if (!container) return [];
-                                    // Long-page WebView layout: container has a `cc...`-class
-                                    // wrapper holding 7-8 direct <canvas> children (one per
-                                    // descrambled vertical slice). Emit each canvas as a
-                                    // standalone tile so toDataURL is called per slice and
-                                    // the webtoon reader stitches them.
-                                    var wrap = null;
+                                // Long-page layout: `#d-img-N` holds a `cc…`-class wrapper whose
+                                // direct <canvas> children are the descrambled vertical slices.
+                                // Single source of truth for finding it — discoverTiles and
+                                // expectedTileCount must agree, or a class rename desyncs them.
+                                function findTileWrapper(container){
+                                    if (!container) return null;
                                     for (var ci = 0; ci < container.children.length; ci++) {
                                         var ch = container.children[ci];
                                         if (ch.tagName === 'DIV' && ('' + ch.className).indexOf('cc') === 0) {
-                                            wrap = ch; break;
+                                            return ch;
                                         }
                                     }
+                                    return null;
+                                }
+
+                                // Discover tile groups in `#d-img-N`'s subtree. Canvases-first:
+                                // walk canvases (works regardless of whether the host custom
+                                // element is exposed in light DOM), group them by their shadow-root
+                                // host, and treat each unique host as one tile.
+                                //
+                                // Returns `{ host, canvases }` records in stable order of first
+                                // appearance. The host is the custom element (e.g. <b-123e6>,
+                                // <w-f1db5> — the tag is randomized per series) whose `.canvas`
+                                // own-property, when set, gives the descrambled bitmap; `canvases`
+                                // is the layered set inside its shadow root.
+                                //
+                                // Discovery is STRUCTURAL, not readiness-based: we deliberately do
+                                // NOT require `.canvas` to exist yet, because the descrambler is
+                                // lazy and only renders a tile once it scrolls into view —
+                                // chicken-and-egg if we filtered on `.canvas` here.
+                                function discoverTiles(container){
+                                    if (!container) return [];
+                                    // Long pages: emit each slice as a standalone tile so
+                                    // toDataURL runs per slice and the webtoon reader stitches them.
+                                    var wrap = findTileWrapper(container);
                                     if (wrap) {
                                         var direct = [];
                                         for (var di = 0; di < wrap.children.length; di++) {
@@ -1238,109 +1228,6 @@ abstract class Japscan :
                                     } catch(e) { return null; }
                                 }
 
-                                // Paginated mode only: composite the (#single-reader-XXX) container's
-                                // direct canvas children. Layered canvases at the same position, so
-                                // we draw them all at (0, 0) in DOM order. No shadow roots, no
-                                // custom-element tiles in this layout — it's the simple legacy form.
-                                function paginatedComposite(container, label) {
-                                    if (!container) return null;
-                                    var canvases = container.querySelectorAll(':scope > canvas');
-                                    if (canvases.length === 0) {
-                                        window.__jlog('[japscan] ' + label + ' compose: no direct canvas children');
-                                        return null;
-                                    }
-                                    var W = 0, H = 0;
-                                    for (var i = 0; i < canvases.length; i++) {
-                                        if (canvases[i].width  > W) W = canvases[i].width;
-                                        if (canvases[i].height > H) H = canvases[i].height;
-                                    }
-                                    if (W === 0 || H === 0) return null;
-                                    var master = document.createElement('canvas');
-                                    master.width = W; master.height = H;
-                                    var mctx = master.getContext('2d');
-                                    if (!mctx) return null;
-                                    var drawn = 0;
-                                    for (var k = 0; k < canvases.length; k++) {
-                                        try { mctx.drawImage(canvases[k], 0, 0); drawn++; } catch(e) {}
-                                    }
-                                    window.__jlog('[japscan] ' + label + ' compose: ' + W + 'x' + H + ' canvases=' + canvases.length + ' drawn=' + drawn);
-                                    var uri = null;
-                                    try { uri = master.toDataURL('image/jpeg', 0.92); } catch(e) {}
-                                    master.width = 0; master.height = 0;
-                                    return uri;
-                                }
-
-                                // Wait for the descrambler to populate the container's shadow-DOM
-                                // canvases, then settle until the canvas count is stable for a bit.
-                                // Settle on TWO independent signals:
-                                //  - canvas count is non-zero and stable (DOM structure done),
-                                //  - no drawImage calls for `quietMs` (descrambler done painting).
-                                // Without the second signal we capture mid-paint and only the
-                                // first few layered passes have been drawn, so the rendered page
-                                // is incomplete.
-                                async function waitForRender(container, timeoutMs, label) {
-                                    var quietMs = 800;
-                                    var minTotal = 1500;
-                                    var pollMs = 150;
-                                    var w = 0;
-                                    var prevCount = -1;
-                                    var structuralStable = 0;
-                                    var lastLogN = -1;
-                                    while (w < timeoutMs) {
-                                        var arr = [];
-                                        gatherCanvases(container, arr);
-                                        var n = arr.length;
-                                        var hasContent = false;
-                                        var maxW = 0, maxH = 0;
-                                        for (var i = 0; i < arr.length; i++) {
-                                            if (arr[i].width > maxW) maxW = arr[i].width;
-                                            if (arr[i].height > maxH) maxH = arr[i].height;
-                                            if (arr[i].width > 0 && arr[i].height > 0) hasContent = true;
-                                        }
-                                        var now = Date.now();
-                                        var sinceDraw = now - (window.__japscanLastDraw || 0);
-                                        if (label && (n !== lastLogN) && (w === 0 || w >= 500)) {
-                                            window.__jlog('[japscan] ' + label + ' poll @' + w + 'ms canvases=' + n + ' hasContent=' + hasContent + ' max=' + maxW + 'x' + maxH + ' sinceDraw=' + sinceDraw + 'ms drawCount=' + (window.__japscanDrawCount || 0));
-                                            lastLogN = n;
-                                        }
-                                        if (hasContent && n === prevCount) {
-                                            structuralStable += pollMs;
-                                        } else {
-                                            structuralStable = 0;
-                                            prevCount = n;
-                                        }
-                                        if (structuralStable >= 600 && sinceDraw >= quietMs && w >= minTotal) {
-                                            if (label) window.__jlog('[japscan] ' + label + ' settled @' + w + 'ms (sinceDraw=' + sinceDraw + 'ms drawCount=' + (window.__japscanDrawCount || 0) + ')');
-                                            return w;
-                                        }
-                                        await sleep(pollMs);
-                                        w += pollMs;
-                                    }
-                                    if (label) window.__jlog('[japscan] ' + label + ' settle timed out @' + w + 'ms');
-                                    return -1;
-                                }
-
-                                async function savePaginated(container, label) {
-                                    var t = await waitForRender(container, 20000, label);
-                                    if (t < 0) {
-                                        window.__jlog('[japscan] ' + label + ' render timed out');
-                                        return false;
-                                    }
-                                    var uri = paginatedComposite(container, label);
-                                    if (!uri || uri.indexOf('data:image/') !== 0) {
-                                        window.__jlog('[japscan] ' + label + ' composite failed');
-                                        return false;
-                                    }
-                                    try {
-                                        window.$$interfaceName.savePage(uri);
-                                        window.__jlog('[japscan] ' + label + ' saved after ' + t + 'ms (' + uri.length + ' chars)');
-                                        return true;
-                                    } catch(e) {
-                                        window.__jlog('[japscan] savePage failed: ' + e);
-                                        return false;
-                                    }
-                                }
-
                                 // Detect reader mode. Webtoon (long-strip) puts everything in
                                 // `#full-reader` with one `<img id="img-N">` per page (each in
                                 // its `<div id="d-img-N">` container) and hides `#single-reader`
@@ -1381,17 +1268,13 @@ abstract class Japscan :
                                     // slow scroll-and-discover loop if a tile is still missing.
                                     var tilesEmitted = 0;
                                     function expectedTileCount(container){
-                                        for (var ci = 0; ci < container.children.length; ci++) {
-                                            var ch = container.children[ci];
-                                            if (ch.tagName === 'DIV' && ('' + ch.className).indexOf('cc') === 0) {
-                                                var n = 0;
-                                                for (var ki = 0; ki < ch.children.length; ki++) {
-                                                    if (ch.children[ki].tagName === 'CANVAS') n++;
-                                                }
-                                                return n > 0 ? n : 1;
-                                            }
+                                        var wrap = findTileWrapper(container);
+                                        if (!wrap) return 1;
+                                        var n = 0;
+                                        for (var ki = 0; ki < wrap.children.length; ki++) {
+                                            if (wrap.children[ki].tagName === 'CANVAS') n++;
                                         }
-                                        return 1;
+                                        return n > 0 ? n : 1;
                                     }
                                     async function captureOnce(container, pageLabel, savedHosts){
                                         var saved = 0;
@@ -1452,128 +1335,17 @@ abstract class Japscan :
                                     return;
                                 }
 
-                                // ---- Paginated mode ----
-                                // The currently-displayed page lives inside the single-reader
-                                // container. Total page count comes from the (hidden) <select>;
-                                // navigation uses the reader's click-zones (#block-left/right) —
-                                // slimselect option clicks don't work because `.ss-content`
-                                // is hidden until the dropdown opens.
-                                var sel = document.getElementById('pages');
-                                var total = sel ? sel.options.length : 1;
-                                var nextBtn = document.getElementById('block-right');
-                                var prevBtn = document.getElementById('block-left');
-                                window.__jlog('[japscan] paginated mode, total = ' + total + ', next=' + !!nextBtn + ', prev=' + !!prevBtn);
-
-                                function nav(btn, fallbackKey){
-                                    try {
-                                        if (btn) { btn.click(); return; }
-                                        document.dispatchEvent(new KeyboardEvent('keydown', {
-                                            key: fallbackKey, code: fallbackKey,
-                                            which: fallbackKey === 'ArrowRight' ? 39 : 37,
-                                            keyCode: fallbackKey === 'ArrowRight' ? 39 : 37,
-                                            bubbles: true,
-                                        }));
-                                    } catch(e) {
-                                        window.__jlog('[japscan] nav failed: ' + e);
-                                    }
-                                }
-
-                                // Wait until the canvas content inside the single-reader container
-                                // changes compared to the previous page (compared via a tiny pixel
-                                // fingerprint of the widest canvas).
-                                function fingerprint(container) {
-                                    var arr = [];
-                                    gatherCanvases(container, arr);
-                                    if (arr.length === 0) return '';
-                                    var ref = arr[0];
-                                    for (var i = 1; i < arr.length; i++) {
-                                        if (arr[i].width > ref.width) ref = arr[i];
-                                    }
-                                    try {
-                                        var ctx = ref.getContext('2d');
-                                        if (!ctx) return '';
-                                        var pts = [
-                                            [0, 0],
-                                            [Math.max(0, ref.width - 1), 0],
-                                            [Math.floor(ref.width / 2), Math.floor(ref.height / 2)],
-                                            [0, Math.max(0, ref.height - 1)],
-                                            [Math.max(0, ref.width - 1), Math.max(0, ref.height - 1)],
-                                        ];
-                                        var s = '';
-                                        for (var i = 0; i < pts.length; i++) {
-                                            var d = ctx.getImageData(pts[i][0], pts[i][1], 1, 1).data;
-                                            s += d[0] + ',' + d[1] + ',' + d[2] + ',' + d[3] + ';';
-                                        }
-                                        return s;
-                                    } catch(e) { return ''; }
-                                }
-
-                                async function waitForPageChange(container, prevFp, timeoutMs) {
-                                    var w = 0;
-                                    while (w < timeoutMs) {
-                                        var fp = fingerprint(container);
-                                        if (fp && fp !== prevFp) {
-                                            // Settle: keep checking until fp stops changing.
-                                            var lastFp = fp;
-                                            var stable = 0;
-                                            while (stable < 600 && w < timeoutMs) {
-                                                await sleep(200); w += 200;
-                                                var nfp = fingerprint(container);
-                                                if (nfp !== lastFp) { lastFp = nfp; stable = 0; }
-                                                else { stable += 200; }
-                                            }
-                                            return w;
-                                        }
-                                        await sleep(200); w += 200;
-                                    }
-                                    return -1;
-                                }
-
-                                var paginatedContainer = singleReader;
-                                if (!paginatedContainer) {
-                                    window.__jlog('[japscan] no single-reader container found');
-                                    try { window.$$interfaceName.passDone(); } catch(e) {}
-                                    return;
-                                }
-
-                                // The reader pre-renders pages on load (the final pre-render is
-                                // the *last* page, not page 1). Give it time to settle, then
-                                // bounce next->prev to force a clean page-1 render.
-                                await sleep(3000);
-                                if (total > 1) {
-                                    nav(nextBtn, 'ArrowRight');
-                                    await sleep(1500);
-                                    nav(prevBtn, 'ArrowLeft');
-                                    await sleep(1500);
-                                }
-
-                                var savedP = 0;
-                                var prevFp = '';
-                                for (var p = 0; p < total; p++) {
-                                    var t = await waitForRender(paginatedContainer, 15000);
-                                    if (t < 0) {
-                                        window.__jlog('[japscan] paginated page ' + (p + 1) + ' render timed out');
-                                    } else {
-                                        var uri = paginatedComposite(paginatedContainer, 'paginated page ' + (p + 1));
-                                        if (uri && uri.indexOf('data:image/') === 0) {
-                                            try { window.$$interfaceName.savePage(uri); savedP++; } catch(e) {}
-                                            window.__jlog('[japscan] paginated page ' + (p + 1) + '/' + total + ' saved after ' + t + 'ms');
-                                        } else {
-                                            window.__jlog('[japscan] paginated page ' + (p + 1) + ' composite failed');
-                                        }
-                                    }
-                                    prevFp = fingerprint(paginatedContainer);
-                                    if (p < total - 1) {
-                                        nav(nextBtn, 'ArrowRight');
-                                        await waitForPageChange(paginatedContainer, prevFp, 15000);
-                                    }
-                                }
-
-                                window.__jlog('[japscan] paginated done, ' + savedP + ' / ' + total + ' pages saved');
+                                // Kotlin committed to the webtoon hook set before this page loaded,
+                                // and the paginated reader refuses to deliver its payload with those
+                                // hooks installed — so there is nothing useful to do from here.
+                                // Report and bail instead of grinding through a driver that cannot
+                                // work; if this ever fires, the fix is to reload the WebView with
+                                // the paginated hooks, not a third capture technique.
+                                window.__jlog('[japscan] MISMATCH: url hinted webtoon but the DOM mounted the paginated reader — giving up');
                                 try { window.$$interfaceName.passDone(); } catch(e) {}
                             })();
                         """.trimIndent(),
-                    ) { result -> Log.d("Japscan", "[wv-kt] driver eval result=$result") }
+                    ) { result -> debugLog("[wv-kt] driver eval result=$result") }
                 }
             }
 
@@ -1583,10 +1355,21 @@ abstract class Japscan :
             )
         }
 
-        // Generous timeout: the JS sequentially drives every page through the
+        // Generous ceiling: the JS sequentially drives every page through the
         // reader's pagination and waits for each blob, which can easily exceed
-        // a minute on long chapters.
-        latch.await(3, TimeUnit.MINUTES)
+        // a minute on long chapters. But a wedged driver would otherwise burn the
+        // whole ceiling doing nothing, so also give up after IDLE_TIMEOUT_MS
+        // without a saved page — each save refreshes the clock, so a healthy long
+        // chapter still gets the full three minutes.
+        val deadline = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(3)
+        var done = false
+        while (!done && System.currentTimeMillis() < deadline) {
+            done = latch.await(15, TimeUnit.SECONDS)
+            if (!done && System.currentTimeMillis() - jsInterface.lastActivity > IDLE_TIMEOUT_MS) {
+                debugLog("[wv-kt] no page saved in ${IDLE_TIMEOUT_MS}ms, giving up")
+                break
+            }
+        }
         handler.post { webView?.destroy() }
 
         if (latch.count == 1L) {
@@ -1622,6 +1405,20 @@ abstract class Japscan :
         screen.addPreference(chapterListPref)
     }
 
+    // Spooled page files outlive the interceptor that serves them, so the reader can
+    // re-request a page (retry, re-open). Nothing else deletes them, and a chapter that
+    // is opened but not read through leaves the rest behind, so reap the stale ones here.
+    //
+    // The cutoff is deliberately far longer than a read session: the reader preloads the
+    // next chapter's page list while the current chapter is still open, so this runs with
+    // an in-progress read's files on disk and must not touch them.
+    private fun sweepPageCache(cacheDir: File) {
+        val cutoff = System.currentTimeMillis() - TimeUnit.HOURS.toMillis(24)
+        cacheDir.listFiles()?.forEach {
+            if (it.name.startsWith(CACHE_FILE_PREFIX) && it.lastModified() < cutoff) it.delete()
+        }
+    }
+
     private fun randomString(length: Int = 10): String {
         val charPool = ('a'..'z') + ('A'..'Z')
         return List(length) { charPool.random() }.joinToString("")
@@ -1634,12 +1431,19 @@ abstract class Japscan :
         // Absolute file paths in the app's cache dir, in capture order.
         var images: List<String> = listOf()
             private set
+
+        // Last time the driver made progress, for fetchPageList's idle watchdog.
+        @Volatile
+        var lastActivity: Long = System.currentTimeMillis()
+            private set
+
         private val savedPaths = mutableListOf<String>()
-        private val sessionTag = "japscan-${System.currentTimeMillis()}"
+        private val sessionTag = "$CACHE_FILE_PREFIX${System.currentTimeMillis()}"
 
         @JavascriptInterface
         @Suppress("UNUSED")
         fun savePage(dataUri: String) {
+            lastActivity = System.currentTimeMillis()
             try {
                 val commaIdx = dataUri.indexOf(',')
                 if (commaIdx <= 0) return
@@ -1658,7 +1462,7 @@ abstract class Japscan :
         @JavascriptInterface
         @Suppress("UNUSED")
         fun log(message: String) {
-            Log.d("Japscan", "[js] $message")
+            debugLog("[js] $message")
         }
 
         @JavascriptInterface
