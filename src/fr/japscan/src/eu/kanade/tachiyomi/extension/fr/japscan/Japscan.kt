@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.fr.japscan
 
-import android.app.Application
 import android.content.ComponentName
 import android.content.Intent
 import android.content.SharedPreferences
@@ -11,6 +10,7 @@ import android.util.Base64
 import android.util.Log
 import android.view.View
 import android.webkit.ConsoleMessage
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -32,6 +32,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
@@ -50,14 +51,13 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.collections.mapIndexed
 import kotlin.time.Duration.Companion.seconds
 
@@ -167,6 +167,16 @@ abstract class Japscan :
         // How long fetchPageList waits with zero saved pages before deciding the
         // WebView driver is wedged rather than merely slow.
         private const val IDLE_TIMEOUT_MS = 45_000L
+
+        // Captcha flow. Same values as the sibling ScanManga extension, which runs the
+        // near-identical Cloudflare dance.
+        private const val CF_POLL_INTERVAL_MS = 5000L
+        private const val CF_MAX_POLLS = 15
+
+        // Settle window that lets Cloudflare's Turnstile beacon commit cf_clearance
+        // before the warmup WebView is torn down.
+        private const val WARMUP_SETTLE_MS = 200L
+        private const val WARMUP_TIMEOUT_SECONDS = 8L
 
         // Synthetic viewport used to force-layout the detached WebView. Must stay
         // desktop-class: under ~1280 px wide the reader takes a "mobile" path that
@@ -463,7 +473,8 @@ abstract class Japscan :
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val interfaceName = randomString()
-        val context = Injekt.get<Application>()
+        val context = applicationContext
+        val chapterUrl = "$internalBaseUrl${chapter.url}"
         sweepPageCache(context.cacheDir)
         val isReader = Exception().stackTrace.any { it.className.contains("reader") }
 
@@ -471,16 +482,29 @@ abstract class Japscan :
         val latch = CountDownLatch(1)
         val jsInterface = JsInterface(latch, context.cacheDir)
         var webView: WebView? = null
-        var request: Response = client.newCall(GET("$internalBaseUrl${chapter.url}", headers)).execute()
-        var pageContent = request.body.string()
-        val matchResult = captchaRegex.find(pageContent)
 
-        if (matchResult != null) {
+        // The probe body is never reused — the WebView re-fetches the chapter itself — so
+        // this only answers "is the captcha in the way right now?".
+        fun captchaPresent(): Boolean = client.newCall(GET(chapterUrl, headers)).execute().use {
+            captchaRegex.containsMatchIn(it.body.string())
+        }
+
+        var blocked = captchaPresent()
+        if (blocked) {
+            // Cold-session path: CF refuses to issue cf_clearance to a session that's never
+            // touched the host. Warm up by loading the homepage in a hidden WebView, then
+            // re-probe — usually clears it without ever bothering the user. (Ported from the
+            // sibling ScanManga extension, which runs the same dance.)
+            warmupWebViewSession()
+            blocked = captchaPresent()
+        }
+
+        if (blocked) {
             try {
                 val intent = Intent().apply {
                     component = ComponentName(context, "eu.kanade.tachiyomi.ui.webview.WebViewActivity")
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    putExtra("url_key", "$internalBaseUrl${chapter.url}")
+                    putExtra("url_key", chapterUrl)
                     putExtra("source_key", id)
                     putExtra("title_key", "Résolvez le captcha, fermez la Webview et réouvrez le chapitre.")
                 }
@@ -490,13 +514,10 @@ abstract class Japscan :
                 // Suwayomi etc.
                 throw Exception("Résolvez le captcha de ce chapitre depuis la WebView et réouvrez le chapitre.")
             }
-            var captchaWait = 0
-            while (captchaWait < 15) {
-                Thread.sleep(5000)
-                request = client.newCall(GET("$internalBaseUrl${chapter.url}", headers)).execute()
-                pageContent = request.body.string()
-                val isGood = captchaRegex.find(pageContent)
-                if (isGood == null) {
+            for (attempt in 1..CF_MAX_POLLS) {
+                Thread.sleep(CF_POLL_INTERVAL_MS)
+                if (!captchaPresent()) {
+                    blocked = false
                     val closeIntent = Intent().apply {
                         val targetClass = if (isReader) {
                             "eu.kanade.tachiyomi.ui.reader.ReaderActivity"
@@ -508,11 +529,12 @@ abstract class Japscan :
                     }
                     context.startActivity(closeIntent)
                     break
-                } else {
-                    captchaWait++
                 }
             }
-            if (captchaWait >= 15) {
+            if (blocked) {
+                // The WebView flow exhausted itself, so the warmup wasn't enough either.
+                // Clear the gate so the next attempt warms again from scratch.
+                sessionWarmedUp.set(false)
                 throw Exception("Résolvez le captcha, fermez la Webview et réouvrez le chapitre.")
             }
         }
@@ -1308,10 +1330,7 @@ abstract class Japscan :
                 }
             }
 
-            innerWv.loadUrl(
-                "$internalBaseUrl${chapter.url}",
-                headers.toMap(),
-            )
+            innerWv.loadUrl(chapterUrl, headers.toMap())
         }
 
         // Generous ceiling: the JS sequentially drives every page through the
@@ -1362,6 +1381,53 @@ abstract class Japscan :
             setDefaultValue("hide")
         }
         screen.addPreference(chapterListPref)
+    }
+
+    private val sessionWarmedUp = AtomicBoolean(false)
+
+    // Load the homepage in a hidden WebView so Cloudflare issues cf_clearance for this
+    // session. Runs once per process; the gate is reset by the captcha flow when the whole
+    // dance fails, so a later attempt warms again from scratch.
+    private fun warmupWebViewSession() {
+        if (!sessionWarmedUp.compareAndSet(false, true)) return
+
+        val latch = CountDownLatch(1)
+        val mainHandler = Handler(Looper.getMainLooper())
+
+        mainHandler.post {
+            val wv = WebView(applicationContext)
+            wv.settings.javaScriptEnabled = true
+            wv.settings.domStorageEnabled = true
+
+            CookieManager.getInstance().apply {
+                setAcceptCookie(true)
+                setAcceptThirdPartyCookies(wv, true)
+            }
+
+            wv.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    // Schedule teardown on the main looper directly — view.postDelayed is
+                    // silently dropped because the WebView isn't attached to a window.
+                    // The settle window lets CF's Turnstile beacon commit cf_clearance.
+                    mainHandler.postDelayed({
+                        runCatching {
+                            view?.stopLoading()
+                            view?.destroy()
+                        }
+                        latch.countDown()
+                    }, WARMUP_SETTLE_MS)
+                }
+            }
+            wv.loadUrl("$internalBaseUrl/")
+        }
+
+        try {
+            if (!latch.await(WARMUP_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                sessionWarmedUp.set(false)
+            }
+        } catch (_: InterruptedException) {
+            sessionWarmedUp.set(false)
+        }
     }
 
     // Spooled page files outlive the interceptor that serves them, so the reader can
