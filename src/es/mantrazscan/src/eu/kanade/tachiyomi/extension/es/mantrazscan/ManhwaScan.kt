@@ -1,6 +1,11 @@
 package eu.kanade.tachiyomi.extension.es.mantrazscan
 
+import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,15 +14,55 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.Jsoup
 
 @Source
-abstract class ManhwaScan : HttpSource() {
+abstract class ManhwaScan :
+    HttpSource(),
+    ConfigurableSource {
+
+    override val baseUrl: String
+        get() = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+
+    private val defaultBaseUrl = "https://mantrazscans.lat"
+
+    private val preferences: SharedPreferences = getPreferences()
 
     override val supportsLatest = true
+
+    override val client: OkHttpClient = network.client.newBuilder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val isPageImage = request.url.host == baseUrl.toHttpUrl().host &&
+                request.url.encodedPath.startsWith(PAGE_IMAGE_PATH_PREFIX)
+
+            if (!isPageImage) {
+                return@addInterceptor chain.proceed(request)
+            }
+
+            val response = chain.proceed(
+                request.newBuilder()
+                    .removeHeader("Accept-Encoding")
+                    .header("Accept-Encoding", "identity")
+                    .build(),
+            )
+            val body = response.body
+            val mediaType = body.contentType()
+            val bytes = body.bytes()
+
+            response.newBuilder()
+                .removeHeader("Content-Encoding")
+                .removeHeader("Content-Length")
+                .body(bytes.toResponseBody(mediaType))
+                .build()
+        }
+        .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -147,9 +192,20 @@ abstract class ManhwaScan : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request = GET(getChapterUrl(chapter), headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val pages = document.select("main img[src*='/WP-manga/data/'], main img[alt*='Página']")
-            .mapNotNull { it.attr("abs:src").takeIf(String::isNotBlank) }
+        val document = Jsoup.parse(response.body.string(), response.request.url.toString())
+        val pages = document.select(
+            "main img[src*='/WP-manga/data/'], " +
+                "main img[alt*='Página'], " +
+                "link[rel=preload][as=image][href*='/WP-manga/data/']",
+        )
+            .mapNotNull { element ->
+                when (element.tagName()) {
+                    "link" -> element.attr("href")
+                    else -> element.attr("src")
+                        .ifBlank { element.attr("data-src") }
+                        .ifBlank { element.attr("data-lazy-src") }
+                }.toAbsoluteImageUrl()
+            }
             .distinct()
 
         return pages.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
@@ -201,7 +257,33 @@ abstract class ManhwaScan : HttpSource() {
 
     private fun String.ensureStartsWithSlash(): String = if (startsWith('/')) this else "/$this"
 
+    private fun String.toAbsoluteImageUrl(): String? {
+        if (isBlank()) return null
+        return baseUrl.toHttpUrl()
+            .resolve(this)
+            ?.toString()
+            ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF
+            title = "Editar URL de la fuente"
+            summary = "Para uso temporal, si la extensión se actualiza se perderá el cambio."
+            dialogTitle = "Editar URL de la fuente"
+            dialogMessage = "URL por defecto:\n$defaultBaseUrl"
+            setDefaultValue(defaultBaseUrl)
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, "Reinicie la aplicación para aplicar los cambios", Toast.LENGTH_LONG).show()
+                true
+            }
+        }.also { screen.addPreference(it) }
+    }
+
     companion object {
+        private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val PAGE_IMAGE_PATH_PREFIX = "/img/WP-manga/data/"
+
         private val CHAPTERS_REGEX = Regex("\\\\\\\"chapters\\\\\\\":\\[(.*?)\\\\\\\"slug\\\\\"", setOf(RegexOption.DOT_MATCHES_ALL))
         private val CHAPTER_NUM_REGEX = Regex("[0-9]+(?:\\.[0-9]+)?")
         private val RSC_SPLIT_NOISE = "\"])</script><script>self.__next_f.push([1,\""
