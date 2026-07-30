@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import java.lang.UnsupportedOperationException
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -23,9 +22,11 @@ abstract class VixenLogic : KeiSource() {
         thumbnail_url = "$baseUrl/wp-content/uploads/2026/06/VL_Cover_Toocheke.png"
         author = "tootaloo and foxboy83"
         status = SManga.UNKNOWN
-        setUrlWithoutDomain(baseUrl)
+        url = "/"
         initialized = true
     }
+
+    override val supportsLatest: Boolean = false
 
     private val dateFormat = DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.ENGLISH)
 
@@ -44,7 +45,10 @@ abstract class VixenLogic : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = MangasPage(
+        mangas = listOf(manga()),
+        hasNextPage = false,
+    )
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -52,7 +56,11 @@ abstract class VixenLogic : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val archives = client.get("$baseUrl/archives/", headers).asJsoup()
+        if (!fetchChapters) {
+            return SMangaUpdate(manga = manga, chapters = emptyList())
+        }
+
+        val archives = client.get("$baseUrl/archives/").asJsoup()
         val comicItems = archives.select(".comic-item")
 
         val chapters = comicItems.map { ci ->
