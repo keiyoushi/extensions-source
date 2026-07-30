@@ -359,49 +359,19 @@ abstract class Japscan :
         return filterOutlierChapters(chapters)
     }
 
-    // Defense in depth: if a honeypot ever slips past the per-row hidden-style
-    // heuristics, its number tends to be wildly out of range (e.g. 483181 vs.
-    // real 1181, or 000001..000008 vs. real 1174..1181). Real chapter numbers are
-    // near-consecutive, so split them on gaps that are much larger than the typical
-    // spacing and drop the clusters that are a clear minority next to the largest —
-    // agnostic to whether the honeypots sit above or below the real range.
+    // Backstop for a honeypot that clears the slug/number binding in parseChapter: its
+    // number comes out wildly out of range (observed: 483181 among real 1174..1181). Real
+    // chapter numbers never sit orders of magnitude above the median, so cap on that.
+    // Low-side honeypots (000001..000008) are already rejected by the leading-zero check
+    // on the URL id, so this only needs to cap the top.
     //
-    // Cluster on chapter_number, NOT on the trailing URL id: Japscan writes
-    // "Chapitre 1100.5" as /11005/, which sits ~9000 away from its neighbours and
-    // would be split off and dropped as an outlier. By chapter number it is 0.5
-    // from 1100 and stays put.
+    // Compare chapter_number, NOT the trailing URL id: Japscan writes "Chapitre 1100.5" as
+    // /11005/, which would read as a 10x outlier. By chapter number it is 0.5 from 1100.
     private fun filterOutlierChapters(chapters: List<SChapter>): List<SChapter> {
-        val withNum = chapters.filter { it.chapter_number >= 0f }
-        if (withNum.size < 2) return chapters
-        val sorted = withNum.sortedBy { it.chapter_number }
-        val gaps = (1 until sorted.size).map { sorted[it].chapter_number - sorted[it - 1].chapter_number }
-        val medianGap = gaps.sorted()[gaps.size / 2].coerceAtLeast(1f)
-        // Treat a gap as a cluster boundary when it dwarfs the typical spacing.
-        // The absolute floor (100) keeps short lists with tiny medians from
-        // splitting on noise; the 50x ratio handles dense lists where the
-        // median is already large.
-        val threshold = maxOf(medianGap * 50, 100f)
-        val clusters = mutableListOf(mutableListOf(sorted[0]))
-        for (i in 1 until sorted.size) {
-            if (sorted[i].chapter_number - sorted[i - 1].chapter_number > threshold) {
-                clusters.add(mutableListOf())
-            }
-            clusters.last().add(sorted[i])
-        }
-        if (clusters.size == 1) return chapters
-        // Only prune when one cluster clearly dominates. On a tie we cannot tell
-        // which side is real (honeypots sit above OR below), and guessing wrong
-        // deletes the entire chapter list — much worse than letting a honeypot
-        // through, since the visibility prune is the primary defense and this is
-        // only a backstop.
-        val largest = clusters.maxOf { it.size }
-        if (clusters.count { it.size == largest } > 1) return chapters
-        // Drop a cluster only if it is a small fraction of the main run. Anything
-        // comparable in size is far more likely a genuine gap in Japscan's catalogue
-        // (a series resuming at a much higher number) than a block of honeypots, and
-        // keeping only the largest cluster would silently delete those real chapters.
-        val keep = clusters.filter { it.size * 4 > largest }.flatten().toSet()
-        return chapters.filter { it.chapter_number < 0f || it in keep }
+        val nums = chapters.map { it.chapter_number }.filter { it >= 0f }.sorted()
+        if (nums.size < 3) return chapters
+        val ceiling = nums[nums.size / 2] * 10 + 100
+        return chapters.filter { it.chapter_number <= ceiling }
     }
 
     private fun extractMangaSlug(url: HttpUrl): String? {
@@ -442,17 +412,9 @@ abstract class Japscan :
             .mapNotNull { el ->
                 // Find the first attribute whose value matches the chapter URL pattern
                 val attrMatch = el.attributes().asList().firstOrNull { attr ->
-                    val value = attr.value
-                    value.startsWith("/manga/") || value.startsWith("/manhua/") || value.startsWith("/manhwa/") || value.startsWith("/bd/") || value.startsWith("/comic/")
+                    CHAPTER_PATH_TYPES.any { attr.value.startsWith("/$it/") }
                 }
-                if (attrMatch != null) {
-                    val name = el.ownText().ifBlank { el.text() }
-                    // Mark if the attribute is not "href"
-                    val isNonHref = attrMatch.key != "href"
-                    Triple(name, attrMatch.value, isNonHref)
-                } else {
-                    null
-                }
+                attrMatch?.let { Pair(el.ownText().ifBlank { el.text() }, it.value) }
             }
             .distinctBy { it.second }
 
@@ -463,7 +425,7 @@ abstract class Japscan :
         // Honeypots use a different slug (e.g. /manga/cv/N/) with sequential numbers that match a
         // fake "Chapitre N" label, so name/number alone is not enough — slug check is what stops them.
         val filtered = allUrlPairs
-            .filter { (name, url, _) ->
+            .filter { (name, url) ->
                 val segments = url.split('/').filter { it.isNotEmpty() }
                 if (segments.size != 3) return@filter false
                 if (segments[0] !in CHAPTER_PATH_TYPES) return@filter false
@@ -478,17 +440,12 @@ abstract class Japscan :
                 chapterNum == urlNum
             }
 
-        // Fall back to the unfiltered list in case the heuristics are too aggressive.
-        // Defense in depth: when the slug filter is unavailable, prefer the longest URL — real
-        // slugs (e.g. "one-piece") are usually longer than honeypot slugs (e.g. "cv").
-        val urlPairs = (filtered.ifEmpty { allUrlPairs })
-            .sortedWith(
-                compareByDescending<Triple<String, String, Boolean>> { it.third }
-                    .thenByDescending { it.second.length },
-            ) // Prefer non-href first, then longer URLs
-            .map { Pair(it.first, it.second) }
-
-        val foundPair = urlPairs.firstOrNull()
+        // Fall back to the unfiltered list in case the heuristics are too aggressive. There
+        // we prefer the longest URL — real slugs (e.g. "one-piece") are usually longer than
+        // honeypot slugs (e.g. "cv"). The binding above admits at most one URL per row, so
+        // nothing needs ordering on the normal path.
+        val foundPair = filtered.firstOrNull()
+            ?: allUrlPairs.maxByOrNull { it.second.length }
             ?: throw Exception("Impossible de trouver l'URL du chapitre")
 
         val chapter = SChapter.create()
@@ -1172,6 +1129,8 @@ abstract class Japscan :
                                 //      consistently holds the real bitmap; siblings are decoys.
                                 //   3. The first non-empty canvas — last-resort.
                                 function pickTileCanvas(tile){
+                                    // cc-wrapper slices are their own host — nothing to resolve.
+                                    if (tile.host instanceof HTMLCanvasElement) return tile.host;
                                     try {
                                         if (tile.host && tile.host.canvas instanceof HTMLCanvasElement) {
                                             return tile.host.canvas;
@@ -1378,7 +1337,7 @@ abstract class Japscan :
         // Wrap each absolute cache path in the sentinel host so OkHttp accepts it
         // and our interceptor serves the file. Paths under /data/data/... are
         // already URL-safe (alphanumerics, dots, slashes, hyphens).
-        val images = jsInterface.images
+        val images = jsInterface.snapshot()
             .mapIndexed { i, path -> Page(i, imageUrl = "https://$JAPSCAN_CACHE_HOST$path") }
         return Observable.just(images)
     }
@@ -1428,10 +1387,6 @@ abstract class Japscan :
         private val latch: CountDownLatch,
         private val cacheDir: File,
     ) {
-        // Absolute file paths in the app's cache dir, in capture order.
-        var images: List<String> = listOf()
-            private set
-
         // Last time the driver made progress, for fetchPageList's idle watchdog.
         @Volatile
         var lastActivity: Long = System.currentTimeMillis()
@@ -1439,6 +1394,9 @@ abstract class Japscan :
 
         private val savedPaths = mutableListOf<String>()
         private val sessionTag = "$CACHE_FILE_PREFIX${System.currentTimeMillis()}"
+
+        // Absolute file paths in the app's cache dir, in capture order.
+        fun snapshot(): List<String> = synchronized(savedPaths) { savedPaths.toList() }
 
         @JavascriptInterface
         @Suppress("UNUSED")
@@ -1468,7 +1426,6 @@ abstract class Japscan :
         @JavascriptInterface
         @Suppress("UNUSED")
         fun passDone() {
-            images = synchronized(savedPaths) { savedPaths.toList() }
             latch.countDown()
         }
     }
