@@ -145,17 +145,15 @@ abstract class SangChanhTeam : KeiSource() {
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
         val linkElement = element.selectFirst("h2 a[href*='/truyen/'], h3 a[href*='/truyen/'], a.uk-link-toggle[href*='/truyen/']")
             ?: error("Manga link not found")
-        title = (linkElement.selectFirst("h2, h3")?.text() ?: linkElement.text())
-            .ifEmpty { error("Manga title not found") }
+        title = linkElement.text()
         setUrlWithoutDomain(linkElement.absUrl("href"))
         thumbnail_url = element.selectFirst("img")?.extractImageUrl()?.fullImageUrl()
     }
 
     private fun mangaFromSearchDto(dto: SearchDto): SManga? {
         val url = dto.url.takeIf { it.isNotBlank() } ?: return null
-        val title = Jsoup.parse(dto.title).text().takeIf { it.isNotEmpty() } ?: return null
         return SManga.create().apply {
-            this.title = title
+            title = Jsoup.parse(dto.title).text()
             setUrlWithoutDomain(url)
             thumbnail_url = dto.thumb?.fullImageUrl()
         }
@@ -178,12 +176,10 @@ abstract class SangChanhTeam : KeiSource() {
 
     private fun parseMangaDetails(document: Document, manga: SManga): SManga = SManga.create().apply {
         setUrlWithoutDomain(manga.url)
-        title = document.selectFirst("main h1")?.text()
-            ?: document.selectFirst("meta[property=og:title]")?.attr("content")?.substringBefore("[")?.trim()
-            ?: error("Title not found")
+        title = document.selectFirst("main h1")!!.text()
         author = null
-        thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
-            ?: document.selectFirst("img[alt^='Ảnh bìa của']")?.extractImageUrl()
+        thumbnail_url = document.selectFirst("img[alt^='Ảnh bìa của']")?.extractImageUrl()
+            ?: document.selectFirst("meta[property=og:image]")?.attr("content")
         genre = document.select(".manga-block a[href*='/the-loai/']")
             .joinToString { it.text() }
             .ifEmpty { null }
