@@ -131,7 +131,6 @@ class Chapter(
     private val number: JsonPrimitive,
     private val title: String? = null,
     private val createdAt: String,
-    private val isAccessible: Boolean,
     private val isLocked: Boolean? = false,
     private val isTimeLocked: Boolean? = false,
     private val mangaPost: MangaPostDto? = null,
@@ -140,12 +139,10 @@ class Chapter(
     private val chapterPurchased: Boolean? = false,
 ) {
 
-    fun isAccessible() = isAccessible
-
     fun isLocked() = (isLocked == true) || (isTimeLocked == true) || (chapterPurchased == false && price != 0)
 
     fun toSChapter(mangaSlug: String?) = SChapter.create().apply {
-        val prefix = if (!isAccessible()) "🔒 " else ""
+        val prefix = if (isLocked()) "🔒 " else ""
         val suffix = if (!title.isNullOrBlank()) " - $title" else ""
         val seriesSlug = (mangaSlug ?: mangaPost?.slug)!!
         url = "/series/$seriesSlug/$slug#$id"

@@ -1,41 +1,38 @@
 package eu.kanade.tachiyomi.multisrc.masonry
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 
-abstract class Masonry : HttpSource() {
+abstract class Masonry : KeiSource() {
 
-    override val supportsLatest = true
-
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
-
-    override fun popularMangaRequest(page: Int): Request {
-        val url = when (page) {
-            1 -> baseUrl
-            2 -> "$baseUrl/archive/"
-            else -> "$baseUrl/archive/page/${page - 1}/"
-        }
-        return GET(url, headers)
+    protected open fun popularMangaUrl(page: Int): String = when (page) {
+        1 -> baseUrl
+        2 -> "$baseUrl/archive/"
+        else -> "$baseUrl/archive/page/${page - 1}/"
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        getTags()
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get(popularMangaUrl(page)).asJsoup()
+        return parseMangaList(document)
+    }
+
+    protected open fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select(".list-gallery:not(.static) figure:not(:has(a[href*=/video/]))")
             .map { element ->
                 SManga.create().apply {
@@ -50,125 +47,125 @@ abstract class Masonry : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/updates/sort/newest/mpage/$page/", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = if (query.isNotEmpty()) {
-        val url = "$baseUrl/search/post/".toHttpUrl().newBuilder()
-            .addPathSegment(query.trim())
-            .addEncodedPathSegments("mpage/$page/")
-            .build()
-        GET(url, headers)
-    } else {
-        val tagFilter = filters.firstInstanceOrNull<TagFilter>()
-        val sortFilter = filters.firstInstanceOrNull<SortFilter>()!!
-
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            if (tagFilter == null || tagFilter.selected == "") {
-                addPathSegment("updates")
-                sortFilter.getUriPartIfNeeded("search").also {
-                    if (it.isBlank()) {
-                        addEncodedPathSegments("page/$page/")
-                    } else {
-                        addEncodedPathSegments(it)
-                        addEncodedPathSegments("mpage/$page/")
-                    }
-                }
-            } else {
-                addPathSegment("tag")
-                addPathSegment(tagFilter.selected)
-                sortFilter.getUriPartIfNeeded("tag").also {
-                    if (it.isBlank()) {
-                        addEncodedPathSegments("page/$page/")
-                    } else {
-                        addEncodedPathSegments(it)
-                        addEncodedPathSegments("mpage/$page/")
-                    }
-                }
-            }
-        }.build()
-
-        GET(url, headers)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get("$baseUrl/updates/sort/newest/mpage/$page/").asJsoup()
+        return parseMangaList(document)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = if (query.isNotEmpty()) {
+            "$baseUrl/search/post/".toHttpUrl().newBuilder()
+                .addPathSegment(query.trim())
+                .addEncodedPathSegments("mpage/$page/")
+                .build()
+        } else {
+            val tagFilter = filters.firstInstanceOrNull<TagFilter>()
+            val sortFilter = filters.firstInstanceOrNull<SortFilter>()!!
 
-    private var tags = emptyList<Pair<String, String>>()
-    private var tagsFetchAttempt = 0
-
-    private fun getTags() {
-        if (tags.isEmpty() && tagsFetchAttempt < 3) {
-            runCatching {
-                tags = client.newCall(GET("$baseUrl/updates/sort/newest/", headers))
-                    .execute().asJsoup()
-                    .select("#filter-a span:has(> input)")
-                    .mapNotNull {
-                        Pair(
-                            it.select("label").text(),
-                            it.select("input").attr("value"),
-                        )
-                    }.let {
-                        listOf(Pair("", "")) + it
+            baseUrl.toHttpUrl().newBuilder().apply {
+                if (tagFilter == null || tagFilter.selected == "") {
+                    addPathSegment("updates")
+                    sortFilter.getUriPartIfNeeded("search").also {
+                        if (it.isBlank()) {
+                            addEncodedPathSegments("page/$page/")
+                        } else {
+                            addEncodedPathSegments(it)
+                            addEncodedPathSegments("mpage/$page/")
+                        }
                     }
-            }
-            tagsFetchAttempt++
+                } else {
+                    addPathSegment("tag")
+                    addPathSegment(tagFilter.selected)
+                    sortFilter.getUriPartIfNeeded("tag").also {
+                        if (it.isBlank()) {
+                            addEncodedPathSegments("page/$page/")
+                        } else {
+                            addEncodedPathSegments(it)
+                            addEncodedPathSegments("mpage/$page/")
+                        }
+                    }
+                }
+            }.build()
         }
+
+        val document = client.get(url).asJsoup()
+        return parseMangaList(document)
     }
 
-    override fun getFilterList(): FilterList {
+    /* Filters */
+
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val tags = client.get("$baseUrl/updates/sort/newest/").asJsoup()
+            .select("#filter-a span:has(> input)")
+            .map {
+                Tag(
+                    it.select("label").text(),
+                    it.select("input").attr("value"),
+                )
+            }.let {
+                listOf(Tag("", "")) + it
+            }
+        return tags.toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filterData = data?.parseAs<List<Tag>>()
+
         val filters = mutableListOf(
             Filter.Header("Filters ignored with text search"),
             Filter.Separator(),
             SortFilter(),
         )
 
-        if (tags.isEmpty()) {
-            filters.add(
-                Filter.Header("Press 'reset' to attempt to load tags"),
-            )
-        } else {
-            filters.add(
-                TagFilter(tags),
-            )
+        if (!filterData.isNullOrEmpty()) {
+            filters += TagFilter(filterData)
         }
 
         return FilterList(filters)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            document.selectFirst("p.link-btn")?.run {
-                artist = select("a[href*=/model/]").eachText().joinToString()
-                genre = select("a[href*=/tag/]").eachText().joinToString()
-                author = selectFirst("a")?.text()
-            }
-            description = document.selectFirst("#content > p")?.text()
-            status = SManga.COMPLETED
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        }
+    /* Manga details & chapters */
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+        return SMangaUpdate(
+            manga = parseMangaDetails(document, manga),
+            chapters = parseChapterList(document, manga),
+        )
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
-        listOf(
-            SChapter.create().apply {
-                name = "Gallery"
-                url = manga.url
-            },
-        ),
+    protected open fun parseMangaDetails(document: Document, manga: SManga): SManga = SManga.create().apply {
+        document.selectFirst("p.link-btn")?.run {
+            artist = select("a[href*=/model/]").eachText().joinToString()
+            genre = select("a[href*=/tag/]").eachText().joinToString()
+            author = selectFirst("a")?.text()
+        }
+        description = document.selectFirst("#content > p")?.text()
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+    }
+
+    protected open fun parseChapterList(document: Document, manga: SManga): List<SChapter> = listOf(
+        SChapter.create().apply {
+            name = "Gallery"
+            url = manga.url
+        },
     )
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    /* Pages */
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select(".list-gallery a[href^=https://cdn.]").mapIndexed { idx, img ->
             Page(idx, imageUrl = img.absUrl("href"))
         }
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     protected fun Element.imgAttr(): String? = when {
         hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")

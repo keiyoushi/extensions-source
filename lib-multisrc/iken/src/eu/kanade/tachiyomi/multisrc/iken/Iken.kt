@@ -244,8 +244,8 @@ abstract class Iken :
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url.substringBeforeLast("#")}"
 
-    protected fun Chapter.isVisible(): Boolean = isAccessible() || (
-        preferences.getBoolean(SHOW_LOCKED_CHAPTER_PREF_KEY, false) && isLocked()
+    protected fun Chapter.isVisible(): Boolean = (
+        preferences.getBoolean(SHOW_LOCKED_CHAPTER_PREF_KEY, false) || !isLocked()
         )
 
     // Switch to chapters endpoint if any Manga chapters mismatch was detected

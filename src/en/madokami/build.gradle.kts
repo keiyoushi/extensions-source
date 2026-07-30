@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Madokami"
-    versionCode = 15
+    versionCode = 16
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
@@ -21,4 +21,8 @@ keiyoushi {
         path("/Artbooks/..*")
         path("/reader/..*")
     }
+}
+
+dependencies {
+    implementation("com.github.gpanther:java-nat-sort:natural-comparator-1.1")
 }

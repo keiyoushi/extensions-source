@@ -2,13 +2,9 @@ package eu.kanade.tachiyomi.extension.en.infinityscans
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
+import kotlin.time.Instant
 
 @Serializable
 class ResponseDto<T>(val result: T)
@@ -46,11 +42,14 @@ class SearchEntryDto(
 
 @Serializable
 class MangaDetailsDto(
+    val name: String,
+    val uri: String,
     val altNames: List<String>? = null,
     val description: DescriptionDto,
     val genres: List<GenreDto>,
     val authors: List<AuthorDto>,
     val status: String,
+    val cover: String? = null,
 )
 
 @Serializable
@@ -104,7 +103,7 @@ class ChapterEntryDto(
 
         // Things like prologues mess up the sequence number
         chapter_number = title.substringAfter("hapter ").toFloatOrNull() ?: sequence.toFloat()
-        date_upload = dateFormat.tryParse(uploaded)
+        date_upload = Instant.parseOrNull(uploaded)?.toEpochMilliseconds() ?: 0L
         url = "$mangaPath/chapter/$id"
         scanlator = groups?.joinToString { it.name }
     }

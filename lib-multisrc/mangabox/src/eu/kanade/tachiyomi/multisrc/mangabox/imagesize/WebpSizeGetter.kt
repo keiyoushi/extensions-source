@@ -28,6 +28,7 @@ class WebpSizeGetter(stream: InputStream) : ImageSizeGetter(stream) {
         private val RIFF = "RIFF".toByteArray()
         private val WEBP = "WEBP".toByteArray()
         private val VP8 = "VP8".toByteArray()
-        const val RANGE = "bytes=0-29"
+        const val BYTES = 30L
+        const val RANGE = "bytes=0-${BYTES - 1}"
     }
 }
