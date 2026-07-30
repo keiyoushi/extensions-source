@@ -16,9 +16,13 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getString
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.obj
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.CacheControl
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -114,9 +118,9 @@ abstract class Viz :
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/$servicePath/chapters/${manga.url}"
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val parts = "$baseUrl/${chapter.url}".toHttpUrl()
-        val chapterId = parts.pathSegments.first()
-        val slug = parts.fragment
+        val chapterId = chapter.memo.getStringOrNull("id")
+            ?: throw Exception("Refresh chapter list")
+        val slug = chapter.memo.getString("slug")
         return "$baseUrl/$servicePath/$slug/chapter/$chapterId"
     }
 
@@ -177,6 +181,10 @@ abstract class Viz :
                 val absoluteUrl = if (cleanUrl.startsWith("http")) cleanUrl else "$baseUrl$cleanUrl"
                 val paths = absoluteUrl.toHttpUrl().pathSegments
                 url = "${paths[3]}#${paths[1]}"
+                memo = buildJsonObject {
+                    put("id", paths[3])
+                    put("slug", paths[1])
+                }
             }
         }.sortedByDescending { it.chapter_number }
 
@@ -193,7 +201,8 @@ abstract class Viz :
             .toInt()
 
         checkIfIsLoggedIn()
-        val chapterId = chapter.url.substringBefore("#")
+        val chapterId = chapter.memo.getStringOrNull("id")
+            ?: throw Exception("Refresh chapter list")
         val hasAccess = client.newCall(pageUrlRequest(chapterId, "0")).execute().parseAs<Dto>().ok
         if (hasAccess == 0) {
             throw Exception("Log in via WebView and subscribe to the website's service.")
@@ -232,20 +241,17 @@ abstract class Viz :
 
     private val subcription = Regex("""var $subscriber\s*=\s*(true|false)""")
 
-    private fun checkIfIsLoggedIn(): Boolean {
-        val loginCheckRequest = GET("$baseUrl/account/refresh_login_links", headers)
-        return try {
-            val document = network.client.newCall(loginCheckRequest).execute().asJsoup()
-            loggedIn = document.selectFirst("div#o_account-links-content")
-                ?.attr("logged_in")?.toBoolean() ?: false
+    private suspend fun checkIfIsLoggedIn(): Boolean = try {
+        val document = network.client.get("$baseUrl/account/refresh_login_links").asJsoup()
+        loggedIn = document.selectFirst("div#o_account-links-content")
+            ?.attr("logged_in")?.toBoolean() ?: false
 
-            document.selectFirst("script:containsData($subscriber)")?.data()
-                ?.let { subcription.find(it) }
-                ?.groupValues?.get(1)?.toBoolean() ?: false
-        } catch (_: Exception) {
-            loggedIn = false
-            false
-        }
+        document.selectFirst("script:containsData($subscriber)")?.data()
+            ?.let { subcription.find(it) }
+            ?.groupValues?.get(1)?.toBoolean() ?: false
+    } catch (_: Exception) {
+        loggedIn = false
+        false
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
