@@ -19,11 +19,12 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import keiyoushi.utils.tryParse
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
-import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
@@ -34,7 +35,7 @@ abstract class FireCross :
     override val supportsLatest = false
 
     private val apiUrl = "$baseUrl/api"
-    private val dateFormat = SimpleDateFormat("yyyy/M/d", Locale.ROOT)
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy/M/d", Locale.ROOT)
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -116,7 +117,9 @@ abstract class FireCross :
 
                     SChapter.create().apply {
                         name = nameText
-                        date_upload = dateFormat.tryParse(dateText)
+                        date_upload = runCatching {
+                            LocalDate.parse(dateText, dateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+                        }.getOrDefault(0L)
 
                         when {
                             form != null -> {

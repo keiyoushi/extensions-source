@@ -28,8 +28,6 @@ abstract class ComicFesta :
     ClipStudioReader(),
     ConfigurableSource {
 
-    override val supportsLatest = true
-
     private val domain = baseUrl.toHttpUrl().host
     private val preferences by getPreferencesLazy()
     private val rscHeaders = headersBuilder()
