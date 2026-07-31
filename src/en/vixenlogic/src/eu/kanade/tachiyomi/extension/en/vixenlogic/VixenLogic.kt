@@ -57,7 +57,7 @@ abstract class VixenLogic : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         if (!fetchChapters) {
-            return SMangaUpdate(manga = manga, chapters = emptyList())
+            return SMangaUpdate(manga, chapters)
         }
 
         val archives = client.get("$baseUrl/archives/").asJsoup()
