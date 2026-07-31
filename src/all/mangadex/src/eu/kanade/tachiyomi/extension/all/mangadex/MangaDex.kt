@@ -117,6 +117,8 @@ abstract class MangaDex :
 
     override fun getChapterUrl(chapter: SChapter): String = delegate.getChapterUrl(chapter)
 
+    override fun imageRequest(page: Page): Request = delegate.delegateImageRequest(page)
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) = delegate.setupPreferenceScreen(screen)
 }
 
@@ -671,6 +673,8 @@ private abstract class MangaDexImpl :
     }
 
     override fun imageRequest(page: Page): Request = runBlocking { helper.getValidImageUrlForPage(page, headers, client) }
+
+    fun delegateImageRequest(page: Page): Request = imageRequest(page)
 
     @Suppress("UNCHECKED_CAST")
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
