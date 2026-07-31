@@ -74,7 +74,6 @@ abstract class PlotTwistNoFansub : HttpSource() {
                 addPathSegment("page")
                 addPathSegment(page.toString())
             }
-            addQueryParameter("m_orderby", "latest3")
         }.build()
         return GET(url, headers)
     }
