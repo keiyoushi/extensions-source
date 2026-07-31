@@ -44,7 +44,7 @@ abstract class VisionHaze : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         if (!fetchChapters) {
-            return SMangaUpdate(manga = manga, chapters = emptyList())
+            return SMangaUpdate(manga, chapters)
         }
 
         val document = client.get("$baseUrl/archive/").asJsoup()
