@@ -176,31 +176,60 @@ class MangaLect(
     override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/info/${manga.url}/", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val slug = document.body().attr("data-manga-slug")
-
         val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.ENGLISH)
+        val seen = linkedSetOf<String>()
+        val chapters = mutableListOf<SChapter>()
 
-        return document.select("div#chapter-list div.chapter-card a.chapter-link[data-chapter]")
-            .mapNotNull { link ->
-                val chapterNum = link.attr("data-chapter")
-                if (chapterNum.isEmpty()) return@mapNotNull null
+        var currentUrl = response.request.url
+        var currentDocument = response.asJsoup()
+        val slug = currentDocument.body().attr("data-manga-slug")
 
-                val chapterTitle = link.selectFirst("div.chapter-title")?.text()
-                    ?: return@mapNotNull null
-                val chapterDate = link.selectFirst("div.chapter-date")?.text()
+        if (slug.isBlank()) return emptyList()
 
-                SChapter.create().apply {
-                    name = chapterTitle
-                    // Store as slug/chapterNum for pageListRequest to split
-                    url = "$slug/$chapterNum"
-                    date_upload = try {
-                        chapterDate?.let { dateFormat.parse(it)?.time ?: 0L } ?: 0L
-                    } catch (_: Exception) {
-                        0L
+        val visitedPages = mutableSetOf(currentUrl.toString())
+        var pageCount = 1
+
+        while (pageCount <= MAX_PAGINATION_PAGES) {
+            currentDocument.select("div#chapter-list div.chapter-card a.chapter-link[data-chapter]")
+                .forEach { link ->
+                    val chapterNum = link.attr("data-chapter")
+                    if (chapterNum.isEmpty()) return@forEach
+
+                    val chapterTitle = link.selectFirst("div.chapter-title")?.text()
+                        ?: return@forEach
+                    val chapterDate = link.selectFirst("div.chapter-date")?.text()
+                    val chapterUrl = "$slug/$chapterNum"
+
+                    if (seen.add(chapterUrl)) {
+                        chapters += SChapter.create().apply {
+                            name = chapterTitle
+                            url = chapterUrl
+                            date_upload = try {
+                                chapterDate?.let { dateFormat.parse(it)?.time ?: 0L } ?: 0L
+                            } catch (_: Exception) {
+                                0L
+                            }
+                        }
                     }
                 }
+
+            val nextUrl = currentDocument.selectFirst("a#more-link[href]")
+                ?.attr("href")
+                ?.takeIf(String::isNotBlank)
+                ?.let { currentUrl.resolve(it) }
+                ?: break
+
+            val nextUrlStr = nextUrl.toString()
+            if (!visitedPages.add(nextUrlStr)) break
+
+            client.newCall(GET(nextUrl, headers)).execute().use { nextResponse ->
+                currentUrl = nextResponse.request.url
+                currentDocument = nextResponse.asJsoup()
             }
+            pageCount++
+        }
+
+        return chapters
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/lectura/${chapter.url}/"
@@ -264,4 +293,8 @@ class MangaLect(
         val titulo: String = "",
         val portada: String = "",
     )
+
+    companion object {
+        private const val MAX_PAGINATION_PAGES = 30
+    }
 }

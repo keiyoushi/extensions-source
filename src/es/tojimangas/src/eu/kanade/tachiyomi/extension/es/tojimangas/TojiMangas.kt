@@ -137,7 +137,9 @@ abstract class TojiMangas : HttpSource() {
                 .toFloatOrNull() ?: return@mapNotNull null
 
             SChapter.create().apply {
-                name = link.text().trim().ifEmpty { "Capítulo $chapterNumber" }
+                name = link.selectFirst("div.truncate")?.text()?.trim()
+                    ?.ifEmpty { null }
+                    ?: "Capítulo $chapterNumber"
                 url = href.substringAfter(baseUrl)
                 chapter_number = chapterNumber
             }
