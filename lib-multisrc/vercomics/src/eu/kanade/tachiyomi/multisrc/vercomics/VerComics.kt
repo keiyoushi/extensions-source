@@ -103,25 +103,29 @@ abstract class VerComics : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(baseUrl + manga.url)
-        val document = response.asJsoup()
+        var sManga = manga
 
-        val sManga = SManga.create().apply {
-            url = manga.url
-            document.selectFirst("div.tax_post")?.let {
-                status = SManga.COMPLETED
-                update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-                val genreList = document.select("div.tax_box:has(div.title:contains(Etiquetas)) a[rel=tag]")
-                genre = genreList.joinToString { genre ->
-                    val text = genre.text().replaceFirstChar { it.uppercase() }
-                    val slug = genre.attr("href").substringAfter("$baseUrl/$genreSuffix/").removeSuffix("/")
-                    val newPair = Pair(text, slug)
+        if (fetchDetails) {
+            val response = client.get(baseUrl + manga.url)
+            val document = response.asJsoup()
 
-                    if (!genres.contains(newPair)) {
-                        genres += newPair
+            sManga = SManga.create().apply {
+                url = manga.url
+                document.selectFirst("div.tax_post")?.let {
+                    status = SManga.COMPLETED
+                    update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+                    val genreList = document.select("div.tax_box:has(div.title:contains(Etiquetas)) a[rel=tag]")
+                    genre = genreList.joinToString { genre ->
+                        val text = genre.text().replaceFirstChar { it.uppercase() }
+                        val slug = genre.attr("href").substringAfter("$baseUrl/$genreSuffix/").removeSuffix("/")
+                        val newPair = Pair(text, slug)
+
+                        if (!genres.contains(newPair)) {
+                            genres += newPair
+                        }
+
+                        text
                     }
-
-                    text
                 }
             }
         }
