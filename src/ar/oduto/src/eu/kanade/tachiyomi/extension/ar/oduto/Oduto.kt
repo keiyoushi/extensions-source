@@ -33,7 +33,7 @@ abstract class Oduto : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = throw UnsupportedOperationException()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getPopularManga(page)
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -41,9 +41,13 @@ abstract class Oduto : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val url = "$baseUrl/feeds/posts/summary/-/${manga.url}?alt=json&max-results=500"
-        val feed = client.get(url).parseAs<BloggerFeedResponse>()
-        return SMangaUpdate(manga, feed.feed.entry.map { it.toSChapter() })
+        if (fetchChapters) {
+            val url = "$baseUrl/feeds/posts/summary/-/${manga.url}?alt=json&max-results=500"
+            val feed = client.get(url).parseAs<BloggerFeedResponse>()
+            return SMangaUpdate(manga, feed.feed.entry.map { it.toSChapter() })
+        }
+
+        return SMangaUpdate(manga, chapters)
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
