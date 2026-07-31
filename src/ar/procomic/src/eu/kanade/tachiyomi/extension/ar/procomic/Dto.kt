@@ -2,9 +2,11 @@ package eu.kanade.tachiyomi.extension.ar.procomic
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonTransformingSerializer
 
@@ -26,7 +28,6 @@ class SearchItem(
 
 @Serializable
 class CoverImageApp(
-    val mobile: String? = null,
     val desktop: String? = null,
 )
 
@@ -78,6 +79,9 @@ class ApiChapter(
 @Serializable
 class ChapterImages(
     @SerialName("appImages") val appImages: List<AppImage>,
+    val cdnPath: String? = null,
+    @Serializable(DeferredMediaSerializer::class)
+    val deferredMedia: DeferredMedia? = null,
 )
 
 @Serializable
@@ -86,10 +90,61 @@ class AppImage(
     val desktop: String? = null,
 )
 
+@Serializable
+class DeferredMedia(
+    val token: String,
+)
+object DeferredMediaSerializer : JsonTransformingSerializer<DeferredMedia?>(DeferredMedia.serializer().nullable) {
+    override fun transformDeserialize(element: JsonElement): JsonElement = if (element is JsonPrimitive) JsonNull else element
+}
+
+@Serializable
+class DeferredResponse(
+    val data: DeferredData,
+)
+
+@Serializable
+class DeferredData(
+    val images: List<String> = emptyList(),
+    val maps: List<MapEntry> = emptyList(),
+)
+
+@Serializable
+class MapEntry(
+    val token: String,
+    val method: String? = null,
+)
+
+@Serializable
+class ScrambledImage(
+    val order: List<Int>,
+    val pieces: List<String>,
+    val dim: List<Int>,
+    val rects: List<MapRect>,
+)
+
+@Serializable
+class MapRect(
+    val left: Int,
+    val top: Int,
+    val width: Int,
+    val height: Int,
+)
+
+@Serializable
+class ProxyPlanResponse(
+    val data: ProxyPlanData,
+)
+
+@Serializable
+class ProxyPlanData(
+    val map: ScrambledImage,
+)
+
 object StringOrListSerializer : JsonTransformingSerializer<String>(String.serializer()) {
-    override fun transformDeserialize(element: JsonElement): JsonElement = when {
-        element is JsonPrimitive -> element
-        element is JsonArray -> JsonPrimitive(element.map { (it as? JsonPrimitive)?.content ?: it.toString() }.joinToString("\n"))
+    override fun transformDeserialize(element: JsonElement): JsonElement = when (element) {
+        is JsonPrimitive -> element
+        is JsonArray -> JsonPrimitive(element.joinToString("\n") { (it as? JsonPrimitive)?.content ?: it.toString() })
         else -> element
     }
 }

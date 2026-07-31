@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.ar.procomic
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Rect
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,17 +12,35 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
+import keiyoushi.utils.toJsonRequestBody
+import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
+import tachiyomi.decoder.ImageDecoder
 import java.util.Locale
 import kotlin.time.Instant
 
@@ -27,6 +48,7 @@ import kotlin.time.Instant
 abstract class Procomic : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(::scrambledImageInterceptor)
         addNetworkInterceptor(
             CookieInterceptor(
                 baseUrl.removePrefix("https://"),
@@ -34,6 +56,8 @@ abstract class Procomic : KeiSource() {
             ),
         )
     }
+
+    val rscHeaders by lazy { headersBuilder().add("rsc", "1").build() }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val filters = getFilterList()
@@ -82,14 +106,14 @@ abstract class Procomic : KeiSource() {
             return null
         }
         val segs = url.pathSegments
-        val off = if (segs.firstOrNull() in listOf("ar", "en")) 1 else 0
+        val off = if (segs.firstOrNull() in LANG_SEGMENTS) 1 else 0
         if (segs.size < off + 4 || segs.getOrNull(off) != "series") return null
         val type = segs[off + 1]
         if (type !in SUPPORTED_TYPES) return null
         val id = segs[off + 2]
         val slug = segs[off + 3]
         return SManga.create().also {
-            it.url = "/$id"
+            it.url = id
             it.memo = buildJsonObject {
                 put("type", type)
                 put("slug", slug)
@@ -103,9 +127,9 @@ abstract class Procomic : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val id = manga.url.removePrefix("/")
+        val id = manga.url
         val m = manga.memo
-        val type = m["type"]!!.jsonPrimitive.content
+        val type = m["type"]!!.string
         val apiManga = fetchApiManga(type, id)
         val smanga = apiManga.toSManga()
         val chapterList = (apiManga.chapters ?: emptyList())
@@ -120,15 +144,181 @@ abstract class Procomic : KeiSource() {
         return client.get(url).parseAs<ApiManga>()
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter), headersBuilder().set("rsc", "1").build())
-        return response.extractNextJs<ChapterImages>()?.appImages?.mapIndexed { i, img ->
-            Page(i, imageUrl = img.mobile ?: img.desktop ?: "")
-        } ?: emptyList()
+    override fun getChapterUrl(chapter: SChapter): String {
+        val m = chapter.memo
+        val type = m["type"]!!.string
+        val seriesId = m["seriesId"]!!.string
+        val slug = m["slug"]!!.string
+        val chapterNum = chapter.chapter_number
+        val chapterId = chapter.url
+        return "$baseUrl/series/$type/$seriesId/$slug/$chapterId/$chapterNum"
     }
 
+    override fun getMangaUrl(manga: SManga): String {
+        val m = manga.memo
+        val id = manga.url
+        val type = m["type"]!!.string
+        val slug = m["slug"]!!.string
+        return "$baseUrl/series/$type/$id/$slug"
+    }
+
+    override fun imageRequest(page: Page) = Request.Builder()
+        .url(page.imageUrl!!)
+        .headers(headersBuilder().set("Referer", page.url).build())
+        .get()
+        .build()
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterUrl = getChapterUrl(chapter)
+        val body = client.get(chapterUrl, rscHeaders).body.string()
+        val chapterData = body.extractNextJsRsc<ChapterImages>() ?: return emptyList()
+
+        val pages = mutableListOf<Page>()
+        var index = 0
+
+        chapterData.appImages.forEach { img ->
+            pages.add(Page(index++, imageUrl = img.mobile ?: img.desktop!!, url = chapterUrl))
+        }
+
+        val deferred = chapterData.deferredMedia
+        if (deferred != null) {
+            val chapterId = chapter.url
+            val deferredUrl = "$baseUrl/chapter-deferred-media/$chapterId".toHttpUrl().newBuilder()
+                .addQueryParameter("token", deferred.token)
+                .build()
+            val deferredResp = client.get(deferredUrl.toString(), rscHeaders).parseAs<DeferredResponse>()
+            val data = deferredResp.data
+
+            data.images.forEach { url ->
+                val imgUrl = signImage(url, chapterUrl) ?: url
+                pages.add(Page(index++, imageUrl = imgUrl, url = chapterUrl))
+            }
+
+            if (data.maps.isNotEmpty()) {
+                data.maps.forEach { mapEntry ->
+                    val image = fetchMapPlan(chapter.url, mapEntry, chapterData.cdnPath, index, chapterUrl)
+                    pages.add(Page(index++, imageUrl = "http://127.0.0.1/#${image.toJsonString()}", url = chapterUrl))
+                }
+            }
+        }
+
+        return pages
+    }
+
+    // -- Scrambled image interceptor --
+
+    private fun scrambledImageInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val url = request.url
+        if (url.host != "127.0.0.1") return chain.proceed(request)
+
+        val scrambledImage = url.fragment!!.parseAs<ScrambledImage>()
+
+        require(scrambledImage.dim.size >= 2) { "Invalid dim" }
+
+        val width = scrambledImage.dim[0]
+        val height = scrambledImage.dim[1]
+
+        val orderedPieces = scrambledImage.order.map { scrambledImage.pieces[it] }
+        val pieceBitmaps = runBlocking {
+            orderedPieces.map { pieceUrl ->
+                async(Dispatchers.IO.limitedParallelism(2)) {
+                    val pieceRequest = request.newBuilder().url(pieceUrl).build()
+                    val response = client.newCall(pieceRequest).execute()
+                    response.body.use { body ->
+                        val decoder = ImageDecoder.newInstance(body.byteStream())
+                            ?: throw Exception("Failed to create decoder")
+                        try {
+                            decoder.decode() ?: throw Exception("Failed to decode piece")
+                        } finally {
+                            decoder.recycle()
+                        }
+                    }
+                }
+            }.awaitAll()
+        }
+
+        val resultBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(resultBitmap)
+
+        try {
+            val rects = scrambledImage.rects
+            require(rects.size == pieceBitmaps.size) { "Rects/pieces mismatch" }
+            rects.forEachIndexed { i, rect ->
+                canvas.drawBitmap(
+                    pieceBitmaps[i],
+                    null,
+                    Rect(rect.left, rect.top, rect.left + rect.width, rect.top + rect.height),
+                    null,
+                )
+            }
+
+            val buffer = Buffer().apply {
+                resultBitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream())
+            }
+            return Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(buffer.asResponseBody("image/jpg".toMediaType(), buffer.size))
+                .build()
+        } finally {
+            pieceBitmaps.forEach { it.recycle() }
+            resultBitmap.recycle()
+        }
+    }
+
+    private suspend fun signImage(cdnUrl: String, referer: String): String? {
+        val payload = buildJsonObject { put("url", cdnUrl) }.toJsonString()
+            .toRequestBody("application/json".toMediaType())
+
+        val rscheaders = rscHeaders.newBuilder()
+            .set("Referer", referer)
+            .set("Sec-Fetch-Site", "same-origin")
+            .build()
+        val response = client.post("$baseUrl/api/cdn-image/sign", rscheaders, payload)
+
+        if (!response.isSuccessful) {
+            response.close()
+            return null
+        }
+        val body = response.body.string()
+        response.close()
+        val obj = Json.parseToJsonElement(body).jsonObject
+        val data = obj["data"]?.jsonObject ?: obj
+        val token = data["token"]?.string ?: return null
+        val expires = data["expires"]?.string ?: return null
+        return baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments("api/cdn-image")
+            .addQueryParameter("url", cdnUrl)
+            .addQueryParameter("token", token)
+            .addQueryParameter("expires", expires)
+            .build()
+            .toString()
+    }
+
+    // -- Scrambled map proxy --
+
+    private suspend fun fetchMapPlan(cid: String, entry: MapEntry, cdnPath: String?, pageIndex: Int, referer: String): ScrambledImage {
+        val body = buildJsonObject {
+            put("token", entry.token)
+            put("method", entry.method ?: "browser_session")
+            put("cdnPath", cdnPath ?: "cdn2")
+            put("pageIndex", pageIndex)
+        }.toJsonRequestBody()
+        val headers = headersBuilder()
+            .set("Origin", baseUrl)
+            .set("Referer", referer)
+            .build()
+        return client.post("$baseUrl/chapter-map-proxy-plan/$cid", headers, body)
+            .parseAs<ProxyPlanResponse>().data.map
+    }
+
+    // -- Manga helpers --
+
     private fun ApiManga.toSManga(): SManga = SManga.create().apply {
-        url = "/$id"
+        url = "$id"
         memo = buildJsonObject {
             put("type", type)
             put("slug", slug)
@@ -174,7 +364,7 @@ abstract class Procomic : KeiSource() {
     }
 
     private fun SearchItem.toSManga(): SManga = SManga.create().apply {
-        url = "/$id"
+        url = "$id"
         memo = buildJsonObject {
             put("type", type)
             put("slug", slug)
@@ -184,22 +374,17 @@ abstract class Procomic : KeiSource() {
             if (it.startsWith("/")) "$baseUrl$it" else it
         }
     }
-    override fun getChapterUrl(chapter: SChapter): String {
-        val m = chapter.memo
-        return "$baseUrl/series/${m["type"]!!.jsonPrimitive.content}/${m["seriesId"]!!.jsonPrimitive.content}/${m["slug"]!!.jsonPrimitive.content}/${chapter.url.removePrefix("/")}/${m["chapterNumber"]!!.jsonPrimitive.content}"
-    }
 
     private fun ApiChapter.toSChapter(type: String, seriesId: String, slug: String): SChapter = SChapter.create().apply {
-        url = "/$id"
+        url = "$id"
         memo = buildJsonObject {
             put("type", type)
             put("seriesId", seriesId)
             put("slug", slug)
-            put("chapterNumber", chapterNumber)
         }
         name = buildString {
             append("\u200F")
-            if (coins != null && coins > 0) append("🔒 ")
+            if (coins != null && coins > 0) append("\uD83D\uDD12 ")
             append("الفصل ")
             append(chapterNumber.toFloatOrNull()?.toString()?.substringBefore(".0") ?: chapterNumber)
             title?.trim()?.takeIf { t -> t.isNotBlank() && t != chapterNumber.trim() && t != chapterNumber }?.let {
@@ -221,5 +406,6 @@ abstract class Procomic : KeiSource() {
 
     companion object {
         private val SUPPORTED_TYPES = setOf("manga", "manhua", "manhwa")
+        private val LANG_SEGMENTS = setOf("ar", "en")
     }
 }

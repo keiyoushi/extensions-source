@@ -28,4 +28,5 @@ keiyoushi {
 
 dependencies {
     implementation(project(":lib:cookieinterceptor"))
+    compileOnly("com.github.tachiyomiorg:image-decoder:e08e9be535")
 }
