@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.mangadex
 
-object MangaDexIntl {
+object MDIntl {
     const val BRAZILIAN_PORTUGUESE = "pt-BR"
     const val CHINESE = "zh"
     const val ENGLISH = "en"
