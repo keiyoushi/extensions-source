@@ -13,7 +13,7 @@ keiyoushi {
     source {
         lang = "vi"
         baseUrl {
-            custom("https://luottruyen13.com")
+            custom("https://luottruyen15.com")
         }
     }
 
