@@ -160,6 +160,7 @@ abstract class Ritto : HttpSource() {
         val chapterRegex = Regex(
             """\{"id":"[^"]+","nombre":"((?:Cap|Vol)\.?[^"]*)".*?"href":"([^"]+)".*?"fechaLabel":"([^"]+)".*?"numero":(\d+(?:\.\d+)?)""",
         )
+        val tituloExtraRegex = Regex(""""tituloExtra":"([^"]+)"""")
 
         for (match in chapterRegex.findAll(cleanArray)) {
             val nombre = match.groupValues[1]
@@ -167,10 +168,14 @@ abstract class Ritto : HttpSource() {
             val fechaLabel = match.groupValues[3]
             val numero = match.groupValues[4].toFloatOrNull() ?: continue
 
+            val tituloExtra = tituloExtraRegex
+                .find(match.value)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
+            val displayName = if (tituloExtra != null) "$nombre · $tituloExtra" else nombre
+
             chapters.add(
                 SChapter.create().apply {
                     url = href
-                    name = nombre
+                    name = displayName
                     chapter_number = numero
                     date_upload = parseDate(fechaLabel)
                 },
