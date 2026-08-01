@@ -24,10 +24,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -171,7 +169,15 @@ abstract class Procomic : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
         val body = client.get(chapterUrl, rscHeaders).body.string()
-        val chapterData = body.extractNextJsRsc<ChapterImages>() ?: return emptyList()
+        val chapterData = body.extractNextJsRsc<ChapterImages>()
+            ?: if (body.contains("\"initialSafeBrowsingEnabled\":true")) {
+                throw Exception(
+                    "التصفح الآمن مفعّل — هذه السلسلة مخفية. أوقِف التصفح الآمن من إعدادات المستخدم على ProComic.\n" +
+                        "Safe browsing is enabled on ProComic — disable it in user settings to read this series.",
+                )
+            } else {
+                return emptyList()
+            }
 
         val pages = mutableListOf<Page>()
         var index = 0
@@ -283,12 +289,9 @@ abstract class Procomic : KeiSource() {
             response.close()
             return null
         }
-        val body = response.body.string()
-        response.close()
-        val obj = Json.parseToJsonElement(body).jsonObject
-        val data = obj["data"]?.jsonObject ?: obj
-        val token = data["token"]?.string ?: return null
-        val expires = data["expires"]?.string ?: return null
+        val sign = response.parseAs<SignResponse>()
+        val token = sign.data?.token ?: sign.token ?: return null
+        val expires = sign.data?.expires ?: sign.expires ?: return null
         return baseUrl.toHttpUrl().newBuilder()
             .addPathSegments("api/cdn-image")
             .addQueryParameter("url", cdnUrl)

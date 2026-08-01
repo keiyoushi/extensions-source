@@ -141,6 +141,19 @@ class ProxyPlanData(
     val map: ScrambledImage,
 )
 
+@Serializable
+class SignResponse(
+    val data: SignData? = null,
+    val token: String? = null,
+    val expires: String? = null,
+)
+
+@Serializable
+class SignData(
+    val token: String,
+    val expires: String,
+)
+
 object StringOrListSerializer : JsonTransformingSerializer<String>(String.serializer()) {
     override fun transformDeserialize(element: JsonElement): JsonElement = when (element) {
         is JsonPrimitive -> element
