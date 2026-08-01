@@ -104,6 +104,11 @@ abstract class OlympusScanlation :
             "(\\d+)\\s+cap[ií]tulos?\\s+en\\s+total",
             RegexOption.IGNORE_CASE,
         )
+
+        private val CHAPTER_NUMBER_TEXT_REGEX = Regex(
+            "cap[ií]tulo\\s*(\\d+(?:\\.\\d+)?)",
+            RegexOption.IGNORE_CASE,
+        )
     }
 
     private val headersMap: Map<String, String>
@@ -764,6 +769,41 @@ abstract class OlympusScanlation :
         return validatedChapters
     }
 
+    /**
+     * Stale-slug recovery for chapter list API errors (404, 500, HTML error pages).
+     * Force-refreshes the series list cache, resolves the latest slug by stable manga ID,
+     * and retries the chapter API exactly once. Returns null when a retry is not possible.
+     */
+    private fun forceRefreshAndRetryChapterList(
+        taggedMangaId: String?,
+        originalResponse: Response,
+    ): List<SChapter>? {
+        if (taggedMangaId == null) return null
+        Log.d(TAG, "Stale-slug recovery: force-refreshing series list for mangaId=$taggedMangaId")
+        try {
+            apiHelper.forceRefreshSeriesList(cacheManager)
+        } catch (e: Exception) {
+            Log.w(TAG, "Stale-slug recovery: force-refresh failed", e)
+            return null
+        }
+        val match = apiHelper.resolveMangaById(taggedMangaId, cacheManager)
+        if (match == null) {
+            Log.d(TAG, "Stale-slug recovery: mangaId=$taggedMangaId not found after refresh")
+            return null
+        }
+        val newSlug = match.slug
+        val oldSlug = originalResponse.request.url.toString()
+            .substringAfter("/series/").substringBefore("/chapters")
+        if (newSlug == oldSlug) {
+            Log.d(TAG, "Stale-slug recovery: slug unchanged ($newSlug), skipping retry")
+            return null
+        }
+        Log.d(TAG, "Stale-slug recovery: retrying with new slug=$newSlug (was=$oldSlug)")
+        cacheManager.updateMangaCache(match)
+        val mangaId = match.id?.toString() ?: taggedMangaId
+        return fetchChapterListBySlug(newSlug, mangaId)
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val body = response.body.string()
         val taggedManga = response.request.tag(MangaRefTag::class.java)?.manga
@@ -776,6 +816,10 @@ abstract class OlympusScanlation :
         }
         if (apiHelper.isErrorPage(response.code, body)) {
             logHttpIssue("chapterListParse#errorPage", response)
+            // Stale-slug recovery: force-refresh series list, resolve by stable manga ID, retry once.
+            val retryResult = forceRefreshAndRetryChapterList(taggedMangaId, response)
+            if (retryResult != null) return retryResult
+            // Force-refresh did not yield a usable slug — fall through to original resolution.
             val title = response.request.tag(MangaTitleTag::class.java)?.title
             val currentId = taggedMangaId
             val match =
@@ -863,9 +907,13 @@ abstract class OlympusScanlation :
                 .takeIf { it.isNotEmpty() } ?: return@mapNotNull null
 
             val chapterNameEl = element.selectFirst(".chapter-name")
-            val chapterNumber = chapterNameEl?.text()?.trim()
-                ?.split("\\s+".toRegex())?.lastOrNull()
-                ?: chapterId
+            val chapterNameText = chapterNameEl?.text()?.trim()
+            // Extract chapter number from the displayed name, never from the backend internal ID.
+            // "Capitulo 1" → 1, "Capitulo 145.5" → 145.5, "1" → 1
+            val chapterNumber = chapterNameText?.let { text ->
+                CHAPTER_NUMBER_TEXT_REGEX.find(text)?.groupValues?.getOrNull(1)
+                    ?: text.toFloatOrNull()?.toString()
+            } ?: "-1"
 
             val timeEl = element.selectFirst("time[datetime]")
             val dateStr = timeEl?.attr("datetime") ?: ""
