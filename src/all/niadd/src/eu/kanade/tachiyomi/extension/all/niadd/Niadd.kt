@@ -25,7 +25,8 @@ abstract class Niadd : HttpSource() {
     companion object {
         private val ALL_IMGS_URL_REGEX = Regex("""all_imgs_url\s*:\s*\[([\s\S]*?)\]""")
         private val CLEAN_IMG_URL_REGEX = Regex("""["'\s]""")
-        private val CHAPTER_NUMBER_REGEX = Regex("""Capítulo\s+(\d+(\.\d+)?)""")
+        private val CHAPTER_NUMBER_REGEX = Regex("""(?:Chapter|Chapters|Ch\.?|Cap[ií]tulo)\s*[.:]?\s*(\d+(?:\.\d+)?)\b""")
+        private val DATE_IN_NAME_REGEX = Regex("""\s+\w{3,9}\s+\d{1,2},?\s+\d{4}\s*$""")
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -142,16 +143,27 @@ abstract class Niadd : HttpSource() {
     }
 
     private val chapterListSelector = "ul.chapter-list a.hover-underline"
-    private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
+
+    private val dateFormats = listOf(
+        SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH),
+        SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH),
+        SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH),
+        SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH),
+    )
 
     private fun parseDate(dateString: String): Long {
-        if (dateString.contains("atrás", ignoreCase = true) ||
-            dateString.contains("ago", ignoreCase = true)
+        val trimmed = dateString.trim()
+        if (trimmed.contains("atrás", ignoreCase = true) ||
+            trimmed.contains("ago", ignoreCase = true) ||
+            trimmed.contains("hace", ignoreCase = true)
         ) {
             return 0L
         }
 
-        return dateFormat.tryParse(dateString)
+        for (format in dateFormats) {
+            format.tryParse(trimmed).takeIf { it > 0L }?.let { return it }
+        }
+        return 0L
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -165,12 +177,20 @@ abstract class Niadd : HttpSource() {
         val rawUrl = element.attr("abs:href")
         setUrlWithoutDomain(rawUrl)
 
-        name = element.selectFirst("span.chapter-name, span.name")?.text()
+        val rawName = element.selectFirst("span.chp-title, span.chapter-name")?.text()
             ?.takeIf(String::isNotEmpty)
             ?: element.text()
 
-        element.selectFirst("span.chapter-time, span.time")?.text()
-            ?.also { date_upload = parseDate(it) }
+        val dateText = element.selectFirst("span.chp-time, span.chapter-time")?.text()
+        if (dateText != null && dateText.isNotEmpty()) {
+            date_upload = parseDate(dateText)
+        }
+
+        name = if (dateText != null) {
+            rawName.removeSuffix(dateText).trimEnd()
+        } else {
+            rawName.replace(DATE_IN_NAME_REGEX, "")
+        }
 
         chapter_number = CHAPTER_NUMBER_REGEX.find(name)
             ?.groupValues?.get(1)?.toFloatOrNull() ?: -1f
@@ -179,21 +199,25 @@ abstract class Niadd : HttpSource() {
     // Pages
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
+        val seenUrls = LinkedHashSet<String>()
         val pages = mutableListOf<Page>()
         val currentUrl = document.location()
         val html = document.html()
+
+        fun addPage(url: String, referrer: String = currentUrl) {
+            if (seenUrls.add(url)) {
+                pages.add(Page(pages.size, referrer, imageUrl = url))
+            }
+        }
 
         if (html.contains("all_imgs_url")) {
             val match = ALL_IMGS_URL_REGEX.find(html)
             if (match != null) {
                 val content = match.groupValues[1]
-                val urls = content.split(",")
+                content.split(",")
                     .map { it.replace(CLEAN_IMG_URL_REGEX, "") }
                     .filter { it.startsWith("http") }
-
-                urls.forEachIndexed { i, url ->
-                    pages.add(Page(i, currentUrl, imageUrl = url))
-                }
+                    .forEach { addPage(it) }
                 if (pages.isNotEmpty()) return pages
             }
         }
@@ -214,7 +238,7 @@ abstract class Niadd : HttpSource() {
         document.select("div.pic_box img, div.reading-content img").forEach { img ->
             val url = img.attr("abs:src")
             if (url.isNotEmpty() && !url.contains("cover") && !url.contains("logo")) {
-                pages.add(Page(pages.size, currentUrl, imageUrl = url))
+                addPage(url)
             }
         }
 
@@ -230,8 +254,8 @@ abstract class Niadd : HttpSource() {
                         val subDoc = resp.asJsoup()
                         subDoc.select("div.pic_box img, div.reading-content img").forEach { img ->
                             val imgUrl = img.attr("abs:src")
-                            if (imgUrl.isNotEmpty() && !imgUrl.contains("cover") && !pages.any { it.imageUrl == imgUrl }) {
-                                pages.add(Page(pages.size, subUrl, imageUrl = imgUrl))
+                            if (imgUrl.isNotEmpty() && !imgUrl.contains("cover")) {
+                                addPage(imgUrl, subUrl)
                             }
                         }
                     }
