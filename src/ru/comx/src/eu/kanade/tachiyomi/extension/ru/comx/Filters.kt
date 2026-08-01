@@ -46,3 +46,15 @@ internal class GenreFilter(data: List<Pair<String, String>> = emptyList()) : Tri
 internal class GroupFilter(data: List<Pair<String, String>> = emptyList()) : TriStateGroup("Разделы", data)
 internal class TypeFilter(data: List<Pair<String, String>> = emptyList()) : TriStateGroup("Тип выпуска", data)
 internal class StatusFilter(data: List<Pair<String, String>> = emptyList()) : TriStateGroup("Статус", data)
+
+internal class MinFilter : Filter.Text("От")
+internal class MaxFilter : Filter.Text("До")
+
+internal class YearRangeFilter :
+    Filter.Group<Filter<String>>(
+        name = "Год выпуска",
+        state = listOf(MinFilter(), MaxFilter()),
+    ) {
+    val minValue: String? get() = (state[0] as MinFilter).state.takeIf { it.isNotBlank() }
+    val maxValue: String? get() = (state[1] as MaxFilter).state.takeIf { it.isNotBlank() }
+}

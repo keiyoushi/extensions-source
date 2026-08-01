@@ -34,6 +34,7 @@ import org.jsoup.nodes.Element
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.Calendar
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
@@ -70,15 +71,18 @@ abstract class ComX :
                 addPathSegments("page/$page")
                 addPathSegment("")
             }.build()
-            return parseSearchMangas2(client.get(url))
+            return parseSearchMangas(client.get(url))
         }
 
         var orderBy = "rating"
         var ascEnd = "desc"
+        val checkYear = Calendar.getInstance().get(Calendar.YEAR)
+        var yearFrom = 1980
+        var yearTo = checkYear
 
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("ComicList")
-            filters.forEach { filter ->
+            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
                 when (filter) {
                     is OrderBy -> {
                         orderBy = filter.selected
@@ -100,10 +104,20 @@ abstract class ComX :
                         filter.included?.let { addPathSegment("st=${it.joinToString(",")}") }
                         filter.excluded?.let { addPathSegment("exc_st=${it.joinToString(",")}") }
                     }
+                    is YearRangeFilter -> {
+                        filter.minValue?.let { yearFrom = checkMinRange(it, max = checkYear) }
+                        filter.maxValue?.let { yearTo = checkMaxRange(it, max = checkYear) }
+                    }
                     else -> {}
                 }
             }
-            addPathSegments("page/$page")
+            // Без этих сегментов происходит зацикленное перенаправление на comix-read
+            addPathSegment("y[from]=$yearFrom")
+            addPathSegment("y[to]=$yearTo")
+            if (page > 1) {
+                addPathSegments("page/$page")
+            }
+            addPathSegment("")
         }.build()
 
         val body = FormBody.Builder()
@@ -113,7 +127,7 @@ abstract class ComX :
             .add("set_direction_sort", "dle_direction_xfilter")
             .build()
 
-        return parseSearchMangas2(client.post(url, body))
+        return parseSearchMangas(client.post(url, body))
     }
 
     // ============================== Search Utilities ===============================
@@ -133,10 +147,10 @@ abstract class ComX :
             .add("set_direction_sort", "dle_direction_cat_1")
             .build()
 
-        return parseSearchMangas2(client.post(url, body))
+        return parseSearchMangas(client.post(url, body))
     }
 
-    fun parseSearchMangas2(response: Response): MangasPage {
+    fun parseSearchMangas(response: Response): MangasPage {
         val document = response.asJsoup()
 
         val mangas = document.select("#dle-content > .readed").map { element ->
@@ -406,6 +420,19 @@ abstract class ComX :
         return FilterList(filters)
     }
 
+    // ============================== Utilities ===============================
+    private fun checkMinRange(input: String?, min: Int = 1980, max: Int): Int {
+        val value = input?.trim()?.takeIf(String::isNotEmpty)?.toIntOrNull() ?: return min
+        if (value !in min..max) return min
+        return value
+    }
+    private fun checkMaxRange(input: String?, min: Int = 1980, max: Int): Int {
+        val value = input?.trim()?.takeIf(String::isNotEmpty)?.toIntOrNull() ?: return max
+        if (value !in min..max) return max
+        return value
+    }
+
+    // ============================== Preferences ===============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
             key = FORCE_IMG_DOMAIN_PREF
