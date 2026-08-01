@@ -416,6 +416,7 @@ abstract class ComX :
             GroupFilter(dto?.pcat ?: emptyList()),
             TypeFilter(dto?.t ?: emptyList()),
             StatusFilter(dto?.st ?: emptyList()),
+            YearRangeFilter(),
         )
         return FilterList(filters)
     }
