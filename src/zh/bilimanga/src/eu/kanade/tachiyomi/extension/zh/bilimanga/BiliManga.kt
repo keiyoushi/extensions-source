@@ -47,7 +47,7 @@ abstract class BiliManga :
     }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(ChapterInterceptor())
+        addNetworkInterceptor(ChapterInterceptor())
         val split = pref.getString(PREF_RATE_LIMIT, "10/10")!!.split("/")
         rateLimit(split[0].toInt(), split[1].toInt().seconds)
     }
