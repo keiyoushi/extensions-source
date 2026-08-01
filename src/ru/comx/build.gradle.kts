@@ -20,4 +20,8 @@ keiyoushi {
         lang = "ru"
         id = 1114173092141608635L
     }
+
+    deeplink {
+        path("/..*")
+    }
 }
