@@ -205,6 +205,10 @@ abstract class Mangadotnet :
                 addQueryParameter("volumes", it)
             }
 
+            filters.firstInstanceOrNull<ScanlatorFilter>()?.selected?.takeIf { it.isNotBlank() }?.also {
+                addQueryParameter("scanlator", it)
+            }
+
             filters.firstInstanceOrNull<TypeFilter>()?.checked?.also { checked ->
                 if (checked.isNotEmpty() && checked.toSet() != allOrigins) {
                     checked.forEach { origin ->
@@ -319,6 +323,7 @@ abstract class Mangadotnet :
             SortFilter(),
             StatusFilter(),
             VolumesFilter(),
+            ScanlatorFilter(),
             TypeFilter(),
             DemographicFilter(excludedDemographicsPref()),
         )
