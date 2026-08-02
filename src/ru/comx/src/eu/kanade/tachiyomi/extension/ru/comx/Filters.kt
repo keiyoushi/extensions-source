@@ -42,10 +42,10 @@ internal class OrderBy :
         Selection(2, false),
     )
 
-internal class GenreFilter(data: List<Pair<String, String>> = emptyList()) : TriStateGroup("Жанры", data)
-internal class GroupFilter(data: List<Pair<String, String>> = emptyList()) : TriStateGroup("Разделы", data)
-internal class TypeFilter(data: List<Pair<String, String>> = emptyList()) : TriStateGroup("Тип выпуска", data)
-internal class StatusFilter(data: List<Pair<String, String>> = emptyList()) : TriStateGroup("Статус", data)
+internal class GenreFilter(data: List<Pair<String, String>>) : TriStateGroup("Жанры", data)
+internal class GroupFilter(data: List<Pair<String, String>>) : TriStateGroup("Разделы", data)
+internal class TypeFilter(data: List<Pair<String, String>>) : TriStateGroup("Тип выпуска", data)
+internal class StatusFilter(data: List<Pair<String, String>>) : TriStateGroup("Статус", data)
 
 internal class MinFilter : Filter.Text("От")
 internal class MaxFilter : Filter.Text("До")

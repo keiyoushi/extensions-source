@@ -6,6 +6,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -24,7 +25,6 @@ import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import okhttp3.FormBody
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -36,7 +36,6 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
-import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class ComX :
@@ -47,13 +46,7 @@ abstract class ComX :
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(DleGuardResolver.interceptor(baseUrl))
-        connectTimeout(10.seconds)
-        readTimeout(30.seconds)
         rateLimit(3)
-    }
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
-        set("Content-Type", "application/x-www-form-urlencoded")
     }
 
     // ============================== Popular ==============================
@@ -431,14 +424,31 @@ abstract class ComX :
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val dto = data?.parseAs<FiltersDto>()
+        val genres = dto?.g ?: emptyList()
+        val groups = dto?.pcat ?: emptyList()
+        val types = dto?.t ?: emptyList()
+        val statuses = dto?.st ?: emptyList()
+
         val filters = mutableListOf(
+            Filter.Header("Фильтры не работают при поиске по названию"),
+            Filter.Separator(),
             OrderBy(),
-            GenreFilter(dto?.g ?: emptyList()),
-            GroupFilter(dto?.pcat ?: emptyList()),
-            TypeFilter(dto?.t ?: emptyList()),
-            StatusFilter(dto?.st ?: emptyList()),
-            YearRangeFilter(),
         )
+
+        if (genres.isNotEmpty()) {
+            filters.add(GenreFilter(genres))
+        }
+        if (groups.isNotEmpty()) {
+            filters.add(GroupFilter(groups))
+        }
+        if (types.isNotEmpty()) {
+            filters.add(TypeFilter(types))
+        }
+        if (statuses.isNotEmpty()) {
+            filters.add(StatusFilter(statuses))
+        }
+        filters.add(YearRangeFilter())
+
         return FilterList(filters)
     }
 
