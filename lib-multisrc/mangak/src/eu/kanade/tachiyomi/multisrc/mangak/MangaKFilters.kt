@@ -24,8 +24,8 @@ class SortFilter :
     SelectFilter(
         "Sort By",
         arrayOf(
-            Pair("Most Followed", "popular"),
             Pair("Best Match", ""),
+            Pair("Most Followed", "popular"),
             Pair("Latest Updated", "latest"),
             Pair("Recently Added", "newest"),
             Pair("Highest Rating", "rating"),
