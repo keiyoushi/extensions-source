@@ -120,8 +120,6 @@ abstract class MadaraBase : KeiSource() {
     protected open val chapterDateSelector = "span.chapter-release-date"
     protected open val pageListParseSelector = "div.page-break, li.blocks-gallery-item, .reading-content .text-left:not(:has(.blocks-gallery-item)) img"
 
-    protected abstract suspend fun relatedManga(manga: SManga): List<SManga>
-
     override suspend fun fetchFilterData(): JsonElement {
         val document = client.get("$baseUrl/$mangaSubString/").asJsoup()
         return document.select("div.genres a[href*='/$genreDirectory/']").mapNotNull { element ->
@@ -440,7 +438,14 @@ abstract class MadaraBase : KeiSource() {
             ?: images.maxOfOrNull { it.first() }
     }
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = relatedManga(manga)
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val id = mangaId(manga) ?: return emptyList()
+        val genres = relatedGenres(manga)
+        if (genres.isEmpty()) return emptyList()
+        return fetchRelatedMangaList(id, genres)
+    }
+
+    protected abstract suspend fun fetchRelatedMangaList(id: String, genres: List<GenreRoute>): List<SManga>
 
     protected fun memoGenres(manga: SManga): List<GenreRoute> = manga.memo["genres"].genreRoutes()
 

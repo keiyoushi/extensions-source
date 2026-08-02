@@ -130,10 +130,7 @@ abstract class Madara : MadaraBase() {
         }
     }
 
-    override suspend fun relatedManga(manga: SManga): List<SManga> {
-        val id = mangaId(manga) ?: return emptyList()
-        val genres = relatedGenres(manga)
-        if (genres.isEmpty()) return emptyList()
+    override suspend fun fetchRelatedMangaList(id: String, genres: List<GenreRoute>): List<SManga> {
         val body = FormBody.Builder().apply {
             add("action", "madara_load_more")
             add("page", "0")

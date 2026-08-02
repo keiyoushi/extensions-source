@@ -127,12 +127,9 @@ abstract class MadaraNoAjax : MadaraBase() {
         return client.get(url).asJsoup().mangaId()
     }
 
-    override suspend fun relatedManga(manga: SManga): List<SManga> = coroutineScope {
-        val current = mangaId(manga) ?: return@coroutineScope emptyList()
-        val genres = relatedGenres(manga)
-        if (genres.isEmpty()) return@coroutineScope emptyList()
+    override suspend fun fetchRelatedMangaList(id: String, genres: List<GenreRoute>): List<SManga> = coroutineScope {
         val lists = genres.map { genre -> async { archivePage(1, "", genre.path).mangas } }.awaitAll()
-        lists.flatten().filterNot { it.url == current }.withIndex().groupBy { it.value.url }.values.sortedWith(compareByDescending<List<IndexedValue<SManga>>> { it.size }.thenBy { it.minOf(IndexedValue<SManga>::index) }).map { it.first().value }.take(PAGE_SIZE)
+        lists.flatten().filterNot { it.url == id }.withIndex().groupBy { it.value.url }.values.sortedWith(compareByDescending<List<IndexedValue<SManga>>> { it.size }.thenBy { it.minOf(IndexedValue<SManga>::index) }).map { it.first().value }.take(PAGE_SIZE)
     }
 
     private class RssIds(val values: Map<String, String>, val complete: Boolean)
