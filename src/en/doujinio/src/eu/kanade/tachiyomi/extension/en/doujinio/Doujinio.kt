@@ -10,6 +10,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -26,6 +28,7 @@ abstract class Doujinio : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.client.newBuilder()
+        .addInterceptor(WatermarkRemover())
         .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
@@ -43,7 +46,7 @@ abstract class Doujinio : HttpSource() {
     )
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val latest = response.parseAs<List<Manga>>().map { it.toSManga() }
+        val latest = response.parseData<List<Manga>>().map { it.toSManga() }
 
         return MangasPage(latest, hasNextPage = latest.size >= LATEST_LIMIT)
     }
@@ -53,7 +56,7 @@ abstract class Doujinio : HttpSource() {
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/mangas/popular", headers)
 
     override fun popularMangaParse(response: Response) = MangasPage(
-        response.parseAs<List<Manga>>().map { it.toSManga() },
+        response.parseData<List<Manga>>().map { it.toSManga() },
         hasNextPage = false,
     )
 
@@ -74,7 +77,7 @@ abstract class Doujinio : HttpSource() {
     )
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<SearchResponse>()
+        val result = response.parseData<SearchResponse>()
 
         return MangasPage(
             result.data.map { it.toSManga() },
@@ -86,7 +89,7 @@ abstract class Doujinio : HttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga) = GET("https://doujin.io/api/mangas/${getIdFromUrl(manga.url)}", headers)
 
-    override fun mangaDetailsParse(response: Response) = response.parseAs<Manga>().toSManga()
+    override fun mangaDetailsParse(response: Response) = response.parseData<Manga>().toSManga()
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${getIdFromUrl(manga.url)}"
 
@@ -94,7 +97,7 @@ abstract class Doujinio : HttpSource() {
 
     override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/chapters?manga_id=${getIdFromUrl(manga.url)}", headers)
 
-    override fun chapterListParse(response: Response) = response.parseAs<List<Chapter>>().map { it.toSChapter() }.reversed()
+    override fun chapterListParse(response: Response) = response.parseData<List<Chapter>>().map { it.toSChapter() }.reversed()
 
     // Page List
 
@@ -111,9 +114,28 @@ abstract class Doujinio : HttpSource() {
     override fun pageListParse(response: Response) = if (response.headers["content-type"] == "text/html; charset=UTF-8") {
         throw Exception("You need to login first through the WebView to read the chapter.")
     } else {
+        val chapterUrl = response.request.url.toString().substringBeforeLast('/')
+        val fragment = runCatching {
+            val res = client.newCall(
+                GET(
+                    chapterUrl + "/chm",
+
+                    headers.newBuilder().apply {
+                        add(
+                            "referer",
+                            "https://doujin.io/manga/${getIdsFromUrl(chapterUrl.substringAfter("/mangas")).split("/").joinToString("/chapter/")}",
+
+                        )
+                    }.build(),
+
+                ),
+            ).execute()
+            "#" + res.parseAs<MangaKeys>().toJsonString()
+        }.getOrElse { "" }
+
         json.decodeFromString<ChapterManifest>(
             response.body.string(),
-        ).toPageList()
+        ).toPageList(fragment)
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
@@ -132,5 +154,5 @@ abstract class Doujinio : HttpSource() {
 
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 
-    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString<PageResponse<T>>(body.string()).data
+    private inline fun <reified T> Response.parseData(): T = parseAs<PageResponse<T>>().data
 }

@@ -71,14 +71,13 @@ class ChapterManifest(
     @SerialName("readingOrder")
     private val pages: List<ChapterPage>,
 ) {
-    fun toPageList() = pages
+    fun toPageList(fragment: String) = pages
         .filter { page ->
             page.type.startsWith("image")
         }.mapIndexed { i, page ->
             Page(
                 index = i,
-                url = metadata.identifier,
-                imageUrl = page.href,
+                imageUrl = page.href + fragment,
             )
         }
 }
@@ -102,3 +101,10 @@ class SearchResponse(
     val to: Int?,
     val total: Int,
 )
+
+@Serializable
+class MangaKeys(
+    private val chmkeys: List<Int>,
+) {
+    fun toByteArray(): ByteArray = ByteArray(chmkeys.size) { chmkeys[it].toByte() }
+}
