@@ -82,7 +82,7 @@ abstract class ComX :
 
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("ComicList")
-            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+            filters.forEach { filter ->
                 when (filter) {
                     is OrderBy -> {
                         orderBy = filter.selected
