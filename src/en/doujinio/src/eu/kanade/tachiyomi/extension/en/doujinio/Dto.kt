@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlin.time.Instant
 
 @Serializable
 class PageResponse<T>(val data: T)
@@ -52,7 +53,7 @@ class Chapter(
         url = "manga/$mangaId/chapter/$id"
         // Can be equal to manga title (gets trimmed to empty)
         name = "\u2063" + this@Chapter.name
-        date_upload = parseDate(publishedAt)
+        date_upload = Instant.parseOrNull(publishedAt)?.toEpochMilliseconds() ?: 0L
     }
 }
 
@@ -93,6 +94,8 @@ class SearchRequest(
     val keyword: String,
     val page: Int,
     val tags: List<Int> = emptyList(),
+    val sort: String,
+    val sort_dir: String,
 )
 
 @Serializable
