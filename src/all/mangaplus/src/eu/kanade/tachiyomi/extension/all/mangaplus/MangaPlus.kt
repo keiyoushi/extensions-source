@@ -24,6 +24,8 @@ import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseAsProto
 import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -115,13 +117,31 @@ abstract class MangaPlus :
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val result = client.get("$API_URL/web/web_homeV4?lang=$internalLangName&clang=$internalLangName")
-            .parseAsProto<MangaPlusResponse>()
+        val (latestResult, allTitlesResult) = coroutineScope {
+            val latest = async {
+                client.get("$API_URL/web/web_homeV4?lang=$internalLangName&clang=$internalLangName")
+                    .parseAsProto<MangaPlusResponse>()
+            }
+            val allTitles = async {
+                client.get("$API_URL/title_list/allV2").parseAsProto<MangaPlusResponse>()
+            }
+            latest.await() to allTitles.await()
+        }
 
-        val titles = result.successOrThrow().webHomeView!!.groups
+        val latestTitles = latestResult.successOrThrow().webHomeView!!.groups
             .flatMap(UpdatedTitleGroup::titles)
             .mapNotNull(UpdatedTitle::title)
-            .filterByLang()
+
+        val allTitlesGroups = allTitlesResult.successOrThrow().allTitlesView!!.allTitlesGroup
+
+        val titles = latestTitles
+            .mapNotNull { latestTitle ->
+                allTitlesGroups
+                    .firstOrNull { group -> group.titles.any { it.titleId == latestTitle.titleId } }
+                    ?.titles
+                    ?.firstOrNull { it.language == internalLangCode }
+            }
+            .distinctBy(Title::titleId)
 
         return MangasPage(titles.map(Title::toSManga), hasNextPage = false)
     }

@@ -561,7 +561,7 @@ abstract class Kagane :
 
     val sources: Map<String, String>
         get() {
-            if (sourceCache == null) {
+            if (sourceCache.isNullOrEmpty()) {
                 getFilterList()
             }
             return (sourceCache ?: emptyMap()).also { sourceCache = it }

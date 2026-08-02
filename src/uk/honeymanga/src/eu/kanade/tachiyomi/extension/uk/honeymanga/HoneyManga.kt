@@ -57,8 +57,9 @@ abstract class HoneyManga :
             if (query.length < 3) {
                 throw Exception("Запит має містити щонайменше 3 символи / The query must contain at least 3 characters")
             }
+            val cleanQuery = cleanSearch.replace(query, "")
             val url = searchApiUrl.toHttpUrl().newBuilder()
-                .addQueryParameter("query", query)
+                .addQueryParameter("query", cleanQuery)
                 .build()
 
             client.get(url).use { response ->
@@ -232,6 +233,7 @@ abstract class HoneyManga :
 
     // ============================= Utilities ==============================
     companion object {
+        private val cleanSearch = """[^\p{L}\d\s]""".toRegex()
         private const val DEFAULT_PAGE_SIZE = 30
         private const val GENRES_PREF = "pref_genres_exclude"
         private const val GENRES_PREF_TITLE = "Приховані жанри"

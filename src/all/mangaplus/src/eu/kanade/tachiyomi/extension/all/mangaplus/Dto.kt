@@ -130,14 +130,14 @@ class TitleDetailView(
             .joinToString("\n\n")
         genre = genreList.mapNotNull { it.name.takeIf(String::isNotEmpty) }.joinToString()
         status = when {
-            isOneShot || nonAppearanceInfo.contains(COMPLETED_REGEX) -> SManga.COMPLETED
+            isOneShot || nonAppearanceInfo.contains(COMPLETED_REGEX) || viewingPeriodDescription.contains("latest 0 chapters") -> SManga.COMPLETED
             nonAppearanceInfo.contains(HIATUS_REGEX) -> SManga.ON_HIATUS
             else -> SManga.ONGOING
         }
     }
 
     companion object {
-        private val COMPLETED_REGEX = "completado|complete|completo".toRegex(RegexOption.IGNORE_CASE)
+        private val COMPLETED_REGEX = "completado|completed?|completo".toRegex(RegexOption.IGNORE_CASE)
         private val HIATUS_REGEX = "on a hiatus".toRegex(RegexOption.IGNORE_CASE)
     }
 }

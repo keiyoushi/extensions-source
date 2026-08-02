@@ -40,8 +40,12 @@ abstract class GocTruyenTranhVui :
     private val preferences = getPreferences()
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
-        rateLimit(3)
         addInterceptor(::authInterceptor)
+        rateLimit(3)
+    }
+
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
+        removeAll("Origin")
     }
 
     private val xhrHeaders: Headers

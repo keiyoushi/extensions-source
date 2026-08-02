@@ -1,32 +1,44 @@
 package eu.kanade.tachiyomi.multisrc.zmanga
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.tryParse
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.get
+import keiyoushi.utils.string
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-abstract class ZManga : HttpSource() {
+abstract class ZManga : KeiSource() {
 
-    protected open val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
-
-    override val supportsLatest = true
+    protected open val dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
 
     // ============================== Popular ==============================
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/advanced-search/${pagePathSegment(page)}?order=popular")
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/advanced-search/${pagePathSegment(page)}?order=popular").asJsoup()
+        val mangas = document.select(popularMangaSelector()).map { element ->
+            popularMangaFromElement(element)
+        }
+        val hasNextPage = document.select(popularMangaNextPageSelector()).isNotEmpty()
+        return MangasPage(mangas, hasNextPage)
+    }
 
     open fun popularMangaSelector() = "div.flexbox2-item"
 
@@ -38,27 +50,10 @@ abstract class ZManga : HttpSource() {
 
     open fun popularMangaNextPageSelector() = "div.pagination .next"
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(popularMangaSelector()).map { element ->
-            popularMangaFromElement(element)
-        }
-        val hasNextPage = document.select(popularMangaNextPageSelector()).isNotEmpty()
-        return MangasPage(mangas, hasNextPage)
-    }
-
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/advanced-search/${pagePathSegment(page)}?order=update")
-
-    open fun latestUpdatesSelector() = popularMangaSelector()
-
-    open fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
-
-    open fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get("$baseUrl/advanced-search/${pagePathSegment(page)}?order=update").asJsoup()
         val mangas = document.select(latestUpdatesSelector()).map { element ->
             latestUpdatesFromElement(element)
         }
@@ -66,48 +61,59 @@ abstract class ZManga : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
+    open fun latestUpdatesSelector() = popularMangaSelector()
+
+    open fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+
+    open fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+
     // ============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        var url = "$baseUrl/advanced-search/${pagePathSegment(page)}".toHttpUrl().newBuilder()
-        url.addQueryParameter("title", query)
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
-            when (filter) {
-                is AuthorFilter -> {
-                    url.addQueryParameter("author", filter.state)
-                }
-                is YearFilter -> {
-                    url.addQueryParameter("yearx", filter.state)
-                }
-                is StatusFilter -> {
-                    val status = when (filter.state) {
-                        Filter.TriState.STATE_INCLUDE -> "completed"
-                        Filter.TriState.STATE_EXCLUDE -> "ongoing"
-                        else -> ""
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val isProjectPage = filters.filterIsInstance<ProjectFilter>().any { it.toUriPart() == "project-filter-on" }
+
+        val document = if (query.isBlank() && isProjectPage) {
+            client.get("$baseUrl$projectPageString/page/$page".toHttpUrl()).asJsoup()
+        } else {
+            val url = "$baseUrl/advanced-search/${pagePathSegment(page)}".toHttpUrl().newBuilder()
+            url.addQueryParameter("title", query)
+            filters.forEach { filter ->
+                when (filter) {
+                    is AuthorFilter -> {
+                        url.addQueryParameter("author", filter.state)
                     }
-                    url.addQueryParameter("status", status)
-                }
-                is TypeFilter -> {
-                    url.addQueryParameter("type", filter.toUriPart())
-                }
-                is OrderByFilter -> {
-                    url.addQueryParameter("order", filter.toUriPart())
-                }
-                is GenreList -> {
-                    filter.state
-                        .filter { it.state }
-                        .forEach { url.addQueryParameter("genre[]", it.id) }
-                }
-                // if site has project page, default value "hasProjectPage" = false
-                is ProjectFilter -> {
-                    if (filter.toUriPart() == "project-filter-on") {
-                        url = "$baseUrl$projectPageString/page/$page".toHttpUrl().newBuilder()
+                    is YearFilter -> {
+                        url.addQueryParameter("yearx", filter.state)
                     }
+                    is StatusFilter -> {
+                        val status = when (filter.state) {
+                            Filter.TriState.STATE_INCLUDE -> "completed"
+                            Filter.TriState.STATE_EXCLUDE -> "ongoing"
+                            else -> ""
+                        }
+                        url.addQueryParameter("status", status)
+                    }
+                    is TypeFilter -> {
+                        url.addQueryParameter("type", filter.toUriPart())
+                    }
+                    is OrderByFilter -> {
+                        url.addQueryParameter("order", filter.toUriPart())
+                    }
+                    is GenreList -> {
+                        filter.state
+                            .filter { it.state }
+                            .forEach { url.addQueryParameter("genre[]", it.id) }
+                    }
+                    else -> {}
                 }
-                else -> {}
             }
+            client.get(url.build()).asJsoup()
         }
-        return GET(url.build(), headers)
+        val mangas = document.select(searchMangaSelector()).map { element ->
+            searchMangaFromElement(element)
+        }
+        val hasNextPage = document.select(searchMangaNextPageSelector()).isNotEmpty()
+        return MangasPage(mangas, hasNextPage)
     }
 
     open val projectPageString = "/project-list"
@@ -118,18 +124,24 @@ abstract class ZManga : HttpSource() {
 
     open fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(searchMangaSelector()).map { element ->
-            searchMangaFromElement(element)
-        }
-        val hasNextPage = document.select(searchMangaNextPageSelector()).isNotEmpty()
-        return MangasPage(mangas, hasNextPage)
-    }
-
     // ============================== Details ==============================
 
-    override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url).asJsoup()
+
+        val updatedManga = mangaDetailsParse(document)
+
+        val updatedChapters = document.select(chapterListSelector()).map { element ->
+            chapterFromElement(element)
+        }
+
+        return SMangaUpdate(updatedManga, updatedChapters)
+    }
 
     open fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         val thumb = document.select("div.series-thumb img")
@@ -172,33 +184,50 @@ abstract class ZManga : HttpSource() {
     open fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.attr("abs:href"))
         name = element.select("span").first()!!.ownText()
-        date_upload = dateFormat.tryParse(element.select("span.date").text())
+        date_upload = parseDate(element.select("span.date").text())
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select(chapterListSelector()).map { element ->
-            chapterFromElement(element)
-        }
+    protected open fun parseDate(dateString: String): Long = try {
+        LocalDate.parse(dateString, dateFormatter).atStartOfDay(ZoneId.systemDefault()).toEpochSecond() * 1000
+    } catch (_: Exception) {
+        0L
     }
 
     // =============================== Pages ===============================
 
-    override fun pageListParse(response: Response): List<Page> = pageListParse(response.asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(baseUrl + chapter.url).asJsoup())
 
     open fun pageListParse(document: Document): List<Page> = document.select("div.reader-area img:not(noscript img)").mapIndexed { i, img ->
-        val imgUrl = img.attr("data-lazy-src").takeIf { it.isNotBlank() }
-            ?: img.attr("abs:src")
-        Page(i, imageUrl = imgUrl)
+        val urlStr = img.attr("data-lazy-src").ifBlank { img.attr("src") }.replace("\\", "")
+        Page(i, imageUrl = img.attr("src", urlStr).attr("abs:src"))
     }
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================== Filters ==============================
 
     open val hasProjectPage = false
 
-    override fun getFilterList(): FilterList {
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrl/advanced-search/").asJsoup()
+        return buildJsonArray {
+            document.select("div.custom-checkbox input[name=\"genre[]\"]").forEach { element ->
+                buildJsonObject {
+                    put("id", element.attr("value"))
+                    put("name", element.nextElementSibling()?.text() ?: element.attr("id"))
+                }.let(::add)
+            }
+        }
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.jsonArray?.map {
+            Tag(
+                it["id"]!!.string,
+                it["name"]!!.string,
+            )
+        } ?: emptyList()
+
         val filters = mutableListOf<Filter<*>>(
             Filter.Header("You can combine filter."),
             Filter.Separator(),
@@ -207,7 +236,7 @@ abstract class ZManga : HttpSource() {
             StatusFilter(),
             TypeFilter(),
             OrderByFilter(),
-            GenreList(getGenreList()),
+            GenreList(genres),
         )
         if (hasProjectPage) {
             filters.addAll(

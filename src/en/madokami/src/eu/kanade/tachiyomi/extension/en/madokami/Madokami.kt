@@ -18,12 +18,13 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import keiyoushi.zip.readZipEntry
 import keiyoushi.zip.zipDirectoryAsync
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.jsonPrimitive
+import net.greypanther.natsort.CaseInsensitiveSimpleNaturalComparator
 import okhttp3.Credentials
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -175,7 +176,7 @@ abstract class Madokami :
         if (isArchiveUrl(url)) return null
 
         val manga = SManga.create().apply {
-            setUrlWithoutDomain(url.toString())
+            this.url = url.encodedPath
         }
 
         return try {
@@ -229,7 +230,7 @@ abstract class Madokami :
         if (segments.isEmpty()) return null
 
         return SManga.create().apply {
-            setUrlWithoutDomain(url.toString())
+            this.url = url.encodedPath
             description = segments.last()
             var i = segments.lastIndex
             while (i > 0 && segments[i].startsWith("!")) {
@@ -478,12 +479,10 @@ abstract class Madokami :
             val path = element.attr("data-path")
             val files = element.attr("data-files").parseAs<JsonArray>()
             files.mapIndexed { index, file ->
-                val url = HttpUrl.Builder()
-                    .scheme("https")
-                    .host(baseUrl)
+                val url = baseUrl.toHttpUrl().newBuilder()
                     .addPathSegments("reader/image")
                     .addQueryParameter("path", path)
-                    .addQueryParameter("file", file.jsonPrimitive.content)
+                    .addQueryParameter("file", file.string)
                     .build()
                 val pageUrl = url.toString()
                 Page(index, url = pageUrl, imageUrl = pageUrl)
@@ -504,7 +503,10 @@ abstract class Madokami :
 
         return directory.entries
             .filter { isImage(it.name) }
-            .sortedBy { it.name }
+            .sortedWith { f1, f2 ->
+                val comparator = CaseInsensitiveSimpleNaturalComparator.getInstance<String>()
+                comparator.compare(f1.name, f2.name)
+            }
             .mapIndexed { index, entry ->
                 // Store entry metadata in fragment to avoid re-reading CD per page
                 val fragment = "${entry.name}|${entry.method}|${entry.compressedSize}|${entry.localHeaderOffset}"

@@ -8,10 +8,10 @@ keiyoushi {
     name = "ZetTruyen"
     versionCode = 11
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "vi"
-        baseUrl = "https://www.zettruyen.ink"
+        baseUrl = "https://www.zettruyen.homes"
     }
 }

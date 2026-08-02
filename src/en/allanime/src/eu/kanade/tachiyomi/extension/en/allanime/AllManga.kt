@@ -264,6 +264,16 @@ abstract class AllManga :
                 .joinToString("")
             val script = """
                 (function () {
+                    const originalJson = Response.prototype.json;
+                    Response.prototype.json = function() {
+                        return originalJson.call(this).then(data => {
+                            if (data && data.chapterPages) {
+                                window.$interfaceName.post(JSON.stringify(data));
+                            }
+                            return data;
+                        });
+                    };
+
                     const originalParse = JSON.parse;
                     JSON.parse = new Proxy(originalParse, {
                         apply(target, thisArg, args) {

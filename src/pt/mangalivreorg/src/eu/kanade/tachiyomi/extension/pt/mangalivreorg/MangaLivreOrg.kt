@@ -29,7 +29,10 @@ abstract class MangaLivreOrg : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Accept-Language", "pt-BR,pt;q=0.9,en;q=0.8")
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = this
+        .add("Accept-Language", "pt-BR,pt;q=0.9,en;q=0.8")
+        // The chapter endpoint answers 404 unless this header is present, with any value.
+        .add("Sec-Fetch-Site", "same-origin")
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, "views", period = "ever")
 

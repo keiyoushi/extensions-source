@@ -233,7 +233,7 @@ abstract class MangaFire :
         val url = if (segments.contains("volume")) {
             "$baseUrl/api/volumes/$last"
         } else {
-            val chapterId = last.substringBefore("-")
+            val chapterId = last.substringBefore("-").toLongOrNull() ?: error("Refresh manga")
             "$baseUrl/api/chapters/$chapterId"
         }
 
