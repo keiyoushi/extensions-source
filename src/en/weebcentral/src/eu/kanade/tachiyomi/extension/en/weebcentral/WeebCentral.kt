@@ -196,13 +196,19 @@ abstract class WeebCentral : KeiSource() {
         val url = "$baseUrl/series/$seriesId/full-chapter-list"
 
         val document = client.get(url).asJsoup()
-        return document.select("div[x-data] > a").map { element ->
+
+        // Descending
+        val chapters = document.select("div[x-data] > a")
+
+        return chapters.mapIndexed { index, element ->
             SChapter.create().apply {
                 name = element.selectFirst("span.flex > span")!!.text()
                 setUrlWithoutDomain(element.attr("abs:href"))
                 element.selectFirst("time[datetime]")?.also {
                     date_upload = Instant.parseOrNull(it.attr("datetime"))?.toEpochMilliseconds() ?: 0L
                 }
+                chapter_number = (chapters.size - index).toFloat()
+
                 element.selectFirst("svg")?.attr("stroke")?.also { stroke ->
                     scanlator = when (stroke) {
                         "#d8b4fe" -> "Official"
