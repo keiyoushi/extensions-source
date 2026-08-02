@@ -17,9 +17,6 @@ import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -88,27 +85,27 @@ abstract class Desu :
                 "\n\n"
         }
 
-        return SManga.create().apply {
-            title = if (isEng.equals("rus")) {
+        return SManga.create().also { manga ->
+            manga.title = if (isEng.equals("rus")) {
                 russian
             } else {
                 name
             }
-            url = "/$manga_id"
-            thumbnail_url = cover.preview
-            description = if (isEng.equals("rus")) {
+            manga.url = "/$manga_id"
+            manga.thumbnail_url = cover.preview
+            manga.description = if (isEng.equals("rus")) {
                 name
             } else {
                 russian
             } + "\n" + ratingStar + " " + ratingValue + " (голосов: " +
-                score_votes + ")\n" + altName + this@toSManga.description
-            genre = ("$category, $rawAgeStop, $genresStr").split(", ").filter { it.isNotEmpty() }.joinToString { it.trim() }
-            status = when (translation_status) {
+                score_votes + ")\n" + altName + description
+            manga.genre = ("$category, $rawAgeStop, $genresStr").split(", ").filter { it.isNotEmpty() }.joinToString { it.trim() }
+            manga.status = when (translation_status) {
                 "continued" -> SManga.ONGOING
 
                 "completed" -> SManga.COMPLETED
 
-                else -> when (this@toSManga.status) {
+                else -> when (status) {
                     "ongoing" -> SManga.ONGOING
 
                     "released" -> SManga.COMPLETED
@@ -117,7 +114,7 @@ abstract class Desu :
                     else -> SManga.UNKNOWN
                 }
             }
-            author = authorsStr
+            manga.author = authorsStr
         }
     }
 
@@ -210,17 +207,19 @@ abstract class Desu :
 
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + API_URL + chapter.url.substringAfterLast("#apiChapter"), headers)
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBeforeLast("#apiChapter")
+    override fun getChapterUrl(chapter: SChapter): String = chapter.url.substringBeforeLast("#apiChapter")
 
     override fun pageListParse(response: Response): List<Page> {
-        val obj = json.parseToJsonElement(response.body.string())
-            .jsonObject["response"]!!
-            .jsonObject
+        val responseString = response.body.string()
 
-        return obj["pages"]!!.jsonObject["list"]!!.jsonArray
-            .mapIndexed { i, jsonEl ->
-                Page(i, "", jsonEl.jsonObject["img"]!!.jsonPrimitive.content.replace(Regex("(?<=\\.)desu\\..+(?=/manga/)"), baseUrl.substringAfter("://")))
-            }
+        val result = json.decodeFromString<ChapterWrapperDto<ChapterDataDto>>(responseString)
+
+        // Теперь компилятор точно знает, что result.chapter — это ChapterDataDto
+        val objPages = result.chapter.pages
+
+        return objPages.mapIndexed { index, page ->
+            Page(index, imageUrl = page.url)
+        }
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ru.desu
 
-import eu.kanade.tachiyomi.extension.ru.desu.MangaDetDto.ImgDto
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -78,4 +77,19 @@ class ChaptersDto(
     val status: String,
     val is_readable: Boolean,
     val view_url: String,
+)
+
+@Serializable
+class ChapterWrapperDto<T>(
+    val chapter: T,
+)
+
+@Serializable
+class ChapterDataDto(
+    val pages: List<ChapterPageDto>,
+)
+
+@Serializable
+class ChapterPageDto(
+    val url: String,
 )
