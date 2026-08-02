@@ -309,13 +309,13 @@ abstract class ComX :
                         // Номер не надежен. Он может быть неверным, например:
                         // https://com-x.life/11082-chelovek-benzopila-2-2026.html#chapters
                         // Глава 158. Или Экстра 17
-                        if (matchNumber != null && (matchNumber - chap.number) in 0f..0.1f) {
+                        if (matchNumber != null && (matchNumber - counter) in 0f..1f) {
                             matchNumber
                         } else {
                             if (isExtraChapter(chap.title)) {
                                 counter + 0.1f
                             } else {
-                                if (anyNumber != null && (anyNumber - counter).toInt() == 1) {
+                                if (anyNumber != null && (anyNumber - counter) in 0f..1f) {
                                     anyNumber
                                 } else {
                                     chap.number
@@ -323,7 +323,7 @@ abstract class ComX :
                             }
                         }
                     } else {
-                        if (anyNumber != null && (anyNumber - counter).toInt() == 1) {
+                        if (anyNumber != null && (anyNumber - counter) in 0f..1f) {
                             anyNumber
                         } else {
                             counter + 0.1f
@@ -342,6 +342,8 @@ abstract class ComX :
     private fun isExtraChapter(title: String): Boolean {
         val lower = title.lowercase()
         return "экстра" in lower ||
+            "ежегодник" in lower ||
+            "вернулся" in lower ||
             "extra" in lower ||
             "special" in lower ||
             "bonus" in lower
