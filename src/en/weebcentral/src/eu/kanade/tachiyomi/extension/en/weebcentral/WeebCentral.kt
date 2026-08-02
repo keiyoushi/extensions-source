@@ -213,13 +213,8 @@ abstract class WeebCentral : KeiSource() {
                 }
                 chapter_number = (chapters.size - index).toFloat()
 
-                element.selectFirst("svg")?.attr("stroke")?.also { stroke ->
-                    scanlator = when (stroke) {
-                        "#d8b4fe" -> "Official"
-                        "#4C4D54" -> "Unknown"
-                        else -> null
-                    }
-                }
+                val isOfficial = element.select("img").any { it.attr("src").lowercase().contains("official") }
+                scanlator = if (isOfficial) "Official" else "Unknown"
             }
         }
     }

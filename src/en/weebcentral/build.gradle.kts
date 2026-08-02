@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Weeb Central"
-    versionCode = 24
+    versionCode = 25
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
