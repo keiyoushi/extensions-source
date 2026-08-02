@@ -476,7 +476,7 @@ abstract class ComX :
     companion object {
         private val dateFormat = DateTimeFormatter.ofPattern("[d.M.yyyy][dd.MM.yyyy][d.MM.yyyy]", Locale.ROOT)
         private const val FORCE_IMG_DOMAIN_PREF = "FORCE_IMG_DOMAIN_PREF"
-        private val chapterNumberRegex = """^(?:\d+\s*-|.*?Глава)\s*([\d.]+)""".toRegex()
+        private val chapterNumberRegex = """(?:\d+\s*-|.*?Глава)\s*([\d.]+)""".toRegex()
         private val chapterAnyNumberRegex = """([\d.]+)""".toRegex()
         private val whitespacesRegex = """\s{2,}""".toRegex()
     }
