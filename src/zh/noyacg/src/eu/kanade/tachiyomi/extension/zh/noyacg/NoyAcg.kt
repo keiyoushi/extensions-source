@@ -56,8 +56,7 @@ abstract class NoyAcg :
         addNetworkInterceptor { chain ->
             val resp = chain.proceed(chain.request())
             resp.takeUnless {
-                it.header("Content-Type")?.contains("application/json") == true &&
-                    (it.header("Content-Encoding") == null || it.header("Content-Length") == "18")
+                it.header("Content-Type")?.contains("application/json") == true && it.header("Content-Length") == "18"
             } ?: resp.use { throw IOException("請在 WebView 中登入") }
         }
     }
