@@ -346,6 +346,7 @@ abstract class ComX :
             "вернулся" in lower ||
             "extra" in lower ||
             "special" in lower ||
+            "annual" in lower ||
             "bonus" in lower
     }
 
