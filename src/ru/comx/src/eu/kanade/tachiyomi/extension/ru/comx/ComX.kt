@@ -293,6 +293,7 @@ abstract class ComX :
             .parseAs<Chapters>()
 
         var counter = 0f
+        var firstChapter = true
 
         return data.chapters.asReversed().map { chap ->
             SChapter.create().apply {
@@ -302,27 +303,43 @@ abstract class ComX :
                 }.getOrDefault(0L)
 
                 val matchNumber = chapterNumberRegex.find(chap.title)?.groupValues[1]?.toFloatOrNull()
-                chapter_number = if (chap.number != 0f) {
-                    // Номер не надежен. Он может быть неверным, например:
-                    // https://com-x.life/11082-chelovek-benzopila-2-2026.html#chapters
-                    // Глава 158. Или Экстра 17
-                    if (matchNumber != null && chap.number != matchNumber) {
-                        matchNumber
-                    } else {
-                        if (isExtraChapter(chap.title)) {
-                            counter + 0.1f
+                val anyNumber = chapterAnyNumberRegex.find(chap.title)?.groupValues[1]?.toFloatOrNull()
+                chapter_number = if (!firstChapter) {
+                    if (chap.number != 0f) {
+                        // Номер не надежен. Он может быть неверным, например:
+                        // https://com-x.life/11082-chelovek-benzopila-2-2026.html#chapters
+                        // Глава 158. Или Экстра 17
+                        if (matchNumber != null && (matchNumber - chap.number) in 0f..0.1f) {
+                            matchNumber
                         } else {
-                            chap.number
+                            if (isExtraChapter(chap.title)) {
+                                counter + 0.1f
+                            } else {
+                                if (anyNumber != null && (anyNumber - counter).toInt() == 1) {
+                                    anyNumber
+                                } else {
+                                    chap.number
+                                }
+                            }
+                        }
+                    } else {
+                        if (anyNumber != null && (anyNumber - counter).toInt() == 1) {
+                            anyNumber
+                        } else {
+                            counter + 0.1f
                         }
                     }
                 } else {
-                    counter + 0.1f
+                    firstChapter = false
+                    chap.number
                 }
-                name = chap.title
+                name = whitespacesRegex.replace(chap.title, " ").trim()
                 counter = chapter_number
             }
         }.asReversed()
     }
+
+    fun Float.round(): Float = String.format("%.2f", this).toFloat()
 
     private fun isExtraChapter(title: String): Boolean {
         val lower = title.lowercase()
@@ -351,11 +368,14 @@ abstract class ComX :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get("$baseUrl${chapter.url}", ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
-                if (response.code == 304 || response.code == 403) {
+                if (response.code == 304 || response.code == 302 || response.code == 403) {
                     throw Exception("Глава не доступна. Возможно может помочь авторизация через WebView")
                 } else {
                     throw HttpException(response.code)
                 }
+            }
+            if (response.request.url.encodedPath == "/404.html") {
+                throw Exception("Глава не доступна. Возможно может помочь авторизация через WebView")
             }
             response.asJsoup()
         }
@@ -363,7 +383,7 @@ abstract class ComX :
         if (document.html().contains("Выпуск был удален по требованию правообладателя")) throw Exception("Лицензировано. Возможно может помочь авторизация через WebView")
 
         val script = document.selectFirst("script:containsData(window.__DATA__)")?.data()
-            ?: throw Exception("Chapter data script not found")
+            ?: throw Exception("Pages data script not found")
 
         val data = script
             .substringAfter("window.__DATA__ = ")
@@ -453,8 +473,10 @@ abstract class ComX :
     }
 
     companion object {
-        private val dateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.ROOT)
+        private val dateFormat = DateTimeFormatter.ofPattern("[d.M.yyyy][dd.MM.yyyy][d.MM.yyyy]", Locale.ROOT)
         private const val FORCE_IMG_DOMAIN_PREF = "FORCE_IMG_DOMAIN_PREF"
-        private val chapterNumberRegex = """^\d+\s-\s([\d.]+)""".toRegex()
+        private val chapterNumberRegex = """^(?:\d+\s-|.*?Глава)\s*([\d.]+)""".toRegex()
+        private val chapterAnyNumberRegex = """([\d.]+)""".toRegex()
+        private val whitespacesRegex = """\s{2,}""".toRegex()
     }
 }
