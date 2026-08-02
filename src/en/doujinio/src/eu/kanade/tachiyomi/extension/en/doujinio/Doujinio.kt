@@ -23,6 +23,7 @@ const val LATEST_LIMIT = 20
 
 @Source
 abstract class Doujinio : HttpSource() {
+
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val supportsLatest = true
@@ -32,11 +33,14 @@ abstract class Doujinio : HttpSource() {
         .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+
     // Latest
 
     override fun latestUpdatesRequest(page: Int) = POST(
         "$baseUrl/api/mangas/newest",
-        headers,
+        // Referer or origin causes 419
         body = json.encodeToString(
             LatestRequest(
                 limit = LATEST_LIMIT,
@@ -101,18 +105,10 @@ abstract class Doujinio : HttpSource() {
 
     // Page List
 
-    override fun pageListRequest(chapter: SChapter) = GET(
-        "$baseUrl/api/mangas/${getIdsFromUrl(chapter.url)}/manifest",
-        headers.newBuilder().apply {
-            add(
-                "referer",
-                "https://doujin.io/manga/${getIdsFromUrl(chapter.url).split("/").joinToString("/chapter/")}",
-            )
-        }.build(),
-    )
+    override fun pageListRequest(chapter: SChapter) = GET("$baseUrl/api/mangas/${getIdsFromUrl(chapter.url)}/manifest", headers)
 
-    override fun pageListParse(response: Response) = if (response.headers["content-type"] == "text/html; charset=UTF-8") {
-        throw Exception("You need to login first through the WebView to read the chapter.")
+    override fun pageListParse(response: Response) = if (response.headers["content-type"]?.contains("text/html") == true) {
+        error("Login through WebView to read")
     } else {
         val chapterUrl = response.request.url.toString().substringBeforeLast('/')
         val fragment = runCatching {
@@ -120,14 +116,7 @@ abstract class Doujinio : HttpSource() {
                 GET(
                     chapterUrl + "/chm",
 
-                    headers.newBuilder().apply {
-                        add(
-                            "referer",
-                            "https://doujin.io/manga/${getIdsFromUrl(chapterUrl.substringAfter("/mangas")).split("/").joinToString("/chapter/")}",
-
-                        )
-                    }.build(),
-
+                    headers,
                 ),
             ).execute()
             "#" + res.parseAs<MangaKeys>().toJsonString()

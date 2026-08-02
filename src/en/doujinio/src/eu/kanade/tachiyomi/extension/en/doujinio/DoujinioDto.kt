@@ -50,8 +50,8 @@ class Chapter(
 ) {
     fun toSChapter() = SChapter.create().apply {
         url = "manga/$mangaId/chapter/$id"
-        name = this@Chapter.name
-        chapter_number = (order + 1).toFloat()
+        // Can be equal to manga title (gets trimmed to empty)
+        name = "\u2063" + this@Chapter.name
         date_upload = parseDate(publishedAt)
     }
 }

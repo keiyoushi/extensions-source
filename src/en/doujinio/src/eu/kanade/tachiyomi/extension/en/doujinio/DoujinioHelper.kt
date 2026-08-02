@@ -72,7 +72,7 @@ fun parseDate(dateStr: String): Long = try {
 }
 
 private val dateFormat by lazy {
-    SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
+    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.ROOT)
 }
 
 fun getIdFromUrl(url: String) = url.split("/").last()
