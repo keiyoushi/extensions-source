@@ -339,8 +339,6 @@ abstract class ComX :
         }.asReversed()
     }
 
-    fun Float.round(): Float = String.format("%.2f", this).toFloat()
-
     private fun isExtraChapter(title: String): Boolean {
         val lower = title.lowercase()
         return "экстра" in lower ||
