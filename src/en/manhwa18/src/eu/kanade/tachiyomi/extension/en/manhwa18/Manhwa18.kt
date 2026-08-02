@@ -90,7 +90,7 @@ abstract class Manhwa18 : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst(".series-name a, .au-bento h1, .au-crumb a:last-child")?.text() ?: "Unknown"
+            title = document.selectFirst(".series-name a, .au-bento h1, .au-crumb a:last-child")!!.text()
             thumbnail_url = document.selectFirst(".series-cover .img-in-ratio")?.attr("style")?.substringAfter("url('")?.substringBefore("')")
             description = document.selectFirst(".summary-content")?.text()
 
