@@ -19,5 +19,6 @@ keiyoushi {
         host("mangadot.net")
         path("/manga/..*")
         path("/chapter/..*")
+        path("/volume/..*")
     }
 }
