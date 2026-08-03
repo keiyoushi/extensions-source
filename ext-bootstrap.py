@@ -138,9 +138,8 @@ def write_keisource_source(f, classname: str) -> None:
         "\toverride suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage =\n"
         "\t\tthrow UnsupportedOperationException()\n\n"
     )
-    f.write(
-        "\toverride suspend fun getMangaByUrl(url: HttpUrl): SManga? = throw UnsupportedOperationException()\n\n"
-    )
+
+    f.write("\toverride suspend fun getMangaByUrl(url: HttpUrl): SManga? = null\n\n")
 
     f.write("\toverride suspend fun fetchMangaUpdate(\n")
     f.write("\t\tmanga: SManga,\n")
@@ -149,15 +148,6 @@ def write_keisource_source(f, classname: str) -> None:
     f.write("\t\tfetchChapters: Boolean,\n")
     f.write("\t): SMangaUpdate = throw UnsupportedOperationException()\n\n")
 
-    f.write(
-        "\toverride suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = throw UnsupportedOperationException()\n\n"
-    )
-    f.write(
-        "\toverride fun getMangaUrl(manga: SManga): String = throw UnsupportedOperationException()\n\n"
-    )
-    f.write(
-        "\toverride fun getChapterUrl(chapter: SChapter): String = throw UnsupportedOperationException()\n\n"
-    )
     f.write(
         "\toverride suspend fun getPageList(chapter: SChapter): List<Page> = throw UnsupportedOperationException()\n"
     )
