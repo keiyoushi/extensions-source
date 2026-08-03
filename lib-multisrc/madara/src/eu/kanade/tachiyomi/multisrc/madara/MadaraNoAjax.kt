@@ -59,11 +59,10 @@ abstract class MadaraNoAjax : MadaraBase() {
             addQueryParameter("post_type", "wp-manga")
         }.build()
         val document = client.get(url).asJsoup()
-        val cards = parseSearchCards(document)
         val archiveMangas = parseArchive(document)
-        if (archiveMangas.map(::memoPath) == cards.map(SearchCard::path)) {
-            return MangasPage(archiveMangas, false)
-        }
+        if (archiveMangas.isNotEmpty()) return MangasPage(archiveMangas, false)
+
+        val cards = parseSearchCards(document)
         val ids = rssIds(query, cards.map(SearchCard::path))
         if (!ids.complete) {
             return MangasPage(
