@@ -6,13 +6,17 @@ plugins {
 
 keiyoushi {
     name = "Atsumaru"
-    versionCode = 19
+    versionCode = 20
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "en"
         baseUrl = "https://atsu.moe"
         versionId = 2
+    }
+
+    deeplink {
+        path("/manga/..*")
     }
 }
