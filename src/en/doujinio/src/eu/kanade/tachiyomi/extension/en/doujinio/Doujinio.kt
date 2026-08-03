@@ -29,7 +29,7 @@ const val LATEST_LIMIT = 20
 @Source
 abstract class Doujinio : KeiSource() {
 
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+    private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(WatermarkRemover())
@@ -103,7 +103,7 @@ abstract class Doujinio : KeiSource() {
     }
 
     private suspend fun fetchMangaDetails(id: String): SManga {
-        val response = client.get("https://doujin.io/api/mangas/$id")
+        val response = client.get("$baseUrl/api/mangas/$id")
         return response.parseData<Manga>().toSManga()
     }
 
@@ -134,9 +134,12 @@ abstract class Doujinio : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterApiUrl = "$baseUrl/api/mangas/${getIdsFromUrl(chapter.url)}"
         val response = client.get(chapterApiUrl + "/manifest")
+
         if (response.headers["content-type"]?.contains("text/html") == true) {
+            response.close()
             error("Login through WebView to read")
         }
+
         val fragment = runCatching {
             val res = client.get(chapterApiUrl + "/chm")
             "#" + res.parseAs<MangaKeys>().toJsonString()
