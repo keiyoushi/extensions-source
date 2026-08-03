@@ -18,6 +18,9 @@ abstract class Manhuashe : HttpSource() {
 
     override val supportsLatest: Boolean = true
 
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+
     // Popular
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/category/order/hits/page/$page", headers)
