@@ -53,7 +53,7 @@ internal class SortFilter :
         Selection(0, false),
     ) {
     companion object {
-        val VALUES = arrayOf("views", "trending", "dateAdded", "released", "avgRating", "title")
+        val VALUES = arrayOf("views", "trending", "dateAdded", "released", "mbRating", "title")
     }
 }
 
@@ -282,11 +282,10 @@ internal fun getTagsList() = listOf(
     Tag("Yuri", "33"),
     Tag("4-Koma", "105"),
     Tag("Anthology", "113"),
-    Tag("Chinese Novels", "1112"),
     Tag("Collection of Stories", "111"),
     Tag("Doujinshi", "24"),
     Tag("Episodic", "115"),
-    Tag("Full color", "57"),
+    Tag("Full Color", "57"),
     Tag("Korean Novels", "1111"),
     Tag("Light Novel", "466"),
     Tag("Longstrip", "93"),
