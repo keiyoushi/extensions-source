@@ -204,14 +204,15 @@ abstract class WeebCentral : KeiSource() {
         // Descending
         val chapters = document.select("div[x-data] > a")
 
+        var useIndexing = false
         return chapters.mapIndexed { index, element ->
             SChapter.create().apply {
-                name = element.selectFirst("span.flex > span")!!.text()
+                name = element.selectFirst("span.flex > span")!!.text().also { useIndexing = seasonRegex.find(it) != null }
                 setUrlWithoutDomain(element.attr("abs:href"))
                 element.selectFirst("time[datetime]")?.also {
                     date_upload = Instant.parseOrNull(it.attr("datetime"))?.toEpochMilliseconds() ?: 0L
                 }
-                chapter_number = (chapters.size - index).toFloat()
+                if (useIndexing) chapter_number = (chapters.size - index).toFloat()
 
                 val isOfficial = element.select("img").any { it.attr("src").lowercase().contains("official") }
                 scanlator = if (isOfficial) "Official" else "Unknown"
@@ -270,5 +271,7 @@ abstract class WeebCentral : KeiSource() {
         const val FETCH_LIMIT = 32
 
         private val excludedSearchCharacters = "[!#:(),-]".toRegex()
+
+        private val seasonRegex = Regex("""(Season|S)\s*\d+""", RegexOption.IGNORE_CASE)
     }
 }
