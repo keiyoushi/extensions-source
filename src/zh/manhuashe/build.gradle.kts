@@ -7,12 +7,17 @@ plugins {
 keiyoushi {
     name = "Manhuashe"
     versionCode = 1
-    contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
 
     source {
         name = "漫画社"
         lang = "zh"
-        baseUrl = "https://www.311s.com"
+        baseUrl {
+            mirrors(
+                "https://www.311s.com",
+                "https://www.m206.com",
+            )
+        }
     }
 }

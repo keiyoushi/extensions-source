@@ -90,7 +90,7 @@ abstract class Manhwa18 : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst(".series-name a")!!.text()
+            title = document.selectFirst(".series-name a, .au-bento h1, .au-crumb a:last-child")!!.text()
             thumbnail_url = document.selectFirst(".series-cover .img-in-ratio")?.attr("style")?.substringAfter("url('")?.substringBefore("')")
             description = document.selectFirst(".summary-content")?.text()
 
@@ -122,13 +122,15 @@ abstract class Manhwa18 : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select("ul.list-chapters a").map { a ->
+        return document.select("div.au-chgrid a.au-chtile").map { a ->
             SChapter.create().apply {
+                // Get link URL
                 setUrlWithoutDomain(a.attr("abs:href"))
-                name = a.selectFirst(".chapter-name")!!.text()
+                name = a.attr("data-name").ifEmpty { a.attr("title") }
 
-                val timeStr = a.selectFirst(".chapter-time")?.text()?.substringAfter("-")?.trim()
-                date_upload = dateFormat.tryParse(timeStr)
+                val timeStr = a.selectFirst(".au-chtile-date")?.text()?.substringAfter("·")?.trim()
+                    ?: a.selectFirst(".chapter-time")?.text()?.substringAfter("-")?.trim()
+                date_upload = dateFormat.tryParse(timeStr) ?: 0L
             }
         }
     }
