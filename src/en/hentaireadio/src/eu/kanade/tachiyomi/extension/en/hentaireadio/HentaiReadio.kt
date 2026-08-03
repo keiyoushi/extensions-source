@@ -1,24 +1,26 @@
 package eu.kanade.tachiyomi.extension.en.hentaireadio
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Source
-abstract class HentaiReadio : HttpSource() {
+abstract class HentaiReadio : KeiSource() {
 
     override val supportsLatest = true
 
@@ -28,15 +30,7 @@ abstract class HentaiReadio : HttpSource() {
         SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH)
     }
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    // ============================== Popular ===============================
-
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/?act=search&f[status]=all&f[sortby]=top-manga&pageNum=$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    fun parseFilteredManga(document: Document): MangasPage {
         val mangas = document.select("div.card:has(.jtip)").map { element ->
             SManga.create().apply {
                 val anchor = element.selectFirst(".title-manga a")!!
@@ -49,15 +43,23 @@ abstract class HentaiReadio : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
+    // ============================== Popular ===============================
+
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/?act=search&f[status]=all&f[sortby]=top-manga&pageNum=$page").asJsoup()
+        return parseFilteredManga(document)
+    }
+
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/?act=search&f[status]=all&f[sortby]=lastest-chap&pageNum=$page", headers)
-
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get("$baseUrl/?act=search&f[status]=all&f[sortby]=lastest-chap&pageNum=$page").asJsoup()
+        return parseFilteredManga(document)
+    }
 
     // =============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("act", "search")
             .addQueryParameter("pageNum", page.toString())
@@ -92,25 +94,26 @@ abstract class HentaiReadio : HttpSource() {
         if (!statusAdded) url.addQueryParameter("f[status]", "all")
         if (!sortAdded) url.addQueryParameter("f[sortby]", "lastest-chap")
 
-        return GET(url.build(), headers)
+        val document = client.get(url.build()).asJsoup()
+        return parseFilteredManga(document)
     }
-
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // ============================== Details ===============================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst("h1.title-detail")!!.text()
-            author = document.selectFirst(".author p.col-8")?.text()
-                ?.takeUnless { it.contains("Updating", ignoreCase = true) }
-            status = parseStatus(document.selectFirst(".status p.col-8")?.text())
-            genre = document.select(".kind p.col-8 a").joinToString(", ") { it.text() }
-            description = document.selectFirst("#summary_shortened")?.text()
-            thumbnail_url = document.selectFirst(".col-image img")?.absUrl("src")
-            initialized = true
-        }
+    private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h1.title-detail")!!.text()
+        author = document.selectFirst(".author p.col-8")?.text()
+            ?.takeUnless { it.contains("Updating", ignoreCase = true) }
+        status = parseStatus(document.selectFirst(".status p.col-8")?.text())
+        genre = document.select(".kind p.col-8 a").joinToString(", ") { it.text() }
+        description = document.selectFirst("#summary_shortened")?.text()
+        thumbnail_url = document.selectFirst(".col-image img")?.absUrl("src")
+        initialized = true
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga {
+        val document = client.get(url).asJsoup()
+        return parseMangaDetails(document)
     }
 
     private fun parseStatus(status: String?) = when (status?.trim()?.lowercase()) {
@@ -122,25 +125,32 @@ abstract class HentaiReadio : HttpSource() {
 
     // ============================== Chapters ==============================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("ul#list_chapter_id_detail li.wp-manga-chapter, ul.version-chap li.wp-manga-chapter")
-            .map { element ->
-                SChapter.create().apply {
-                    val link = element.selectFirst("a")!!
-                    setUrlWithoutDomain(link.attr("href"))
-                    name = link.text()
-                    date_upload = dateFormat.tryParse(
-                        element.selectFirst(".chapter-release-date i")?.text()?.trim(),
-                    )
-                }
+    private fun parseChapterList(document: Document): List<SChapter> = document.select("ul#list_chapter_id_detail li.wp-manga-chapter, ul.version-chap li.wp-manga-chapter")
+        .map { element ->
+            SChapter.create().apply {
+                val link = element.selectFirst("a")!!
+                setUrlWithoutDomain(link.attr("href"))
+                name = link.text()
+                date_upload = dateFormat.tryParse(
+                    element.selectFirst(".chapter-release-date i")?.text()?.trim(),
+                )
             }
+        }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url).asJsoup()
+        return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
     }
 
     // =============================== Pages ================================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(baseUrl + chapter.url).asJsoup()
         return document.select(".page-chapter img").mapIndexed { index, img ->
             // Prefer data-src (lazy-loaded) over src which may be a placeholder
             val url = img.absUrl("data-src").ifEmpty { img.absUrl("src") }
@@ -148,11 +158,11 @@ abstract class HentaiReadio : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    override suspend fun getImageUrl(page: Page) = throw UnsupportedOperationException()
 
     // =============================== Filters ==============================
 
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         StatusFilter(),
         SortFilter(),
         Filter.Separator(),
