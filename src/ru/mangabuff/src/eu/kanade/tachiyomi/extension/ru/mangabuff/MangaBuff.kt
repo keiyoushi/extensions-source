@@ -85,26 +85,6 @@ abstract class MangaBuff :
         return chain.proceed(request)
     }
 
-    private fun getToken(): String {
-        storedToken?.let { return it }
-
-        val request = GET(baseUrl, headers)
-        val response = client.newCall(request).execute()
-
-        response.use {
-            val document = it.asJsoup()
-            val token = document.select("head meta[name*=csrf-token]")
-                .attr("content")
-
-            if (token.isEmpty()) {
-                throw IOException("Unable to find CSRF token")
-            }
-
-            storedToken = token
-            return token
-        }
-    }
-
     private fun gifToWebpInterceptor(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
 
@@ -124,6 +104,26 @@ abstract class MangaBuff :
         original.compress(Bitmap.CompressFormat.WEBP, 90, buffer.outputStream())
         original.recycle()
         return response.newBuilder().body(buffer.asResponseBody(WEBP_MEDIA_TYPE, buffer.size)).build()
+    }
+
+    private fun getToken(): String {
+        storedToken?.let { return it }
+
+        val request = GET(baseUrl, headers)
+        val response = client.newCall(request).execute()
+
+        response.use {
+            val document = it.asJsoup()
+            val token = document.select("head meta[name*=csrf-token]")
+                .attr("content")
+
+            if (token.isEmpty()) {
+                throw IOException("Unable to find CSRF token")
+            }
+
+            storedToken = token
+            return token
+        }
     }
 
     // ============================== Popular ===============================
@@ -238,11 +238,7 @@ abstract class MangaBuff :
             }
             response.asJsoup()
         }
-        val mangaNew = if (fetchDetails) {
-            parseMangaDetails(document, newUrl)
-        } else {
-            manga
-        }
+        val mangaNew = parseMangaDetails(document, newUrl)
 
         val chaptersNew = if (fetchChapters) {
             parseChapterList(document)
