@@ -15,6 +15,7 @@ import keiyoushi.source.KeiSource
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -31,6 +32,9 @@ abstract class WeebCentral : KeiSource() {
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(1, 2.seconds) { it.host == baseUrlHost }
     }
+
+    // Origin causes some thumbnails to mismatch
+    override fun Headers.Builder.configureHeaders() = removeAll("Origin")
 
     // ============================== Popular ===============================
 
@@ -196,20 +200,22 @@ abstract class WeebCentral : KeiSource() {
         val url = "$baseUrl/series/$seriesId/full-chapter-list"
 
         val document = client.get(url).asJsoup()
-        return document.select("div[x-data] > a").map { element ->
+
+        // Descending
+        val chapters = document.select("div[x-data] > a")
+
+        var useIndexing = false
+        return chapters.mapIndexed { index, element ->
             SChapter.create().apply {
-                name = element.selectFirst("span.flex > span")!!.text()
+                name = element.selectFirst("span.flex > span")!!.text().also { useIndexing = seasonRegex.find(it) != null }
                 setUrlWithoutDomain(element.attr("abs:href"))
                 element.selectFirst("time[datetime]")?.also {
                     date_upload = Instant.parseOrNull(it.attr("datetime"))?.toEpochMilliseconds() ?: 0L
                 }
-                element.selectFirst("svg")?.attr("stroke")?.also { stroke ->
-                    scanlator = when (stroke) {
-                        "#d8b4fe" -> "Official"
-                        "#4C4D54" -> "Unknown"
-                        else -> null
-                    }
-                }
+                if (useIndexing) chapter_number = (chapters.size - index).toFloat()
+
+                val isOfficial = element.select("img").any { it.attr("src").lowercase().contains("official") }
+                scanlator = if (isOfficial) "Official" else "Unknown"
             }
         }
     }
@@ -265,5 +271,7 @@ abstract class WeebCentral : KeiSource() {
         const val FETCH_LIMIT = 32
 
         private val excludedSearchCharacters = "[!#:(),-]".toRegex()
+
+        private val seasonRegex = Regex("""(Season|S)\s*\d+""", RegexOption.IGNORE_CASE)
     }
 }
