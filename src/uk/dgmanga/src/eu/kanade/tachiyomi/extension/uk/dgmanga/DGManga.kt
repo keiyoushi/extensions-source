@@ -21,7 +21,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import kotlin.collections.component1
 import kotlin.collections.joinToString
 import kotlin.getValue
 import kotlin.text.ifEmpty
