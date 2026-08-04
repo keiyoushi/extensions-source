@@ -45,15 +45,13 @@ abstract class MangaTales : KeiSource() {
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val filterList = if (filters.isEmpty()) getFilterList() else filters
-
-        val oneShotFilter = filterList.firstInstance<OneShotFilter>()
-        val mangaTypeFilter = filterList.firstInstance<MangaTypeFilter>()
-        val storyStatusFilter = filterList.firstInstance<StoryStatusFilter>()
-        val translationStatusFilter = filterList.firstInstance<TranslationStatusFilter>()
-        val categoryFilter = filterList.firstInstanceOrNull<CategoryFilter>() ?: CategoryFilter(emptyList())
-        val chapterCountFilter = filterList.firstInstance<ChapterCountFilter>()
-        val dateRangeFilter = filterList.firstInstance<DateRangeFilter>()
+        val oneShotFilter = filters.firstInstance<OneShotFilter>()
+        val mangaTypeFilter = filters.firstInstance<MangaTypeFilter>()
+        val storyStatusFilter = filters.firstInstance<StoryStatusFilter>()
+        val translationStatusFilter = filters.firstInstance<TranslationStatusFilter>()
+        val categoryFilter = filters.firstInstanceOrNull<CategoryFilter>() ?: CategoryFilter(emptyList())
+        val chapterCountFilter = filters.firstInstance<ChapterCountFilter>()
+        val dateRangeFilter = filters.firstInstance<DateRangeFilter>()
 
         val body = SearchPayload(
             oneshot = OneShot(
@@ -125,14 +123,13 @@ abstract class MangaTales : KeiSource() {
         )
     }
 
+    override val supportsFilterFetching: Boolean get() = true
+
     override suspend fun fetchFilterData(): JsonElement {
         val document = client.get("$baseUrl/mangas/").asJsoup()
 
         val categories = document.select(".js-react-on-rails-component").html()
-            .parseAs<FiltersDto>()
-            .run {
-                categoryTypes!!.flatMap { it.categories!! }
-            }.map { TagFilterData(it.id.toString(), it.name) }
+            .parseAs<FiltersDto>().categories
 
         return categories.toJsonElement()
     }
@@ -156,7 +153,8 @@ abstract class MangaTales : KeiSource() {
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val categories = data?.let {
-            it.parseAs<List<TagFilterData>>()
+            it.parseAs<List<FilterDto>>()
+                .map { TagFilterData(it.id.toString(), it.name) }
         }
 
         val filters = mutableListOf<Filter<*>>(

@@ -46,8 +46,7 @@ class BrowseManga(
 
 @Serializable
 class FiltersDto(
-    val categoryTypes: List<FiltersDto>? = null,
-    val categories: List<FilterDto>? = null,
+    val categories: List<FilterDto>,
 )
 
 @Serializable
