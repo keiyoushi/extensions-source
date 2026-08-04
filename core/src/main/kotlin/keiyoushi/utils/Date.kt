@@ -10,7 +10,7 @@ import java.time.format.DateTimeFormatter
 import kotlin.time.Instant
 
 @Deprecated(
-    message = "Use Instant.tryParse, DateTimeFormatter.tryParseDate, tryParseDateTime, or tryParseZonedDateTime instead."
+    message = "Use Instant.tryParse, DateTimeFormatter.tryParseDate, tryParseDateTime, or tryParseZonedDateTime instead.",
 )
 fun SimpleDateFormat.tryParse(date: String?): Long {
     date ?: return 0L
