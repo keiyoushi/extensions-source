@@ -29,7 +29,7 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class VyvyManga : KeiSource() {
 
-    private val dateFormat = DateTimeFormatter.ofPattern("MMM dd, yyy", Locale.US)
+    private val dateFormat = DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.US)
     private val relativeDateRegex = Regex("""(\d+)""")
 
     // Popular
