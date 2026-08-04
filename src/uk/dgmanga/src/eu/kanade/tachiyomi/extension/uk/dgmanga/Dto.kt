@@ -58,6 +58,7 @@ class SMangaDto(
     private val tags: Array<String>? = null,
     private val authorRef: List<SMangaStaffDto>? = null,
     private val illustratorRef: List<SMangaStaffDto>? = null,
+    private val ageRating: String? = null,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         url = id
@@ -67,9 +68,10 @@ class SMangaDto(
             append(this@SMangaDto.description)
             append("\n\nАльтернативні назви: ${alternativeTitles?.joinToString(",")}")
         }
-        artist = authorRef?.joinToString { it.name.toString() }?.takeIf { it.isNotBlank() }
-        author = illustratorRef?.joinToString { it.name.toString() }?.takeIf { it.isNotBlank() }
+        author = authorRef?.joinToString { it.name.toString() }?.takeIf { it.isNotBlank() }
+        artist = illustratorRef?.joinToString { it.name.toString() }?.takeIf { it.isNotBlank() }
         genre = buildList {
+            ageRating?.let { add(it) }
             add(mangaType(type))
             genres?.map { it }?.let { addAll(it) }
             tags?.map { it }?.let { addAll(it) }
@@ -102,7 +104,7 @@ class ChapterResponseDto(
     fun toSChapter() = SChapter.create().apply {
         val vol = volumeNumber.toString().removeSuffix(".0")
         val num = chapterNumber.toString().removeSuffix(".0")
-        val time = updatedAt ?: createdAt ?: ""
+        val time = createdAt ?: updatedAt ?: ""
         name = "Том $vol Розділ $num ${chapterName ?: ""}"
         url = "$id/$num/$title"
         date_upload = Instant.parseOrNull(time)?.toEpochMilliseconds() ?: 0L

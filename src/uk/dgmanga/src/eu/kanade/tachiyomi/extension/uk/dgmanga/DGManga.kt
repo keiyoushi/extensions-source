@@ -14,7 +14,6 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
@@ -136,35 +135,34 @@ abstract class DGManga :
     }
 
     // ============================== Images ===============================
-    // Site also loads pages with API: "$apiUrl/image-proxy/chapter/${chapterId}/${i}"
-    // where "$i" - counter, from 1 to number of images in chapter
-    // But, site doesn't provide number of images anywhere: not in API, not in HTML response. Only loads that number with JavaScript
-    // Only option left is extract data from NextJS
-    // Or load images untill site returns {"error":"Page not found"} (if "$i" doesn't exist)
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val (chapterId, chapterNumber, chapterTitle) = chapter.url.split("/", limit = 3)
-        val url = "$baseUrl/read/$chapterTitle/$chapterNumber?chapterId=$chapterId"
-        val rscHeaders = headersBuilder()
-            .set("rsc", "1")
-            .build()
-
-        val data = client.get(url, rscHeaders).use { it.extractNextJs<PagesList>()!! }
+        val (chapterId, _, _) = chapter.url.split("/", limit = 3)
+        val url = "$apiUrl/chapters/$chapterId"
+        val data = client.get(url).parseAs<PagesList>()
         return data.pages.mapIndexed { i, page ->
             Page(i, imageUrl = page)
         }
     }
 
+    // =========================== Related Manga (Komikku) ============================
+    override val supportsRelatedMangas: Boolean = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val url = "$apiUrl/titles/${manga.url}/similar"
+        val data = client.get(url).parseAs<List<SearchResponseTitlesDto>>()
+        val ignoredGenres = ignoreGenres()
+        return data.mapNotNull { it.toSManga(ignoredGenres) }
+    }
+
     // ============================== Filters ===============================
     override fun getFilterList(data: JsonElement?) = FilterList(
         OrderBy(),
-        TypeFilter(),
-        StatusFilter(),
-        TranslationStatusFilter(),
-        Filter.Separator(),
         GenresFilter(),
         Filter.Separator(),
         TagsFilter(),
-        Filter.Separator(),
+        TypeFilter(),
+        StatusFilter(),
+        TranslationStatusFilter(),
         LicensedFilter(),
     )
 
