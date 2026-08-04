@@ -160,11 +160,9 @@ abstract class DGManga :
         GenresFilter(),
         Filter.Separator(),
         TagsFilter(),
-        Filter.Separator(),
         TypeFilter(),
         StatusFilter(),
         TranslationStatusFilter(),
-        Filter.Separator(),
         LicensedFilter(),
     )
 
