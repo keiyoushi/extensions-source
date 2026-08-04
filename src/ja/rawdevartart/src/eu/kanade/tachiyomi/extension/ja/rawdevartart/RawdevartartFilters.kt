@@ -50,20 +50,20 @@ class GenreFilter(genres: Array<Genre>) : Filter.Select<Genre>("Genre", genres)
 
 /**
  * https://rawdevart.art/genre/all
- copy(
- [...document.querySelectorAll(".genre-list a.__link")]
- .map((e) => {
- const title = e.getAttribute("title");
- const capitalized = title
- .split(" ")
- .map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase())
- .join(" ");
- const id = e.id || e.pathname.split("/")[2].replace(/^ne/, "");
+copy(
+[...document.querySelectorAll(".genre-list a.__link")]
+.map((e) => {
+const title = e.getAttribute("title");
+const capitalized = title
+.split(" ")
+.map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase())
+.join(" ");
+const id = e.id || e.pathname.split("/")[2].replace(/^ne/, "");
 
- return `Genre("${capitalized}", "${id}"),`;
- })
- .join("\n"),
- );
+return `Genre("${capitalized}", "${id}"),`;
+})
+.join("\n"),
+);
  */
 val genres = arrayOf(
     Genre("All", "all"),
