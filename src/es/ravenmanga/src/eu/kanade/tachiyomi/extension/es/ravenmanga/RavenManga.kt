@@ -181,7 +181,7 @@ abstract class RavenManga : KeiSource() {
     private fun String.containsWord(vararg words: String): Boolean = words.any { this.contains(it, ignoreCase = true) }
 
     companion object {
-        private val JSON_PROJECT_LIST = """proyectos\s*=\s*(\[[\s\S]+?\])\s*;""".toRegex()
+        private val JSON_PROJECT_LIST = """proyectos\s*=\s*(\[[\s\S]+?])\s*;""".toRegex()
         private val NUMBER_REGEX = """(\d+)""".toRegex()
     }
 }
