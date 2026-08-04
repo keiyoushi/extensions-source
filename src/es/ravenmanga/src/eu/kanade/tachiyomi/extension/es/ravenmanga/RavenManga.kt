@@ -24,12 +24,8 @@ import java.util.Calendar
 
 @Source
 abstract class RavenManga : KeiSource() {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-
-    override val supportsLatest = true
-
     override fun OkHttpClient.Builder.configureClient() = apply {
-        rateLimit(2) { it.host == baseUrlHost }
+        rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -64,7 +60,7 @@ abstract class RavenManga : KeiSource() {
         val isSearch = query.isNotEmpty()
 
         if (isSearch && query.length < 2) throw Exception("La búsqueda debe tener al menos 2 caracteres")
-        val url = if (isSearch) "$baseUrl/comics#$query" else "$baseUrl/comics?page=$page"
+        val url = if (isSearch) "$baseUrl/comics" else "$baseUrl/comics?page=$page"
 
         val document = client.get(url).asJsoup()
 
@@ -99,23 +95,16 @@ abstract class RavenManga : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        val document = client.get(url).asJsoup()
-        return SManga.create().apply {
-            val container = document.selectFirst("section#section-sinopsis")
-            if (container != null) {
-                description = container.select("p").text()
-                genre = container.select("div.flex:has(div:containsOwn(Géneros)) > div > a > span")
-                    .joinToString { it.text() }
-            }
+        if (url.host != baseUrl.toHttpUrl().host) {
+            throw Exception("URL no soportada")
         }
-    }
 
-    private fun parseChapterList(document: Document): List<SChapter> = document.select("section#section-list-cap div.grid > a").map { element ->
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
-            name = element.selectFirst("div#name")?.text().orEmpty()
-            date_upload = element.selectFirst("time")?.text()?.let { parseRelativeDate(it) } ?: 0L
+        if (url.pathSegments.size != 2 || url.pathSegments[0] != "sr2" || url.pathSegments[1].isBlank()) {
+            throw Exception("URL no soportada")
         }
+
+        val document = client.get(url).asJsoup()
+        return parseMangaDetails(document).apply { setUrlWithoutDomain(url.toString()) }
     }
 
     override suspend fun fetchMangaUpdate(
@@ -125,7 +114,31 @@ abstract class RavenManga : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(baseUrl + manga.url).asJsoup()
-        return SMangaUpdate(manga, parseChapterList(document))
+        return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
+    }
+
+    private fun parseMangaDetails(document: Document) = SManga.create().apply {
+        val mainElement = document.selectFirst("main.wrap-project")
+        if (mainElement != null) {
+            title = mainElement.attr("data-project")
+        }
+
+        thumbnail_url = document.selectFirst("#coverProject")?.attr("src")
+
+        val container = document.selectFirst("section#section-sinopsis")
+        if (container != null) {
+            description = container.select("p").text()
+            genre = container.select("div.flex:has(div:containsOwn(Géneros)) > div > a > span")
+                .joinToString { it.text() }
+        }
+    }
+
+    private fun parseChapterList(document: Document): List<SChapter> = document.select("section#section-list-cap div.grid > a").map { element ->
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.attr("href"))
+            name = element.selectFirst("div#name")?.text().orEmpty()
+            date_upload = element.selectFirst("time")?.text()?.let { parseRelativeDate(it) } ?: 0L
+        }
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -144,8 +157,6 @@ abstract class RavenManga : KeiSource() {
             Page(i, imageUrl = element.absUrl("src"))
         }
     }
-
-    override suspend fun getImageUrl(page: Page): String = throw UnsupportedOperationException()
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Filter.Header("Limpie la barra de búsqueda y haga click en 'Filtrar' para mostrar todas las series."),
