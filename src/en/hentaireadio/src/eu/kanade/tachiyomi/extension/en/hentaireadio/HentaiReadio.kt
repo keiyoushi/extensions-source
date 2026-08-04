@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.hentaireadio
 
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,23 +10,21 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class HentaiReadio : KeiSource() {
-
-    override val supportsLatest = true
-
     // Site is behind Cloudflare
 
-    private val dateFormat by lazy {
-        SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH)
+    private val dateFormatter by lazy {
+        DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH)
     }
 
     fun parseFilteredManga(document: Document): MangasPage {
@@ -112,8 +109,20 @@ abstract class HentaiReadio : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga {
+        if (url.host != baseUrl.toHttpUrl().host) {
+            throw Exception("Unsupported URL")
+        }
+
+        if (
+            url.pathSegments.size !in 1..2 ||
+            url.pathSegments[0].isBlank() ||
+            url.pathSegments.getOrNull(1)?.isNotBlank() == true
+        ) {
+            throw Exception("Unsupported URL")
+        }
+
         val document = client.get(url).asJsoup()
-        return parseMangaDetails(document)
+        return parseMangaDetails(document).apply { setUrlWithoutDomain(url.toString()) }
     }
 
     private fun parseStatus(status: String?) = when (status?.trim()?.lowercase()) {
@@ -125,15 +134,21 @@ abstract class HentaiReadio : KeiSource() {
 
     // ============================== Chapters ==============================
 
-    private fun parseChapterList(document: Document): List<SChapter> = document.select("ul#list_chapter_id_detail li.wp-manga-chapter, ul.version-chap li.wp-manga-chapter")
+    private fun parseChapterList(document: Document): List<SChapter> = document
+        .select("ul#list_chapter_id_detail li.wp-manga-chapter, ul.version-chap li.wp-manga-chapter")
         .map { element ->
             SChapter.create().apply {
                 val link = element.selectFirst("a")!!
                 setUrlWithoutDomain(link.attr("href"))
                 name = link.text()
-                date_upload = dateFormat.tryParse(
-                    element.selectFirst(".chapter-release-date i")?.text()?.trim(),
-                )
+                date_upload = runCatching {
+                    element.selectFirst(".chapter-release-date i")?.text()?.trim()?.let {
+                        LocalDate.parse(it, dateFormatter)
+                            .atStartOfDay(ZoneOffset.UTC)
+                            .toInstant()
+                            .toEpochMilli()
+                    }
+                }.getOrNull() ?: 0L
             }
         }
 
@@ -158,123 +173,7 @@ abstract class HentaiReadio : KeiSource() {
         }
     }
 
-    override suspend fun getImageUrl(page: Page) = throw UnsupportedOperationException()
-
     // =============================== Filters ==============================
 
-    override fun getFilterList(data: JsonElement?) = FilterList(
-        StatusFilter(),
-        SortFilter(),
-        Filter.Separator(),
-        GenreFilter(),
-    )
-
-    private open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        fun toUriPart() = vals[state].second
-    }
-
-    private class StatusFilter :
-        UriPartFilter(
-            "Status",
-            arrayOf(
-                Pair("All", "all"),
-                Pair("Completed", "complete"),
-                Pair("Ongoing", "in-process"),
-                Pair("Hiatus", "pause"),
-            ),
-        )
-
-    private class SortFilter :
-        UriPartFilter(
-            "Sort By",
-            arrayOf(
-                Pair("Latest update", "lastest-chap"),
-                Pair("Top all", "top-manga"),
-                Pair("Hot", "hot"),
-                Pair("New", "lastest-manga"),
-                Pair("Top month", "top-month"),
-                Pair("Top week", "top-week"),
-                Pair("Top day", "top-day"),
-                Pair("Follow", "follow"),
-                Pair("Comment", "comment"),
-                Pair("Num. Chapter", "num-chap"),
-            ),
-        )
-
-    private class GenreFilter :
-        UriPartFilter(
-            "Genre",
-            arrayOf(
-                Pair("All genres", ""),
-                Pair("Adult", "adult"),
-                Pair("Action", "action"),
-                Pair("Adaptation", "adaptation"),
-                Pair("Adventure", "adventure"),
-                Pair("Anime", "anime"),
-                Pair("Comedy", "comedy"),
-                Pair("Completed", "completed"),
-                Pair("Cooking", "cooking"),
-                Pair("Crime", "crime"),
-                Pair("Crossdressing", "crossdressin"),
-                Pair("Delinquents", "delinquents"),
-                Pair("Demons", "demons"),
-                Pair("Detective", "detective"),
-                Pair("Drama", "drama"),
-                Pair("Ecchi", "ecchi"),
-                Pair("Fantasy", "fantasy"),
-                Pair("Game", "game"),
-                Pair("Ghosts", "ghosts"),
-                Pair("Hentai", "hentai"),
-                Pair("Harem", "harem"),
-                Pair("Historical", "historical"),
-                Pair("Horror", "horror"),
-                Pair("Isekai", "isekai"),
-                Pair("Josei", "josei"),
-                Pair("Magic", "magic"),
-                Pair("Magical", "magical"),
-                Pair("Manhua", "manhua"),
-                Pair("Manhwa", "manhwa"),
-                Pair("Martial Arts", "martial-arts"),
-                Pair("Mature", "mature"),
-                Pair("Mecha", "mecha"),
-                Pair("Medical", "medical"),
-                Pair("Military", "military"),
-                Pair("Moder", "moder"),
-                Pair("Monsters", "monsters"),
-                Pair("Music", "music"),
-                Pair("Mystery", "mystery"),
-                Pair("Office Workers", "office-workers"),
-                Pair("One shot", "one-shot"),
-                Pair("Philosophical", "philosophical"),
-                Pair("Police", "police"),
-                Pair("Reincarnation", "reincarnation"),
-                Pair("Reverse", "reverse"),
-                Pair("Reverse harem", "reverse-harem"),
-                Pair("Romance", "romance"),
-                Pair("Royal family", "royal-family"),
-                Pair("Smut", "smut"),
-                Pair("School Life", "school-life"),
-                Pair("Sci-fi", "scifi"),
-                Pair("Seinen", "seinen"),
-                Pair("Shoujo", "shoujo"),
-                Pair("Shoujo Ai", "shoujo-ai"),
-                Pair("Shounen", "shounen"),
-                Pair("Shounen Ai", "shounen-ai"),
-                Pair("Slice of Life", "slice-of-life"),
-                Pair("Sports", "sports"),
-                Pair("Super power", "super-power"),
-                Pair("Superhero", "superhero"),
-                Pair("Supernatural", "supernatural"),
-                Pair("Survival", "survival"),
-                Pair("Thriller", "thriller"),
-                Pair("Time Travel", "time-travel"),
-                Pair("Tragedy", "tragedy"),
-                Pair("Vampire", "vampire"),
-                Pair("Villainess", "villainess"),
-                Pair("Webtoons", "webtoons"),
-                Pair("Yaoi", "yaoi"),
-                Pair("Yuri", "yuri"),
-                Pair("Zombies", "zombies"),
-            ),
-        )
+    override fun getFilterList(data: JsonElement?) = getFilters()
 }
