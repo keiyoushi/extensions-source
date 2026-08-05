@@ -229,11 +229,10 @@ abstract class Desu :
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
-            if (url.host != baseUrlHost) {
-                throw Exception("Unsupported url")
-            }
-            val titleid = url.pathSegments[1]
-            return fetchSearchManga(page, "$PREFIX_SLUG_SEARCH$titleid", filters)
+            val titleFullId = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() }
+                ?: throw Exception("Unsupported url")
+            val titleId = titleFullId.substringAfterLast(".")
+            return fetchSearchManga(page, "$PREFIX_SLUG_SEARCH$titleId", filters)
         }
         return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
             val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
