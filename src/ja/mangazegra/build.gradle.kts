@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Manga Zegra"
-    versionCode = 1
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "comiciviewer"
