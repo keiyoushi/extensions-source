@@ -9,8 +9,9 @@ import org.jsoup.nodes.Element
 abstract class Siikomik : Madara() {
 
     override val mangaSubString = "komik"
+    override val chapterMode = ChapterMode.MangaAjax
 
-    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
+    override fun chapterFromElement(element: Element, mangaPath: String): SChapter? = super.chapterFromElement(element, mangaPath)?.apply {
         if (element.hasClass("premium") || element.hasClass("premium-block")) {
             name = "🔒 $name"
         }
