@@ -106,7 +106,7 @@ abstract class JeazScans : HttpSource() {
             ?: throw Exception("Could not extract Jeaz Scans manga id from: ${response.request.url}")
 
         val slug = extractMangaSlug(document)
-            ?: throw Exception("Could not extract Jeaz Scans manga slug")
+            ?: throw Exception("Could not extract Jeaz Scans manga slug from: ${response.request.url}")
 
         return fetchAllChapters(mangaId, slug)
     }
@@ -114,14 +114,14 @@ abstract class JeazScans : HttpSource() {
     private fun fetchAllChapters(mangaId: Int, slug: String): List<SChapter> {
         val pages = walkChapterPages { offset ->
             val request = buildChapterListRequest(mangaId, offset, CHAPTER_API_LIMIT)
-            client.newCall(request).execute().use { apiResponse ->
-                if (!apiResponse.isSuccessful) {
-                    throw Exception("HTTP error ${apiResponse.code} fetching chapters")
-                }
-                val dto = apiResponse.parseAs<ChaptersPageDto>()
-                if (!dto.success) throw Exception("Jeaz Scans chapters API returned error")
-                dto.toChapterPage()
+            val apiResponse = client.newCall(request).execute()
+            if (!apiResponse.isSuccessful) {
+                apiResponse.close()
+                throw Exception("HTTP error ${apiResponse.code} fetching chapters")
             }
+            val dto = apiResponse.parseAs<ChaptersPageDto>()
+            if (!dto.success) throw Exception("Jeaz Scans chapters API returned error")
+            dto.toChapterPage()
         }
         return pages.flatMap { page ->
             page.chapters.mapNotNull { chapter -> chapter.toSChapter(slug, baseUrl) }
@@ -168,18 +168,16 @@ abstract class JeazScans : HttpSource() {
             .set("Referer", document.location())
             .build()
 
-        val payload = client.newCall(GET(apiUrl, requestHeaders)).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw Exception("HTTP error ${response.code}")
-            }
-
-            val apiResponse = response.parseAs<ApiLectorResponse>()
-            if (!apiResponse.success) throw Exception("API returned error")
-
-            apiResponse
+        val response = client.newCall(GET(apiUrl, requestHeaders)).execute()
+        if (!response.isSuccessful) {
+            response.close()
+            throw Exception("HTTP error ${response.code}")
         }
 
-        val pages = payload.paginas
+        val apiResponse = response.parseAs<ApiLectorResponse>()
+        if (!apiResponse.success) throw Exception("API returned error")
+
+        val pages = apiResponse.paginas
 
         return pages.filter { it.dataVerify.isNotBlank() }
             .sortedBy { it.orden }

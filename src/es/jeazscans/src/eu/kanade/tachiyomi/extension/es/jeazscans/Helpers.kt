@@ -10,6 +10,8 @@ import java.util.Locale
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
 private const val DATE_PATTERN = "dd MMM, yyyy"
+private const val DATE_PATTERN_NO_COMMA = "dd MMM yyyy"
+private const val DATE_PATTERN_SHORT = "dd MMM"
 
 private val DATE_LOCALE: Locale = Locale.forLanguageTag("es")
 
@@ -18,6 +20,18 @@ private val DATE_LOCALE: Locale = Locale.forLanguageTag("es")
  */
 internal val dateFormatRef: ThreadLocal<SimpleDateFormat> =
     ThreadLocal.withInitial { SimpleDateFormat(DATE_PATTERN, DATE_LOCALE) }
+
+/**
+ * Thread-local [SimpleDateFormat] for the no-comma `dd MMM yyyy` format.
+ */
+internal val noCommaDateFormatRef: ThreadLocal<SimpleDateFormat> =
+    ThreadLocal.withInitial { SimpleDateFormat(DATE_PATTERN_NO_COMMA, DATE_LOCALE) }
+
+/**
+ * Thread-local [SimpleDateFormat] for the short `dd MMM` format.
+ */
+internal val shortDateFormatRef: ThreadLocal<SimpleDateFormat> =
+    ThreadLocal.withInitial { SimpleDateFormat(DATE_PATTERN_SHORT, DATE_LOCALE) }
 
 /**
  * Regex matching an integer inside a relative-date string such as "hace 3 horas".
@@ -69,10 +83,10 @@ private fun parseAbsoluteDate(date: String): Long {
     val full = dateFormatRef.get().parse(date, ParsePosition(0))?.time
     if (full != null) return full
 
-    val noComma = SimpleDateFormat("dd MMM yyyy", DATE_LOCALE).parse(date, ParsePosition(0))?.time
+    val noComma = noCommaDateFormatRef.get().parse(date, ParsePosition(0))?.time
     if (noComma != null) return noComma
 
-    val short = SimpleDateFormat("dd MMM", DATE_LOCALE).parse(date, ParsePosition(0))?.time
+    val short = shortDateFormatRef.get().parse(date, ParsePosition(0))?.time
     if (short != null) {
         val cal = Calendar.getInstance().apply {
             timeInMillis = short
