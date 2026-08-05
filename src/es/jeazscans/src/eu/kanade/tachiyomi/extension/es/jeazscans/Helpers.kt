@@ -54,10 +54,34 @@ internal fun parseChapterDate(date: String?): Long {
         lowercaseDate.contains("hoy") -> {
             Calendar.getInstance().timeInMillis
         }
-        else -> dateFormatRef.get().run {
-            parse(date, ParsePosition(0))?.time ?: 0L
-        }
+        else -> parseAbsoluteDate(date)
     }
+}
+
+/**
+ * Parse an absolute date, trying progressively shorter formats:
+ * 1. `dd MMM, yyyy` (e.g. "15 Jul, 2025")
+ * 2. `dd MMM yyyy` (no comma)
+ * 3. `dd MMM` (day + month, assumes the current year, as used by the API)
+ * Returns epoch millis, or 0 when no format matches.
+ */
+private fun parseAbsoluteDate(date: String): Long {
+    val full = dateFormatRef.get().parse(date, ParsePosition(0))?.time
+    if (full != null) return full
+
+    val noComma = SimpleDateFormat("dd MMM yyyy", DATE_LOCALE).parse(date, ParsePosition(0))?.time
+    if (noComma != null) return noComma
+
+    val short = SimpleDateFormat("dd MMM", DATE_LOCALE).parse(date, ParsePosition(0))?.time
+    if (short != null) {
+        val cal = Calendar.getInstance().apply {
+            timeInMillis = short
+            set(Calendar.YEAR, Calendar.getInstance().get(Calendar.YEAR))
+        }
+        return cal.timeInMillis
+    }
+
+    return 0L
 }
 
 // ── Chapter-number regex ──────────────────────────────────────────────────────
@@ -142,4 +166,83 @@ internal fun buildApiUrl(location: String, slug: String, cap: String): String? {
             .build()
             .toString()
     }.getOrNull()
+}
+
+// ── Chapter-list API helpers ─────────────────────────────────────────────────
+
+/**
+ * Matches the numeric manga id inside a `manga.php?id=123` canonical URL.
+ */
+internal val MANGA_ID_URL_REGEX: Regex = Regex("""manga\.php\?id=(\d+)""", RegexOption.IGNORE_CASE)
+
+/**
+ * Matches the `const MANGA_ID = 123;` variable embedded in the manga page.
+ */
+internal val MANGA_ID_SCRIPT_REGEX: Regex = Regex("""MANGA_ID\s*=\s*(\d+)""")
+
+/**
+ * Matches the manga slug inside a `/manga/{slug}` or `/leer/{slug}/capitulo-{n}` URL.
+ */
+internal val MANGA_SLUG_URL_REGEX: Regex =
+    Regex("""(?:/manga/|/leer/)([^/]+?)(?:/capitulo-[^/]+)?/?$""", RegexOption.IGNORE_CASE)
+
+/**
+ * Extract the manga id from a canonical `manga.php?id=…` URL, or `null` when absent.
+ */
+internal fun extractMangaIdFromUrl(url: String?): Int? = url?.let { MANGA_ID_URL_REGEX.find(it)?.groupValues?.getOrNull(1)?.toIntOrNull() }
+
+/**
+ * Extract the manga id from the `MANGA_ID` variable embedded in the page scripts.
+ */
+internal fun extractMangaIdFromScript(document: Document): Int? {
+    val scriptContent = document.select("script").joinToString("\n") { it.data() + "\n" + it.html() }
+    return MANGA_ID_SCRIPT_REGEX.find(scriptContent)?.groupValues?.getOrNull(1)?.toIntOrNull()
+}
+
+/**
+ * Extract the manga slug from the page's canonical `/manga/{slug}` link, falling
+ * back to the first `/leer/{slug}/capitulo-…` reader anchor. Returns `null` when
+ * no slug can be found.
+ */
+internal fun extractMangaSlug(document: Document): String? {
+    val canonical = document.selectFirst("link[rel=canonical]")?.attr("abs:href").orEmpty()
+    val source = canonical.ifEmpty { document.selectFirst("a[href*='/leer/']")?.attr("abs:href").orEmpty() }
+    if (source.isBlank()) return null
+    return MANGA_SLUG_URL_REGEX.find(source)?.groupValues?.getOrNull(1)
+}
+
+/**
+ * Upper bound on the number of chapter pages fetched, guarding against a
+ * non-terminating pagination response.
+ */
+internal const val MAX_CHAPTER_PAGES = 100
+
+/**
+ * Walk all chapter pages starting at [initialOffset], stopping when a page is
+ * empty, the server reports `has_more = false`, `next_offset` is missing, or
+ * `next_offset` does not advance past the current offset. [maxPages] prevents
+ * unbounded loops.
+ */
+internal fun walkChapterPages(
+    initialOffset: Int = 0,
+    maxPages: Int = MAX_CHAPTER_PAGES,
+    fetchPage: (offset: Int) -> ChapterPage,
+): List<ChapterPage> {
+    val pages = mutableListOf<ChapterPage>()
+    var offset = initialOffset
+    var fetched = 0
+
+    while (fetched < maxPages) {
+        val page = fetchPage(offset)
+        pages += page
+        fetched++
+
+        if (page.isEmpty || !page.hasMore) break
+        val next = page.nextOffset ?: break
+        if (next <= offset) break
+
+        offset = next
+    }
+
+    return pages
 }

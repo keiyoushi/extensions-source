@@ -1,11 +1,19 @@
 package eu.kanade.tachiyomi.extension.es.jeazscans.test
 
 import eu.kanade.tachiyomi.extension.es.jeazscans.CHAPTER_NUMBER_REGEX
+import eu.kanade.tachiyomi.extension.es.jeazscans.ChapterPage
+import eu.kanade.tachiyomi.extension.es.jeazscans.ChaptersApiChapter
+import eu.kanade.tachiyomi.extension.es.jeazscans.ChaptersPageDto
 import eu.kanade.tachiyomi.extension.es.jeazscans.buildApiUrl
 import eu.kanade.tachiyomi.extension.es.jeazscans.decodeVerifyToUrl
+import eu.kanade.tachiyomi.extension.es.jeazscans.extractMangaIdFromUrl
+import eu.kanade.tachiyomi.extension.es.jeazscans.extractMangaSlug
 import eu.kanade.tachiyomi.extension.es.jeazscans.extractSlugAndCap
 import eu.kanade.tachiyomi.extension.es.jeazscans.parseChapterDate
+import eu.kanade.tachiyomi.extension.es.jeazscans.walkChapterPages
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.junit.Assert.assertEquals
@@ -509,6 +517,197 @@ $pages
 
         val result = decodeVerifyToUrl(element.attr("data-verify"))
         assertEquals(url, result)
+    }
+
+    // ── Chapter API JSON parsing ───────────────────────────────────────────────
+
+    private val chapterApiJson: Json = Json { ignoreUnknownKeys = true }
+
+    @Test
+    fun `chapter api page json parses records and pagination metadata`() {
+        val payload = """
+            {"success":true,"chapters":[
+              {"id":22806,"number":"34.00","title":"Capítulo 34","published_at":"Hoy","is_locked":true},
+              {"id":22267,"number":"33.00","title":"Capítulo 33","published_at":"24 jul","is_locked":false}
+            ],"has_more":true,"next_offset":20,"total_count":34,"match_count":34}
+        """.trimIndent()
+
+        val dto = chapterApiJson.decodeFromString<ChaptersPageDto>(payload)
+
+        assertTrue(dto.success)
+        assertEquals(2, dto.chapters.size)
+        assertTrue(dto.hasMore)
+        assertEquals(20, dto.nextOffset)
+
+        val locked = dto.chapters.first { it.isLocked }
+        assertEquals(22806L, locked.id)
+        assertEquals("34.00", locked.number)
+        assertEquals("Hoy", locked.publishedAt)
+    }
+
+    // ── Chapter API mapping & locked filtering ─────────────────────────────────
+
+    private val slug = "el-personaje-yandere-que-dibuj-"
+    private val baseUrl = "https://lectorhub.j5z.xyz"
+
+    @Test
+    fun `locked api chapter is hard filtered out`() {
+        val locked = ChaptersApiChapter(
+            id = 22806,
+            number = "34.00",
+            title = "Capítulo 34",
+            publishedAt = "Hoy",
+            isLocked = true,
+        )
+
+        assertNull("Pure mapping must drop locked records", locked.toChapterData(slug, baseUrl))
+        assertNull("Adapter must not create SChapter for locked records", locked.toSChapter(slug, baseUrl))
+    }
+
+    @Test
+    fun `unlocked api chapter maps to valid reader url`() {
+        val unlocked = ChaptersApiChapter(
+            id = 22267,
+            number = "33.00",
+            title = "Capítulo 33",
+            publishedAt = "24 jul",
+            isLocked = false,
+        )
+
+        val chapter = unlocked.toChapterData(slug, baseUrl)
+
+        assertNotNull(chapter)
+        assertEquals("Capítulo 33", chapter!!.name)
+        assertEquals(33.0f, chapter.chapterNumber, 0.001f)
+        assertEquals("/leer/$slug/capitulo-33.00", chapter.readerUrl)
+        assertTrue("API short date must be parsed", chapter.dateUpload > 0L)
+    }
+
+    @Test
+    fun `api chapter without number is skipped rather than emitting a fake url`() {
+        val noNumber = ChaptersApiChapter(id = 1L, title = "Capítulo X", isLocked = false)
+
+        assertNull(noNumber.toChapterData(slug, baseUrl))
+    }
+
+    @Test
+    fun `unlocked api chapter without title falls back to numbered name`() {
+        val unnamed = ChaptersApiChapter(id = 22267, number = "30.00", isLocked = false)
+
+        val chapter = unnamed.toChapterData(slug, baseUrl)
+
+        assertNotNull(chapter)
+        assertEquals("Chapter 30", chapter!!.name)
+        assertEquals(30.0f, chapter.chapterNumber, 0.001f)
+    }
+
+    // ── Chapter API pagination control flow ────────────────────────────────────
+
+    @Test
+    fun `walkChapterPages fetches every page through the terminal page`() {
+        val calls = mutableListOf<Int>()
+        val pages = walkChapterPages(initialOffset = 0) { offset ->
+            calls += offset
+            when (offset) {
+                0 -> ChapterPage(chapters = (1..20).map { ChaptersApiChapter(number = "$it.00") }, hasMore = true, nextOffset = 20)
+                else -> ChapterPage(chapters = (21..34).map { ChaptersApiChapter(number = "$it.00") }, hasMore = false, nextOffset = 34)
+            }
+        }
+
+        assertEquals(listOf(0, 20), calls)
+        assertEquals(2, pages.size)
+        assertEquals(34, pages.sumOf { it.chapters.size })
+    }
+
+    @Test
+    fun `walkChapterPages stops when a page is empty`() {
+        var calls = 0
+        walkChapterPages(initialOffset = 0) {
+            calls++
+            ChapterPage(chapters = emptyList(), hasMore = true, nextOffset = 20)
+        }
+
+        assertEquals("Empty page must terminate the walk", 1, calls)
+    }
+
+    @Test
+    fun `walkChapterPages stops on terminal page regardless of next offset`() {
+        var calls = 0
+        walkChapterPages(initialOffset = 0) {
+            calls++
+            ChapterPage(chapters = listOf(ChaptersApiChapter(number = "1.00")), hasMore = false, nextOffset = 999)
+        }
+
+        assertEquals("has_more=false must terminate even with a next_offset", 1, calls)
+    }
+
+    @Test
+    fun `walkChapterPages stops when next offset is missing`() {
+        var calls = 0
+        walkChapterPages(initialOffset = 0) {
+            calls++
+            ChapterPage(chapters = listOf(ChaptersApiChapter(number = "1.00")), hasMore = true, nextOffset = null)
+        }
+
+        assertEquals("Missing next_offset must terminate", 1, calls)
+    }
+
+    @Test
+    fun `walkChapterPages stops when next offset does not advance`() {
+        var calls = 0
+        walkChapterPages(initialOffset = 0) {
+            calls++
+            ChapterPage(chapters = listOf(ChaptersApiChapter(number = "1.00")), hasMore = true, nextOffset = 0)
+        }
+
+        assertEquals("Non-advancing next_offset must terminate", 1, calls)
+    }
+
+    @Test
+    fun `walkChapterPages stops within max pages on a runaway loop`() {
+        var calls = 0
+        val pages = walkChapterPages(initialOffset = 0, maxPages = 5) {
+            calls++
+            ChapterPage(chapters = listOf(ChaptersApiChapter(number = "1.00")), hasMore = true, nextOffset = it + 1)
+        }
+
+        assertTrue("Runaway responses must be bounded", calls <= 5)
+        assertEquals(5, pages.size)
+    }
+
+    // ── Manga id / slug extraction ─────────────────────────────────────────────
+
+    @Test
+    fun `extractMangaIdFromUrl reads id from canonical manga url`() {
+        assertEquals(245, extractMangaIdFromUrl("https://lectorhub.j5z.xyz/manga.php?id=245"))
+        assertNull(extractMangaIdFromUrl("https://lectorhub.j5z.xyz/manga/el-personaje-yandere-que-dibuj-"))
+        assertNull(extractMangaIdFromUrl(null))
+    }
+
+    @Test
+    fun `extractMangaSlug reads slug from canonical link and reader anchor`() {
+        val canonicalDoc = Jsoup.parse(
+            "<html><head><link rel=\"canonical\" href=\"https://lectorhub.j5z.xyz/manga/el-personaje-yandere-que-dibuj-\"></head></html>",
+            "https://lectorhub.j5z.xyz",
+        )
+        assertEquals("el-personaje-yandere-que-dibuj-", extractMangaSlug(canonicalDoc))
+
+        val readerDoc = Jsoup.parse(
+            "<html><body><a href=\"/leer/solo-leveling/capitulo-5\">x</a></body></html>",
+            "https://lectorhub.j5z.xyz",
+        )
+        assertEquals("solo-leveling", extractMangaSlug(readerDoc))
+
+        val empty = Jsoup.parse("<html><body></body></html>", "https://lectorhub.j5z.xyz")
+        assertNull(extractMangaSlug(empty))
+    }
+
+    // ── API short-date parsing ─────────────────────────────────────────────────
+
+    @Test
+    fun `parseChapterDate handles API short day-month date`() {
+        val result = parseChapterDate("24 jul")
+        assertTrue("API short dates must resolve to the current year", result > 0L)
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────

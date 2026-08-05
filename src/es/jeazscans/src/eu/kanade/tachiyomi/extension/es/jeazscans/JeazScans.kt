@@ -100,32 +100,42 @@ abstract class JeazScans : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select("#chaptersContainer a.chapter-item").map { element ->
-            SChapter.create().apply {
-                val chapterUrl = element.attr("abs:href")
-                setUrlWithoutDomain(chapterUrl)
 
-                val parsedChapterNumber = element.attr("data-chapter-number")
-                    .toFloatOrNull()
-                    ?: CHAPTER_NUMBER_REGEX
-                        .find(chapterUrl)
-                        ?.groupValues
-                        ?.getOrNull(1)
-                        ?.toFloatOrNull()
-                    ?: -1f
-                chapter_number = parsedChapterNumber
+        val mangaId = extractMangaIdFromUrl(response.request.url.toString())
+            ?: extractMangaIdFromScript(document)
+            ?: throw Exception("Could not extract Jeaz Scans manga id from: ${response.request.url}")
 
-                val chapterTitle = element.selectFirst(".chapter-title")?.text().orEmpty()
-                name = if (chapterTitle.isNotEmpty()) {
-                    chapterTitle
-                } else {
-                    "Chapter ${parsedChapterNumber.toString().removeSuffix(".0")}"
+        val slug = extractMangaSlug(document)
+            ?: throw Exception("Could not extract Jeaz Scans manga slug")
+
+        return fetchAllChapters(mangaId, slug)
+    }
+
+    private fun fetchAllChapters(mangaId: Int, slug: String): List<SChapter> {
+        val pages = walkChapterPages { offset ->
+            val request = buildChapterListRequest(mangaId, offset, CHAPTER_API_LIMIT)
+            client.newCall(request).execute().use { apiResponse ->
+                if (!apiResponse.isSuccessful) {
+                    throw Exception("HTTP error ${apiResponse.code} fetching chapters")
                 }
-
-                val dateText = element.selectFirst("span:has(i.ph-clock)")?.text()
-                date_upload = parseChapterDate(dateText)
+                val dto = apiResponse.parseAs<ChaptersPageDto>()
+                if (!dto.success) throw Exception("Jeaz Scans chapters API returned error")
+                dto.toChapterPage()
             }
         }
+        return pages.flatMap { page ->
+            page.chapters.mapNotNull { chapter -> chapter.toSChapter(slug, baseUrl) }
+        }
+    }
+
+    private fun buildChapterListRequest(mangaId: Int, offset: Int, limit: Int): Request {
+        val url = "$baseUrl/api_capitulos_manga.php".toHttpUrl().newBuilder()
+            .addQueryParameter("manga_id", mangaId.toString())
+            .addQueryParameter("offset", offset.toString())
+            .addQueryParameter("limit", limit.toString())
+            .addQueryParameter("orden", "desc")
+            .build()
+        return GET(url, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -201,6 +211,7 @@ abstract class JeazScans : HttpSource() {
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     companion object {
+        private const val CHAPTER_API_LIMIT = 20
         private val SINOPSIS_REGEX = Regex("^SINOPSIS:?\\s*", RegexOption.IGNORE_CASE)
     }
 }
