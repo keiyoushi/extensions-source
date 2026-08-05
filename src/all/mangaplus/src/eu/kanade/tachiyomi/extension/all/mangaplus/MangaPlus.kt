@@ -118,12 +118,16 @@ abstract class MangaPlus :
         val result = client.get("$API_URL/web/web_homeV4?lang=$internalLangName&clang=$internalLangName")
             .parseAsProto<MangaPlusResponse>()
 
-        val titles = result.successOrThrow().webHomeView!!.groups
-            .flatMap(UpdatedTitleGroup::titles)
-            .mapNotNull(UpdatedTitle::title)
+        val webHomeView = result.successOrThrow().webHomeView!!
+        val entries = webHomeView.groups.flatMap(UpdatedTitleGroup::titles) + listOfNotNull(webHomeView.featured?.title)
+        val titles = entries
+            .sortedByDescending(UpdatedTitle::updatedAt)
+            .flatMap(UpdatedTitle::latestChapters)
+            .map(LatestChapter::title)
             .filterByLang()
+            .map(Title::toSManga)
 
-        return MangasPage(titles.map(Title::toSManga), hasNextPage = false)
+        return MangasPage(titles, hasNextPage = false)
     }
 
     // =============================== Search ===============================

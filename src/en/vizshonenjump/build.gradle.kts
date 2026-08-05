@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "VIZ"
-    versionCode = 28
+    versionCode = 29
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     deeplink {
         host("www.viz.com")
@@ -33,6 +33,7 @@ keiyoushi {
 
 dependencies {
     implementation("de.stefan-oltmann:kim:0.32.0") {
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-serialization-core")
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-serialization-json")
     }

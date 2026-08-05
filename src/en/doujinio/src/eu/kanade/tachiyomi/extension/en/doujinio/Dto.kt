@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlin.time.Instant
 
 @Serializable
 class PageResponse<T>(val data: T)
@@ -50,9 +51,9 @@ class Chapter(
 ) {
     fun toSChapter() = SChapter.create().apply {
         url = "manga/$mangaId/chapter/$id"
-        name = this@Chapter.name
-        chapter_number = (order + 1).toFloat()
-        date_upload = parseDate(publishedAt)
+        // Can be equal to manga title (gets trimmed to empty)
+        name = "\u2063" + this@Chapter.name
+        date_upload = Instant.parseOrNull(publishedAt)?.toEpochMilliseconds() ?: 0L
     }
 }
 
@@ -71,14 +72,13 @@ class ChapterManifest(
     @SerialName("readingOrder")
     private val pages: List<ChapterPage>,
 ) {
-    fun toPageList() = pages
+    fun toPageList(fragment: String) = pages
         .filter { page ->
             page.type.startsWith("image")
         }.mapIndexed { i, page ->
             Page(
                 index = i,
-                url = metadata.identifier,
-                imageUrl = page.href,
+                imageUrl = page.href + fragment,
             )
         }
 }
@@ -94,6 +94,8 @@ class SearchRequest(
     val keyword: String,
     val page: Int,
     val tags: List<Int> = emptyList(),
+    val sort: String,
+    val sort_dir: String,
 )
 
 @Serializable
@@ -102,3 +104,10 @@ class SearchResponse(
     val to: Int?,
     val total: Int,
 )
+
+@Serializable
+class MangaKeys(
+    private val chmkeys: List<Int>,
+) {
+    fun toByteArray(): ByteArray = ByteArray(chmkeys.size) { chmkeys[it].toByte() }
+}

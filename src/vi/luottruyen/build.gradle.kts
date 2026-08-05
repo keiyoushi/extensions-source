@@ -6,14 +6,14 @@ plugins {
 
 keiyoushi {
     name = "LuotTruyen"
-    versionCode = 9
+    versionCode = 10
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "vi"
         baseUrl {
-            custom("https://luottruyen14.com")
+            custom("https://luottruyen15.com")
         }
     }
 

@@ -73,6 +73,12 @@ class AllTitlesGroup(
 @Serializable
 class WebHomeView(
     @ProtoNumber(2) val groups: List<UpdatedTitleGroup> = emptyList(),
+    @ProtoNumber(7) val featured: FeaturedUpdate?,
+)
+
+@Serializable
+class FeaturedUpdate(
+    @ProtoNumber(2) val title: UpdatedTitle,
 )
 
 @Serializable
@@ -82,10 +88,9 @@ class UpdatedTitleGroup(
 
 @Serializable
 class UpdatedTitle(
-    @ProtoNumber(3) private val latestChapter: LatestChapter? = null,
-) {
-    val title: Title? get() = latestChapter?.title
-}
+    @ProtoNumber(3) val latestChapters: List<LatestChapter>,
+    @ProtoNumber(6) val updatedAt: Int,
+)
 
 @Serializable
 class LatestChapter(
@@ -130,14 +135,14 @@ class TitleDetailView(
             .joinToString("\n\n")
         genre = genreList.mapNotNull { it.name.takeIf(String::isNotEmpty) }.joinToString()
         status = when {
-            isOneShot || nonAppearanceInfo.contains(COMPLETED_REGEX) -> SManga.COMPLETED
+            isOneShot || nonAppearanceInfo.contains(COMPLETED_REGEX) || viewingPeriodDescription.contains("latest 0 chapters") -> SManga.COMPLETED
             nonAppearanceInfo.contains(HIATUS_REGEX) -> SManga.ON_HIATUS
             else -> SManga.ONGOING
         }
     }
 
     companion object {
-        private val COMPLETED_REGEX = "completado|complete|completo".toRegex(RegexOption.IGNORE_CASE)
+        private val COMPLETED_REGEX = "completado|completed?|completo".toRegex(RegexOption.IGNORE_CASE)
         private val HIATUS_REGEX = "on a hiatus".toRegex(RegexOption.IGNORE_CASE)
     }
 }

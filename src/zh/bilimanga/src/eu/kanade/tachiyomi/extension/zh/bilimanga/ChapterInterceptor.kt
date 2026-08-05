@@ -35,7 +35,7 @@ class ChapterInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val origin = chain.request()
         regexOf(origin.url.fragment)?.let {
-            val response = chain.proceed(origin)
+            val response = chain.proceed(origin.newBuilder().removeHeader("Content-Encoding").build())
             val path = it.find(response.body.string())?.groups?.get(1)?.value ?: predictUrlByContext(origin.url)
             val url = origin.url.newBuilder().encodedPath(path.replace(".", "_2.")).build()
             return chain.proceed(origin.newBuilder().url(url).build())
