@@ -38,15 +38,23 @@ abstract class JeazScans : HttpSource() {
     // The site migrated to custom home sections and PHP routes for search.
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/", headers)
 
+    // The homepage popular carousel is a finite collection (24 items); it has no
+    // pagination, so hasNextPage is always false.
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("section:has(h3:matchesOwn((?i)Top Rankings)) a[href*='manga.php?id=']").map { element ->
-            SManga.create().apply {
-                setUrlWithoutDomain(element.attr("abs:href"))
-                title = element.selectFirst("h4, h5")!!.text()
-                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+        val mangas = document.select(".popular-carousel-shell a.popular-card[href*='manga.php?id=']")
+            .mapNotNull { card ->
+                val title = card.selectFirst("strong")?.text()?.trim().orEmpty()
+                if (title.isEmpty()) return@mapNotNull null
+                SManga.create().apply {
+                    setUrlWithoutDomain(card.attr("abs:href"))
+                    this.title = title
+                    thumbnail_url = card.selectFirst("img")?.let { img ->
+                        img.attr("abs:data-src").ifBlank { img.attr("abs:src") }
+                            .takeIf { it.startsWith("http://") || it.startsWith("https://") }
+                    }
+                }
             }
-        }
         return MangasPage(mangas, false)
     }
 

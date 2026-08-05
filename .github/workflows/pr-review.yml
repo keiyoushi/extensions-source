@@ -11,7 +11,7 @@ on:
 
 permissions:
   contents: read
-  issues: write
+  pull-requests: write
 
 concurrency:
   group: deepseek-review-${{ github.event.pull_request.number }}
@@ -35,6 +35,7 @@ jobs:
           import json
           import os
           import sys
+          import urllib.error
           import urllib.request
 
           with open(os.environ["GITHUB_EVENT_PATH"]) as f:
@@ -61,17 +62,32 @@ jobs:
                   print(f"Warning: GET {url} failed: {e}")
                   return None
 
+          class ApiError(Exception):
+              def __init__(self, method, url, status, detail):
+                  self.method = method
+                  self.url = url
+                  self.status = status
+                  self.detail = detail
+                  super().__init__(f"{method} {url} returned HTTP {status}")
+
           def api_request(url, data=None, method="GET"):
-              body = json.dumps(data).encode() if data else None
+              body = json.dumps(data).encode() if data is not None else None
               req = urllib.request.Request(url, data=body, headers=headers, method=method)
               if body:
                   req.add_header("Content-Type", "application/json")
               try:
                   with urllib.request.urlopen(req, timeout=30) as r:
-                      return json.loads(r.read().decode())
+                      raw = r.read().decode()
+                      return json.loads(raw) if raw else None
+              except urllib.error.HTTPError as e:
+                  detail = ""
+                  try:
+                      detail = e.read().decode("utf-8", errors="replace")[:500]
+                  except Exception:
+                      pass
+                  raise ApiError(method, url, e.code, detail) from e
               except Exception as e:
-                  print(f"Warning: {method} {url} failed: {e}")
-                  return None
+                  raise ApiError(method, url, "no response", str(e)) from e
 
           # --- Fetch PR diff ---
           diff_url = pr.get("diff_url", f"{api}/pulls/{pr_number}")
@@ -204,22 +220,35 @@ jobs:
               "Always follow the project's CONTRIBUTING.md._"
           )
 
-          # --- Post or update comment (avoid duplicates) ---
+          # --- Post or update PR review (avoid duplicates) ---
           marker = "<!-- deepseek-pr-reviewer -->"
           comment_body = f"{marker}\n{comment_body}"
 
-          comments_url = f"{api}/issues/{pr_number}/comments"
-          existing = api_get(comments_url) or []
-          comment_id = None
-          for c in existing:
-              if c.get("body", "").startswith(marker):
-                  comment_id = c["id"]
+          reviews_url = f"{api}/pulls/{pr_number}/reviews"
+          existing = api_get(reviews_url) or []
+          review_id = None
+          for rv in existing:
+              if rv.get("body", "").startswith(marker):
+                  review_id = rv["id"]
                   break
 
-          if comment_id:
-              api_request(f"{comments_url}/{comment_id}", {"body": comment_body}, method="PATCH")
-          else:
-              api_request(comments_url, {"body": comment_body}, method="POST")
+          try:
+              if review_id:
+                  api_request(
+                      f"{reviews_url}/{review_id}",
+                      {"body": comment_body},
+                      method="PUT",
+                  )
+              else:
+                  api_request(
+                      reviews_url,
+                      {"body": comment_body, "event": "COMMENT"},
+                      method="POST",
+                  )
+          except ApiError as e:
+              detail = f"\n  Response body: {e.detail}" if e.detail else ""
+              print(f"::error::Failed to publish PR review via {e.method} {e.url}: {e}{detail}")
+              sys.exit(0)
 
           print("Review posted successfully.")
         shell: python

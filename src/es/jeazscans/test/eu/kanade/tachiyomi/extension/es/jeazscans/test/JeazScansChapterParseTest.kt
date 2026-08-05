@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.jeazscans.test
 
 import eu.kanade.tachiyomi.extension.es.jeazscans.CHAPTER_NUMBER_REGEX
+import eu.kanade.tachiyomi.extension.es.jeazscans.ChapterData
 import eu.kanade.tachiyomi.extension.es.jeazscans.ChapterPage
 import eu.kanade.tachiyomi.extension.es.jeazscans.ChaptersApiChapter
 import eu.kanade.tachiyomi.extension.es.jeazscans.ChaptersPageDto
@@ -9,11 +10,14 @@ import eu.kanade.tachiyomi.extension.es.jeazscans.decodeVerifyToUrl
 import eu.kanade.tachiyomi.extension.es.jeazscans.extractMangaIdFromUrl
 import eu.kanade.tachiyomi.extension.es.jeazscans.extractMangaSlug
 import eu.kanade.tachiyomi.extension.es.jeazscans.extractSlugAndCap
+import eu.kanade.tachiyomi.extension.es.jeazscans.formatCountdown
 import eu.kanade.tachiyomi.extension.es.jeazscans.parseChapterDate
+import eu.kanade.tachiyomi.extension.es.jeazscans.parsePaymentUntil
 import eu.kanade.tachiyomi.extension.es.jeazscans.walkChapterPages
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.junit.Assert.assertEquals
@@ -527,7 +531,7 @@ $pages
     fun `chapter api page json parses records and pagination metadata`() {
         val payload = """
             {"success":true,"chapters":[
-              {"id":22806,"number":"34.00","title":"Capítulo 34","published_at":"Hoy","is_locked":true},
+              {"id":22806,"number":"34.00","title":"Capítulo 34","published_at":"Hoy","is_locked":true,"price":120,"payment_until":"2026-08-06 05:06:46"},
               {"id":22267,"number":"33.00","title":"Capítulo 33","published_at":"24 jul","is_locked":false}
             ],"has_more":true,"next_offset":20,"total_count":34,"match_count":34}
         """.trimIndent()
@@ -543,6 +547,8 @@ $pages
         assertEquals(22806L, locked.id)
         assertEquals("34.00", locked.number)
         assertEquals("Hoy", locked.publishedAt)
+        assertEquals("120", (locked.price as? JsonPrimitive)?.content)
+        assertEquals("2026-08-06 05:06:46", locked.paymentUntil)
     }
 
     // ── Chapter API mapping & locked filtering ─────────────────────────────────
@@ -551,17 +557,44 @@ $pages
     private val baseUrl = "https://lectorhub.j5z.xyz"
 
     @Test
-    fun `locked api chapter is hard filtered out`() {
+    fun `locked api chapter maps to non-readable chapter data`() {
         val locked = ChaptersApiChapter(
             id = 22806,
             number = "34.00",
             title = "Capítulo 34",
             publishedAt = "Hoy",
             isLocked = true,
+            price = JsonPrimitive(120),
+            paymentUntil = "2026-08-06 05:06:46",
         )
 
-        assertNull("Pure mapping must drop locked records", locked.toChapterData(slug, baseUrl))
-        assertNull("Adapter must not create SChapter for locked records", locked.toSChapter(slug, baseUrl))
+        val chapter = locked.toChapterData(slug, baseUrl)
+
+        assertNotNull("Locked records must be kept in the chapter list", chapter)
+        assertTrue("Locked record must be flagged as locked", chapter!!.isLocked)
+        assertEquals("Locked reader URL must stay non-readable", "javascript:void(0)", chapter.readerUrl)
+        assertEquals(120, chapter.priceCoins)
+        assertNotNull("Payment deadline must be parsed", chapter.paymentUntilEpoch)
+    }
+
+    @Test
+    fun `locked api chapter materializes locked SChapter with decorated name`() {
+        val locked = ChaptersApiChapter(
+            id = 22806,
+            number = "34.00",
+            title = "Capítulo 34",
+            publishedAt = "Hoy",
+            isLocked = true,
+            price = JsonPrimitive("120"),
+            paymentUntil = "2026-08-06 05:06:46",
+        )
+
+        val chapter = locked.toSChapter(slug, baseUrl)
+
+        assertNotNull(chapter)
+        assertEquals("Locked SChapter URL must stay non-readable", "javascript:void(0)", chapter!!.url)
+        assertTrue("Name must be prefixed with a lock symbol", chapter.name.startsWith("🔒 "))
+        assertTrue("Name must include the price in coins", chapter.name.contains("120 monedas"))
     }
 
     @Test
@@ -599,6 +632,76 @@ $pages
         assertNotNull(chapter)
         assertEquals("Chapter 30", chapter!!.name)
         assertEquals(30.0f, chapter.chapterNumber, 0.001f)
+    }
+
+    // ── Locked chapter display name & countdown ────────────────────────────────
+
+    @Test
+    fun `locked display name includes price and future countdown`() {
+        val future = System.currentTimeMillis() + 11 * 3600_000L + 24 * 60_000L
+        val data = ChapterData(
+            readerUrl = "javascript:void(0)",
+            chapterNumber = 15.0f,
+            name = "capítulo 15",
+            dateUpload = 0L,
+            isLocked = true,
+            priceCoins = 120,
+            paymentUntilEpoch = future,
+        )
+
+        val name = data.displayName()
+
+        assertTrue("Lock symbol must prefix the name", name.startsWith("🔒 capítulo 15"))
+        assertTrue("Price must appear in coins", name.contains("120 monedas"))
+        assertTrue("Future countdown must be appended as a snapshot", name.contains("Gratis en 0d 11h 24m"))
+    }
+
+    @Test
+    fun `locked display name marks elapsed deadline as free`() {
+        val past = System.currentTimeMillis() - 60_000L
+        val data = ChapterData(
+            readerUrl = "javascript:void(0)",
+            chapterNumber = 15.0f,
+            name = "capítulo 15",
+            dateUpload = 0L,
+            isLocked = true,
+            paymentUntilEpoch = past,
+        )
+
+        assertTrue("Elapsed deadline must be flagged as free", data.displayName().contains("Gratis disponible"))
+    }
+
+    @Test
+    fun `unlocked display name is returned verbatim`() {
+        val data = ChapterData(
+            readerUrl = "/leer/slug/capitulo-33.00",
+            chapterNumber = 33.0f,
+            name = "Capítulo 33",
+            dateUpload = 0L,
+        )
+
+        assertEquals("Capítulo 33", data.displayName())
+    }
+
+    @Test
+    fun `parsePaymentUntil parses API datetime`() {
+        val parsed = parsePaymentUntil("2026-08-06 05:06:46")
+
+        assertNotNull(parsed)
+        assertTrue("Deadline must resolve to the future", parsed!! > System.currentTimeMillis())
+    }
+
+    @Test
+    fun `parsePaymentUntil returns null for blank and unparseable values`() {
+        assertNull(parsePaymentUntil(null))
+        assertNull(parsePaymentUntil(""))
+        assertNull(parsePaymentUntil("not a date"))
+    }
+
+    @Test
+    fun `formatCountdown renders days hours and minutes`() {
+        assertEquals("0d 11h 24m", formatCountdown(11 * 3600_000L + 24 * 60_000L))
+        assertEquals("1d 2h 3m", formatCountdown(26 * 3600_000L + 3 * 60_000L))
     }
 
     // ── Chapter API pagination control flow ────────────────────────────────────

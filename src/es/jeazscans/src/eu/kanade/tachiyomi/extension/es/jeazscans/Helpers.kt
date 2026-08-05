@@ -98,6 +98,42 @@ private fun parseAbsoluteDate(date: String): Long {
     return 0L
 }
 
+// ── Locked-chapter payment helpers ────────────────────────────────────────────
+
+private const val PAYMENT_UNTIL_PATTERN = "yyyy-MM-dd HH:mm:ss"
+
+/**
+ * Thread-local [SimpleDateFormat] for the chapters API `payment_until` timestamp.
+ *
+ * The timestamp is interpreted in the device's default timezone as a best-effort
+ * snapshot; the site renders a live ticking countdown that the extension cannot
+ * reproduce without a chapter-list reload.
+ */
+internal val paymentUntilFormatRef: ThreadLocal<SimpleDateFormat> =
+    ThreadLocal.withInitial { SimpleDateFormat(PAYMENT_UNTIL_PATTERN, Locale.ROOT) }
+
+/**
+ * Parse the chapters API `payment_until` timestamp (e.g. `2026-08-06 05:06:46`)
+ * to epoch millis, or `null` when absent or unparseable.
+ */
+internal fun parsePaymentUntil(value: String?): Long? {
+    if (value.isNullOrBlank()) return null
+    return paymentUntilFormatRef.get().parse(value, ParsePosition(0))?.time
+}
+
+/**
+ * Format a remaining duration as a minutes-granularity snapshot, e.g. `0d 11h 24m`.
+ * Rounds up to the next minute so a not-yet-elapsed deadline never renders as
+ * zero minutes.
+ */
+internal fun formatCountdown(remainingMillis: Long): String {
+    val totalMinutes = (remainingMillis.coerceAtLeast(1L) + 59_999L) / 60_000L
+    val days = totalMinutes / (24 * 60)
+    val hours = (totalMinutes % (24 * 60)) / 60
+    val minutes = totalMinutes % 60
+    return "${days}d ${hours}h ${minutes}m"
+}
+
 // ── Chapter-number regex ──────────────────────────────────────────────────────
 
 internal val CHAPTER_NUMBER_REGEX: Regex = Regex("capitulo-([0-9.]+)", RegexOption.IGNORE_CASE)
