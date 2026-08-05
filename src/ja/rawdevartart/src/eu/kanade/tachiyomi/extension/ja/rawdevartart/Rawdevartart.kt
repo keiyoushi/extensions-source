@@ -13,22 +13,23 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class Rawdevartart : KeiSource() {
+    override val supportsFilterFetching: Boolean get() = true
+
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(
         page,
         "",
-        FilterList(
-            SortFilter(),
-            GenreFilter(genres),
-        ),
+        getFilterList(),
     )
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -49,7 +50,7 @@ abstract class Rawdevartart : KeiSource() {
                 return@apply
             }
 
-            (if (filters.isEmpty()) getFilterList() else filters).forEach { f ->
+            filters.forEach { f ->
                 when (f) {
                     is UriFilter -> f.addToUri(this)
                     is GenreFilter -> {
@@ -96,10 +97,35 @@ abstract class Rawdevartart : KeiSource() {
         return "$baseUrl/read/ne$mangaId/chapter-$chapterNumber"
     }
 
-    override fun getFilterList(data: JsonElement?) = FilterList(
-        Filter.Header("Filters are ignored when using text search."),
-        StatusFilter(),
-        SortFilter(),
-        GenreFilter(genres),
-    )
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<Array<Genre>>() ?: return FilterList(
+            SortFilter(),
+            GenreFilter(),
+        )
+
+        return FilterList(
+            Filter.Header("Filters are ignored when using text search."),
+            StatusFilter(),
+            SortFilter(),
+            GenreFilter(genres),
+        )
+    }
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrl/genre/all").asJsoup()
+
+        val genres = document.select(".genre-list a[id]")
+            .map {
+                // <a id="108" class="__link" href="/genre/ne108/school%20life" title="school life">school life</a>
+                val title = it.attr("title")
+                    .split(' ')
+                    .joinToString(" ") { s ->
+                        s.replaceFirstChar(Char::titlecase)
+                    }
+
+                Genre(title, it.id())
+            }
+
+        return genres.toJsonElement()
+    }
 }
