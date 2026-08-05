@@ -54,6 +54,7 @@ abstract class AlphaManga :
     ): SMangaUpdate = coroutineScope {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val mangas = async {
+            if (!fetchDetails) return@async manga
             val document = client.get(getMangaUrl(manga), desktopHeaders).asJsoup()
             SManga.create().apply {
                 title = document.selectFirst("h1.c-h1")!!.text()
@@ -76,6 +77,7 @@ abstract class AlphaManga :
         }
 
         val chapterList = async {
+            if (!fetchChapters) return@async chapters
             client.get("$baseUrl/manga/${manga.url}/episodes.json").parseAs<ChapterResponse>().episodes
                 .filter { !hideLocked || !it.isLocked }
                 .map { it.toSChapter(manga.url) }
