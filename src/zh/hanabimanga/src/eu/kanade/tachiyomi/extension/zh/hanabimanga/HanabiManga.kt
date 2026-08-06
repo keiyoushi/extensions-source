@@ -1,8 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.hanabimanga
 
-import android.util.Patterns
-import android.widget.Toast
-import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -33,13 +30,12 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import java.io.IOException
 import java.util.Locale
 import kotlin.getValue
 
-const val ANONYMOUS_TOKEN =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVoa3ZxcnhtY2FwZ3Rwc3BnbHJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5NjgzMjksImV4cCI6MjA3OTU0NDMyOX0.uuHr888lp14ObW5eWowJrHPJGgQf3sF2l7NPmFN84g4"
-const val COMIC_BODY =
-    "id,title,summary,cover_url,release_date,is_finished,authors,region,latest_chapter_title,tags(id,name),categories(id,name)"
+const val ANONYMOUS_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVoa3ZxcnhtY2FwZ3Rwc3BnbHJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5NjgzMjksImV4cCI6MjA3OTU0NDMyOX0.uuHr888lp14ObW5eWowJrHPJGgQf3sF2l7NPmFN84g4"
+const val COMIC_BODY = "id,title,summary,cover_url,release_date,is_finished,authors,region,latest_chapter_title,tags(id,name),categories(id,name)"
 const val PAGE_SIZE = 20
 
 @Source
@@ -58,42 +54,27 @@ abstract class HanabiManga :
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(TileScrambleInterceptor())
+        addInterceptor { chain ->
+            val request = chain.request()
+            chain.proceed(request).also {
+                if (it.code == 401 && request.url.queryParameterNames.containsAll(listOf("t", "sign"))) {
+                    it.close()
+                    throw IOException("图片链接已过期，请清除章节缓存后重试")
+                }
+            }
+        }
     }
 
     private val pref by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = "EMAIL"
-            title = "登录邮箱"
-            summary = pref.getString(key, "未设置")
-            setDefaultValue(null)
-            setOnPreferenceChangeListener { _, newValue ->
-                if (Patterns.EMAIL_ADDRESS.matcher(newValue as String).matches()) {
-                    summary = newValue
-                    true
-                } else {
-                    Toast.makeText(screen.context, "邮箱格式不正确！", Toast.LENGTH_SHORT).show()
-                    false
-                }
-            }
-        }.also(screen::addPreference)
-        EditTextPreference(screen.context).apply {
-            key = "PASSWORD"
-            title = "登录密码"
-            summary = pref.getString(key, null)?.let { "*".repeat(it.length) } ?: "未设置"
-            setDefaultValue(null)
-            setOnPreferenceChangeListener { _, newValue ->
-                summary = "*".repeat((newValue as String).length)
-                true
-            }
-        }.also(screen::addPreference)
+        preferencesInternal(screen.context, pref).forEach(screen::addPreference)
     }
 
     // Customize
 
     private suspend fun getToken(): String {
-        val httpUrl = baseUrl.toHttpUrl()
+        val httpUrl = getHomeUrl().toHttpUrl()
         val access = client.cookieJar.loadForRequest(httpUrl).find { it.name == "access_token" }
         if (access != null) return access.value
 
@@ -104,9 +85,7 @@ abstract class HanabiManga :
         val response = client.post("$baseUrl/auth/v1/token?grant_type=refresh_token", refreshBody.toJsonRequestBody(), false)
 
         return if (response.isSuccessful) {
-            val json = response.parseAs<JsonObject>()
-            saveTokens(json)
-            json.getString("access_token")
+            response.parseAs<JsonObject>().also(::saveTokens).getString("access_token")
         } else {
             login()
         }
@@ -122,14 +101,14 @@ abstract class HanabiManga :
             put("password", password)
             putJsonObject("gotrue_meta_security") {}
         }
-        val json = client.post("$baseUrl/auth/v1/token?grant_type=password", body.toJsonRequestBody(), true).parseAs<JsonObject>()
+        val response = client.post("$baseUrl/auth/v1/token?grant_type=password", body.toJsonRequestBody(), false)
+        if (response.code == 400) throw Exception("登录失败，邮箱或密码错误")
 
-        saveTokens(json)
-        return json.getString("access_token")
+        return response.parseAs<JsonObject>().also(::saveTokens).getString("access_token")
     }
 
     private fun saveTokens(json: JsonObject) {
-        val httpUrl = baseUrl.toHttpUrl()
+        val httpUrl = getHomeUrl().toHttpUrl()
         val expiresAt = json.getLong("expires_at") * 1000L
         val c1 = Cookie.Builder().name("access_token").value(json.getString("access_token")).domain(httpUrl.host)
             .expiresAt(expiresAt).build()
@@ -155,8 +134,8 @@ abstract class HanabiManga :
     // Popular
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val url =
-            "$baseUrl/rest/v1/comics".toHttpUrl().newBuilder().addPaginationParameters(page, "popularity_daily.desc.nullslast").build()
+        val order = pref.getString(PREF_POPULAR_MANGA, "popularity_daily.desc.nullslast")!!
+        val url = "$baseUrl/rest/v1/comics".toHttpUrl().newBuilder().addPaginationParameters(page, order).build()
         val comics = client.get(url).parseAs<List<Comic>>()
         return MangasPage(comics.map(Comic::toSManga), comics.size == PAGE_SIZE)
     }
