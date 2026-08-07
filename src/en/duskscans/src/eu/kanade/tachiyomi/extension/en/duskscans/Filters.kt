@@ -26,25 +26,9 @@ open class CheckBoxGroup(
     val checked get() = state.filter { it.state }.map { it.name }
 }
 
-class StatusFilter :
-    CheckBoxGroup(
-        name = "Status",
-        options = listOf(
-            "Ongoing",
-            "Completed",
-            "Hiatus",
-        ),
-    )
+class StatusFilter(options: List<String>) : CheckBoxGroup("Status", options)
 
-class TypeFilter :
-    CheckBoxGroup(
-        name = "Type",
-        options = listOf(
-            "Manhwa",
-            "Manga",
-            "Manhua",
-        ),
-    )
+class TypeFilter(options: List<String>) : CheckBoxGroup("Type", options)
 
 class TriStateItem(name: String) : Filter.TriState(name)
 
