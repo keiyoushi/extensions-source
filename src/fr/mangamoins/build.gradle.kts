@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "MangaMoins"
-    versionCode = 11
+    versionCode = 12
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
