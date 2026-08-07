@@ -18,6 +18,11 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
@@ -34,10 +39,14 @@ abstract class Keyoapp :
 
     protected val preferences: SharedPreferences by getPreferencesLazy()
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+
+    protected fun launchIO(block: suspend () -> Unit) = scope.launch { block() }
 
     private val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH)
 
@@ -76,7 +85,9 @@ abstract class Keyoapp :
     override fun popularMangaParse(response: Response): MangasPage {
         runCatching { fetchGenres() }
         val document = response.asJsoup()
-        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
+        val mangas = document.select(popularMangaSelector())
+            .withoutNovels()
+            .map { popularMangaFromElement(it) }
         val hasNextPage = popularMangaNextPageSelector()?.let { document.selectFirst(it) } != null
         return MangasPage(mangas, hasNextPage)
     }
@@ -94,7 +105,9 @@ abstract class Keyoapp :
     override fun latestUpdatesParse(response: Response): MangasPage {
         runCatching { fetchGenres() }
         val document = response.asJsoup()
-        val mangas = document.select(latestUpdatesSelector()).map { latestUpdatesFromElement(it) }
+        val mangas = document.select(latestUpdatesSelector())
+            .withoutNovels()
+            .map { latestUpdatesFromElement(it) }
         val hasNextPage = latestUpdatesNextPageSelector()?.let { document.selectFirst(it) } != null
         return MangasPage(mangas, hasNextPage)
     }
@@ -108,13 +121,9 @@ abstract class Keyoapp :
             if (query.isNotBlank()) {
                 addQueryParameter("q", query)
             }
-            filters.firstInstanceOrNull<GenreList>()?.also { filter ->
-                filter.state
-                    .filter { it.state }
-                    .forEach { genre ->
-                        addQueryParameter("genre", genre.id)
-                    }
-            }
+            filters.firstInstanceOrNull<TypeList>()?.addCheckedTo(this, "type")
+            filters.firstInstanceOrNull<StatusList>()?.addCheckedTo(this, "status")
+            filters.firstInstanceOrNull<GenreList>()?.addCheckedTo(this, "genre")
         }.build()
 
         return GET(url, headers)
@@ -132,8 +141,11 @@ abstract class Keyoapp :
 
         val query = response.request.url.queryParameter("q") ?: ""
         val genres = response.request.url.queryParameterValues("genre").filterNotNull()
+        val types = response.request.url.queryParameterValues("type").filterNotNull()
+        val statuses = response.request.url.queryParameterValues("status").filterNotNull()
 
         val mangaList = document.select(searchMangaSelector())
+            .withoutNovels()
             .filter { it.attr("title").contains(query, true) }
             .filter { entry ->
                 val entryGenres = runCatching {
@@ -141,6 +153,8 @@ abstract class Keyoapp :
                 }.getOrDefault(emptyList())
                 genres.all { genre -> entryGenres.any { it.equals(genre, true) } }
             }
+            .filter { entry -> types.isEmpty() || types.any { it.equals(entry.attr("data-type"), true) } }
+            .filter { entry -> statuses.isEmpty() || statuses.any { it.equals(entry.attr("data-status"), true) } }
             .map(::searchMangaFromElement)
 
         return MangasPage(mangaList, false)
@@ -154,43 +168,88 @@ abstract class Keyoapp :
     private var genresList: List<Genre> = emptyList()
 
     /**
-     * Inner variable to control the genre fetching failed state.
+     * Automatically fetched types from the source to be used in the filters.
      */
-    private var fetchGenresFailed: Boolean = false
+    private var typesList: List<Type> = emptyList()
 
     /**
-     * Inner variable to control how much tries the genres request was called.
+     * Automatically fetched statuses from the source to be used in the filters.
      */
-    private var fetchGenresAttempts: Int = 0
+    private var statusesList: List<Status> = emptyList()
 
-    class Genre(name: String, val id: String = name) : Filter.CheckBox(name)
+    /**
+     * Inner variable to control the filter fetching failed state.
+     */
+    private var fetchFiltersFailed: Boolean = false
+
+    /**
+     * Inner variable to avoid overlapping filter fetches.
+     */
+    @Volatile
+    private var fetchFiltersInProgress: Boolean = false
+
+    /**
+     * Inner variable to control how much tries the filters request was called.
+     */
+    private var fetchFiltersAttempts: Int = 0
+
+    abstract class CheckBoxFilter(name: String, val id: String) : Filter.CheckBox(name)
+
+    class Genre(name: String, id: String = name) : CheckBoxFilter(name, id)
+
+    class Type(name: String, id: String = name) : CheckBoxFilter(name, id)
+
+    class Status(name: String, id: String = name) : CheckBoxFilter(name, id)
 
     protected class GenreList(title: String, genres: List<Genre>) : Filter.Group<Genre>(title, genres)
 
-    override fun getFilterList(): FilterList = if (genresList.isNotEmpty()) {
-        FilterList(
-            GenreList("Genres", genresList),
-        )
-    } else {
-        FilterList(
-            Filter.Header("Press 'Reset' to attempt to show the genres"),
-        )
+    protected class TypeList(title: String, types: List<Type>) : Filter.Group<Type>(title, types)
+
+    protected class StatusList(title: String, statuses: List<Status>) : Filter.Group<Status>(title, statuses)
+
+    override fun getFilterList(): FilterList {
+        launchIO { fetchGenres() }
+
+        val filters = buildList {
+            if (typesList.isNotEmpty()) add(TypeList("Type", typesList))
+            if (statusesList.isNotEmpty()) add(StatusList("Status", statusesList))
+            if (genresList.isNotEmpty()) add(GenreList("Genres", genresList))
+        }
+
+        return if (filters.isNotEmpty()) {
+            FilterList(filters)
+        } else {
+            FilterList(
+                Filter.Header("Press 'Reset' to attempt to show the filters"),
+            )
+        }
     }
 
     /**
-     * Fetch the genres from the source to be used in the filters.
+     * Fetch the filter options from the source to be used in the filters.
      */
     protected open fun fetchGenres() {
-        if (fetchGenresAttempts <= 3 && (genresList.isEmpty() || fetchGenresFailed)) {
-            val genres = runCatching {
-                client.newCall(genresRequest()).execute()
-                    .use { parseGenres(it.asJsoup()) }
-            }
-
-            fetchGenresFailed = genres.isFailure
-            genresList = genres.getOrNull().orEmpty()
-            fetchGenresAttempts++
+        if (fetchFiltersAttempts >= 3 || fetchFiltersInProgress || (genresList.isNotEmpty() && !fetchFiltersFailed)) {
+            return
         }
+
+        fetchFiltersInProgress = true
+        fetchFiltersAttempts++
+
+        try {
+            client.newCall(genresRequest()).execute().use { response ->
+                val document = response.asJsoup()
+                val genres = parseGenres(document)
+                fetchFiltersFailed = genres.isEmpty()
+                genresList = genres
+                typesList = parseTypes(document)
+                statusesList = parseStatuses(document)
+            }
+        } catch (_: Exception) {
+            fetchFiltersFailed = true
+        }
+
+        fetchFiltersInProgress = false
     }
 
     protected open fun genresRequest(): Request = GET("$baseUrl/series/", headers)
@@ -200,10 +259,80 @@ abstract class Keyoapp :
      *
      * @param document The search page document
      */
-    protected open fun parseGenres(document: Document): List<Genre> = document.select("#series_tags_page > button")
-        .map { btn ->
-            Genre(btn.text(), btn.attr("tag"))
+    protected open fun parseGenres(document: Document): List<Genre> {
+        val genres = document.parseDropdown("genre").map { (id, name) -> Genre(name, id) }
+
+        if (genres.isNotEmpty()) {
+            return genres
         }
+
+        return document.select("button[menu-logged][name=genre] [menu-options] [menu-option]")
+            .map { option ->
+                Genre(option.selectFirst("span")?.text().orEmpty(), option.attr("value"))
+            }
+    }
+
+    /**
+     * Get the types from the search page document.
+     *
+     * @param document The search page document
+     */
+    protected open fun parseTypes(document: Document): List<Type> = document.parseDropdown("type")
+        .map { (id, name) -> Type(name, id) }
+        .filterNot { excludeNovels && it.id.equals("novel", true) }
+
+    /**
+     * Get the statuses from the search page document.
+     *
+     * @param document The search page document
+     */
+    protected open fun parseStatuses(document: Document): List<Status> = document.parseDropdown("status")
+        .map { (id, name) -> Status(name, id) }
+
+    /**
+     * Whether novel entries should be excluded from source listings.
+     */
+    protected open val excludeNovels = true
+
+    /**
+     * Returns whether a listing element represents a novel.
+     *
+     * Override this when a site uses different novel markers.
+     */
+    protected open fun isNovel(element: Element): Boolean {
+        if (element.attr("data-type").equals("novel", true)) {
+            return true
+        }
+
+        if (element.select("span").any { it.ownText().equals("novel", true) }) {
+            return true
+        }
+
+        val title = element.attr("title")
+            .ifEmpty { element.selectFirst("[title]")?.attr("title").orEmpty() }
+
+        return NOVEL_TITLE_REGEX.containsMatchIn(title)
+    }
+
+    protected fun Iterable<Element>.withoutNovels(): List<Element> = if (excludeNovels) filterNot(::isNovel) else toList()
+
+    /**
+     * The filter options are only available as the payload of an inline
+     * `initializeDropdownMenu({ ... })` call, not as regular markup.
+     *
+     * @return the `value` to `displayName` pairs of the requested dropdown
+     */
+    private fun Document.parseDropdown(type: String): List<Pair<String, String>> {
+        val regex = dropdownItemsRegex(type)
+        val items = select("script")
+            .firstNotNullOfOrNull { regex.find(it.data()) }
+            ?.groupValues?.get(1)
+            ?: return emptyList()
+
+        return DROPDOWN_ITEM_REGEX.findAll(items)
+            .map { it.groupValues[1] to it.groupValues[2] }
+            .toList()
+    }
 
     // ============================== Details ==============================
     protected open val descriptionSelector: String = "#expand_content p"
@@ -383,6 +512,10 @@ abstract class Keyoapp :
 
     private fun selector(selector: String, contains: List<String>): String = contains.joinToString { selector.replace("%s", it) }
 
+    protected fun <T : CheckBoxFilter> Filter.Group<T>.addCheckedTo(builder: HttpUrl.Builder, name: String) {
+        state.filter { it.state }.forEach { builder.addQueryParameter(name, it.id) }
+    }
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = SHOW_PAID_CHAPTERS_PREF
@@ -399,6 +532,9 @@ abstract class Keyoapp :
     companion object {
         private const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
         private const val SHOW_PAID_CHAPTERS_DEFAULT = false
+        private val NOVEL_TITLE_REGEX = """(?i)(?:\[\s*novel\s*]|\(\s*novel\s*\))""".toRegex()
+        private fun dropdownItemsRegex(type: String) = """type:\s*"$type"\s*,.*?items:\s*\[(.*?)]\s*\}\)""".toRegex(RegexOption.DOT_MATCHES_ALL)
+        val DROPDOWN_ITEM_REGEX = """value:\s*"([^"]+)"\s*,\s*displayName:\s*"([^"]+)"""".toRegex()
         val CDN_HOST_REGEX = """realUrl\s*=\s*`[^`]+//([^/]+)""".toRegex()
         val CDN_CLEAN_REGEX = """\$\{[^}]*\}""".toRegex()
         val IMG_REGEX = """url\(['"]?([^(['")])]+)""".toRegex()

@@ -59,6 +59,7 @@ abstract class RitharScans : Keyoapp() {
 
         val mangas = response.asJsoup()
             .select(searchMangaSelector())
+            .withoutNovels()
             .map(::searchMangaFromElement)
 
         return MangasPage(mangas, false)

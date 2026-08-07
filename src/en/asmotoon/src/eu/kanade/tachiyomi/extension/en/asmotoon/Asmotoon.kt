@@ -20,10 +20,9 @@ abstract class Asmotoon : Keyoapp() {
         .rateLimit(3, 5.seconds) { it.host == baseUrlHost }
         .build()
 
-    // filtering novel entries
-    override fun popularMangaSelector() = "div:contains(Trending) + div .group:not([data-type=novel])"
-    override fun latestUpdatesSelector() = ".group:not([data-type=novel])"
-    override fun searchMangaSelector() = ".group:not([data-type=novel])"
+    override fun popularMangaSelector() = "div:contains(Trending) + div .group"
+    override fun latestUpdatesSelector() = ".group"
+    override fun searchMangaSelector() = ".group"
 
     override val genreSelector: String = ".gap-3 .gap-1 a"
 

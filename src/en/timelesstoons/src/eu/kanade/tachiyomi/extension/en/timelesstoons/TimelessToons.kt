@@ -82,6 +82,7 @@ abstract class TimelessToons : Keyoapp() {
         val statuses = url.queryParameterValues("status").filterNotNull().takeIf { it.isNotEmpty() }
 
         val mangaList = document.select(searchMangaSelector())
+            .withoutNovels()
             .filter { entry ->
                 val titleMatch = query == null ||
                     entry.attr("title").contains(query, ignoreCase = true)

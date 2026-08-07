@@ -27,15 +27,21 @@ abstract class ArtLapsa : Keyoapp() {
 
     override fun genresRequest() = GET("$baseUrl/search", headers)
 
-    override fun parseGenres(document: Document): List<Genre> = document.select("[wire:model.live=genre] option:not(:contains(All))").map { Genre(it.text(), it.attr("value")) }
+    override fun parseGenres(document: Document): List<Genre> = document.parseSelect("genre").map { (id, name) -> Genre(name, id) }
+
+    override fun parseTypes(document: Document): List<Type> = document.parseSelect("type").map { (id, name) -> Type(name, id) }
+
+    override fun parseStatuses(document: Document): List<Status> = document.parseSelect("status").map { (id, name) -> Status(name, id) }
+
+    private fun Document.parseSelect(name: String): List<Pair<String, String>> = select("select[wire:model.live=$name] option[value~=.]").map { it.attr("value") to it.text() }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
             if (page > 1) addQueryParameter("page", page.toString())
             if (query.isNotBlank()) addQueryParameter("title", query)
-            filters.firstInstanceOrNull<GenreList>()?.state
-                ?.filter { it.state }
-                ?.forEach { addQueryParameter("genre", it.id) }
+            filters.firstInstanceOrNull<TypeList>()?.addCheckedTo(this, "type")
+            filters.firstInstanceOrNull<StatusList>()?.addCheckedTo(this, "status")
+            filters.firstInstanceOrNull<GenreList>()?.addCheckedTo(this, "genre")
         }.build()
         return GET(url, headers)
     }
@@ -45,7 +51,9 @@ abstract class ArtLapsa : Keyoapp() {
     override fun searchMangaParse(response: Response): MangasPage {
         runCatching { fetchGenres() }
         val document = response.asJsoup()
-        val mangas = document.select(searchMangaSelector()).map(::searchMangaFromElement)
+        val mangas = document.select(searchMangaSelector())
+            .withoutNovels()
+            .map(::searchMangaFromElement)
         return MangasPage(mangas, hasNextPage = mangas.size >= 20)
     }
 
