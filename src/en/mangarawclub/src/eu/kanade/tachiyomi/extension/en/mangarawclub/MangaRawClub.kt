@@ -232,10 +232,10 @@ abstract class MangaRawClub :
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         return document.select("#chapter-reader img")
-        .filterNot { it.absUrl("src").contains("credits-mgeko.png") }
-        .mapIndexed { i, img ->
-            Page(i, imageUrl = img.absUrl("src"))
-        }
+            .filterNot { it.absUrl("src").contains("credits-mgeko.png") }
+            .mapIndexed { i, img ->
+                Page(i, imageUrl = img.absUrl("src"))
+            }
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
