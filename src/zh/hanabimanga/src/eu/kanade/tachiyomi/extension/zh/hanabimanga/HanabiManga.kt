@@ -186,8 +186,12 @@ abstract class HanabiManga :
         val comic = response.parseAs<List<Comic>>().first()
 
         val smanga = if (fetchDetails) comic.toSManga() else manga
-        val schapters = if (fetchChapters) comic.chapters!!.sortedByDescending { it.idx }.map { it.toSChapter(manga.url) } else chapters
-
+        val schapters = if (fetchChapters) {
+            comic.chapters!!.sortedWith(compareBy<Chapter> { if (it.category == "volume") 1 else 0 }.thenByDescending { it.idx })
+                .map { it.toSChapter(manga.url) }
+        } else {
+            chapters
+        }
         return SMangaUpdate(smanga, schapters)
     }
 
@@ -215,7 +219,7 @@ abstract class HanabiManga :
         }
         val authHeader = headers.newBuilder().add("Authorization", "Bearer ${getToken()}").build()
         val response = client.post("$baseUrl/functions/v1/sd-image-url", authHeader, body.toJsonRequestBody(), false)
-        if (response.code == 429) throw Exception("登录后享受更多免费阅读额度")
+        if (response.code == 429) throw Exception("请先在插件设置中登录！")
         val result = response.parseAs<PagesResult>()
         val info = with(result.scrambleInfo) { "$ticket|$nonce|$cols|$rows" }
         return result.urls.mapIndexed { i, o -> Page(i, imageUrl = "${o.getString("url")}#$info") }

@@ -69,8 +69,8 @@ class Chapter(
         date_upload = Instant.parse(updatedAt).toEpochMilliseconds()
         scanlator = when (category) {
             "normal" -> "连载"
-            "special" -> "单行本"
-            "volume" -> "特典番外"
+            "special" -> "特典番外"
+            "volume" -> "单行本"
             else -> null
         }
         memo = buildJsonObject {
