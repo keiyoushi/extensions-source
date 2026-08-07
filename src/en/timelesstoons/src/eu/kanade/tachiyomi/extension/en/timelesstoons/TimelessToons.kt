@@ -91,7 +91,7 @@ abstract class TimelessToons : Keyoapp() {
                     val tagsAttr = entry.attr("tags").replace("___", "'")
                     val entryGenres = runCatching {
                         tagsAttr.parseAs<List<String>>()
-                    }.getOrDefault(emptyList())
+                    }.getOrDefault(emptyList()).map(String::trim)
                     genres.all { genre -> entryGenres.any { it.equals(genre, ignoreCase = true) } }
                 }
 

@@ -7,7 +7,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -34,19 +33,16 @@ abstract class RitharScans : Keyoapp() {
         Genre(name, id)
     }
 
+    // The genre chips replace each other on click, only one is ever applied
+    override fun getFilterList(): FilterList = singleSelectFilterList()
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("search")
             if (query.isNotBlank()) {
                 addQueryParameter("title", query)
             }
-            filters.firstInstanceOrNull<GenreList>()?.also { filter ->
-                filter.state
-                    .filter { it.state }
-                    .forEach { genre ->
-                        addQueryParameter("genre", genre.id)
-                    }
-            }
+            addSelectedTo(filters)
         }.build()
 
         return GET(url, headers)

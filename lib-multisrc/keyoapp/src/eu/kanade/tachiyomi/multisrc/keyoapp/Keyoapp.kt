@@ -146,16 +146,19 @@ abstract class Keyoapp :
 
         val mangaList = document.select(searchMangaSelector())
             .withoutNovels()
+            .asSequence()
             .filter { it.attr("title").contains(query, true) }
             .filter { entry ->
                 val entryGenres = runCatching {
                     entry.attr("tags").parseAs<List<String>>()
-                }.getOrDefault(emptyList())
+                    // Tags are frequently padded, e.g. `[" Fantasy", "Action "]`
+                }.getOrDefault(emptyList()).map(String::trim)
                 genres.all { genre -> entryGenres.any { it.equals(genre, true) } }
             }
             .filter { entry -> types.isEmpty() || types.any { it.equals(entry.attr("data-type"), true) } }
             .filter { entry -> statuses.isEmpty() || statuses.any { it.equals(entry.attr("data-status"), true) } }
             .map(::searchMangaFromElement)
+            .toList()
 
         return MangasPage(mangaList, false)
     }
@@ -165,22 +168,30 @@ abstract class Keyoapp :
     /**
      * Automatically fetched genres from the source to be used in the filters.
      */
-    private var genresList: List<Genre> = emptyList()
+    protected var genresList: List<Genre> = emptyList()
+        private set
 
     /**
      * Automatically fetched types from the source to be used in the filters.
      */
-    private var typesList: List<Type> = emptyList()
+    protected var typesList: List<Type> = emptyList()
+        private set
 
     /**
      * Automatically fetched statuses from the source to be used in the filters.
      */
-    private var statusesList: List<Status> = emptyList()
+    protected var statusesList: List<Status> = emptyList()
+        private set
 
     /**
      * Inner variable to control the filter fetching failed state.
      */
     private var fetchFiltersFailed: Boolean = false
+
+    /**
+     * Whether filters have been successfully fetched at least once.
+     */
+    private var filtersFetched: Boolean = false
 
     /**
      * Inner variable to avoid overlapping filter fetches.
@@ -207,29 +218,55 @@ abstract class Keyoapp :
 
     protected class StatusList(title: String, statuses: List<Status>) : Filter.Group<Status>(title, statuses)
 
+    /**
+     * Single-choice dropdown, for search endpoints that honour only one value per
+     * query parameter and so cannot be offered as a checkbox group.
+     */
+    protected class SelectFilter(name: String, val param: String, private val options: List<CheckBoxFilter>) : Filter.Select<String>(name, (listOf("All") + options.map { it.name }).toTypedArray()) {
+        val selectedId: String? get() = options.getOrNull(state - 1)?.id
+    }
+
     override fun getFilterList(): FilterList {
         launchIO { fetchGenres() }
 
-        val filters = buildList {
-            if (typesList.isNotEmpty()) add(TypeList("Type", typesList))
-            if (statusesList.isNotEmpty()) add(StatusList("Status", statusesList))
-            if (genresList.isNotEmpty()) add(GenreList("Genres", genresList))
-        }
+        return filterListOrHeader(
+            buildList {
+                if (typesList.isNotEmpty()) add(TypeList("Type", typesList))
+                if (statusesList.isNotEmpty()) add(StatusList("Status", statusesList))
+                if (genresList.isNotEmpty()) add(GenreList("Genres", genresList))
+            },
+        )
+    }
 
-        return if (filters.isNotEmpty()) {
-            FilterList(filters)
-        } else {
-            FilterList(
-                Filter.Header("Press 'Reset' to attempt to show the filters"),
-            )
-        }
+    /**
+     * Filter list for sources that filter server-side and honour only one value per
+     * parameter, instead of returning every entry for client-side narrowing.
+     */
+    protected fun singleSelectFilterList(): FilterList {
+        launchIO { fetchGenres() }
+
+        return filterListOrHeader(
+            buildList {
+                if (typesList.isNotEmpty()) add(SelectFilter("Type", "type", typesList))
+                if (statusesList.isNotEmpty()) add(SelectFilter("Status", "status", statusesList))
+                if (genresList.isNotEmpty()) add(SelectFilter("Genres", "genre", genresList))
+            },
+        )
+    }
+
+    private fun filterListOrHeader(filters: List<Filter<*>>): FilterList = if (filters.isNotEmpty()) {
+        FilterList(filters)
+    } else {
+        FilterList(
+            Filter.Header("Press 'Reset' to attempt to show the filters"),
+        )
     }
 
     /**
      * Fetch the filter options from the source to be used in the filters.
      */
     protected open fun fetchGenres() {
-        if (fetchFiltersAttempts >= 3 || fetchFiltersInProgress || (genresList.isNotEmpty() && !fetchFiltersFailed)) {
+        if (fetchFiltersAttempts >= 3 || fetchFiltersInProgress || filtersFetched) {
             return
         }
 
@@ -239,11 +276,11 @@ abstract class Keyoapp :
         try {
             client.newCall(genresRequest()).execute().use { response ->
                 val document = response.asJsoup()
-                val genres = parseGenres(document)
-                fetchFiltersFailed = genres.isEmpty()
-                genresList = genres
+                genresList = parseGenres(document)
                 typesList = parseTypes(document)
                 statusesList = parseStatuses(document)
+                fetchFiltersFailed = genresList.isEmpty()
+                filtersFetched = genresList.isNotEmpty()
             }
         } catch (_: Exception) {
             fetchFiltersFailed = true
@@ -514,6 +551,12 @@ abstract class Keyoapp :
 
     protected fun <T : CheckBoxFilter> Filter.Group<T>.addCheckedTo(builder: HttpUrl.Builder, name: String) {
         state.filter { it.state }.forEach { builder.addQueryParameter(name, it.id) }
+    }
+
+    protected fun HttpUrl.Builder.addSelectedTo(filters: FilterList) {
+        filters.filterIsInstance<SelectFilter>().forEach { filter ->
+            filter.selectedId?.let { addQueryParameter(filter.param, it) }
+        }
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
