@@ -5,13 +5,13 @@ plugins {
 }
 
 keiyoushi {
-    name = "HentaiRead.io"
+    name = "Alpha Manga"
     versionCode = 1
-    contentWarning = ContentWarning.NSFW
+    contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
         lang = "en"
-        baseUrl = "https://hentairead.io"
+        baseUrl = "https://www.alpha-manga.com"
     }
 }
