@@ -15,14 +15,15 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
@@ -134,7 +135,10 @@ abstract class KhoManhwa : KeiSource() {
     private fun parseChapters(document: Document): List<SChapter> = document.select(".chapter-row").map { el ->
         SChapter.create().apply {
             name = el.selectFirst(".chapter-name strong")!!.text()
-            date_upload = dateFormat.tryParse(el.selectFirst(".chapter-age")?.text())
+            date_upload = chapterDateFormat.tryParseDate(
+                el.selectFirst(".chapter-age")?.text(),
+                chapterDateZone,
+            )
             chapter_number = el.attr("data-number").toFloatOrNull() ?: 0f
             setUrlWithoutDomain(el.selectFirst("a.chapter-main")!!.absUrl("href"))
         }
@@ -206,6 +210,7 @@ abstract class KhoManhwa : KeiSource() {
             }
         }
     }
-}
 
-private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ROOT)
+    private val chapterDateFormat = DateTimeFormatter.ofPattern("MMM dd, uuuu", Locale.ENGLISH)
+    private val chapterDateZone = ZoneId.of("Asia/Ho_Chi_Minh")
+}
