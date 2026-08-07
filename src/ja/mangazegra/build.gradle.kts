@@ -5,14 +5,14 @@ plugins {
 }
 
 keiyoushi {
-    name = "Hayalistic"
-    versionCode = 6
+    name = "Manga Zegra"
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
-    theme = "madara"
+    theme = "comiciviewer"
 
     source {
-        lang = "tr"
-        baseUrl = "https://hayalistic.online"
+        lang = "ja"
+        baseUrl = "https://manga-zegra.com"
     }
 }

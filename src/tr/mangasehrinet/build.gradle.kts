@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Manga Şehri.net"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
