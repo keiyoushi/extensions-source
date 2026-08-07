@@ -6,12 +6,18 @@ plugins {
 
 keiyoushi {
     name = "ZetTruyen"
-    versionCode = 11
+    versionCode = 12
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "vi"
-        baseUrl = "https://www.zettruyen.homes"
+        baseUrl {
+            custom("https://www.zettruyen.homes")
+        }
+    }
+
+    deeplink {
+        path("/truyen-tranh/..*")
     }
 }
