@@ -8,6 +8,9 @@ import java.util.Locale
 @Source
 abstract class MangaSehriNet : Madara() {
     override val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr"))
-    override val useLoadMoreRequest = LoadMoreStrategy.AutoDetect
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = false
+
+    override fun popularMangaSelector() = "div.page-item-detail"
 }
