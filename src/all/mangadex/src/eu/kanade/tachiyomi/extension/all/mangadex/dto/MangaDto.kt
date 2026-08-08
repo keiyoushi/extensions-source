@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.mangadex.dto
 
-import eu.kanade.tachiyomi.extension.all.mangadex.MDConstants
+import eu.kanade.tachiyomi.extension.all.mangadex.Constants
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -18,7 +18,7 @@ typealias MangaListDto = PaginatedResponseDto<MangaDataDto>
 typealias MangaDto = ResponseDto<MangaDataDto>
 
 @Serializable
-@SerialName(MDConstants.MANGA)
+@SerialName(Constants.MANGA)
 data class MangaDataDto(override val attributes: MangaAttributesDto? = null) : EntityDto()
 
 @Serializable
@@ -84,7 +84,7 @@ enum class StatusDto(val value: String) {
 }
 
 @Serializable
-@SerialName(MDConstants.TAG)
+@SerialName(Constants.TAG)
 data class TagDto(override val attributes: TagAttributesDto? = null) : EntityDto()
 
 @Serializable

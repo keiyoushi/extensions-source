@@ -9,7 +9,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.lib.i18n.Intl
 import okhttp3.HttpUrl
 
-class MangaDexFilters {
+class Filters {
 
     internal fun getMDFilterList(
         preferences: SharedPreferences,
@@ -58,10 +58,10 @@ class MangaDexFilters {
             state.filter(OriginalLanguage::state)
                 .forEach { lang ->
                     // dex has zh and zh-hk for chinese manhua
-                    if (lang.isoCode == MDConstants.ORIGINAL_LANGUAGE_PREF_VAL_CHINESE) {
+                    if (lang.isoCode == Constants.ORIGINAL_LANGUAGE_PREF_VAL_CHINESE) {
                         url.addQueryParameter(
                             "originalLanguage[]",
-                            MDConstants.ORIGINAL_LANGUAGE_PREF_VAL_CHINESE_HK,
+                            Constants.ORIGINAL_LANGUAGE_PREF_VAL_CHINESE_HK,
                         )
                     }
 
@@ -76,7 +76,7 @@ class MangaDexFilters {
         intl: Intl,
     ): List<OriginalLanguage> {
         val originalLanguages = preferences.getStringSet(
-            MDConstants.getOriginalLanguagePrefKey(dexLang),
+            Constants.getOriginalLanguagePrefKey(dexLang),
             setOf(),
         )!!
 
@@ -84,26 +84,26 @@ class MangaDexFilters {
             OriginalLanguage(
                 name = intl.format(
                     "original_language_filter_japanese",
-                    intl.languageDisplayName(MangaDexIntl.JAPANESE),
+                    intl.languageDisplayName(MDIntl.JAPANESE),
                 ),
-                isoCode = MDConstants.ORIGINAL_LANGUAGE_PREF_VAL_JAPANESE,
-                state = MDConstants.ORIGINAL_LANGUAGE_PREF_VAL_JAPANESE in originalLanguages,
+                isoCode = Constants.ORIGINAL_LANGUAGE_PREF_VAL_JAPANESE,
+                state = Constants.ORIGINAL_LANGUAGE_PREF_VAL_JAPANESE in originalLanguages,
             ),
             OriginalLanguage(
                 name = intl.format(
                     "original_language_filter_chinese",
-                    intl.languageDisplayName(MangaDexIntl.CHINESE),
+                    intl.languageDisplayName(MDIntl.CHINESE),
                 ),
-                isoCode = MDConstants.ORIGINAL_LANGUAGE_PREF_VAL_CHINESE,
-                state = MDConstants.ORIGINAL_LANGUAGE_PREF_VAL_CHINESE in originalLanguages,
+                isoCode = Constants.ORIGINAL_LANGUAGE_PREF_VAL_CHINESE,
+                state = Constants.ORIGINAL_LANGUAGE_PREF_VAL_CHINESE in originalLanguages,
             ),
             OriginalLanguage(
                 name = intl.format(
                     "original_language_filter_korean",
-                    intl.languageDisplayName(MangaDexIntl.KOREAN),
+                    intl.languageDisplayName(MDIntl.KOREAN),
                 ),
-                isoCode = MDConstants.ORIGINAL_LANGUAGE_PREF_VAL_KOREAN,
-                state = MDConstants.ORIGINAL_LANGUAGE_PREF_VAL_KOREAN in originalLanguages,
+                isoCode = Constants.ORIGINAL_LANGUAGE_PREF_VAL_KOREAN,
+                state = Constants.ORIGINAL_LANGUAGE_PREF_VAL_KOREAN in originalLanguages,
             ),
         )
     }
@@ -125,22 +125,22 @@ class MangaDexFilters {
         intl: Intl,
     ): List<ContentRating> {
         val contentRatings = preferences.getStringSet(
-            MDConstants.getContentRatingPrefKey(dexLang),
-            MDConstants.contentRatingPrefDefaults,
+            Constants.getContentRatingPrefKey(dexLang),
+            Constants.contentRatingPrefDefaults,
         )
 
         return listOf(
             ContentRating(intl["content_rating_safe"], ContentRatingDto.SAFE.value).apply {
-                state = contentRatings?.contains(MDConstants.CONTENT_RATING_PREF_VAL_SAFE) ?: true
+                state = contentRatings?.contains(Constants.CONTENT_RATING_PREF_VAL_SAFE) ?: true
             },
             ContentRating(intl["content_rating_suggestive"], ContentRatingDto.SUGGESTIVE.value).apply {
-                state = contentRatings?.contains(MDConstants.CONTENT_RATING_PREF_VAL_SUGGESTIVE) ?: true
+                state = contentRatings?.contains(Constants.CONTENT_RATING_PREF_VAL_SUGGESTIVE) ?: true
             },
             ContentRating(intl["content_rating_erotica"], ContentRatingDto.EROTICA.value).apply {
-                state = contentRatings?.contains(MDConstants.CONTENT_RATING_PREF_VAL_EROTICA) ?: false
+                state = contentRatings?.contains(Constants.CONTENT_RATING_PREF_VAL_EROTICA) ?: false
             },
             ContentRating(intl["content_rating_pornographic"], ContentRatingDto.PORNOGRAPHIC.value).apply {
-                state = contentRatings?.contains(MDConstants.CONTENT_RATING_PREF_VAL_PORNOGRAPHIC) ?: false
+                state = contentRatings?.contains(Constants.CONTENT_RATING_PREF_VAL_PORNOGRAPHIC) ?: false
             },
         )
     }
@@ -389,7 +389,7 @@ class MangaDexFilters {
     }
 
     private fun List<Tag>.sortIfTranslated(intl: Intl): List<Tag> = apply {
-        if (intl.chosenLanguage == MangaDexIntl.ENGLISH) {
+        if (intl.chosenLanguage == MDIntl.ENGLISH) {
             return this
         }
 

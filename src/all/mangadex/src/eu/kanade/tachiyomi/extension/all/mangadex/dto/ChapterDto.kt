@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.mangadex.dto
 
-import eu.kanade.tachiyomi.extension.all.mangadex.MDConstants
+import eu.kanade.tachiyomi.extension.all.mangadex.Constants
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -9,7 +9,7 @@ typealias ChapterListDto = PaginatedResponseDto<ChapterDataDto>
 typealias ChapterDto = ResponseDto<ChapterDataDto>
 
 @Serializable
-@SerialName(MDConstants.CHAPTER)
+@SerialName(Constants.CHAPTER)
 data class ChapterDataDto(override val attributes: ChapterAttributesDto? = null) : EntityDto()
 
 @Serializable
