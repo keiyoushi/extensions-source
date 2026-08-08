@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Hive Scans"
-    versionCode = 43
+    versionCode = 44
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "iken"
