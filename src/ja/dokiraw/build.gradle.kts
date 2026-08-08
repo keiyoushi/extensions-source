@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Dokiraw"
-    versionCode = 5
+    versionCode = 6
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "liliana"
@@ -14,7 +14,7 @@ keiyoushi {
     source {
         lang = "ja"
         baseUrl {
-            custom("https://dokiraw.biz")
+            custom("https://dokiraw.work")
         }
     }
 }
