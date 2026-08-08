@@ -17,6 +17,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -93,6 +94,20 @@ abstract class ZetTruyen : KeiSource() {
     override fun getFilterList(data: JsonElement?) = getFilters()
 
     // =========================== Manga Details ============================
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "truyen-tranh") return null
+
+        val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
+        val isDetailUrl = url.pathSegments.size == 2
+        val isChapterUrl = url.pathSegments.size == 3 && url.pathSegments[2].startsWith("chuong-")
+        if (!isDetailUrl && !isChapterUrl) return null
+
+        val mangaPath = "/truyen-tranh/$slug"
+        return parseMangaDetails(client.get("$baseUrl$mangaPath").asJsoup()).apply {
+            setUrlWithoutDomain(mangaPath)
+        }
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
