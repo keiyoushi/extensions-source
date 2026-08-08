@@ -64,7 +64,7 @@ class Chapter(
 ) {
     fun toSChapter(cid: String) = SChapter.create().apply {
         url = id.toString()
-        name = "$title（${size}P）"
+        name = title
         // chapter_number = idx.toFloat()
         date_upload = Instant.parse(updatedAt).toEpochMilliseconds()
         scanlator = when (category) {

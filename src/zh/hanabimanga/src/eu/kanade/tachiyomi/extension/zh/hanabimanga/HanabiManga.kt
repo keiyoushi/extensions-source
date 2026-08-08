@@ -73,7 +73,7 @@ abstract class HanabiManga :
 
     // Customize
 
-    private suspend fun getToken(): String {
+    private suspend fun token(): String {
         val httpUrl = getHomeUrl().toHttpUrl()
         val access = client.cookieJar.loadForRequest(httpUrl).find { it.name == "access_token" }
         if (access != null) return access.value
@@ -217,7 +217,7 @@ abstract class HanabiManga :
                 repeat(chapter.memo["size"]!!.int) { add(String.format(Locale.getDefault(), "%03d", it + 1)) }
             }
         }
-        val authHeader = headers.newBuilder().add("Authorization", "Bearer ${getToken()}").build()
+        val authHeader = headers.newBuilder().add("Authorization", "Bearer ${token()}").build()
         val response = client.post("$baseUrl/functions/v1/sd-image-url", authHeader, body.toJsonRequestBody(), false)
         if (response.code == 429) throw Exception("请先在插件设置中登录！")
         val result = response.parseAs<PagesResult>()

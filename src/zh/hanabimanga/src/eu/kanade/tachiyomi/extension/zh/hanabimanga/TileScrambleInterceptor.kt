@@ -32,7 +32,6 @@ class TileScrambleInterceptor : Interceptor {
         if (!response.isSuccessful) return response
 
         val restored = TileRestorer.restore(response.body.bytes(), info)
-
         return response.newBuilder()
             .body(Buffer().write(restored).asResponseBody(mediaType, restored.size.toLong()))
             .build()
@@ -169,7 +168,7 @@ private object TileRestorer {
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
             return out.toByteArray()
         } finally {
-            bitmap.recycle() // 异常也确保释放
+            bitmap.recycle()
         }
     }
 
