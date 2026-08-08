@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Manganato"
-    versionCode = 6
+    versionCode = 7
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "mangabox"
@@ -16,7 +16,6 @@ keiyoushi {
         baseUrl {
             mirrors(
                 "https://www.natomanga.com",
-                "https://www.nelomanga.com",
                 "https://www.nelomanga.net",
                 "https://www.manganato.gg",
             )
