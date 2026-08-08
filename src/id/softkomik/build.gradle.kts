@@ -6,12 +6,14 @@ plugins {
 
 keiyoushi {
     name = "Softkomik"
-    versionCode = 13
-    contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    versionCode = 14
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
 
     source {
         lang = "id"
-        baseUrl = "https://softkomik.co"
+        baseUrl {
+            mirrors("https://softkomik.co", "https://softkomik.online")
+        }
     }
 }
