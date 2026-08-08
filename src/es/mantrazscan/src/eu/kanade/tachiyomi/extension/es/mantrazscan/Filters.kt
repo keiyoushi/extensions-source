@@ -5,6 +5,17 @@ import eu.kanade.tachiyomi.source.model.Filter
 open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
     fun toUriPart() = vals[state].second
 }
+class TypeFilter :
+    UriPartFilter(
+        "Tipo",
+        arrayOf(
+            Pair("Todos", ""),
+            Pair("+18", "adult"),
+            Pair("BL", "bl"),
+            Pair("Shoujo", "shoujo"),
+            Pair("Manga", "manga"),
+        ),
+    )
 
 class GenreFilter :
     UriPartFilter(
@@ -24,38 +35,5 @@ class GenreFilter :
             Pair("Vida Escolar", "vida-escolar"),
             Pair("Seinen", "seinen"),
             Pair("Shounen", "shounen"),
-        ),
-    )
-
-class StatusFilter :
-    UriPartFilter(
-        "Estado",
-        arrayOf(
-            Pair("Todos", ""),
-            Pair("En curso", "ongoing"),
-            Pair("Completado", "completed"),
-            Pair("Hiatus", "hiatus"),
-        ),
-    )
-
-class SortFilter :
-    UriPartFilter(
-        "Ordenar",
-        arrayOf(
-            Pair("Recientes", "updated"),
-            Pair("Vistas", "views"),
-            Pair("Rating", "rating"),
-        ),
-    )
-
-class TypeFilter :
-    UriPartFilter(
-        "Tipo",
-        arrayOf(
-            Pair("Todos", ""),
-            Pair("Adulto", "adult"),
-            Pair("BL", "bl"),
-            Pair("Shoujo", "shoujo"),
-            Pair("Manga", "manga"),
         ),
     )
