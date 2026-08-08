@@ -19,6 +19,5 @@ keiyoushi {
 
     deeplink {
         path("/..*")
-        path("/..*/..*")
     }
 }
