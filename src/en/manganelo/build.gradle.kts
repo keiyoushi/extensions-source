@@ -16,7 +16,6 @@ keiyoushi {
         baseUrl {
             mirrors(
                 "https://www.natomanga.com",
-                "https://www.nelomanga.com",
                 "https://www.nelomanga.net",
                 "https://www.manganato.gg",
             )
