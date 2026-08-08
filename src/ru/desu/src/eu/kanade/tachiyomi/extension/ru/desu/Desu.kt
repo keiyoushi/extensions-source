@@ -17,14 +17,6 @@ import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.float
-import kotlinx.serialization.json.floatOrNull
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -89,31 +81,31 @@ abstract class Desu :
 
         if (!synonyms.isNullOrEmpty()) {
             altName = "Альтернативные названия:\n" +
-                synonyms.replace("/", " / ") +
+                synonyms.joinToString(separator = " / ") +
                 "\n\n"
         }
 
-        return SManga.create().apply {
-            title = if (isEng.equals("rus")) {
+        return SManga.create().also { manga ->
+            manga.title = if (isEng.equals("rus")) {
                 russian
             } else {
                 name
             }
-            url = "/$id"
-            thumbnail_url = image.original
-            description = if (isEng.equals("rus")) {
+            manga.url = "/$manga_id"
+            manga.thumbnail_url = cover.preview
+            manga.description = if (isEng.equals("rus")) {
                 name
             } else {
                 russian
             } + "\n" + ratingStar + " " + ratingValue + " (голосов: " +
-                score_users + ")\n" + altName + this@toSManga.description
-            genre = ("$category, $rawAgeStop, $genresStr").split(", ").filter { it.isNotEmpty() }.joinToString { it.trim() }
-            status = when (trans_status) {
+                score_votes + ")\n" + altName + description
+            manga.genre = ("$category, $rawAgeStop, $genresStr").split(", ").filter { it.isNotEmpty() }.joinToString { it.trim() }
+            manga.status = when (translation_status) {
                 "continued" -> SManga.ONGOING
 
                 "completed" -> SManga.COMPLETED
 
-                else -> when (this@toSManga.status) {
+                else -> when (status) {
                     "ongoing" -> SManga.ONGOING
 
                     "released" -> SManga.COMPLETED
@@ -122,7 +114,7 @@ abstract class Desu :
                     else -> SManga.UNKNOWN
                 }
             }
-            author = authorsStr
+            manga.author = authorsStr
         }
     }
 
@@ -184,55 +176,50 @@ abstract class Desu :
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val responseString = response.body.string()
-        val series = json.decodeFromString<SeriesWrapperDto<MangaDetDto>>(responseString)
-        val genresStr = json.decodeFromString<SeriesWrapperDto<MangaDetGenresDto>>(responseString).response.genres!!.joinToString { it.russian }
-        val authorsStr = if (responseString.contains("people_name")) {
-            json.decodeFromString<SeriesWrapperDto<MangaDetAuthorsDto>>(responseString).response.authors!!.joinToString { it.people_name }
+        val series = json.decodeFromString<InfoWrapperDto<MangaDetDto>>(responseString)
+        val genresStr = json.decodeFromString<InfoWrapperDto<MangaDetGenresDto>>(responseString).manga.genres!!.joinToString { it.name }
+        val authorsStr = if (responseString.contains("author_id")) {
+            json.decodeFromString<InfoWrapperDto<MangaDetAuthorsDto>>(responseString).manga.authors!!.joinToString { it.name }
         } else {
             null
         }
-        return series.response.toSManga(genresStr, authorsStr)
+        return series.manga.toSManga(genresStr, authorsStr)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val obj = json.parseToJsonElement(response.body.string())
-            .jsonObject["response"]!!
-            .jsonObject
+        val responseString = response.body.string()
+        val objChapter = json.decodeFromString<SeriesWrapperDto<List<ChaptersDto>>>(responseString).chapters
 
-        val cid = obj["id"]!!.jsonPrimitive.int
-        val objChapter = obj["chapters"]!!
-        return objChapter.jsonObject["list"]!!.jsonArray.filterNot { it.jsonObject["vol"]!!.jsonPrimitive.floatOrNull!! == objChapter.jsonObject["last"]!!.jsonObject["vol"]!!.jsonPrimitive.float && it.jsonObject["ch"]!!.jsonPrimitive.floatOrNull!! > objChapter.jsonObject["last"]!!.jsonObject["ch"]!!.jsonPrimitive.float }.map {
-            val chapterObj = it.jsonObject
-            val ch = chapterObj["ch"]!!.jsonPrimitive.content
-            val vol = chapterObj["vol"]!!.jsonPrimitive.content
-            val fullNumStr = "$vol. Глава $ch"
-            val title = chapterObj["title"]!!.jsonPrimitive.contentOrNull ?: ""
-
+        val chaptersList = objChapter.map { chapter ->
+            val fullNumStr = "${chapter.volume}. Глава ${chapter.number}"
             SChapter.create().apply {
-                name = "$fullNumStr $title"
+                name = chapter.title?.let { "$fullNumStr $it" } ?: fullNumStr
                 // #apiChapter - JSON API url to automatically delete when chapter is opened in browser
-                url = "/manga/$cid/vol$vol/ch$ch/rus" + "#apiChapter/$cid/chapter/${chapterObj["id"]!!.jsonPrimitive.int}"
-                chapter_number = ch.toFloatOrNull() ?: -1f
-                date_upload = chapterObj["date"]!!.jsonPrimitive.long * 1000L
+                url = chapter.view_url + "#apiChapter/${chapter.manga_id}/chapters/${chapter.chapter_id}"
+                chapter_number = chapter.number.toFloatOrNull() ?: -1f
+                date_upload = chapter.publish_date.times(1000L)
             }
         }
+        return chaptersList
     }
 
-    override fun chapterListRequest(manga: SManga): Request = titleDetailsRequest(manga)
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + API_URL + manga.url + "/chapters", headers)
 
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + API_URL + chapter.url.substringAfterLast("#apiChapter"), headers)
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBeforeLast("#apiChapter")
+    override fun getChapterUrl(chapter: SChapter): String = chapter.url.substringBeforeLast("#apiChapter")
 
     override fun pageListParse(response: Response): List<Page> {
-        val obj = json.parseToJsonElement(response.body.string())
-            .jsonObject["response"]!!
-            .jsonObject
+        val responseString = response.body.string()
 
-        return obj["pages"]!!.jsonObject["list"]!!.jsonArray
-            .mapIndexed { i, jsonEl ->
-                Page(i, "", jsonEl.jsonObject["img"]!!.jsonPrimitive.content.replace(Regex("(?<=\\.)desu\\..+(?=/manga/)"), baseUrl.substringAfter("://")))
-            }
+        val result = json.decodeFromString<ChapterWrapperDto<ChapterDataDto>>(responseString)
+
+        // Теперь компилятор точно знает, что result.chapter — это ChapterDataDto
+        val objPages = result.chapter.pages
+
+        return objPages.mapIndexed { index, page ->
+            Page(index, imageUrl = page.url)
+        }
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
@@ -242,11 +229,10 @@ abstract class Desu :
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith("https://")) {
             val url = query.toHttpUrl()
-            if (url.host != baseUrlHost) {
-                throw Exception("Unsupported url")
-            }
-            val titleid = url.pathSegments[1]
-            return fetchSearchManga(page, "$PREFIX_SLUG_SEARCH$titleid", filters)
+            val titleFullId = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() }
+                ?: throw Exception("Unsupported url")
+            val titleId = titleFullId.substringAfterLast(".")
+            return fetchSearchManga(page, "$PREFIX_SLUG_SEARCH$titleId", filters)
         }
         return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
             val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
@@ -363,6 +349,6 @@ abstract class Desu :
     companion object {
         const val PREFIX_SLUG_SEARCH = "slug:"
         private const val LANGUAGE_PREF = "DesuTitleLanguage"
-        private const val API_URL = "/manga/api"
+        private const val API_URL = "/api/manga/"
     }
 }

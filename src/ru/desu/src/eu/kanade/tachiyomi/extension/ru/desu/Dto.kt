@@ -3,8 +3,8 @@ package eu.kanade.tachiyomi.extension.ru.desu
 import kotlinx.serialization.Serializable
 
 @Serializable
-class SeriesWrapperDto<T>(
-    val response: T,
+class InfoWrapperDto<T>(
+    val manga: T,
 )
 
 @Serializable
@@ -22,22 +22,22 @@ class PageWrapperDto<T>(
 
 @Serializable
 class MangaDetDto(
-    val id: Long,
+    val manga_id: Long,
     val name: String,
     val russian: String,
     val kind: String?,
     val description: String?,
     val score: Float?,
-    val score_users: Long?,
+    val score_votes: Long?,
     val age_limit: String?,
-    val synonyms: String?,
-    val image: ImgDto,
-    val trans_status: String?,
+    val synonyms: List<String>,
+    val cover: ImgDto,
+    val translation_status: String?,
     val status: String?,
 ) {
     @Serializable
     class ImgDto(
-        val original: String?,
+        val preview: String?,
     )
 }
 
@@ -47,7 +47,7 @@ class MangaDetGenresDto(
 ) {
     @Serializable
     class TagsDto(
-        val russian: String,
+        val name: String,
     )
 }
 
@@ -57,6 +57,39 @@ class MangaDetAuthorsDto(
 ) {
     @Serializable
     class PeopleDto(
-        val people_name: String,
+        val name: String,
     )
 }
+
+@Serializable
+class SeriesWrapperDto<T>(
+    val chapters: T,
+)
+
+@Serializable
+class ChaptersDto(
+    val chapter_id: Long,
+    val manga_id: Long,
+    val volume: String,
+    val number: String,
+    val title: String?,
+    val publish_date: Long,
+    val status: String,
+    val is_readable: Boolean,
+    val view_url: String,
+)
+
+@Serializable
+class ChapterWrapperDto<T>(
+    val chapter: T,
+)
+
+@Serializable
+class ChapterDataDto(
+    val pages: List<ChapterPageDto>,
+)
+
+@Serializable
+class ChapterPageDto(
+    val url: String,
+)
