@@ -12,7 +12,9 @@ keiyoushi {
 
     source {
         lang = "vi"
-        baseUrl = "https://damconuong.sbs"
+        baseUrl {
+            custom("https://damconuong.sbs")
+        }
     }
 
     deeplink {
