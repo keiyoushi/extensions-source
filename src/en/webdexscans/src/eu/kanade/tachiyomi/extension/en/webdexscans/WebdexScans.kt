@@ -20,6 +20,7 @@ import keiyoushi.utils.string
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
@@ -34,13 +35,12 @@ abstract class WebdexScans :
     private val supabaseUrl = "https://nrqghtbdrdnoywxjkgkf.supabase.co/rest/v1"
     private val supabaseApiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycWdodGJkcmRub3l3eGprZ2tmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4Njg4NDEsImV4cCI6MjA5MjQ0NDg0MX0.Gnrn33_LMxFA9m_OdCpybBZ-Cjcc5rdsJlD8Y9eOICg"
 
-    private val supabaseHeaders by lazy {
-        headersBuilder()
+    private val supabaseHeaders: Headers
+        get() = headersBuilder()
             .add("apikey", supabaseApiKey)
             .add("authorization", "Bearer $supabaseApiKey")
             .add("Accept", "application/json")
             .build()
-    }
 
     // ============================== Popular ==============================
 
@@ -132,13 +132,16 @@ abstract class WebdexScans :
     // ============================= Utilities =============================
 
     override fun getMangaUrl(manga: SManga): String {
-        val slug = manga.memo["slug"]?.string ?: manga.url
+        val slug = manga.memo["slug"]?.string
+            ?: throw Exception("Series slug missing (try refreshing)")
         return "$baseUrl/series/$slug"
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val seriesSlug = chapter.memo["seriesSlug"]?.string ?: ""
-        val chapterSlug = chapter.memo["slug"]?.string ?: chapter.url
+        val seriesSlug = chapter.memo["seriesSlug"]?.string
+            ?: throw Exception("Chapter missing series slug (try refreshing)")
+        val chapterSlug = chapter.memo["slug"]?.string
+            ?: throw Exception("Chapter slug missing (try refreshing)")
         return "$baseUrl/series/$seriesSlug/$chapterSlug"
     }
 
@@ -181,7 +184,7 @@ abstract class WebdexScans :
         val seriesSlug = series?.slug
             ?: chapterInfos?.firstOrNull()?.seriesSlug
             ?: manga.memo["slug"]?.string
-            ?: ""
+            ?: throw Exception("Failed to resolve series slug (try refreshing)")
 
         val newManga = (series?.toSManga(baseUrl) ?: manga).apply {
             updateSeriesSlug(seriesSlug)
