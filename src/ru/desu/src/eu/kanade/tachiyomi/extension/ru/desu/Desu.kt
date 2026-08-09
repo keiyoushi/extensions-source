@@ -137,7 +137,7 @@ abstract class Desu :
         val genres = mutableListOf<Genre>()
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
-                is OrderBy -> url.addQueryParameter("order", arrayOf("popular", "updated", "id", "name")[filter.state])
+                is OrderBy -> url.addQueryParameter("order_by", arrayOf("popular", "updated", "id", "name")[filter.state])
                 is TypeList -> filter.state.forEach { type -> if (type.state) types.add(type) }
                 is GenreList -> filter.state.forEach { genre -> if (genre.state) genres.add(genre) }
                 else -> {}
