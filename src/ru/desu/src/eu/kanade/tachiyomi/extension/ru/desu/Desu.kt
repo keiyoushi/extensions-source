@@ -278,7 +278,7 @@ abstract class Desu :
     private class OrderBy :
         Filter.Select<String>(
             "Сортировка",
-            arrayOf("По популярности", "По обновлению", "По добавлению" , "По алфавиту"),
+            arrayOf("По популярности", "По обновлению", "По добавлению", "По алфавиту"),
         )
 
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Жанр", genres)
