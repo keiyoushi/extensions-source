@@ -41,6 +41,7 @@ class FiltersData(
     val category: List<Pair<String, String>>? = emptyList(),
     val limitation: List<Pair<String, String>>? = emptyList(),
     val another: List<Pair<String, String>>? = emptyList(),
+    val tags: List<Pair<String, String>>? = emptyList(),
     val years: YearsData? = null,
 )
 
@@ -49,3 +50,14 @@ class YearsData(
     val min: Int? = null,
     val max: Int? = null,
 )
+
+@Serializable
+class FiltersAPIResponse(
+    val results: List<Elements>? = emptyList(),
+) {
+    @Serializable
+    class Elements(
+        val text: String,
+        val id: String,
+    )
+}

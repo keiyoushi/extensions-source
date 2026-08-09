@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ru.allhentai
 
+import eu.kanade.tachiyomi.multisrc.grouple.FiltersAPIResponse
 import eu.kanade.tachiyomi.multisrc.grouple.FiltersData
 import eu.kanade.tachiyomi.multisrc.grouple.GroupLe
 import eu.kanade.tachiyomi.multisrc.grouple.YearsData
@@ -9,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import org.jsoup.nodes.Document
@@ -32,6 +34,7 @@ abstract class AllHentai : GroupLe() {
     }
 
     // =========================== Manga ============================
+    override val tagsSelector: String = ".cr-tags .cr-tags__item:not(.cr-tags__item--misc) span:not(.text-secondary)"
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -68,6 +71,7 @@ abstract class AllHentai : GroupLe() {
     override suspend fun fetchFilterData(): JsonElement = FiltersData(
         sortType = getSortBy,
         productionStatus = getStatus,
+        tags = getTags(),
         translationStatus = getTranslationStatus,
         searchFilters = getAdditionalFilters,
         genre = getGenreList,
@@ -77,6 +81,10 @@ abstract class AllHentai : GroupLe() {
         years = YearsData(1988, 2027),
     ).toJsonElement()
 
+    private suspend fun getTags(): List<Pair<String, String>>? {
+        val result = client.get("$baseUrl/api/catalog/elementsByType?type=40").parseAs<FiltersAPIResponse>()
+        return result.results?.map { it.text to it.id }
+    }
     private val getAdditionalFilters = listOf(
         Pair("Высокий рейтинг", "HIGH_RATE"),
         Pair("Сингл", "SINGLE"),

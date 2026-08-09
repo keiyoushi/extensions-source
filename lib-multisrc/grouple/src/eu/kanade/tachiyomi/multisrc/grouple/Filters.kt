@@ -30,6 +30,7 @@ abstract class SelectFilter(
 
 class OrderBy(data: List<Pair<String, String>>, defaultOrder: String? = null) : SelectFilter("Сортировать по", data, defaultOrder)
 class GenreFilter(data: List<Pair<String, String>>) : TriStateGroup("Жанры", data)
+class TagsFilter(data: List<Pair<String, String>>) : TriStateGroup("Теги", data)
 class CategoryFilter(data: List<Pair<String, String>>) : TriStateGroup("Категории", data)
 class AnotherFilter(data: List<Pair<String, String>>) : TriStateGroup("Прочее", data)
 class LimitationFilter(data: List<Pair<String, String>>) : TriStateGroup("Возрастная рекомендация", data)

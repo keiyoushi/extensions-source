@@ -20,6 +20,8 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -192,6 +194,10 @@ abstract class GroupLe :
                         filter.included?.forEach { addQueryParameter("includeElementIds", it) }
                         filter.excluded?.forEach { addQueryParameter("excludeElementIds", it) }
                     }
+                    is TagsFilter -> {
+                        filter.included?.forEach { addQueryParameter("includeElementIds", it) }
+                        filter.excluded?.forEach { addQueryParameter("excludeElementIds", it) }
+                    }
                     is CategoryFilter -> {
                         filter.included?.forEach { addQueryParameter("includeElementIds", it) }
                         filter.excluded?.forEach { addQueryParameter("excludeElementIds", it) }
@@ -260,6 +266,7 @@ abstract class GroupLe :
     }
 
     // ============================== Manga Details ===============================
+    protected open val tagsSelector: String = ".creation-element-tags .creation-element-tags__item:not(.creation-element-tags__item--misc) span:not(.text-secondary)"
     protected open fun parseMangaDetails(document: Document, mangaUrl: String): SManga = SManga.create().apply {
         url = mangaUrl
         title = document.selectFirst(".cr-hero-names__main")?.text()
@@ -310,7 +317,7 @@ abstract class GroupLe :
             document.selectFirst(".cr-hero-short-details a[href*=\"/list/limitation/\"]")?.text().orEmpty(),
         )
         val tags = document
-            .select(".creation-element-tags .creation-element-tags__item:not(.creation-element-tags__item--misc) span:not(.text-secondary)")
+            .select(tagsSelector)
             .map { it.text() }
 
         genre = buildList {
@@ -549,10 +556,12 @@ abstract class GroupLe :
     protected open val defaultSortOrder = "RATING"
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement {
+    override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         // Так же доступны в API /api/catalog/elementsByType?type=
         // Для каждого типа фильтров свой запрос, например жанры: /api/catalog/elementsByType?type=2
-        val result = client.get("$baseUrl/search/advanced").asJsoup()
+        val result = async { client.get("$baseUrl/search/advanced").asJsoup() }.await()
+        val result2 = async { client.get("$baseUrl/api/catalog/elementsByType?type=40").parseAs<FiltersAPIResponse>() }.await()
+
         val data = result.selectFirst("script:containsData(window.__FILTERS)")?.data()
             ?: throw Exception("Не удалось найти данные о фильтрах")
 
@@ -562,7 +571,7 @@ abstract class GroupLe :
             f += filter.groupValues[1] to filter.groupValues[2]
         }
 
-        return FiltersData(
+        FiltersData(
             sortType = f["sortType"]?.parseAs<Map<String, String>>()?.map { it.value to it.key },
             productionStatus = f["productionStatus"]?.parseAs<Map<String, String>>()?.map { it.value to it.key },
             translationStatus = f["translationStatus"]?.parseAs<Map<String, String>>()?.map { it.value to it.key },
@@ -571,6 +580,7 @@ abstract class GroupLe :
             category = f["category"]?.parseAs<Map<String, String>>()?.map { it.value to it.key },
             limitation = f["limitation"]?.parseAs<Map<String, String>>()?.map { it.value to it.key },
             another = f["another"]?.parseAs<Map<String, String>>()?.map { it.value to it.key },
+            tags = result2.results?.map { it.text to it.id },
             years = f["years"]?.let {
                 // Исправляем JSON: { min: 1950, max: 2027 }.
                 val json = it.replace(CHECK_JSON, "\"$1\":")
@@ -584,6 +594,7 @@ abstract class GroupLe :
         data?.parseAs<FiltersData>()?.let {
             if (it.sortType?.isNotEmpty() == true) filters.add(OrderBy(it.sortType, defaultSortOrder))
             if (it.genre?.isNotEmpty() == true) filters.add(GenreFilter(it.genre))
+            if (it.tags?.isNotEmpty() == true) filters.add(TagsFilter(it.tags))
             if (it.category?.isNotEmpty() == true) filters.add(CategoryFilter(it.category))
             if (it.productionStatus?.isNotEmpty() == true) filters.add(StatusFilter(it.productionStatus))
             if (it.translationStatus?.isNotEmpty() == true) filters.add(TranslationStatusFilter(it.translationStatus))
