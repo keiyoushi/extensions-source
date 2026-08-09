@@ -34,8 +34,10 @@ import java.io.IOException
 import java.util.Locale
 import kotlin.getValue
 
-const val ANONYMOUS_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVoa3ZxcnhtY2FwZ3Rwc3BnbHJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5NjgzMjksImV4cCI6MjA3OTU0NDMyOX0.uuHr888lp14ObW5eWowJrHPJGgQf3sF2l7NPmFN84g4"
-const val COMIC_BODY = "id,title,summary,cover_url,release_date,is_finished,authors,region,latest_chapter_title,tags(id,name),categories(id,name)"
+const val ANONYMOUS_TOKEN =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVoa3ZxcnhtY2FwZ3Rwc3BnbHJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5NjgzMjksImV4cCI6MjA3OTU0NDMyOX0.uuHr888lp14ObW5eWowJrHPJGgQf3sF2l7NPmFN84g4"
+const val COMIC_BODY =
+    "id,title,summary,cover_url,release_date,is_finished,authors,region,latest_chapter_title,tags(id,name),categories(id,name)"
 const val PAGE_SIZE = 20
 
 @Source
@@ -58,8 +60,7 @@ abstract class HanabiManga :
             val request = chain.request()
             chain.proceed(request).also {
                 if (it.code == 401 && request.url.queryParameterNames.containsAll(listOf("t", "sign"))) {
-                    it.close()
-                    throw IOException("图片链接已过期，请清除章节缓存后重试")
+                    it.use { throw IOException("图片链接已过期，请清除章节缓存后重试") }
                 }
             }
         }
@@ -217,9 +218,16 @@ abstract class HanabiManga :
                 repeat(chapter.memo["size"]!!.int) { add(String.format(Locale.getDefault(), "%03d", it + 1)) }
             }
         }
+        val label = if (pref.getBoolean(PREF_AI_SR, false)) "vip" else "sd"
         val authHeader = headers.newBuilder().add("Authorization", "Bearer ${token()}").build()
-        val response = client.post("$baseUrl/functions/v1/sd-image-url", authHeader, body.toJsonRequestBody(), false)
-        if (response.code == 429) throw Exception("请先在插件设置中登录！")
+        val response = client.post("$baseUrl/functions/v1/$label-image-url", authHeader, body.toJsonRequestBody(), false)
+        if (response.code == 401) response.use { throw Exception("请先在插件设置中登录") }
+        if (response.code == 429) {
+            when (response.parseAs<JsonObject>().getString("code")) {
+                "ANON_QUOTA_EXCEEDED" -> throw Exception("请先在插件设置中登录")
+                "FREE_QUOTA_EXCEEDED" -> throw Exception("今日超分额度已用完")
+            }
+        }
         val result = response.parseAs<PagesResult>()
         val info = with(result.scrambleInfo) { "$ticket|$nonce|$cols|$rows" }
         return result.urls.mapIndexed { i, o -> Page(i, imageUrl = "${o.getString("url")}#$info") }

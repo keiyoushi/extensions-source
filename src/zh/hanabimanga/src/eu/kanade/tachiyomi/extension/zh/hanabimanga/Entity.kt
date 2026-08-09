@@ -37,7 +37,7 @@ class Comic(
         url = id.toString()
         title = this@Comic.title!!
         thumbnail_url = coverUrl
-        author = authors?.joinToString("，")
+        author = authors?.joinToString(" & ")
         description = summary
         genre = (tags.orEmpty().map { it.name } + listOfNotNull(categories?.name, region())).joinToString()
         status = when (isFinished) {

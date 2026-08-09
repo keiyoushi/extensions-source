@@ -6,26 +6,14 @@ import android.util.Patterns
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
+import androidx.preference.SwitchPreferenceCompat
 
-const val PREF_POPULAR_MANGA = "POPULAR_MANGA"
 const val PREF_EMAIL = "EMAIL"
 const val PREF_PASSWORD = "PASSWORD"
+const val PREF_POPULAR_MANGA = "POPULAR_MANGA"
+const val PREF_AI_SR = "AI_SUPER_RESOLUTION"
 
 fun preferencesInternal(context: Context, pref: SharedPreferences) = arrayOf(
-    ListPreference(context).apply {
-        key = PREF_POPULAR_MANGA
-        title = "热门漫画显示"
-        summary = "%s"
-        entries = arrayOf("日榜", "周榜", "月榜", "评分", "人气")
-        entryValues = arrayOf(
-            "popularity_daily.desc.nullslast",
-            "popularity_weekly.desc.nullslast",
-            "popularity_monthly.desc.nullslast",
-            "rating_average.desc.nullslast",
-            "rating_count.desc.nullslast",
-        )
-        setDefaultValue("popularity_daily.desc.nullslast")
-    },
     EditTextPreference(context).apply {
         key = PREF_EMAIL
         title = "登录邮箱"
@@ -50,5 +38,25 @@ fun preferencesInternal(context: Context, pref: SharedPreferences) = arrayOf(
             summary = "*".repeat((newValue as String).length)
             true
         }
+    },
+    ListPreference(context).apply {
+        key = PREF_POPULAR_MANGA
+        title = "热门漫画显示"
+        summary = "%s"
+        entries = arrayOf("日榜", "周榜", "月榜", "评分", "人气")
+        entryValues = arrayOf(
+            "popularity_daily.desc.nullslast",
+            "popularity_weekly.desc.nullslast",
+            "popularity_monthly.desc.nullslast",
+            "rating_average.desc.nullslast",
+            "rating_count.desc.nullslast",
+        )
+        setDefaultValue("popularity_daily.desc.nullslast")
+    },
+    SwitchPreferenceCompat(context).apply {
+        key = PREF_AI_SR
+        title = "AI 超分辨率"
+        summary = "尝试获取超分辨率图片，普通用户每日限 5 个章节。不建议非 VIP 用户开启，避免额度用完后还要再关"
+        setDefaultValue(false)
     },
 )
