@@ -148,13 +148,12 @@ abstract class KhoManhwa : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val response = client.get("$baseUrl${chapter.url}", ensureSuccess = false)
-        if (response.code == 403) {
-            response.close()
-            throw Exception("Đăng nhập Webview bằng tài khoản phù hợp để xem chương này")
-        }
         if (!response.isSuccessful) {
             val code = response.code
             response.close()
+            if (code == 403) {
+                throw Exception("Đăng nhập Webview bằng tài khoản phù hợp để xem chương này")
+            }
             throw Exception("HTTP error $code")
         }
         val document = response.asJsoup()
