@@ -134,11 +134,13 @@ abstract class Desu :
             .addQueryParameter("page", page.toString())"""
         val url = "$baseUrl/manga/?page=$page".toHttpUrl().newBuilder()
         val types = mutableListOf<Type>()
+        val statuses = mutableListOf<Status>()
         val genres = mutableListOf<Genre>()
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
                 is OrderBy -> url.addQueryParameter("order_by", arrayOf("popular", "updated", "id", "name")[filter.state])
                 is TypeList -> filter.state.forEach { type -> if (type.state) types.add(type) }
+                is StatusList -> filter.state.forEach { status -> if (status.state) statuses.add(status) }
                 is GenreList -> filter.state.forEach { genre -> if (genre.state) genres.add(genre) }
                 else -> {}
             }
@@ -149,6 +151,9 @@ abstract class Desu :
         }
         if (genres.isNotEmpty()) {
             url.addQueryParameter("genres", genres.joinToString(",") { it.id })
+        }
+        if (statuses.isNotEmpty()) {
+            url.addQueryParameter("status", statuses.joinToString(",") { it.id })
         }
         if (query.isNotEmpty()) {
             url.addQueryParameter("search", query)
@@ -285,14 +290,17 @@ abstract class Desu :
 
     private class TypeList(types: List<Type>) : Filter.Group<Type>("Тип", types)
 
-    private class Type(name: String, val id: String) : Filter.CheckBox(name)
+    private class StatusList(statuses: List<Status>) : Filter.Group<Status>("Статус", statuses)
 
     private class Genre(name: String, val id: String) : Filter.CheckBox(name)
+    private class Type(name: String, val id: String) : Filter.CheckBox(name)
+    private class Status(name: String, val id: String) : Filter.CheckBox(name)
 
     override fun getFilterList() = FilterList(
         OrderBy(),
         TypeList(getTypeList()),
         GenreList(getGenreList()),
+        StatusList(getStatusList()),
     )
 
     private fun getTypeList() = listOf(
@@ -301,6 +309,13 @@ abstract class Desu :
         Type("Маньхуа", "manhua"),
         Type("Ваншот", "one_shot"),
         Type("Комикс", "comics"),
+    )
+
+    private fun getStatusList() = listOf(
+        Status("Выходит", "ongoing"),
+        Status("Издано", "released"),
+        Status("Переводится", "continued"),
+        Status("Завершено", "completed"),
     )
 
     private fun getGenreList() = listOf(
