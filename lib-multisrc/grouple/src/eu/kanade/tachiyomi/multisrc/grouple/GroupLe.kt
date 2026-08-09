@@ -177,7 +177,6 @@ abstract class GroupLe :
         val url = "$baseUrl/api/catalog/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("offset", (50 * (page - 1)).toString())
             query?.takeIf { it.isNotBlank() }?.let { addQueryParameter("q", query) }
-            val checkYear = Calendar.getInstance().get(Calendar.YEAR)
 
             filters?.forEach { filter ->
                 when (filter) {
@@ -211,8 +210,8 @@ abstract class GroupLe :
                         filter.excluded?.forEach { addQueryParameter("excludeSearchFilter", it) }
                     }
                     is YearRangeFilter -> {
-                        val min = checkMinRange(filter.minValue, filter.minYear, checkYear)
-                        val max = checkMaxRange(filter.maxValue, filter.maxYear, checkYear)
+                        val min = checkMinRange(filter.minValue, filter.minYear, filter.maxYear)
+                        val max = checkMaxRange(filter.maxValue, filter.minYear, filter.maxYear)
                         addQueryParameter("years", "$min,$max")
                     }
                     else -> {}
