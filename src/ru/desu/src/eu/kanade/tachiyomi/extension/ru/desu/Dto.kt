@@ -22,19 +22,24 @@ class PageWrapperDto<T>(
 
 @Serializable
 class MangaDetDto(
-    val manga_id: Long,
+    val id: Long,
     val name: String,
     val russian: String,
     val kind: String?,
     val description: String?,
-    val score: Float?,
-    val score_votes: Long?,
-    val age_limit: String?,
+    val score: ScoreDto?,
+    val content_rating: String?,
     val synonyms: List<String>,
     val cover: ImgDto,
-    val translation_status: String?,
+    val trans_status: String?,
     val status: String?,
 ) {
+    @Serializable
+    class ScoreDto(
+        val value: Float?,
+        val votes: Long?,
+    )
+
     @Serializable
     class ImgDto(
         val preview: String?,
@@ -68,7 +73,7 @@ class SeriesWrapperDto<T>(
 
 @Serializable
 class ChaptersDto(
-    val chapter_id: Long,
+    val id: Long,
     val manga_id: Long,
     val volume: String,
     val number: String,
