@@ -35,7 +35,6 @@ import java.text.DecimalFormat
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import java.util.Calendar
 import java.util.Locale
 
 abstract class GroupLe :
