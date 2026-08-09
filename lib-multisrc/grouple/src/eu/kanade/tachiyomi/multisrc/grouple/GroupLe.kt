@@ -77,7 +77,7 @@ abstract class GroupLe :
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         val userAgent = preferences.getString(UAGENT_TITLE, UAGENT_DEFAULT) ?: UAGENT_DEFAULT
-        add("User-Agent", userAgent)
+        set("User-Agent", userAgent)
     }
 
     // ============================== Interceptors ===============================
