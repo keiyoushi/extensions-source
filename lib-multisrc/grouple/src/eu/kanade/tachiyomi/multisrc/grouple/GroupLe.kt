@@ -234,9 +234,9 @@ abstract class GroupLe :
 
     // =========================== Deeplink ============================
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host == baseUrl.toHttpUrl().host && url.encodedPath.length > 1) {
+        if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0].isNotBlank()) {
             val tmpManga = SManga.create().apply {
-                this.url = url.encodedPath
+                this.url = "/${url.pathSegments[0]}"
             }
             return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
         }

@@ -7,6 +7,6 @@ keiyoushi {
     libVersion = "1.6"
 
     deeplink {
-        path("/..*/vol..*")
+        path("/..*")
     }
 }
