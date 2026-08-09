@@ -434,7 +434,6 @@ abstract class GroupLe :
                 }
 
                 date_upload = dateFormat.tryParseDate(element.select("td.d-none").last()?.text())
-
             }
         }
     }
