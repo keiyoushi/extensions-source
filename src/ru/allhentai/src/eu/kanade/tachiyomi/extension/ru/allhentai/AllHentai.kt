@@ -44,15 +44,13 @@ abstract class AllHentai : GroupLe() {
         // ahen.me sometimes sets url as id, for manga with paid chapters, while allhen.online can have only slug in url.
         // If baseUrl are not ahen.me and url are only numbers -> it's an old entry from ahen.me opened with new base url
         // Throw message to migrate
-        if (baseUrl != "https://x.ahen.me" && manga.url.matches(checkManga)) {
+        if (baseUrl == "https://20.allhen.online" && manga.url.matches(checkManga)) {
             throw Exception("URL серии изменился. Перенесите/мигрируйте с $name на $name, чтобы обновить информацию")
         }
         return super.fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters)
     }
 
     // =========================== Related Manga (Komikku) ============================
-    override val supportsRelatedMangas: Boolean = true
-
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val url = "$baseUrl/list/like${manga.url.substringBefore("__")}"
         val document = client.get(url).asJsoup()

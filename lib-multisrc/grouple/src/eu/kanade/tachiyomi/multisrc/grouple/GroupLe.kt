@@ -20,6 +20,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
@@ -34,8 +35,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.io.IOException
 import java.text.DecimalFormat
-import java.time.LocalDate
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -434,9 +433,8 @@ abstract class GroupLe :
                     }
                 }
 
-                date_upload = runCatching {
-                    LocalDate.parse(element.select("td.d-none").last()?.text(), dateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-                }.getOrDefault(0L)
+                date_upload = dateFormat.tryParseDate(element.select("td.d-none").last()?.text())
+
             }
         }
     }
@@ -559,8 +557,11 @@ abstract class GroupLe :
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         // Так же доступны в API /api/catalog/elementsByType?type=
         // Для каждого типа фильтров свой запрос, например жанры: /api/catalog/elementsByType?type=2
-        val result = async { client.get("$baseUrl/search/advanced").asJsoup() }.await()
-        val result2 = async { client.get("$baseUrl/api/catalog/elementsByType?type=40").parseAs<FiltersAPIResponse>() }.await()
+        val resultDeferred = async { client.get("$baseUrl/search/advanced").asJsoup() }
+        val result2Deferred = async { client.get("$baseUrl/api/catalog/elementsByType?type=40").parseAs<FiltersAPIResponse>() }
+
+        val result = resultDeferred.await()
+        val result2 = result2Deferred.await()
 
         val data = result.selectFirst("script:containsData(window.__FILTERS)")?.data()
             ?: throw Exception("Не удалось найти данные о фильтрах")
