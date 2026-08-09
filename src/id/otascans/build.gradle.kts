@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Ota Scans"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
 
     source {
         lang = "id"
-        baseUrl = "https://yurilabs.my.id"
+        baseUrl = "https://yurilab.top"
     }
 }
