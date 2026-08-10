@@ -45,6 +45,7 @@ abstract class GroupLe :
 
     protected open val siteId: Int get() = 0
     protected open val authApiUrl: String = "https://3.grouple.co"
+    private val authApiHttpUrl by lazy { authApiUrl.toHttpUrl() }
 
     private val apiHeaders get() = headersBuilder()
         .set("Accept", "application/json, text/plain, */*")
@@ -83,18 +84,17 @@ abstract class GroupLe :
     protected open fun authInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
 
-        val cookieStore = client.cookieJar
-        val baseHttpUrl = baseUrl.toHttpUrl()
-        val hasRememberMe = cookieStore.loadForRequest(baseHttpUrl).any { it.name == "remember_me" }
-
-        // Cookie exists, no need to proceed
-        if (hasRememberMe) return chain.proceed(request)
-
         // Skip image requests (by file extension or Accept header)
         val extension = request.url.pathSegments.lastOrNull()
             ?.substringAfterLast('.', "")
             ?.lowercase().orEmpty()
         if (extension in IMAGE_EXTENSIONS || request.header("Accept")?.contains("image") == true) {
+            return chain.proceed(request)
+        }
+
+        val path = request.url.encodedPath
+        // Avoid loops while login
+        if (path.contains("/internal/auth") || path.contains("/login/")) {
             return chain.proceed(request)
         }
 
@@ -105,13 +105,13 @@ abstract class GroupLe :
             return chain.proceed(request)
         }
 
-        val path = request.url.encodedPath
-        // Avoid loops while login
-        if (path.contains("/internal/auth") || path.contains("/login/")) {
-            return chain.proceed(request)
-        }
+        val cookieStore = client.cookieJar
+        val baseHttpUrl = baseUrl.toHttpUrl()
+        val hasRememberMe = cookieStore.loadForRequest(baseHttpUrl).any { it.name == "remember_me" }
 
-        val authApiHttpUrl = authApiUrl.toHttpUrl()
+        // Cookie exists, no need to proceed
+        if (hasRememberMe) return chain.proceed(request)
+
         val checkAuth = autoAuth()
         val hasRememberMeAuth = cookieStore.loadForRequest(authApiHttpUrl).any { it.name == "remember_me" }
 
@@ -583,8 +583,7 @@ abstract class GroupLe :
             tags = result2.results?.map { it.text to it.id },
             years = f["years"]?.let {
                 // Исправляем JSON: { min: 1950, max: 2027 }.
-                val json = it.replace(CHECK_JSON, "\"$1\":")
-                json.parseAs<YearsData>()
+                it.replace(CHECK_JSON, "\"$1\":").parseAs<YearsData>()
             },
         ).toJsonElement()
     }
