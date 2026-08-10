@@ -1,0 +1,41 @@
+name: Build MangaLivre APK
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'src/pt/mangalivre/**'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'src/pt/mangalivre/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Gradle
+        uses: gradle/gradle-build-action@v2
+
+      - name: Fix formatting (spotless)
+        run: ./gradlew :src:pt:mangalivre:spotlessApply
+
+      - name: Build extension APK
+        run: ./gradlew :src:pt:mangalivre:assembleRelease
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mangalivre-apk
+          path: src/pt/mangalivre/build/outputs/apk/release/*.apk
