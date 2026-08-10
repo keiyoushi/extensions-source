@@ -14,6 +14,9 @@ private fun buildQuery(queryAction: () -> String): String = queryAction()
 class ApiComicNodeVariables(val id: String)
 
 @Serializable
+class ApiChapterNodeVariables(val id: String)
+
+@Serializable
 class ApiComicSearchVariables(
     val word: String? = null,
     val page: Int? = null,
@@ -62,7 +65,17 @@ private const val COMIC_FIELDS = """
         name
         altNames
         authors
+        authorNodes {
+            data {
+                name
+            }
+        }
         artists
+        artistNodes {
+            data {
+                name
+            }
+        }
         originalLanguage
         translatedLanguage
         originalStatus
@@ -114,26 +127,33 @@ val COMIC_NODE_QUERY = buildQuery {
             $COMIC_FIELDS
         }
     }
-    """
+    """.trimIndent()
 }
 
-val COMIC_SEARCH_QUERY = buildQuery {
+val COMIC_PAGER_QUERY = buildQuery {
     """
     query(%select: Comic_Browse_Select) {
         get_comic_browse_pager(select: %select) {
             next
         }
+    }
+    """.trimIndent()
+}
+
+val COMIC_ITEMS_QUERY = buildQuery {
+    """
+    query(%select: Comic_Browse_Select) {
         get_comic_browse_items(select: %select) {
             $COMIC_FIELDS
         }
     }
-    """
+    """.trimIndent()
 }
 
 val CHAPTER_LIST_QUERY = buildQuery {
     """
     query(%select: Select_Comic_ChapterList) {
-        get_comic_chapterList(select: %select) {
+        get_comic_chapterList_fullList(select: %select) {
             paging {
                 next
             }
@@ -164,5 +184,115 @@ val CHAPTER_LIST_QUERY = buildQuery {
             }
         }
     }
+    """.trimIndent()
+}
+
+val CHAPTER_UNIQ_LIST_QUERY = buildQuery {
     """
+    query(%select: Select_Comic_ChapterList_UniqList) {
+        get_comic_chapterList_uniqList(select: %select) {
+            paging {
+                next
+            }
+            items {
+                id
+                data {
+                    id
+                    serial
+                    chaNum
+                    volNum
+                    dname
+                    title
+                    urlPath
+                    dateCreate
+                    dateModify
+                    datePublic
+                    userNode {
+                        data {
+                            name
+                        }
+                    }
+                    groupNodes {
+                        data {
+                            name
+                        }
+                    }
+                }
+            }
+        }
+    }
+    """.trimIndent()
+}
+
+val COMIC_LATEST_QUERY = buildQuery {
+    """
+    query(%select: Comic_LatestUploads_Select) {
+        get_comic_latestUploads(select: %select) {
+            before
+            items {
+                comic {
+                    $COMIC_FIELDS
+                }
+                chapters(amount: 3) {
+                    id
+                    data {
+                        id
+                        serial
+                        chaNum
+                        volNum
+                        dname
+                        title
+                        urlPath
+                        dateCreate
+                    }
+                }
+            }
+        }
+    }
+    """.trimIndent()
+}
+
+val CHAPTER_INDEX_QUERY = buildQuery {
+    """
+    query(%select: ChapterIndex_Select) {
+        get_comic_chapterIndex(select: %select) {
+            chapter_id
+            volIdx
+            volNum
+            chaNum
+            title
+            count
+            datePublic
+        }
+    }
+    """.trimIndent()
+}
+
+val CHAPTER_DUPLICATION_QUERY = buildQuery {
+    """
+    query(%chapter_id: ID!) {
+        get_comic_chapterDuplications(chapter_id: %chapter_id) {
+            id
+            data {
+                id
+                urlPath
+                dname
+                title
+            }
+        }
+    }
+    """.trimIndent()
+}
+
+val CHAPTER_PAGES_QUERY = buildQuery {
+    """
+    query(%id: ID!) {
+        get_chapterNode(id: %id) {
+            id
+            data {
+                imageUrls
+            }
+        }
+    }
+    """.trimIndent()
 }

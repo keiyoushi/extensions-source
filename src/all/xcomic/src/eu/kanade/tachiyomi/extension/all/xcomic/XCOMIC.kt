@@ -4,10 +4,9 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.widget.Button
 import android.widget.Toast
-import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -19,12 +18,14 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLPost
 import keiyoushi.utils.parseGraphQLAs
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Request
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.json.JSONArray
 import java.nio.charset.StandardCharsets
@@ -49,19 +50,10 @@ abstract class XCOMIC :
 
     // ============================== Search ===============================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val idMatch = when {
-            query.startsWith("https://") -> {
-                val id = urlIdRegex.find(query)?.groupValues?.get(1)
-                    ?: throw Exception("Unknown url")
-                idQueryRegex.matchEntire("id:$id")
-            }
-            else -> idQueryRegex.matchEntire(query.trim())
-        }
+        val idMatch = idQueryRegex.matchEntire(query.trim())
         if (idMatch != null) {
-            val id = idMatch.groupValues[1]
-            val apiVariables = ApiComicNodeVariables(id)
-            val response = client.newCall(graphQLRequest(apiVariables, COMIC_NODE_QUERY)).await()
-            return MangasPage(listOf(parseMangaDetails(response)), false)
+            val id = idMatch.groupValues[1].substringBefore("-")
+            return MangasPage(listOf(getMangaDetails(id)), false)
         }
 
         var sort: String? = null
@@ -147,16 +139,18 @@ abstract class XCOMIC :
             ignoreGlobalGenres = isIgnoreGenreBlocklist(),
         )
 
-        val response = client.newCall(graphQLRequest(ApiComicSearchWrapper(variables), COMIC_SEARCH_QUERY)).await()
-        return parseSearchManga(response)
+        val pagerResponse = client.newCall(graphQLPost("$baseUrl/query/", headers, COMIC_PAGER_QUERY, null, ApiComicSearchWrapper(variables))).await()
+        val itemsResponse = client.newCall(graphQLPost("$baseUrl/query/", headers, COMIC_ITEMS_QUERY, null, ApiComicSearchWrapper(variables))).await()
+        return parseSearchManga(pagerResponse, itemsResponse)
     }
 
-    private fun parseSearchManga(response: Response): MangasPage {
-        val data = response.parseGraphQLAs<SearchData>()
-        val mangas = data.items.map { item ->
+    private fun parseSearchManga(pagerResponse: Response, itemsResponse: Response): MangasPage {
+        val pagerData = pagerResponse.parseGraphQLAs<SearchPagerData>()
+        val itemsData = itemsResponse.parseGraphQLAs<SearchItemsData>()
+        val mangas = itemsData.items.map { item ->
             item.data.toSManga(baseUrl, ::cleanTitleIfNeeded)
         }
-        return MangasPage(mangas, data.pager.hasNextPage())
+        return MangasPage(mangas, pagerData.pager.hasNextPage())
     }
 
     // ============================== Filters ==============================
@@ -205,9 +199,11 @@ abstract class XCOMIC :
         return SMangaUpdate(details, chapterList)
     }
 
-    private suspend fun getMangaDetails(manga: SManga): SManga {
-        val apiVariables = ApiComicNodeVariables(id = getMangaId(manga.url))
-        val response = client.newCall(graphQLRequest(apiVariables, COMIC_NODE_QUERY)).await()
+    private suspend fun getMangaDetails(manga: SManga): SManga = getMangaDetails(getMangaId(manga.url))
+
+    private suspend fun getMangaDetails(id: String): SManga {
+        val apiVariables = ApiComicNodeVariables(id = id)
+        val response = client.newCall(graphQLPost("$baseUrl/query/", headers, COMIC_NODE_QUERY, null, apiVariables)).await()
         return parseMangaDetails(response)
     }
 
@@ -216,14 +212,23 @@ abstract class XCOMIC :
         return result.response.data.toSManga(baseUrl, ::cleanTitleIfNeeded)
     }
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+
+        val id = url.pathSegments.takeIf { it.size >= 2 && it[0] == "comic" }?.get(1)
+            ?.substringBefore("-") ?: return null
+
+        return getMangaDetails(id)
+    }
+
     override fun getMangaUrl(manga: SManga): String {
         val url = manga.url
         return if (url.startsWith("/")) "$baseUrl$url" else "$baseUrl/comic/$url"
     }
 
     private fun getMangaId(url: String): String {
-        val matchResult = urlIdRegex.find(url)
-        return matchResult?.groups?.get(1)?.value ?: url
+        val extracted = urlIdRegex.find(url)?.groupValues?.get(1) ?: url
+        return extracted.substringBefore("-")
     }
 
     // ============================= Chapters ==============================
@@ -235,7 +240,7 @@ abstract class XCOMIC :
             page = page,
             size = 100,
         )
-        val response = client.newCall(graphQLRequest(ApiChapterListWrapper(select), CHAPTER_LIST_QUERY)).await()
+        val response = client.newCall(graphQLPost("$baseUrl/query/", headers, CHAPTER_LIST_QUERY, null, ApiChapterListWrapper(select))).await()
         val data = response.parseGraphQLAs<ChapterListData>().response
         val chapters = data.items.map { it.data.toSChapter() }
 
@@ -248,10 +253,22 @@ abstract class XCOMIC :
 
     // =============================== Pages ===============================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterId = getChapterId(chapter.url)
+
+        runCatching {
+            val response = client.newCall(graphQLPost("$baseUrl/query/", headers, CHAPTER_PAGES_QUERY, null, ApiChapterNodeVariables(chapterId))).await()
+            val data = response.parseGraphQLAs<ChapterPagesData>().response.data
+            data.imageUrls.takeIf { it.isNotEmpty() }?.let { urls ->
+                return urls.mapIndexed { index, url ->
+                    Page(index, imageUrl = if (url.startsWith("http")) url else "$baseUrl$url")
+                }
+            }
+        }
+
         val url = chapter.url
         val absUrl = if (url.startsWith("/")) "$baseUrl$url" else "$baseUrl/comic/chapter/$url"
 
-        val response = client.newCall(GET(absUrl, headers)).await()
+        val response = client.get(absUrl)
         val document = response.asJsoup()
 
         // Parse images directly from HTML
@@ -320,6 +337,8 @@ abstract class XCOMIC :
         return if (url.startsWith("/")) "$baseUrl$url" else "$baseUrl/comic/chapter/$url"
     }
 
+    private fun getChapterId(url: String): String = url.substringAfterLast("/").substringBefore("-")
+
     private fun cleanTitleIfNeeded(title: String): String {
         var tempTitle = title
         customRemoveTitle().takeIf { it.isNotEmpty() }?.let { customRegex ->
@@ -332,8 +351,6 @@ abstract class XCOMIC :
         }
         return tempTitle.trim()
     }
-
-    private inline fun <reified T : Any> graphQLRequest(variables: T, query: String): Request = graphQLPost("$baseUrl/query/", headers, query, null, variables)
 
     private fun decryptAES(encrypted: String, password: String): String {
         val cipherData = android.util.Base64.decode(encrypted, android.util.Base64.DEFAULT)
@@ -386,9 +403,9 @@ abstract class XCOMIC :
 
     // ============================ Preferences ============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        CheckBoxPreference(screen.context).apply {
+        SwitchPreferenceCompat(screen.context).apply {
             key = REMOVE_TITLE_VERSION_PREF
-            title = "Remove version information from entry titles"
+            title = "Remove Version Information From Entry Titles"
             summary = "This removes version tags like '(Official)' or '(Yaoi)' from entry titles.\n" +
                 "To update existing entries, enable 'Update library manga titles' in advanced settings and refresh manually."
             setDefaultValue(false)
@@ -396,7 +413,7 @@ abstract class XCOMIC :
 
         EditTextPreference(screen.context).apply {
             key = REMOVE_TITLE_CUSTOM_PREF
-            title = "Custom regex to be removed from title"
+            title = "Custom Regex To Be Removed From Title"
             summary = customRemoveTitle()
             setDefaultValue("")
 
@@ -429,9 +446,9 @@ abstract class XCOMIC :
             }
         }.also(screen::addPreference)
 
-        CheckBoxPreference(screen.context).apply {
+        SwitchPreferenceCompat(screen.context).apply {
             key = IGNORE_GENRE_BLOCKLIST_PREF
-            title = "Ignore webview genre blocklist"
+            title = "Ignore WebView Genre Blocklist"
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
@@ -445,8 +462,8 @@ abstract class XCOMIC :
         private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
         private const val IGNORE_GENRE_BLOCKLIST_PREF = "IGNORE_GENRE_BLOCKLIST"
 
-        private val idQueryRegex = Regex("^id\\s*:?\\s*([a-zA-Z0-9]+)\\s*$", RegexOption.IGNORE_CASE)
-        private val urlIdRegex = Regex("""/comic/([a-zA-Z0-9]+)""")
+        private val idQueryRegex = Regex("^id\\s*:?\\s*([a-zA-Z0-9-_]+)\\s*$", RegexOption.IGNORE_CASE)
+        private val urlIdRegex = Regex("""/comic/([a-zA-Z0-9-_]+)""")
 
         private const val BROWSE_PAGE_SIZE = 36
 

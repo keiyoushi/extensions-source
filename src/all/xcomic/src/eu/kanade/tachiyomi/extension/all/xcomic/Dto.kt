@@ -16,12 +16,6 @@ class XComicData<T>(
 )
 
 @Serializable
-class XComicItems<T>(
-    val paging: XComicPaging,
-    val items: List<T>,
-)
-
-@Serializable
 class XComicPaging(
     val next: Int? = 0,
 ) {
@@ -43,10 +37,10 @@ class DateYMD(
 
 @Serializable
 class ComicTrackingSites(
-    val mangaupdates: String? = null,
-    val myanimelist: String? = null,
-    val animeplanet: String? = null,
-    val anilist: String? = null,
+    @SerialName("mangaupdates") val mangaUpdates: String? = null,
+    @SerialName("myanimelist") val myAnimeList: String? = null,
+    @SerialName("animeplanet") val animePlanet: String? = null,
+    @SerialName("anilist") val aniList: String? = null,
     val kitsu: String? = null,
 )
 
@@ -56,7 +50,9 @@ class ComicNode(
     private val name: String,
     private val altNames: List<String>? = null,
     private val authors: List<String>? = null,
+    private val authorNodes: List<XComicData<XComicName?>>? = null,
     private val artists: List<String>? = null,
+    private val artistNodes: List<XComicData<XComicName?>>? = null,
     private val originalLanguage: String? = null,
     private val translatedLanguage: String? = null,
     private val originalStatus: String? = null,
@@ -94,8 +90,10 @@ class ComicNode(
         url = urlPath ?: id
         title = cleanTitle(name)
 
-        author = authors?.joinToString { cleanAuthorSlug(it) }
-        artist = artists?.joinToString { cleanAuthorSlug(it) }
+        author = authorNodes?.mapNotNull { it.data?.name }?.takeIf { it.isNotEmpty() }?.joinToString()
+            ?: authors?.joinToString { cleanAuthorSlug(it) }
+        artist = artistNodes?.mapNotNull { it.data?.name }?.takeIf { it.isNotEmpty() }?.joinToString()
+            ?: artists?.joinToString { cleanAuthorSlug(it) }
 
         genre = buildSet {
             type?.let { add(typeOptions.firstOrNull { o -> o.second == it }?.first ?: it) }
@@ -133,7 +131,7 @@ class ComicNode(
             if (isHot == true || isNew == true) append("\n\n")
 
             if (!summary.isNullOrEmpty()) {
-                append(summary.htmlToMarkdown())
+                append(summary.htmlToMarkdown(baseUrl))
             }
 
             val metadata = buildList {
@@ -171,14 +169,14 @@ class ComicNode(
 
             if (!extraInfo.isNullOrEmpty()) {
                 if (isNotEmpty()) append("\n\nExtra Info:\n")
-                append(extraInfo.htmlToMarkdown())
+                append(extraInfo.htmlToMarkdown(baseUrl))
             }
 
             val links = buildList {
-                trackingSites?.mangaupdates?.let { add("[MangaUpdates](https://www.mangaupdates.com/series.html?id=$it)") }
-                trackingSites?.myanimelist?.let { add("[MyAnimeList](https://myanimelist.net/manga/$it)") }
-                trackingSites?.animeplanet?.let { add("[Anime-Planet](https://www.anime-planet.com/manga/$it)") }
-                trackingSites?.anilist?.let { add("[AniList](https://anilist.co/manga/$it)") }
+                trackingSites?.mangaUpdates?.let { add("[MangaUpdates](https://www.mangaupdates.com/series.html?id=$it)") }
+                trackingSites?.myAnimeList?.let { add("[MyAnimeList](https://myanimelist.net/manga/$it)") }
+                trackingSites?.animePlanet?.let { add("[Anime-Planet](https://www.anime-planet.com/manga/$it)") }
+                trackingSites?.aniList?.let { add("[AniList](https://anilist.co/manga/$it)") }
                 trackingSites?.kitsu?.let { add("[Kitsu](https://kitsu.io/manga/$it)") }
             }
 
@@ -243,10 +241,10 @@ private fun cleanAuthorSlug(slug: String): String {
     }
 }
 
-private fun String.htmlToMarkdown(): String = Jsoup.parseBodyFragment(this).body().let { body ->
+private fun String.htmlToMarkdown(baseUrl: String): String = Jsoup.parseBodyFragment(this, baseUrl).body().let { body ->
     body.select("a").forEach { a ->
         val text = a.text()
-        val href = a.attr("href")
+        val href = a.absUrl("href")
 
         if (href.startsWith("http")) {
             a.replaceWith(TextNode("[$text]($href)"))
@@ -276,9 +274,13 @@ private fun String.htmlToMarkdown(): String = Jsoup.parseBodyFragment(this).body
 // ============================= Search ===============================
 
 @Serializable
-class SearchData(
+class SearchPagerData(
     @SerialName("get_comic_browse_pager")
     val pager: XComicPaging,
+)
+
+@Serializable
+class SearchItemsData(
     @SerialName("get_comic_browse_items")
     val items: List<XComicData<ComicNode>>,
 )
@@ -295,7 +297,7 @@ class ComicNodeData(
 
 @Serializable
 class ChapterListData(
-    @SerialName("get_comic_chapterList")
+    @SerialName("get_comic_chapterList_fullList")
     val response: ChapterListItems,
 )
 
@@ -306,7 +308,47 @@ class ChapterListItems(
 )
 
 @Serializable
+class ChapterIndexItem(
+    @SerialName("chapter_id") val chapterId: String,
+    val chaNum: Float? = null,
+    val volNum: Float? = null,
+    val title: String? = null,
+    val count: Int? = null,
+    val datePublic: Long? = null,
+)
+
+@Serializable
+class ChapterIndexData(
+    @SerialName("get_comic_chapterIndex")
+    val chapters: List<ChapterIndexItem>,
+)
+
+@Serializable
+class ChapterDuplicationData(
+    @SerialName("get_comic_chapterDuplications")
+    val items: List<ApiChapterWrapper>,
+)
+
+@Serializable
+class ChapterPagesData(
+    @SerialName("get_chapterNode")
+    val response: ChapterNodeWithImages,
+)
+
+@Serializable
+class ChapterNodeWithImages(
+    val id: String,
+    val data: ChapterImageUrls,
+)
+
+@Serializable
+class ChapterImageUrls(
+    val imageUrls: List<String>,
+)
+
+@Serializable
 class ApiChapterWrapper(
+    val id: String,
     val data: ChapterData,
 )
 
@@ -342,7 +384,7 @@ class ChapterData(
         (chaNum ?: serial)?.let { chapter_number = it }
         date_upload = dateModify ?: dateCreate ?: datePublic ?: 0L
         scanlator = groupNodes?.mapNotNull { it?.data?.name }?.joinToString().takeIf { !it.isNullOrEmpty() }
-            ?: userNode?.data?.name ?: "\u200B"
+            ?: userNode?.data?.name
     }
 }
 
