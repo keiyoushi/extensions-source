@@ -98,14 +98,14 @@ abstract class DuskScans : KeiSource() {
             ?: throw Exception("Series not found")
 
         return SMangaUpdate(
-            if (fetchDetails) series.manga.toSManga() else manga,
-            if (fetchChapters) series.chapters.map { it.toSChapter(manga.url) } else chapters,
+            series.manga.toSManga(),
+            series.chapters.map { it.toSChapter(manga.url) },
         )
     }
 
     // get both manga details and chapters (already ordered newest first)
     private suspend fun getSeriesPage(slug: String): SeriesPageDto? {
-        val rscHeaders = headers.newBuilder().add("RSC", "1").build()
+        val rscHeaders = headersBuilder().add("RSC", "1").build()
         return client.get("$baseUrl/series/$slug", rscHeaders).extractNextJs()
     }
 
