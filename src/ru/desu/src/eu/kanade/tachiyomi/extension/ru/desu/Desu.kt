@@ -12,11 +12,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -120,19 +118,18 @@ abstract class Desu :
         }
     }
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga/?order_by=popular&page=$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl$API_URL/catalog/?order_by=popular&page=$page", headers)
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manga/?order_by=updated&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl$API_URL/catalog/?order_by=updated&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-"""        val url = "$baseUrl$API_URL/".toHttpUrl().newBuilder()
+        val url = "$baseUrl$API_URL/catalog/?page=$page".toHttpUrl().newBuilder()
             .addQueryParameter("limit", "20")
-            .addQueryParameter("page", page.toString())"""
-        val url = "$baseUrl/manga/?page=$page".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
         val types = mutableListOf<Type>()
         val statuses = mutableListOf<Status>()
         val genres = mutableListOf<Genre>()
@@ -162,33 +159,12 @@ abstract class Desu :
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-"""        val page = json.decodeFromString<PageWrapperDto<MangaDetDto>>(response.body.string())
-        val mangas = page.response.map {
+        val page = json.decodeFromString<PageWrapperDto<MangaDetDto>>(response.body.string())
+        val mangas = page.mangas.map {
             it.toSManga()
         }
 
-        return MangasPage(mangas, page.pageNavParams.count > page.pageNavParams.page * page.pageNavParams.limit)"""
-        val document = response.asJsoup()
-        val mangas = document.select(".animeList .memberListItem").map { element ->
-            SManga.create().apply {
-                element.selectFirst("a.avatar")?.let { cover ->
-                    val titleFullId = cover.attr("href")
-                    val titleId = titleFullId.substringAfterLast(".").substringBeforeLast("/")
-                    setUrlWithoutDomain("/$titleId")
-                    cover.selectFirst(".img")?.attr("style")?.let { style ->
-                        if (style.contains("url('")) {
-                            thumbnail_url = style.substringAfter("url('").substringBefore("')")
-                        }
-                    }
-                }
-                val titleSelector = if (isEng == "rus") ".dimmed.oTitle" else ".animeTitle.oTitle"
-                title = element.selectFirst(titleSelector)?.text()
-                    ?: element.selectFirst(".animeTitle.oTitle")?.text() ?: ""
-            }
-        }
-        val hasNextPage = document.selectFirst("a:contains(Вперёд)") != null
-
-        return MangasPage(mangas, hasNextPage)
+        return MangasPage(mangas, page.pagination.last_page > page.pagination.current_page)
     }
 
     private fun titleDetailsRequest(manga: SManga): Request = GET(baseUrl + API_URL + manga.url + "/", headers)
@@ -223,7 +199,7 @@ abstract class Desu :
             SChapter.create().apply {
                 name = chapter.title?.let { "$fullNumStr $it" } ?: fullNumStr
                 // #apiChapter - JSON API url to automatically delete when chapter is opened in browser
-                url = chapter.view_url + "#apiChapter/${chapter.manga_id}/chapters/${chapter.id}"
+                url = chapter.view_url + "#apiChapter/${chapter.id}"
                 chapter_number = chapter.number.toFloatOrNull() ?: -1f
                 date_upload = chapter.publish_date.times(1000L)
             }
@@ -233,7 +209,12 @@ abstract class Desu :
 
     override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + API_URL + manga.url + "/chapters", headers)
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + API_URL + chapter.url.substringAfterLast("#apiChapter"), headers)
+    override fun pageListRequest(chapter: SChapter): Request {
+        val titleFullId = chapter.url.substringAfter("/manga/").substringBefore("#apiChapter").substringBefore("/vol")
+        val titleId = titleFullId.substringAfterLast(".").substringBeforeLast("/")
+        val chapterId = chapter.url.substringAfterLast("#apiChapter")
+        return GET(baseUrl + API_URL + titleId + chapterId, headers)
+    }
 
     override fun getChapterUrl(chapter: SChapter): String = chapter.url.substringBeforeLast("#apiChapter")
 

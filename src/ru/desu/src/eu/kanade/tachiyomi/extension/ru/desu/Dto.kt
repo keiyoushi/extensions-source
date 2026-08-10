@@ -9,14 +9,13 @@ class InfoWrapperDto<T>(
 
 @Serializable
 class PageWrapperDto<T>(
-    val pageNavParams: NavDto,
-    val response: List<T>,
+    val pagination: NavDto,
+    val mangas: List<T>,
 ) {
     @Serializable
     class NavDto(
-        val count: Int,
-        val page: Int,
-        val limit: Int,
+        val current_page: Int,
+        val last_page: Int,
     )
 }
 
@@ -29,7 +28,7 @@ class MangaDetDto(
     val description: String?,
     val score: ScoreDto?,
     val content_rating: String?,
-    val synonyms: List<String>,
+    val synonyms: List<String>?,
     val cover: ImgDto,
     val trans_status: String?,
     val status: String?,
@@ -74,7 +73,6 @@ class SeriesWrapperDto<T>(
 @Serializable
 class ChaptersDto(
     val id: Long,
-    val manga_id: Long,
     val volume: String,
     val number: String,
     val title: String?,
