@@ -137,9 +137,10 @@ abstract class MangaLivre :
     private suspend fun getPageListWithWebView(
         chapter: SChapter,
     ): List<Page> {
-        val ref = chapter.url.substringAfterLast("#").parseAs<ChapterReferenceDto>()
-        val chapterUrl = "$baseUrl${chapter.url.substringBefore('#')}"
-        val chapterNumber = chapterUrl.toHttpUrl().pathSegments.last { it.isNotEmpty() }
+        val chapterUrl = "$baseUrl${chapter.url}".toHttpUrl()
+        val ref = chapterUrl.fragment!!.parseAs<ChapterReferenceDto>()
+        val chapterNumber = chapterUrl.pathSegments.last { it.isNotEmpty() }
+        val readerUrl = chapterUrl.newBuilder().fragment(null).build().toString()
         val imageUrls = Collections.synchronizedSet(LinkedHashSet<String>())
 
         fun collect(rawUrl: String) {
@@ -179,7 +180,7 @@ abstract class MangaLivre :
                         resolve(imageUrls.toPageList())
                     }
                 }
-                loadUrl(chapterUrl)
+                loadUrl(readerUrl)
             }
         } catch (error: WebViewTimeoutException) {
             if (imageUrls.isNotEmpty()) {
