@@ -142,6 +142,10 @@ abstract class MangaLivre :
         val chapterNumber = chapterUrl.pathSegments.last { it.isNotEmpty() }
         val readerUrl = chapterUrl.newBuilder().fragment(null).build().toString()
         val imageUrls = Collections.synchronizedSet(LinkedHashSet<String>())
+        val bridgeName = (1..(10..20).random())
+            .map { (('a'..'z') + ('A'..'Z')).random() }
+            .joinToString("")
+        val collectImageUrlsScript = collectImageUrlsScript(bridgeName)
 
         fun collect(rawUrl: String) {
             val imageUrl = rawUrl.toCdnImageUrl() ?: return
@@ -161,14 +165,14 @@ abstract class MangaLivre :
                     collect(request.url.toString())
                     null
                 }
-                jsBridge(JS_BRIDGE_NAME) { payload ->
+                jsBridge(bridgeName) { payload ->
                     payload.parseAs<List<String>>().forEach(::collect)
                 }
                 onPageFinished {
-                    evaluateJs(COLLECT_IMAGE_URLS_SCRIPT)
+                    evaluateJs(collectImageUrlsScript)
                 }
                 poll(1.seconds) {
-                    evaluateJs(COLLECT_IMAGE_URLS_SCRIPT)
+                    evaluateJs(collectImageUrlsScript)
                     val currentCount = imageUrls.size
                     if (currentCount > 0 && currentCount == previousCount) {
                         stablePolls++
@@ -246,25 +250,11 @@ abstract class MangaLivre :
     }
 
     companion object {
-        private const val JS_BRIDGE_NAME = "MangaLivreReader"
         private const val STABLE_POLLS = 3
         private val WEBVIEW_TIMEOUT = 90.seconds
         private const val CDN_HOST = "cdn.toonlivre.net"
         private const val PROXY_HOST = "slightly-free-mayfly.edgecompute.app"
         private val PAGE_NUMBER_REGEX = Regex("""_(\d+)\.[^.]+$""")
-        private val COLLECT_IMAGE_URLS_SCRIPT =
-            """
-            (() => {
-                const urls = new Set();
-                document.querySelectorAll('img').forEach((image) => {
-                    [image.currentSrc, image.src, image.dataset.src].forEach((url) => {
-                        if (url) urls.add(url);
-                    });
-                });
-                performance.getEntriesByType('resource').forEach((entry) => urls.add(entry.name));
-                $JS_BRIDGE_NAME.post(JSON.stringify(Array.from(urls)));
-            })();
-            """.trimIndent()
 
         private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
         private const val MAX_PEEK = 1024L
@@ -279,6 +269,20 @@ abstract class MangaLivre :
         private const val DIRECTION_DESC = "desc"
         private const val DIRECTION_ASC = "asc"
     }
+
+    private fun collectImageUrlsScript(bridgeName: String) =
+        """
+        (() => {
+            const urls = new Set();
+            document.querySelectorAll('img').forEach((image) => {
+                [image.currentSrc, image.src, image.dataset.src].forEach((url) => {
+                    if (url) urls.add(url);
+                });
+            });
+            performance.getEntriesByType('resource').forEach((entry) => urls.add(entry.name));
+            $bridgeName.post(JSON.stringify(Array.from(urls)));
+        })();
+        """.trimIndent()
 
     private fun String.toCdnImageUrl(): String? {
         val url = toHttpUrlOrNull() ?: return null
