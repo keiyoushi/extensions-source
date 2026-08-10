@@ -5,19 +5,14 @@ plugins {
 }
 
 keiyoushi {
-    name = "LuotTruyen"
-    versionCode = 11
+    name = "HanabiManga"
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
-        lang = "vi"
-        baseUrl {
-            custom("https://luottruyen16.com")
-        }
-    }
-
-    deeplink {
-        path("/truyen-tranh/..*")
+        name = "花火漫画"
+        lang = "zh"
+        baseUrl = "https://uhkvqrxmcapgtpspglrp.moedot.net"
     }
 }
