@@ -443,7 +443,7 @@ abstract class GroupLe :
         val userHash = scriptContent?.let { USER_HASH_REGEX.find(it)?.groupValues?.get(1) }
         return userHash?.let {
             val prefHash = getUserHash()
-            if (prefHash != "none" && prefHash != it) {
+            if (prefHash != it) {
                 preferences.edit().putString(USER_HASH_PREF, it).apply()
             }
             "?d=$it&mtr=true"
