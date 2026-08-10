@@ -59,7 +59,7 @@ class ApiChapterListWrapper(val select: ApiChapterListSelect)
 
 // ============================= Queries ==============================
 
-private const val COMIC_FIELDS = """
+private val COMIC_FIELDS = """
     data {
         id
         name
@@ -118,7 +118,7 @@ private const val COMIC_FIELDS = """
         urlPath
         urlCover
     }
-"""
+""".trimIndent()
 
 val COMIC_NODE_QUERY = buildQuery {
     """
