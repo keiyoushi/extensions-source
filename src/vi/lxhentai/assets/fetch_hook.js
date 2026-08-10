@@ -10,6 +10,12 @@
     var _realFetch = window.fetch;
     window.__lxRealFetch = _realFetch;
 
+    try {
+        var _realHasFocus = Document.prototype.hasFocus;
+        Document.prototype.hasFocus = function() { return true; };
+        Document.prototype.hasFocus.toString = function() { return _realHasFocus.toString(); };
+    } catch(e) {}
+
     var _origSlice = Array.prototype.slice;
     Array.prototype.slice = function() {
         try {
@@ -59,11 +65,28 @@
         } catch(e) {}
     }, 50);
 
-    window.fetch = function(input, init) {
-        var url = (typeof input === 'string') ? input : (input && input.url) || '';
+    var _wrapFetch = function(fetchImpl) {
+        var wrapped = function(input, init) {
+            var url = (typeof input === 'string') ? input : (input && input.url) || '';
+            var token = null;
 
-        if (url.indexOf('/get_token') >= 0) {
-            return _realFetch.apply(this, arguments).then(function(resp) {
+            if (init && init.headers) {
+                var headers = init.headers;
+                if (headers instanceof Headers) { token = headers.get('Token') || headers.get('token'); }
+                else if (typeof headers === 'object') { token = headers['Token'] || headers['token']; }
+            }
+
+            if (token) {
+                window.__lxToken = token;
+                if (url.indexOf('http') === 0 && window.__lxImageUrls.indexOf(url) < 0) {
+                    window.__lxImageUrls.push(url);
+                }
+            }
+
+            var result = fetchImpl.apply(this, arguments);
+            if (url.indexOf('/get_token') < 0) return result;
+
+            return result.then(function(resp) {
                 var clone = resp.clone();
                 clone.json().then(function(data) {
                     if (data && data.action_token) {
@@ -71,61 +94,21 @@
                     }
                 }).catch(function() {});
                 return resp;
-            }).catch(function(err) { throw err; });
-        }
+            });
+        };
 
-        if (init && init.headers) {
-            var h = init.headers;
-            var tok = null;
-            if (h instanceof Headers) { tok = h.get('Token') || h.get('token'); }
-            else if (typeof h === 'object') { tok = h['Token'] || h['token']; }
-            if (tok && url.indexOf('http') === 0 && window.__lxImageUrls.indexOf(url) < 0) {
-                window.__lxImageUrls.push(url);
-            }
-        }
-
-        return _realFetch.apply(this, arguments);
+        try { wrapped.toString = function() { return 'function fetch() { [native code] }'; }; } catch(e) {}
+        return wrapped;
     };
 
-    try { window.fetch.toString = function() { return 'function fetch() { [native code] }'; }; } catch(e) {}
+    window.fetch = _wrapFetch(_realFetch);
+    window.__lxWrappedFetch = window.fetch;
 
-    var _replacedOnce = false;
     var _replaceInterval = setInterval(function() {
         try {
-            if (_replacedOnce) { clearInterval(_replaceInterval); return; }
-            if (window.fetch.toString().indexOf('[native code]') === -1) {
-                _replacedOnce = true;
-                var savedReal = window.__lxRealFetch;
-                window.fetch = function(input, init) {
-                    var url = (typeof input === 'string') ? input : (input && input.url) || '';
-
-                    if (url.indexOf('/get_token') >= 0) {
-                        return savedReal.apply(this, arguments).then(function(resp) {
-                            var clone = resp.clone();
-                            clone.json().then(function(data) {
-                                if (data && data.action_token) {
-                                    window.__lxToken = data.action_token;
-                                }
-                            }).catch(function() {});
-                            return resp;
-                        }).catch(function(err) { throw err; });
-                    }
-
-                    if (init && init.headers) {
-                        var h = init.headers;
-                        var tok = null;
-                        if (h instanceof Headers) { tok = h.get('Token') || h.get('token'); }
-                        else if (typeof h === 'object') { tok = h['Token'] || h['token']; }
-                        if (tok && url.indexOf('http') === 0 && window.__lxImageUrls.indexOf(url) < 0) {
-                            window.__lxImageUrls.push(url);
-                        }
-                    }
-
-                    return savedReal.apply(this, arguments);
-                };
-                try { window.fetch.toString = function() { return 'function fetch() { [native code] }'; }; } catch(e) {}
-                clearInterval(_replaceInterval);
-            }
+            if (window.fetch === window.__lxWrappedFetch) return;
+            window.fetch = _wrapFetch(window.fetch);
+            window.__lxWrappedFetch = window.fetch;
         } catch(e) {}
     }, 100);
 

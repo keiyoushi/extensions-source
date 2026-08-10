@@ -104,12 +104,17 @@ abstract class TruyenQQ : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host == baseUrl.toHttpUrl().host) {
-            client.get(url, headers).use { response ->
-                return parseMangaDetails(response.asJsoup())
-            }
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "truyen-tranh") return null
+
+        val slug = url.pathSegments.getOrNull(1)?.takeIf { url.pathSegments.size == 2 } ?: return null
+        val mangaSlug = chapterSlugRegex.matchEntire(slug)?.groupValues?.get(1)
+            ?: slug.takeIf { mangaSlugRegex.matches(it) }
+            ?: return null
+        val mangaPath = "/truyen-tranh/$mangaSlug"
+
+        return parseMangaDetails(client.get("$baseUrl$mangaPath").asJsoup()).apply {
+            setUrlWithoutDomain(mangaPath)
         }
-        return null
     }
 
     // =========================== Manga Details ============================
@@ -189,4 +194,7 @@ abstract class TruyenQQ : KeiSource() {
         SortByFilter(),
         GenreList(getGenreList()),
     )
+
+    private val mangaSlugRegex = Regex(""".+-\d+""")
+    private val chapterSlugRegex = Regex("""(.+-\d+)-chap-.+""")
 }

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Team Lanh Lung"
-    versionCode = 35
+    versionCode = 36
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -14,7 +14,7 @@ keiyoushi {
         name = "Team Lạnh Lùng"
         lang = "vi"
         baseUrl {
-            custom("https://lanhlungteam1.top")
+            custom("https://lanhlungteam2.top")
         }
     }
 
