@@ -386,7 +386,7 @@ abstract class Mangadotnet :
         }.build()
         val cache = CacheControl.Builder().maxAge(6.hours).build()
         client.get(forYouUrl, cacheControl = cache).use { response ->
-            response.parseAs<ForYouResponse>().items
+            response.parseAs<MangaItemsResponse>().items
         }
     }.getOrElse { emptyList() }
 
@@ -395,7 +395,7 @@ abstract class Mangadotnet :
         val url = "$baseUrl/api/discovery/following-reads?limit=30"
         val cache = CacheControl.Builder().maxAge(6.hours).build()
         client.get(url, cacheControl = cache).use { response ->
-            response.parseAs<ForYouResponse>().items
+            response.parseAs<MangaItemsResponse>().items
         }
     }.getOrElse { emptyList() }
 
