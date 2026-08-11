@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.khomanhwa
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -154,7 +155,7 @@ abstract class KhoManhwa : KeiSource() {
             if (code == 403) {
                 throw Exception("Đăng nhập Webview bằng tài khoản phù hợp để xem chương này")
             }
-            throw Exception("HTTP error $code")
+            throw HttpException(code)
         }
         val document = response.asJsoup()
 
