@@ -392,8 +392,7 @@ abstract class Mangadotnet :
 
     private suspend fun fetchFollowingReads(): List<BrowseManga> = runCatching {
         if (!isLoggedIn()) return emptyList()
-        val url = "$baseUrl/api/discovery/following-reads?limit=30".toHttpUrl().newBuilder().apply {
-        }.build()
+        val url = "$baseUrl/api/discovery/following-reads?limit=30"
         val cache = CacheControl.Builder().maxAge(6.hours).build()
         client.get(url, cacheControl = cache).use { response ->
             response.parseAs<ForYouResponse>().items
