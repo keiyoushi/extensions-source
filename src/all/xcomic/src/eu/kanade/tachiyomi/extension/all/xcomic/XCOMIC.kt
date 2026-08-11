@@ -22,12 +22,17 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLPost
+import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseGraphQLAs
+import keiyoushi.utils.string
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.encodeToJsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
-import org.json.JSONArray
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import javax.crypto.Cipher
@@ -41,12 +46,10 @@ abstract class XCOMIC :
 
     private val preferences by getPreferencesLazy()
 
-    override val supportsLatest = true
-
     // ========================= Popular & Latest ==========================
-    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.POPULAR)
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(DefaultSortFilter("field_score")))
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.LATEST)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(DefaultSortFilter("field_upload")))
 
     // ============================== Search ===============================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -68,13 +71,14 @@ abstract class XCOMIC :
         var releaseYearMin: Int? = null
         var releaseYearMax: Int? = null
         var incOLangs = emptyList<String>()
-        var incTLangs = if (lang == "all") emptyList() else listOf(lang)
+        var incTLangs = if (lang == "all") emptyList() else listOf(mapLangCode(lang))
         var origStatus = ""
         var uploadStatus = ""
         var chapCount = ""
 
         filters.forEach { filter ->
             when (filter) {
+                is DefaultSortFilter -> sort = filter.sort
                 is LetterFilter -> letterMode = (filter.state == 1)
                 is ContentRatingFilter -> contentRating = filter.selected
                 is TypeFilter -> types = filter.selected
@@ -120,71 +124,132 @@ abstract class XCOMIC :
             size = BROWSE_PAGE_SIZE,
             init = (page - 1) * BROWSE_PAGE_SIZE,
             sortby = sort,
-            word = query.takeIf { it.isNotEmpty() },
+            word = query.takeIf { it.isNotEmpty() } ?: "",
             where = if (letterMode) "letter" else "browse",
             releaseYearMin = releaseYearMin,
             releaseYearMax = releaseYearMax,
-            incTypes = types.takeIf { it.isNotEmpty() },
-            incDemographics = demographics.takeIf { it.isNotEmpty() },
-            incContentRatings = contentRating.takeIf { it.isNotEmpty() },
-            incGenres = incGenres.takeIf { it.isNotEmpty() },
-            excGenres = excGenres.takeIf { it.isNotEmpty() },
+            incTypes = types,
+            incDemographics = demographics,
+            incContentRatings = contentRating,
+            incGenres = incGenres,
+            excGenres = excGenres,
             incGenresMode = incGenresMode?.takeIf { it.isNotEmpty() },
             excGenresMode = excGenresMode?.takeIf { it.isNotEmpty() },
-            incOLangs = incOLangs.takeIf { it.isNotEmpty() },
-            incTLangs = incTLangs.takeIf { it.isNotEmpty() },
+            incOLangs = incOLangs,
+            incTLangs = incTLangs,
             origStatus = origStatus.takeIf { it.isNotEmpty() },
             siteStatus = uploadStatus.takeIf { it.isNotEmpty() },
             chapCount = chapCount.takeIf { it.isNotEmpty() },
             ignoreGlobalGenres = isIgnoreGenreBlocklist(),
         )
 
-        val pagerResponse = client.newCall(graphQLPost("$baseUrl/query/", headers, COMIC_PAGER_QUERY, null, ApiComicSearchWrapper(variables))).await()
-        val itemsResponse = client.newCall(graphQLPost("$baseUrl/query/", headers, COMIC_ITEMS_QUERY, null, ApiComicSearchWrapper(variables))).await()
-        return parseSearchManga(pagerResponse, itemsResponse)
+        val request = graphQLPost(
+            url = "$baseUrl/query/",
+            headers = headers,
+            query = COMIC_ITEMS_QUERY,
+            variables = ApiComicSearchWrapper(variables),
+        )
+
+        val response = client.newCall(request).await()
+        return parseSearchManga(response)
     }
 
-    private fun parseSearchManga(pagerResponse: Response, itemsResponse: Response): MangasPage {
-        val pagerData = pagerResponse.parseGraphQLAs<SearchPagerData>()
-        val itemsData = itemsResponse.parseGraphQLAs<SearchItemsData>()
+    private fun parseSearchManga(response: Response): MangasPage {
+        val itemsData = response.parseGraphQLAs<SearchItemsData>()
         val mangas = itemsData.items.map { item ->
             item.data.toSManga(baseUrl, ::cleanTitleIfNeeded)
         }
-        return MangasPage(mangas, pagerData.pager.hasNextPage())
+        val hasNextPage = mangas.size >= BROWSE_PAGE_SIZE
+        return MangasPage(mangas, hasNextPage)
     }
 
     // ============================== Filters ==============================
-    override fun getFilterList(data: JsonElement?): FilterList {
-        val filters = buildList {
-            addAll(
-                listOf(
-                    SortFilter(SortFilter.POPULAR_INDEX),
-                    ContentRatingFilter(),
-                    TypeFilter(),
-                    DemographicFilter(),
-                    Filter.Separator(),
-                    GenreGroupFilter(),
-                    FormatFilter(),
-                    GenreInModeFilter(),
-                    GenreExModeFilter(),
-                    Filter.Separator(),
-                    OriginalStatusFilter(),
-                    UploadStatusFilter(),
-                    OriginalLanguageFilter(),
-                ),
-            )
-            if (lang == "all") {
-                add(TranslationLanguageFilter())
+    override val supportsFilterFetching: Boolean get() = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val response = client.get("$baseUrl/search", headers)
+        val document = response.asJsoup()
+
+        val filterMap = mutableMapOf<String, MutableList<Map<String, String>>>()
+        filterMap["genres"] = mutableListOf()
+        filterMap["types"] = mutableListOf()
+        filterMap["demographics"] = mutableListOf()
+        filterMap["contentRatings"] = mutableListOf()
+
+        document.select("details.group").forEach { details ->
+            val summaryText = details.selectFirst("summary")?.text()?.lowercase() ?: return@forEach
+            val container = details.selectFirst("div.columns-2") ?: details.selectFirst("div.w-full.overflow-y-auto")
+            val category = when {
+                "genre" in summaryText -> "genres"
+                "type" in summaryText -> "types"
+                "demographic" in summaryText -> "demographics"
+                "content rating" in summaryText -> "contentRatings"
+                else -> null
             }
-            addAll(
-                listOf(
-                    ChapterCountFilter(),
-                    YearFilter(),
-                    LetterFilter(),
-                ),
-            )
+
+            if (category != null) {
+                container?.select("div[:]")?.forEach { div ->
+                    val slug = div.attr(":")
+                    val name = div.selectFirst("span")?.text()?.trim()
+                    if (slug.isNotEmpty() && !name.isNullOrEmpty()) {
+                        filterMap[category]?.add(mapOf("name" to name, "value" to slug))
+                    }
+                }
+            }
         }
-        return FilterList(filters)
+
+        if (filterMap["genres"].isNullOrEmpty() && filterMap["types"].isNullOrEmpty()) {
+            throw Exception("Failed to fetch filters dynamically")
+        }
+
+        val cleanMap = filterMap.mapValues { it.value.distinctBy { v -> v["value"] } }
+        return jsonInstance.encodeToJsonElement(cleanMap)
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val parsed = try {
+            data?.let { jsonInstance.decodeFromString<Map<String, List<Map<String, String>>>>(it.toString()) } ?: emptyMap()
+        } catch (_: Exception) {
+            emptyMap()
+        }
+
+        fun extractList(key: String): List<Pair<String, String>> = parsed[key]?.mapNotNull { map ->
+            val name = map["name"]
+            val value = map["value"]
+            if (name != null && value != null) name to value else null
+        } ?: emptyList()
+
+        val dynamicGenres = extractList("genres")
+        val dynamicTypes = extractList("types")
+        val dynamicDemographics = extractList("demographics")
+        val dynamicContentRatings = extractList("contentRatings")
+
+        return FilterList(
+            buildList {
+                if (dynamicGenres.isEmpty() && dynamicTypes.isEmpty()) {
+                    add(Filter.Header("Press 'Reset' to load filters"))
+                } else {
+                    add(SortFilter())
+                    if (dynamicContentRatings.isNotEmpty()) add(ContentRatingFilter(options = dynamicContentRatings))
+                    if (dynamicTypes.isNotEmpty()) add(TypeFilter(options = dynamicTypes))
+                    add(Filter.Separator())
+                    if (dynamicDemographics.isNotEmpty()) add(DemographicFilter(options = dynamicDemographics))
+                    if (dynamicGenres.isNotEmpty()) add(GenreGroupFilter(options = dynamicGenres))
+                    add(FormatFilter())
+                    add(GenreInModeFilter())
+                    add(GenreExModeFilter())
+                    add(Filter.Separator())
+                    add(OriginalLanguageFilter())
+                    add(OriginalStatusFilter())
+                    add(UploadStatusFilter())
+                    if (lang == "all") add(TranslationLanguageFilter())
+                    add(ChapterCountFilter())
+                }
+                add(Filter.Separator())
+                add(YearFilter())
+                add(LetterFilter())
+            },
+        )
     }
 
     // ============================== Details ==============================
@@ -202,8 +267,13 @@ abstract class XCOMIC :
     private suspend fun getMangaDetails(manga: SManga): SManga = getMangaDetails(getMangaId(manga.url))
 
     private suspend fun getMangaDetails(id: String): SManga {
-        val apiVariables = ApiComicNodeVariables(id = id)
-        val response = client.newCall(graphQLPost("$baseUrl/query/", headers, COMIC_NODE_QUERY, null, apiVariables)).await()
+        val request = graphQLPost(
+            url = "$baseUrl/query/",
+            headers = headers,
+            query = COMIC_NODE_QUERY,
+            variables = ApiComicNodeVariables(id = id),
+        )
+        val response = client.newCall(request).await()
         return parseMangaDetails(response)
     }
 
@@ -214,16 +284,14 @@ abstract class XCOMIC :
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
-
         val id = url.pathSegments.takeIf { it.size >= 2 && it[0] == "comic" }?.get(1)
             ?.substringBefore("-") ?: return null
-
         return getMangaDetails(id)
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        val url = manga.url
-        return if (url.startsWith("/")) "$baseUrl$url" else "$baseUrl/comic/$url"
+        val urlPath = manga.memo["urlPath"]?.string
+        return if (urlPath != null) "$baseUrl$urlPath" else "$baseUrl/comic/${manga.url}"
     }
 
     private fun getMangaId(url: String): String {
@@ -232,109 +300,76 @@ abstract class XCOMIC :
     }
 
     // ============================= Chapters ==============================
-    private suspend fun getChapterList(manga: SManga): List<SChapter> = fetchChapterListPage(manga, 1)
+    private suspend fun getChapterList(manga: SManga): List<SChapter> = coroutineScope {
+        val firstPage = fetchChapterListPage(manga, 1)
+        val allChapters = firstPage.chapters.toMutableList()
+        val totalItems = firstPage.total ?: 0
 
-    private suspend fun fetchChapterListPage(manga: SManga, page: Int): List<SChapter> {
+        if (totalItems > 100 && firstPage.hasNextPage) {
+            val totalPages = (totalItems + 99) / 100
+
+            (2..totalPages).chunked(3).forEach { batch ->
+                val deferredPages = batch.map { pageNum ->
+                    async {
+                        fetchChapterListPage(manga, pageNum).chapters
+                    }
+                }
+                allChapters.addAll(deferredPages.awaitAll().flatten())
+            }
+        }
+
+        allChapters
+    }
+
+    private suspend fun fetchChapterListPage(manga: SManga, page: Int): ChapterListPage {
         val select = ApiChapterListSelect(
             comicId = getMangaId(manga.url),
             page = page,
             size = 100,
         )
-        val response = client.newCall(graphQLPost("$baseUrl/query/", headers, CHAPTER_LIST_QUERY, null, ApiChapterListWrapper(select))).await()
+        val request = graphQLPost(
+            url = "$baseUrl/query/",
+            headers = headers,
+            query = CHAPTER_LIST_QUERY,
+            variables = ApiChapterListWrapper(select),
+        )
+        val response = client.newCall(request).await()
         val data = response.parseGraphQLAs<ChapterListData>().response
-        val chapters = data.items.map { it.data.toSChapter() }
 
-        return if (data.paging.hasNextPage()) {
-            chapters + fetchChapterListPage(manga, page + 1)
-        } else {
-            chapters
-        }
+        return ChapterListPage(
+            chapters = data.items.map { it.data.toSChapter() },
+            total = data.paging.total,
+            hasNextPage = data.paging.hasNextPage(),
+        )
     }
+
+    private data class ChapterListPage(
+        val chapters: List<SChapter>,
+        val total: Int?,
+        val hasNextPage: Boolean,
+    )
 
     // =============================== Pages ===============================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = getChapterId(chapter.url)
 
-        runCatching {
-            val response = client.newCall(graphQLPost("$baseUrl/query/", headers, CHAPTER_PAGES_QUERY, null, ApiChapterNodeVariables(chapterId))).await()
-            val data = response.parseGraphQLAs<ChapterPagesData>().response.data
-            data.imageUrls.takeIf { it.isNotEmpty() }?.let { urls ->
-                return urls.mapIndexed { index, url ->
-                    Page(index, imageUrl = if (url.startsWith("http")) url else "$baseUrl$url")
-                }
-            }
+        val request = graphQLPost(
+            url = "$baseUrl/query/",
+            headers = headers,
+            query = CHAPTER_PAGES_QUERY,
+            variables = ApiChapterNodeVariables(chapterId),
+        )
+        val response = client.newCall(request).await()
+        val data = response.parseGraphQLAs<ChapterPagesData>().response.data
+
+        return data.imageUrls.mapIndexed { index, url ->
+            Page(index, imageUrl = if (url.startsWith("http")) url else "$baseUrl$url")
         }
-
-        val url = chapter.url
-        val absUrl = if (url.startsWith("/")) "$baseUrl$url" else "$baseUrl/comic/chapter/$url"
-
-        val response = client.get(absUrl)
-        val document = response.asJsoup()
-
-        // Parse images directly from HTML
-        var images = document.select("div[data-name=\"image-item\"] img[src]")
-        if (images.isNotEmpty()) {
-            return images.mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("src")) }
-        }
-
-        images = document.select("img[src^=\"/_f/\"]")
-        if (images.isNotEmpty()) {
-            return images.mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("src")) }
-        }
-
-        images = document.select("img[src*=\"/_f/\"]")
-        if (images.isNotEmpty()) {
-            return images.mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("src")) }
-        }
-
-        images = document.select("img[src]")
-        if (images.isNotEmpty()) {
-            val valid = images.filter { img ->
-                val src = img.absUrl("src")
-                src.contains("/_f/") || src.contains("/images/") || src.endsWith(".webp") || src.endsWith(".jpg")
-            }
-            if (valid.isNotEmpty()) {
-                return valid.mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("src")) }
-            }
-        }
-
-        // Fallback to script parsing if images are encrypted
-        val scripts = document.select("script")
-        for (script in scripts) {
-            val scriptSrc = script.html()
-            val p = scriptSrc.indexOf("const imgHttps =")
-            if (p == -1) continue
-
-            val start = scriptSrc.indexOf('[', p)
-            val end = scriptSrc.indexOf(';', start)
-            if (start == -1 || end == -1) continue
-
-            val imagesArray = JSONArray(scriptSrc.substring(start, end))
-            val batoPass = scriptSrc.substringAfter("batoPass =").substringBefore(";").trim(' ', '"', '\n')
-            val batoWord = scriptSrc.substringAfter("batoWord =").substringBefore(";").trim(' ', '"', '\n')
-
-            val pages = mutableListOf<Page>()
-            if (batoPass.isNotEmpty() && batoWord.isNotEmpty()) {
-                val args = JSONArray(decryptAES(batoWord, batoPass))
-                for (i in 0 until imagesArray.length()) {
-                    val imgurl = imagesArray.getString(i)
-                    val fullUrl = if (args.length() == 0) imgurl else "$imgurl?${args.getString(i)}"
-                    pages.add(Page(i, imageUrl = fullUrl))
-                }
-            } else {
-                for (i in 0 until imagesArray.length()) {
-                    pages.add(Page(i, imageUrl = imagesArray.getString(i)))
-                }
-            }
-            return pages
-        }
-
-        throw Exception("Cannot find images list")
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val url = chapter.url
-        return if (url.startsWith("/")) "$baseUrl$url" else "$baseUrl/comic/chapter/$url"
+        val urlPath = chapter.memo["urlPath"]?.string
+        return if (urlPath != null) "$baseUrl$urlPath" else "$baseUrl/comic/chapter/${chapter.url}"
     }
 
     private fun getChapterId(url: String): String = url.substringAfterLast("/").substringBefore("-")
@@ -456,6 +491,15 @@ abstract class XCOMIC :
     private fun isRemoveTitleVersion(): Boolean = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
     private fun customRemoveTitle(): String = preferences.getString(REMOVE_TITLE_CUSTOM_PREF, "")!!
     private fun isIgnoreGenreBlocklist(): Boolean = preferences.getBoolean(IGNORE_GENRE_BLOCKLIST_PREF, false)
+
+    private class DefaultSortFilter(val sort: String) : Filter.Header("")
+
+    private fun mapLangCode(code: String): String = when (code) {
+        "pt-BR" -> "pt_br"
+        "es-419" -> "es_419"
+        "other" -> "_t"
+        else -> code
+    }
 
     companion object {
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"

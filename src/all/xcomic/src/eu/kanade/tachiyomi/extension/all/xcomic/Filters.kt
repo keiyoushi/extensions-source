@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.xcomic
 
 import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.source.model.FilterList
 
 class CheckboxFilterOption(name: String, val value: String) : Filter.CheckBox(name)
 class TriStateFilterOption(name: String, val value: String) : Filter.TriState(name)
@@ -29,7 +28,6 @@ abstract class TriStateGroupFilter(
 ) : Filter.Group<TriStateFilterOption>(name, options.map { TriStateFilterOption(it.first, it.second) }) {
     val included: List<String>
         get() = state.filter { it.isIncluded() }.map { it.value }
-
     val excluded: List<String>
         get() = state.filter { it.isExcluded() }.map { it.value }
 }
@@ -37,276 +35,157 @@ abstract class TriStateGroupFilter(
 class LetterFilter :
     SelectFilter(
         name = "Letter matching mode (Slow)",
-        options = listOf(
-            "Disabled" to "disabled",
-            "Enabled" to "enabled",
-        ),
+        options = listOf("Disabled" to "disabled", "Enabled" to "enabled"),
     )
 
 class SortFilter(
-    defaultIndex: Int = LATEST_INDEX,
-) : SelectFilter(
-    name = "Order by",
-    options = sortOptions,
-    default = defaultIndex,
-) {
-    companion object {
-        const val POPULAR_INDEX = 0
-        const val LATEST_INDEX = 6
-        val POPULAR = FilterList(SortFilter(POPULAR_INDEX))
-        val LATEST = FilterList(SortFilter(LATEST_INDEX))
-    }
-}
+    options: List<Pair<String, String>> = sortOptions,
+    defaultIndex: Int = 0,
+) : SelectFilter(name = "Order by", options = options, default = defaultIndex)
 
-private val sortOptions = listOf(
-    "Rating Score" to "field_score",
-    "Most Follows" to "field_follow",
-    "Most Reviews" to "field_review",
-    "Most Comments" to "field_comment",
-    "Most Chapters" to "field_chapter",
-    "Latest Upload" to "field_upload",
-    "Recently Created" to "field_public",
-    "Name A-Z" to "field_name",
-    "Most Views (Total)" to "views_d000",
-    "Most Views (360 days)" to "views_d360",
-    "Most Views (180 days)" to "views_d180",
-    "Most Views (90 days)" to "views_d090",
-    "Most Views (30 days)" to "views_d030",
-    "Most Views (7 days)" to "views_d007",
-    "Most Views (24 hours)" to "views_h024",
-    "Most Views (12 hours)" to "views_h012",
-    "Most Views (6 hours)" to "views_h006",
-    "Most Views (1 hour)" to "views_h001",
-    "User Status (Plan to Read)" to "status_wish",
-    "User Status (Reading)" to "status_doing",
-    "User Status (Completed)" to "status_completed",
-    "User Status (On Hold)" to "status_on_hold",
-    "User Status (Dropped)" to "status_dropped",
-    "User Status (Re-reading)" to "status_repeat",
-)
+class OriginalStatusFilter(
+    options: List<Pair<String, String>> = uploadStatus,
+) : SelectFilter(name = "Original Work Status", options = options)
 
-class OriginalStatusFilter :
-    SelectFilter(
-        name = "Original Work Status",
-        options = uploadStatus,
-    )
+class UploadStatusFilter(
+    options: List<Pair<String, String>> = uploadStatus,
+) : SelectFilter(name = "Upload Status", options = options)
 
-class UploadStatusFilter :
-    SelectFilter(
-        name = "Upload Status",
-        options = uploadStatus,
-    )
+class ChapterCountFilter(
+    options: List<Pair<String, String>> = chapterCountOptions,
+) : SelectFilter(name = "Chapter Count", options = options)
 
-private val uploadStatus = listOf(
-    "All" to "",
-    "Pending" to "pending",
-    "Ongoing" to "ongoing",
-    "Completed" to "completed",
-    "Hiatus" to "hiatus",
-    "Cancelled" to "cancelled",
-)
+class OriginalLanguageFilter(
+    options: List<Pair<String, String>> = languages,
+) : CheckboxGroupFilter(name = "Original Work Language", options = options)
 
-class ChapterCountFilter :
-    SelectFilter(
-        name = "Chapter Count",
-        options = listOf(
-            "Any" to "",
-            "0" to "0",
-            "1+" to "1",
-            "10+" to "10",
-            "20+" to "20",
-            "30+" to "30",
-            "40+" to "40",
-            "50+" to "50",
-            "60+" to "60",
-            "70+" to "70",
-            "80+" to "80",
-            "90+" to "90",
-            "100+" to "100",
-            "200+" to "200",
-            "300+" to "300",
-            "1~9" to "1-9",
-            "10~19" to "10-19",
-            "20~29" to "20-29",
-            "30~39" to "30-39",
-            "40~49" to "40-49",
-            "50~59" to "50-59",
-            "60~69" to "60-69",
-            "70~79" to "70-79",
-            "80~89" to "80-89",
-            "90~99" to "90-99",
-            "100~199" to "100-199",
-            "200~299" to "200-299",
-        ),
-    )
+class TranslationLanguageFilter(
+    options: List<Pair<String, String>> = languages,
+) : CheckboxGroupFilter(name = "Translated Language", options = options)
 
-class OriginalLanguageFilter :
-    CheckboxGroupFilter(
-        name = "Original Work Language",
-        options = languages,
-    )
+class ContentRatingFilter(
+    options: List<Pair<String, String>> = emptyList(),
+) : CheckboxGroupFilter(name = "Content Rating", options = options)
 
-class TranslationLanguageFilter :
-    CheckboxGroupFilter(
-        name = "Translated Language",
-        options = languages,
-    )
+class TypeFilter(
+    options: List<Pair<String, String>> = emptyList(),
+) : CheckboxGroupFilter(name = "Types", options = options)
 
+class DemographicFilter(
+    options: List<Pair<String, String>> = emptyList(),
+) : CheckboxGroupFilter(name = "Demographics", options = options)
+
+class FormatFilter(
+    options: List<Pair<String, String>> = formatOptions,
+) : TriStateGroupFilter(name = "Formats", options = options)
+
+class GenreGroupFilter(
+    name: String = "Genres",
+    options: List<Pair<String, String>> = emptyList(),
+) : TriStateGroupFilter(name, options)
+
+class GenreInModeFilter : SelectFilter(name = "Include Mode", options = listOf("AND" to "and", "OR" to "or"), default = 0)
+
+class GenreExModeFilter : SelectFilter(name = "Exclude Mode", options = listOf("AND" to "and", "OR" to "or"), default = 0)
+
+class YearFilter : Filter.Text("Year (e.g. 2015 or 1901-2027)")
+
+// --- Hardcoded Constants ---
 val languages = listOf(
     "English" to "en",
-    "Chinese" to "zh",
-    "Japanese" to "ja",
+    "French" to "fr",
+    "Portuguese" to "pt",
     "Korean" to "ko",
+    "Japanese" to "ja",
+    "Indonesian" to "id",
+    "Chinese" to "zh",
+    "Abkhazian" to "ab",
     "Afrikaans" to "af",
-    "Albanian" to "sq",
-    "Amharic" to "am",
-    "Arabic" to "ar",
     "Armenian" to "hy",
+    "Arabic" to "ar",
+    "Albanian" to "sq",
     "Azerbaijani" to "az",
     "Belarusian" to "be",
     "Bengali" to "bn",
-    "Bosnian" to "bs",
-    "Bulgarian" to "bg",
     "Burmese" to "my",
+    "Bulgarian" to "bg",
+    "Bosnian" to "bs",
     "Cambodian" to "km",
     "Catalan" to "ca",
     "Cebuano" to "ceb",
-    "Chinese (Cantonese)" to "zh_hk",
-    "Chinese (Traditional)" to "zh_tw",
-    "Croatian" to "hr",
     "Czech" to "cs",
+    "Croatian" to "hr",
+    "Chuvash" to "cv",
     "Danish" to "da",
     "Dutch" to "nl",
     "Estonian" to "et",
-    "Faroese" to "fo",
+    "Esperanto" to "eo",
+    "Basque" to "eu",
     "Filipino" to "fil",
     "Finnish" to "fi",
-    "French" to "fr",
-    "Georgian" to "ka",
     "German" to "de",
+    "Georgian" to "ka",
     "Greek" to "el",
     "Guarani" to "gn",
     "Gujarati" to "gu",
-    "Haitian Creole" to "ht",
-    "Hausa" to "ha",
-    "Hebrew" to "he",
     "Hindi" to "hi",
+    "Hebrew" to "he",
+    "Haitian Creole" to "ht",
     "Hungarian" to "hu",
     "Icelandic" to "is",
     "Igbo" to "ig",
-    "Indonesian" to "id",
+    "Galician" to "gl",
     "Irish" to "ga",
     "Italian" to "it",
-    "Javanese" to "jv",
-    "Kannada" to "kn",
     "Kazakh" to "kk",
-    "Kurdish" to "ku",
     "Kyrgyz" to "ky",
-    "Laothian" to "lo",
-    "Latvian" to "lv",
     "Lithuanian" to "lt",
-    "Luxembourgish" to "lb",
-    "Macedonian" to "mk",
+    "Latin" to "la",
+    "Laothian" to "lo",
+    "Kurdish" to "ku",
+    "Javanese" to "jv",
     "Malagasy" to "mg",
+    "Latvian" to "lv",
     "Malay" to "ms",
     "Malayalam" to "ml",
     "Maltese" to "mt",
-    "Maori" to "mi",
-    "Marathi" to "mr",
     "Moldavian" to "mo",
+    "Marathi" to "mr",
+    "Maori" to "mi",
     "Mongolian" to "mn",
-    "Nepali" to "ne",
-    "Norwegian" to "no",
     "Nyanja" to "ny",
+    "Nepali" to "ne",
     "Pashto" to "ps",
+    "Norwegian" to "no",
     "Persian" to "fa",
-    "Polish" to "pl",
-    "Portuguese" to "pt",
-    "Portuguese (Brazil)" to "pt_br",
-    "Romanian" to "ro",
-    "Romansh" to "rm",
-    "Russian" to "ru",
-    "Samoan" to "sm",
+    "Portuguese (BR)" to "pt_br",
     "Serbian" to "sr",
-    "Serbo-Croatian" to "sh",
     "Sesotho" to "st",
-    "Shona" to "sn",
-    "Sindhi" to "sd",
+    "Russian" to "ru",
+    "Romanian" to "ro",
+    "Polish" to "pl",
+    "Serbo-Croatian" to "sh",
     "Sinhalese" to "si",
-    "Slovak" to "sk",
-    "Slovenian" to "sl",
     "Somali" to "so",
-    "Spanish" to "es",
-    "Spanish (Latin America)" to "es_419",
-    "Swahili" to "sw",
     "Swedish" to "sv",
-    "Tajik" to "tg",
-    "Tamil" to "ta",
-    "Telugu" to "te",
     "Thai" to "th",
-    "Tigrinya" to "ti",
-    "Tonga" to "to",
     "Turkish" to "tr",
+    "Swati" to "ss",
+    "Slovak" to "sk",
+    "Spanish" to "es",
+    "Tigrinya" to "ti",
+    "Tamil" to "ta",
     "Turkmen" to "tk",
     "Ukrainian" to "uk",
-    "Urdu" to "ur",
-    "Uzbek" to "uz",
+    "Tonga" to "to",
+    "Telugu" to "te",
+    "Spanish (LA)" to "es_419",
+    "Slovenian" to "sl",
     "Vietnamese" to "vi",
-    "Yoruba" to "yo",
-    "Zulu" to "zu",
     "Other" to "_t",
+    "Uzbek" to "uz",
+    "Zulu" to "zu",
 )
-
-class ContentRatingFilter :
-    CheckboxGroupFilter(
-        name = "Content Rating",
-        options = contentRatingOptions,
-    )
-
-val contentRatingOptions = listOf(
-    "Safe" to "safe",
-    "Suggestive" to "suggestive",
-    "Erotica" to "erotica",
-    "Pornographic" to "pornographic",
-)
-
-class TypeFilter :
-    CheckboxGroupFilter(
-        name = "Types",
-        options = typeOptions,
-    )
-
-val typeOptions = listOf(
-    "Artbook" to "artbook",
-    "Cartoon" to "cartoon",
-    "Imageset" to "imageset",
-    "Manga" to "manga",
-    "Manhua" to "manhua",
-    "Manhwa" to "manhwa",
-    "Western" to "western",
-)
-
-class DemographicFilter :
-    CheckboxGroupFilter(
-        name = "Demographics",
-        options = demographicOptions,
-    )
-
-val demographicOptions = listOf(
-    "Shounen(B)" to "shounen",
-    "Shoujo(G)" to "shoujo",
-    "Seinen(M)" to "seinen",
-    "Josei(W)" to "josei",
-    "Kodomo(Kid)" to "kodomo",
-    "Silver & Golden" to "silver_golden",
-    "Non-human" to "non_human",
-)
-
-class FormatFilter :
-    TriStateGroupFilter(
-        name = "Formats",
-        options = formatOptions,
-    )
 
 val formatOptions = listOf(
     "4 Koma" to "4_koma",
@@ -323,153 +202,32 @@ val formatOptions = listOf(
     "Webtoon" to "webtoon",
 )
 
-class GenreGroupFilter :
-    TriStateGroupFilter(
-        name = "Genres",
-        options = genreOptions,
-    )
+val uploadStatus = listOf(
+    "All" to "",
+    "Pending" to "pending",
+    "Ongoing" to "ongoing",
+    "Completed" to "completed",
+    "Hiatus" to "hiatus",
+    "Cancelled" to "cancelled",
+)
 
-class GenreInModeFilter :
-    SelectFilter(
-        name = "Include Mode",
-        options = listOf(
-            "AND" to "and",
-            "OR" to "or",
-        ),
-        default = 0,
-    )
+val chapterCountOptions = listOf(
+    "Any" to "", "0" to "0", "1+" to "1", "10+" to "10", "20+" to "20", "30+" to "30",
+    "40+" to "40", "50+" to "50", "60+" to "60", "70+" to "70", "80+" to "80", "90+" to "90",
+    "100+" to "100", "200+" to "200", "300+" to "300", "1~9" to "1-9", "10~19" to "10-19",
+    "20~29" to "20-29", "30~39" to "30-39", "40~49" to "40-49", "50~59" to "50-59",
+    "60~69" to "60-69", "70~79" to "70-79", "80~89" to "80-89", "90~99" to "90-99",
+    "100~199" to "100-199", "200~299" to "200-299",
+)
 
-class GenreExModeFilter :
-    SelectFilter(
-        name = "Exclude Mode",
-        options = listOf(
-            "AND" to "and",
-            "OR" to "or",
-        ),
-        default = 0,
-    )
-
-class YearFilter : Filter.Text("Year (e.g. 2024 or 2020-2024)")
-
-val genreOptions = listOf(
-    "Action" to "action",
-    "Adventure" to "adventure",
-    "Age Gap" to "age_gap",
-    "Aliens" to "aliens",
-    "Animals" to "animals",
-    "Art-by-AI" to "art_by_ai",
-    "Bara" to "bara",
-    "Beasts" to "beasts",
-    "Blackmail" to "blackmail",
-    "Bodyswap" to "bodyswap",
-    "Boys" to "boys",
-    "Boys Love" to "boys_love",
-    "Brocon Siscon" to "brocon_siscon",
-    "Cars" to "cars",
-    "Cheating/Infidelity" to "cheating_infidelity",
-    "Childhood Friends" to "childhood_friends",
-    "College life" to "college_life",
-    "Comedy" to "comedy",
-    "Comic" to "comic",
-    "Contest winning" to "contest_winning",
-    "Cooking" to "cooking",
-    "Crime" to "crime",
-    "Crossdressing" to "crossdressing",
-    "Cultivation" to "cultivation",
-    "Death Game" to "death_game",
-    "Degeneratemc" to "degeneratemc",
-    "Delinquents" to "delinquents",
-    "Dementia" to "dementia",
-    "Demons" to "demons",
-    "Drama" to "drama",
-    "Dungeons" to "dungeons",
-    "Emperor's Daughter" to "emperors_daughter",
-    "Fantasy" to "fantasy",
-    "Female-protagonists" to "female_protagonists",
-    "Fetish" to "fetish",
-    "Futa" to "futa",
-    "Game" to "game",
-    "Genderswap" to "genderswap",
-    "Ghosts" to "ghosts",
-    "Girls" to "girls",
-    "Girls Love" to "girls_love",
-    "Gyaru" to "gyaru",
-    "Harem" to "harem",
-    "Harlequin" to "harlequin",
-    "Historical" to "historical",
-    "Horror" to "horror",
-    "Incest" to "incest",
-    "Isekai" to "isekai",
-    "Kids" to "kids",
-    "Loli" to "loli",
-    "Mafia" to "mafia",
-    "Magic" to "magic",
-    "Magical Girls" to "magical_girls",
-    "Mahjong" to "mahjong",
-    "Male-protagonists" to "male_protagonists",
-    "Martial Arts" to "martial_arts",
-    "Master-Servant" to "master_servant",
-    "Mecha" to "mecha",
-    "Medical" to "medical",
-    "Milf" to "milf",
-    "Military" to "military",
-    "Monster Girls" to "monster_girls",
-    "Monsters" to "monsters",
-    "Music" to "music",
-    "Mystery" to "mystery",
-    "Netorare/NTR" to "netorare_ntr",
-    "Netori" to "netori",
-    "Ninja" to "ninja",
-    "Office Workers" to "office_workers",
-    "Omegaverse" to "omegaverse",
-    "Parody" to "parody",
-    "Philosophical" to "philosophical",
-    "Police" to "police",
-    "Post-Apocalyptic" to "post_apocalyptic",
-    "Psychological" to "psychological",
-    "Regression" to "regression",
-    "Reincarnation" to "reincarnation",
-    "Revenge" to "revenge",
-    "Reverse Harem" to "reverse_harem",
-    "Reverse Isekai" to "reverse_isekai",
-    "Romance" to "romance",
-    "Royal family" to "royal_family",
-    "Royalty" to "royalty",
-    "Samurai" to "samurai",
-    "School Life" to "school_life",
-    "Sci-Fi" to "sci_fi",
-    "Sexual Violence" to "sexual_violence",
-    "Shota" to "shota",
-    "Shoujo ai" to "shoujo_ai",
-    "Shounen ai" to "shounen_ai",
-    "Showbiz" to "showbiz",
-    "Slice of Life" to "slice_of_life",
-    "SM/BDSM/SUB-DOM" to "sm_bdsm_sub_dom",
-    "Space" to "space",
-    "Sports" to "sports",
-    "Spy" to "spy",
-    "Step-family" to "step_family",
-    "Story-by-AI" to "story_by_ai",
-    "Super Power" to "super_power",
-    "Superhero" to "superhero",
-    "Supernatural" to "supernatural",
-    "Survival" to "survival",
-    "Suspense" to "suspense",
-    "Teacher-Student" to "teacher_student",
-    "Thriller" to "thriller",
-    "Time Travel" to "time_travel",
-    "Tower Climbing" to "tower_climbing",
-    "Traditional Games" to "traditional_games",
-    "Tragedy" to "tragedy",
-    "Transmigration" to "transmigration",
-    "Vampires" to "vampires",
-    "Video Games" to "video_games",
-    "Villainess" to "villainess",
-    "Virtual Reality" to "virtual_reality",
-    "Wuxia" to "wuxia",
-    "Xianxia" to "xianxia",
-    "Xuanhuan" to "xuanhuan",
-    "Yakuzas" to "yakuzas",
-    "Youkai" to "youkai",
-    "Zombies" to "zombies",
+val sortOptions = listOf(
+    "Rating Score" to "field_score", "Most Follows" to "field_follow", "Most Reviews" to "field_review",
+    "Most Comments" to "field_comment", "Most Chapters" to "field_chapter", "Latest Upload" to "field_upload",
+    "Recently Created" to "field_public", "Name A-Z" to "field_name", "Most Views (Total)" to "views_d000",
+    "Most Views (360 days)" to "views_d360", "Most Views (180 days)" to "views_d180", "Most Views (90 days)" to "views_d090",
+    "Most Views (30 days)" to "views_d030", "Most Views (7 days)" to "views_d007", "Most Views (24 hours)" to "views_h024",
+    "Most Views (12 hours)" to "views_h012", "Most Views (6 hours)" to "views_h006", "Most Views (1 hour)" to "views_h001",
+    "User Status (Plan to Read)" to "status_wish", "User Status (Reading)" to "status_doing",
+    "User Status (Completed)" to "status_completed", "User Status (On Hold)" to "status_on_hold",
+    "User Status (Dropped)" to "status_dropped", "User Status (Re-reading)" to "status_repeat",
 )

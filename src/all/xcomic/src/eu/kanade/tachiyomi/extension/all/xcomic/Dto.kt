@@ -4,6 +4,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
 import org.jsoup.nodes.TextNode
 
@@ -18,6 +21,7 @@ class XComicData<T>(
 @Serializable
 class XComicPaging(
     val next: Int? = 0,
+    val total: Int? = 0,
 ) {
     fun hasNextPage() = (next ?: 0) != 0
 }
@@ -68,8 +72,8 @@ class ComicNode(
     private val publishers: List<String>? = null,
     private val publisherNodes: List<XComicData<XComicName?>>? = null,
     private val tagNodes: List<XComicData<XComicName?>>? = null,
-    private val summary: String? = null,
-    private val extraInfo: String? = null,
+    private val summary: XComicStrings? = null,
+    private val extraInfo: XComicStrings? = null,
     private val urlPath: String? = null,
     private val urlCover: String? = null,
     @SerialName("is_hot")
@@ -87,7 +91,7 @@ class ComicNode(
     private val trackingSites: ComicTrackingSites? = null,
 ) {
     fun toSManga(baseUrl: String, cleanTitle: (String) -> String): SManga = SManga.create().apply {
-        url = urlPath ?: id
+        url = id
         title = cleanTitle(name)
 
         author = authorNodes?.mapNotNull { it.data?.name }?.takeIf { it.isNotEmpty() }?.joinToString()
@@ -96,19 +100,16 @@ class ComicNode(
             ?: artists?.joinToString { cleanAuthorSlug(it) }
 
         genre = buildSet {
-            type?.let { add(typeOptions.firstOrNull { o -> o.second == it }?.first ?: it) }
-            demographics?.forEach { d -> add(demographicOptions.firstOrNull { o -> o.second == d }?.first ?: d) }
-            contentRating?.let { add(contentRatingOptions.firstOrNull { o -> o.second == it }?.first ?: it) }
-            genres?.forEach { g ->
-                val label = genreOptions.firstOrNull { it.second == g }?.first
-                    ?: formatOptions.firstOrNull { it.second == g }?.first
-                    ?: typeOptions.firstOrNull { it.second == g }?.first
-                    ?: demographicOptions.firstOrNull { it.second == g }?.first
-                    ?: contentRatingOptions.firstOrNull { it.second == g }?.first
-                    ?: g
-                add(label)
-            }
+            type?.let { add(it.toTitleCase()) }
+            demographics?.forEach { d -> add(d.toTitleCase()) }
+            contentRating?.let { add(it.toTitleCase()) }
+            genres?.forEach { g -> add(g.toTitleCase()) }
         }.joinToString()
+
+        memo = buildJsonObject {
+            urlPath?.let { put("urlPath", it) }
+        }
+
         status = run {
             val statusToCheck = originalStatus ?: uploadStatus
             when {
@@ -159,12 +160,17 @@ class ComicNode(
             }
 
             if (stats.isNotEmpty()) {
-                append("**Statistics**:\n${stats.joinToString(" · ")}")
+                append("**Statistics**\n${stats.joinToString(" · ")}")
                 append("\n\n")
             }
 
-            if (!summary.isNullOrEmpty()) {
-                append(summary.htmlToMarkdown(baseUrl))
+            if (metadata.isNotEmpty()) {
+                append("\n\n---\n\n")
+            }
+
+            val summaryText = summary?.text
+            if (!summaryText.isNullOrEmpty()) {
+                append(summaryText.htmlToMarkdown(baseUrl))
             }
 
             val links = buildList {
@@ -202,12 +208,13 @@ class ComicNode(
                 append(altNames.joinToString("\n") { "- $it" })
             }
 
-            if (!extraInfo.isNullOrEmpty()) {
+            val extraInfoText = extraInfo?.text
+            if (!extraInfoText.isNullOrEmpty()) {
                 if (isNotEmpty()) append("\n\n**Extra Info**:\n")
-                append(extraInfo.htmlToMarkdown(baseUrl))
+                append(extraInfoText.htmlToMarkdown(baseUrl))
             }
         }
-        initialized = true
+        initialized = originalStatus != null
     }
 }
 
@@ -238,6 +245,12 @@ private fun cleanAuthorSlug(slug: String): String {
             }
     } else {
         slug
+    }
+}
+
+private fun String.toTitleCase(): String = this.replace("_", " ").split(" ").joinToString(" ") { word ->
+    word.lowercase().replaceFirstChar {
+        if (it.isLowerCase()) it.titlecase() else it.toString()
     }
 }
 
@@ -355,21 +368,47 @@ class ApiChapterWrapper(
 @Serializable
 class ChapterData(
     private val id: String,
+    private val comicId: String? = null,
+    private val dbStatus: String? = null,
+    private val isFinal: Boolean? = null,
+    private val volume: JsonElement? = null,
     private val serial: Float? = null,
-    private val chaNum: Float? = null,
-    private val volNum: Float? = null,
     @SerialName("dname")
     private val displayName: String,
     private val title: String? = null,
     private val urlPath: String? = null,
+    @SerialName("sfw_result")
+    private val sfwResult: String? = null,
+    @SerialName("chaDuplications")
+    private val chaDuplications: String? = null,
     private val dateCreate: Long? = null,
-    private val dateModify: Long? = null,
+    @SerialName("datePublic")
     private val datePublic: Long? = null,
-    private val userNode: XComicData<XComicName?>? = null,
-    private val groupNodes: List<XComicData<XComicName?>?>? = null,
+    private val dateModify: Long? = null,
+    private val chaNum: Float? = null,
+    private val volNum: Float? = null,
+    private val volIdx: JsonElement? = null,
+    private val count_images: Int? = null,
+    @SerialName("is_new")
+    private val isNew: Boolean? = null,
+    @SerialName("srcName")
+    private val srcName: String? = null,
+    @SerialName("srcTitle")
+    private val srcTitle: String? = null,
+    @SerialName("srcColor")
+    private val srcColor: String? = null,
+    @SerialName("comments_topic")
+    private val commentsTopic: Int? = null,
+    @SerialName("comments_total")
+    private val commentsTotal: Int? = null,
+    @SerialName("views_login")
+    private val viewsLogin: Int? = null,
+    @SerialName("views_guest")
+    private val viewsGuest: Int? = null,
+    private val profileNodes: List<XComicData<XComicName?>?>? = null,
 ) {
     fun toSChapter(): SChapter = SChapter.create().apply {
-        url = urlPath ?: id
+        url = id
         name = buildString {
             val number = (chaNum ?: serial)?.toString()?.removeSuffix(".0")
             if (number != null && !displayName.contains(number)) {
@@ -381,10 +420,17 @@ class ChapterData(
                 append(title)
             }
         }
+
+        memo = buildJsonObject {
+            urlPath?.let { put("urlPath", it) }
+        }
+
         (chaNum ?: serial)?.let { chapter_number = it }
         date_upload = dateModify ?: dateCreate ?: datePublic ?: 0L
-        scanlator = groupNodes?.mapNotNull { it?.data?.name }?.joinToString().takeIf { !it.isNullOrEmpty() }
-            ?: userNode?.data?.name
+
+        scanlator = srcName?.takeIf { it.isNotEmpty() }?.replaceFirstChar {
+            if (it.isLowerCase()) it.titlecase() else it.toString()
+        } ?: profileNodes?.mapNotNull { it?.data?.name }?.joinToString().takeIf { !it.isNullOrEmpty() }
     }
 }
 
@@ -406,4 +452,9 @@ class LatestUploadsResult(
 class LatestUploadsItem(
     val comic: XComicData<ComicNode>,
     val chapters: List<XComicData<ChapterData>>,
+)
+
+@Serializable
+class XComicStrings(
+    val text: String? = null,
 )
