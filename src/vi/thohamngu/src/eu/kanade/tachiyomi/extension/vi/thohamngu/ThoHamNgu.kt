@@ -15,6 +15,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl
@@ -23,8 +24,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.LocalDate
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -204,27 +203,21 @@ abstract class ThoHamNgu : KeiSource() {
         return match?.value?.trim() ?: rawName.substringAfterLast("–").substringAfterLast("-").trim()
     }
 
-    private fun parseChapterDate(dateStr: String): Long = runCatching {
-        LocalDate.parse(dateStr, dateFormat)
-            .atStartOfDay(dateZone)
-            .toInstant()
-            .toEpochMilli()
-    }.getOrDefault(0L)
+    private fun parseChapterDate(dateStr: String): Long = dateFormat.tryParseDate(dateStr)
 
     // ============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
-        val imageUrls = extractImageUrls(document.html(), baseUrl)
+        val imageUrls = extractImageUrls(document)
 
         return imageUrls.mapIndexed { idx, url ->
             Page(idx, imageUrl = url)
         }
     }
 
-    private fun extractImageUrls(html: String, baseUrl: String): List<String> {
-        val doc = org.jsoup.Jsoup.parse(html, baseUrl)
-        val viewChapter = doc.selectFirst("#view-chapter") ?: doc
+    private fun extractImageUrls(document: Document): List<String> {
+        val viewChapter = document.selectFirst("#view-chapter") ?: document
 
         return viewChapter.select("img").mapNotNull { img ->
             val lazySrc = img.attr("data-lazy-src")
@@ -298,7 +291,6 @@ abstract class ThoHamNgu : KeiSource() {
     }
 
     private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ROOT)
-    private val dateZone = ZoneId.of("Asia/Ho_Chi_Minh")
     private val chapterNameRegex = Regex("Chap\\s*\\d+(\\.\\d+)?", RegexOption.IGNORE_CASE)
     private val smallThumbnailRegex = Regex("-150x150(\\.[a-zA-Z]+)$")
 }
