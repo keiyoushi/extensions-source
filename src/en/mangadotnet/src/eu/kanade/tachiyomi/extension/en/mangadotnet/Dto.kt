@@ -194,10 +194,10 @@ class Manga(
                 null
             }
         }
-        author = authors?.let {
+        author = authors?.let { it ->
             runCatching { it.parseAs<List<String>>().joinToString() }.getOrNull()?.let { "\u200B$it" }
         }
-        artist = artists?.let {
+        artist = artists?.let { it ->
             runCatching { it.parseAs<List<String>>().joinToString() }.getOrNull()?.let { "\u200B\u200B$it" }
         }
         genre = buildList {
@@ -241,6 +241,10 @@ class Manga(
             }
             if (metaInfo.isNotEmpty()) {
                 append(metaInfo.joinToString(" · "), "\n\n")
+            }
+
+            if (isNotEmpty()) {
+                append("---\n\n")
             }
 
             this@Manga.description?.let {
@@ -366,6 +370,6 @@ class TagItem(
 )
 
 @Serializable
-class ForYouResponse(
+class MangaItemsResponse(
     val items: List<BrowseManga> = emptyList(),
 )

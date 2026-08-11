@@ -386,7 +386,16 @@ abstract class Mangadotnet :
         }.build()
         val cache = CacheControl.Builder().maxAge(6.hours).build()
         client.get(forYouUrl, cacheControl = cache).use { response ->
-            response.parseAs<ForYouResponse>().items
+            response.parseAs<MangaItemsResponse>().items
+        }
+    }.getOrElse { emptyList() }
+
+    private suspend fun fetchFollowingReads(): List<BrowseManga> = runCatching {
+        if (!isLoggedIn()) return emptyList()
+        val url = "$baseUrl/api/discovery/following-reads?limit=30"
+        val cache = CacheControl.Builder().maxAge(6.hours).build()
+        client.get(url, cacheControl = cache).use { response ->
+            response.parseAs<MangaItemsResponse>().items
         }
     }.getOrElse { emptyList() }
 
@@ -419,16 +428,23 @@ abstract class Mangadotnet :
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = coroutineScope {
         val url = "$baseUrl/manga/${manga.url}.data?_routes=pages/MangaDetailPage".toHttpUrl()
         val dataDeferred = async { client.get(url).use { it.decodeRscAs<Data<RelatedData>>().data } }
+        val followingReadsDeferred = async { fetchFollowingReads() }
         val forYouDeferred = async { fetchForYouItems() }
 
         val data = dataDeferred.await()
+        val followingReadsItems = followingReadsDeferred.await()
         val forYouItems = forYouDeferred.await()
+
+        val hideAdultCovers = adultModePref() == "none"
 
         buildList {
             data.relationsData?.relations?.values?.forEach(::addAll)
             addAll(data.suggestions)
+            addAll(followingReadsItems)
             addAll(forYouItems)
-        }.map { it.toSManga(baseUrl) }
+        }.map {
+            it.toSManga(baseUrl, hideAdultCovers)
+        }
     }
 
     // ============================= Chapters ==============================
