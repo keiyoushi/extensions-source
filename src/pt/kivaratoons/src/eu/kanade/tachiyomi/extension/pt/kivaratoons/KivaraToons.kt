@@ -30,7 +30,15 @@ abstract class KivaraToons : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, defaultSort = "views")
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(page, defaultSort = "recentes")
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = "$baseUrl/api/leitores/ultimas-atualizacoes".toHttpUrl().newBuilder()
+            .addQueryParameter("pagina", page.toString())
+            .addQueryParameter("limite", UPDATES_PAGE_SIZE.toString())
+            .build()
+
+        val result = client.get(url).parseAs<LatestUpdatesDto>()
+        return MangasPage(result.mangas.map { it.toSManga(siteUrl) }, result.hasNextPage)
+    }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getMangaList(page, query, filters, defaultSort = "recentes")
 
@@ -119,6 +127,7 @@ abstract class KivaraToons : KeiSource() {
 
     companion object {
         private const val MANGA_PAGE_SIZE = 24
+        private const val UPDATES_PAGE_SIZE = MANGA_PAGE_SIZE * 2
         private val MANGA_PATH_SEGMENTS = listOf("obra", "manhwa", "reader")
     }
 }
