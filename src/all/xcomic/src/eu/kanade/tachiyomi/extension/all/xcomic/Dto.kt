@@ -159,7 +159,7 @@ class ComicNode(
             }
 
             if (stats.isNotEmpty()) {
-                append("**Statistics**: ${stats.joinToString(" · ")}")
+                append("**Statistics**:\n${stats.joinToString(" · ")}")
                 append("\n\n")
             }
 
