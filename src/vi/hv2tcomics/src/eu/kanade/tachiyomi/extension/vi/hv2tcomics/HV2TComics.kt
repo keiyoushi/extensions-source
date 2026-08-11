@@ -13,7 +13,6 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.parseAs
@@ -179,25 +178,25 @@ abstract class HV2TComics : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         loadAuthToken()
-        val updatedManga = async {
-            if (fetchDetails) {
-                val url = "$baseUrl/api/comics/${manga.url}".toHttpUrl()
-                client.get(url).parseAs<ComicDetailResponse>().data.toSManga()
-            } else {
-                manga
-            }
+        val detailResponse = if (fetchDetails || fetchChapters) {
+            client.get("$baseUrl/api/comics/${manga.url}").parseAs<ComicDetailResponse>()
+        } else {
+            null
         }
-        val updatedChapters = async {
-            if (fetchChapters) {
-                val url = "$baseUrl/api/comics/${manga.url}".toHttpUrl()
-                client.get(url).parseAs<ComicDetailResponse>().data.chapters.map {
-                    it.toSChapter(manga.url)
-                }
-            } else {
-                chapters
-            }
+
+        val updatedManga = if (fetchDetails && detailResponse != null) {
+            detailResponse.data.toSManga()
+        } else {
+            manga
         }
-        SMangaUpdate(updatedManga.await(), updatedChapters.await())
+
+        val updatedChapters = if (fetchChapters && detailResponse != null) {
+            detailResponse.data.chapters.map { it.toSChapter(manga.url) }
+        } else {
+            chapters
+        }
+
+        SMangaUpdate(updatedManga, updatedChapters)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/truyen/${manga.url}"
@@ -218,27 +217,17 @@ abstract class HV2TComics : KeiSource() {
         }
         loadAuthToken()
         val pageUrl = "$baseUrl/truyen/${chapter.url}"
-        val imageUrls = try {
-            runWebView<List<String>>(timeout = 60.seconds) {
-                loadWithOverviewMode = true
-                useWideViewPort = true
-                userAgent = headers["User-Agent"]!!
+        val imageUrls = runWebView<List<String>>(timeout = 60.seconds) {
+            loadWithOverviewMode = true
+            useWideViewPort = true
+            userAgent = headers["User-Agent"]!!
 
-                val capturedUrls = java.util.concurrent.CopyOnWriteArrayList<String>()
-                var lastCount = 0
-                var stablePolls = 0
+            var lastCount = 0
+            var stablePolls = 0
 
-                interceptRequest { request ->
-                    val url = request.url.toString()
-                    if (url.contains("/media/") && (url.endsWith(".webp") || url.endsWith(".jpg") || url.endsWith(".png"))) {
-                        capturedUrls.add(url)
-                    }
-                    null
-                }
-
-                poll(1.seconds) {
-                    evaluateJs(
-                        """
+            poll(1.seconds) {
+                evaluateJs(
+                    """
                         (function() {
                             var images = document.querySelectorAll('img[alt^="Page"]');
                             images.forEach(function(img) {
@@ -246,38 +235,43 @@ abstract class HV2TComics : KeiSource() {
                                 img.removeAttribute('loading');
                             });
                             window.scrollTo(0, document.body.scrollHeight);
+                            var urls = [];
+                            images.forEach(function(img) {
+                                if (img.src && img.src.includes('/media/')) {
+                                    urls.push(img.src);
+                                }
+                            });
+                            return urls;
                         })()
-                        """.trimIndent(),
-                    )
-                    val currentCount = capturedUrls.size
-                    if (currentCount > 0) {
-                        if (currentCount == lastCount) {
+                    """.trimIndent(),
+                ) { result ->
+                    val urls = result.parseAs<List<String>>()
+                    if (urls.isNotEmpty()) {
+                        if (urls.size == lastCount) {
                             stablePolls++
                         } else {
-                            lastCount = currentCount
+                            lastCount = urls.size
                             stablePolls = 0
                         }
                         if (stablePolls >= 3) {
-                            resolve(capturedUrls.distinct())
+                            resolve(urls.distinct())
                         }
                     }
-                    evaluateJs(
-                        """
+                }
+                evaluateJs(
+                    """
                         (function() {
                             var loginRequired = document.querySelector('h2')?.textContent?.includes('Yêu cầu đăng nhập');
                             return loginRequired;
                         })()
-                        """.trimIndent(),
-                    ) { result ->
-                        if (result.parseAs<Boolean>()) {
-                            reject(Exception("Đăng nhập vào tài khoản phù hợp bằng webview để xem chương này"))
-                        }
+                    """.trimIndent(),
+                ) { result ->
+                    if (result != "null" && result.parseAs<Boolean>()) {
+                        reject(Exception("Đăng nhập vào tài khoản phù hợp bằng webview để xem chương này"))
                     }
                 }
-                loadUrl(pageUrl)
             }
-        } catch (_: WebViewTimeoutException) {
-            emptyList()
+            loadUrl(pageUrl)
         }
         return imageUrls.mapIndexed { index, imageUrl ->
             Page(index, pageUrl, imageUrl)
