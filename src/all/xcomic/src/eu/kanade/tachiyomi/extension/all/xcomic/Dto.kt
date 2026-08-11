@@ -130,46 +130,41 @@ class ComicNode(
             if (isNew == true) append("✨ NEW")
             if (isHot == true || isNew == true) append("\n\n")
 
-            if (!summary.isNullOrEmpty()) {
-                append(summary.htmlToMarkdown(baseUrl))
-            }
-
             val metadata = buildList {
                 originalLanguage?.let { ol ->
                     val label = languages.firstOrNull { it.second == ol }?.first ?: ol
-                    add("Original: $label")
+                    add("**Original**: $label")
                 }
                 translatedLanguage?.let { tl ->
                     val label = languages.firstOrNull { it.second == tl }?.first ?: tl
-                    add("Translated: $label")
+                    add("**Translated**: $label")
                 }
                 if (originalPubFrom != null) {
                     val till = originalPubTill?.toString() ?: "Ongoing"
-                    add("Publication: $originalPubFrom - $till")
+                    add("**Publication**: $originalPubFrom - $till")
                 }
-                originalPubZone?.takeIf { it.isNotEmpty() }?.let { add("Region: $it") }
+                originalPubZone?.takeIf { it.isNotEmpty() }?.let { add("**Region**: $it") }
             }
 
             if (metadata.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
                 append(metadata.joinToString("\n"))
+                append("\n\n")
             }
 
             val stats = buildList {
-                scoreVal?.takeIf { it > 0 }?.let { add("Score: %.1f".format(it)) }
-                follows?.takeIf { it > 0 }?.let { add("Follows: $it") }
-                reviews?.takeIf { it > 0 }?.let { add("Reviews: $it") }
-                chapsNormal?.takeIf { it > 0 }?.let { add("Chapters: $it") }
+                scoreVal?.takeIf { it > 0 }?.let { add("**Score**: %.1f".format(it)) }
+                follows?.takeIf { it > 0 }?.let { add("**Follows**: $it") }
+                reviews?.takeIf { it > 0 }?.let { add("**Reviews**: $it") }
+                chapsNormal?.takeIf { it > 0 }?.let { add("**Chapters**: $it") }
             }
 
             if (stats.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append("Statistics: ${stats.joinToString(" · ")}")
+                append("**Statistics**: ${stats.joinToString(" · ")}")
+                append("\n\n")
             }
 
-            if (!extraInfo.isNullOrEmpty()) {
-                if (isNotEmpty()) append("\n\nExtra Info:\n")
-                append(extraInfo.htmlToMarkdown(baseUrl))
+            if (!summary.isNullOrEmpty()) {
+                append(summary.htmlToMarkdown(baseUrl))
             }
 
             val links = buildList {
@@ -182,29 +177,34 @@ class ComicNode(
 
             if (links.isNotEmpty()) {
                 if (isNotEmpty()) append("\n\n")
-                append("External Links:\n")
+                append("**External Links**:\n")
                 append(links.joinToString("\n") { "- $it" })
             }
 
             val extras = buildList {
                 val pubList = publisherNodes?.mapNotNull { it.data?.name }
                     ?.takeIf { it.isNotEmpty() } ?: publishers
-                pubList?.takeIf { it.isNotEmpty() }?.let { add("Publishers: ${it.joinToString()}") }
+                pubList?.takeIf { it.isNotEmpty() }?.let { add("**Publishers**: ${it.joinToString()}") }
 
                 val tagList = tagNodes?.mapNotNull { it.data?.name }
                     ?.takeIf { it.isNotEmpty() } ?: tags
-                tagList?.takeIf { it.isNotEmpty() }?.let { add("Tags: ${it.joinToString()}") }
+                tagList?.takeIf { it.isNotEmpty() }?.let { add("**Tags**: ${it.joinToString()}") }
             }
 
             if (extras.isNotEmpty()) {
                 if (isNotEmpty()) append("\n\n")
-                append(extras.joinToString("\n"))
+                append(extras.joinToString("\n\n"))
             }
 
             if (!altNames.isNullOrEmpty()) {
                 if (isNotEmpty()) append("\n\n")
-                append("Alternative Titles:\n")
+                append("**Alternative Titles**:\n")
                 append(altNames.joinToString("\n") { "- $it" })
+            }
+
+            if (!extraInfo.isNullOrEmpty()) {
+                if (isNotEmpty()) append("\n\n**Extra Info**:\n")
+                append(extraInfo.htmlToMarkdown(baseUrl))
             }
         }
         initialized = true
