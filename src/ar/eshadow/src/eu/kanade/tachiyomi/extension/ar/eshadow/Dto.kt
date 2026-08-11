@@ -7,6 +7,7 @@ import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.time.Instant
 
 @Serializable
@@ -31,7 +32,7 @@ class Manga(
     val chapters: List<Chapter> = emptyList(),
 ) {
     fun toSManga() = SManga.create().apply {
-        url = slug
+        url = id
         title = this@Manga.title
         thumbnail_url = coverImage
         description = this@Manga.description
@@ -43,14 +44,14 @@ class Manga(
             else -> SManga.UNKNOWN
         }
         memo = buildJsonObject {
-            put("id", id.toJsonElement())
+            put("slug", slug)
         }
     }
 }
 
 @Serializable
 class Chapter(
-    private val id: String = "",
+    private val id: String? = null,
     private val mangaId: String = "",
     private val title: String? = null,
     private val number: Int,
@@ -58,7 +59,7 @@ class Chapter(
     private val publishedAt: String? = null,
 ) {
     fun toSChapter() = SChapter.create().apply {
-        url = id
+        url = id!!
         name = buildString {
             append("الفصل ", number, title?.let { " - $it" } ?: "")
         }

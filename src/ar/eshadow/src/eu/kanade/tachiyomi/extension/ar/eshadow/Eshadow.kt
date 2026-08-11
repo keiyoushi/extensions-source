@@ -29,7 +29,10 @@ abstract class Eshadow : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int) = throw UnsupportedOperationException()
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
+    override fun getMangaUrl(manga: SManga): String {
+        val slug = manga.memo["slug"]!!.string
+        return "$baseUrl/manga/$slug"
+    }
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/read/${chapter.url}"
 
@@ -39,8 +42,7 @@ abstract class Eshadow : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val id = manga.memo["id"]!!.string
-        val response = client.get("$baseUrl/api/manga/$id")
+        val response = client.get("$baseUrl/api/manga/${manga.url}")
         val mangaDto = response.parseAs<Manga>()
 
         val updatedChapters = mangaDto.chapters.map {
