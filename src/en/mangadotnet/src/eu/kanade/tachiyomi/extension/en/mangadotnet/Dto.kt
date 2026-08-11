@@ -370,6 +370,6 @@ class TagItem(
 )
 
 @Serializable
-class ForYouResponse(
+class MangaItemsResponse(
     val items: List<BrowseManga> = emptyList(),
 )
