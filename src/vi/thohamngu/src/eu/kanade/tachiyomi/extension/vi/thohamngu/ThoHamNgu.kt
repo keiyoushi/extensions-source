@@ -24,6 +24,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -203,7 +204,7 @@ abstract class ThoHamNgu : KeiSource() {
         return match?.value?.trim() ?: rawName.substringAfterLast("–").substringAfterLast("-").trim()
     }
 
-    private fun parseChapterDate(dateStr: String): Long = dateFormat.tryParseDate(dateStr)
+    private fun parseChapterDate(dateStr: String): Long = dateFormat.tryParseDate(dateStr, dateZone)
 
     // ============================== Pages ================================
 
@@ -291,6 +292,7 @@ abstract class ThoHamNgu : KeiSource() {
     }
 
     private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ROOT)
+    private val dateZone = ZoneId.of("Asia/Ho_Chi_Minh")
     private val chapterNameRegex = Regex("Chap\\s*\\d+(\\.\\d+)?", RegexOption.IGNORE_CASE)
     private val smallThumbnailRegex = Regex("-150x150(\\.[a-zA-Z]+)$")
 }
