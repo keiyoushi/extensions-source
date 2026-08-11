@@ -178,25 +178,12 @@ abstract class HV2TComics : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         loadAuthToken()
-        val detailResponse = if (fetchDetails || fetchChapters) {
-            client.get("$baseUrl/api/comics/${manga.url}").parseAs<ComicDetailResponse>()
-        } else {
-            null
-        }
+        val detailResponse = client.get("$baseUrl/api/comics/${manga.url}").parseAs<ComicDetailResponse>()
 
-        val updatedManga = if (fetchDetails && detailResponse != null) {
-            detailResponse.data.toSManga()
-        } else {
-            manga
-        }
-
-        val updatedChapters = if (fetchChapters && detailResponse != null) {
-            detailResponse.data.chapters.map { it.toSChapter(manga.url) }
-        } else {
-            chapters
-        }
-
-        SMangaUpdate(updatedManga, updatedChapters)
+        SMangaUpdate(
+            manga = detailResponse.data.toSManga(),
+            chapters = detailResponse.data.chapters.map { it.toSChapter(manga.url) },
+        )
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/truyen/${manga.url}"
