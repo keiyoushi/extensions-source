@@ -13,19 +13,16 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.tryParse
+import kotlin.time.Instant
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
-import java.time.OffsetDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 @Source
 abstract class KingComiX : KeiSource() {
 
     override val supportsLatest = false
-
-    private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ENGLISH)
 
     // ============================== Popular ===============================
 
@@ -138,11 +135,7 @@ abstract class KingComiX : KeiSource() {
         SChapter.create().apply {
             name = "Chapter"
             setUrlWithoutDomain(url)
-            date_upload = runCatching {
-                document.selectFirst("meta[property=article:published_time]")
-                    ?.attr("content")
-                    ?.let { OffsetDateTime.parse(it, dateFormatter).toInstant().toEpochMilli() }
-            }.getOrNull() ?: 0L
+            date_upload = Instant.tryParse(document.selectFirst("meta[property=article:published_time]")?.attr("content"))
         },
     )
 
