@@ -33,11 +33,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class XCOMIC :
@@ -275,7 +270,7 @@ abstract class XCOMIC :
         return if (urlPath != null) "$baseUrl$urlPath" else "$baseUrl/comic/${manga.url}"
     }
 
-    private fun getMangaId(url: String): String = url.substringBefore("-")
+    private fun getMangaId(url: String): String = url
 
     // ============================= Chapters ==============================
     private suspend fun getChapterList(manga: SManga): List<SChapter> = coroutineScope {
@@ -340,7 +335,7 @@ abstract class XCOMIC :
         return if (urlPath != null) "$baseUrl$urlPath" else "$baseUrl/comic/chapter/${chapter.url}"
     }
 
-    private fun getChapterId(url: String): String = url.substringAfterLast("/").substringBefore("-")
+    private fun getChapterId(url: String): String = url
 
     private fun cleanTitleIfNeeded(title: String): String {
         var tempTitle = title
@@ -353,55 +348,6 @@ abstract class XCOMIC :
             tempTitle = tempTitle.replace(titleRegex, "")
         }
         return tempTitle.trim()
-    }
-
-    private fun decryptAES(encrypted: String, password: String): String {
-        val cipherData = android.util.Base64.decode(encrypted, android.util.Base64.DEFAULT)
-        val saltData = cipherData.copyOfRange(8, 16)
-        val (key, iv) = generateKeyAndIV(
-            keyLength = 32,
-            ivLength = 16,
-            iterations = 1,
-            salt = saltData,
-            password = password.toByteArray(StandardCharsets.UTF_8),
-            md = MessageDigest.getInstance("MD5"),
-        )
-        val encryptedData = cipherData.copyOfRange(16, cipherData.size)
-        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        cipher.init(Cipher.DECRYPT_MODE, key, iv)
-        return String(cipher.doFinal(encryptedData), StandardCharsets.UTF_8)
-    }
-
-    private fun generateKeyAndIV(
-        keyLength: Int,
-        ivLength: Int,
-        iterations: Int,
-        salt: ByteArray,
-        password: ByteArray,
-        md: MessageDigest,
-    ): Pair<SecretKeySpec, IvParameterSpec> {
-        val digestLength = md.digestLength
-        val requiredLength = (keyLength + ivLength + digestLength - 1) / digestLength * digestLength
-        val generatedData = ByteArray(requiredLength)
-        var generatedLength = 0
-        md.reset()
-        while (generatedLength < keyLength + ivLength) {
-            if (generatedLength > 0) {
-                md.update(generatedData, generatedLength - digestLength, digestLength)
-            }
-            md.update(password)
-            md.update(salt, 0, 8)
-            md.digest(generatedData, generatedLength, digestLength)
-            repeat(iterations - 1) {
-                md.update(generatedData, generatedLength, digestLength)
-                md.digest(generatedData, generatedLength, digestLength)
-            }
-            generatedLength += digestLength
-        }
-
-        return SecretKeySpec(generatedData.copyOfRange(0, keyLength), "AES") to IvParameterSpec(
-            if (ivLength > 0) generatedData.copyOfRange(keyLength, keyLength + ivLength) else byteArrayOf(),
-        )
     }
 
     // ============================ Preferences ============================
