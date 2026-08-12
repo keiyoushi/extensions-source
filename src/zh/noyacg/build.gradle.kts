@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "NoyAcg"
-    versionCode = 6
+    versionCode = 7
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -23,6 +23,7 @@ keiyoushi {
 
     deeplink {
         host("beta.noyteam.online")
+        host("noymanga.com")
         path("/manga/..*")
     }
 }
