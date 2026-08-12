@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivre
 
-import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.toJsonString
@@ -92,14 +91,5 @@ class ChapterDto(
         name = "Capítulo $number"
         date_upload = timestamp
         url = "/$slug/$number#${ChapterReferenceDto(mangaId, id).toJsonString()}"
-    }
-}
-
-@Serializable
-class PageDto(
-    val pages: List<String>,
-) {
-    fun toPageList() = pages.mapIndexed { index, imageUrl ->
-        Page(index, imageUrl = imageUrl)
     }
 }
