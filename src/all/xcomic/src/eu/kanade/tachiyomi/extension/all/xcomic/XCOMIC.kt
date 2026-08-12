@@ -21,11 +21,11 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseGraphQLAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
-import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -143,7 +143,7 @@ abstract class XCOMIC :
             ignoreGlobalGenres = isIgnoreGenreBlocklist(),
         )
 
-        val payload = GraphQLPayload(COMIC_ITEMS_QUERY, ApiComicSearchWrapper(variables)).toJsonRequestBody()
+        val payload = graphQLBody(query = COMIC_ITEMS_QUERY, variables = ApiComicSearchWrapper(variables))
         val response = client.post("$baseUrl/query/", headers, payload)
         return parseSearchManga(response)
     }
@@ -253,7 +253,7 @@ abstract class XCOMIC :
     private suspend fun getMangaDetails(manga: SManga): SManga = getMangaDetails(getMangaId(manga.url))
 
     private suspend fun getMangaDetails(id: String): SManga {
-        val payload = GraphQLPayload(COMIC_NODE_QUERY, ApiComicNodeVariables(id = id)).toJsonRequestBody()
+        val payload = graphQLBody(query = COMIC_NODE_QUERY, variables = ApiComicNodeVariables(id = id))
         val response = client.post("$baseUrl/query/", headers, payload)
         return parseMangaDetails(response)
     }
@@ -305,7 +305,7 @@ abstract class XCOMIC :
             page = page,
             size = 100,
         )
-        val payload = GraphQLPayload(CHAPTER_LIST_QUERY, ApiChapterListWrapper(select)).toJsonRequestBody()
+        val payload = graphQLBody(query = CHAPTER_LIST_QUERY, variables = ApiChapterListWrapper(select))
         val response = client.post("$baseUrl/query/", headers, payload)
         val data = response.parseGraphQLAs<ChapterListData>().response
 
@@ -326,7 +326,7 @@ abstract class XCOMIC :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = getChapterId(chapter.url)
 
-        val payload = GraphQLPayload(CHAPTER_PAGES_QUERY, ApiChapterNodeVariables(chapterId)).toJsonRequestBody()
+        val payload = graphQLBody(query = CHAPTER_PAGES_QUERY, variables = ApiChapterNodeVariables(chapterId))
         val response = client.post("$baseUrl/query/", headers, payload)
         val data = response.parseGraphQLAs<ChapterPagesData>().response.data
 
@@ -475,7 +475,6 @@ abstract class XCOMIC :
         private const val IGNORE_GENRE_BLOCKLIST_PREF = "IGNORE_GENRE_BLOCKLIST"
 
         private val idQueryRegex = Regex("^id\\s*:?\\s*([a-zA-Z0-9-_]+)\\s*$", RegexOption.IGNORE_CASE)
-        private val urlIdRegex = Regex("""/comic/([a-zA-Z0-9-_]+)""")
 
         private const val BROWSE_PAGE_SIZE = 36
 
