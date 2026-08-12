@@ -139,7 +139,7 @@ abstract class XCOMIC :
         )
 
         val payload = graphQLBody(query = COMIC_ITEMS_QUERY, variables = ApiComicSearchWrapper(variables))
-        val response = client.post("$baseUrl/query/", headers, payload)
+        val response = client.post("$baseUrl/query/", payload)
         return parseSearchManga(response)
     }
 
@@ -156,7 +156,7 @@ abstract class XCOMIC :
     override val supportsFilterFetching: Boolean get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val response = client.get("$baseUrl/search", headers)
+        val response = client.get("$baseUrl/search")
         val document = response.asJsoup()
 
         val filterMap = mutableMapOf<String, MutableList<Map<String, String>>>()
@@ -249,7 +249,7 @@ abstract class XCOMIC :
 
     private suspend fun getMangaDetails(id: String): SManga {
         val payload = graphQLBody(query = COMIC_NODE_QUERY, variables = ApiComicNodeVariables(id = id))
-        val response = client.post("$baseUrl/query/", headers, payload)
+        val response = client.post("$baseUrl/query/", payload)
         return parseMangaDetails(response)
     }
 
@@ -301,7 +301,7 @@ abstract class XCOMIC :
             size = 100,
         )
         val payload = graphQLBody(query = CHAPTER_LIST_QUERY, variables = ApiChapterListWrapper(select))
-        val response = client.post("$baseUrl/query/", headers, payload)
+        val response = client.post("$baseUrl/query/", payload)
         val data = response.parseGraphQLAs<ChapterListData>().response
 
         return ChapterListPage(
@@ -322,7 +322,7 @@ abstract class XCOMIC :
         val chapterId = getChapterId(chapter.url)
 
         val payload = graphQLBody(query = CHAPTER_PAGES_QUERY, variables = ApiChapterNodeVariables(chapterId))
-        val response = client.post("$baseUrl/query/", headers, payload)
+        val response = client.post("$baseUrl/query/", payload)
         val data = response.parseGraphQLAs<ChapterPagesData>().response.data
 
         return data.imageUrls.mapIndexed { index, url ->
