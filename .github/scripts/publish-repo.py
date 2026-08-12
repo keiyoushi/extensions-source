@@ -32,9 +32,9 @@ to_delete: list[str] = json.loads(sys.argv[1])
 current_sha = sys.argv[2]
 current_sha_short = current_sha[:7]
 
-release_index_path = REPO_DIR / "index.release.json"
-if release_index_path.exists():
-    with release_index_path.open() as f:
+beta_index_path = REPO_DIR / "index.beta.json"
+if beta_index_path.exists():
+    with beta_index_path.open() as f:
         remote_release_proto = json_format.Parse(f.read(), index_pb2.Index())
 else:
     remote_release_proto = index_pb2.Index()
@@ -249,7 +249,7 @@ def write_index(filename: str, index: index_pb2.Index):
 index = create_index("Keiyoushi", "KEI", all_extensions)
 release_index = create_index("Keiyoushi (Beta)", "KEI β", all_release_extensions)
 write_index("index", index)
-write_index("index.release", release_index)
+write_index("index.beta", release_index)
 
 with release_assets_path.open("w", encoding="utf-8") as f:
     json.dump(updated_release_assets, f, indent=2, sort_keys=True)

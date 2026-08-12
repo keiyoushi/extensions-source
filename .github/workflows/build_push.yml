@@ -154,8 +154,8 @@ jobs:
             curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.min.json
             curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.json
             curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.pb
-            curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.release.json
-            curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.release.pb
+            curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.beta.json
+            curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.beta.pb
           else
             echo "No changes to commit"
           fi
