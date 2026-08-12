@@ -221,12 +221,14 @@ val chapterCountOptions = listOf(
 )
 
 val sortOptions = listOf(
-    "Rating Score" to "field_score", "Most Follows" to "field_follow", "Most Reviews" to "field_review",
-    "Most Comments" to "field_comment", "Most Chapters" to "field_chapter", "Latest Upload" to "field_upload",
-    "Recently Created" to "field_public", "Name A-Z" to "field_name", "Most Views (Total)" to "views_d000",
-    "Most Views (360 days)" to "views_d360", "Most Views (180 days)" to "views_d180", "Most Views (90 days)" to "views_d090",
-    "Most Views (30 days)" to "views_d030", "Most Views (7 days)" to "views_d007", "Most Views (24 hours)" to "views_h024",
-    "Most Views (12 hours)" to "views_h012", "Most Views (6 hours)" to "views_h006", "Most Views (1 hour)" to "views_h001",
+    "Rating Score" to "field_score", "Latest Update" to "field_update", "Recently Added" to "field_create",
+    "Name A-Z" to "field_name_asc", "Name Z-A" to "field_name_desc", "Most Chapters" to "field_chapter",
+    "Most Follows" to "field_follow", "Most Reviews" to "field_review", "Most Comments" to "field_comment",
+    "Most Views (Total)" to "views_d000", "Most Views (360 days)" to "views_d360",
+    "Most Views (180 days)" to "views_d180", "Most Views (90 days)" to "views_d090",
+    "Most Views (30 days)" to "views_d030", "Most Views (7 days)" to "views_d007",
+    "Most Views (24 hours)" to "views_h024", "Most Views (12 hours)" to "views_h012",
+    "Most Views (6 hours)" to "views_h006", "Most Views (1 hour)" to "views_h001",
     "User Status (Plan to Read)" to "status_wish", "User Status (Reading)" to "status_doing",
     "User Status (Completed)" to "status_completed", "User Status (On Hold)" to "status_on_hold",
     "User Status (Dropped)" to "status_dropped", "User Status (Re-reading)" to "status_repeat",
