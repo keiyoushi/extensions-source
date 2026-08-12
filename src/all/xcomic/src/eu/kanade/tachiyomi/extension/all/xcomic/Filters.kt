@@ -86,7 +86,7 @@ class GenreGroupFilter(
 
 class GenreInModeFilter : SelectFilter(name = "Include Mode", options = listOf("AND" to "and", "OR" to "or"), default = 0)
 
-class GenreExModeFilter : SelectFilter(name = "Exclude Mode", options = listOf("AND" to "and", "OR" to "or"), default = 0)
+class GenreExModeFilter : SelectFilter(name = "Exclude Mode", options = listOf("AND" to "and", "OR" to "or"), default = 1)
 
 class YearFilter : Filter.Text("Year (e.g. 2015 or 1901-2027)")
 
