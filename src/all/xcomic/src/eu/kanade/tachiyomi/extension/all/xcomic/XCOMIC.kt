@@ -7,7 +7,6 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -19,17 +18,18 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.graphQLPost
-import keiyoushi.utils.jsonInstance
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseGraphQLAs
 import keiyoushi.utils.string
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.encodeToJsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
@@ -143,14 +143,8 @@ abstract class XCOMIC :
             ignoreGlobalGenres = isIgnoreGenreBlocklist(),
         )
 
-        val request = graphQLPost(
-            url = "$baseUrl/query/",
-            headers = headers,
-            query = COMIC_ITEMS_QUERY,
-            variables = ApiComicSearchWrapper(variables),
-        )
-
-        val response = client.newCall(request).await()
+        val payload = GraphQLPayload(COMIC_ITEMS_QUERY, ApiComicSearchWrapper(variables)).toJsonRequestBody()
+        val response = client.post("$baseUrl/query/", headers, payload)
         return parseSearchManga(response)
     }
 
@@ -203,15 +197,11 @@ abstract class XCOMIC :
         }
 
         val cleanMap = filterMap.mapValues { it.value.distinctBy { v -> v["value"] } }
-        return jsonInstance.encodeToJsonElement(cleanMap)
+        return cleanMap.toJsonElement()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val parsed = try {
-            data?.let { jsonInstance.decodeFromString<Map<String, List<Map<String, String>>>>(it.toString()) } ?: emptyMap()
-        } catch (_: Exception) {
-            emptyMap()
-        }
+        val parsed = data?.parseAs<Map<String, List<Map<String, String>>>>() ?: emptyMap()
 
         fun extractList(key: String): List<Pair<String, String>> = parsed[key]?.mapNotNull { map ->
             val name = map["name"]
@@ -226,25 +216,21 @@ abstract class XCOMIC :
 
         return FilterList(
             buildList {
-                if (dynamicGenres.isEmpty() && dynamicTypes.isEmpty()) {
-                    add(Filter.Header("Press 'Reset' to load filters"))
-                } else {
-                    add(SortFilter())
-                    if (dynamicContentRatings.isNotEmpty()) add(ContentRatingFilter(options = dynamicContentRatings))
-                    if (dynamicTypes.isNotEmpty()) add(TypeFilter(options = dynamicTypes))
-                    add(Filter.Separator())
-                    if (dynamicDemographics.isNotEmpty()) add(DemographicFilter(options = dynamicDemographics))
-                    if (dynamicGenres.isNotEmpty()) add(GenreGroupFilter(options = dynamicGenres))
-                    add(FormatFilter())
-                    add(GenreInModeFilter())
-                    add(GenreExModeFilter())
-                    add(Filter.Separator())
-                    add(OriginalLanguageFilter())
-                    add(OriginalStatusFilter())
-                    add(UploadStatusFilter())
-                    if (lang == "all") add(TranslationLanguageFilter())
-                    add(ChapterCountFilter())
-                }
+                add(SortFilter())
+                if (dynamicContentRatings.isNotEmpty()) add(ContentRatingFilter(options = dynamicContentRatings))
+                if (dynamicTypes.isNotEmpty()) add(TypeFilter(options = dynamicTypes))
+                add(Filter.Separator())
+                if (dynamicDemographics.isNotEmpty()) add(DemographicFilter(options = dynamicDemographics))
+                if (dynamicGenres.isNotEmpty()) add(GenreGroupFilter(options = dynamicGenres))
+                add(FormatFilter())
+                add(GenreInModeFilter())
+                add(GenreExModeFilter())
+                add(Filter.Separator())
+                add(OriginalStatusFilter())
+                add(UploadStatusFilter())
+                add(OriginalLanguageFilter())
+                if (lang == "all") add(TranslationLanguageFilter())
+                add(ChapterCountFilter())
                 add(Filter.Separator())
                 add(YearFilter())
                 add(LetterFilter())
@@ -267,13 +253,8 @@ abstract class XCOMIC :
     private suspend fun getMangaDetails(manga: SManga): SManga = getMangaDetails(getMangaId(manga.url))
 
     private suspend fun getMangaDetails(id: String): SManga {
-        val request = graphQLPost(
-            url = "$baseUrl/query/",
-            headers = headers,
-            query = COMIC_NODE_QUERY,
-            variables = ApiComicNodeVariables(id = id),
-        )
-        val response = client.newCall(request).await()
+        val payload = GraphQLPayload(COMIC_NODE_QUERY, ApiComicNodeVariables(id = id)).toJsonRequestBody()
+        val response = client.post("$baseUrl/query/", headers, payload)
         return parseMangaDetails(response)
     }
 
@@ -294,10 +275,7 @@ abstract class XCOMIC :
         return if (urlPath != null) "$baseUrl$urlPath" else "$baseUrl/comic/${manga.url}"
     }
 
-    private fun getMangaId(url: String): String {
-        val extracted = urlIdRegex.find(url)?.groupValues?.get(1) ?: url
-        return extracted.substringBefore("-")
-    }
+    private fun getMangaId(url: String): String = url.substringBefore("-")
 
     // ============================= Chapters ==============================
     private suspend fun getChapterList(manga: SManga): List<SChapter> = coroutineScope {
@@ -327,13 +305,8 @@ abstract class XCOMIC :
             page = page,
             size = 100,
         )
-        val request = graphQLPost(
-            url = "$baseUrl/query/",
-            headers = headers,
-            query = CHAPTER_LIST_QUERY,
-            variables = ApiChapterListWrapper(select),
-        )
-        val response = client.newCall(request).await()
+        val payload = GraphQLPayload(CHAPTER_LIST_QUERY, ApiChapterListWrapper(select)).toJsonRequestBody()
+        val response = client.post("$baseUrl/query/", headers, payload)
         val data = response.parseGraphQLAs<ChapterListData>().response
 
         return ChapterListPage(
@@ -353,13 +326,8 @@ abstract class XCOMIC :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = getChapterId(chapter.url)
 
-        val request = graphQLPost(
-            url = "$baseUrl/query/",
-            headers = headers,
-            query = CHAPTER_PAGES_QUERY,
-            variables = ApiChapterNodeVariables(chapterId),
-        )
-        val response = client.newCall(request).await()
+        val payload = GraphQLPayload(CHAPTER_PAGES_QUERY, ApiChapterNodeVariables(chapterId)).toJsonRequestBody()
+        val response = client.post("$baseUrl/query/", headers, payload)
         val data = response.parseGraphQLAs<ChapterPagesData>().response.data
 
         return data.imageUrls.mapIndexed { index, url ->

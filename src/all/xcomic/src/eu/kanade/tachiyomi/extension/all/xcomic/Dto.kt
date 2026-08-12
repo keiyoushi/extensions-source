@@ -458,3 +458,9 @@ class LatestUploadsItem(
 class XComicStrings(
     val text: String? = null,
 )
+
+@Serializable
+class GraphQLPayload<T>(
+    val query: String,
+    val variables: T,
+)
