@@ -25,7 +25,7 @@ import org.jsoup.nodes.Document
 @Source
 abstract class MangaDar : KeiSource() {
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
@@ -39,7 +39,16 @@ abstract class MangaDar : KeiSource() {
 
     // ============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getPopularManga(page)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val urlBuilder = "$baseUrl/manga/".toHttpUrl().newBuilder()
+            .addQueryParameter("sort", "new")
+        if (page > 1) {
+            urlBuilder.addPathSegment("page")
+            urlBuilder.addPathSegment(page.toString())
+        }
+        val response = client.get(urlBuilder.build())
+        return parseMangaListPage(response)
+    }
 
     // ============================== Search ===============================
 
@@ -149,8 +158,10 @@ abstract class MangaDar : KeiSource() {
     private fun parseMangaListPage(response: Response): MangasPage {
         val doc = response.asJsoup()
         val mangas = doc.select("a[href*=/manga/]").mapNotNull { element ->
-            val slug = element.absUrl("href").toHttpUrl()
-                .pathSegments.last { it.isNotEmpty() }
+            val href = element.absUrl("href")
+            val segments = href.toHttpUrl().pathSegments.filter { it.isNotEmpty() }
+            if (segments.size != 2 || segments[0] != "manga") return@mapNotNull null
+            val slug = segments[1]
             if (slug.isBlank() || slug == "page") return@mapNotNull null
             val title = element.select("img").attr("alt")
                 .ifBlank { element.select("h3, h4, .font-semibold").text() }
@@ -202,12 +213,9 @@ abstract class MangaDar : KeiSource() {
     }
 
     private fun parseChaptersFromDoc(doc: Document): List<SChapter> {
-        // There are multiple div[x-data] on the page; find the one containing chapter data
         val containers = doc.select("div[x-data]")
         for (container in containers) {
             val xData = container.attr("x-data")
-
-            // New format: rows: [[id, number, url, timestamp, num], ...]
             val rowsStart = xData.indexOf("rows:")
             if (rowsStart != -1) {
                 val bracketStart = xData.indexOf("[", rowsStart)
@@ -217,20 +225,7 @@ abstract class MangaDar : KeiSource() {
                     return parseRowsJson(rowsJson)
                 }
             }
-
-            // Legacy format: chapters: [{...}]
-            val chaptersStart = xData.indexOf("chapters:")
-            if (chaptersStart != -1) {
-                val jsonStart = xData.indexOf("[", chaptersStart)
-                val jsonEnd = findMatchingBracket(xData, jsonStart)
-                if (jsonStart != -1 && jsonEnd != -1) {
-                    val chaptersJson = xData.substring(jsonStart, jsonEnd + 1)
-                    val initialChapters = chaptersJson.parseAs<List<ChapterDto>>()
-                    return initialChapters.map { it.toSChapter() }
-                }
-            }
         }
-
         return emptyList()
     }
 
