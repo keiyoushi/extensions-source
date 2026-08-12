@@ -30,7 +30,15 @@ abstract class KivaraToons : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, defaultSort = "views")
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(page, defaultSort = "recentes")
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = "$baseUrl/api/leitores/ultimas-atualizacoes?$SHOW_ADULT_CONTENT".toHttpUrl().newBuilder()
+            .addQueryParameter("pagina", page.toString())
+            .addQueryParameter("limite", UPDATES_PAGE_SIZE.toString())
+            .build()
+
+        val result = client.get(url).parseAs<LatestUpdatesDto>()
+        return MangasPage(result.mangas.map { it.toSManga(siteUrl) }, result.hasNextPage)
+    }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getMangaList(page, query, filters, defaultSort = "recentes")
 
@@ -40,7 +48,7 @@ abstract class KivaraToons : KeiSource() {
         filters: FilterList = FilterList(),
         defaultSort: String,
     ): MangasPage {
-        val url = "$baseUrl/api/obras".toHttpUrl().newBuilder()
+        val url = "$baseUrl/api/obras?$SHOW_ADULT_CONTENT".toHttpUrl().newBuilder()
             .addQueryParameter("pagina", page.toString())
             .addQueryParameter("limite", MANGA_PAGE_SIZE.toString())
             .addQueryParameter("ordem", filters.firstInstanceOrNull<SortFilter>()?.selectedValue ?: defaultSort)
@@ -74,7 +82,7 @@ abstract class KivaraToons : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = client.get("$baseUrl/api/obras/${manga.url}").parseAs<MangaDto>()
+        val details = client.get("$baseUrl/api/obras/${manga.url}?$SHOW_ADULT_CONTENT").parseAs<MangaDto>()
 
         return SMangaUpdate(
             manga = details.toSManga(siteUrl),
@@ -82,7 +90,7 @@ abstract class KivaraToons : KeiSource() {
         )
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/api/capitulos/${chapter.url}")
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/api/capitulos/${chapter.url}?$SHOW_ADULT_CONTENT")
         .parseAs<ChapterPagesDto>()
         .toPageList(siteUrl)
 
@@ -119,6 +127,8 @@ abstract class KivaraToons : KeiSource() {
 
     companion object {
         private const val MANGA_PAGE_SIZE = 24
+        private const val UPDATES_PAGE_SIZE = MANGA_PAGE_SIZE * 2
+        private const val SHOW_ADULT_CONTENT = "mostrar_conteudo_adulto=true"
         private val MANGA_PATH_SEGMENTS = listOf("obra", "manhwa", "reader")
     }
 }
