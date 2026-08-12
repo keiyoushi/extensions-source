@@ -14,10 +14,10 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
-import kotlin.time.Instant
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
+import kotlin.time.Instant
 
 @Source
 abstract class KingComiX : KeiSource() {
