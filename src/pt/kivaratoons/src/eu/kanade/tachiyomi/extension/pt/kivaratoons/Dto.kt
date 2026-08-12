@@ -20,6 +20,29 @@ class MangaListDto(
 }
 
 @Serializable
+class LatestUpdatesDto(
+    private val updates: List<ChapterUpdateDto>,
+    @SerialName("pagina") private val page: Int = 1,
+    @SerialName("total_paginas") private val totalPages: Int = 1,
+) {
+    val mangas get() = updates.distinctBy(ChapterUpdateDto::mangaId)
+    val hasNextPage get() = page < totalPages
+}
+
+@Serializable
+class ChapterUpdateDto(
+    @SerialName("obra_id") val mangaId: Int,
+    @SerialName("obra_nome") private val mangaName: String,
+    @SerialName("obra_capa") private val mangaCover: String? = null,
+) {
+    fun toSManga(siteUrl: HttpUrl) = SManga.create().apply {
+        url = mangaId.toString()
+        title = mangaName
+        thumbnail_url = mangaCover?.takeIf(String::isNotBlank)?.let { siteUrl.resolve(it)?.toString() }
+    }
+}
+
+@Serializable
 class MangaDto(
     private val id: Int,
     @SerialName("nome") private val name: String,
