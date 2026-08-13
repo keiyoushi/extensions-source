@@ -180,7 +180,7 @@ abstract class MangaShi : KeiSource() {
         description = Jsoup.parseBodyFragment(
             document.selectFirst("div.leading-relaxed[x-ref*=\"descDesktop\"]")
                 ?.wholeText()?.trim().toString(),
-        ).text().substringAfterLast(">")
+        ).text()
     }
 
     private fun parseStatus(raw: String?): Int {
