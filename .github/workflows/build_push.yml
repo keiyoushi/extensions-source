@@ -112,7 +112,7 @@ jobs:
       needs.build.result != 'cancelled' &&
       needs.prepare.outputs.delete != '[]'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
     steps:
       - name: Download APK artifacts
         if: needs.build.result == 'success'
@@ -143,7 +143,7 @@ jobs:
         run: |
           cd repo
           pip install protobuf
-          python ../main/.github/scripts/publish-repo.py "$DELETE" "$GITHUB_SHA"
+          python -u ../main/.github/scripts/publish-repo.py "$DELETE" "$GITHUB_SHA"
           git config --global user.email "156378334+keiyoushi-bot@users.noreply.github.com"
           git config --global user.name "keiyoushi-bot"
           git status
