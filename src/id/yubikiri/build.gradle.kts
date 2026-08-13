@@ -6,14 +6,14 @@ plugins {
 
 keiyoushi {
     name = "Kaguya"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
     theme = "madara"
 
     source {
         lang = "id"
-        baseUrl = "https://v1.kaguya.pro"
+        baseUrl = "https://02.kaguya.pro"
         id = 1557304490417397104L
     }
 }
