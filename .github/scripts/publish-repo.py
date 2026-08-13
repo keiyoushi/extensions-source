@@ -5,6 +5,7 @@ import json
 import math
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import index_pb2
@@ -27,6 +28,14 @@ ICON_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions-source@main"
 REPO_NAME = "keiyoushi/extensions"
 RELEASE_BASE_URL = f"https://github.com/{REPO_NAME}/releases/download"
 ASSET_LIMIT = 495  # Actual limit is 1000 but we upload 2 items per extension.
+RETRY_ATTEMPTS = 4
+RETRY_BASE_DELAY = 60  # Documented minimum wait; doubles per attempt.
+# Uploading continuously trips a secondary rate limit after roughly 450 assets, and
+# that limit clears again within a few minutes. Pace the uploads well under the rate
+# that trips it. Small calls also cap how much completed work gh re-sends on retry,
+# since it re-uploads the whole call.
+UPLOAD_CHUNK_SIZE = 80
+UPLOAD_CHUNK_INTERVAL = 30
 
 to_delete: list[str] = json.loads(sys.argv[1])
 current_sha = sys.argv[2]
@@ -271,17 +280,33 @@ if not new_extensions:
 
 
 def run_gh(*args: str, success_codes: tuple[int, ...] = ()) -> str:
-    result = subprocess.run(
-        ["gh", *args],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode == 0 or result.returncode in success_codes:
-        return result.stdout.strip()
+    delay = RETRY_BASE_DELAY
+    for attempt in range(1, RETRY_ATTEMPTS + 1):
+        result = subprocess.run(
+            ["gh", *args],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0 or result.returncode in success_codes:
+            return result.stdout.strip()
 
-    print(f"gh {' '.join(args)} failed: {result.stderr}", file=sys.stderr)
-    sys.exit(result.returncode)
+        # Secondary rate limits are explicitly retryable after a wait; everything else
+        # is a real failure, so fail fast. The upload endpoint sends no retry-after
+        # header, so back off from the documented one minute minimum.
+        # https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
+        if attempt < RETRY_ATTEMPTS and "secondary rate limit" in result.stderr.lower():
+            print(
+                f"secondary rate limit hit, retrying in {delay}s "
+                f"(attempt {attempt}/{RETRY_ATTEMPTS})",
+                file=sys.stderr,
+            )
+            time.sleep(delay)
+            delay *= 2
+            continue
+
+        print(f"gh {' '.join(args)} failed: {result.stderr}", file=sys.stderr)
+        sys.exit(result.returncode)
 
 
 def create_release(tag: str):
@@ -322,15 +347,20 @@ def upload_assets(tag: str, files: list[Path]):
     if not files:
         return
     print(f"Uploading {len(files)} assets to {tag}")
-    run_gh(
-        "release",
-        "upload",
-        tag,
-        *[str(f) for f in files],
-        "--repo",
-        REPO_NAME,
-        "--clobber",
-    )
+    for i in range(0, len(files), UPLOAD_CHUNK_SIZE):
+        chunk = files[i : i + UPLOAD_CHUNK_SIZE]
+        if i:
+            time.sleep(UPLOAD_CHUNK_INTERVAL)
+        print(f"  assets {i + 1}-{i + len(chunk)} of {len(files)}")
+        run_gh(
+            "release",
+            "upload",
+            tag,
+            *[str(f) for f in chunk],
+            "--repo",
+            REPO_NAME,
+            "--clobber",
+        )
     publish_release(tag)
 
 

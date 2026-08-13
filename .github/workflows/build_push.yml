@@ -112,7 +112,7 @@ jobs:
       needs.build.result != 'cancelled' &&
       needs.prepare.outputs.delete != '[]'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     steps:
       - name: Download APK artifacts
         if: needs.build.result == 'success'
