@@ -248,7 +248,7 @@ def write_index(filename: str, index: index_pb2.Index):
         )
 
     with REPO_DIR.joinpath(f"{filename}.pb").open("wb") as f:
-        f.write(gzip.compress(index.SerializeToString(deterministic=True)))
+        f.write(gzip.compress(index.SerializeToString(deterministic=True), mtime=0))
 
 
 index = create_index("Keiyoushi", "KEI", all_extensions)
