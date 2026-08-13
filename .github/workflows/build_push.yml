@@ -139,10 +139,11 @@ jobs:
       - name: Publish and deploy repo
         env:
           DELETE: ${{ needs.prepare.outputs.delete }}
+          GH_TOKEN: ${{ secrets.BOT_PAT }}
         run: |
           cd repo
           pip install protobuf
-          python ../main/.github/scripts/publish-repo.py "$DELETE"
+          python ../main/.github/scripts/publish-repo.py "$DELETE" "$GITHUB_SHA"
           git config --global user.email "156378334+keiyoushi-bot@users.noreply.github.com"
           git config --global user.name "keiyoushi-bot"
           git status
@@ -153,6 +154,8 @@ jobs:
             curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.min.json
             curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.json
             curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.pb
+            curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.beta.json
+            curl https://purge.jsdelivr.net/gh/keiyoushi/extensions@repo/index.beta.pb
           else
             echo "No changes to commit"
           fi
