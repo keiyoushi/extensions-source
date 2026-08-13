@@ -160,7 +160,7 @@ abstract class MangaShi : KeiSource() {
         val badges = document.select("span.tracking-widest").map { it.text().trim() }
         val statusText = badges.firstOrNull { txt ->
             val lower = txt.lowercase()
-            lower.contains("онгоинг") || lower.contains("выпускается") || lower.contains("заверш") || lower.contains("заморож") || lower.contains("приостановл") || lower.contains("заброш")
+            lower.contains("онгоинг") || lower.contains("выпускается") || lower.contains("заверш") || lower.contains("заморож") || lower.contains("приостановл") || lower.contains("заброш") || lower.contains("хиатус")
         }
 
         status = parseStatus(statusText)
@@ -177,8 +177,10 @@ abstract class MangaShi : KeiSource() {
             .distinct()
             .joinToString { it.removePrefix("#").lowercase(Locale.ROOT) }
 
-        description = document.selectFirst("p.leading-relaxed, .leading-relaxed")
-            ?.wholeText()?.trim()
+        description = Jsoup.parseBodyFragment(
+            document.selectFirst("div.leading-relaxed[x-ref*=\"descDesktop\"]")
+                ?.wholeText()?.trim().toString(),
+        ).text().substringAfterLast(">")
     }
 
     private fun parseStatus(raw: String?): Int {
