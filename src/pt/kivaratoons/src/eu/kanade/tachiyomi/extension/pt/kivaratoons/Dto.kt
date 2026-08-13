@@ -1,10 +1,12 @@
 package eu.kanade.tachiyomi.extension.pt.kivaratoons
 
+import android.util.Base64
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
@@ -31,12 +33,14 @@ class LatestUpdatesDto(
 
 @Serializable
 class ChapterUpdateDto(
-    @SerialName("obra_id") val mangaId: Int,
+    @SerialName("obra_id") private val id: JsonPrimitive,
     @SerialName("obra_nome") private val mangaName: String,
     @SerialName("obra_capa") private val mangaCover: String? = null,
 ) {
+    val mangaId get() = id.content.decodeMangaId()
+
     fun toSManga(siteUrl: HttpUrl) = SManga.create().apply {
-        url = mangaId.toString()
+        url = mangaId
         title = mangaName
         thumbnail_url = mangaCover?.takeIf(String::isNotBlank)?.let { siteUrl.resolve(it)?.toString() }
     }
@@ -82,7 +86,7 @@ class MangaDto(
 @Serializable
 class ChapterDto(
     private val id: String,
-    @SerialName("obra_id") private val mangaId: Int,
+    @SerialName("obra_id") private val mangaId: JsonPrimitive,
     @SerialName("numero") private val number: Float,
     @SerialName("data_publicacao") private val publishedAt: String? = null,
 ) {
@@ -91,7 +95,7 @@ class ChapterDto(
         name = "Capítulo ${number.formatted()}"
         chapter_number = number
         date_upload = publishedAt?.let(Instant::parseOrNull)?.toEpochMilliseconds() ?: 0L
-        memo = buildJsonObject { put("mangaId", mangaId) }
+        memo = buildJsonObject { put("mangaId", mangaId.content.decodeMangaId()) }
     }
 
     private fun Float.formatted(): String = if (this % 1 == 0f) toInt().toString() else toString()
@@ -139,3 +143,17 @@ class FilterData(
     val statuses: List<FilterOptionDto>,
     val tags: List<String>,
 )
+
+private const val MANGA_ID_KEY = "4b7e8"
+
+/** Newer entries expose the manga id base64 encoded and XORed, while the listings use the plain numeric id. */
+fun String.decodeMangaId(): String {
+    if (isEmpty() || all(Char::isDigit)) return this
+
+    val bytes = runCatching { Base64.decode(this, Base64.DEFAULT) }.getOrNull() ?: return this
+    val decoded = String(
+        ByteArray(bytes.size) { (bytes[it].toInt() xor MANGA_ID_KEY[it % MANGA_ID_KEY.length].code).toByte() },
+    )
+
+    return decoded.takeIf { it.isNotEmpty() && it.all(Char::isDigit) } ?: this
+}
