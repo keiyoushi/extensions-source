@@ -31,10 +31,11 @@ class SeriesDto(
 
     fun isNovel() = seriesTypeId == "99" // 99 is Novel ID
 
-    fun toSManga(createThumbnail: (String, String) -> String) = SManga.create().apply {
+    context(source: Dilar)
+    fun toSManga() = SManga.create().apply {
         title = this@SeriesDto.title
         url = "$id/$title"
-        thumbnail_url = cover?.let { createThumbnail(id, it) }
+        thumbnail_url = cover?.let { source.createThumbnail(id, it) }
         description = summary
 
         author = staff.filter { it.staff?.role == "Author" }.joinToString { it.name }
@@ -120,6 +121,16 @@ class PageListDto(
 class PageDto(
     val url: String,
     val order: Int,
+)
+
+@Serializable
+class EncryptedResponseDto(
+    val v: Int,
+    val epk: String,
+    val e: Int,
+    val iv: String,
+    val ct: String,
+    val tag: String,
 )
 
 // common
