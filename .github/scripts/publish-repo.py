@@ -17,13 +17,7 @@ ARTIFACTS_DIR = Path.home() / "apk-artifacts"
 
 # The checked-out `repo` branch we publish into (the working directory).
 REPO_DIR = Path.cwd()
-REPO_APK_DIR = REPO_DIR / "apk"
-REPO_JAR_DIR = REPO_DIR / "jar"
-REPO_APK_DIR.mkdir(parents=True, exist_ok=True)
-REPO_JAR_DIR.mkdir(parents=True, exist_ok=True)
 
-APK_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions@repo/apk"
-JAR_BASE_URL = "https://raw.githubusercontent.com/keiyoushi/extensions/repo/jar"
 ICON_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions-source@main"
 REPO_NAME = "keiyoushi/extensions"
 RELEASE_BASE_URL = f"https://github.com/{REPO_NAME}/releases/download"
@@ -37,15 +31,11 @@ to_delete: list[str] = json.loads(sys.argv[1])
 current_sha = sys.argv[2]
 current_sha_short = current_sha[:7]
 
-beta_index_path = REPO_DIR / "index.beta.json"
-if beta_index_path.exists():
-    with beta_index_path.open() as f:
-        remote_release_proto = json_format.Parse(f.read(), index_pb2.Index())
-else:
-    remote_release_proto = index_pb2.Index()
+with REPO_DIR.joinpath("index.json").open() as f:
+    remote_proto = json_format.Parse(f.read(), index_pb2.Index())
 
-remote_release_extensions = {
-    ext.packageName: ext for ext in remote_release_proto.extensionList.extensions
+remote_extensions = {
+    ext.packageName: ext for ext in remote_proto.extensionList.extensions
 }
 
 release_assets_path = REPO_DIR / "release-assets.json"
@@ -65,7 +55,6 @@ updated_release_assets = {
 # source-info JSON emitted by its assembleRelease task (see GenerateSourceInfoTask); its APK is a
 # sibling in the same build dir. aapt reads the icon out of the APK
 new_extensions: list[tuple[index_pb2.Extension, Path, Path, bool]] = []
-published_files: set[Path] = set()
 
 SOURCE_DIR = Path(__file__).resolve().parents[2]
 ICON_FILE = "res/mipmap-xhdpi/ic_launcher.png"
@@ -100,37 +89,27 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
             f"{package_name}: no release jar found under {info_file.parent}"
         )
 
-    apk_bytes = apk.read_bytes()
-    jar_bytes = jar.read_bytes()
-    repo_apk = REPO_APK_DIR / apk.name
-    repo_jar = REPO_JAR_DIR / jar.name
-
     assets = {
         "apk": {
             "name": apk.name,
-            "sha256": hashlib.sha256(apk_bytes).hexdigest(),
+            "sha256": hashlib.sha256(apk.read_bytes()).hexdigest(),
         },
         "jar": {
             "name": jar.name,
-            "sha256": hashlib.sha256(jar_bytes).hexdigest(),
+            "sha256": hashlib.sha256(jar.read_bytes()).hexdigest(),
         },
     }
     changed = (
-        package_name not in remote_release_extensions
+        package_name not in remote_extensions
         or release_assets.get(package_name) != assets
     )
 
-    repo_apk.write_bytes(apk_bytes)
-    repo_jar.write_bytes(jar_bytes)
-    published_files.update((repo_apk, repo_jar))
     updated_release_assets[package_name] = assets
 
     ext = index_pb2.Extension(
         name=info["name"],
         packageName=package_name,
         resources=index_pb2.Resources(
-            apkUrl=f"{APK_BASE_URL}/{apk.name}",
-            jarUrl=f"{JAR_BASE_URL}/{jar.name}",
             iconUrl=get_icon_url(info["module"], info.get("theme")),
         ),
         extensionLib=info["extensionLib"],
@@ -163,98 +142,48 @@ def get_release_tag(batch_index: int) -> str:
     )
 
 
-# Drop stale repo assets for modules that were deleted or rebuilt. Current artifacts are retained;
-# release upload checks use the checksum manifest above and do not depend on these repo copies.
-for module in to_delete:
-    for file in REPO_APK_DIR.glob(f"tachiyomi-{module}-v*.*.*.apk"):
-        if file not in published_files:
-            print(f"removing {file.name}")
-            file.unlink(missing_ok=True)
-    for file in REPO_JAR_DIR.glob(f"tachiyomi-{module}-v*.*.*.jar"):
-        if file not in published_files:
-            print(f"removing {file.name}")
-            file.unlink(missing_ok=True)
+for i, (ext, apk, jar, changed) in enumerate(new_extensions):
+    if changed:
+        tag = get_release_tag(i // ext_per_release)
+        ext.resources.apkUrl = f"{RELEASE_BASE_URL}/{tag}/{apk.name}"
+        ext.resources.jarUrl = f"{RELEASE_BASE_URL}/{tag}/{jar.name}"
+    else:
+        old_resources = remote_extensions[ext.packageName].resources
+        ext.resources.apkUrl = old_resources.apkUrl
+        ext.resources.jarUrl = old_resources.jarUrl
 
 # Merge with the already-published index, dropping the deleted/rebuilt modules.
-with REPO_DIR.joinpath("index.json").open() as f:
-    remote_proto = json_format.Parse(f.read(), index_pb2.Index())
-
-all_extensions = [
+final_extensions = []
+final_extensions.extend(
     ext
     for ext in remote_proto.extensionList.extensions
     if not any(ext.packageName.endswith(f".{module}") for module in to_delete)
-]
-all_extensions.extend([i[0] for i in new_extensions])
-all_extensions.sort(key=lambda ext: ext.packageName)
+)
+final_extensions.extend(ext for ext, _, _, _ in new_extensions)
+final_extensions.sort(key=lambda ext: ext.packageName)
 
-new_release_extensions = {}
-for i, (ext, apk, jar, changed) in enumerate(new_extensions):
-    release_ext = index_pb2.Extension()
-    release_ext.CopyFrom(ext)
+index = index_pb2.Index(
+    name="Keiyoushi",
+    badgeLabel="KEI",
+    signingKey="9add655a78e96c4ec7a53ef89dccb557cb5d767489fac5e785d671a5a75d4da2",
+    contact=index_pb2.Contact(
+        website="https://keiyoushi.github.io",
+        discord="https://discord.gg/3FbCpdKbdY",
+    ),
+    extensionList=index_pb2.ExtensionList(extensions=final_extensions),
+)
 
-    if changed:
-        tag = get_release_tag(i // ext_per_release)
-        release_ext.resources.apkUrl = f"{RELEASE_BASE_URL}/{tag}/{apk.name}"
-        release_ext.resources.jarUrl = f"{RELEASE_BASE_URL}/{tag}/{jar.name}"
-    else:
-        old_resources = remote_release_extensions[ext.packageName].resources
-        release_ext.resources.apkUrl = old_resources.apkUrl
-        release_ext.resources.jarUrl = old_resources.jarUrl
-
-    new_release_extensions[ext.packageName] = release_ext
-
-all_release_extensions = []
-for ext in all_extensions:
-    if ext.packageName in new_release_extensions:
-        all_release_extensions.append(new_release_extensions[ext.packageName])
-        continue
-
-    if ext.packageName not in remote_release_extensions:
-        raise ValueError(f"{ext.packageName}: no GitHub release asset mapping found")
-
-    release_ext = index_pb2.Extension()
-    release_ext.CopyFrom(ext)
-    old_resources = remote_release_extensions[ext.packageName].resources
-    release_ext.resources.apkUrl = old_resources.apkUrl
-    release_ext.resources.jarUrl = old_resources.jarUrl
-    all_release_extensions.append(release_ext)
-
-
-def create_index(
-    name: str,
-    badge_label: str,
-    extensions: list[index_pb2.Extension],
-) -> index_pb2.Index:
-    return index_pb2.Index(
-        name=name,
-        badgeLabel=badge_label,
-        signingKey="9add655a78e96c4ec7a53ef89dccb557cb5d767489fac5e785d671a5a75d4da2",
-        contact=index_pb2.Contact(
-            website="https://keiyoushi.github.io",
-            discord="https://discord.gg/3FbCpdKbdY",
-        ),
-        extensionList=index_pb2.ExtensionList(extensions=extensions),
+with REPO_DIR.joinpath("index.json").open("w", encoding="utf-8") as f:
+    f.write(
+        json_format.MessageToJson(
+            index,
+            always_print_fields_with_no_presence=False,
+            preserving_proto_field_name=True,
+        )
     )
 
-
-def write_index(filename: str, index: index_pb2.Index):
-    with REPO_DIR.joinpath(f"{filename}.json").open("w", encoding="utf-8") as f:
-        f.write(
-            json_format.MessageToJson(
-                index,
-                always_print_fields_with_no_presence=False,
-                preserving_proto_field_name=True,
-            )
-        )
-
-    with REPO_DIR.joinpath(f"{filename}.pb").open("wb") as f:
-        f.write(gzip.compress(index.SerializeToString(deterministic=True), mtime=0))
-
-
-index = create_index("Keiyoushi", "KEI", all_extensions)
-release_index = create_index("Keiyoushi (Beta)", "KEI β", all_release_extensions)
-write_index("index", index)
-write_index("index.beta", release_index)
+with REPO_DIR.joinpath("index.pb").open("wb") as f:
+    f.write(gzip.compress(index.SerializeToString(deterministic=True), mtime=0))
 
 with release_assets_path.open("w", encoding="utf-8") as f:
     json.dump(updated_release_assets, f, indent=2, sort_keys=True)
@@ -264,7 +193,7 @@ with REPO_DIR.joinpath("index.html").open("w", encoding="utf-8") as f:
     f.write(
         '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<title>apks</title>\n</head>\n<body>\n<pre>\n'
     )
-    for ext in all_extensions:
+    for ext in final_extensions:
         apk_escaped = html.escape(ext.resources.apkUrl)
         name_escaped = html.escape(f"Tachiyomi: {ext.name}")
         f.write(f'<a href="{apk_escaped}">{name_escaped}</a>\n')
