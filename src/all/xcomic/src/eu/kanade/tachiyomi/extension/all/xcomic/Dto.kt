@@ -58,7 +58,7 @@ class ComicNode(
     private val artists: List<String>? = null,
     private val artistNodes: List<XComicData<XComicName?>>? = null,
     private val originalLanguage: String? = null,
-    private val translatedLanguage: String? = null,
+    val translatedLanguage: String? = null,
     private val originalStatus: String? = null,
     private val originalPubFrom: DateYMD? = null,
     private val originalPubTill: DateYMD? = null,
@@ -316,6 +316,12 @@ class ChapterListData(
 )
 
 @Serializable
+class ChapterListUniqData(
+    @SerialName("get_comic_chapterList_uniqList")
+    val response: ChapterListItems,
+)
+
+@Serializable
 class ChapterListItems(
     val paging: XComicPaging,
     val items: List<ApiChapterWrapper>,
@@ -375,7 +381,7 @@ class ChapterData(
     private val volume: JsonElement? = null,
     private val serial: Float? = null,
     @SerialName("dname")
-    private val displayName: String,
+    private val displayName: String = "",
     private val title: String? = null,
     private val urlPath: String? = null,
     @SerialName("sfw_result")
@@ -413,9 +419,12 @@ class ChapterData(
         name = buildString {
             val number = (chaNum ?: serial)?.toString()?.removeSuffix(".0")
             if (number != null && !displayName.contains(number)) {
-                append("Chapter ", number, ": ")
+                append("Chapter ", number)
             }
-            append(displayName)
+            if (displayName.isNotEmpty()) {
+                if (isNotEmpty()) append(": ")
+                append(displayName)
+            }
             if (!title.isNullOrEmpty()) {
                 if (isNotEmpty()) append(": ")
                 append(title)
@@ -438,6 +447,16 @@ class ChapterData(
 // ========================= Latest Uploads ===========================
 
 @Serializable
+class ApiLatestUploadsSelect(
+    val size: Int? = null,
+    val before: Long? = null,
+    val genre: String? = null,
+)
+
+@Serializable
+class ApiLatestUploadsWrapper(val select: ApiLatestUploadsSelect)
+
+@Serializable
 class LatestUploadsData(
     @SerialName("get_comic_latestUploads")
     val response: LatestUploadsResult,
@@ -445,14 +464,14 @@ class LatestUploadsData(
 
 @Serializable
 class LatestUploadsResult(
-    val before: Double? = null,
+    val before: Long? = null,
     val items: List<LatestUploadsItem>,
 )
 
 @Serializable
 class LatestUploadsItem(
-    val comic: XComicData<ComicNode>,
-    val chapters: List<XComicData<ChapterData>>,
+    val comic: XComicData<ComicNode?>? = null,
+    val chapters: List<XComicData<ChapterData?>>? = null,
 )
 
 @Serializable
