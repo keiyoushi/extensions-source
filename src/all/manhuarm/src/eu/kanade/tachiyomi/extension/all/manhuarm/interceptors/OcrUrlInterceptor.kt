@@ -1,113 +1,52 @@
 package eu.kanade.tachiyomi.extension.all.manhuarm.interceptors
 
-import android.app.Application
-import android.os.Handler
-import android.os.Looper
-import android.webkit.JavascriptInterface
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import okhttp3.Headers
-import org.json.JSONObject
-import uy.kohesive.injekt.injectLazy
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import org.jsoup.nodes.Document
 
-class OcrUrlInterceptor(private val headers: Headers) {
+class OcrUrlInterceptor {
 
-    private val context: Application by injectLazy()
-    private val handler = Handler(Looper.getMainLooper())
-    private val bridgeName = ('a'..'z').shuffled().take(10).joinToString("")
+    /**
+     * The chapter page embeds the OCR endpoint and its single-use gate credentials in a
+     * `_0xvault` array. The site's own script refuses to call the endpoint when it detects a
+     * patched `XMLHttpRequest`/`fetch` — sending a decoy request instead — so the credentials are
+     * read straight out of the HTML rather than by intercepting the page's request.
+     */
+    fun getOcrRequest(document: Document): OcrRequest? {
+        val vault = VAULT_REGEX.find(document.html())
+            ?.groupValues?.get(1)
+            ?.let { entries -> ENTRY_REGEX.findAll(entries).map(::entryValue).toList() }
+            ?: return null
 
-    fun getOcrRequest(url: String): OcrRequest? {
-        val latch = CountDownLatch(1)
-        var ocrRequest: OcrRequest? = null
-        var webView: WebView? = null
-
-        handler.post {
-            val webview = WebView(context)
-            webView = webview
-            with(webview.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                useWideViewPort = false
-                loadWithOverviewMode = false
-                userAgentString = headers["User-Agent"]
-            }
-
-            webview.addJavascriptInterface(
-                object {
-                    @JavascriptInterface
-                    fun onFetch(url: String, body: String, headersJson: String) {
-                        if (ocrRequest == null && url.contains("fetch-ocr.php")) {
-                            val headerMap = mutableMapOf<String, String>()
-                            try {
-                                val json = JSONObject(headersJson)
-                                val keys = json.keys()
-                                while (keys.hasNext()) {
-                                    val key = keys.next()
-                                    headerMap[key] = json.getString(key)
-                                }
-                            } catch (_: Exception) { /* do nothing */ }
-
-                            ocrRequest = OcrRequest(url, body, headerMap)
-                            latch.countDown()
-                        }
-                    }
-                },
-                bridgeName,
-            )
-
-            webview.webViewClient = object : WebViewClient() {
-                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) = injectScript(view)
-                override fun onPageFinished(view: WebView?, url: String?) = injectScript(view)
-            }
-
-            webview.loadUrl(url, headers.toMultimap().mapValues { it.value.first() })
+        if (vault.size <= REF_INDEX) {
+            return null
         }
 
-        latch.await(10, TimeUnit.SECONDS)
+        val url = vault.getOrNull(URL_INDEX)?.takeIf { it.contains("fetch-ocr") } ?: return null
 
-        handler.post {
-            webView?.apply {
-                stopLoading()
-                destroy()
-            }
-        }
-
-        return ocrRequest
-    }
-
-    private val utilities: String by lazy {
-        javaClass.getResource("/assets/scripts/utilities.js")!!.readText()
-    }
-
-    private fun injectScript(view: WebView?) {
-        view?.evaluateJavascript(
-            """
-            (function() {
-                $utilities
-
-                const nativeFetch = window.fetch;
-                window.fetch = function() {
-                    const input = arguments[0];
-                    const options = arguments[1] || {};
-                    const url = typeof input === 'string' ? input : (input.url || "");
-
-                    if (url.includes('fetch-ocr.php')) {
-                        const body = options.body || "";
-                        const headers = serializeHeaders(options.headers);
-
-                        if (window.$bridgeName) {
-                            window.$bridgeName.onFetch(url, body.toString(), headers);
-                        }
-                    }
-                    return nativeFetch.apply(this, arguments);
-                };
-            })();
-            """.trimIndent(),
-            null,
+        return OcrRequest(
+            url = url,
+            body = """{"cid":"${vault[CID_INDEX]}","ref":"${vault[REF_INDEX]}"}""",
+            interceptedHeaders = mapOf(
+                "X-Requested-With" to "XMLHttpRequest",
+                "Cache-Control" to "no-cache",
+                "X-Gate-Token" to vault[TOKEN_INDEX],
+                "X-Gate-Nonce" to vault[NONCE_INDEX],
+                "X-Gate-Timestamp" to vault[TIMESTAMP_INDEX],
+            ),
         )
+    }
+
+    private fun entryValue(match: MatchResult): String = match.groups[1]?.value?.replace("\\/", "/") ?: match.groupValues[2]
+
+    companion object {
+        private val VAULT_REGEX = Regex("""_0xvault\s*=\s*\[(.*?)]""", RegexOption.DOT_MATCHES_ALL)
+        private val ENTRY_REGEX = Regex(""""([^"]*)"|(\d+)""")
+
+        private const val CID_INDEX = 0
+        private const val TOKEN_INDEX = 1
+        private const val TIMESTAMP_INDEX = 2
+        private const val NONCE_INDEX = 3
+        private const val URL_INDEX = 4
+        private const val REF_INDEX = 5
     }
 }
 

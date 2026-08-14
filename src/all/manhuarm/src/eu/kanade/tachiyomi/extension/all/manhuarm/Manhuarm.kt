@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -133,7 +134,7 @@ abstract class Manhuarm :
 
     private val warmupInterceptor = CloudflareWarmupInterceptor(baseUrl, headers)
 
-    private val ocrUrlInterceptor by lazy { OcrUrlInterceptor(headers) }
+    private val ocrUrlInterceptor = OcrUrlInterceptor()
 
     /**
      * This ensures that the `OkHttpClient` instance is only created when required, and it is rebuilt
@@ -198,102 +199,70 @@ abstract class Manhuarm :
 
     override fun popularMangaRequest(page: Int): Request {
         val url = if (page == 1) {
-            "$baseUrl/manga/?m_orderby=trending"
+            "$baseUrl/manga/?sort=trending"
         } else {
-            "$baseUrl/manga/page/$page/?m_orderby=trending"
+            "$baseUrl/manga/page/$page/?sort=trending"
         }
         return GET(url, headers)
     }
 
-    override fun popularMangaSelector(): String = ".page-item-detail, .manga-card"
+    override fun popularMangaSelector(): String = ".mrm-results__grid .mrm-r-item"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        val titleEl = element.selectFirst(".post-title a, .manga-title a")
-        val thumbEl = element.selectFirst(".item-thumb img, .manga-thumb img, img")
-        manga.setUrlWithoutDomain(titleEl!!.attr("href"))
-        manga.title = titleEl.text()
-        manga.thumbnail_url = thumbEl?.extractCoverUrl()
-        return manga
-    }
+    override fun popularMangaFromElement(element: Element): SManga = element.toSManga()
 
-    override fun popularMangaNextPageSelector(): String = "a.next, a.nextpostslink, .pagination a.next, .navigation-ajax #navigation-ajax"
+    // The archive pager and the search results pager differ.
+    override fun popularMangaNextPageSelector(): String = "a.next, a.mrm-pager__btn[rel=next]"
 
     // =========================== Latest ==========================================
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = if (page == 1) {
-            "$baseUrl/manga/?m_orderby=latest"
+            "$baseUrl/manga/?sort=latest"
         } else {
-            "$baseUrl/manga/page/$page/?m_orderby=latest"
+            "$baseUrl/manga/page/$page/?sort=latest"
         }
         return GET(url, headers)
     }
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        val titleEl = element.selectFirst(".manga-title a")
-            ?: element.selectFirst(".post-title a, h3.h5 a, .post-title h3 a")
-        val thumbEl = element.selectFirst(".manga-thumb img")
-            ?: element.selectFirst(".item-thumb img, img")
-        manga.setUrlWithoutDomain(titleEl!!.attr("href"))
-        manga.title = titleEl.text()
-        manga.thumbnail_url = thumbEl?.extractCoverUrl()
-        return manga
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga = element.toSManga()
 
     override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
 
-    // =========================== Details ==========================================
+    // =========================== Search ==========================================
+
+    override fun searchMangaSelector(): String = popularMangaSelector()
+
+    override fun searchMangaFromElement(element: Element): SManga = element.toSManga()
 
     /**
-     * Extracts the cover image URL from an image element, checking multiple attributes
-     * to handle lazy loading and different image formats.
+     * Search results paginate with a `pg` query parameter rather than the `page/N/` path
+     * segment that Madara builds, so the page is always kept out of the path.
      */
-    private fun Element?.extractCoverUrl(): String? {
-        if (this == null) return null
+    override fun searchPage(page: Int): String = ""
 
-        // Try data-src first (lazy loading)
-        absUrl("data-src").takeIf { it.isNotBlank() && !it.contains("data:image") }?.let { return it }
-
-        // Try src attribute
-        absUrl("src").takeIf { it.isNotBlank() && !it.contains("data:image") && !it.contains("placeholder") }?.let { return it }
-
-        // Try srcset attribute (parse first URL)
-        attr("srcset").takeIf { it.isNotBlank() }?.let { srcset ->
-            srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()?.let { url ->
-                if (url.startsWith("http")) {
-                    return url
-                } else {
-                    absUrl(url).takeIf { it.isNotBlank() && !it.contains("data:image") }?.let { return it }
-                }
-            }
+    override fun searchRequest(page: Int, query: String, filters: FilterList): Request {
+        val request = super.searchRequest(page, query, filters)
+        if (page == 1) {
+            return request
         }
-
-        return null
+        val url = request.url.newBuilder()
+            .addQueryParameter("pg", page.toString())
+            .build()
+        return request.newBuilder().url(url).build()
     }
+
+    // =========================== Details ==========================================
+
+    override val mangaDetailsSelectorTitle = "h1.mrm-hero__title"
+    override val mangaDetailsSelectorThumbnail = ".mrm-hero__cover img"
 
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = super.mangaDetailsParse(document)
 
         if (translateSynopsis && language.target != language.origin && !manga.description.isNullOrBlank()) {
             manga.description = translator.translate(language.origin, language.target, manga.description!!)
-        }
-
-        // Ensure cover is always set from detail page if it wasn't set from listing
-        if (manga.thumbnail_url.isNullOrBlank()) {
-            val coverEl = document.selectFirst(".summary_image img, .wp-post-image, .item-thumb img, .manga-thumb img, img.wp-post-image")
-            manga.thumbnail_url = coverEl?.extractCoverUrl()
-        } else {
-            // Even if cover was set, try to get a better quality version from detail page
-            val coverEl = document.selectFirst(".summary_image img, .wp-post-image, .item-thumb img, .manga-thumb img, img.wp-post-image")
-            coverEl?.extractCoverUrl()?.let {
-                if (it.isNotBlank() && !it.contains("placeholder")) {
-                    manga.thumbnail_url = it
-                }
-            }
         }
 
         return manga
@@ -313,7 +282,7 @@ abstract class Manhuarm :
             .removeAllQueryParameters("style")
             .build()
 
-        val ocrRequest = ocrUrlInterceptor.getOcrRequest(chapterUrl.toString()) ?: return pages
+        val ocrRequest = ocrUrlInterceptor.getOcrRequest(document) ?: return pages
 
         val jsonHeaders = Headers.Builder().apply {
             add("Referer", chapterUrl.toString())
@@ -381,6 +350,18 @@ abstract class Manhuarm :
     }
 
     // ================================ Utils ============================================
+
+    /**
+     * Entries in the archive and search grids share the same markup.
+     */
+    private fun Element.toSManga(): SManga {
+        val link = selectFirst("a.mrm-r-item__link")!!
+        return SManga.create().apply {
+            setUrlWithoutDomain(link.attr("abs:href"))
+            title = selectFirst(".mrm-r-item__title")?.text() ?: link.attr("title")
+            thumbnail_url = selectFirst(".mrm-r-item__art img")?.let(::imageFromElement)
+        }
+    }
 
     // Prevent bad fragments
     fun String.toFragment(): String = "#${this.replace("#", "*")}"
