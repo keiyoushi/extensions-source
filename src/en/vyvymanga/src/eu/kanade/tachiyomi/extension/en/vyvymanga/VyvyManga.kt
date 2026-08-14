@@ -19,6 +19,7 @@ import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
+import java.security.MessageDigest
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -130,10 +131,15 @@ abstract class VyvyManga : KeiSource() {
 
         val updatedChapters = document.select(".list-group > a").mapIndexed { index, element ->
             SChapter.create().apply {
-                // Avoid the dynamic URLs, prefer last url over index.
-                url = chapters.getOrNull(index)?.url ?: "$index"
-                name = element.selectFirst("span")!!.text()
-                date_upload = parseChapterDate(element.selectFirst("> p")?.text())
+                val chapterDate = parseChapterDate(element.selectFirst("> p")?.text())
+                val title = element.selectFirst("span")!!.text()
+                // Avoid the dynamic URLs
+                url = MessageDigest.getInstance("MD5")
+                    .digest("$chapterDate:$title".toByteArray())
+                    .joinToString("") { "%02x".format(it) }
+                    .takeLast(10)
+                name = title
+                date_upload = chapterDate
                 memo = buildJsonObject {
                     put("chapterUrl", element.absUrl("href"))
                 }
