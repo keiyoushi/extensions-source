@@ -3,12 +3,12 @@ import hashlib
 import html
 import json
 import math
-import subprocess
 import sys
 import time
 from pathlib import Path
 
 import index_pb2
+from github_utils import REPO_NAME, run_gh
 from google.protobuf import json_format
 
 # Artifacts downloaded from the build jobs: one APK per extension plus the source metadata JSON
@@ -19,11 +19,8 @@ ARTIFACTS_DIR = Path.home() / "apk-artifacts"
 REPO_DIR = Path.cwd()
 
 ICON_BASE_URL = "https://cdn.jsdelivr.net/gh/keiyoushi/extensions-source@main"
-REPO_NAME = "keiyoushi/extensions"
 RELEASE_BASE_URL = f"https://github.com/{REPO_NAME}/releases/download"
 ASSET_LIMIT = 495  # Actual limit is 1000 but we upload 2 items per extension.
-RETRY_ATTEMPTS = 4
-RETRY_BASE_DELAY = 60  # Documented minimum wait; doubles per attempt.
 UPLOAD_CHUNK_SIZE = 80
 UPLOAD_CHUNK_INTERVAL = 30
 
@@ -202,62 +199,6 @@ with REPO_DIR.joinpath("index.html").open("w", encoding="utf-8") as f:
 # --- Upload assets as release ---
 if not new_extensions:
     sys.exit(0)
-
-
-def run_gh(*args: str, success_errors: tuple[str, ...] = ()) -> str:
-    delay = RETRY_BASE_DELAY
-    for attempt in range(1, RETRY_ATTEMPTS + 1):
-        result = subprocess.run(
-            ["gh", *args],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-
-        error = result.stderr.lower()
-
-        # The upload endpoint does not expose retry headers through gh, so use the
-        # documented one-minute minimum with exponential backoff for secondary limits.
-        # https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
-        if "secondary rate limit" in error:
-            if attempt < RETRY_ATTEMPTS:
-                print(
-                    f"secondary rate limit hit, retrying in {delay}s "
-                    f"(attempt {attempt}/{RETRY_ATTEMPTS})",
-                    file=sys.stderr,
-                )
-                time.sleep(delay)
-                delay *= 2
-                continue
-
-        elif "api rate limit exceeded" in error and attempt < RETRY_ATTEMPTS:
-            rate_limit = subprocess.run(
-                ["gh", "api", "rate_limit", "--jq", ".resources.core.reset"],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            retry_delay = RETRY_BASE_DELAY
-            if rate_limit.returncode == 0:
-                retry_delay = max(
-                    int(rate_limit.stdout.strip()) - int(time.time()) + 10,
-                    RETRY_BASE_DELAY,
-                )
-            print(
-                f"API rate limit hit, retrying in {retry_delay}s "
-                f"(attempt {attempt}/{RETRY_ATTEMPTS})",
-                file=sys.stderr,
-            )
-            time.sleep(retry_delay)
-            continue
-
-        elif any(success_error in error for success_error in success_errors):
-            return result.stdout.strip()
-
-        print(f"gh {' '.join(args)} failed: {result.stderr}", file=sys.stderr)
-        sys.exit(result.returncode)
 
 
 def create_release(tag: str):
