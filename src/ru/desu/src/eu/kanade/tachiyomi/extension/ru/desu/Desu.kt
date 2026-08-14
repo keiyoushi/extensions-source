@@ -2,8 +2,6 @@ package eu.kanade.tachiyomi.extension.ru.desu
 
 import android.widget.Toast
 import androidx.preference.ListPreference
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,23 +9,25 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
 @Source
 abstract class Desu :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
@@ -37,16 +37,14 @@ abstract class Desu :
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder() = Headers.Builder().apply {
-        add("User-Agent", "Tachiyomi")
+    override fun Headers.Builder.configureHeaders() = apply {
+        add("User-Agent", "Mihon (+https://github.com/keiyoushi/extensions-source)")
         add("Referer", baseUrl)
     }
 
-    override val client: OkHttpClient =
-        network.client.newBuilder()
-            .rateLimit(3) { it.host == baseUrlHost }
-            .build()
-
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        rateLimit(3) { it.host == baseUrlHost }
+    }
     private fun MangaDetDto.toSManga(
         genresStr: String? = genres?.joinToString { it.name } ?: "",
         authorsStr: String? = authors?.joinToString { it.name },
@@ -122,15 +120,7 @@ abstract class Desu :
         }
     }
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl$API_URL/catalog/?order_by=popular&page=$page", headers)
-
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
-
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl$API_URL/catalog/?order_by=updated&page=$page", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl$API_URL/catalog/?page=$page".toHttpUrl().newBuilder()
             .addQueryParameter("limit", "20")
             .addQueryParameter("page", page.toString())
@@ -159,10 +149,9 @@ abstract class Desu :
         if (query.isNotEmpty()) {
             url.addQueryParameter("search", query)
         }
-        return GET(url.build(), headers)
-    }
 
-    override fun searchMangaParse(response: Response): MangasPage {
+        val response = client.get(url.build())
+
         val page = response.parseAs<PageWrapperDto<MangaDetDto>>()
 
         val mangas = page.mangas.map { it.toSManga() }
@@ -170,46 +159,49 @@ abstract class Desu :
         return MangasPage(mangas, page.pagination.last_page > page.pagination.current_page)
     }
 
-    private fun titleDetailsRequest(manga: SManga): Request = GET(baseUrl + API_URL + manga.url + "/", headers)
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", getFilterList(null))
 
-    // Workaround to allow "Open in browser" use the real URL.
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(titleDetailsRequest(manga))
-        .asObservableSuccess()
-        .map { response ->
-            mangaDetailsParse(response).apply { initialized = true }
-        }
+    override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", getFilterList(null))
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + "/manga" + manga.url, headers)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val responseManga = client.get("$baseUrl$API_URL${manga.url}/")
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<InfoWrapperDto<MangaDetDto>>().manga.toSManga()
+        val manga = responseManga.parseAs<InfoWrapperDto<MangaDetDto>>().manga.toSManga()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val objChapter = response.parseAs<SeriesWrapperDto<List<ChaptersDto>>>().chapters
+        val responseChapter = client.get("$baseUrl$API_URL${manga.url}/chapters")
 
-        return objChapter.map { chapter ->
+        val objChapter = responseChapter.parseAs<SeriesWrapperDto<List<ChaptersDto>>>().chapters
+
+        val chapters = objChapter.map { chapter ->
             val fullNumStr = "${chapter.volume}. Глава ${chapter.number}"
             SChapter.create().apply {
                 name = chapter.title?.let { "$fullNumStr $it" } ?: fullNumStr
-                // #apiChapter - JSON API url to automatically delete when chapter is opened in browser
-                url = chapter.view_url + "#apiChapter${chapter.id}"
+                url = chapter.id.toString()
+                memo = buildJsonObject {
+                    put("mangaUrl", manga.url)
+                    put("viewUrl", chapter.view_url)
+                }
                 chapter_number = chapter.number.toFloatOrNull() ?: -1f
                 date_upload = chapter.publish_date.times(1000L)
             }
         }
+        return SMangaUpdate(manga, chapters)
     }
 
-    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + API_URL + manga.url + "/chapters", headers)
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga${manga.url}"
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val titleFullId = chapter.url.substringAfter("/manga/").substringBefore("#apiChapter").substringBefore("/vol")
-        val titleId = titleFullId.substringAfterLast(".").substringBeforeLast("/")
-        val chapterId = chapter.url.substringAfterLast("#apiChapter")
-        return GET("$baseUrl$API_URL$titleId/chapters/$chapterId", headers)
-    }
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val titleId = chapter.memo["mangaUrl"]!!.string.removePrefix("/")
+        val chapterId = chapter.url
+        val url = "$baseUrl$API_URL$titleId/chapters/$chapterId"
 
-    override fun getChapterUrl(chapter: SChapter): String = chapter.url.substringBeforeLast("#apiChapter")
+        val response = client.get(url.toHttpUrl())
 
-    override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<ChapterWrapperDto<ChapterDataDto>>()
 
         return result.chapter.pages.mapIndexed { index, page ->
@@ -217,35 +209,39 @@ abstract class Desu :
         }
     }
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    private fun searchMangaByIdRequest(id: String): Request = GET("$baseUrl$API_URL/$id", headers)
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            val titleFullId = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() }
-                ?: throw Exception("Unsupported url")
-            val titleId = titleFullId.substringAfterLast(".").substringBeforeLast("/")
-            return fetchSearchManga(page, "$PREFIX_SLUG_SEARCH$titleId", filters)
-        }
-        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
-            client.newCall(searchMangaByIdRequest(realQuery))
-                .asObservableSuccess()
-                .map { response ->
-                    val details = mangaDetailsParse(response)
-                    details.url = "/$realQuery"
-                    MangasPage(listOf(details), false)
-                }
-        } else {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    searchMangaParse(response)
-                }
-        }
+    override fun getChapterUrl(chapter: SChapter): String {
+        val viewUrl = chapter.memo["viewUrl"]?.string
+            ?: throw Exception("Обновите список глав!")
+        return viewUrl
     }
+
+//   private fun searchMangaByIdRequest(id: String): Request = GET("$baseUrl$API_URL/$id", headers)
+
+//   override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+//        if (query.startsWith("https://")) {
+//            val url = query.toHttpUrl()
+//            val titleFullId = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() }
+//                ?: throw Exception("Unsupported url")
+//            val titleId = titleFullId.substringAfterLast(".").substringBeforeLast("/")
+//            return fetchSearchManga(page, "$PREFIX_SLUG_SEARCH$titleId", filters)
+//        }
+//        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+//            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
+//            client.newCall(searchMangaByIdRequest(realQuery))
+//                .asObservableSuccess()
+//                .map { response ->
+//                    val details = mangaDetailsParse(response)
+//                    details.url = "/$realQuery"
+//                    MangasPage(listOf(details), false)
+//                }
+//        } else {
+//            client.newCall(searchMangaRequest(page, query, filters))
+//                .asObservableSuccess()
+//                .map { response ->
+//                    searchMangaParse(response)
+//                }
+//        }
+//    }
 
     private class OrderBy :
         Filter.Select<String>(
@@ -263,12 +259,12 @@ abstract class Desu :
     private class Type(name: String, val id: String) : Filter.CheckBox(name)
     private class Status(name: String, val id: String) : Filter.CheckBox(name)
 
-    override fun getFilterList() = FilterList(
-        OrderBy(),
-        TypeList(getTypeList()),
-        GenreList(getGenreList()),
-        StatusList(getStatusList()),
-    )
+//    override fun getFilterList() = FilterList(
+//        OrderBy(),
+//        TypeList(getTypeList()),
+//        GenreList(getGenreList()),
+//        StatusList(getStatusList()),
+//    )
 
     private fun getTypeList() = listOf(
         Type("Манга", "manga"),
