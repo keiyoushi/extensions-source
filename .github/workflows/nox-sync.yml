@@ -1,0 +1,48 @@
+name: Nox - Sync Keiyoushi
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nox-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sincronizar Keiyoushi
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clonar Project Nox
+        uses: actions/checkout@v4
+        with:
+          ref: nox/main
+          fetch-depth: 0
+
+      - name: Configurar Git
+        run: |
+          git config user.name "Project Nox Bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Configurar upstream
+        run: |
+          if git remote get-url upstream >/dev/null 2>&1; then
+            git remote set-url upstream https://github.com/keiyoushi/extensions-source.git
+          else
+            git remote add upstream https://github.com/keiyoushi/extensions-source.git
+          fi
+
+          git remote set-url --push upstream DISABLED
+
+      - name: Executar sincronização segura
+        run: |
+          chmod +x .nox/scripts/check-upstream.sh
+          chmod +x .nox/scripts/sync-upstream.sh
+
+          ./.nox/scripts/sync-upstream.sh --apply
