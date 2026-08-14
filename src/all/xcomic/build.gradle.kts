@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "XCOMIC"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -37,8 +37,4 @@ keiyoushi {
         host("xcomic.net")
         path("/comic/..*")
     }
-}
-
-dependencies {
-    implementation(project(":lib:cryptoaes"))
 }
