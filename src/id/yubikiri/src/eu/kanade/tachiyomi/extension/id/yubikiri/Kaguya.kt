@@ -23,11 +23,12 @@ abstract class Kaguya : Madara() {
         .readTimeout(1.minutes)
         .build()
 
-    override val mangaSubString = "all-series"
+    // Fixed: Set to "series" to match https://02.kaguya.pro/series/...
+    override val mangaSubString = "series"
 
     override val mangaDetailsSelectorTitle = "h1.post-title"
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div"
-    override val mangaDetailsSelectorThumbnail = "head meta[property='og:image']" // Same as browse
+    override val mangaDetailsSelectorThumbnail = "head meta[property='og:image']"
 
     override fun imageFromElement(element: Element): String? {
         if (element.hasAttr("data-aesir")) {
@@ -37,7 +38,7 @@ abstract class Kaguya : Madara() {
 
         return super.imageFromElement(element)
             ?.takeIf { it.isNotEmpty() }
-            ?: element.attr("content") // Thumbnail from <head>
+            ?: element.attr("content")
     }
 
     // ============================== Chapters ==============================

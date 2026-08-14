@@ -31,8 +31,9 @@ abstract class MangaLivreOrg : KeiSource() {
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = this
         .add("Accept-Language", "pt-BR,pt;q=0.9,en;q=0.8")
-        // The chapter endpoint answers 404 unless this header is present, with any value.
         .add("Sec-Fetch-Site", "same-origin")
+        // Constant in the site's bundle. The chapter endpoint answers 404 without it.
+        .add("X-ML-Nonce", "7854d8e036b53cddefc539b61aa95e35")
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, "views", period = "ever")
 

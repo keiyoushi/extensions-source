@@ -38,7 +38,7 @@ or fix them directly by submitting a Pull Request.
         - [JSON serialization - `toJsonString` / `toJsonRequestBody`](#json-serialization---tojsonstring--tojsonrequestbody)
         - [JSON models (DTOs) and serialization](#json-models-dtos-and-serialization)
         - [Protobuf parsing and serialization - `parseAsProto` / `toRequestBodyProto`](#protobuf-parsing-and-serialization---parseasproto--torequestbodyproto)
-        - [Date parsing - `Instant.parseOrNull` / `java.time`](#date-parsing---instantparseornull--javatime)
+        - [Date parsing - `tryParse` helpers](#date-parsing---tryparse-helpers)
         - [HTTP requests - `OkHttpClient.get` / `post` / `put` / `head`](#http-requests---okhttpclientget--post--put--head)
         - [WebView execution - `runWebView` / `getLocalStorage`](#webview-execution---runwebview--getlocalstorage)
         - [Filter helpers - `firstInstance` / `firstInstanceOrNull`](#filter-helpers---firstinstance--firstinstanceornull)
@@ -700,62 +700,54 @@ If you only need to work with raw bytes, you can also use `.decodeProto()` and `
 
 Do not create a local `private val proto: ProtoBuf by injectLazy()` unless you specifically need a custom configuration. For standard parsing, the global instance is already available and the `parseAsProto` helpers use it automatically.
 
-##### Date parsing - `Instant.parseOrNull` / `java.time`
+##### Date parsing - `tryParse` helpers
 
-For **ISO-8601** date strings (e.g. `2024-03-05T12:30:00Z`), prefer `kotlin.time.Instant.parseOrNull`:
+Use the date helpers from `keiyoushi.utils` instead of parsing dates manually. They accept nullable
+strings, return epoch milliseconds, and return `0L` when parsing fails.
+
+For a self-describing ISO-8601 instant, such as `2024-01-06T00:00:00Z` or
+the equivalent `2024-01-06T01:00:00+01:00`, use the `kotlin.time` helper:
 
 ```kotlin
+import keiyoushi.utils.tryParse
 import kotlin.time.Instant
 
-chapter.date_upload = Instant.parseOrNull(dateStr)?.toEpochMilliseconds() ?: 0L
+chapter.date_upload = Instant.tryParse(dateStr)
 ```
 
-It returns `null` on a malformed string instead of throwing, and needs no format pattern, locale, or
-timezone handling - `parseOrNull` only accepts strict ISO-8601 (with an explicit `Z` or offset), so
-fall back to `java.time` for anything else (e.g. `dd MMM yyyy`, or a site-local format with no
-offset).
+For a site-specific format, declare a `java.time.format.DateTimeFormatter` at class or file level and
+use the helper that matches the information in the input:
 
-For those non-ISO formats, prefer `java.time` (`DateTimeFormatter` with `LocalDate`/`LocalDateTime`/
-`OffsetDateTime`) over `SimpleDateFormat`, which is discouraged for new code. Wrap the parse in
-`runCatching` so a malformed or unexpected string falls back to `0L` instead of crashing:
+- `tryParseDate` for a date without a time. It resolves to the start of the day in the supplied zone.
+- `tryParseDateTime` for a local date and time whose zone is supplied separately.
+- `tryParseZonedDateTime` when the parsed text contains the offset or zone that should determine the
+  instant.
 
 ```kotlin
-import java.time.LocalDate
-import java.time.ZoneOffset
+import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.tryParseDateTime
+import keiyoushi.utils.tryParseZonedDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-// Declare the formatter at class/file level - creating one is not free:
 private val dateFormat = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH)
+private val dateTimeFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+private val zonedDateTimeFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")
 
-chapter.date_upload = runCatching {
-    LocalDate.parse(dateStr, dateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-}.getOrDefault(0L)
+chapter.date_upload = dateFormat.tryParseDate(dateStr, ZoneId.of("Europe/London"))
+chapter.date_upload = dateTimeFormat.tryParseDateTime(dateStr, ZoneId.of("Asia/Tokyo"))
+chapter.date_upload = zonedDateTimeFormat.tryParseZonedDateTime(dateStr)
 ```
 
-If a site mixes ISO and non-ISO shapes in the same field (rare, but happens), chain the attempts with
-`recoverCatching` instead of hand-rolling detection logic:
+The date and local date-time helpers default to `ZoneId.systemDefault()`. Pass an explicit zone when
+the site's zone is known so results do not depend on the user's device. Use the appropriate `Locale`
+when a pattern contains locale-sensitive text such as month names. Offset and zone pattern letters
+must not be quoted; for example, use `XXX`, not a literal `'Z'`, when calling
+`tryParseZonedDateTime`.
 
-```kotlin
-runCatching { Instant.parse(dateStr).toEpochMilliseconds() }
-    .recoverCatching { LocalDate.parse(dateStr, dateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() }
-    .getOrDefault(0L)
-```
-
-Only reach for `SimpleDateFormat` + `keiyoushi.utils.tryParse` if `java.time` genuinely can't express
-the pattern you need; it is otherwise discouraged in new code.
-
-Two common mistakes to avoid, regardless of which API you use:
-
-- **Always set `Locale.ROOT`** (or `Locale.ENGLISH` for `java.time`, which requires a non-root locale for some symbol sets), unless the pattern contains locale-sensitive text (such as month names), in which case use the appropriate locale.
-- **Set the timezone/offset** if known, either because the site's region is known or because the pattern uses a literal `'Z'`.
-
-  ```kotlin
-  // Wrong: 'Z' is treated as a literal character, no offset is applied
-  DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
-  // Correct, if you must parse this shape by hand at all - prefer Instant.parseOrNull instead:
-  LocalDateTime.parse(dateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")).toInstant(ZoneOffset.UTC)
-  ```
+Do not use `SimpleDateFormat` for new code. Its `keiyoushi.utils.tryParse` overload is deprecated in
+favor of these `kotlin.time` and `java.time` helpers.
 
 ##### HTTP requests - `OkHttpClient.get` / `post` / `put` / `head`
 
