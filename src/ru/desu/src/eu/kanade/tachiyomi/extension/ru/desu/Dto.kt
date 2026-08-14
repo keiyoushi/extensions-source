@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.ru.desu
 
 import kotlinx.serialization.Serializable
-
 @Serializable
 class InfoWrapperDto<T>(
     val manga: T,
@@ -32,6 +31,9 @@ class MangaDetDto(
     val cover: ImgDto,
     val trans_status: String?,
     val status: String?,
+
+    val genres: List<GenreDto>? = null,
+    val authors: List<AuthorDto>? = null,
 ) {
     @Serializable
     class ScoreDto(
@@ -42,6 +44,16 @@ class MangaDetDto(
     @Serializable
     class ImgDto(
         val preview: String?,
+    )
+
+    @Serializable
+    class GenreDto(
+        val name: String,
+    )
+
+    @Serializable
+    class AuthorDto(
+        val name: String,
     )
 }
 

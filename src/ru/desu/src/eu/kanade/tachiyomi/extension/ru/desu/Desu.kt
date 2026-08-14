@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -46,7 +47,10 @@ abstract class Desu :
             .rateLimit(3) { it.host == baseUrlHost }
             .build()
 
-    private fun MangaDetDto.toSManga(genresStr: String? = "", authorsStr: String? = null): SManga {
+    private fun MangaDetDto.toSManga(
+        genresStr: String? = genres?.joinToString { it.name } ?: "",
+        authorsStr: String? = authors?.joinToString { it.name },
+    ): SManga {
         val ratingValue = score?.value ?: 0.0f
         val ratingStar = when {
             ratingValue > 9.5 -> "★★★★★"
@@ -159,10 +163,9 @@ abstract class Desu :
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val page = json.decodeFromString<PageWrapperDto<MangaDetDto>>(response.body.string())
-        val mangas = page.mangas.map {
-            it.toSManga()
-        }
+        val page = response.parseAs<PageWrapperDto<MangaDetDto>>()
+
+        val mangas = page.mangas.map { it.toSManga() }
 
         return MangasPage(mangas, page.pagination.last_page > page.pagination.current_page)
     }
@@ -178,33 +181,21 @@ abstract class Desu :
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + "/manga" + manga.url, headers)
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val responseString = response.body.string()
-        val series = json.decodeFromString<InfoWrapperDto<MangaDetDto>>(responseString)
-        val genresStr = json.decodeFromString<InfoWrapperDto<MangaDetGenresDto>>(responseString).manga.genres?.joinToString { it.name } ?: ""
-        val authorsStr = if (responseString.contains("author_id")) {
-            json.decodeFromString<InfoWrapperDto<MangaDetAuthorsDto>>(responseString).manga.authors?.joinToString { it.name } ?: ""
-        } else {
-            null
-        }
-        return series.manga.toSManga(genresStr, authorsStr)
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<InfoWrapperDto<MangaDetDto>>().manga.toSManga()
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val responseString = response.body.string()
-        val objChapter = json.decodeFromString<SeriesWrapperDto<List<ChaptersDto>>>(responseString).chapters
+        val objChapter = response.parseAs<SeriesWrapperDto<List<ChaptersDto>>>().chapters
 
-        val chaptersList = objChapter.map { chapter ->
+        return objChapter.map { chapter ->
             val fullNumStr = "${chapter.volume}. Глава ${chapter.number}"
             SChapter.create().apply {
                 name = chapter.title?.let { "$fullNumStr $it" } ?: fullNumStr
                 // #apiChapter - JSON API url to automatically delete when chapter is opened in browser
-                url = chapter.view_url + "#apiChapter/${chapter.id}"
+                url = chapter.view_url + "#apiChapter${chapter.id}"
                 chapter_number = chapter.number.toFloatOrNull() ?: -1f
                 date_upload = chapter.publish_date.times(1000L)
             }
         }
-        return chaptersList
     }
 
     override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + API_URL + manga.url + "/chapters", headers)
@@ -213,20 +204,15 @@ abstract class Desu :
         val titleFullId = chapter.url.substringAfter("/manga/").substringBefore("#apiChapter").substringBefore("/vol")
         val titleId = titleFullId.substringAfterLast(".").substringBeforeLast("/")
         val chapterId = chapter.url.substringAfterLast("#apiChapter")
-        return GET(baseUrl + API_URL + titleId + chapterId, headers)
+        return GET("$baseUrl$API_URL$titleId/chapters/$chapterId", headers)
     }
 
     override fun getChapterUrl(chapter: SChapter): String = chapter.url.substringBeforeLast("#apiChapter")
 
     override fun pageListParse(response: Response): List<Page> {
-        val responseString = response.body.string()
+        val result = response.parseAs<ChapterWrapperDto<ChapterDataDto>>()
 
-        val result = json.decodeFromString<ChapterWrapperDto<ChapterDataDto>>(responseString)
-
-        // Теперь компилятор точно знает, что result.chapter — это ChapterDataDto
-        val objPages = result.chapter.pages
-
-        return objPages.mapIndexed { index, page ->
+        return result.chapter.pages.mapIndexed { index, page ->
             Page(index, imageUrl = page.url)
         }
     }
