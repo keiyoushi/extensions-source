@@ -20,28 +20,30 @@ import java.time.ZoneOffset
 
 const val HOSTNAME_PART = "kuromangas.com::v2"
 const val ANTIBOT = "x9_4v2_b"
-const val DEFAULT_ENC_KEY = "5ato8l674shksfE2oMmieshonuYTusF4jKdqEwhUEft9787147sadr32s"
+const val DEFAULT_ENC_KEY = "2i3ato8l674shksfE2oMmieshonuYTusF4jKdqEwhUEft9dsadcxzde3"
+const val VERIFY_COOKIE = "kuro_x"
+const val VERIFY_HEADER = "X-Kuro-Verify"
 
 private val encKeyRegex = Regex("""ENCRYPTION_KEY\s*[:=]\s*["']([^"']+)["']""")
-private val anyAssignRegex = Regex("""[:=]\s*["']([^"']+)["']""")
 
 class KuroMangasDecryptor(val baseUrl: String, val client: OkHttpClient) {
     private var viteApiEncKey: String? = DEFAULT_ENC_KEY
-    private var headerCookie: Pair<String, String?>? = "X-Kuro-Verify" to client.getCookie(baseUrl, "kuro_v")
-    private var hasErrored: Boolean = false
 
     fun vSecureInterceptor() = Interceptor { chain ->
 
-        fun newRequest() = chain.request().newBuilder().apply {
-            headerCookie?.let { (name, value) -> header(name, value ?: "") }
-        }.build()
+        fun newRequest(): Request {
+            val verifyToken = client.getCookie(baseUrl, VERIFY_COOKIE) ?: return chain.request()
+            return chain.request().newBuilder()
+                .header(VERIFY_HEADER, verifyToken)
+                .build()
+        }
 
         fun execute(request: Request, retried: Boolean): Response {
             val response = chain.proceed(request)
 
             if (response.code == 401 || response.code == 403) {
                 response.close()
-                if (retried) throw IOException("Credentials expired, open webivew and retry")
+                if (retried) throw IOException("Credentials expired, open webview and retry")
                 reloadCredentials()
                 return execute(newRequest(), true)
             }
@@ -72,29 +74,11 @@ class KuroMangasDecryptor(val baseUrl: String, val client: OkHttpClient) {
         val indexJsUrl = client.newCall(GET(baseUrl)).execute()
             .asJsoup()
             .selectFirst("script[src*=index]")
-            ?.absUrl("src")
+            ?.absUrl("src") ?: return
 
-        if (indexJsUrl != null) {
-            val js = client.newCall(GET(indexJsUrl)).execute().body.string()
+        val js = client.newCall(GET(indexJsUrl)).execute().body.string()
 
-            viteApiEncKey = encKeyRegex.find(js)?.groupValues?.get(1)
-
-            for (cookie in client.getCookies(baseUrl)) {
-                val key = getHeaderKey(js, cookie.name) ?: continue
-                headerCookie = key to cookie.value
-                return
-            }
-        }
-    }
-
-    private fun getHeaderKey(js: String, cookieName: String): String? {
-        val match = Regex("""\b\w+\s*[:=]\s*["']$cookieName["']""")
-            .find(js) ?: return null
-
-        return anyAssignRegex
-            .find(js, match.range.last + 1)
-            ?.groupValues
-            ?.get(1)
+        encKeyRegex.find(js)?.groupValues?.get(1)?.let { viteApiEncKey = it }
     }
 
     // index-*.js: Ik2() + Hk2()
