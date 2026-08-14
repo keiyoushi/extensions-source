@@ -19,7 +19,7 @@ import okhttp3.Response
 @Source
 abstract class KomikCast : HttpSource() {
 
-    private val apiUrl = "https://be.komikcast.cc"
+    private val apiUrl = "https://api.voratoon.com"
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
