@@ -156,6 +156,7 @@ class ComicNode(
                 scoreVal?.takeIf { it > 0 }?.let { add("**Score**: %.1f".format(it)) }
                 follows?.takeIf { it > 0 }?.let { add("**Follows**: $it") }
                 reviews?.takeIf { it > 0 }?.let { add("**Reviews**: $it") }
+                commentsTotal?.takeIf { it > 0 }?.let { add("**Comments**: $it") }
                 chapsNormal?.takeIf { it > 0 }?.let { add("**Chapters**: $it") }
             }
 
