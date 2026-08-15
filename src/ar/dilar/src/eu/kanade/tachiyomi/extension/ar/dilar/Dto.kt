@@ -124,6 +124,11 @@ class PageDto(
 )
 
 @Serializable
+class UnlockDto(
+    val token: String,
+)
+
+@Serializable
 class EncryptedResponseDto(
     val v: Int,
     val epk: String,
