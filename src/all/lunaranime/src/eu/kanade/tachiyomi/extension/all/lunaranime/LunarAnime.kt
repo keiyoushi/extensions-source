@@ -40,7 +40,7 @@ abstract class LunarAnime : HttpSource() {
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()
-            if (url.contains("storage.lunaranime.ru")) {
+            if (url.contains("storage.lunarx.to")) {
                 val newRequest = request.newBuilder()
                     .header("Referer", "$baseUrl/")
                     .build()
@@ -258,7 +258,7 @@ abstract class LunarAnime : HttpSource() {
     }
 
     companion object {
-        private const val API_URL = "https://api.lunaranime.ru"
-        private const val CDN_URL = "https://storage.lunaranime.ru"
+        private const val API_URL = "https://api.lunarx.to"
+        private const val CDN_URL = "https://storage.lunarx.to"
     }
 }

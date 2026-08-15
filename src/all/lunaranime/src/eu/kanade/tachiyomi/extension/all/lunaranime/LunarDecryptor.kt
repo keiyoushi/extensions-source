@@ -27,8 +27,6 @@ class LunarDecryptor(
 
         val token = generateToken(rctx0, rctx1, slug, chapterNum)
 
-        // val response = client.newCall(GET("$apiUrl/api/user/server-region?v=$token")).execute().close()
-
         val sessionDataB64 = fetchSessionData(token, lang)
 
         val finalJson = decryptSessionImages(sessionDataB64, rctx0)
@@ -43,27 +41,117 @@ class LunarDecryptor(
         return res.data?.sessionData ?: error("session_data is empty")
     }
 
-    private val nextFPushRegex = Regex("""self\.__next_f\.push\(\[1,"(.*?)"\]\)""", RegexOption.DOT_MATCHES_ALL)
+    private val nextFPushRegex = Regex("""self\.__next_f\.push\(\[\s*\d+\s*,\s*(["'])(.*?)\1\s*\]\)""", RegexOption.DOT_MATCHES_ALL)
     private val dictRegex = Regex("""\{[^{}]*\}""")
-    fun Response.extractSeeds(): List<Map<String, String>> {
-        val doc = asJsoup()
-        val seedObjects = mutableListOf<Map<String, String>>()
-        val scripts = doc.select("script:not([src])")
-        for (script in scripts) {
-            val scriptData = script.data()
-            for (match in nextFPushRegex.findAll(scriptData)) {
-                val segment = match.groupValues[1]
-                val decoded = segment.replace("\\\\", "\\").replace("\\\"", "\"")
-                for (dictStr in dictRegex.findAll(decoded)) {
-                    try {
-                        val map = dictStr.value.parseAs<Map<String, String>>()
-                        if (map.keys.any { it.length == 2 }) {
-                            seedObjects.add(map)
+
+    private fun unescapeJsString(s: String): String {
+        val sb = StringBuilder(s.length)
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            if (c == '\\' && i + 1 < s.length) {
+                when (val next = s[i + 1]) {
+                    '"' -> {
+                        sb.append('"')
+                        i += 2
+                    }
+                    '\'' -> {
+                        sb.append('\'')
+                        i += 2
+                    }
+                    '\\' -> {
+                        sb.append('\\')
+                        i += 2
+                    }
+                    '/' -> {
+                        sb.append('/')
+                        i += 2
+                    }
+                    'n' -> {
+                        sb.append('\n')
+                        i += 2
+                    }
+                    'r' -> {
+                        sb.append('\r')
+                        i += 2
+                    }
+                    't' -> {
+                        sb.append('\t')
+                        i += 2
+                    }
+                    'b' -> {
+                        sb.append('\b')
+                        i += 2
+                    }
+                    'f' -> {
+                        sb.append('\u000C')
+                        i += 2
+                    }
+                    'u' -> {
+                        if (i + 5 < s.length) {
+                            val hex = s.substring(i + 2, i + 6)
+                            val code = hex.toIntOrNull(16)
+                            if (code != null) {
+                                sb.append(code.toChar())
+                                i += 6
+                                continue
+                            }
                         }
-                    } catch (_: Exception) { }
+                        sb.append(c)
+                        i++
+                    }
+                    else -> {
+                        sb.append(next)
+                        i += 2
+                    }
                 }
+            } else {
+                sb.append(c)
+                i++
             }
         }
+        return sb.toString()
+    }
+
+    private fun isSeedMap(map: Map<String, String>): Boolean {
+        val twoCharEntry = map.entries.firstOrNull { it.key.length == 2 } ?: return false
+        val reversedVal = twoCharEntry.value.reversed()
+        return try {
+            val decoded = String(Base64.decode(reversedVal.padEnd((reversedVal.length + 3) / 4 * 4, '='), Base64.DEFAULT))
+            decoded.contains('.')
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    fun Response.extractSeeds(): List<Map<String, String>> {
+        val doc = asJsoup()
+        val html = doc.outerHtml()
+        val seedObjects = mutableListOf<Map<String, String>>()
+
+        fun processDict(dictStr: String) {
+            try {
+                val map = dictStr.parseAs<Map<String, String>>()
+                if (map.keys.any { it.length == 2 } && isSeedMap(map) && !seedObjects.contains(map)) {
+                    seedObjects.add(map)
+                }
+            } catch (_: Exception) { }
+        }
+
+        for (match in nextFPushRegex.findAll(html)) {
+            val segment = match.groupValues[2]
+            val decoded = unescapeJsString(segment)
+            for (dictStr in dictRegex.findAll(decoded)) {
+                processDict(dictStr.value)
+            }
+        }
+
+        if (seedObjects.size < 2) {
+            for (dictStr in dictRegex.findAll(html)) {
+                processDict(dictStr.value)
+            }
+        }
+
         return seedObjects
     }
 
