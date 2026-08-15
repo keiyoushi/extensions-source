@@ -49,7 +49,10 @@ abstract class Atsumaru :
             "$baseUrl/api/infinite/trending?page=${page - 1}&types=Manga,Manwha,Manhua,OEL${get18Mode()}",
         ).parseAs<BrowseMangaDto>()
 
-        return MangasPage(data.items.map { it.toSManga(baseUrl) }, true)
+        return MangasPage(
+            data.items.filter { it.medium != "Novel" }.map { it.toSManga(baseUrl) },
+            true,
+        )
     }
 
     // =============================== Latest ===============================
@@ -59,7 +62,10 @@ abstract class Atsumaru :
             "$baseUrl/api/infinite/recentlyUpdated?page=${page - 1}&types=Manga,Manwha,Manhua,OEL${get18Mode()}",
         ).parseAs<BrowseMangaDto>()
 
-        return MangasPage(data.items.map { it.toSManga(baseUrl) }, true)
+        return MangasPage(
+            data.items.filter { it.medium != "Novel" }.map { it.toSManga(baseUrl) },
+            true,
+        )
     }
 
     // =============================== Search ===============================
@@ -196,6 +202,7 @@ abstract class Atsumaru :
             }
 
             filterBy.add("(mbContentRating:=[`Safe`,`Suggestive`,`Erotica`] || mbContentRating:!=*)")
+            filterBy.add("medium:!=[`Novel`]")
             filterBy.add("views:>0")
 
             addQueryParameter("filter_by", filterBy.joinToString(" && "))
@@ -221,7 +228,10 @@ abstract class Atsumaru :
             MangasPage(data.hits.map { it.document.toSManga(baseUrl) }, data.hasNextPage())
         } else {
             val data = body.parseAs<BrowseMangaDto>()
-            MangasPage(data.items.map { it.toSManga(baseUrl) }, true)
+            MangasPage(
+                data.items.filter { it.medium != "Novel" }.map { it.toSManga(baseUrl) },
+                true,
+            )
         }
     }
 
