@@ -318,17 +318,20 @@ abstract class Manhuarm :
             return pages
         }
 
-        return dialog.mapIndexed { index, dto ->
+        val result = mutableListOf<Page>()
+        dialog.forEach { dto ->
             val page = pages.first { it.imageUrl?.contains(dto.imageUrl, true)!! }
-            val fragment = json.encodeToString<List<Dialog>>(
-                dto.dialogues.filter { it.getTextBy(language).isNotBlank() },
-            )
-            if (dto.dialogues.isEmpty()) {
-                return@mapIndexed page
+            val dialogues = dto.dialogues.filter { it.getTextBy(language).isNotBlank() }
+
+            if (dialogues.isEmpty()) {
+                result += Page(result.size, imageUrl = page.imageUrl)
+                return@forEach
             }
 
-            Page(index, imageUrl = "${page.imageUrl}${fragment.toFragment()}")
+            val fragment = json.encodeToString<List<Dialog>>(dialogues).toFragment()
+            result += Page(result.size, imageUrl = "${page.imageUrl}$fragment")
         }
+        return result
     }
 
     override fun imageRequest(page: Page): Request {
