@@ -83,7 +83,7 @@ abstract class Jinmantiantang :
 
     private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         val children = element.children()
-        if (children.isNotEmpty() && children[0].tagName() == "a") children.removeFirst()
+        if (children.isNotEmpty() && children[0].tagName() == "a") children.removeAt(0)
         if (children.size >= 4) {
             title = children[1].text()
             children[0].selectFirst("a")?.attr("href")?.let { setUrlWithoutDomain(it) }

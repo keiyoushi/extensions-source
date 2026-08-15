@@ -71,7 +71,12 @@ class SpeechBubblePainterInterceptor : Interceptor {
         val format = when (ext) {
             "png" -> Bitmap.CompressFormat.PNG
             "jpeg", "jpg" -> Bitmap.CompressFormat.JPEG
-            else -> Bitmap.CompressFormat.WEBP_LOSSY
+            else -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Bitmap.CompressFormat.WEBP_LOSSY
+            } else {
+                @Suppress("DEPRECATION")
+                Bitmap.CompressFormat.WEBP
+            }
         }
 
         val output = ByteArrayOutputStream().use { stream ->

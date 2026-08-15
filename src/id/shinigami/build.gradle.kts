@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Shinigami"
-    versionCode = 80
+    versionCode = 81
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
     source {
         lang = "id"
-        baseUrl = "https://g.shinigami.asia"
+        baseUrl = "https://11.shinigami.asia"
         id = 3411809758861089969L
     }
 }

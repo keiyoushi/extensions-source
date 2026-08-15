@@ -11,11 +11,13 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.JSON_MEDIA_TYPE
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import okhttp3.Headers
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.ByteArrayOutputStream
 import java.math.BigInteger
 import java.security.AlgorithmParameters
@@ -101,10 +103,11 @@ abstract class Dilar : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader/${chapter.url.substringBeforeLast("#")}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$baseUrl/api/chapters/${chapter.url.substringAfterLast("#")}")
-        val encrypted = response.parseAs<EncryptedResponseDto>()
-
-        require(encrypted.v == 1) { "Unsupported encryption protocol version: ${encrypted.v}" }
+        val chapterUrl = "$baseUrl/api/chapters/${chapter.url.substringAfterLast("#")}"
+        val body = "{}".toRequestBody(JSON_MEDIA_TYPE)
+        val unlock = client.post("$chapterUrl/unlock/free", body).parseAs<UnlockDto>()
+        val chapterHeaders = headers.newBuilder().set("X-Unlock-Free-Chapter", unlock.token).build()
+        val encrypted = client.get(chapterUrl, chapterHeaders).parseAs<EncryptedResponseDto>()
 
         val data = decrypt(encrypted).parseAs<PageListDto>()
         return data.pages.sortedBy { it.order }
@@ -133,10 +136,16 @@ abstract class Dilar : KeiSource() {
             doPhase(serverPubKey, true)
         }.generateSecret()
 
+        val salt = when (data.v) {
+            1 -> clientPubRaw + serverPubRaw
+            2 -> serverPubRaw + clientPubRaw
+            else -> error("Unsupported encryption protocol version: ${data.v}")
+        }
+
         val key = hkdfSha256(
             ikm = sharedSecret,
-            salt = clientPubRaw + serverPubRaw,
-            info = "dilar.response.ecies.v1|${data.e}".toByteArray(),
+            salt = salt,
+            info = "dilar.response.ecies.v${data.v}|${data.e}".toByteArray(),
             length = 32,
         )
 

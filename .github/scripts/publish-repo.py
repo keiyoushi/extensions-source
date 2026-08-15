@@ -128,9 +128,16 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
 
 new_extensions.sort(key=lambda item: item[0].packageName)
 
-total_extensions = len(new_extensions)
-release_count = math.ceil(total_extensions / ASSET_LIMIT) if total_extensions else 0
-ext_per_release = math.ceil(total_extensions / release_count) if release_count else 0
+changed_extensions = [item for item in new_extensions if item[3]]
+total_changed_extensions = len(changed_extensions)
+release_count = (
+    math.ceil(total_changed_extensions / ASSET_LIMIT)
+    if total_changed_extensions
+    else 0
+)
+ext_per_release = (
+    math.ceil(total_changed_extensions / release_count) if release_count else 0
+)
 
 
 def get_release_tag(batch_index: int) -> str:
@@ -139,11 +146,13 @@ def get_release_tag(batch_index: int) -> str:
     )
 
 
-for i, (ext, apk, jar, changed) in enumerate(new_extensions):
+changed_index = 0
+for ext, apk, jar, changed in new_extensions:
     if changed:
-        tag = get_release_tag(i // ext_per_release)
+        tag = get_release_tag(changed_index // ext_per_release)
         ext.resources.apkUrl = f"{RELEASE_BASE_URL}/{tag}/{apk.name}"
         ext.resources.jarUrl = f"{RELEASE_BASE_URL}/{tag}/{jar.name}"
+        changed_index += 1
     else:
         old_resources = remote_extensions[ext.packageName].resources
         ext.resources.apkUrl = old_resources.apkUrl
@@ -197,7 +206,7 @@ with REPO_DIR.joinpath("index.html").open("w", encoding="utf-8") as f:
     f.write("</pre>\n</body>\n</html>\n")
 
 # --- Upload assets as release ---
-if not new_extensions:
+if not changed_extensions:
     sys.exit(0)
 
 
@@ -284,17 +293,10 @@ def upload_assets(tag: str, files: list[Path]):
     publish_release(tag)
 
 
-for i in range(0, total_extensions, ext_per_release):
-    batch = new_extensions[i : i + ext_per_release]
+for i in range(0, total_changed_extensions, ext_per_release):
+    batch = changed_extensions[i : i + ext_per_release]
     tag = get_release_tag(i // ext_per_release)
-    files_to_upload = []
-    for ext, apk, jar, changed in batch:
-        if changed:
-            files_to_upload.extend([apk, jar])
-
-    if not files_to_upload:
-        print(f"Nothing changed for {tag}, skipping release")
-        continue
+    files_to_upload = [file for _, apk, jar, _ in batch for file in (apk, jar)]
 
     create_release(tag)
     upload_assets(tag, files_to_upload)
