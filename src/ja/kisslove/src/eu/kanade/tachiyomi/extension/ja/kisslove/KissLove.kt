@@ -154,7 +154,7 @@ abstract class KissLove : KeiSource() {
     override fun getFilterList(data: JsonElement?): FilterList {
         val filterList = ArrayList<Filter<*>>()
 
-        filterList.add(StatusFilter(intl["status"], getStatusList()))
+        filterList.add(StatusFilter(intl["status"], statusList))
 
         val genres = data?.parseAs<List<Genre>>()?.map {
             CheckBoxFilter(it.name)
@@ -182,7 +182,7 @@ abstract class KissLove : KeiSource() {
         return genres.toJsonElement()
     }
 
-    private fun getStatusList() = arrayOf(
+    private val statusList = arrayOf(
         intl["all"] to "",
         intl["ongoing"] to "Ongoing",
         intl["completed"] to "Completed",

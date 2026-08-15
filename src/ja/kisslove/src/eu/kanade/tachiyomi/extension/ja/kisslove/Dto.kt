@@ -9,7 +9,7 @@ import org.jsoup.Jsoup
 import kotlin.time.Instant
 
 @Serializable
-data class PagedManga(
+class PagedManga(
     val currentPage: Long,
     val items: List<Manga>,
     val totalItems: Long,
@@ -17,7 +17,7 @@ data class PagedManga(
 )
 
 @Serializable
-data class Manga(
+class Manga(
     val artists: String?,
     val authors: String,
     val chapters: List<Chapter> = emptyList(),
@@ -55,7 +55,7 @@ data class Manga(
 }
 
 @Serializable
-data class ListPagedManga(
+class ListPagedManga(
     val currentPage: Long,
     val items: List<MangaEntry>,
     val totalItems: Long,
@@ -63,7 +63,7 @@ data class ListPagedManga(
 )
 
 @Serializable
-data class MangaEntry(
+class MangaEntry(
     val artists: String?,
     val authors: String,
     val cover: String,
@@ -90,7 +90,7 @@ data class MangaEntry(
 }
 
 @Serializable
-data class Chapter(
+class Chapter(
     val chapter: Double,
     val content: String = "",
     val hidden: Int?,
@@ -110,6 +110,6 @@ data class Chapter(
 }
 
 @Serializable
-data class Genre(
+class Genre(
     val name: String,
 )
