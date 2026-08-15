@@ -33,10 +33,14 @@ abstract class EvaScans : MangaThemesia() {
     // Fix page reading - site uses custom reader with camelCase ID
     override val pageSelector = "div#readerArea img"
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst(".series-title-main, h1.entry-title")?.text().orEmpty()
-        thumbnail_url = document.selectFirst(".series-poster-premium img, .poster-box img")?.imgAttr()
+    override val seriesDetailsSelector = ".series-premium-header"
+    override val seriesTitleSelector = ".series-title-main"
+    override val seriesThumbnailSelector = ".series-poster-premium img, .poster-box img"
+    override val seriesGenreSelector = ".series-genres-wrap .gen-tag"
+    override val seriesTypeSelector = ".stat-v-box:has(.stat-v-label:containsOwn(Type)) .stat-v-value"
+    override val seriesStatusSelector = ".stat-v-box:has(.stat-v-label:containsOwn(Status)) .stat-v-value"
 
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
         val stats = document.select(".stat-v-box").associate { box ->
             box.selectFirst(".stat-v-label")?.text().orEmpty() to
                 box.selectFirst(".stat-v-value")?.text()?.trim().orEmpty()
@@ -67,12 +71,5 @@ abstract class EvaScans : MangaThemesia() {
                 add("Alternative Names:\n" + altNames.joinToString("\n") { "- $it" })
             }
         }.joinToString("\n\n")
-
-        genre = buildList {
-            stats["Type"]?.takeIf { it.isNotBlank() }?.let { add(it) }
-            addAll(document.select(".series-genres-wrap .gen-tag").map { it.text() })
-        }.joinToString()
-
-        status = stats["Status"]?.parseStatus() ?: SManga.UNKNOWN
     }
 }
