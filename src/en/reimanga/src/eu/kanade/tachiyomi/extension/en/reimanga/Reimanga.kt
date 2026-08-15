@@ -21,6 +21,7 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonString
+import keiyoushi.utils.tryParse
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
@@ -175,9 +176,9 @@ abstract class Reimanga :
             SChapter.create().apply {
                 url = "${data.manga.slug}-${data.manga.id}/${chapter.id}"
                 name = chapter.name.replace(spaceRegex, " ").trim()
-                date_upload = Instant.parseOrNull(
-                    chapter.uploadDate ?: chapter.updatedAt ?: chapter.createdAt ?: "",
-                )?.toEpochMilliseconds() ?: 0L
+                date_upload = Instant.tryParse(
+                    chapter.uploadDate ?: chapter.updatedAt ?: chapter.createdAt,
+                )
             }
         }
     }
