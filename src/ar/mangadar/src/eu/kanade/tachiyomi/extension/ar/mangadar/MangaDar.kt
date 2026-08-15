@@ -16,6 +16,7 @@ import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -236,9 +237,9 @@ abstract class MangaDar : KeiSource() {
             val row = element as? JsonArray ?: return@mapNotNull null
             if (row.size < 4) return@mapNotNull null
 
-            val chapterNumber = (row[1] as? JsonPrimitive)?.content ?: ""
-            val chapterUrl = (row[2] as? JsonPrimitive)?.content ?: ""
-            val timestamp = (row[3] as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L
+            val chapterNumber = (row[1] as? JsonPrimitive)?.contentOrNull.orEmpty()
+            val chapterUrl = (row[2] as? JsonPrimitive)?.contentOrNull.orEmpty()
+            val timestamp = (row[3] as? JsonPrimitive)?.contentOrNull?.toLongOrNull() ?: 0L
 
             if (chapterUrl.isBlank()) return@mapNotNull null
 
