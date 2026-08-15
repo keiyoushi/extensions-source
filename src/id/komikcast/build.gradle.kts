@@ -5,7 +5,7 @@ plugins {
 }
 
 keiyoushi {
-    name = "Komik Cast"
+    name = "Voratoon"
     versionCode = 83
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"

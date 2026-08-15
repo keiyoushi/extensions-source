@@ -17,7 +17,7 @@ import okhttp3.Request
 import okhttp3.Response
 
 @Source
-abstract class KomikCast : HttpSource() {
+abstract class Voratoon : HttpSource() {
 
     private val apiUrl = "https://api.voratoon.com/"
     override val supportsLatest = true
