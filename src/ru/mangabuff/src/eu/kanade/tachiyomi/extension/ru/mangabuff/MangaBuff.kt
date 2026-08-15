@@ -212,7 +212,7 @@ abstract class MangaBuff :
 
     // =========================== Deeplink ============================
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "manga") {
+        if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "manga" && url.pathSegments[1].length > 1) {
             val tmpManga = SManga.create().apply {
                 this.url = "/${url.pathSegments[0]}/${url.pathSegments[1]}"
             }
