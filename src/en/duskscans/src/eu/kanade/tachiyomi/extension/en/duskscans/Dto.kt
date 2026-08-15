@@ -36,7 +36,12 @@ class ChapterDto(
     private val number: Float,
     private val title: String = "",
     private val releaseDate: String? = null,
+    private val price: Int = 0,
+    private val requiresLogin: Boolean = false,
 ) {
+    val isLocked: Boolean
+        get() = requiresLogin || price > 0
+
     fun toSChapter(slug: String): SChapter = SChapter.create().apply {
         url = id
         // URL is built from the slug and number, id alone can't provide
@@ -45,7 +50,8 @@ class ChapterDto(
             put("slug", slug)
             put("number", numberStr)
         }
-        name = title.ifBlank { "Chapter $numberStr" }
+        val chapterName = title.ifBlank { "Chapter $numberStr" }
+        name = if (isLocked) "🔒 $chapterName" else chapterName
         chapter_number = number
         date_upload = Instant.tryParse(releaseDate)
     }

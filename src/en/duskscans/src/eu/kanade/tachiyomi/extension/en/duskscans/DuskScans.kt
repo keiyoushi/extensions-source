@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.duskscans
 
+import androidx.preference.CheckBoxPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,6 +15,7 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.getString
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -21,7 +25,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 
 @Source
-abstract class DuskScans : KeiSource() {
+abstract class DuskScans :
+    KeiSource(),
+    ConfigurableSource {
+
+    private val preferences by getPreferencesLazy()
 
     private val apiUrl get() = "$baseUrl/api"
 
@@ -96,9 +104,12 @@ abstract class DuskScans : KeiSource() {
         val series = getSeriesPage(manga.url)
             ?: throw Exception("Series not found")
 
+        val showPremium = preferences.getBoolean(PREF_SHOW_PREMIUM, PREF_SHOW_PREMIUM_DEFAULT)
         return SMangaUpdate(
             series.manga.toSManga(),
-            series.chapters.map { it.toSChapter(manga.url) },
+            series.chapters
+                .filter { showPremium || !it.isLocked }
+                .map { it.toSChapter(manga.url) },
         )
     }
 
@@ -148,5 +159,21 @@ abstract class DuskScans : KeiSource() {
                 filterData?.genres?.takeIf { it.isNotEmpty() }?.let { add(GenreFilter(it)) }
             },
         )
+    }
+
+    // ============================ Preferences ============================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        CheckBoxPreference(screen.context).apply {
+            key = PREF_SHOW_PREMIUM
+            title = "Show premium chapters"
+            summary = "Include chapters that require payment or login to read"
+            setDefaultValue(PREF_SHOW_PREMIUM_DEFAULT)
+        }.also(screen::addPreference)
+    }
+
+    companion object {
+        private const val PREF_SHOW_PREMIUM = "pref_show_premium"
+        private const val PREF_SHOW_PREMIUM_DEFAULT = false
     }
 }
