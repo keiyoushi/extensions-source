@@ -156,8 +156,20 @@ abstract class Dilar : KeiSource() {
 
             4 -> {
                 sha256(clientPubRaw + serverPubRaw + iv) to
-                    "dilar.response.ecies.v4|${data.e}|${Base64.encodeToString(iv, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)}"
+                    "dilar.response.ecies.v4|${data.e}|${data.iv}"
                         .toByteArray()
+            }
+
+            5 -> {
+                hmacSha256(
+                    key = iv,
+                    data = serverPubRaw + clientPubRaw,
+                ) to "dilar.response.ecies.v5|${data.e}".toByteArray()
+            }
+
+            6 -> {
+                sha256(sha256(clientPubRaw) + sha256(serverPubRaw) + iv) to
+                    "dilar.response.ecies.v6|${data.e}|${data.iv}".toByteArray()
             }
 
             else -> error("Unsupported encryption protocol version: ${data.v}")
