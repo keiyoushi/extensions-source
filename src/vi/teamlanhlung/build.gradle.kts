@@ -6,15 +6,19 @@ plugins {
 
 keiyoushi {
     name = "Team Lanh Lung"
-    versionCode = 34
+    versionCode = 36
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         name = "Team Lạnh Lùng"
         lang = "vi"
         baseUrl {
-            custom("https://lanhhome.casa")
+            custom("https://lanhlungteam2.top")
         }
+    }
+
+    deeplink {
+        path("/.*")
     }
 }

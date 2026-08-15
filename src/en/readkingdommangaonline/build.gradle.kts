@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Read Kingdom Manga Online"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangacatalog"
 
     source {
         lang = "en"
-        baseUrl = "https://ww5.readkingdom.com"
+        baseUrl = "https://ww6.readkingdom.com"
     }
 }

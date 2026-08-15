@@ -1,96 +1,223 @@
 package eu.kanade.tachiyomi.extension.ar.dilar
 
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
+import android.util.Base64
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.JSON_MEDIA_TYPE
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
-import okhttp3.Request
-import okhttp3.Response
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import okhttp3.Headers
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.ByteArrayOutputStream
+import java.math.BigInteger
+import java.security.AlgorithmParameters
+import java.security.KeyFactory
+import java.security.KeyPair
+import java.security.KeyPairGenerator
+import java.security.interfaces.ECPublicKey
+import java.security.spec.ECGenParameterSpec
+import java.security.spec.ECParameterSpec
+import java.security.spec.ECPoint
+import java.security.spec.ECPublicKeySpec
+import javax.crypto.Cipher
+import javax.crypto.KeyAgreement
+import javax.crypto.Mac
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 @Source
-abstract class Dilar : HttpSource() {
+abstract class Dilar : KeiSource() {
     override val supportsLatest = false
+
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
+        add("X-DH-Pub", clientPubB64)
+    }
 
     // Popular
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/series?page=$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val response = client.get("$baseUrl/api/series?page=$page")
         val data = response.parseAs<SeriesListDto>()
-        val mangas = data.series
+        val entries = data.series
             .filterNot { it.isNovel() }
-            .map { it.toSManga(::createThumbnail) }
-        return MangasPage(mangas, data.hasNextPage)
+            .map { it.toSManga() }
+        return MangasPage(entries, data.hasNextPage)
     }
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val body = SearchRequestDto(query, page).toJsonRequestBody()
-        return POST("$baseUrl/api/search/filter", headers, body)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
+        val response = client.post("$baseUrl/api/search/filter", body)
         val data = response.parseAs<SearchListDto>()
-        val mangas = data.rows.filterNot { it.isNovel() }
-            .map { it.toSManga(::createThumbnail) }
+        val entries = data.rows.filterNot { it.isNovel() }
+            .map { it.toSManga() }
 
-        return MangasPage(mangas, data.hasNextPage)
+        return MangasPage(entries, data.hasNextPage)
     }
 
-    // Details
+    // Details & Chapters
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("$baseUrl/api/series/${manga.getMangaId()}", headers)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val mangaDeferred = async {
+            if (!fetchDetails) return@async manga
+            client.get("$baseUrl/api/series/${manga.getMangaId()}")
+                .parseAs<SeriesDto>()
+                .toSManga()
+        }
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<SeriesDto>().toSManga(::createThumbnail)
+        val chaptersDeferred = async {
+            if (!fetchChapters) return@async chapters
+            val response = client.get("$baseUrl/api/series/${manga.getMangaId()}/chapters")
+            response.parseAs<ChapterListDto>().chapters.flatMap { chapter ->
+                chapter.releases.map { it.toSChapter(chapter, manga.url) }
+            }
+        }
 
-    // Chapters
-
-    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/series/${manga.getMangaId()}/chapters#${manga.url}", headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<ChapterListDto>().chapters.flatMap { chapter ->
-        val mangaUrl = response.request.url.fragment!!
-        chapter.releases.map { it.toSChapter(chapter, mangaUrl) }
+        SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
     }
 
     // Pages
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader/${chapter.url.substringBeforeLast("#")}"
 
-    override fun pageListRequest(chapter: SChapter) = GET("$baseUrl/api/chapters/${chapter.url.substringAfterLast("#")}", headers)
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterUrl = "$baseUrl/api/chapters/${chapter.url.substringAfterLast("#")}"
+        val body = "{}".toRequestBody(JSON_MEDIA_TYPE)
+        val unlock = client.post("$chapterUrl/unlock/free", body).parseAs<UnlockDto>()
+        val chapterHeaders = headers.newBuilder().set("X-Unlock-Free-Chapter", unlock.token).build()
+        val encrypted = client.get(chapterUrl, chapterHeaders).parseAs<EncryptedResponseDto>()
 
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<PageListDto>()
+        val data = decrypt(encrypted).parseAs<PageListDto>()
         return data.pages.sortedBy { it.order }
             .mapIndexed { index, page ->
                 Page(index, imageUrl = "$baseUrl/uploads/releases/${data.storageKey}/hq/${page.url}")
             }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    // ECIES decrypt
+
+    private val ecKeyPair: KeyPair = KeyPairGenerator.getInstance("EC").apply {
+        initialize(ECGenParameterSpec(CURVE_NAME))
+    }.generateKeyPair()
+
+    private val clientPubRaw: ByteArray = pointToRaw(ecKeyPair.public as ECPublicKey)
+
+    private val clientPubB64: String =
+        Base64.encodeToString(clientPubRaw, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+
+    private fun decrypt(data: EncryptedResponseDto): String {
+        val serverPubRaw = Base64.decode(data.epk, Base64.URL_SAFE)
+        val serverPubKey = rawToPoint(serverPubRaw)
+
+        val sharedSecret = KeyAgreement.getInstance("ECDH").apply {
+            init(ecKeyPair.private)
+            doPhase(serverPubKey, true)
+        }.generateSecret()
+
+        val salt = when (data.v) {
+            1 -> clientPubRaw + serverPubRaw
+            2 -> serverPubRaw + clientPubRaw
+            else -> error("Unsupported encryption protocol version: ${data.v}")
+        }
+
+        val key = hkdfSha256(
+            ikm = sharedSecret,
+            salt = salt,
+            info = "dilar.response.ecies.v${data.v}|${data.e}".toByteArray(),
+            length = 32,
+        )
+
+        val iv = Base64.decode(data.iv, Base64.URL_SAFE)
+        val ct = Base64.decode(data.ct, Base64.URL_SAFE)
+        val tag = Base64.decode(data.tag, Base64.URL_SAFE)
+
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
+            init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
+        }
+
+        return cipher.doFinal(ct + tag).toString(Charsets.UTF_8)
+    }
+
+    private fun pointToRaw(publicKey: ECPublicKey): ByteArray {
+        val x = publicKey.w.affineX.toFixedBytes(32)
+        val y = publicKey.w.affineY.toFixedBytes(32)
+        return byteArrayOf(0x04) + x + y
+    }
+
+    private fun rawToPoint(raw: ByteArray): ECPublicKey {
+        require(raw.size == 65 && raw[0] == 0x04.toByte()) { "Invalid P-256 raw public key" }
+        val x = BigInteger(1, raw.copyOfRange(1, 33))
+        val y = BigInteger(1, raw.copyOfRange(33, 65))
+
+        val curveParams = AlgorithmParameters.getInstance("EC").apply {
+            init(ECGenParameterSpec(CURVE_NAME))
+        }.getParameterSpec(ECParameterSpec::class.java)
+
+        val spec = ECPublicKeySpec(ECPoint(x, y), curveParams)
+        return KeyFactory.getInstance("EC").generatePublic(spec) as ECPublicKey
+    }
+
+    private fun BigInteger.toFixedBytes(length: Int): ByteArray {
+        val raw = toByteArray()
+        return when {
+            raw.size == length -> raw
+            raw.size > length -> raw.copyOfRange(raw.size - length, raw.size) // drop sign byte
+            else -> ByteArray(length - raw.size) + raw
+        }
+    }
+
+    // HKDF-SHA256
+
+    private fun hmacSha256(key: ByteArray, data: ByteArray): ByteArray = Mac.getInstance("HmacSHA256").apply {
+        init(SecretKeySpec(key, "HmacSHA256"))
+    }.doFinal(data)
+
+    private fun hkdfSha256(ikm: ByteArray, salt: ByteArray, info: ByteArray, length: Int): ByteArray {
+        val prk = hmacSha256(salt, ikm)
+        val okm = ByteArrayOutputStream()
+        var t = ByteArray(0)
+        var counter = 1
+        while (okm.size() < length) {
+            t = hmacSha256(prk, t + info + byteArrayOf(counter.toByte()))
+            okm.write(t)
+            counter++
+        }
+        return okm.toByteArray().copyOf(length)
+    }
 
     // common
 
     private fun SManga.getMangaId(): String = this.url.substringBeforeLast("/")
 
-    private fun createThumbnail(mangaId: String, cover: String): String {
+    fun createThumbnail(mangaId: String, cover: String): String {
         val thumbnail = "large_${cover.substringBeforeLast(".")}.webp"
 
         return "$baseUrl/uploads/manga/cover/$mangaId/$thumbnail"
+    }
+
+    companion object {
+        private const val CURVE_NAME = "secp256r1"
     }
 }

@@ -5,14 +5,15 @@ plugins {
 }
 
 keiyoushi {
-    name = "Manhwalist.org"
-    versionCode = 1
+    name = "IsekaiKomik"
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "mangathemesia"
 
     source {
         lang = "id"
-        baseUrl = "https://isekaikomik.com"
+        baseUrl = "https://ch1.isekaikomik.site"
+        id = 1031213229391436059L
     }
 }

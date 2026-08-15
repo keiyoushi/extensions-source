@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Mangakuri"
-    versionCode = 33
+    versionCode = 34
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
     source {
         lang = "id"
-        baseUrl = "https://lc1.mangakuri.online"
+        baseUrl = "https://lc2.mangakuri.online"
         versionId = 2
     }
 }

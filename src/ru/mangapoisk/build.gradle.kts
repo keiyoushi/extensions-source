@@ -8,10 +8,16 @@ keiyoushi {
     name = "MangaPoisk"
     versionCode = 16
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "ru"
-        baseUrl = "https://mangapsk.ru"
+        baseUrl {
+            custom("https://mangapoisk.me")
+        }
+    }
+
+    deeplink {
+        path("/manga/..*")
     }
 }

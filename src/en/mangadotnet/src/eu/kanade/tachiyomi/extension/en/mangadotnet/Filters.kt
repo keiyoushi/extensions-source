@@ -68,6 +68,20 @@ private val volumeOptions = listOf(
     "No Volumes" to "without",
 )
 
+class ScanlatorFilter :
+    Filter.Select<String>(
+        name = "Scanlator Group",
+        values = scanlatorOptions.map { it.first }.toTypedArray(),
+    ) {
+    val selected get() = scanlatorOptions[state].second
+}
+
+private val scanlatorOptions = listOf(
+    "Any" to "",
+    "Scanlator Group" to "with",
+    "No Scanlator Group" to "without",
+)
+
 class TypeCheckBox(name: String, val value: String) : Filter.CheckBox(name)
 
 class TypeFilter :

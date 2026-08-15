@@ -4,204 +4,203 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.asObservable
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.float
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
 import okhttp3.FormBody
-import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import org.jsoup.Jsoup
-import rx.Observable
-import java.io.IOException
-import java.security.MessageDigest
-import java.text.SimpleDateFormat
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.util.Calendar
 import java.util.Locale
-import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class ComX :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
     private val preferences: SharedPreferences = getPreferences()
 
-    override val supportsLatest = true
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    override val client = network.client.newBuilder()
-        .connectTimeout(10.seconds)
-        .readTimeout(30.seconds)
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val url = request.url.toString()
-
-            val finalRequest = if (url.contains("/reader/")) {
-                val adultValue = url.substringAfter("/reader/").substringBefore("/")
-                val originalCookie = request.header("Cookie") ?: ""
-                val newCookie = if (originalCookie.isNotEmpty()) "$originalCookie; adult=$adultValue" else "adult=$adultValue"
-
-                request.newBuilder()
-                    .header("Cookie", newCookie)
-                    .build()
-            } else {
-                request
-            }
-
-            var response = chain.proceed(finalRequest)
-            if (response.code == 404 && response.request.url.encodedPath == "/_c") {
-                response = solveGuardChallenge(chain, response, finalRequest)
-            }
-
-            val imgPreloadHost = baseUrl.replace(Regex("^https?://"), "img.")
-            if (response.code == 403 &&
-                request.url.toString().contains("/comix/") &&
-                request.url.host != imgPreloadHost
-            ) {
-                val newUrl = request.url.newBuilder()
-                    .host(imgPreloadHost)
-                    .build()
-
-                val newRequest = request.newBuilder().url(newUrl).headers(headers).build()
-                response.close()
-                response = chain.proceed(newRequest)
-            }
-            response
-        }
-        .rateLimit(3)
-        .build()
-
-    // Popular
-    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList())
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        val mangas = document.select("div.short").map { element ->
-            SManga.create().apply {
-                element.selectFirst("img")?.let { img ->
-                    val src = img.attr("data-src").takeIf { it.isNotEmpty() } ?: img.attr("src")
-                    thumbnail_url = if (src.contains("://")) src else baseUrl + src
-                }
-                element.selectFirst(".readed__title a")?.let {
-                    setUrlWithoutDomain(it.attr("abs:href"))
-                    title = it.text().replace(" / ", " | ").substringAfterLast(" | ").trim()
-                }
-            }
-        }
-
-        return MangasPage(mangas, mangas.isNotEmpty())
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(DleGuardResolver.interceptor(baseUrl))
+        rateLimit(3)
     }
 
-    // Latest
-    override fun latestUpdatesRequest(page: Int): Request = GET(if (page == 1) "$baseUrl/" else "$baseUrl/page/$page/", headers)
+    // ============================== Popular ==============================
+    override suspend fun getPopularManga(page: Int): MangasPage = searchCatalog(page, "rating")
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("ul#content-load li.latest").map { element ->
-            SManga.create().apply {
-                thumbnail_url = element.selectFirst("img")?.absUrl("src")?.replace("mini/mini", "mini/mid")
-                element.selectFirst(".latest__title a")?.let {
-                    setUrlWithoutDomain(it.absUrl("href"))
-                    title = it.text().replace(" / ", " | ").substringAfterLast(" | ").trim()
-                }
-            }
-        }
-        val hasNextPage = document.selectFirst("div.pagination__btn-loader a") != null
-        return MangasPage(mangas, hasNextPage)
-    }
+    // ============================== Latest ===============================
+    override suspend fun getLatestUpdates(page: Int): MangasPage = searchCatalog(page, "editdate")
 
-    // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotEmpty()) {
+    // ============================== Search ===============================
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (query.isNotBlank()) {
             val url = baseUrl.toHttpUrl().newBuilder().apply {
                 addPathSegment("search")
                 addPathSegment(query)
                 addPathSegments("page/$page")
+                addPathSegment("")
             }.build()
-            return GET(url, headers)
+            return parseSearchMangas(client.get(url))
         }
 
-        val mutableGenre = mutableListOf<String>()
-        val mutableType = mutableListOf<String>()
-        val mutableAge = mutableListOf<String>()
-        val sectionPub = mutableListOf<String>()
         var orderBy = "rating"
         var ascEnd = "desc"
+        val checkYear = Calendar.getInstance().get(Calendar.YEAR)
+        var yearFrom = 1980
+        var yearTo = checkYear
 
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
-            when (filter) {
-                is OrderBy -> {
-                    orderBy = arrayOf("date", "rating", "news_read", "comm_num", "title")[filter.state!!.index]
-                    ascEnd = if (filter.state!!.ascending) "asc" else "desc"
-                }
-                is AgeList -> filter.state.forEach { age ->
-                    if (age.state) {
-                        mutableAge += age.id
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("ComicList")
+            filters.forEach { filter ->
+                when (filter) {
+                    is OrderBy -> {
+                        orderBy = filter.selected
+                        ascEnd = filter.order
                     }
-                }
-                is GenreList -> filter.state.forEach { genre ->
-                    if (genre.state) {
-                        mutableGenre += genre.id
+                    is GroupFilter -> {
+                        filter.included?.let { addPathSegment("p.cat=${it.joinToString(",")}") }
+                        filter.excluded?.let { addPathSegment("exc_p.cat=${it.joinToString(",")}") }
                     }
-                }
-                is TypeList -> filter.state.forEach { type ->
-                    if (type.state) {
-                        mutableType += type.id
+                    is GenreFilter -> {
+                        filter.included?.let { addPathSegment("g=${it.joinToString(",")}") }
+                        filter.excluded?.let { addPathSegment("exc_g=${it.joinToString(",")}") }
                     }
-                }
-                is PubList -> filter.state.forEach { publisher ->
-                    if (publisher.state) {
-                        sectionPub += publisher.id
+                    is TypeFilter -> {
+                        filter.included?.let { addPathSegment("t=${it.joinToString(",")}") }
+                        filter.excluded?.let { addPathSegment("exc_t=${it.joinToString(",")}") }
                     }
+                    is StatusFilter -> {
+                        filter.included?.let { addPathSegment("st=${it.joinToString(",")}") }
+                        filter.excluded?.let { addPathSegment("exc_st=${it.joinToString(",")}") }
+                    }
+                    is YearRangeFilter -> {
+                        filter.minValue?.let { yearFrom = checkMinRange(it, max = checkYear) }
+                        filter.maxValue?.let { yearTo = checkMaxRange(it, max = checkYear) }
+                    }
+                    else -> {}
                 }
-                else -> {}
             }
-        }
-        val pageParameter = if (page > 1) "page/$page/" else ""
-        return POST(
-            "$baseUrl/ComicList/p.cat=${sectionPub.joinToString(",")}/g=${mutableGenre.joinToString(",")}/t=${mutableType.joinToString(",")}/adult=${mutableAge.joinToString(",")}/$pageParameter",
-            body = FormBody.Builder()
-                .add("dlenewssortby", orderBy)
-                .add("dledirection", ascEnd)
-                .add("set_new_sort", "dle_sort_xfilter")
-                .add("set_direction_sort", "dle_direction_xfilter")
-                .build(),
-            headers = headers,
-        )
+            // Без этих сегментов происходит зацикленное перенаправление на comix-read
+            addPathSegment("y[from]=$yearFrom")
+            addPathSegment("y[to]=$yearTo")
+            if (page > 1) {
+                addPathSegments("page/$page")
+            }
+            addPathSegment("")
+        }.build()
+
+        val body = FormBody.Builder()
+            .add("dlenewssortby", orderBy)
+            .add("dledirection", ascEnd)
+            .add("set_new_sort", "dle_sort_xfilter")
+            .add("set_direction_sort", "dle_direction_xfilter")
+            .build()
+
+        return parseSearchMangas(client.post(url, body))
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    // ============================== Search Utilities ===============================
+    private suspend fun searchCatalog(page: Int, sortBy: String): MangasPage {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("comix-read")
+            if (page > 1) {
+                addPathSegments("page/$page")
+            }
+            addPathSegment("")
+        }.build()
 
-    // Details
-    override fun mangaDetailsParse(response: Response): SManga {
+        val body = FormBody.Builder()
+            .add("dlenewssortby", sortBy)
+            .add("dledirection", "desc")
+            .add("set_new_sort", "dle_sort_cat_1")
+            .add("set_direction_sort", "dle_direction_cat_1")
+            .build()
+
+        return parseSearchMangas(client.post(url, body))
+    }
+
+    fun parseSearchMangas(response: Response): MangasPage {
         val document = response.asJsoup()
-        val infoElement = document.selectFirst("div.page__grid") ?: return SManga.create()
 
-        val ratingValue = (infoElement.selectFirst(".page__activity-votes")?.ownText()?.trim()?.toFloatOrNull() ?: 0f) * 2
-        val ratingVotes = infoElement.selectFirst(".page__activity-votes span > span")?.text()?.trim() ?: "0"
+        val mangas = document.select("#dle-content > .readed").map { element ->
+            SManga.create().apply {
+                with(element.selectFirst(".readed__title > a")!!) {
+                    setUrlWithoutDomain(absUrl("href"))
+                    title = ownText().replace(" / ", " | ").substringAfterLast(" | ").trim()
+                }
+                thumbnail_url = element.selectFirst("img")?.imgAttr()
+            }
+        }
+
+        val hasNextPage = document.selectFirst("div.pagination__pages")
+            ?.children()?.last()?.tagName() == "a"
+
+        return MangasPage(mangas, hasNextPage)
+    }
+    private fun Element.imgAttr(): String = when {
+        hasAttr("data-src") && absUrl("data-src").isNotBlank() && absUrl("data-src").contains("://") -> absUrl("data-src")
+        hasAttr("data-src") && absUrl("data-src").isNotBlank() && !absUrl("data-src").contains("://") -> baseUrl + absUrl("data-src")
+        absUrl("src").contains("://") -> absUrl("src")
+        else -> baseUrl + absUrl("src")
+    }
+
+    // ============================== Manga ===============================
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        url.pathSegments.firstOrNull() ?: return null
+        return parseMangaDetails(client.get(url).asJsoup(), url.encodedPath)
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val doc = client.get("$baseUrl/${manga.url}", ensureSuccess = false).use { response ->
+            if (!response.isSuccessful) {
+                if (response.code == 403) {
+                    throw Exception("Контент не доступен. Возможно может помочь авторизация через WebView")
+                } else {
+                    throw HttpException(response.code)
+                }
+            }
+            response.asJsoup()
+        }
+        return SMangaUpdate(parseMangaDetails(doc, manga.url), parseChapterList(doc))
+    }
+
+    private fun parseMangaDetails(doc: Document, mangaUrl: String): SManga = SManga.create().apply {
+        url = mangaUrl
+        title = doc.selectFirst("header.page__header h1")!!.text()
+        thumbnail_url = doc.selectFirst("div.page__poster img")?.imgAttr()
+
+        val ratingValue = (doc.selectFirst(".page__activity-votes")?.ownText()?.trim()?.toFloatOrNull() ?: 0f) * 2
+        val ratingVotes = doc.selectFirst(".page__activity-votes span > span")?.text()?.trim() ?: "0"
         val ratingStar = when {
             ratingValue > 9.5 -> "★★★★★"
             ratingValue > 8.5 -> "★★★★✬"
@@ -216,272 +215,265 @@ abstract class ComX :
             else -> "☆☆☆☆☆"
         }
 
-        val rawCategory = document.select(".speedbar a").last()?.text()?.trim() ?: ""
-        val category = when (rawCategory.lowercase()) {
-            "manga" -> "Манга"
-            "manhwa" -> "Манхва"
-            "manhua" -> "Маньхуа"
-            else -> "Комикс"
+        description = buildString {
+            doc.selectFirst(".page__title-original")?.text()?.takeIf { it.isNotBlank() }?.let {
+                append(it)
+                appendLine()
+            }
+            if (doc.getPageListItem("Тип выпуска")?.contains("ХРОНОЛОГИЯ") == true) {
+                append("Cобытие в комиксах - ХРОНОЛОГИЯ")
+                appendLine()
+            }
+            append(ratingStar).append(" ").append(ratingValue).append(" (голосов: ").append(ratingVotes).append(")\n")
+            appendLine()
+            append(doc.selectFirst("div.page__text")?.text())
         }
-        val rawAgeStop = if (document.html().contains("ВНИМАНИЕ! 18+")) "18+" else ""
 
-        return SManga.create().apply {
-            title = infoElement.selectFirst(".page__header h1")?.text()?.trim() ?: ""
-            author = infoElement.select("li:contains(Издатель)").text().substringAfter("Издатель:").trim()
-            genre = listOf(category, rawAgeStop).plus(infoElement.select(".page__tags a").map { it.text() })
-                .filter { it.isNotBlank() }
-                .joinToString(", ")
-            status = parseStatus(infoElement.select(".page__list li:contains(Статус)").text())
+        author = doc.getPageListItem("Автор")
+        artist = doc.getPageListItem("Художник")
 
-            description = buildString {
-                infoElement.selectFirst(".page__title-original")?.text()?.takeIf { it.isNotBlank() }?.let {
-                    append(it).append("\n")
+        genre = buildList {
+            add(parseCategory(doc.select(".speedbar a").last()?.text()?.trim() ?: ""))
+            addAll(doc.select("div.page__tags a").eachText())
+        }.joinToString()
+
+        status = parseStatus(doc.getPageListItem("Статус"))
+
+        doc.selectFirst("#rec-similar")?.select("a.poster")?.let { anchor ->
+            memo = buildJsonObject {
+                val similar = anchor.mapNotNull { element ->
+                    val title = element.selectFirst(".poster__title")?.text()?.takeIf { it.isNotBlank() }
+                    val url = element.attr("href").takeIf { it.isNotBlank() }
+                    val thumb = element.selectFirst("img")?.imgAttr()
+                    if (title != null && url != null) RelatedComic(title, url, thumb) else null
                 }
-                if (document.select(".page__list li:contains(Тип выпуска)").text().contains("!!! События в комиксах - ХРОНОЛОГИЯ !!!")) {
-                    append("Cобытие в комиксах - ХРОНОЛОГИЯ\n")
-                }
-                append(ratingStar).append(" ").append(ratingValue).append(" (голосов: ").append(ratingVotes).append(")\n")
 
-                val textHtml = infoElement.selectFirst(".page__text")?.html() ?: ""
-                val text = Jsoup.parseBodyFragment(textHtml).select("body:not(:has(p)), p, br")
-                    .prepend("\\n").text().replace("\\n", "\n").replace("\n ", "\n")
-                append(text)
-            }.trim()
-
-            val img = infoElement.selectFirst(".img-wide img")
-            thumbnail_url = img?.absUrl("data-src")?.takeIf { it.isNotEmpty() } ?: img?.absUrl("src")
+                put("similarComics", similar.toJsonElement())
+            }
         }
     }
 
-    private fun parseStatus(element: String): Int = when {
+    // ============================== Manga Utilities ===============================
+    private fun Document.getPageListItem(label: String): String? = selectFirst(".page__list > li:has(> div:contains($label))")
+        ?.ownText()
+        ?.takeIf { it.isNotBlank() }
+    private fun parseStatus(element: String?): Int = when {
+        element.isNullOrBlank() -> SManga.UNKNOWN
         element.contains("Продолжается") || element.contains(" из ") || element.contains("Онгоинг") -> SManga.ONGOING
+        element.contains("перевод продолжается") -> SManga.PUBLISHING_FINISHED
         element.contains("Заверш") || element.contains("Лимитка") || element.contains("Ван шот") || element.contains("Графический роман") -> SManga.COMPLETED
+        element.contains("Заморожен") || element.contains("Приостановлен") -> SManga.ON_HIATUS
         else -> SManga.UNKNOWN
     }
 
-    private fun solveGuardChallenge(chain: Interceptor.Chain, challenge: Response, original: Request): Response {
-        val token = TOKEN_REGEX.find(challenge.peekBody(4096).string())?.groupValues?.get(1)
-            ?: throw IOException("Antibot challenge failed: token not found")
-        challenge.close()
-
-        var nonce = 0L
-        val md = MessageDigest.getInstance("SHA-256")
-        val start = System.currentTimeMillis()
-        val powHash = run {
-            while (true) {
-                val hash = md.digest("$token:$nonce".toByteArray()).joinToString("") { "%02x".format(it) }
-                if (hash.startsWith("00")) {
-                    return@run hash
-                }
-                nonce++
-                if (nonce > 1_000_000L) throw IOException("Antibot challenge failed: PoW exhausted")
-            }
-        }
-        val workTime = (System.currentTimeMillis() - start).coerceAtLeast(120)
-
-        val verifyBody = FormBody.Builder()
-            .add("token", token).add("mode", "modern")
-            .add("workTime", workTime.toString()).add("iterations", (nonce + 1).toString())
-            .add("webdriver", "0").add("touch", "1")
-            .add("screen_w", "390").add("screen_h", "844").add("screen_cd", "24")
-            .add("wgv", "Apple Inc.").add("wgr", "Apple GPU")
-            .add("tz", "-180").add("dpr", "3").add("cdp", "0").add("cdpf", "")
-            .add("pow_nonce", nonce.toString())
-            .add("pow_hash", powHash.toString())
-            .build()
-
-        val verifyReq = Request.Builder()
-            .url("$baseUrl/_v")
-            .post(verifyBody)
-            .headers(headers)
-            .header("X-Requested-With", "XMLHttpRequest")
-            .header("Referer", challenge.request.url.toString())
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .build()
-        chain.proceed(verifyReq).close()
-
-        return chain.proceed(original)
+    private fun parseCategory(cat: String) = when (cat.lowercase()) {
+        "manga" -> "Манга"
+        "manhwa" -> "Манхва"
+        "manhua" -> "Маньхуа"
+        else -> "Комикс"
     }
 
-    // Chapters
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val extraStep = 0.001f
-        val document = response.asJsoup()
+    // ============================== Chapters ===============================
+    private fun parseChapterList(document: Document): List<SChapter> {
+        if (document.selectFirst(".message-info__content:contains(не имеют доступа)") != null) throw Exception("Авторизируйтесь для просмотра контента")
+        val script = document.selectFirst("script:containsData(window.__DATA__)")?.data()
+            ?: throw Exception("Chapter data script not found")
 
-        val dataStr = document.outerHtml()
-            .substringAfter("window.__DATA__ = ", "")
-            .substringBefore("</script>")
+        val data = script
+            .substringAfter("window.__DATA__ = ")
             .substringBeforeLast(";")
+            .trim()
+            .parseAs<Chapters>()
 
-        if (dataStr.isEmpty()) return emptyList()
+        var counter = 0f
+        var firstChapter = true
 
-        val data = try {
-            dataStr.parseAs<JsonObject>()
-        } catch (e: Exception) {
-            return emptyList()
-        }
+        return data.chapters.asReversed().map { chap ->
+            SChapter.create().apply {
+                url = "/reader/${data.comicId}/${chap.id}"
+                date_upload = runCatching {
+                    LocalDate.parse(chap.date, dateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+                }.getOrDefault(0L)
 
-        val chaptersList = data["chapters"]?.jsonArray ?: return emptyList()
-        val newsId = data["news_id"]?.jsonPrimitive?.content ?: return emptyList()
-
-        val isEvent = document
-            .select(".page__list li:contains(Тип выпуска)")
-            .text()
-            .contains("!!! События в комиксах - ХРОНОЛОГИЯ !!!")
-
-        var currentBase = 0f
-        var subIndex = 0
-
-        val pendingExtras = mutableListOf<SChapter>()
-        val result = mutableListOf<SChapter>()
-
-        chaptersList.forEach { element ->
-            val obj = element.jsonObject
-            val chapter = SChapter.create()
-
-            val title = obj["title"]?.jsonPrimitive?.content ?: ""
-            val posi = obj["posi"]?.jsonPrimitive?.float ?: 0f
-
-            chapter.name = title
-            chapter.date_upload = dateFormat.tryParse(obj["date"]?.jsonPrimitive?.content)
-
-            val parsedBase = parseBaseChapterNumber(title)
-            val isExtra = isExtraChapter(title)
-
-            when {
-                parsedBase != null -> {
-                    currentBase = parsedBase
-                    subIndex = 0
-                    if (pendingExtras.isNotEmpty()) {
-                        pendingExtras.reversed().forEach {
-                            subIndex++
-                            it.chapter_number = currentBase + subIndex * extraStep
+                val matchNumber = chapterNumberRegex.find(chap.title)?.groupValues[1]?.toFloatOrNull()
+                val anyNumber = chapterAnyNumberRegex.find(chap.title)?.groupValues[1]?.toFloatOrNull()
+                chapter_number = if (!firstChapter) {
+                    if (chap.number != 0f) {
+                        // Номер не надежен. Он может быть неверным, например:
+                        // https://com-x.life/11082-chelovek-benzopila-2-2026.html#chapters
+                        // Глава 158. Или Экстра 17
+                        if (matchNumber != null && (matchNumber - counter) in 0f..1f) {
+                            matchNumber
+                        } else {
+                            if (isExtraChapter(chap.title)) {
+                                counter + 0.1f
+                            } else {
+                                if (anyNumber != null && (anyNumber - counter) in 0f..1f) {
+                                    anyNumber
+                                } else {
+                                    chap.number
+                                }
+                            }
                         }
-                        pendingExtras.clear()
-                    }
-                    chapter.chapter_number = parsedBase
-                }
-                isExtra -> {
-                    pendingExtras += chapter
-                }
-                else -> {
-                    currentBase = posi
-                    subIndex = 0
-                    if (pendingExtras.isNotEmpty()) {
-                        pendingExtras.reversed().forEach {
-                            subIndex++
-                            it.chapter_number = currentBase + subIndex * extraStep
+                    } else {
+                        if (anyNumber != null && (anyNumber - counter) in 0f..1f) {
+                            anyNumber
+                        } else {
+                            counter + 0.1f
                         }
-                        pendingExtras.clear()
                     }
-                    chapter.chapter_number = posi
+                } else {
+                    firstChapter = false
+                    chap.number
                 }
+                name = whitespacesRegex.replace(chap.title, " ").trim()
+                counter = chapter_number
             }
-            if (isEvent && chapter.chapter_number > 0f) {
-                chapter.name = "${chapter.chapter_number.toInt()} ${chapter.name}"
-            }
-            chapter.setUrlWithoutDomain("/reader/$newsId/${obj["id"]!!.jsonPrimitive.content}")
-
-            result += chapter
-        }
-
-        if (pendingExtras.isNotEmpty()) {
-            subIndex = 0
-            pendingExtras.reversed().forEach {
-                subIndex++
-                it.chapter_number = currentBase + subIndex * extraStep
-            }
-        }
-
-        return result
-    }
-
-    private fun parseBaseChapterNumber(title: String): Float? {
-        val dashIndex = title.indexOf('-')
-        if (dashIndex == -1) return null
-
-        val afterDash = title.substring(dashIndex + 1).trimStart()
-
-        val end = afterDash.indexOf(' ').let {
-            if (it == -1) afterDash.length else it
-        }
-
-        return afterDash.take(end).toFloatOrNull()
+        }.asReversed()
     }
 
     private fun isExtraChapter(title: String): Boolean {
         val lower = title.lowercase()
         return "экстра" in lower ||
+            "ежегодник" in lower ||
+            "вернулся" in lower ||
             "extra" in lower ||
             "special" in lower ||
+            "annual" in lower ||
             "bonus" in lower
     }
 
-    // Pages
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = client.newCall(pageListRequest(chapter)).asObservable().map { response ->
-        response.use {
-            if (!it.isSuccessful) {
-                if (it.code == 404 && it.peekBody(2048).string().contains("Выпуск был удален по требованию правообладателя")) {
-                    throw Exception("Лицензировано. Возможно может помочь авторизация через WebView")
+    // ============================== Related ==============================
+    override val supportsRelatedMangas get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val related = manga.memo["similarComics"]
+
+        return related?.parseAs<List<RelatedComic>>()?.map {
+            SManga.create().apply {
+                title = it.name
+                thumbnail_url = it.thumbnail
+                setUrlWithoutDomain(it.url)
+            }
+        } ?: emptyList()
+    }
+
+    // =============================== Pages ===============================
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get("$baseUrl${chapter.url}", ensureSuccess = false).use { response ->
+            if (!response.isSuccessful) {
+                if (response.code == 304 || response.code == 302 || response.code == 403) {
+                    throw Exception("Глава не доступна. Возможно может помочь авторизация через WebView")
                 } else {
-                    throw Exception("HTTP error ${it.code}")
+                    throw HttpException(response.code)
                 }
             }
-            pageListParse(it)
-        }
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        val html = response.body.string()
-
-        if (html.contains("adult__header")) {
-            throw Exception("Комикс 18+ (что-то сломалось)")
+            if (response.request.url.encodedPath == "/404.html") {
+                throw Exception("Глава не доступна. Возможно может помочь авторизация через WebView")
+            }
+            response.asJsoup()
         }
 
+        if (document.html().contains("Выпуск был удален по требованию правообладателя")) throw Exception("Лицензировано. Возможно может помочь авторизация через WebView")
+
+        val script = document.selectFirst("script:containsData(window.__DATA__)")?.data()
+            ?: throw Exception("Pages data script not found")
+
+        val data = script
+            .substringAfter("window.__DATA__ = ")
+            .substringBefore("window.")
+            .substringBeforeLast(";")
+            .trim()
+            .parseAs<Pages>()
+
+        // Сайт использует два домена для изображений: img.com-x.life (глобальный) и rus.com-x.life (для россии)
+        // Домен из настроек в приоритете, если задан.
         val imageUrl = preferences.getString(FORCE_IMG_DOMAIN_PREF, null)?.takeIf { it.isNotBlank() }
-            ?: IMG_DOMAIN_REGEX.find(html)?.groupValues?.get(1)?.let { "https://$it" }
-
-        if (imageUrl.isNullOrBlank()) {
-            throw Exception("Не удалось определить домен картинок. Попробуйте задать вручную в настройках")
-        }
-
-        val beginTag = "\"images\":["
-        val beginIndex = html.indexOf(beginTag)
-        if (beginIndex == -1) return emptyList()
-        val endIndex = html.indexOf("]", beginIndex)
-
-        val urls = html.substring(beginIndex + beginTag.length, endIndex)
-            .split(',').map {
-                val img = it.replace("\\", "").replace("\"", "")
-                "$imageUrl/comix/$img"
+            ?: if (baseUrl.contains("https://ru.")) {
+                "https://${data.hostRu}/comix/"
+            } else {
+                "https://${data.host}/comix/"
             }
 
-        return urls.mapIndexed { i, url ->
-            Page(i, imageUrl = url)
+        return data.images.mapIndexed { idx, img ->
+            Page(idx, imageUrl = "$imageUrl$img")
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    // =============================== Filters ===============================
+    override val supportsFilterFetching = true
 
-    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headers)
+    override suspend fun fetchFilterData(): JsonElement {
+        val doc = client.get("$baseUrl/comix-read/").asJsoup()
+        val script = doc.selectFirst("script:containsData(window.__XFILTER__)")?.data()
+            ?: error("Filter data not found")
 
-    // Filters
-    override fun getFilterList() = FilterList(
-        OrderBy(),
-        PubList(pubList),
-        GenreList(genreList),
-        TypeList(typeList),
-        AgeList(ageList),
-    )
+        val data = script
+            .substringAfter("window.__XFILTER__ = ")
+            .substringBeforeLast(";")
+            .trim()
+            .parseAs<FiltersJSON>()
 
+        return FiltersDto(
+            pcat = data.filterItems.pCat.values.map { it.value to it.id.toString() },
+            g = data.filterItems.g.values.map { it.value to it.id.toString() },
+            t = data.filterItems.t.values.map { it.value to it.id.toString() },
+            st = data.filterItems.st.values.map { it.value to it.id.toString() },
+        ).toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val dto = data?.parseAs<FiltersDto>()
+        val genres = dto?.g ?: emptyList()
+        val groups = dto?.pcat ?: emptyList()
+        val types = dto?.t ?: emptyList()
+        val statuses = dto?.st ?: emptyList()
+
+        val filters = mutableListOf(
+            Filter.Header("Фильтры не работают при поиске по названию"),
+            Filter.Separator(),
+            OrderBy(),
+        )
+
+        if (genres.isNotEmpty()) {
+            filters.add(GenreFilter(genres))
+        }
+        if (groups.isNotEmpty()) {
+            filters.add(GroupFilter(groups))
+        }
+        if (types.isNotEmpty()) {
+            filters.add(TypeFilter(types))
+        }
+        if (statuses.isNotEmpty()) {
+            filters.add(StatusFilter(statuses))
+        }
+        filters.add(YearRangeFilter())
+
+        return FilterList(filters)
+    }
+
+    // ============================== Utilities ===============================
+    private fun checkMinRange(input: String?, min: Int = 1980, max: Int): Int {
+        val value = input?.trim()?.takeIf(String::isNotEmpty)?.toIntOrNull() ?: return min
+        if (value !in min..max) return min
+        return value
+    }
+    private fun checkMaxRange(input: String?, min: Int = 1980, max: Int): Int {
+        val value = input?.trim()?.takeIf(String::isNotEmpty)?.toIntOrNull() ?: return max
+        if (value !in min..max) return max
+        return value
+    }
+
+    // ============================== Preferences ===============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
             key = FORCE_IMG_DOMAIN_PREF
             title = "Домен картинок"
-            summary = "Если изображения не грузяться очистите «Кэш приложения» и всевозможные данные в настройках приложения  (Настройки -> Дополнительно) \nи перезапустите приложение с полной остановкой" +
+            summary = "Если изображения не грузятся очистите «Кэш приложения» и всевозможные данные в настройках приложения  (Настройки -> Дополнительно) \nи перезапустите приложение с полной остановкой" +
                 "\n\nНастройка переопределяет домен картинок." +
-                "\nПо умолчанию домент картинок берётся автоматически." +
-                "\nЧтобы узнать домен изображения откройте главу в браузере и после долгим тапом откройте изображение в новом окне."
+                "\nПо умолчанию домен картинок берётся автоматически." +
+                "\nОставьте это поле пустым что бы использовать домен по умолчанию." +
+                "\nЧтобы узнать домен изображения откройте главу в браузере и \nпосле долгим тапом откройте изображение в новом окне."
             setDefaultValue("")
             setOnPreferenceChangeListener { _, _ ->
                 val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
@@ -492,9 +484,10 @@ abstract class ComX :
     }
 
     companion object {
-        private val dateFormat by lazy { SimpleDateFormat("dd.MM.yyyy", Locale.US) }
+        private val dateFormat = DateTimeFormatter.ofPattern("[d.M.yyyy][dd.MM.yyyy][d.MM.yyyy]", Locale.ROOT)
         private const val FORCE_IMG_DOMAIN_PREF = "FORCE_IMG_DOMAIN_PREF"
-        private val IMG_DOMAIN_REGEX = "\"host\":\"(.+?)\"".toRegex()
-        private val TOKEN_REGEX = """token:\s*"([^"]+)"""".toRegex()
+        private val chapterNumberRegex = """(?:\d+\s*-|.*?Глава)\s*([\d.]+)""".toRegex()
+        private val chapterAnyNumberRegex = """([\d.]+)""".toRegex()
+        private val whitespacesRegex = """\s{2,}""".toRegex()
     }
 }

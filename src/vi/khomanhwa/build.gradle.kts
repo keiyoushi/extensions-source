@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "KhoManhwa"
-    versionCode = 1
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 

@@ -1,60 +1,42 @@
 package eu.kanade.tachiyomi.extension.ar.mangatek
 
-import android.content.SharedPreferences
-import android.widget.Toast
-import androidx.preference.ListPreference
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
+import javax.crypto.Cipher
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 @Source
-abstract class MangaTek :
-    HttpSource(),
-    ConfigurableSource {
+abstract class MangaTek : KeiSource() {
 
-    private var fontSize: Int
-        get() = preferences.getString(FONT_SIZE_PREF, DEFAULT_FONT_SIZE)!!.toInt()
-        set(value) = preferences.edit().putString(FONT_SIZE_PREF, value.toString()).apply()
-
-    override val client by lazy {
-        network.client.newBuilder()
-            .addInterceptor(SpeechBubblePainterInterceptor(fontSize))
-            .rateLimit(3)
-            .build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        addInterceptor(SpeechBubblePainterInterceptor())
+        rateLimit(3)
     }
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-
-    private val preferences: SharedPreferences by getPreferencesLazy()
-
-    override val supportsLatest = true
-
-    // Popular
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga-list?sort=views&page=$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun Response.toMangasPage(): MangasPage {
+        val document = this.asJsoup()
 
         val mangas = document.select(".flex-grow .grid a").map { element ->
             SManga.create().apply {
@@ -69,104 +51,96 @@ abstract class MangaTek :
         return MangasPage(mangas, hasNextPage)
     }
 
-    // Latest
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manga-list?page=$page", headers)
+    // ============================== Popular ==============================
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-
-    // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/manga-list".toHttpUrl().newBuilder()
-            .addQueryParameter("search", query)
-            .addQueryParameter("page", page.toString())
-            .build()
-
-        return GET(url, headers)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val response = client.get("$baseUrl/manga-list?sort=views&page=$page")
+        return response.toMangasPage()
     }
 
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    // ============================== Latest ===============================
 
-    // Details
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val response = client.get("$baseUrl/manga-list?page=$page")
+        return response.toMangasPage()
+    }
 
-        return SManga.create().apply {
-            title = document.selectFirst("h1")!!.text()
-            description = document.selectFirst("p.text-base")?.text()
-            genre = document
-                .selectFirst("p > span:contains(التصنيفات:) + span")
-                ?.text()?.replace("،", ",")
-            status = document.selectFirst(".flex span.border.rounded")?.text().toStatus()
-            thumbnail_url = document.selectFirst("img#mangaCover")?.imgAttr()
-            author = document
-                .selectFirst("p > span:contains(المؤلف:) + span")
-                ?.ownText()
-                ?.takeIf { it != "Unknown" }
+    // ============================== Search ===============================
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$baseUrl/manga-list".toHttpUrl().newBuilder().apply {
+            addQueryParameter("search", query)
+            addQueryParameter("page", page.toString())
+        }.build()
+        return client.get(url).toMangasPage()
+    }
+
+    // ========================= Details & Chapters  =========================
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        check(url.pathSegments.size >= 2) { "Unsupported URL" }
+        val slug = url.pathSegments[1]
+        val manga = SManga.create().apply {
+            this.url = "/manga/$slug"
+        }
+        return fetchMangaUpdate(manga, emptyList(), true, false).manga.apply {
+            initialized = true
         }
     }
 
-    private fun String?.toStatus() = when (this) {
-        "مستمر" -> SManga.ONGOING
-        "مكتمل" -> SManga.COMPLETED
-        "متوقف" -> SManga.ON_HIATUS
-        else -> SManga.UNKNOWN
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val url = "$baseUrl${manga.url}".toHttpUrl()
+        val data: MangaDto = client.get(url).asJsoup().extractAstroProp("manga")
+        val slug = url.pathSegments[1]
+
+        return SMangaUpdate(
+            data.manga.toSManga(manga.url),
+            data.manga.chapters.map { it.toSChapter(slug) },
+        )
     }
 
-    // Chapters
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val seriesSlug = response.request.url.toString().substringAfterLast("/")
+    //  ============================== Astro ==============================
 
-        val props = response.asJsoup()
-            .selectFirst("astro-island[component-url*=MangaChaptersLoader]")
-            ?.attr("props") ?: return emptyList()
+    private inline fun <reified T> Document.extractAstroProp(key: String): T {
+        val prop = selectFirst("[props*=$key]")?.attr("props")
+            ?: throw Exception("Unable to find prop with $key")
+        return prop.parseAs<JsonElement>().unwrapAstro().parseAs()
+    }
 
-        val data = props.parseAs<MangaWrapper>()
-        val chapters = data.manga.value.mangaChapters.value.map { it.value }
+    private fun JsonElement.unwrapAstro(): JsonElement = when (this) {
+        is JsonArray -> when {
+            size == 2 && this[0] is JsonPrimitive -> this[1].unwrapAstro()
+            else -> JsonArray(map { it.unwrapAstro() })
+        }
+        is JsonObject -> JsonObject(mapValues { it.value.unwrapAstro() })
+        else -> this
+    }
 
-        return chapters.map { ch ->
-            SChapter.create().apply {
-                name = ch.title.value?.takeIf { it.isNotBlank() } ?: "Chapter ${ch.chapterNumber.value}"
-                url = "/reader/$seriesSlug/${ch.chapterNumber.value}"
-                date_upload = dateFormat.tryParse(ch.createdAt.value)
-            }
+    //  ============================== Page ==============================
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val props: ChapterProps = document.extractAstroProp("imageUrls")
+        val overlaysByPageNumber: Map<Int, OverlayPage> = props.overlayBlob
+            ?.let(::decrypt)?.pages
+            ?.associateBy { it.pageNumber } ?: emptyMap()
+
+        return props.imageUrls.mapIndexed { index, imageUrl ->
+            val overlayPage = overlaysByPageNumber[index]
+                ?: return@mapIndexed Page(index, imageUrl = imageUrl)
+
+            val url = imageUrl.toHttpUrl().newBuilder()
+                .fragment(overlayPage.overlays.toJsonString())
+                .build().toString()
+
+            Page(index, imageUrl = url)
         }
     }
-
-    // Page
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val pages = getPages(document)
-
-        return pages.mapIndexed { index, page ->
-            val imageUrl = when {
-                page.hasSpeechBubbles() -> "${page.imageUrl}${page.bubbles.toJsonString().toFragment()}"
-                else -> page.imageUrl
-            }
-            Page(index, imageUrl = imageUrl)
-        }
-    }
-
-    private fun getPages(document: Document): List<PageDTO> = document.select(".manga-page").map { element ->
-        val imageUrl = element.selectFirst("img")!!.imgAttr()
-        val overlays = element.select(".text-overlay").takeIf(List<Element>::isNotEmpty) ?: return@map PageDTO(imageUrl)
-
-        val bubbles = overlays.map { overlay ->
-            val style = overlay.attr("style")
-            Bubble(
-                text = overlay.text(),
-                left = style.substringAfterLast("left:").substringBefore("%").trim().toFloat(),
-                top = style.substringAfterLast("top:").substringBefore("%").trim().toFloat(),
-                width = style.substringAfterLast("width:").substringBefore("%").trim().toFloat(),
-                height = style.substringAfterLast("height:").substringBefore("%").trim().toFloat(),
-            )
-        }
-
-        PageDTO(imageUrl, bubbles)
-    }
-
-    fun String.toFragment(): String = "#${this.replace("#", "*")}"
-
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private fun Element.imgAttr(): String = when {
         hasAttr("data-src") -> attr("abs:data-src")
@@ -177,53 +151,38 @@ abstract class MangaTek :
         else -> attr("abs:src")
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val sizes = arrayOf(
-            "12", "13", "14",
-            "15", "16", "18",
-            "20", "21", "22",
-            "24", "26", "28",
-            "32", "36", "40",
-            "42", "44", "48",
-            "54", "60", "72",
-            "80", "88", "96",
-        )
+    // decrypt
 
-        ListPreference(screen.context).apply {
-            key = FONT_SIZE_PREF
-            title = "Font size"
-            entries = sizes.map {
-                "${it}pt" + if (it == DEFAULT_FONT_SIZE) " - Default" else ""
-            }.toTypedArray()
-            entryValues = sizes
+    private fun String.hexToBytes(): ByteArray {
+        require(length % 2 == 0) { "Invalid hex string length" }
 
-            summary = buildString {
-                appendLine("Font changes will not be applied to downloaded or cached chapters. ")
-                append("\t* %s")
-            }
+        return ByteArray(length / 2) { index ->
+            substring(index * 2, index * 2 + 2).toInt(16).toByte()
+        }
+    }
 
-            setDefaultValue(fontSize.toString())
+    fun decrypt(blob: String): OverlayData {
+        val (ivHex, ctHex, tagHex) = blob.split(":").also {
+            require(it.size == 3) { "unexpected overlayBlob format" }
+        }
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = this.findIndexOfValue(selected)
-                val entry = entries[index] as String
+        val iv = ivHex.hexToBytes()
+        val ciphertext = ctHex.hexToBytes()
+        val tag = tagHex.hexToBytes()
 
-                Toast.makeText(
-                    screen.context,
-                    "Font size changed to '$entry'. Restart app to apply new setting.",
-                    Toast.LENGTH_LONG,
-                ).show()
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
+            init(
+                Cipher.DECRYPT_MODE,
+                SecretKeySpec(KEY.hexToBytes(), "AES"),
+                GCMParameterSpec(tag.size * 8, iv),
+            )
+        }
 
-                true
-            }
-        }.also(screen::addPreference)
+        return String(cipher.doFinal(ciphertext + tag), Charsets.UTF_8).parseAs<OverlayData>()
     }
 
     companion object {
         val PAGE_REGEX = Regex(""".*?\.(webp|png|jpg|jpeg)(?:\?v=\d+)?#\[.*?]""", RegexOption.IGNORE_CASE)
-        private const val FONT_SIZE_PREF = "fontSizePref"
-        private const val DEFAULT_FONT_SIZE = "28"
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale("ar"))
+        private val KEY = "ff453871399fe268588a0936b45376022d85ed0fd1292001d5102f6a30291dc1"
     }
 }

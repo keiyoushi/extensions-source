@@ -2,88 +2,50 @@ package eu.kanade.tachiyomi.multisrc.foolslide
 
 import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
+import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.Headers
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
+import java.time.temporal.ChronoField
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 abstract class FoolSlide :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
-    protected open val urlModifier: String = ""
+    protected open val urlModifier = ""
 
-    override val supportsLatest = true
-
-    private val json by lazy { Injekt.get<Json>() }
-
-    open fun popularMangaSelector() = "div.group"
-
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl$urlModifier/directory/$page/", headers)
-
-    private val latestUpdatesUrls = mutableSetOf<String>()
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        val mangas = document.select(latestUpdatesSelector()).map { element ->
-            latestUpdatesFromElement(element)
-        }
-
-        val hasNextPage = latestUpdatesNextPageSelector()?.let { selector ->
-            document.select(selector).first() != null
-        } ?: false
-
-        val newMangas = mangas.distinctBy { it.url }.filter {
-            latestUpdatesUrls.add(it.url)
-        }
-
-        return MangasPage(newMangas, hasNextPage)
-    }
-
-    open fun latestUpdatesSelector() = "div.group"
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        if (page == 1) latestUpdatesUrls.clear()
-        return GET("$baseUrl$urlModifier/latest/$page/")
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        val mangas = document.select(popularMangaSelector()).map { element ->
-            popularMangaFromElement(element)
-        }
-
-        val hasNextPage = popularMangaNextPageSelector().let { selector ->
-            document.select(selector).first() != null
-        }
-
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl$urlModifier/directory/$page/").asJsoup()
+        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
+        val hasNextPage = popularMangaNextPageSelector().let { selector -> document.select(selector).first() != null }
         return MangasPage(mangas, hasNextPage)
     }
+
+    open fun popularMangaSelector() = "div.group"
 
     open fun popularMangaFromElement(element: Element) = SManga.create().apply {
         element.select("a[title]").first()!!.let {
@@ -95,6 +57,17 @@ abstract class FoolSlide :
         }
     }
 
+    open fun popularMangaNextPageSelector() = "div.next"
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get("$baseUrl$urlModifier/latest/$page/").asJsoup()
+        val mangas = document.select(latestUpdatesSelector()).map { latestUpdatesFromElement(it) }
+        val hasNextPage = latestUpdatesNextPageSelector()?.let { selector -> document.select(selector).first() != null } ?: false
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    open fun latestUpdatesSelector() = "div.group"
+
     open fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         element.select("a[title]").first()!!.let {
             setUrlWithoutDomain(it.attr("href"))
@@ -102,77 +75,97 @@ abstract class FoolSlide :
         }
     }
 
-    open fun popularMangaNextPageSelector() = "div.next"
-
     open fun latestUpdatesNextPageSelector(): String? = "div.next"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val searchHeaders = headersBuilder().add("Content-Type", "application/x-www-form-urlencoded").build()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val form = FormBody.Builder().add("search", query).build()
-        return POST("$baseUrl$urlModifier/search/", searchHeaders, form)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        val mangas = document.select(searchMangaSelector()).map { element ->
-            searchMangaFromElement(element)
-        }
-
-        val hasNextPage = searchMangaNextPageSelector().let { selector ->
-            document.select(selector).first() != null
-        }
-
+        val document = client.post("$baseUrl$urlModifier/search/", headers, form).asJsoup()
+        val mangas = document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
+        val hasNextPage = searchMangaNextPageSelector().let { selector -> document.select(selector).first() != null }
         return MangasPage(mangas, hasNextPage)
     }
 
     open fun searchMangaSelector() = "div.group"
 
-    open fun searchMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
+    open fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         element.select("a[title]").first()!!.let {
-            manga.setUrlWithoutDomain(it.attr("href"))
-            manga.title = it.text()
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.text()
         }
-        return manga
     }
 
     open fun searchMangaNextPageSelector() = "a:has(span.next)"
 
-    override fun mangaDetailsRequest(manga: SManga) = allowAdult(super.mangaDetailsRequest(manga))
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url, adultHeaders).asJsoup()
+
+        val sManga = mangaDetailsParse(document).apply { url = manga.url }
+        val sChapters = document.select(chapterListSelector()).map { chapterFromElement(it) }
+
+        return SMangaUpdate(sManga, sChapters)
+    }
 
     protected open val mangaDetailsInfoSelector = "div.info"
 
     // if there's no image on the details page, get the first page of the first chapter
-    protected fun getDetailsThumbnail(document: Document, urlSelector: String = chapterUrlSelector): String? = document.select("div.thumbnail img, table.thumb img").firstOrNull()?.attr("abs:src")
+    protected suspend fun getDetailsThumbnail(document: Document, urlSelector: String = chapterUrlSelector): String? = document.select("div.thumbnail img, table.thumb img").firstOrNull()?.attr("abs:src")
         ?: document.select(chapterListSelector()).lastOrNull()?.select(urlSelector)?.attr("abs:href")
-            ?.let { url -> client.newCall(allowAdult(GET(url))).execute() }
-            ?.use { response -> pageListParse(response).firstOrNull()?.imageUrl }
+            ?.let { url -> client.get(url, adultHeaders).asJsoup() }
+            ?.let { doc -> pageListParse(doc).firstOrNull()?.imageUrl }
 
-    override fun mangaDetailsParse(response: Response): SManga = mangaDetailsParse(response.asJsoup())
+    open suspend fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        document.selectFirst(mangaDetailsInfoSelector)?.let { infoElement ->
+            infoElement.select("b").forEach { b ->
+                val text = b.text().lowercase(Locale.ROOT)
+                val next = b.nextSibling()
+                val value = if (next is org.jsoup.nodes.TextNode) {
+                    next.text().trim().removePrefix(":").trim()
+                } else {
+                    ""
+                }
 
-    open fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        document.select(mangaDetailsInfoSelector).firstOrNull()?.html()?.let { infoHtml ->
-            author = Regex("""(?i)(Author|Autore)</b>:\s?([^\n<]*)[\n<]""").find(infoHtml)?.groupValues?.get(2)
-            artist = Regex("""Artist</b>:\s?([^\n<]*)[\n<]""").find(infoHtml)?.groupValues?.get(1)
-            description = Regex("""(?i)(Synopsis|Description|Trama)</b>:\s?([^\n<]*)[\n<]""").find(infoHtml)?.groupValues?.get(2)
+                if (value.isEmpty()) return@forEach
+
+                when {
+                    "author" in text || "autore" in text -> author = value
+                    "artist" in text -> artist = value
+                    "synopsis" in text || "description" in text || "trama" in text -> description = value
+                }
+            }
         }
         thumbnail_url = getDetailsThumbnail(document)
     }
 
+    protected val preferences by getPreferencesLazy()
+
     protected open val allowAdult: Boolean
         get() = preferences.getBoolean("adult", true)
 
-    private fun allowAdult(request: Request): Request {
-        val form = FormBody.Builder().add("adult", allowAdult.toString()).build()
-        return POST(request.url.toString(), headers, form)
-    }
+    protected val adultHeaders: Headers get() = headersBuilder().add("Adult", "true").build()
 
-    override fun chapterListRequest(manga: SManga) = allowAdult(super.chapterListRequest(manga))
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select(chapterListSelector()).map { chapterFromElement(it) }
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
+        val request = chain.request()
+        if (request.header("Adult") == "true") {
+            val newRequest = if (allowAdult) {
+                val form = FormBody.Builder().add("adult", "true").build()
+                request.newBuilder()
+                    .removeHeader("Adult")
+                    .method("POST", form)
+                    .build()
+            } else {
+                request.newBuilder()
+                    .removeHeader("Adult")
+                    .build()
+            }
+            chain.proceed(newRequest)
+        } else {
+            chain.proceed(request)
+        }
     }
 
     open fun chapterListSelector() = "div.group div.element, div.list div.element"
@@ -196,45 +189,27 @@ abstract class FoolSlide :
         }
 
         // Handle 'yesterday' and 'today', using midnight
-        var relativeDate: Calendar? = null
-        // Result parsed but no year, copy current year over
+        var relativeDate: ZonedDateTime? = null
         when {
             lcDate.startsWith("yesterday") -> {
-                relativeDate = Calendar.getInstance()
-                relativeDate.add(Calendar.DAY_OF_MONTH, -1) // yesterday
-                relativeDate.set(Calendar.HOUR_OF_DAY, 0)
-                relativeDate.set(Calendar.MINUTE, 0)
-                relativeDate.set(Calendar.SECOND, 0)
-                relativeDate.set(Calendar.MILLISECOND, 0)
+                relativeDate = ZonedDateTime.now().minusDays(1).truncatedTo(ChronoUnit.DAYS)
             }
-
             lcDate.startsWith("today") -> {
-                relativeDate = Calendar.getInstance()
-                relativeDate.set(Calendar.HOUR_OF_DAY, 0)
-                relativeDate.set(Calendar.MINUTE, 0)
-                relativeDate.set(Calendar.SECOND, 0)
-                relativeDate.set(Calendar.MILLISECOND, 0)
+                relativeDate = ZonedDateTime.now().truncatedTo(ChronoUnit.DAYS)
             }
-
             lcDate.startsWith("tomorrow") -> {
-                relativeDate = Calendar.getInstance()
-                relativeDate.add(Calendar.DAY_OF_MONTH, +1) // tomorrow
-                relativeDate.set(Calendar.HOUR_OF_DAY, 0)
-                relativeDate.set(Calendar.MINUTE, 0)
-                relativeDate.set(Calendar.SECOND, 0)
-                relativeDate.set(Calendar.MILLISECOND, 0)
+                relativeDate = ZonedDateTime.now().plusDays(1).truncatedTo(ChronoUnit.DAYS)
             }
         }
 
-        relativeDate?.timeInMillis?.let {
-            return it
-        }
+        relativeDate?.toInstant()?.toEpochMilli()?.let { return it }
 
-        var result = DATE_FORMAT_1.parseOrNull(date)
+        var result: Long? = null
+        result = runCatching { LocalDate.parse(date, DATE_FORMAT_1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }.getOrNull()
 
         for (dateFormat in DATE_FORMATS_WITH_ORDINAL_SUFFIXES) {
             if (result == null) {
-                result = dateFormat.parseOrNull(date)
+                result = runCatching { LocalDate.parse(date, dateFormat).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }.getOrNull()
             } else {
                 break
             }
@@ -242,21 +217,13 @@ abstract class FoolSlide :
 
         for (dateFormat in DATE_FORMATS_WITH_ORDINAL_SUFFIXES_NO_YEAR) {
             if (result == null) {
-                result = dateFormat.parseOrNull(date)
-
-                if (result != null) {
-                    // Result parsed but no year, copy current year over
-                    result = Calendar.getInstance().apply {
-                        time = result
-                        set(Calendar.YEAR, Calendar.getInstance().get(Calendar.YEAR))
-                    }.time
-                }
+                result = runCatching { LocalDate.parse(date, dateFormat).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }.getOrNull()
             } else {
                 break
             }
         }
 
-        return result?.time ?: 0L
+        return result ?: 0L
     }
 
     /**
@@ -266,43 +233,34 @@ abstract class FoolSlide :
     private fun parseRelativeDate(date: String): Long? {
         val trimmedDate = date.split(" ")
 
-        if (trimmedDate[2] != "ago") return null
+        if (trimmedDate.size < 3 || trimmedDate[2] != "ago") return null
 
-        val number = trimmedDate[0].toIntOrNull() ?: return null
+        val number = trimmedDate[0].toLongOrNull() ?: return null
         val unit = trimmedDate[1].removeSuffix("s") // Remove 's' suffix
+        val now = ZonedDateTime.now()
 
-        val now = Calendar.getInstance()
-
-        // Map English unit to Java unit
-        val javaUnit = when (unit) {
-            "year", "yr" -> Calendar.YEAR
-            "month" -> Calendar.MONTH
-            "week", "wk" -> Calendar.WEEK_OF_MONTH
-            "day" -> Calendar.DAY_OF_MONTH
-            "hour", "hr" -> Calendar.HOUR
-            "minute", "min" -> Calendar.MINUTE
-            "second", "sec" -> Calendar.SECOND
+        val parsed = when (unit) {
+            "year", "yr" -> now.minusYears(number)
+            "month" -> now.minusMonths(number)
+            "week", "wk" -> now.minusWeeks(number)
+            "day" -> now.minusDays(number)
+            "hour", "hr" -> now.minusHours(number)
+            "minute", "min" -> now.minusMinutes(number)
+            "second", "sec" -> now.minusSeconds(number)
             else -> return null
         }
-
-        now.add(javaUnit, -number)
-
-        return now.timeInMillis
+        return parsed.toInstant().toEpochMilli()
     }
 
-    private fun SimpleDateFormat.parseOrNull(string: String): Date? {
-        val time = this.tryParse(string)
-        return if (time == 0L) null else Date(time)
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(baseUrl + chapter.url, adultHeaders).asJsoup()
+        return pageListParse(document)
     }
-
-    override fun pageListRequest(chapter: SChapter) = allowAdult(super.pageListRequest(chapter))
-
-    override fun pageListParse(response: Response): List<Page> = pageListParse(response.asJsoup())
 
     open fun pageListParse(document: Document): List<Page> {
         val doc = document.toString()
         val jsonStr = doc.substringAfter("var pages = ").substringBefore(";")
-        val pages = json.parseToJsonElement(jsonStr).jsonArray
+        val pages = jsonStr.parseAs<JsonArray>()
         return pages.mapIndexed { i, jsonEl ->
             // Create dummy element to resolve relative URL
             val absUrl = document.createElement("a")
@@ -312,30 +270,24 @@ abstract class FoolSlide :
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    protected val preferences by getPreferencesLazy()
-
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         CheckBoxPreference(screen.context).apply {
             key = "adult"
             summary = "Show adult content"
             setDefaultValue(true)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putBoolean(key, newValue as Boolean).commit()
-            }
         }.let(screen::addPreference)
     }
 
     companion object {
         private val ORDINAL_SUFFIXES = listOf("st", "nd", "rd", "th")
-        private val DATE_FORMAT_1 = SimpleDateFormat("yyyy.MM.dd", Locale.US)
+        private val DATE_FORMAT_1 = DateTimeFormatter.ofPattern("yyyy.MM.dd", Locale.US)
         private val DATE_FORMATS_WITH_ORDINAL_SUFFIXES = ORDINAL_SUFFIXES.map {
-            SimpleDateFormat("dd'$it' MMMM, yyyy", Locale.US)
+            DateTimeFormatter.ofPattern("dd'$it' MMMM, yyyy", Locale.US)
         }
         private val DATE_FORMATS_WITH_ORDINAL_SUFFIXES_NO_YEAR = ORDINAL_SUFFIXES.map {
-            SimpleDateFormat("dd'$it' MMMM", Locale.US)
+            DateTimeFormatterBuilder().appendPattern("dd'$it' MMMM")
+                .parseDefaulting(ChronoField.YEAR, LocalDate.now().year.toLong())
+                .toFormatter(Locale.US)
         }
     }
 }
