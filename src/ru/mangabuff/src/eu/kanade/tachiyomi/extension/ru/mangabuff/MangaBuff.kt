@@ -49,7 +49,7 @@ abstract class MangaBuff :
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(::tokenInterceptor)
         addInterceptor(::gifToWebpInterceptor)
-        rateLimit(1)
+        rateLimit(1) { it.encodedPath.startsWith("/manga/") || it.encodedPath.contains("chapters/load") }
     }
 
     // From Akuma - CSRF token
