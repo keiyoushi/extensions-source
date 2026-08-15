@@ -6,13 +6,12 @@ plugins {
 
 keiyoushi {
     name = "Hwago"
-    versionCode = 4
+    versionCode = 57
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
-    theme = "madara"
+    libVersion = "1.6"
 
     source {
         lang = "id"
-        baseUrl = "https://01.hwago.xyz"
+        baseUrl = "https://02.hwago.xyz"
     }
 }

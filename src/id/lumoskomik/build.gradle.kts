@@ -6,13 +6,12 @@ plugins {
 
 keiyoushi {
     name = "LumosKomik"
-    versionCode = 4
+    versionCode = 57
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "madara"
+    libVersion = "1.6"
 
     source {
         lang = "id"
-        baseUrl = "https://02.lumosgg.com"
+        baseUrl = "https://03.lumosgg.com"
     }
 }
