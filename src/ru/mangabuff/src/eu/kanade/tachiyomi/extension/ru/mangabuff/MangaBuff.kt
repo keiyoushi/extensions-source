@@ -23,6 +23,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl
@@ -37,8 +38,6 @@ import okio.IOException
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.LocalDate
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -347,9 +346,7 @@ abstract class MangaBuff :
     private fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.absUrl("href"))
         name = element.select(".chapters__volume, .chapters__value, .chapters__name").text()
-        date_upload = runCatching {
-            LocalDate.parse(element.selectFirst(".chapters__add-date")?.text(), dateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-        }.getOrDefault(0L)
+        date_upload = dateFormat.tryParseDate(element.selectFirst(".chapters__add-date")?.text())
         chapter_number = element.select(".chapters__value").text()
             .substringAfter(" ").toFloatOrNull() ?: -1f
     }
