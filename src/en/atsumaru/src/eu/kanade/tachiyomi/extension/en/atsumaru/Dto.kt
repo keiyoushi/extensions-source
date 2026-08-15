@@ -64,7 +64,6 @@ class MangaDto(
     private val released: Long? = null,
     private val status: String? = null,
     private val type: String? = null,
-    val medium: String? = null,
     private val views: JsonElement? = null,
     private val otherNames: List<String>? = null,
     private val avgRating: Float? = null,
