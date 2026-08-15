@@ -190,7 +190,7 @@ def get_all_modules() -> tuple[list[str], list[str]]:
     return modules, deleted
 
 def main() -> None:
-    _, ref, build_type = sys.argv
+    _, ref = sys.argv
     modules, deleted = get_module_list(ref)
 
     chunked = {
@@ -198,7 +198,7 @@ def main() -> None:
             {"number": i + 1, "modules": modules}
             for i, modules in
             enumerate(itertools.batched(
-                map(lambda x: f"{x}:assemble{build_type}", modules),
+                modules,
                 int(os.getenv("CI_CHUNK_SIZE", 65))
             ))
         ]
