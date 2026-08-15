@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.all.manhuarm.interceptors
 import eu.kanade.tachiyomi.extension.all.manhuarm.Dialog
 import eu.kanade.tachiyomi.extension.all.manhuarm.Language
 import org.jsoup.Jsoup
+import java.util.zip.GZIPInputStream
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -302,9 +303,11 @@ internal object TextPageRenderer {
 
     private val atlas: Atlas? by lazy {
         try {
+            // Gzipped, but deliberately not named .gz: AGP's asset merger decompresses
+            // and renames *.gz assets during packaging.
             val blob = TextPageRenderer::class.java.classLoader!!
                 .getResourceAsStream("assets/fonts/atlas_96.bin")!!
-                .use { it.readBytes() }
+                .use { GZIPInputStream(it).readBytes() }
             require(blob.size > Atlas.HEADER && String(blob, 0, 4) == "MRMF") { "bad atlas" }
             Atlas(blob)
         } catch (_: Throwable) {

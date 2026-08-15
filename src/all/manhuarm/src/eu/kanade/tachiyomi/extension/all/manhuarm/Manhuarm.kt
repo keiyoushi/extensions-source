@@ -9,7 +9,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.CloudflareWarmupInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.ComposedImageInterceptor
-import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.OcrUrlInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.TranslationInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.translator.bing.BingTranslator
 import eu.kanade.tachiyomi.extension.all.manhuarm.translator.google.GoogleTranslator
@@ -134,8 +133,6 @@ abstract class Manhuarm :
 
     private val warmupInterceptor = CloudflareWarmupInterceptor(baseUrl, headers)
 
-    private val ocrUrlInterceptor = OcrUrlInterceptor()
-
     /**
      * This ensures that the `OkHttpClient` instance is only created when required, and it is rebuilt
      * when there are configuration changes to ensure that the client uses the most up-to-date settings.
@@ -224,12 +221,6 @@ abstract class Manhuarm :
         return GET(url, headers)
     }
 
-    override fun latestUpdatesSelector(): String = popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element): SManga = element.toSManga()
-
-    override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
-
     // =========================== Search ==========================================
 
     override fun searchMangaSelector(): String = popularMangaSelector()
@@ -282,13 +273,13 @@ abstract class Manhuarm :
             .removeAllQueryParameters("style")
             .build()
 
-        val ocrRequest = ocrUrlInterceptor.getOcrRequest(document) ?: return pages
+        val ocrRequest = OcrRequestParser.getOcrRequest(document) ?: return pages
 
         val jsonHeaders = Headers.Builder().apply {
             add("Referer", chapterUrl.toString())
             add("Accept", "*/*")
 
-            ocrRequest.interceptedHeaders.forEach { (name, value) ->
+            ocrRequest.headers.forEach { (name, value) ->
                 set(name, value)
             }
         }.build()
@@ -318,20 +309,17 @@ abstract class Manhuarm :
             return pages
         }
 
-        val result = mutableListOf<Page>()
-        dialog.forEach { dto ->
+        return dialog.mapIndexed { index, dto ->
             val page = pages.first { it.imageUrl?.contains(dto.imageUrl, true)!! }
             val dialogues = dto.dialogues.filter { it.getTextBy(language).isNotBlank() }
 
             if (dialogues.isEmpty()) {
-                result += Page(result.size, imageUrl = page.imageUrl)
-                return@forEach
+                Page(index, imageUrl = page.imageUrl)
+            } else {
+                val fragment = json.encodeToString<List<Dialog>>(dialogues).toFragment()
+                Page(index, imageUrl = "${page.imageUrl}$fragment")
             }
-
-            val fragment = json.encodeToString<List<Dialog>>(dialogues).toFragment()
-            result += Page(result.size, imageUrl = "${page.imageUrl}$fragment")
         }
-        return result
     }
 
     override fun imageRequest(page: Page): Request {
