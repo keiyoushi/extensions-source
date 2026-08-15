@@ -42,4 +42,6 @@ abstract class InmortalScan : Madara() {
     override val mangaDetailsSelectorThumbnail = "div.scanim-series-cover img"
     override val mangaDetailsSelectorGenre = "a[href*='manga-genre']"
     override val altNameSelector = "p.scanim-series-alternative"
+
+    override fun chapterListSelector() = "li.wp-manga-chapter:not(.premium-block)"
 }
