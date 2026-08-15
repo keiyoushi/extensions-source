@@ -37,8 +37,6 @@ import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class Dilar : KeiSource() {
-    override val supportsLatest = false
-
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         add("X-DH-Pub", clientPubB64)
     }
@@ -46,6 +44,17 @@ abstract class Dilar : KeiSource() {
     // Popular
 
     override suspend fun getPopularManga(page: Int): MangasPage {
+        val response = client.get("$baseUrl/api/rankings")
+        val data = response.parseAs<RankingsDto>()
+        val entries = data.topSeries
+            .filterNot { it.isNovel() }
+            .map { it.toSManga() }
+        return MangasPage(entries, false)
+    }
+
+    // Latest
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val response = client.get("$baseUrl/api/series?page=$page")
         val data = response.parseAs<SeriesListDto>()
         val entries = data.series
@@ -53,10 +62,6 @@ abstract class Dilar : KeiSource() {
             .map { it.toSManga() }
         return MangasPage(entries, data.hasNextPage)
     }
-
-    // Latest
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // Search
 
