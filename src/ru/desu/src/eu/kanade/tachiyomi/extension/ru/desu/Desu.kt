@@ -21,6 +21,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import uy.kohesive.injekt.injectLazy
@@ -45,6 +46,8 @@ abstract class Desu :
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(3) { it.host == baseUrlHost }
     }
+
+    // ============================== Manga Details ===============================
     private fun MangaDetDto.toSManga(
         genresStr: String? = genres?.joinToString { it.name } ?: "",
         authorsStr: String? = authors?.joinToString { it.name },
@@ -120,6 +123,7 @@ abstract class Desu :
         }
     }
 
+    // ============================== Search ===============================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl$API_URL/catalog/?page=$page".toHttpUrl().newBuilder()
             .addQueryParameter("limit", "20")
@@ -163,6 +167,7 @@ abstract class Desu :
 
     override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", getFilterList(null))
 
+    // ============================== Manga/Chapters ===============================
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -195,6 +200,7 @@ abstract class Desu :
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga${manga.url}"
 
+    // ============================== Chapters Images ===============================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val titleId = chapter.memo["mangaUrl"]!!.string.removePrefix("/")
         val chapterId = chapter.url
@@ -215,34 +221,18 @@ abstract class Desu :
         return viewUrl
     }
 
-//   private fun searchMangaByIdRequest(id: String): Request = GET("$baseUrl$API_URL/$id", headers)
+    // =========================== Deeplink (Manga from Browser) ============================
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "manga" && url.pathSegments[1].length > 1) {
+            val tmpManga = SManga.create().apply {
+                this.url = "/${url.pathSegments[1].substringAfterLast(".")}"
+            }
+            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        }
+        return null
+    }
 
-//   override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-//        if (query.startsWith("https://")) {
-//            val url = query.toHttpUrl()
-//            val titleFullId = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() }
-//                ?: throw Exception("Unsupported url")
-//            val titleId = titleFullId.substringAfterLast(".").substringBeforeLast("/")
-//            return fetchSearchManga(page, "$PREFIX_SLUG_SEARCH$titleId", filters)
-//        }
-//        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-//            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
-//            client.newCall(searchMangaByIdRequest(realQuery))
-//                .asObservableSuccess()
-//                .map { response ->
-//                    val details = mangaDetailsParse(response)
-//                    details.url = "/$realQuery"
-//                    MangasPage(listOf(details), false)
-//                }
-//        } else {
-//            client.newCall(searchMangaRequest(page, query, filters))
-//                .asObservableSuccess()
-//                .map { response ->
-//                    searchMangaParse(response)
-//                }
-//        }
-//    }
-
+    // ============================== Filters ===============================
     private class OrderBy :
         Filter.Select<String>(
             "Сортировка",
@@ -329,6 +319,7 @@ abstract class Desu :
         Genre("Яой", "Yaoi"),
     )
 
+    // ============================== Preference ===============================
     private var isEng: String? = preferences.getString(LANGUAGE_PREF, "eng")
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
@@ -348,7 +339,6 @@ abstract class Desu :
     }
 
     companion object {
-        const val PREFIX_SLUG_SEARCH = "slug:"
         private const val LANGUAGE_PREF = "DesuTitleLanguage"
         private const val API_URL = "/api/manga/"
     }
