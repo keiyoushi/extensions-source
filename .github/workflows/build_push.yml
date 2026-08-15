@@ -45,7 +45,7 @@ jobs:
       - id: generate-matrices
         name: Create output matrices
         run: |
-          python ./.github/scripts/generate-build-matrices.py "$NX_BASE" Release
+          python ./.github/scripts/generate-build-matrices.py "$NX_BASE"
 
   build:
     name: Build extensions (${{ matrix.chunk.number }})
@@ -83,7 +83,11 @@ jobs:
           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          ./gradlew $MODULES
+          TASKS=()
+          for module in $MODULES; do
+            TASKS+=("${module}:assembleRelease")
+          done
+          ./gradlew "${TASKS[@]}"
 
       - name: Upload APKs (${{ matrix.chunk.number }})
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
