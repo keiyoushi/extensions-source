@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.post
+import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -49,6 +50,7 @@ abstract class MangaBuff :
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(::tokenInterceptor)
         addInterceptor(::gifToWebpInterceptor)
+        rateLimit(1)
     }
 
     // From Akuma - CSRF token
