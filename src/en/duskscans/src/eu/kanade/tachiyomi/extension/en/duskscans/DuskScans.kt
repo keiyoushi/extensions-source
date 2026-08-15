@@ -12,7 +12,6 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.getInt
 import keiyoushi.utils.getString
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -113,7 +112,7 @@ abstract class DuskScans : KeiSource() {
 
     override fun getChapterUrl(chapter: SChapter): String {
         val slug = chapter.memo.getString("slug")
-        val number = chapter.memo.getInt("number")
+        val number = chapter.memo.getString("number")
         return "$baseUrl/series/$slug/chapter-$number"
     }
 

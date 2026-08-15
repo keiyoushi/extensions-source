@@ -33,19 +33,20 @@ class MangaDto(
 @Serializable
 class ChapterDto(
     private val id: String,
-    private val number: Int,
+    private val number: Float,
     private val title: String = "",
     private val releaseDate: String? = null,
 ) {
     fun toSChapter(slug: String): SChapter = SChapter.create().apply {
         url = id
         // URL is built from the slug and number, id alone can't provide
+        val numberStr = number.toString().removeSuffix(".0")
         memo = buildJsonObject {
             put("slug", slug)
-            put("number", number)
+            put("number", numberStr)
         }
-        name = title.ifBlank { "Chapter $number" }
-        chapter_number = number.toFloat()
+        name = title.ifBlank { "Chapter $numberStr" }
+        chapter_number = number
         date_upload = Instant.tryParse(releaseDate)
     }
 }
