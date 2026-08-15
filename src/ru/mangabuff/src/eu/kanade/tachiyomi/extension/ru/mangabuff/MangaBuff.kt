@@ -41,6 +41,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class MangaBuff :
@@ -50,7 +51,7 @@ abstract class MangaBuff :
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(::tokenInterceptor)
         addInterceptor(::gifToWebpInterceptor)
-        rateLimit(1)
+        rateLimit(50, 30.seconds, 1.seconds)
     }
 
     // From Akuma - CSRF token
