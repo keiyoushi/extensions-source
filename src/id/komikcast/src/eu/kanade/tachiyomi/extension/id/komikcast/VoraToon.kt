@@ -17,9 +17,9 @@ import okhttp3.Request
 import okhttp3.Response
 
 @Source
-abstract class KomikCast : HttpSource() {
+abstract class VoraToon : HttpSource() {
 
-    private val apiUrl = "https://be.komikcast.cc"
+    private val apiUrl = "https://api.voratoon.com"
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
@@ -35,7 +35,7 @@ abstract class KomikCast : HttpSource() {
     override fun popularMangaRequest(page: Int): Request {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
             .addQueryParameter("includeMeta", "true")
-            .addQueryParameter("sort", "popularity")
+            .addQueryParameter("sort", "totalViews")
             .addQueryParameter("sortOrder", "desc")
             .addQueryParameter("take", "12")
             .addQueryParameter("page", page.toString())
@@ -65,11 +65,19 @@ abstract class KomikCast : HttpSource() {
             .addQueryParameter("page", page.toString())
 
         if (query.isNotEmpty()) {
-            url.addQueryParameter("filter", "title=like=\"$query\",nativeTitle=like=\"$query\"")
+            url.addQueryParameter("title", query)
         }
 
+        val filterBuilder = StringBuilder()
         filters.filterIsInstance<UriFilter>().forEach {
-            it.addToUri(url)
+            it.addToFilter(filterBuilder)
+        }
+        if (filterBuilder.isNotEmpty()) {
+            url.addQueryParameter("filter", filterBuilder.toString())
+        }
+
+        filters.filterIsInstance<UriQueryFilter>().forEach {
+            it.addToQuery(url)
         }
 
         return GET(url.build(), headers)

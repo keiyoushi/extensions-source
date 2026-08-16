@@ -4,12 +4,16 @@ import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
 
 interface UriFilter {
-    fun addToUri(builder: HttpUrl.Builder)
+    fun addToFilter(builder: StringBuilder)
+}
+
+interface UriQueryFilter {
+    fun addToQuery(builder: HttpUrl.Builder)
 }
 
 open class UriPartFilter(
     name: String,
-    private val param: String,
+    private val field: String,
     private val vals: Array<Pair<String, String>>,
     private val default: String = "",
 ) : Filter.Select<String>(
@@ -17,11 +21,11 @@ open class UriPartFilter(
     vals.map { it.first }.toTypedArray(),
     vals.indexOfFirst { it.second == default }.takeIf { it != -1 } ?: 0,
 ),
-    UriFilter {
-    override fun addToUri(builder: HttpUrl.Builder) {
+    UriQueryFilter {
+    override fun addToQuery(builder: HttpUrl.Builder) {
         val selected = vals[state].second
         if (selected.isNotEmpty()) {
-            builder.addQueryParameter(param, selected)
+            builder.addQueryParameter(field, selected)
         }
     }
 }
@@ -30,42 +34,25 @@ open class UriMultiSelectOption(name: String, val value: String) : Filter.CheckB
 
 open class UriMultiSelectFilter(
     name: String,
-    private val param: String,
+    private val field: String,
     private val options: Array<Pair<String, String>>,
 ) : Filter.Group<UriMultiSelectOption>(
     name,
     options.map { UriMultiSelectOption(it.first, it.second) },
 ),
     UriFilter {
-    override fun addToUri(builder: HttpUrl.Builder) {
+    override fun addToFilter(builder: StringBuilder) {
         state.filter { it.state }.forEach {
-            builder.addQueryParameter(param, it.value)
+            appendFilter(builder, "$field==${it.value}")
         }
     }
 }
 
-open class UriMultiTriSelectOption(name: String, val value: String) : Filter.TriState(name)
-
-open class UriMultiTriSelectFilter(
-    name: String,
-    private val includeParam: String,
-    private val excludeParam: String,
-    private val options: Array<Pair<String, String>>,
-) : Filter.Group<UriMultiTriSelectOption>(
-    name,
-    options.map { UriMultiTriSelectOption(it.first, it.second) },
-),
-    UriFilter {
-    override fun addToUri(builder: HttpUrl.Builder) {
-        state.forEach {
-            if (it.isIncluded()) {
-                builder.addQueryParameter(includeParam, it.value)
-            }
-            if (it.isExcluded()) {
-                builder.addQueryParameter(excludeParam, "-${it.value}")
-            }
-        }
+private fun appendFilter(builder: StringBuilder, filter: String) {
+    if (builder.isNotEmpty()) {
+        builder.append(';')
     }
+    builder.append(filter)
 }
 
 class SortFilter(default: String = "") :
@@ -73,9 +60,10 @@ class SortFilter(default: String = "") :
         "Sort",
         "sort",
         arrayOf(
-            Pair("Popularitas", "popular"),
+            Pair("Popular", "totalViews"),
             Pair("Terbaru", "latest"),
             Pair("Rating", "rating"),
+            Pair("A-Z", "title"),
         ),
         default,
     )
@@ -88,6 +76,7 @@ class SortOrderFilter :
             Pair("Desc", "desc"),
             Pair("Asc", "asc"),
         ),
+        default = "desc",
     )
 
 class StatusFilter :
@@ -125,59 +114,59 @@ class TypeFilter :
     )
 
 fun getGenres(): Array<Pair<String, String>> = arrayOf(
-    Pair("4-Koma", "4-Koma"),
-    Pair("Adventure", "Adventure"),
-    Pair("Cooking", "Cooking"),
-    Pair("Game", "Game"),
-    Pair("Gore", "Gore"),
-    Pair("Harem", "Harem"),
-    Pair("Historical", "Historical"),
-    Pair("Horror", "Horror"),
-    Pair("Isekai", "Isekai"),
-    Pair("Josei", "Josei"),
-    Pair("Magic", "Magic"),
-    Pair("Martial Arts", "Martial Arts"),
-    Pair("Mature", "Mature"),
-    Pair("Mecha", "Mecha"),
-    Pair("Medical", "Medical"),
-    Pair("Military", "Military"),
-    Pair("Music", "Music"),
-    Pair("Mystery", "Mystery"),
-    Pair("One-Shot", "One-Shot"),
-    Pair("Police", "Police"),
-    Pair("Psychological", "Psychological"),
-    Pair("Reincarnation", "Reincarnation"),
-    Pair("Romance", "Romance"),
-    Pair("School", "School"),
-    Pair("School Life", "School Life"),
-    Pair("Sci-Fi", "Sci-Fi"),
-    Pair("Seinen", "Seinen"),
-    Pair("Shoujo", "Shoujo"),
-    Pair("Shoujo Ai", "Shoujo Ai"),
-    Pair("Action", "Action"),
-    Pair("Comedy", "Comedy"),
-    Pair("Demons", "Demons"),
-    Pair("Drama", "Drama"),
-    Pair("Ecchi", "Ecchi"),
-    Pair("Fantasy", "Fantasy"),
-    Pair("Gender Bender", "Gender Bender"),
-    Pair("Shounen", "Shounen"),
-    Pair("Shounen Ai", "Shounen Ai"),
-    Pair("Slice of Life", "Slice of Life"),
-    Pair("Sports", "Sports"),
-    Pair("Super Power", "Super Power"),
-    Pair("Supernatural", "Supernatural"),
-    Pair("Thriller", "Thriller"),
-    Pair("Tragedy", "Tragedy"),
-    Pair("Vampire", "Vampire"),
-    Pair("Webtoons", "Webtoons"),
-    Pair("Yuri", "Yuri"),
+    Pair("4-Koma", "11"),
+    Pair("Action", "19"),
+    Pair("Adult", "49"),
+    Pair("Adventure", "16"),
+    Pair("Comedy", "22"),
+    Pair("Cooking", "7"),
+    Pair("Demons", "40"),
+    Pair("Drama", "29"),
+    Pair("Ecchi", "47"),
+    Pair("Fantasy", "28"),
+    Pair("Game", "17"),
+    Pair("Gender Bender", "41"),
+    Pair("Gore", "15"),
+    Pair("Harem", "34"),
+    Pair("Historical", "10"),
+    Pair("Horror", "18"),
+    Pair("Isekai", "6"),
+    Pair("Josei", "23"),
+    Pair("Magic", "35"),
+    Pair("Martial Arts", "46"),
+    Pair("Mature", "37"),
+    Pair("Mecha", "20"),
+    Pair("Medical", "9"),
+    Pair("Military", "36"),
+    Pair("Music", "44"),
+    Pair("Mystery", "39"),
+    Pair("One-Shot", "33"),
+    Pair("Police", "43"),
+    Pair("Psychological", "4"),
+    Pair("Reincarnation", "14"),
+    Pair("Romance", "26"),
+    Pair("School", "42"),
+    Pair("School Life", "2"),
+    Pair("Sci-Fi", "32"),
+    Pair("Seinen", "1"),
+    Pair("Shoujo", "31"),
+    Pair("Shoujo Ai", "27"),
+    Pair("Shounen", "30"),
+    Pair("Shounen Ai", "25"),
+    Pair("Slice of Life", "13"),
+    Pair("Sports", "12"),
+    Pair("Super Power", "45"),
+    Pair("Supernatural", "24"),
+    Pair("Thriller", "5"),
+    Pair("Tragedy", "38"),
+    Pair("Vampire", "21"),
+    Pair("Webtoons", "8"),
+    Pair("Yuri", "3"),
 )
 
 class GenreFilter(genres: Array<Pair<String, String>>) :
-    UriMultiTriSelectFilter(
+    UriMultiSelectFilter(
         "Genre",
-        "genreIds",
         "genreIds",
         genres,
     )
