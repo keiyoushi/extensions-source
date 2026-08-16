@@ -16,7 +16,7 @@ import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import kotlinx.serialization.json.JsonObject
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -92,7 +92,7 @@ abstract class Aurora : KeiSource() {
             .set("Sec-Fetch-Mode", "cors")
             .set("Sec-Fetch-Dest", "empty")
             .set("Sec-Fetch-Site", "same-origin")
-            .set("next-url", entryURL(chapter.memo).toHttpUrlOrNull()!!.encodedPath)
+            .set("next-url", entryURL(chapter.memo).toHttpUrl().encodedPath)
             .set("Accept", "*/*")
             .build()
         val response = client
