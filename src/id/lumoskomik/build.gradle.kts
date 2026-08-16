@@ -6,9 +6,10 @@ plugins {
 
 keiyoushi {
     name = "LumosKomik"
-    versionCode = 57
+    versionCode = 56
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
+    theme = "astromangareader"
 
     source {
         lang = "id"

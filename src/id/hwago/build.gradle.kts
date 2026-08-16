@@ -6,9 +6,10 @@ plugins {
 
 keiyoushi {
     name = "Hwago"
-    versionCode = 57
+    versionCode = 56
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
+    theme = "astromangareader"
 
     source {
         lang = "id"
