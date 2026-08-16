@@ -25,6 +25,7 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Desu :
@@ -38,7 +39,7 @@ abstract class Desu :
     }
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
-        rateLimit(1) { it.host == baseUrl.toHttpUrl().host }
+        rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
     }
 
     // ============================== Manga Details ===============================
