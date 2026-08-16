@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.astromangareader
+package eu.kanade.tachiyomi.multisrc.hwalumi
 
 import android.util.Base64
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -22,7 +22,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 
-abstract class AstroMangaReader : KeiSource() {
+abstract class Hwalumi : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/all-series?sort=popular&lang=id&page=$page").asJsoup()
@@ -63,7 +63,7 @@ abstract class AstroMangaReader : KeiSource() {
             SManga.create().apply {
                 this.title = title
                 thumbnail_url = img.attr("abs:src")
-                url = element.attr("href").substringAfter("/comic/").substringBefore("?").trimEnd('/')
+                url = mangaSlug(element.attr("abs:href"))
             }
         }.distinctBy { it.url }
 
@@ -82,10 +82,9 @@ abstract class AstroMangaReader : KeiSource() {
         ).manga.apply { initialized = true }
     }
 
-    private fun mangaUrl(url: String): String {
-        val slug = url.substringBefore("?").substringBefore("#").trim().trimEnd('/').substringAfterLast("/")
-        return "$baseUrl/comic/$slug"
-    }
+    private fun mangaSlug(url: String): String = (if (url.startsWith("http")) url else "$baseUrl/${url.trimStart('/')}").toHttpUrl().pathSegments.last { it.isNotEmpty() }
+
+    private fun mangaUrl(url: String): String = "$baseUrl/comic/${mangaSlug(url)}"
 
     override fun getMangaUrl(manga: SManga): String = mangaUrl(manga.url)
 

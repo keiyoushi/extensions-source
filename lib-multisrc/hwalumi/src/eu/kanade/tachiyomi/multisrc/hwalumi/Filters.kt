@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.astromangareader
+package eu.kanade.tachiyomi.multisrc.hwalumi
 
 import eu.kanade.tachiyomi.source.model.Filter
 
