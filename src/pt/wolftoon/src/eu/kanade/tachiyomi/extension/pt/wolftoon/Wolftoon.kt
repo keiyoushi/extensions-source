@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
@@ -36,7 +35,6 @@ abstract class Wolftoon : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .addNetworkInterceptor(CookieInterceptor(supabaseUrlHost, emptyList()))
         .rateLimit(2, 1.seconds) { it.host == baseUrlHost || it.host == supabaseUrlHost }
         .build()
 

@@ -13,7 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.addCookie
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
@@ -46,9 +46,7 @@ abstract class Reimanga :
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.client.newBuilder()
-        .addNetworkInterceptor(
-            CookieInterceptor(baseUrl.toHttpUrl().host, "showAdultContent" to "true"),
-        )
+        .addCookie("showAdultContent" to "true")
         .protocols(listOf(Protocol.HTTP_1_1))
         .build()
 
