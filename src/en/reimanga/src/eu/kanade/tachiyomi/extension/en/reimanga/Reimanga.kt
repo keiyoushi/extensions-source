@@ -14,16 +14,13 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
-import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -44,18 +41,10 @@ abstract class Reimanga :
 
     private val preferences by getPreferencesLazy()
 
-    private val rscHeaders by lazy {
-        headers.newBuilder()
+    private val rscHeaders
+        get() = headersBuilder()
             .set("rsc", "1")
             .build()
-    }
-
-    private val tagsCacheFile by lazy {
-        applicationContext.cacheDir
-            .resolve("source_$id")
-            .also { it.mkdirs() }
-            .resolve("tags.json")
-    }
 
     private val spaceRegex = Regex("""\s+""")
 
@@ -140,32 +129,37 @@ abstract class Reimanga :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
+        if (!fetchDetails && !fetchChapters) {
+            return SMangaUpdate(manga, chapters)
+        }
+
         val mangaId = manga.url.substringAfterLast("-")
-
-        val detailsDeferred = async {
-            if (fetchDetails) {
-                client.get("$baseUrl/api/manga/$mangaId")
-                    .parseAs<MangaPage>()
-                    .manga
-                    .toSManga(baseUrl)
-            } else {
-                null
-            }
-        }
-        val chaptersDeferred = async {
-            if (fetchChapters) {
-                parseChapterList(
-                    client.get(getMangaUrl(manga), rscHeaders).extractNextJs<ChapterList>(),
-                )
-            } else {
-                null
-            }
+        var apiManga = if (fetchDetails || fetchChapters) {
+            client.get("$baseUrl/api/manga/$mangaId")
+                .parseAs<MangaPage>()
+                .manga
+        } else {
+            null
         }
 
-        SMangaUpdate(
-            manga = detailsDeferred.await() ?: manga,
-            chapters = chaptersDeferred.await() ?: chapters,
+        // DMCA / duplicate entries point at a main series with real metadata & chapters
+        if (apiManga != null && apiManga.resolvedId != mangaId.toLongOrNull()) {
+            apiManga = client.get("$baseUrl/api/manga/${apiManga.resolvedId}")
+                .parseAs<MangaPage>()
+                .manga
+        }
+
+        val updatedChapters = if (fetchChapters) {
+            val pageUrl = apiManga?.chapterPageUrl(baseUrl) ?: getMangaUrl(manga)
+            parseChapterList(client.get(pageUrl, rscHeaders).extractNextJs())
+        } else {
+            chapters
+        }
+
+        return SMangaUpdate(
+            manga = if (fetchDetails) apiManga?.toSManga(baseUrl) ?: manga else manga,
+            chapters = updatedChapters,
         )
     }
 
@@ -207,7 +201,6 @@ abstract class Reimanga :
         val tagList = client.get("$baseUrl/advanced-search", rscHeaders)
             .extractNextJs<TagList>()
             ?: throw IOException("Failed to extract tags")
-        tagsCacheFile.writeText(tagList.toJsonString())
         return tagList.toJsonElement()
     }
 
@@ -243,45 +236,42 @@ abstract class Reimanga :
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val cachedTags = runCatching {
-            tagsCacheFile.readText().parseAs<TagList>()
-        }.getOrNull()
+        val filters = getFilterList()
+        val tags = buildList {
+            filters.firstInstanceOrNull<GenreFilter>()?.state?.let(::addAll)
+            filters.firstInstanceOrNull<TagFilter>()?.state?.let(::addAll)
+        }.sortedBy { it.name }
 
-        if (cachedTags != null) {
-            val tags = buildList {
-                addAll(cachedTags.genres)
-                addAll(cachedTags.tags)
-            }.sortedBy { it.name }
-            MultiSelectListPreference(screen.context).apply {
-                key = EXCLUDE_TAG_PREF
-                title = "Exclude Tags from Browse"
-                entries = tags.map { it.name }.toTypedArray()
-                entryValues = tags.map { it.slug }.toTypedArray()
-                setDefaultValue(emptySet<String>())
+        MultiSelectListPreference(screen.context).apply {
+            key = EXCLUDE_TAG_PREF
+            title = "Exclude Tags from Browse"
+            entries = tags.map { it.name }.toTypedArray()
+            entryValues = tags.map { it.value }.toTypedArray()
+            setDefaultValue(emptySet<String>())
+            setEnabled(tags.isNotEmpty())
 
-                fun updateSummary(pref: MultiSelectListPreference, selected: Set<String>?) {
-                    pref.summary = if (selected.isNullOrEmpty()) {
-                        "None"
-                    } else {
-                        val entryMap = pref.entryValues.zip(pref.entries).toMap()
-                        selected.joinToString { entryMap[it] ?: it }
-                    }
+            fun updateSummary(pref: MultiSelectListPreference, selected: Set<String>?) {
+                pref.summary = if (selected.isNullOrEmpty()) {
+                    "None"
+                } else {
+                    val entryMap = pref.entryValues.zip(pref.entries).toMap()
+                    selected.joinToString { entryMap[it] ?: it }
                 }
+            }
 
-                updateSummary(this, preferences.getStringSet(EXCLUDE_TAG_PREF, emptySet()))
+            updateSummary(this, preferences.getStringSet(EXCLUDE_TAG_PREF, emptySet()))
 
-                setOnPreferenceChangeListener { pref, newValue ->
-                    @Suppress("UNCHECKED_CAST")
-                    val updated = pref as MultiSelectListPreference
+            setOnPreferenceChangeListener { pref, newValue ->
+                @Suppress("UNCHECKED_CAST")
+                val updated = pref as MultiSelectListPreference
 
-                    @Suppress("UNCHECKED_CAST")
-                    val newSet = newValue as Set<String>
+                @Suppress("UNCHECKED_CAST")
+                val newSet = newValue as Set<String>
 
-                    updateSummary(updated, newSet)
-                    true
-                }
-            }.also(screen::addPreference)
-        }
+                updateSummary(updated, newSet)
+                true
+            }
+        }.also(screen::addPreference)
     }
 }
 

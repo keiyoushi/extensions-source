@@ -50,6 +50,8 @@ class MangaPage(
         @SerialName("cover_url")
         private val cover: String? = null,
         private val description: String? = null,
+        @SerialName("ai_description")
+        private val aiDescription: String? = null,
         @SerialName("alt_title")
         private val altTitle: String? = null,
         private val completed: Int = 0,
@@ -59,7 +61,13 @@ class MangaPage(
         private val genres: List<Tag> = emptyList(),
         private val tags: List<Tag> = emptyList(),
         private val authors: List<Name> = emptyList(),
+        @SerialName("main_manga_id")
+        private val mainMangaId: Long? = null,
+        @SerialName("main_name_url")
+        private val mainNameUrl: String? = null,
     ) {
+        val resolvedId: Long get() = mainMangaId ?: id
+
         fun toSManga(baseUrl: String) = SManga.create().apply {
             url = "$slug-$id"
             title = this@MangaDetails.title
@@ -72,7 +80,7 @@ class MangaPage(
                     append(rating)
                     append("\n\n")
                 }
-                this@MangaDetails.description?.takeIf { it.isNotBlank() }?.also {
+                (aiDescription ?: this@MangaDetails.description)?.takeIf { it.isNotBlank() }?.also {
                     append(it.trim())
                     append("\n\n")
                 }
@@ -95,6 +103,16 @@ class MangaPage(
                 genres.mapTo(this) { it.name.trim() }
                 tags.mapTo(this) { it.name.trim() }
             }.joinToString()
+        }
+
+        fun chapterPageUrl(baseUrl: String): String {
+            val mainId = mainMangaId
+            val mainSlug = mainNameUrl
+            return if (mainId != null && !mainSlug.isNullOrBlank()) {
+                "$baseUrl/manga/$mainSlug-$mainId"
+            } else {
+                "$baseUrl/manga/$slug-$id"
+            }
         }
 
         @Serializable
