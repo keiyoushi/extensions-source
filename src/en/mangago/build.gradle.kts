@@ -15,7 +15,3 @@ keiyoushi {
         baseUrl = "https://www.mangago.me"
     }
 }
-
-dependencies {
-    implementation(project(":lib:cookieinterceptor"))
-}
