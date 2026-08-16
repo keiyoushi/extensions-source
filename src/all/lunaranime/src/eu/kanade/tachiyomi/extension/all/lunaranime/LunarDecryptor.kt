@@ -20,17 +20,64 @@ class LunarDecryptor(
 
     fun decryptChapterImages(chapterResponse: Response, slug: String, chapterNum: String, lang: String): List<String> {
         val seedObjs = chapterResponse.extractSeeds()
-        require(seedObjs.size >= 2) { "Failed to find payload seeds" }
 
-        val rctx0 = generateRctxFrom(seedObjs[0])
-        val rctx1 = generateRctxFrom(seedObjs[1])
-
-        val token = generateToken(rctx0, rctx1, slug, chapterNum)
+        val (token, seed0) = if (seedObjs.size >= 2) {
+            val s0 = generateRctxFrom(seedObjs[0])
+            val s1 = generateRctxFrom(seedObjs[1])
+            val tok = generateToken(s0, s1, slug, chapterNum)
+            tok to s0
+        } else {
+            val s0 = "seed0"
+            val s1 = "seed1"
+            val tok = mintTokenFallback(slug, chapterNum, s0, s1)
+            tok to s0
+        }
 
         val sessionDataB64 = fetchSessionData(token, lang)
 
-        val finalJson = decryptSessionImages(sessionDataB64, rctx0)
-        return finalJson.parseAs<LunarPageListDecrypted>().data.images
+        return try {
+            val finalJson = decryptSessionImages(sessionDataB64, seed0)
+            finalJson.parseAs<LunarPageListDecrypted>().data.images
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun sha256Bytes(s: String): ByteArray = MessageDigest.getInstance("SHA-256").digest(s.toByteArray(Charsets.ISO_8859_1))
+
+    private fun generateXorKeyFallback(seed0: String, seed1: String): ByteArray {
+        val r = sha256Bytes("$seed0\u0001$seed1")
+        val maxLen = maxOf(seed0.length, seed1.length)
+        val res = ByteArray(maxLen)
+        for (n in 0 until maxLen) {
+            val eChar = seed0[n % seed0.length].code
+            val tChar = seed1[n % seed1.length].code
+            val rByte = r[n % 32].toInt() and 0xFF
+            res[n] = (eChar xor tChar xor rByte xor (83 * n + 29)).toByte()
+        }
+        return res
+    }
+
+    private fun mintTokenFallback(slug: String, chapterNum: String, seed0: String, seed1: String): String {
+        val xorKey = generateXorKeyFallback(seed0, seed1)
+        val timestamp = (System.currentTimeMillis() / 1000).toString(16)
+        val rand12 = (1..12).map { RAND_ALPHABET[Random.nextInt(RAND_ALPHABET.length)] }.joinToString("")
+        val rand6 = (1..6).map { RAND_ALPHABET[Random.nextInt(RAND_ALPHABET.length)] }.joinToString("")
+        val payload = "$timestamp|$rand12|$slug|$chapterNum|$rand6"
+
+        val n = Random.nextInt(256)
+        val a = ByteArray(payload.length + 1)
+        a[0] = n.toByte()
+        val keyLen = xorKey.size
+        for (i in payload.indices) {
+            val code = payload[i].code
+            val k = xorKey[(i + n) % keyLen].toInt() and 0xFF
+            val enc = (code xor k xor (n + 83 * i)) and 0xFF
+            a[i + 1] = enc.toByte()
+        }
+
+        return Base64.encodeToString(a, Base64.NO_WRAP)
+            .replace('+', '-').replace('/', '_').trimEnd('=')
     }
 
     private fun fetchSessionData(token: String, lang: String): String {
@@ -43,75 +90,6 @@ class LunarDecryptor(
 
     private val nextFPushRegex = Regex("""self\.__next_f\.push\(\[\s*\d+\s*,\s*(["'])(.*?)\1\s*\]\)""", RegexOption.DOT_MATCHES_ALL)
     private val dictRegex = Regex("""\{[^{}]*\}""")
-
-    private fun unescapeJsString(s: String): String {
-        val sb = StringBuilder(s.length)
-        var i = 0
-        while (i < s.length) {
-            val c = s[i]
-            if (c == '\\' && i + 1 < s.length) {
-                when (val next = s[i + 1]) {
-                    '"' -> {
-                        sb.append('"')
-                        i += 2
-                    }
-                    '\'' -> {
-                        sb.append('\'')
-                        i += 2
-                    }
-                    '\\' -> {
-                        sb.append('\\')
-                        i += 2
-                    }
-                    '/' -> {
-                        sb.append('/')
-                        i += 2
-                    }
-                    'n' -> {
-                        sb.append('\n')
-                        i += 2
-                    }
-                    'r' -> {
-                        sb.append('\r')
-                        i += 2
-                    }
-                    't' -> {
-                        sb.append('\t')
-                        i += 2
-                    }
-                    'b' -> {
-                        sb.append('\b')
-                        i += 2
-                    }
-                    'f' -> {
-                        sb.append('\u000C')
-                        i += 2
-                    }
-                    'u' -> {
-                        if (i + 5 < s.length) {
-                            val hex = s.substring(i + 2, i + 6)
-                            val code = hex.toIntOrNull(16)
-                            if (code != null) {
-                                sb.append(code.toChar())
-                                i += 6
-                                continue
-                            }
-                        }
-                        sb.append(c)
-                        i++
-                    }
-                    else -> {
-                        sb.append(next)
-                        i += 2
-                    }
-                }
-            } else {
-                sb.append(c)
-                i++
-            }
-        }
-        return sb.toString()
-    }
 
     private fun isSeedMap(map: Map<String, String>): Boolean {
         val twoCharEntry = map.entries.firstOrNull { it.key.length == 2 } ?: return false
@@ -140,7 +118,7 @@ class LunarDecryptor(
 
         for (match in nextFPushRegex.findAll(html)) {
             val segment = match.groupValues[2]
-            val decoded = unescapeJsString(segment)
+            val decoded = segment.replace("\\\\", "\\").replace("\\\"", "\"")
             for (dictStr in dictRegex.findAll(decoded)) {
                 processDict(dictStr.value)
             }
@@ -155,19 +133,10 @@ class LunarDecryptor(
         return seedObjects
     }
 
-    private val b64urlDecode = { s: String ->
-        Base64.decode(s.replace('-', '+').replace('_', '/').padEnd((s.length + 3) / 4 * 4, '='), Base64.DEFAULT)
-    }
-
-    private val randAlphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
-    // Find 2-char key from flight chunks
     private fun findTwoCharKey(data: Map<String, String>) = data.entries.first { it.key.length == 2 }.let { it.key to it.value.reversed() }
 
-    // Decode reversed base64
     private fun decodeReversedBase64(reversed: String) = String(Base64.decode(reversed.padEnd((reversed.length + 3) / 4 * 4, '='), Base64.DEFAULT))
 
-    // Construct rctx0/rctx1 from seed object with some bit rotations
     private fun generateRctxFrom(seedObj: Map<String, String>): String {
         val (_, reversedB64) = findTwoCharKey(seedObj)
         val (xorKey, hexStr) = decodeReversedBase64(reversedB64).split('.')
@@ -178,9 +147,8 @@ class LunarDecryptor(
         }.joinToString("")
         if (aStr.isEmpty()) return ""
 
-        val rand = Random(aStr.length.toLong()) // JS: Math.random() seeded through length
+        val rand = Random(aStr.length.toLong())
         val h = IntArray(256) { it }.apply {
-            // shuffle
             for (i in 255 downTo 1) {
                 val j = rand.nextInt(i + 1)
                 this[i] = this[j].also { this[j] = this[i] }
@@ -191,7 +159,6 @@ class LunarDecryptor(
         val d = aStr.map { it.code }.toMutableList()
 
         repeat(3) { round ->
-            // 3 forward rounds (JS)
             d.indices.forEach { t ->
                 d[t] = d[t] xor u[(t + 7 * round) % u.size]
                 d[t] = h[d[t]]
@@ -201,7 +168,7 @@ class LunarDecryptor(
             for (t in 1 until d.size) d[t] = d[t] xor d[t - 1]
         }
 
-        val e = d.toMutableList() // 3 reverse rounds
+        val e = d.toMutableList()
         for (round in 2 downTo 0) {
             for (t in e.size - 1 downTo 1) e[t] = e[t] xor e[t - 1]
             e.indices.forEach { t ->
@@ -214,16 +181,14 @@ class LunarDecryptor(
         return e.joinToString("") { it.toChar().toString() }
     }
 
-    // Js: char code XOR
-    private infix fun String.xor(other: String) = ByteArray(maxOf(length, other.length)) { i ->
-        (this[i % length].code.toByte() xor other[i % other.length].code.toByte())
+    private fun xorStrings(first: String, second: String): ByteArray = ByteArray(maxOf(first.length, second.length)) { i ->
+        (first[i % first.length].code.toByte() xor second[i % second.length].code.toByte())
     }
 
-    // taken from Js: timestamp|rand|slug|chapterNumber→ base64url
     private fun generateToken(rctx0: String, rctx1: String, slug: String, index: String): String {
-        val xorKey = rctx0 xor rctx1
+        val xorKey = xorStrings(rctx0, rctx1)
         val timestamp = (System.currentTimeMillis() / 1000).toString(16)
-        val rand = (1..8).map { randAlphabet[Random.nextInt(randAlphabet.length)] }.joinToString("")
+        val rand = (1..8).map { RAND_ALPHABET[Random.nextInt(RAND_ALPHABET.length)] }.joinToString("")
         val payload = "$timestamp|$rand|$slug|$index"
         val encrypted = payload.mapIndexed { i, c ->
             (c.code xor xorKey[i % xorKey.size].toInt()).toByte()
@@ -232,13 +197,16 @@ class LunarDecryptor(
             .replace('+', '-').replace('/', '_').trimEnd('=')
     }
 
-    // Decrypt session_data (AES‑CBC) as originally, with key being SHA‑256 of rctx0 from token step
     private fun decryptSessionImages(sessionDataB64: String, rctx0: String): String {
-        val ciphertext = b64urlDecode(sessionDataB64)
+        val ciphertext = Base64.decode(sessionDataB64.replace('-', '+').replace('_', '/').padEnd((sessionDataB64.length + 3) / 4 * 4, '='), Base64.DEFAULT)
         val key = MessageDigest.getInstance("SHA-256").digest(rctx0.toByteArray())
         Cipher.getInstance("AES/CBC/PKCS5Padding").apply {
             init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(ByteArray(16)))
             return String(doFinal(ciphertext), Charsets.UTF_8)
         }
+    }
+
+    companion object {
+        private const val RAND_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
     }
 }
