@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -26,12 +26,10 @@ import kotlin.time.Duration.Companion.seconds
 abstract class MangasBrasuka : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3, 1.seconds)
-        .addNetworkInterceptor(
-            CookieInterceptor(
-                baseUrl.toHttpUrl().host,
-                listOf(
-                    "mnx_adulto" to "1",
-                ),
+        .addCookie(
+            { baseUrl.toHttpUrl().host },
+            listOf(
+                "mnx_adulto" to "1",
             ),
         )
 
@@ -100,12 +98,10 @@ abstract class MangasBrasuka : KeiSource() {
             .build()
         val response = client
             .newBuilder()
-            .addNetworkInterceptor(
-                CookieInterceptor(
-                    baseUrl.toHttpUrl().host,
-                    listOf(
-                        "mnx_gate_${chapter.memo["number"]?.int}" to "1",
-                    ),
+            .addCookie(
+                { baseUrl.toHttpUrl().host },
+                listOf(
+                    "mnx_gate_${chapter.memo["number"]?.int}" to "1",
                 ),
             )
             .build()

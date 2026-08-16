@@ -16,7 +16,3 @@ keiyoushi {
         versionId = 2
     }
 }
-
-dependencies {
-    implementation(project(":lib:cookieinterceptor"))
-}
