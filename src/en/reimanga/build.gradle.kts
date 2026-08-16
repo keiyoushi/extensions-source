@@ -12,7 +12,7 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl = "https://reimanga.com"
+        baseUrl = "https://reimanga.net"
     }
 
     deeplink {
