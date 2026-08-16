@@ -40,7 +40,7 @@ import javax.crypto.spec.SecretKeySpec
 abstract class Dilar : KeiSource() {
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         add("X-DH-Pub", clientPubB64)
-        add("X-Crypto-Caps", "1,2,3,4,5,6")
+        add("X-Crypto-Caps", "1,2,3,4,5,6,7,8")
     }
 
     // Popular
