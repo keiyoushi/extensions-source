@@ -10,7 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.addCookie
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -35,7 +35,7 @@ abstract class Nudemoon : HttpSource() {
 
     override val client by lazy {
         network.client.newBuilder()
-            .addNetworkInterceptor(CookieInterceptor(domain, listOf("NMfYa" to "1", "nm_mobile" to "1", "Domain" to domain)))
+            .addCookie { listOf("NMfYa" to "1", "nm_mobile" to "1", "Domain" to domain) }
             .build()
     }
 

@@ -38,8 +38,9 @@ or fix them directly by submitting a Pull Request.
         - [JSON serialization - `toJsonString` / `toJsonRequestBody`](#json-serialization---tojsonstring--tojsonrequestbody)
         - [JSON models (DTOs) and serialization](#json-models-dtos-and-serialization)
         - [Protobuf parsing and serialization - `parseAsProto` / `toRequestBodyProto`](#protobuf-parsing-and-serialization---parseasproto--torequestbodyproto)
-        - [Date parsing - `Instant.parseOrNull` / `java.time`](#date-parsing---instantparseornull--javatime)
+        - [Date parsing - `tryParse` helpers](#date-parsing---tryparse-helpers)
         - [HTTP requests - `OkHttpClient.get` / `post` / `put` / `head`](#http-requests---okhttpclientget--post--put--head)
+        - [Custom cookies - `addCookie`](#custom-cookies---addcookie)
         - [WebView execution - `runWebView` / `getLocalStorage`](#webview-execution---runwebview--getlocalstorage)
         - [Filter helpers - `firstInstance` / `firstInstanceOrNull`](#filter-helpers---firstinstance--firstinstanceornull)
         - [SharedPreferences - `getPreferences` / `getPreferencesLazy`](#sharedpreferences---getpreferences--getpreferenceslazy)
@@ -504,15 +505,14 @@ Referencing the actual implementation will help with understanding extensions' c
 #### lib tools
 
 The `lib/` directory contains reusable Gradle modules that solve common problems shared across
-multiple extensions, such as cookie injection, image descrambling, JavaScript deobfuscation, and
-more. Before implementing something from scratch, check whether an existing lib already covers your
+multiple extensions, such as image descrambling, JavaScript deobfuscation, and more. Before
+implementing something from scratch, check whether an existing lib already covers your
 use case. Each lib is self-documented via KDoc comments and/or a README in its own folder.
 
 #### Available libs
 
 | Module                                                                                                    | Description                                                                             |
 |-----------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------|
-| [`lib-cookieinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cookieinterceptor) | Injects cookies into OkHttp requests for a given domain                                 |
 | [`lib-cryptoaes`](https://github.com/keiyoushi/extensions-source/tree/main/lib/cryptoaes)                 | AES-CBC decryption compatible with CryptoJS; JSFuck deobfuscation                       |
 | [`lib-dataimage`](https://github.com/keiyoushi/extensions-source/tree/main/lib/dataimage)                 | Decodes base64 `data:image` strings into mock URLs that OkHttp can handle               |
 | [`lib-e4p`](https://github.com/keiyoushi/extensions-source/tree/main/lib/e4p)                             | Decodes and decrypts E4P-format manga page archives (TIFF/XEBP)                         |
@@ -700,62 +700,54 @@ If you only need to work with raw bytes, you can also use `.decodeProto()` and `
 
 Do not create a local `private val proto: ProtoBuf by injectLazy()` unless you specifically need a custom configuration. For standard parsing, the global instance is already available and the `parseAsProto` helpers use it automatically.
 
-##### Date parsing - `Instant.parseOrNull` / `java.time`
+##### Date parsing - `tryParse` helpers
 
-For **ISO-8601** date strings (e.g. `2024-03-05T12:30:00Z`), prefer `kotlin.time.Instant.parseOrNull`:
+Use the date helpers from `keiyoushi.utils` instead of parsing dates manually. They accept nullable
+strings, return epoch milliseconds, and return `0L` when parsing fails.
+
+For a self-describing ISO-8601 instant, such as `2024-01-06T00:00:00Z` or
+the equivalent `2024-01-06T01:00:00+01:00`, use the `kotlin.time` helper:
 
 ```kotlin
+import keiyoushi.utils.tryParse
 import kotlin.time.Instant
 
-chapter.date_upload = Instant.parseOrNull(dateStr)?.toEpochMilliseconds() ?: 0L
+chapter.date_upload = Instant.tryParse(dateStr)
 ```
 
-It returns `null` on a malformed string instead of throwing, and needs no format pattern, locale, or
-timezone handling - `parseOrNull` only accepts strict ISO-8601 (with an explicit `Z` or offset), so
-fall back to `java.time` for anything else (e.g. `dd MMM yyyy`, or a site-local format with no
-offset).
+For a site-specific format, declare a `java.time.format.DateTimeFormatter` at class or file level and
+use the helper that matches the information in the input:
 
-For those non-ISO formats, prefer `java.time` (`DateTimeFormatter` with `LocalDate`/`LocalDateTime`/
-`OffsetDateTime`) over `SimpleDateFormat`, which is discouraged for new code. Wrap the parse in
-`runCatching` so a malformed or unexpected string falls back to `0L` instead of crashing:
+- `tryParseDate` for a date without a time. It resolves to the start of the day in the supplied zone.
+- `tryParseDateTime` for a local date and time whose zone is supplied separately.
+- `tryParseZonedDateTime` when the parsed text contains the offset or zone that should determine the
+  instant.
 
 ```kotlin
-import java.time.LocalDate
-import java.time.ZoneOffset
+import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.tryParseDateTime
+import keiyoushi.utils.tryParseZonedDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-// Declare the formatter at class/file level - creating one is not free:
 private val dateFormat = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH)
+private val dateTimeFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+private val zonedDateTimeFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")
 
-chapter.date_upload = runCatching {
-    LocalDate.parse(dateStr, dateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-}.getOrDefault(0L)
+chapter.date_upload = dateFormat.tryParseDate(dateStr, ZoneId.of("Europe/London"))
+chapter.date_upload = dateTimeFormat.tryParseDateTime(dateStr, ZoneId.of("Asia/Tokyo"))
+chapter.date_upload = zonedDateTimeFormat.tryParseZonedDateTime(dateStr)
 ```
 
-If a site mixes ISO and non-ISO shapes in the same field (rare, but happens), chain the attempts with
-`recoverCatching` instead of hand-rolling detection logic:
+The date and local date-time helpers default to `ZoneId.systemDefault()`. Pass an explicit zone when
+the site's zone is known so results do not depend on the user's device. Use the appropriate `Locale`
+when a pattern contains locale-sensitive text such as month names. Offset and zone pattern letters
+must not be quoted; for example, use `XXX`, not a literal `'Z'`, when calling
+`tryParseZonedDateTime`.
 
-```kotlin
-runCatching { Instant.parse(dateStr).toEpochMilliseconds() }
-    .recoverCatching { LocalDate.parse(dateStr, dateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() }
-    .getOrDefault(0L)
-```
-
-Only reach for `SimpleDateFormat` + `keiyoushi.utils.tryParse` if `java.time` genuinely can't express
-the pattern you need; it is otherwise discouraged in new code.
-
-Two common mistakes to avoid, regardless of which API you use:
-
-- **Always set `Locale.ROOT`** (or `Locale.ENGLISH` for `java.time`, which requires a non-root locale for some symbol sets), unless the pattern contains locale-sensitive text (such as month names), in which case use the appropriate locale.
-- **Set the timezone/offset** if known, either because the site's region is known or because the pattern uses a literal `'Z'`.
-
-  ```kotlin
-  // Wrong: 'Z' is treated as a literal character, no offset is applied
-  DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
-  // Correct, if you must parse this shape by hand at all - prefer Instant.parseOrNull instead:
-  LocalDateTime.parse(dateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")).toInstant(ZoneOffset.UTC)
-  ```
+Do not use `SimpleDateFormat` for new code. Its `keiyoushi.utils.tryParse` overload is deprecated in
+favor of these `kotlin.time` and `java.time` helpers.
 
 ##### HTTP requests - `OkHttpClient.get` / `post` / `put` / `head`
 
@@ -782,6 +774,47 @@ val response = client.post(url, headers, body)
 - `ensureSuccess` (default `true`) throws if the response isn't 2xx; pass `ensureSuccess = false` to inspect non-2xx responses yourself.
 - `get`/`head` also take a `cacheControl` (defaults to a 10-minute max-age).
 - Always wrap the returned `Response` in `response.use { ... }` or consume it with `parseAs`/`asJsoup`, which close it for you.
+
+##### Custom cookies - `addCookie`
+
+Use `keiyoushi.network.addCookie` on an `OkHttpClient.Builder` to inject custom cookies while
+preserving unrelated cookies already attached to the request. If the request already contains a
+cookie with the same name, the configured value replaces it. Inside an `HttpSource`, the domain
+defaults to the source's current `baseUrl` and is resolved again for every request, so generated
+mirror and custom-URL preferences keep working after a runtime change:
+
+```kotlin
+import keiyoushi.network.addCookie
+
+override val client = network.client.newBuilder()
+    .addCookie(
+        listOf(
+            "adult" to "1",
+            "reader" to "web",
+            "quality" to "high",
+        ),
+    )
+    .build()
+```
+
+Pass a lambda when cookie values must also be resolved for every request:
+
+```kotlin
+.addCookie { listOf("locale" to localePreference()) }
+```
+
+For a domain unrelated to `baseUrl`, pass a domain lambda. Calls can be chained to configure
+multiple domains; configurations are checked in call order and the first matching domain is used:
+
+```kotlin
+network.client.newBuilder()
+    .addCookie("site-cookie" to "1")
+    .addCookie({ apiUrl.toHttpUrl().host }, "api-cookie" to "1")
+    .build()
+```
+
+Do not manually set the `Cookie` header for this purpose. Doing so replaces all existing cookies,
+including Cloudflare cookies set through WebView, which can break login and challenge solving.
 
 ##### WebView execution - `runWebView` / `getLocalStorage`
 
@@ -1147,7 +1180,7 @@ Behavior `KeiSource` gives you for free:
 - **Never call `client.newCall(...).execute()` directly from a suspend function:** Use the suspend `OkHttpClient.get`/`post`/`put`/`head` helpers instead (see [HTTP requests](#http-requests---okhttpclientget--post--put--head)); they suspend properly instead of blocking a thread. This doesn't apply to genuinely synchronous, non-suspend callback contexts (an `OkHttp` interceptor, a WebView bridge, or the `fetch` callback passed to `readZipDirectory`/`readZipEntry`), where there's no suspend context to hook into and a blocking `.execute()` is expected - see [ZIP streaming](#zip-streaming---readzipdirectory--readzipentry) for an example.
 - **Pass `HttpUrl` directly:** `client.get`/`post`/`put`/`head` and the `GET()`/`POST()` builders all accept an `HttpUrl` object. Do not call `.toString()` on a built `HttpUrl` before passing it.
 - **Use `HttpUrl` for URL manipulation:** When parsing or extracting parts of a URL, prefer using `HttpUrl` methods (like `pathSegments` property, `encodedPathSegments`, or `queryParameter("id")`) over manual string splitting (e.g., `.split("/")`) or regex. This ensures proper separation of concerns and protects against unexpected inputs-such as URL fragments or query parameters-without you needing to manually account for all edge cases.
-- **Use `CookieInterceptor` for custom cookies:** When you need to inject custom cookies into requests, use the `lib-cookieinterceptor` dependency instead of manually adding `Cookie` headers. Manually setting the `Cookie` header overrides all cookies (including Cloudflare cookies set via WebView), breaking login and challenge solving.
+- **Use `addCookie` for custom cookies:** See [Custom cookies - `addCookie`](#custom-cookies---addcookie). Do not manually add `Cookie` headers: doing so can discard unrelated cookies already attached to the request, whereas `addCookie` preserves them and replaces only cookies with matching names.
 
 ### Extension call flow
 
@@ -1760,6 +1793,17 @@ command:
 // For a single apk, use this command
 $ ./gradlew src:<lang>:<source>:assembleDebug
 ```
+
+As a final check before submitting, run release lint on every Android module you touched:
+
+```console
+$ ./gradlew :src:<lang>:<source>:lintRelease
+```
+
+Run lint directly on shared modules, such as
+`./gradlew :lib-multisrc:<theme>:lintRelease` or `./gradlew :lib:<name>:lintRelease`.
+Linting only an extension that depends on a shared module does not reliably report issues in the
+dependency itself. If you explicitly changed `core/`, run `./gradlew :core:lintRelease` as well.
 
 ## Submitting the changes
 
