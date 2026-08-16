@@ -35,11 +35,11 @@ abstract class MangasBrasuka : KeiSource() {
             ),
         )
 
-    override suspend fun getPopularManga(page: Int) = getMangaPage(client.get("$baseUrl/catalogo"))
+    override suspend fun getPopularManga(page: Int) = getMangasPage(client.get("$baseUrl/catalogo"))
 
-    override suspend fun getLatestUpdates(page: Int) = getMangaPage(client.get("$baseUrl/novidades"))
+    override suspend fun getLatestUpdates(page: Int) = getMangasPage(client.get("$baseUrl/novidades"))
 
-    private fun getMangaPage(response: Response): MangasPage {
+    private fun getMangasPage(response: Response): MangasPage {
         val dto = response.extractNextJs<SeriesDto>()
         return MangasPage(dto?.toSMangaList() ?: emptyList(), false)
     }
