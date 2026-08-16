@@ -4,6 +4,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.math.roundToInt
 
 @Serializable
@@ -103,6 +105,7 @@ class MangaPage(
                 genres.mapTo(this) { it.name.trim() }
                 tags.mapTo(this) { it.name.trim() }
             }.joinToString()
+            memo = buildJsonObject { put("mangaId", id) }
         }
 
         fun chapterPageUrl(baseUrl: String): String {

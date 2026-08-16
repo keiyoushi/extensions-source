@@ -17,11 +17,14 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getLongOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -130,37 +133,35 @@ abstract class Reimanga :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        if (!fetchDetails && !fetchChapters) {
-            return SMangaUpdate(manga, chapters)
-        }
+        val requestId = manga.memo.getLongOrNull(MANGA_ID_MEMO)
+            ?: manga.url.substringAfterLast("-").toLong()
 
-        val mangaId = manga.url.substringAfterLast("-")
-        var apiManga = if (fetchDetails || fetchChapters) {
-            client.get("$baseUrl/api/manga/$mangaId")
-                .parseAs<MangaPage>()
-                .manga
-        } else {
-            null
-        }
+        var apiManga = client.get("$baseUrl/api/manga/$requestId")
+            .parseAs<MangaPage>()
+            .manga
 
         // DMCA / duplicate entries point at a main series with real metadata & chapters
-        if (apiManga != null && apiManga.resolvedId != mangaId.toLongOrNull()) {
+        if (apiManga.resolvedId != requestId) {
             apiManga = client.get("$baseUrl/api/manga/${apiManga.resolvedId}")
                 .parseAs<MangaPage>()
                 .manga
         }
 
+        val updatedManga = if (fetchDetails) {
+            apiManga.toSManga(baseUrl)
+        } else {
+            manga.apply {
+                memo = buildJsonObject { put(MANGA_ID_MEMO, apiManga.resolvedId) }
+            }
+        }
+
         val updatedChapters = if (fetchChapters) {
-            val pageUrl = apiManga?.chapterPageUrl(baseUrl) ?: getMangaUrl(manga)
-            parseChapterList(client.get(pageUrl, rscHeaders).extractNextJs())
+            parseChapterList(client.get(apiManga.chapterPageUrl(baseUrl), rscHeaders).extractNextJs())
         } else {
             chapters
         }
 
-        return SMangaUpdate(
-            manga = if (fetchDetails) apiManga?.toSManga(baseUrl) ?: manga else manga,
-            chapters = updatedChapters,
-        )
+        return SMangaUpdate(updatedManga, updatedChapters)
     }
 
     private fun parseChapterList(data: ChapterList?): List<SChapter> {
@@ -276,3 +277,4 @@ abstract class Reimanga :
 }
 
 const val EXCLUDE_TAG_PREF = "pref_exclude_tag"
+private const val MANGA_ID_MEMO = "mangaId"
