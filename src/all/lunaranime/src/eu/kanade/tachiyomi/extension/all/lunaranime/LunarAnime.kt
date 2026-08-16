@@ -40,7 +40,7 @@ abstract class LunarAnime : HttpSource() {
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()
-            if (url.contains("storage.lunarx.to")) {
+            if (url.contains("vault.lunarx.to") || url.contains("storage.lunarx.to")) {
                 val newRequest = request.newBuilder()
                     .header("Referer", "$baseUrl/")
                     .build()
@@ -53,7 +53,6 @@ abstract class LunarAnime : HttpSource() {
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         .add("Referer", "$baseUrl/")
 
     private val crypto = LunarDecryptor(client, API_URL)
@@ -256,6 +255,6 @@ abstract class LunarAnime : HttpSource() {
 
     companion object {
         private const val API_URL = "https://api.lunarx.to"
-        private const val CDN_URL = "https://storage.lunarx.to"
+        private const val CDN_URL = "https://vault.lunarx.to"
     }
 }

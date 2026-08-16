@@ -4,7 +4,6 @@ import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
-import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.security.MessageDigest
@@ -19,14 +18,9 @@ class LunarDecryptor(
     private val apiUrl: String,
 ) {
 
-    private val headers = Headers.Builder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        .add("Referer", "https://lunarx.to/")
-        .build()
-
     fun getChapterImages(slug: String, chapterNum: String, lang: String): List<String> {
         val chapterWebUrl = "https://lunarx.to/manga/$slug/$chapterNum?lang=$lang"
-        val webRequest = GET(chapterWebUrl, headers)
+        val webRequest = GET(chapterWebUrl)
         val seedObjs = runCatching {
             client.newCall(webRequest).execute().extractSeeds()
         }.getOrDefault(emptyList())
@@ -102,7 +96,7 @@ class LunarDecryptor(
 
     private fun fetchSessionData(token: String, lang: String): LunarPageListResponse {
         val url = "$apiUrl/api/manga/r/$token?lang=$lang"
-        val response = client.newCall(GET(url, headers)).execute()
+        val response = client.newCall(GET(url)).execute()
         if (!response.isSuccessful) error("Failed decrypting with ${response.code} while fetching session_data")
         return response.parseAs<LunarPageListResponse>()
     }
