@@ -1,38 +1,116 @@
 package eu.kanade.tachiyomi.extension.pt.mangasbrasuka
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.int
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
+import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
-import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class MangasBrasuka : Madara() {
-    override val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.ROOT)
-    override val client = super.client.newBuilder()
-        .rateLimit(2)
-        .build()
+abstract class MangasBrasuka : KeiSource() {
 
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3, 1.seconds)
+        .addNetworkInterceptor(
+            CookieInterceptor(
+                baseUrl.toHttpUrl().host,
+                listOf(
+                    "mnx_adulto" to "1",
+                ),
+            ),
+        )
 
-    override val useNewChapterEndpoint = true
+    override suspend fun getPopularManga(page: Int) = getMangaPage(client.get("$baseUrl/catalogo"))
 
-    override fun pageListParse(document: Document): List<Page> {
-        val redirectUrl = document.selectFirst("div.page-break a")!!.absUrl("href")
-        val pageUrl = redirectUrl.toHttpUrl().queryParameter("a")!!.toHttpUrl().toUrl()
+    override suspend fun getLatestUpdates(page: Int) = getMangaPage(client.get("$baseUrl/novidades"))
 
-        val url = "$baseUrl/campanha.php".toHttpUrl().newBuilder()
-            .addQueryParameter("auth", pageUrl.toString())
+    private fun getMangaPage(response: Response): MangasPage {
+        val dto = response.extractNextJs<SeriesDto>()
+        return MangasPage(dto?.toSMangaList() ?: emptyList(), false)
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val mangas = getPopularManga(page).mangas.filter { it.title.contains(query, ignoreCase = true) }
+        return MangasPage(mangas, false)
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga)).asJsoup()
+
+        val manga = getSMangaDetails(document, manga)
+        val chapters = document.extractNextJs<ChapterListDto>()
+            ?.toSChapterList(manga)
+            ?: emptyList()
+
+        return SMangaUpdate(manga, chapters)
+    }
+
+    private val mangaDetailsDescriptionRegex = """description":"([^"]+)""".toRegex()
+    private val mangaDetailsGenreRegex = """genre":([^]]+])""".toRegex()
+    private val mangaDetailsAuthorRegex = """author[^.]+name":"([^"]+)""".toRegex()
+    private val cleanRegex = """\\{2,}""".toRegex()
+
+    private fun getSMangaDetails(
+        document: Document,
+        manga: SManga,
+    ): SManga = document.selectFirst("script[type]:containsData(ComicSeries)")?.data()
+        ?.parseAs<MangaDto>()
+        ?.toSManga()
+        ?: manga.apply {
+            document.selectFirst("script:containsData(ComicSeries)")?.data()
+                ?.replace(cleanRegex, "")
+                ?.let {
+                    description = mangaDetailsDescriptionRegex.find(it)?.groupValues?.last()
+                    genre = mangaDetailsGenreRegex.find(it)?.groupValues?.last()?.parseAs<List<String>>()?.joinToString()
+                    author = mangaDetailsAuthorRegex.find(it)?.groupValues?.last()
+                }
+        }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val slug = chapter.memo["slug"]?.string
+        val type = chapter.memo["type"]?.string
+        val pageHeaders = headers.newBuilder()
+            .set("rsc", "1")
+            .set("Referer", "$baseUrl/$type/$slug")
+            .set("Sec-Fetch-Mode", "cors")
+            .set("Sec-Fetch-Dest", "empty")
+            .set("Sec-Fetch-Site", "same-origin")
+            .set("next-url", "/$type/$slug")
+            .set("Accept", "*/*")
             .build()
+        val response = client
+            .newBuilder()
+            .addNetworkInterceptor(
+                CookieInterceptor(
+                    baseUrl.toHttpUrl().host,
+                    listOf(
+                        "mnx_gate_${chapter.memo["number"]?.int}" to "1",
+                    ),
+                ),
+            )
+            .build()
+            .get(getChapterUrl(chapter), pageHeaders)
 
-        return client.newCall(GET(url, headers)).execute().asJsoup()
-            .select(".manga-content img").mapIndexed { index, element ->
-                Page(index, imageUrl = element.absUrl("src"))
-            }
+        return response.extractNextJs<PagesDto>()?.toPageList() ?: emptyList()
     }
 }
