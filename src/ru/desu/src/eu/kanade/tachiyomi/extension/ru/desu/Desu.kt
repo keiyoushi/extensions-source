@@ -177,7 +177,7 @@ abstract class Desu :
             null
         }
 
-        val chaptersDeferred = if (fetchDetails) {
+        val chaptersDeferred = if (fetchChapters) {
             async {
                 val responseChapter = client.get("$baseUrl$API_URL${manga.url}/chapters")
                 val objChapter = responseChapter.parseAs<SeriesWrapperDto<List<ChaptersDto>>>().chapters
