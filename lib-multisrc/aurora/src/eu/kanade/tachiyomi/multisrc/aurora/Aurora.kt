@@ -16,6 +16,7 @@ import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import kotlinx.serialization.json.JsonObject
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -41,11 +42,11 @@ abstract class Aurora : KeiSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun getMangaUrl(manga: SManga): String = entryLocation(manga.memo)
+    override fun getMangaUrl(manga: SManga): String = entryURL(manga.memo)
 
-    override fun getChapterUrl(chapter: SChapter) = "${entryLocation(chapter.memo)}/${chapter.chapter_number}"
+    override fun getChapterUrl(chapter: SChapter) = "${entryURL(chapter.memo)}/${chapter.chapter_number}"
 
-    private fun entryLocation(memo: JsonObject): String = "$baseUrl/${memo["type"]!!.string}/${memo["slug"]!!.string}"
+    private fun entryURL(memo: JsonObject): String = "$baseUrl/${memo["type"]!!.string}/${memo["slug"]!!.string}"
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -85,15 +86,13 @@ abstract class Aurora : KeiSource() {
         }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val slug = chapter.memo["slug"]?.string
-        val type = chapter.memo["type"]?.string
         val pageHeaders = headersBuilder()
             .set("rsc", "1")
-            .set("Referer", "$baseUrl/$type/$slug")
+            .set("Referer", entryURL(chapter.memo))
             .set("Sec-Fetch-Mode", "cors")
             .set("Sec-Fetch-Dest", "empty")
             .set("Sec-Fetch-Site", "same-origin")
-            .set("next-url", "/$type/$slug")
+            .set("next-url", entryURL(chapter.memo).toHttpUrlOrNull()!!.encodedPath)
             .set("Accept", "*/*")
             .build()
         val response = client
