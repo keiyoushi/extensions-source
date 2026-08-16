@@ -35,6 +35,14 @@
             urls = window.__lxImageUrls;
         }
 
+        urls = urls.filter(function(url, index) {
+            return url && urls.indexOf(url) === index;
+        }).sort(function(a, b) {
+            var pageA = parseInt((a.match(/page_(\d+)/i) || [])[1] || '0', 10);
+            var pageB = parseInt((b.match(/page_(\d+)/i) || [])[1] || '0', 10);
+            return pageA - pageB;
+        });
+
         var token = window.__lxToken || null;
 
         if (token && urls.length > 0) {
