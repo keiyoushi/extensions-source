@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "AsiaToon"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.NSFW // or MIXED, please confirm
     libVersion = "1.4"
 
@@ -14,9 +14,4 @@ keiyoushi {
         lang = "en"
         baseUrl = "https://asiatoon.net"
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:cookieinterceptor"))
 }

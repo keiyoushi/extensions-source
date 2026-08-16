@@ -5,8 +5,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import keiyoushi.network.addCookie
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
@@ -17,7 +16,7 @@ import java.util.Locale
 abstract class Toonily : Madara() {
     override val dateFormat = SimpleDateFormat("MMM d, yy", Locale.US)
     override val client = super.client.newBuilder()
-        .addNetworkInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, "toonily-mature" to "1"))
+        .addCookie("toonily-mature" to "1")
         .addInterceptor(::hdCoverInterceptor)
         .build()
 

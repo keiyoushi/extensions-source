@@ -11,7 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.addCookie
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.jsonArray
@@ -36,7 +36,7 @@ abstract class FodFuji :
 
     override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
-        .addNetworkInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, ("sfsc" to "0")))
+        .addCookie("sfsc" to "0")
         .addInterceptor {
             val request = it.request()
             val response = it.proceed(request)

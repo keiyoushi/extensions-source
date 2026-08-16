@@ -10,7 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.addCookie
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -33,15 +33,8 @@ abstract class Mangahere : HttpSource() {
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    private val cookieInterceptor = CookieInterceptor(
-        baseUrl.substringAfter("://"),
-        listOf(
-            "isAdult" to "1",
-        ),
-    )
-
     private val notRateLimitClient: OkHttpClient = network.client.newBuilder()
-        .addNetworkInterceptor(cookieInterceptor)
+        .addCookie("isAdult" to "1")
         .build()
 
     override val client: OkHttpClient = notRateLimitClient.newBuilder()

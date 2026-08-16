@@ -16,7 +16,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -150,7 +149,6 @@ abstract class MangoTheme :
 
     override val client: OkHttpClient by lazy {
         network.client.newBuilder()
-            .addInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, emptyList()))
             .addInterceptor(authInterceptor)
             .addInterceptor(decryptInterceptor)
             .rateLimit(2)

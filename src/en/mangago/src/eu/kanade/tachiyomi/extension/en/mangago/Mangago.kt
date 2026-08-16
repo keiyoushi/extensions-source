@@ -23,7 +23,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.addCookie
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.getPreferencesLazy
@@ -87,7 +87,7 @@ abstract class Mangago :
                 .body(body)
                 .build()
         }
-        .addNetworkInterceptor(CookieInterceptor(domain, "_m_superu" to "1"))
+        .addCookie("_m_superu" to "1")
         .rateLimit(1) { it.host == baseUrlHost || it.host == readerDomain }
         .build()
 
