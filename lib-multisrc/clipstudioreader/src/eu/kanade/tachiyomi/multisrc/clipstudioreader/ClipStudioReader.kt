@@ -1,53 +1,57 @@
 package eu.kanade.tachiyomi.multisrc.clipstudioreader
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.parser.Parser
 
-abstract class ClipStudioReader : HttpSource() {
+abstract class ClipStudioReader : KeiSource() {
 
-    override val client = network.client.newBuilder()
+    override fun OkHttpClient.Builder.configureClient() = this
         .addInterceptor(Deobfuscator())
         .addInterceptor(ImageInterceptor())
-        .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    override fun Headers.Builder.configureHeaders() = add("Referer", "$baseUrl/")
 
-    override fun pageListParse(response: Response): List<Page> {
+    abstract suspend fun getViewerResponse(chapter: SChapter): Response
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = getViewerResponse(chapter)
         val requestUrl = response.request.url
         val contentId = requestUrl.queryParameter("c")
 
         if (contentId != null) {
             // EPUB-based path
             val tokenUrl = "$baseUrl/api/tokens/viewer?content_id=$contentId".toHttpUrl()
-            val tokenResponse = client.newCall(GET(tokenUrl, headers)).execute()
+            val tokenResponse = client.get(tokenUrl, headers)
             val viewerToken = tokenResponse.parseAs<TokenResponse>().token
 
             val metaUrl = "$baseUrl/api/contents/$contentId/meta".toHttpUrl()
-            val apiHeaders = headersBuilder().add("Authorization", "Bearer $viewerToken").build()
-            val metaResponse = client.newCall(GET(metaUrl, apiHeaders)).execute()
+            val apiHeaders = headers.newBuilder().add("Authorization", "Bearer $viewerToken").build()
+            val metaResponse = client.get(metaUrl, apiHeaders)
             val contentBaseUrl = metaResponse.parseAs<MetaResponse>().content.baseUrl
 
             val preprocessUrl = "$contentBaseUrl/preprocess-settings.json"
-            val obfuscationResponse = client.newCall(GET(preprocessUrl, headers)).execute()
+            val obfuscationResponse = client.get(preprocessUrl, headers)
             val obfuscationKey = obfuscationResponse.parseAs<PreprocessSettings>().obfuscateImageKey
 
             val containerUrl = "$contentBaseUrl/META-INF/container.xml"
-            val containerResponse = client.newCall(GET(containerUrl, headers)).execute()
+            val containerResponse = client.get(containerUrl, headers)
             val containerDoc = Jsoup.parse(containerResponse.body.string(), containerUrl, Parser.xmlParser())
             val opfPath = containerDoc.selectFirst("*|rootfile")?.attr("full-path")
                 ?: throw Exception("Failed to find rootfile in container.xml")
 
             val opfUrl = (contentBaseUrl.removeSuffix("/") + "/" + opfPath).toHttpUrl()
-            val opfResponse = client.newCall(GET(opfUrl, headers)).execute()
+            val opfResponse = client.get(opfUrl, headers)
             val opfDoc = opfResponse.asJsoup()
 
             val imageManifestItems = opfDoc.select("*|item[media-type^=image/]")
@@ -89,7 +93,7 @@ abstract class ClipStudioReader : HttpSource() {
             addQueryParameter("param", authkey)
         }.build()
 
-        val faceResponse = client.newCall(GET(faceUrl, headers)).execute()
+        val faceResponse = client.get(faceUrl, headers)
         if (!faceResponse.isSuccessful) throw Exception("HTTP error ${faceResponse.code} while fetching face.xml")
         val faceData = faceResponse.use { parseFaceData(it.asJsoup()) }
 
@@ -106,7 +110,8 @@ abstract class ClipStudioReader : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
+    override suspend fun getImageUrl(page: Page): String {
+        val response = client.get(page.url, headers)
         val requestUrl = response.request.url
         val document = response.asJsoup()
 
