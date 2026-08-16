@@ -33,7 +33,15 @@ class LunarDecryptor(
             tok to s0
         }
 
-        val sessionDataB64 = fetchSessionData(token, lang)
+        val pageListResponse = fetchSessionData(token, lang)
+
+        // 1. Direct unencrypted images array in API response
+        pageListResponse.data?.images?.takeIf { it.isNotEmpty() }?.let {
+            return it
+        }
+
+        // 2. Encrypted session_data
+        val sessionDataB64 = pageListResponse.data?.sessionData ?: error("session_data is empty")
 
         return try {
             val finalJson = decryptSessionImages(sessionDataB64, seed0)
@@ -80,12 +88,11 @@ class LunarDecryptor(
             .replace('+', '-').replace('/', '_').trimEnd('=')
     }
 
-    private fun fetchSessionData(token: String, lang: String): String {
+    private fun fetchSessionData(token: String, lang: String): LunarPageListResponse {
         val url = "$apiUrl/api/manga/r/$token?lang=$lang"
         val response = client.newCall(GET(url)).execute()
         if (!response.isSuccessful) error("Failed decrypting with ${response.code} while fetching session_data")
-        val res = response.parseAs<LunarPageListResponse>()
-        return res.data?.sessionData ?: error("session_data is empty")
+        return response.parseAs<LunarPageListResponse>()
     }
 
     private val nextFPushRegex = Regex("""self\.__next_f\.push\(\[\s*\d+\s*,\s*(["'])(.*?)\1\s*\]\)""", RegexOption.DOT_MATCHES_ALL)
