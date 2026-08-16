@@ -6,9 +6,10 @@ plugins {
 
 keiyoushi {
     name = "Mangas Brasuka"
-    versionCode = 56
+    versionCode = 55
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
+    theme = "aurora"
 
     source {
         lang = "pt-BR"
