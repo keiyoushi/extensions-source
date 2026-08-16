@@ -216,14 +216,16 @@ abstract class Mangago :
             val link = element.selectFirst("a.chico") ?: return@mapNotNull null
             val name = link.text().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
             val date = DATE_FORMAT.tryParseDate(element.select("td:last-child").text(), ZoneOffset.UTC)
-            val scanlator = element.selectFirst("td.no a, td.uk-table-shrink a")?.text()
+            val scanlator = element.selectFirst("td.no a, td.uk-table-shrink a")
+                ?.text()
+                ?.takeIf { it.isNotEmpty() }
             val chapterUrl = link.absUrl("href")
 
             SChapter.create().apply {
                 url = stableChapterId(date, name, scanlator)
                 this.name = name
                 date_upload = date
-                this.scanlator = scanlator
+                this.scanlator = scanlator ?: "Unknown"
                 memo = buildJsonObject { put("chapterUrl", chapterUrl) }
             }
         }
