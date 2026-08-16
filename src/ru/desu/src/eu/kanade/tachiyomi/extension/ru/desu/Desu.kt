@@ -17,34 +17,28 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
-import kotlinx.serialization.json.Json
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import uy.kohesive.injekt.injectLazy
 
 @Source
 abstract class Desu :
     KeiSource(),
     ConfigurableSource {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     private val preferences by getPreferencesLazy()
 
-    override val supportsLatest = true
-
-    private val json: Json by injectLazy()
-
     override fun Headers.Builder.configureHeaders() = apply {
-        add("User-Agent", "Mihon (+https://github.com/keiyoushi/extensions-source)")
-        add("Referer", baseUrl)
+        set("User-Agent", "Mihon (+https://github.com/keiyoushi/extensions-source)")
     }
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
-        rateLimit(3) { it.host == baseUrlHost }
+        rateLimit(1) { it.host == baseUrl.toHttpUrl().host }
     }
 
     // ============================== Manga Details ===============================
@@ -131,7 +125,7 @@ abstract class Desu :
         val types = mutableListOf<Type>()
         val statuses = mutableListOf<Status>()
         val genres = mutableListOf<Genre>()
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+        filters.forEach { filter ->
             when (filter) {
                 is OrderBy -> url.addQueryParameter("order_by", arrayOf("popular", "updated", "id", "name")[filter.state])
                 is TypeList -> filter.state.forEach { type -> if (type.state) types.add(type) }
@@ -173,29 +167,42 @@ abstract class Desu :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val responseManga = client.get("$baseUrl$API_URL${manga.url}/")
-
-        val manga = responseManga.parseAs<InfoWrapperDto<MangaDetDto>>().manga.toSManga()
-
-        val responseChapter = client.get("$baseUrl$API_URL${manga.url}/chapters")
-
-        val objChapter = responseChapter.parseAs<SeriesWrapperDto<List<ChaptersDto>>>().chapters
-
-        val chapters = objChapter.map { chapter ->
-            val fullNumStr = "${chapter.volume}. Глава ${chapter.number}"
-            SChapter.create().apply {
-                name = chapter.title?.let { "$fullNumStr $it" } ?: fullNumStr
-                url = chapter.id.toString()
-                memo = buildJsonObject {
-                    put("mangaUrl", manga.url)
-                    put("viewUrl", chapter.view_url)
-                }
-                chapter_number = chapter.number.toFloatOrNull() ?: -1f
-                date_upload = chapter.publish_date.times(1000L)
+    ): SMangaUpdate = coroutineScope {
+        val mangaDeferred = if (fetchDetails) {
+            async {
+                val responseManga = client.get("$baseUrl$API_URL${manga.url}/")
+                responseManga.parseAs<InfoWrapperDto<MangaDetDto>>().manga.toSManga()
             }
+        } else {
+            null
         }
-        return SMangaUpdate(manga, chapters)
+
+        val chaptersDeferred = if (fetchDetails) {
+            async {
+                val responseChapter = client.get("$baseUrl$API_URL${manga.url}/chapters")
+                val objChapter = responseChapter.parseAs<SeriesWrapperDto<List<ChaptersDto>>>().chapters
+                objChapter.map { chapter ->
+                    val fullNumStr = "${chapter.volume}. Глава ${chapter.number}"
+                    SChapter.create().apply {
+                        name = chapter.title?.let { "$fullNumStr $it" } ?: fullNumStr
+                        url = chapter.id.toString()
+                        memo = buildJsonObject {
+                            put("mangaUrl", manga.url)
+                            put("viewUrl", chapter.view_url)
+                        }
+                        chapter_number = chapter.number.toFloatOrNull() ?: -1f
+                        date_upload = chapter.publish_date.times(1000L)
+                    }
+                }
+            }
+        } else {
+            null
+        }
+
+        val finalManga = mangaDeferred?.await() ?: manga
+        val finalChapters = chaptersDeferred?.await() ?: chapters
+
+        SMangaUpdate(finalManga, finalChapters)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga${manga.url}"
