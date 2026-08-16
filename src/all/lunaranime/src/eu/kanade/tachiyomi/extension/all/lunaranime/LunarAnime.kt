@@ -53,6 +53,7 @@ abstract class LunarAnime : HttpSource() {
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         .add("Referer", "$baseUrl/")
 
     private val crypto = LunarDecryptor(client, API_URL)
@@ -208,14 +209,10 @@ abstract class LunarAnime : HttpSource() {
         val language = chapterUrl.queryParameter("lang") ?: "en"
         val (slug, chapterNumber) = chapterUrl.pathSegments.takeLast(2)
 
-        val response = client.newCall(GET(chapterUrl)).execute()
-        if (!response.isSuccessful) error("HTTP ${response.code} fetching chapter")
-
-        // Required requests or fake images are returned
+        // Required request or fake images are returned
         viewChapter(slug, chapterNumber, language)
 
-        // I see decryption is always required now
-        val decryptedImages = crypto.decryptChapterImages(response, slug, chapterNumber, language)
+        val decryptedImages = crypto.getChapterImages(slug, chapterNumber, language)
         decryptedImages.mapIndexed { index, imageUrl ->
             Page(index, chapter.url, imageUrl)
         }

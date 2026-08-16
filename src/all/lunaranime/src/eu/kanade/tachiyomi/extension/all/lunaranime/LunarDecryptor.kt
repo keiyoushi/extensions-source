@@ -4,6 +4,7 @@ import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
+import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.security.MessageDigest
@@ -18,8 +19,17 @@ class LunarDecryptor(
     private val apiUrl: String,
 ) {
 
-    fun decryptChapterImages(chapterResponse: Response, slug: String, chapterNum: String, lang: String): List<String> {
-        val seedObjs = chapterResponse.extractSeeds()
+    private val headers = Headers.Builder()
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .add("Referer", "https://lunarx.to/")
+        .build()
+
+    fun getChapterImages(slug: String, chapterNum: String, lang: String): List<String> {
+        val chapterWebUrl = "https://lunarx.to/manga/$slug/$chapterNum?lang=$lang"
+        val webRequest = GET(chapterWebUrl, headers)
+        val seedObjs = runCatching {
+            client.newCall(webRequest).execute().extractSeeds()
+        }.getOrDefault(emptyList())
 
         val (token, seed0) = if (seedObjs.size >= 2) {
             val s0 = generateRctxFrom(seedObjs[0])
@@ -35,20 +45,22 @@ class LunarDecryptor(
 
         val pageListResponse = fetchSessionData(token, lang)
 
-        // 1. Direct unencrypted images array in API response
-        pageListResponse.data?.images?.takeIf { it.isNotEmpty() }?.let {
-            return it
+        pageListResponse.data?.images?.takeIf { it.isNotEmpty() }?.let { images ->
+            if (images.none { it.contains("unknown") }) {
+                return images
+            }
         }
 
-        // 2. Encrypted session_data
-        val sessionDataB64 = pageListResponse.data?.sessionData ?: error("session_data is empty")
-
-        return try {
-            val finalJson = decryptSessionImages(sessionDataB64, seed0)
-            finalJson.parseAs<LunarPageListDecrypted>().data.images
-        } catch (_: Exception) {
-            emptyList()
+        val sessionDataB64 = pageListResponse.data?.sessionData
+        if (!sessionDataB64.isNullOrEmpty()) {
+            runCatching {
+                val finalJson = decryptSessionImages(sessionDataB64, seed0, chapterNum)
+                val decrypted = finalJson.parseAs<LunarPageListDecrypted>().data.images
+                if (decrypted.isNotEmpty()) return decrypted
+            }
         }
+
+        return pageListResponse.data?.images ?: emptyList()
     }
 
     private fun sha256Bytes(s: String): ByteArray = MessageDigest.getInstance("SHA-256").digest(s.toByteArray(Charsets.ISO_8859_1))
@@ -90,20 +102,19 @@ class LunarDecryptor(
 
     private fun fetchSessionData(token: String, lang: String): LunarPageListResponse {
         val url = "$apiUrl/api/manga/r/$token?lang=$lang"
-        val response = client.newCall(GET(url)).execute()
+        val response = client.newCall(GET(url, headers)).execute()
         if (!response.isSuccessful) error("Failed decrypting with ${response.code} while fetching session_data")
         return response.parseAs<LunarPageListResponse>()
     }
 
-    private val nextFPushRegex = Regex("""self\.__next_f\.push\(\[\s*\d+\s*,\s*(["'])(.*?)\1\s*\]\)""", RegexOption.DOT_MATCHES_ALL)
     private val dictRegex = Regex("""\{[^{}]*\}""")
 
     private fun isSeedMap(map: Map<String, String>): Boolean {
-        val twoCharEntry = map.entries.firstOrNull { it.key.length == 2 } ?: return false
-        val reversedVal = twoCharEntry.value.reversed()
+        val seedEntry = map.entries.firstOrNull { it.value.startsWith("=") || it.value.endsWith("=") } ?: return false
+        val reversedVal = seedEntry.value.reversed()
         return try {
             val decoded = String(Base64.decode(reversedVal.padEnd((reversedVal.length + 3) / 4 * 4, '='), Base64.DEFAULT))
-            decoded.contains('.')
+            decoded.contains('.') && decoded.split('.').firstOrNull()?.all { it.isLetterOrDigit() } == true
         } catch (_: Exception) {
             false
         }
@@ -111,41 +122,30 @@ class LunarDecryptor(
 
     fun Response.extractSeeds(): List<Map<String, String>> {
         val doc = asJsoup()
-        val html = doc.outerHtml()
+        val html = doc.outerHtml().replace("\\\"", "\"").replace("\\\\", "\\")
         val seedObjects = mutableListOf<Map<String, String>>()
 
-        fun processDict(dictStr: String) {
+        for (dictStr in dictRegex.findAll(html)) {
             try {
-                val map = dictStr.parseAs<Map<String, String>>()
-                if (map.keys.any { it.length == 2 } && isSeedMap(map) && !seedObjects.contains(map)) {
+                val map = dictStr.value.parseAs<Map<String, String>>()
+                if (isSeedMap(map) && !seedObjects.contains(map)) {
                     seedObjects.add(map)
                 }
             } catch (_: Exception) { }
         }
 
-        for (match in nextFPushRegex.findAll(html)) {
-            val segment = match.groupValues[2]
-            val decoded = segment.replace("\\\\", "\\").replace("\\\"", "\"")
-            for (dictStr in dictRegex.findAll(decoded)) {
-                processDict(dictStr.value)
-            }
-        }
-
-        if (seedObjects.size < 2) {
-            for (dictStr in dictRegex.findAll(html)) {
-                processDict(dictStr.value)
-            }
-        }
-
         return seedObjects
     }
 
-    private fun findTwoCharKey(data: Map<String, String>) = data.entries.first { it.key.length == 2 }.let { it.key to it.value.reversed() }
+    private fun findSeedKeyVal(data: Map<String, String>): Pair<String, String> {
+        val entry = data.entries.first { it.value.startsWith("=") || it.value.endsWith("=") }
+        return entry.key to entry.value.reversed()
+    }
 
     private fun decodeReversedBase64(reversed: String) = String(Base64.decode(reversed.padEnd((reversed.length + 3) / 4 * 4, '='), Base64.DEFAULT))
 
     private fun generateRctxFrom(seedObj: Map<String, String>): String {
-        val (_, reversedB64) = findTwoCharKey(seedObj)
+        val (_, reversedB64) = findSeedKeyVal(seedObj)
         val (xorKey, hexStr) = decodeReversedBase64(reversedB64).split('.')
             .let { parts -> parts[0].toInt(16) to parts.drop(1).joinToString("") { seedObj[it] ?: "" } }
 
@@ -204,9 +204,10 @@ class LunarDecryptor(
             .replace('+', '-').replace('/', '_').trimEnd('=')
     }
 
-    private fun decryptSessionImages(sessionDataB64: String, rctx0: String): String {
+    private fun decryptSessionImages(sessionDataB64: String, rctx0: String, chapterNum: String): String {
         val ciphertext = Base64.decode(sessionDataB64.replace('-', '+').replace('_', '/').padEnd((sessionDataB64.length + 3) / 4 * 4, '='), Base64.DEFAULT)
-        val key = MessageDigest.getInstance("SHA-256").digest(rctx0.toByteArray())
+        val keyStr = "$rctx0\u0001$chapterNum"
+        val key = MessageDigest.getInstance("SHA-256").digest(keyStr.toByteArray())
         Cipher.getInstance("AES/CBC/PKCS5Padding").apply {
             init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(ByteArray(16)))
             return String(doFinal(ciphertext), Charsets.UTF_8)
