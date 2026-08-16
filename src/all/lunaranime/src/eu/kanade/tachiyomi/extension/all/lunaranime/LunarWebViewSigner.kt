@@ -30,6 +30,7 @@ class LunarWebViewSigner(
                 cachedWv = WebView(applicationContext).apply {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
+                    settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                 }
             }
             destroyWv = Runnable {
@@ -74,7 +75,7 @@ class LunarWebViewSigner(
                 handler.post { destroyWv?.run() }
                 return@Interceptor proceed(url)
             }
-            throw IOException("Solve captcha in webview and retry")
+            throw IOException("Selesaikan Captcha di WebView lalu coba lagi")
         }
         resp
     }
@@ -245,7 +246,7 @@ class LunarWebViewSigner(
                 const payload = {
                     htm: "$method",
                     htu: "$apiUrl",
-                    iat: Math.floor(Date.now() / 1000),
+                    iat: Math.floor(Date.now()/1000),
                     jti: randJti()
                 };
 
