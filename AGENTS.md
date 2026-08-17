@@ -40,17 +40,16 @@ asked to change them - that's a different, higher-risk category of work.
 
 ## Before committing / opening a PR
 
-Format the module(s) you touched, not the whole repo - a full-repo Spotless run is slow on
-this monorepo. Use the module's Gradle path, e.g. for a single extension:
+Run release lint on every Android module you touched:
 
 ```bash
-./gradlew :src:en:mysource:spotlessApply
+./gradlew :src:en:mysource:lintRelease
 ```
 
-or for a theme: `./gradlew :lib-multisrc:madara:spotlessApply`.
-
-Spotless also runs as part of `preBuild`, so a full build would catch violations too - running it
-scoped like this first is just faster.
+Run lint directly on shared modules, for example
+`./gradlew :lib-multisrc:madara:lintRelease` or `./gradlew :lib:myhelper:lintRelease`.
+Linting only an extension that depends on a shared module does not reliably report issues in the
+dependency itself. Apply the same rule to `:core:lintRelease` when explicitly working on `core/`.
 
 ## Opening a pull request
 

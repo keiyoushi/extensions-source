@@ -15,8 +15,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.addCookie
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -58,12 +58,7 @@ abstract class Honeytoon :
             chain.proceed(chain.request())
         }
         .addInterceptor(ScrambledImageInterceptor())
-        .addNetworkInterceptor(
-            when {
-                isAdultContentEnabled -> CookieInterceptor(baseUrl.substringAfter("//"), "eighteen" to "1")
-                else -> CookieInterceptor(baseUrl.substringAfter("//"), "eighteen" to "0")
-            },
-        )
+        .addCookie { listOf("eighteen" to if (isAdultContentEnabled) "1" else "0") }
         .rateLimit(3, 1.seconds)
         .build()
 
