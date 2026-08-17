@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Toonily"
-    versionCode = 15
+    versionCode = 16
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
     theme = "madara"
@@ -15,9 +15,4 @@ keiyoushi {
         lang = "en"
         baseUrl = "https://toonily.com"
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:cookieinterceptor"))
 }
