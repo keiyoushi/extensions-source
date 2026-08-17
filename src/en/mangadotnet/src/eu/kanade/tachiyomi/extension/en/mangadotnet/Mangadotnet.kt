@@ -255,11 +255,10 @@ abstract class Mangadotnet :
             addQueryParameter("_routes", "pages/SearchPage")
         }.build()
 
-        val data = client.get(url).use { it.decodeRscAs<Data<SearchData>>().data }
+        val data = client.get(url).use { it.decodeRscAs<Data<SearchData>>().data.payload }
 
         val hideAdultCovers = adultModePref() == "none"
-        val payload = data.payload
-        return MangasPage(payload?.mangaList.orEmpty().map { it.toSManga(baseUrl, hideAdultCovers) }, payload?.hasNextPage() ?: false)
+        return MangasPage(data.mangaList.orEmpty().map { it.toSManga(baseUrl, hideAdultCovers) }, data.hasNextPage())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -306,12 +305,12 @@ abstract class Mangadotnet :
             .distinct()
             .sortedBy { it.lowercase(Locale.ROOT) }
         val tags = searchData.allTags?.asSequence()
-            ?.flatMap { it.tags }
-            ?.map { it.name.trim() }
-            ?.filter { it.isNotEmpty() }
-            ?.distinct()
-            ?.sortedBy { it.lowercase(Locale.ROOT) }
-            ?.toList() ?: emptyList()
+            .flatMap { it.tags }
+            .map { it.name.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .sortedBy { it.lowercase(Locale.ROOT) }
+            .toList() ?: emptyList()
 
         FilterDataDto(genres, tags).toJsonElement()
     }
