@@ -21,12 +21,17 @@ class Data<T>(
 )
 
 @Serializable
+class SearchData(
+    val payload: MangaList,
+    val allGenres: List<String> = emptyList(),
+    val allTags: List<TagCategory> = emptyList(),
+)
+
+@Serializable
 class MangaList(
     @JsonNames("results", "manga_list")
     val mangaList: List<BrowseManga>? = emptyList(),
     private val pagination: Pagination? = null,
-    val allGenres: List<String> = emptyList(),
-    val allTags: List<TagCategory> = emptyList(),
 ) {
     fun hasNextPage() = when {
         pagination?.current != null && pagination.total != null -> pagination.current < pagination.total
