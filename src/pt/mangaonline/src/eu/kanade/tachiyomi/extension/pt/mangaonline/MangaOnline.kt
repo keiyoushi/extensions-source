@@ -28,10 +28,7 @@ abstract class MangaOnline : KeiSource() {
 
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList(popularFilter))
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/atualizacoes?page=$page").asJsoup()
-        return getMangasPage(document)
-    }
+    override suspend fun getLatestUpdates(page: Int) = getMangasPage(client.get("$baseUrl/atualizacoes?page=$page").asJsoup())
 
     override suspend fun getSearchMangaList(
         page: Int,
