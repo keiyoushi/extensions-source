@@ -24,6 +24,7 @@ import java.security.AlgorithmParameters
 import java.security.KeyFactory
 import java.security.KeyPair
 import java.security.KeyPairGenerator
+import java.security.MessageDigest
 import java.security.interfaces.ECPublicKey
 import java.security.spec.ECGenParameterSpec
 import java.security.spec.ECParameterSpec
@@ -37,15 +38,25 @@ import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class Dilar : KeiSource() {
-    override val supportsLatest = false
-
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         add("X-DH-Pub", clientPubB64)
+        add("X-Crypto-Caps", "1,2,3,4,5,6")
     }
 
     // Popular
 
     override suspend fun getPopularManga(page: Int): MangasPage {
+        val response = client.get("$baseUrl/api/rankings")
+        val data = response.parseAs<RankingsDto>()
+        val entries = data.topSeries
+            .filterNot { it.isNovel() }
+            .map { it.toSManga() }
+        return MangasPage(entries, false)
+    }
+
+    // Latest
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val response = client.get("$baseUrl/api/series?page=$page")
         val data = response.parseAs<SeriesListDto>()
         val entries = data.series
@@ -53,10 +64,6 @@ abstract class Dilar : KeiSource() {
             .map { it.toSManga() }
         return MangasPage(entries, data.hasNextPage)
     }
-
-    // Latest
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     // Search
 
@@ -130,26 +137,57 @@ abstract class Dilar : KeiSource() {
     private fun decrypt(data: EncryptedResponseDto): String {
         val serverPubRaw = Base64.decode(data.epk, Base64.URL_SAFE)
         val serverPubKey = rawToPoint(serverPubRaw)
+        val iv = Base64.decode(data.iv, Base64.URL_SAFE)
 
         val sharedSecret = KeyAgreement.getInstance("ECDH").apply {
             init(ecKeyPair.private)
             doPhase(serverPubKey, true)
         }.generateSecret()
 
-        val salt = when (data.v) {
-            1 -> clientPubRaw + serverPubRaw
-            2 -> serverPubRaw + clientPubRaw
+        val (salt, info) = when (data.v) {
+            1 -> {
+                clientPubRaw + serverPubRaw to
+                    "dilar.response.ecies.v1|${data.e}".toByteArray()
+            }
+
+            2 -> {
+                serverPubRaw + clientPubRaw to
+                    "dilar.response.ecies.v2|${data.e}".toByteArray()
+            }
+
+            3 -> {
+                sha256(serverPubRaw + clientPubRaw) to
+                    "dilar.response.ecies.v3|${data.e}".toByteArray()
+            }
+
+            4 -> {
+                sha256(clientPubRaw + serverPubRaw + iv) to
+                    "dilar.response.ecies.v4|${data.e}|${data.iv}"
+                        .toByteArray()
+            }
+
+            5 -> {
+                hmacSha256(
+                    key = iv,
+                    data = serverPubRaw + clientPubRaw,
+                ) to "dilar.response.ecies.v5|${data.e}".toByteArray()
+            }
+
+            6 -> {
+                sha256(sha256(clientPubRaw) + sha256(serverPubRaw) + iv) to
+                    "dilar.response.ecies.v6|${data.e}|${data.iv}".toByteArray()
+            }
+
             else -> error("Unsupported encryption protocol version: ${data.v}")
         }
 
         val key = hkdfSha256(
             ikm = sharedSecret,
             salt = salt,
-            info = "dilar.response.ecies.v${data.v}|${data.e}".toByteArray(),
+            info = info,
             length = 32,
         )
 
-        val iv = Base64.decode(data.iv, Base64.URL_SAFE)
         val ct = Base64.decode(data.ct, Base64.URL_SAFE)
         val tag = Base64.decode(data.tag, Base64.URL_SAFE)
 
@@ -189,6 +227,8 @@ abstract class Dilar : KeiSource() {
     }
 
     // HKDF-SHA256
+
+    private fun sha256(data: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").digest(data)
 
     private fun hmacSha256(key: ByteArray, data: ByteArray): ByteArray = Mac.getInstance("HmacSHA256").apply {
         init(SecretKeySpec(key, "HmacSHA256"))

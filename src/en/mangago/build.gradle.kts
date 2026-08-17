@@ -6,12 +6,16 @@ plugins {
 
 keiyoushi {
     name = "Mangago"
-    versionCode = 37
+    versionCode = 39
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "en"
         baseUrl = "https://www.mangago.me"
+    }
+
+    deeplink {
+        path("/read-manga/..*")
     }
 }

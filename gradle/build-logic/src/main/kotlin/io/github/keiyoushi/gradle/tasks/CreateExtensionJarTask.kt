@@ -132,7 +132,8 @@ abstract class CreateExtensionJarTask : DefaultTask() {
 
         val args = buildList {
             add("-injars")
-            add(program.absolutePath)
+            // Kotlin module metadata is compile-time only and changes when unused package parts are added.
+            add("${program.absolutePath}(!META-INF/*.kotlin_module)")
             add("-outjars")
             add(shrunk.absolutePath)
             libraryClasspath.files.forEach {
