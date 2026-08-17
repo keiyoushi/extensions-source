@@ -92,9 +92,19 @@ class ChapterItem(
         chapter_number = index
     }
 
-    fun toPageList(): List<Page> = data.images?.mapIndexed { index, imageUrl ->
-        Page(index, "", imageUrl)
-    } ?: emptyList()
+    fun toPageList(): List<Page> {
+        val imageUrls = if (!data.images.isNullOrEmpty()) {
+            data.images
+        } else {
+            data.dataImages.orEmpty()
+                .toSortedMap(compareBy { it.toIntOrNull() ?: Int.MAX_VALUE })
+                .values
+                .toList()
+        }
+        return imageUrls.mapIndexed { index, imageUrl ->
+            Page(index, "", imageUrl)
+        }
+    }
 }
 
 @Serializable
@@ -102,6 +112,7 @@ class ChapterData(
     val index: Float? = null,
     val title: String? = null,
     val images: List<String>? = null,
+    val dataImages: Map<String, String>? = null,
 )
 
 @Serializable

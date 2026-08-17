@@ -5,14 +5,16 @@ plugins {
 }
 
 keiyoushi {
-    name = "Komik Cast"
-    versionCode = 82
+    name = "Voratoon"
+    versionCode = 83
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "id"
-        baseUrl = "https://v3.komikcast.fit"
+        baseUrl = "https://v1.voratoon.com"
         id = 972717448578983812L
+
+        baseUrl = "https://v1.voratoon.com"
     }
 }
