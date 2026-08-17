@@ -24,6 +24,9 @@ import okhttp3.Response
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.net.URLEncoder
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 @Source
 class Voratoon(
@@ -52,6 +55,29 @@ class Voratoon(
 
     private val json = Json {
         ignoreUnknownKeys = true
+    }
+
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
+
+    private fun parseDate(dateStr: String?): Long {
+        if (dateStr.isNullOrEmpty()) return 0L
+
+        return try {
+            val cleanDate = dateStr.substringBefore("+").substringBefore("Z")
+
+            dateFormat.parse(cleanDate)?.time ?: 0L
+        } catch (e: Exception) {
+            try {
+                val fallbackFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }
+                fallbackFormat.parse(dateStr.substringBefore("+").substringBefore("Z"))?.time ?: 0L
+            } catch (e: Exception) {
+                0L
+            }
+        }
     }
 
     override fun headersBuilder() = Headers.Builder()
@@ -288,6 +314,13 @@ class Voratoon(
                 setUrlWithoutDomain(
                     "/series/$slug/chapters/$chapterIndex",
                 )
+
+                val dateStr = chapter["createdAt"]?.jsonPrimitive?.content
+                    ?: chapter["updatedAt"]?.jsonPrimitive?.content
+                    ?: chapterData["createdAt"]?.jsonPrimitive?.content
+                    ?: chapterData["updatedAt"]?.jsonPrimitive?.content
+
+                date_upload = parseDate(dateStr)
             }
         }
     }
