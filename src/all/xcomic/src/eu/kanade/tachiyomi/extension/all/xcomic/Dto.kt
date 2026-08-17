@@ -7,8 +7,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import org.jsoup.Jsoup
-import org.jsoup.nodes.TextNode
 
 @Serializable
 class XComicName(val name: String? = null)
@@ -180,7 +178,7 @@ class ComicNode(
 
             val summaryText = summary?.text
             if (!summaryText.isNullOrEmpty()) {
-                append(summaryText.urlToMarkdown(baseUrl))
+                append(summaryText.toMarkdownUrls())
             }
 
             val links = buildList {
@@ -221,19 +219,12 @@ class ComicNode(
             val extraInfoText = extraInfo?.text
             if (!extraInfoText.isNullOrEmpty()) {
                 if (isNotEmpty()) append("\n\n**Extra Info**:\n")
-                append(extraInfoText.urlToMarkdown(baseUrl))
+                append(extraInfoText.toMarkdownUrls())
             }
         }
         initialized = originalStatus != null
     }
 }
-
-private val urlRegex = Regex("""(?<![\[(])(https?://[^\s<"]+)""")
-
-private val spaceCollapseRegex = Regex("[ \\t]+")
-private val trailingSpaceRegex = Regex(" \\n")
-private val leadingSpaceRegex = Regex("\\n ")
-private val multiNewlineRegex = Regex("\\n{3,}")
 
 // ============================= Helpers ==============================
 
@@ -243,34 +234,11 @@ private fun String.toTitleCase(): String = this.replace("_", " ").split(" ").joi
     }
 }
 
-private fun String.urlToMarkdown(baseUrl: String): String = Jsoup.parseBodyFragment(this, baseUrl).body().let { body ->
-    body.select("a").forEach { a ->
-        val text = a.text()
-        val href = a.absUrl("href")
+private val urlRegex = Regex("""(?<![\[(])(https?://[^\s<"]+)""")
 
-        if (href.startsWith("http") && !href.contains("](")) {
-            a.replaceWith(TextNode("[$text]($href)"))
-        } else {
-            a.replaceWith(TextNode(text))
-        }
-    }
-
-    body.select("br").forEach { br -> br.replaceWith(TextNode("\n")) }
-
-    body.select("p, div, li, blockquote, h1, h2, h3, h4, h5, h6").forEach { el ->
-        el.after("\n")
-    }
-
-    body.wholeText()
-        .replace(urlRegex) { match ->
-            val url = match.value
-            "[$url]($url)"
-        }
-        .replace(spaceCollapseRegex, " ")
-        .replace(trailingSpaceRegex, "\n")
-        .replace(leadingSpaceRegex, "\n")
-        .replace(multiNewlineRegex, "\n\n")
-        .trim()
+private fun String.toMarkdownUrls(): String = this.replace(urlRegex) { match ->
+    val url = match.value
+    "[$url]($url)"
 }
 
 // ============================= Search ===============================
