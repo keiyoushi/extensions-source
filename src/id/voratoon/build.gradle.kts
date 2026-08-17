@@ -5,8 +5,8 @@ plugins {
 }
 
 keiyoushi {
-    name = "Voratoon"
-    versionCode = 1
+    name = "VoraToon"
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 

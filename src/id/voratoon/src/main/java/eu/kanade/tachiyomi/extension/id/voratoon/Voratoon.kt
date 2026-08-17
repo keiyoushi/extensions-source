@@ -1,6 +1,11 @@
 package eu.kanade.tachiyomi.extension.id.voratoon
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -16,6 +21,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
+import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.net.URLEncoder
 
@@ -23,13 +29,20 @@ import java.net.URLEncoder
 class Voratoon(
     override val lang: String = "id",
     override val id: Long = 0L,
-) : HttpSource() {
+) : HttpSource(),
+    ConfigurableSource {
 
-    override val name = "Voratoon"
+    override val name = "VoraToon"
 
-    override val baseUrl = "https://v1.voratoon.com"
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
 
-    private val apiUrl = "https://api.voratoon.com"
+    override val baseUrl: String
+        get() = preferences.getString(BASE_URL_PREF, DEFAULT_BASE_URL)!!
+
+    private val apiUrl: String
+        get() = preferences.getString(API_URL_PREF, DEFAULT_API_URL)!!
 
     private val cdnUserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
@@ -353,4 +366,39 @@ class Voratoon(
     )
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val baseUrlPref = EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF
+            title = "Base URL (Link Utama)"
+            summary = "Link saat ini: ${this@Voratoon.baseUrl}\nUbah jika website berganti domain."
+            setDefaultValue(DEFAULT_BASE_URL)
+            dialogTitle = "Masukkan Base URL baru"
+            dialogMessage = "Contoh: https://v2.voratoon.com"
+        }
+
+        val apiUrlPref = EditTextPreference(screen.context).apply {
+            key = API_URL_PREF
+            title = "API URL (Link Data)"
+            summary = "Link saat ini: ${this@Voratoon.apiUrl}\nUbah jika link API berganti."
+            setDefaultValue(DEFAULT_API_URL)
+            dialogTitle = "Masukkan API URL baru"
+            dialogMessage = "Contoh: https://api.v2.voratoon.com"
+        }
+
+        screen.addPreference(baseUrlPref)
+        screen.addPreference(apiUrlPref)
+    }
+
+    companion object {
+        private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val DEFAULT_BASE_URL = "https://v1.voratoon.com"
+
+        private const val API_URL_PREF = "overrideApiUrl"
+        private const val DEFAULT_API_URL = "https://api.voratoon.com"
+    }
 }
