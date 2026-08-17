@@ -255,10 +255,11 @@ abstract class Mangadotnet :
             addQueryParameter("_routes", "pages/SearchPage")
         }.build()
 
-        val data = client.get(url).use { it.decodeRscAs<Data<MangaList>>().data }
+        val data = client.get(url).use { it.decodeRscAs<Data<SearchData>>().data }
 
         val hideAdultCovers = adultModePref() == "none"
-        return MangasPage(data.mangaList.orEmpty().map { it.toSManga(baseUrl, hideAdultCovers) }, data.hasNextPage())
+        val payload = data.payload
+        return MangasPage(payload?.mangaList.orEmpty().map { it.toSManga(baseUrl, hideAdultCovers) }, payload?.hasNextPage() ?: false)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -299,18 +300,18 @@ abstract class Mangadotnet :
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         val searchUrl = "$baseUrl/search.data?page=1&_routes=pages/SearchPage".toHttpUrl()
 
-        val searchData = client.get(searchUrl).use { it.decodeRscAs<Data<MangaList>>().data }
+        val searchData = client.get(searchUrl).use { it.decodeRscAs<Data<SearchData>>().data }
 
         val genres = searchData.allGenres.filter { it !in demographicNames }
             .distinct()
             .sortedBy { it.lowercase(Locale.ROOT) }
-        val tags = searchData.allTags.asSequence()
-            .flatMap { it.tags }
-            .map { it.name.trim() }
-            .filter { it.isNotEmpty() }
-            .distinct()
-            .sortedBy { it.lowercase(Locale.ROOT) }
-            .toList()
+        val tags = searchData.allTags?.asSequence()
+            ?.flatMap { it.tags }
+            ?.map { it.name.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.distinct()
+            ?.sortedBy { it.lowercase(Locale.ROOT) }
+            ?.toList() ?: emptyList()
 
         FilterDataDto(genres, tags).toJsonElement()
     }
