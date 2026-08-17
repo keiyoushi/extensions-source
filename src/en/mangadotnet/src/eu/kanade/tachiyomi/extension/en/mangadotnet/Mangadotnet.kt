@@ -304,7 +304,7 @@ abstract class Mangadotnet :
         val genres = searchData.allGenres.filter { it !in demographicNames }
             .distinct()
             .sortedBy { it.lowercase(Locale.ROOT) }
-        val tags = searchData.allTags?.asSequence()
+        val tags = searchData.allTags.asSequence()
             .flatMap { it.tags }
             .map { it.name.trim() }
             .filter { it.isNotEmpty() }
