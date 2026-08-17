@@ -74,6 +74,7 @@ class ComicNode(
     private val tagNodes: List<XComicData<XComicName?>>? = null,
     private val summary: XComicStrings? = null,
     private val extraInfo: XComicStrings? = null,
+    private val readDirection: String? = null,
     private val urlPath: String? = null,
     private val urlCover: String? = null,
     @SerialName("is_hot")
@@ -95,9 +96,7 @@ class ComicNode(
         title = cleanTitle(name)
 
         author = authorNodes?.mapNotNull { it.data?.name }?.takeIf { it.isNotEmpty() }?.joinToString()
-            ?: authors?.joinToString { cleanAuthorSlug(it) }
         artist = artistNodes?.mapNotNull { it.data?.name }?.takeIf { it.isNotEmpty() }?.joinToString()
-            ?: artists?.joinToString { cleanAuthorSlug(it) }
 
         genre = buildSet {
             type?.let { add(it.toTitleCase()) }
@@ -145,6 +144,16 @@ class ComicNode(
                     add("**Publication**: $originalPubFrom - $till")
                 }
                 originalPubZone?.takeIf { it.isNotEmpty() }?.let { add("**Region**: $it") }
+
+                readDirection?.let { dir ->
+                    val directionValues = listOf(
+                        "ttb" to "⬇️ Top To Bottom",
+                        "rtl" to "⬅️ Right To Left",
+                        "ltr" to "➡️ Left To Right",
+                    )
+                    val label = directionValues.firstOrNull { it.first == dir }?.second ?: dir
+                    add("**Read Direction**: $label")
+                }
             }
 
             if (metadata.isNotEmpty()) {
@@ -171,7 +180,7 @@ class ComicNode(
 
             val summaryText = summary?.text
             if (!summaryText.isNullOrEmpty()) {
-                append(summaryText.htmlToMarkdown(baseUrl))
+                append(summaryText.urlToMarkdown(baseUrl))
             }
 
             val links = buildList {
@@ -212,14 +221,12 @@ class ComicNode(
             val extraInfoText = extraInfo?.text
             if (!extraInfoText.isNullOrEmpty()) {
                 if (isNotEmpty()) append("\n\n**Extra Info**:\n")
-                append(extraInfoText.htmlToMarkdown(baseUrl))
+                append(extraInfoText.urlToMarkdown(baseUrl))
             }
         }
         initialized = originalStatus != null
     }
 }
-
-private val authorSlugRegex = Regex("^[a-zA-Z0-9]{4,}-(.*)$")
 
 private val urlRegex = Regex("""(?<![\[(])(https?://[^\s<"]+)""")
 
@@ -230,37 +237,18 @@ private val multiNewlineRegex = Regex("\\n{3,}")
 
 // ============================= Helpers ==============================
 
-private fun cleanAuthorSlug(slug: String): String {
-    val path = slug.substringAfterLast("/")
-
-    val match = authorSlugRegex.matchEntire(path)
-
-    return if (match != null) {
-        val namePart = match.groupValues[1]
-        namePart.replace("-", " ")
-            .split(" ")
-            .joinToString(" ") { word ->
-                word.lowercase().replaceFirstChar {
-                    if (it.isLowerCase()) it.titlecase() else it.toString()
-                }
-            }
-    } else {
-        slug
-    }
-}
-
 private fun String.toTitleCase(): String = this.replace("_", " ").split(" ").joinToString(" ") { word ->
     word.lowercase().replaceFirstChar {
         if (it.isLowerCase()) it.titlecase() else it.toString()
     }
 }
 
-private fun String.htmlToMarkdown(baseUrl: String): String = Jsoup.parseBodyFragment(this, baseUrl).body().let { body ->
+private fun String.urlToMarkdown(baseUrl: String): String = Jsoup.parseBodyFragment(this, baseUrl).body().let { body ->
     body.select("a").forEach { a ->
         val text = a.text()
         val href = a.absUrl("href")
 
-        if (href.startsWith("http")) {
+        if (href.startsWith("http") && !href.contains("](")) {
             a.replaceWith(TextNode("[$text]($href)"))
         } else {
             a.replaceWith(TextNode(text))

@@ -123,6 +123,7 @@ val COMIC_NODE_QUERY = $$"""
                 extraInfo {
                     text
                 }
+                readDirection
                 urlPath
                 urlCover
             }
