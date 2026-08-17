@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "DMM/FANZA"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
@@ -25,5 +25,4 @@ keiyoushi {
 
 dependencies {
     implementation(project(":lib:publus"))
-    implementation(project(":lib:cookieinterceptor"))
 }

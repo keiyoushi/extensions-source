@@ -92,7 +92,7 @@ abstract class MangaFire :
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val authorQuery = filters.firstInstanceOrNull<AuthorFilter>()?.state.orEmpty()
+        val authorQuery = filters.firstInstanceOrNull<AuthorFilter>()?.state.orEmpty().trim()
         var authorId: String? = null
 
         if (authorQuery.isNotBlank()) {
@@ -111,7 +111,7 @@ abstract class MangaFire :
 
         val url = "$baseUrl/api/titles".toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
-                addQueryParameter("keyword", query)
+                addQueryParameter("keyword", query.trim())
             }
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", "50")

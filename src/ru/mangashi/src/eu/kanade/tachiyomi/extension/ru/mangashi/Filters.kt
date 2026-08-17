@@ -1,208 +1,107 @@
 package eu.kanade.tachiyomi.extension.ru.mangashi
 
 import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.source.model.FilterList
-import okhttp3.HttpUrl
 
-interface UriFilter {
-    fun addToUri(builder: HttpUrl.Builder)
+abstract class SelectFilter(
+    name: String,
+    private val options: List<Pair<String, String>>,
+    defaultValue: String? = null,
+) : Filter.Select<String>(
+    name,
+    options.map { it.first }.toTypedArray(),
+    options.indexOfFirst { it.second == defaultValue }.takeIf { it != -1 } ?: 0,
+) {
+    val selected get() = options[state].second
 }
 
-fun getMangaShiFilters(): FilterList = FilterList(
-    Filter.Header("ПРИМЕЧАНИЕ: Игнорируются при текстовом поиске!"),
-    Filter.Separator(),
-    SortFilter(),
-    StatusFilter(),
-    TypeFilter(),
-    YearFilter(),
-    AgeRatingFilter(),
-    GenreFilter(),
-)
-
-class SortFilter :
-    Filter.Select<String>(
-        "Сортировка",
-        SORT_LABELS,
-    ),
-    UriFilter {
-    override fun addToUri(builder: HttpUrl.Builder) {
-        builder.addQueryParameter("sort", SORT_VALUES[state])
-    }
-
+class SortFilter(defaultOrder: String = "popular") : SelectFilter("Сортировка", data, defaultOrder) {
     companion object {
-        private val SORT_LABELS = arrayOf(
-            "По дате добавления",
-            "По обновлению глав",
-            "По рейтингу",
-            "По популярности",
-            "По количеству глав",
-            "По году выпуска",
-        )
-
-        private val SORT_VALUES = arrayOf(
-            "added",
-            "updated",
-            "rating",
-            "popular",
-            "chapters",
-            "year",
+        private val data = listOf(
+            Pair("По дате добавления", "added"),
+            Pair("По обновлению глав", "updated"),
+            Pair("По рейтингу", "rating"),
+            Pair("По популярности", "popular"),
+            Pair("По количеству глав", "chapters"),
+            Pair("По году выпуска", "year"),
         )
     }
 }
 
-class StatusFilter :
-    Filter.Select<String>(
-        "Статус",
-        STATUS_LABELS,
-    ),
-    UriFilter {
-    override fun addToUri(builder: HttpUrl.Builder) {
-        val value = STATUS_VALUES[state]
-        if (value.isNotEmpty()) {
-            builder.addQueryParameter("status", value)
-        }
-    }
-
+class StatusFilter(defaultValue: String = "") : SelectFilter("Статус", data, defaultValue) {
     companion object {
-        private val STATUS_LABELS = arrayOf("Все", "Онгоинг", "Завершён", "Хиатус")
-        private val STATUS_VALUES = arrayOf("", "ONGOING", "COMPLETED", "HIATUS")
-    }
-}
-
-class TypeFilter :
-    Filter.Select<String>(
-        "Тип",
-        TYPE_LABELS,
-    ),
-    UriFilter {
-    override fun addToUri(builder: HttpUrl.Builder) {
-        val value = TYPE_VALUES[state]
-        if (value.isNotEmpty()) {
-            builder.addQueryParameter("type", value)
-        }
-    }
-
-    companion object {
-        private val TYPE_LABELS = arrayOf("Все", "Манга", "Манхва", "Маньхуа", "Западный комикс")
-        private val TYPE_VALUES = arrayOf("", "MANGA", "MANHWA", "MANHUA", "WESTERN")
-    }
-}
-
-class YearFilter :
-    Filter.Select<String>(
-        "Год",
-        YEAR_LABELS,
-    ),
-    UriFilter {
-    override fun addToUri(builder: HttpUrl.Builder) {
-        val value = YEAR_VALUES[state]
-        if (value.isNotEmpty()) {
-            builder.addQueryParameter("year", value)
-        }
-    }
-
-    companion object {
-        private val YEAR_LABELS = arrayOf(
-            "Все годы",
-            "2026", "2025", "2024", "2023", "2022", "2021", "2020",
-            "2019", "2018", "2017", "2016", "2015", "2014", "2013",
-            "2012", "2010", "2005", "1998", "1997", "1989",
-        )
-
-        private val YEAR_VALUES = arrayOf(
-            "",
-            "2026", "2025", "2024", "2023", "2022", "2021", "2020",
-            "2019", "2018", "2017", "2016", "2015", "2014", "2013",
-            "2012", "2010", "2005", "1998", "1997", "1989",
+        private val data = listOf(
+            Pair("Все", ""),
+            Pair("Онгоинг", "ONGOING"),
+            Pair("Завершён", "COMPLETED"),
+            Pair("Хиатус", "HIATUS"),
         )
     }
 }
 
-class AgeRatingFilter :
-    Filter.Select<String>(
-        "Возрастной рейтинг",
-        AGE_LABELS,
-    ),
-    UriFilter {
-    override fun addToUri(builder: HttpUrl.Builder) {
-        val value = AGE_VALUES[state]
-        if (value.isNotEmpty()) {
-            builder.addQueryParameter("age_rating", value)
-        }
-    }
-
+class TypeFilter(defaultValue: String = "") : SelectFilter("Тип", data, defaultValue) {
     companion object {
-        private val AGE_LABELS = arrayOf("Все", "Без 18+", "Только 18+")
-        private val AGE_VALUES = arrayOf("", "sfw", "adult")
-    }
-}
-
-class Tag(name: String, val value: String) : Filter.CheckBox(name)
-
-class GenreFilter :
-    Filter.Group<Tag>(
-        "Жанры / Теги",
-        GENRES.map { Tag(it.first, it.second) },
-    ),
-    UriFilter {
-    override fun addToUri(builder: HttpUrl.Builder) {
-        state.filter { it.state }.forEach { tag ->
-            builder.addQueryParameter("tag", tag.value)
-        }
-    }
-
-    companion object {
-        private val GENRES = listOf(
-            "18+" to "18",
-            "Академия" to "tag-05769fe2",
-            "Антигерой" to "tag-1309a7f7",
-            "Антиутопия" to "tag-4a511b8e",
-            "Апокалипсис" to "tag-4adee779",
-            "Аристократия" to "tag-48151849",
-            "Боевик" to "tag-386280c1",
-            "Боевые искусства" to "tag-7701241f",
-            "Вампиры" to "tag-b0396b50",
-            "Военные" to "tag-ac7e464f",
-            "Выживание" to "tag-a68cdc29",
-            "Гарем" to "tag-c855893e",
-            "ГГ женщина" to "tag-45706580",
-            "ГГ имба" to "tag-41b4b132",
-            "ГГ мужчина" to "tag-847d42fc",
-            "Гендерная интрига" to "tag-5ce8dc5f",
-            "Демоны" to "tag-36863543",
-            "Детектив" to "tag-394f730e",
-            "Дзёсэй" to "tag-8b857526",
-            "Драма" to "tag-794fbe56",
-            "Исекай" to "tag-955ea3ff",
-            "Историческое" to "tag-ae9789ff",
-            "Комедия" to "tag-d52b5e63",
-            "Культивация" to "tag-1d537988",
-            "Магия" to "tag-121431c0",
-            "Мистика" to "tag-d339496a",
-            "Монстры" to "tag-56ffc473",
-            "Музыка" to "tag-e65ad734",
-            "Научная фантастика" to "tag-8a8d71d0",
-            "Повседневность" to "tag-c71e5cc0",
-            "Подземелья" to "tag-8fcd09b8",
-            "Приключения" to "tag-65c3e2be",
-            "Психологическое" to "tag-0c5b7bff",
-            "Реинкарнация" to "tag-246a4b88",
-            "Романтика" to "tag-897bb76d",
-            "Сверхъестественное" to "tag-e6b86e64",
-            "Сёдзё" to "tag-1e57fed7",
-            "Сёнэн" to "tag-b2cc99f6",
-            "Сэйнэн" to "tag-5f15ec0a",
-            "Спорт" to "tag-f39e647a",
-            "Супер сила" to "tag-f82c854c",
-            "Трагедия" to "tag-b32f1d45",
-            "Триллер" to "tag-a203bb8c",
-            "Ужасы" to "tag-22e77980",
-            "Фантастика" to "tag-18f95076",
-            "Фэнтези" to "tag-f626cde3",
-            "Школа" to "tag-1de4e421",
-            "Экшен" to "tag-7c95b72a",
-            "Эротика" to "tag-ef731402",
-            "Этти" to "tag-3588a0b8",
+        private val data = listOf(
+            Pair("Все", ""),
+            Pair("Манга", "MANGA"),
+            Pair("Манхва", "MANHWA"),
+            Pair("Маньхуа", "MANHUA"),
+            Pair("Западный комикс", "WESTERN"),
         )
     }
 }
+
+class YearFilter(defaultValue: String = "") : SelectFilter("Год выпуска", data, defaultValue) {
+    companion object {
+        private val data = listOf(
+            Pair("Все годы", ""),
+            Pair("2026", "2026"),
+            Pair("2025", "2025"),
+            Pair("2024", "2024"),
+            Pair("2023", "2023"),
+            Pair("2022", "2022"),
+            Pair("2021", "2021"),
+            Pair("2020", "2020"),
+            Pair("2019", "2019"),
+            Pair("2018", "2018"),
+            Pair("2017", "2017"),
+            Pair("2016", "2016"),
+            Pair("2015", "2015"),
+            Pair("2014", "2014"),
+            Pair("2013", "2013"),
+            Pair("2012", "2012"),
+            Pair("2011", "2011"),
+            Pair("2010", "2010"),
+            Pair("2005", "2005"),
+            Pair("2002", "2002"),
+            Pair("1998", "1998"),
+            Pair("1997", "1997"),
+            Pair("1989", "1989"),
+            Pair("1977", "1977"),
+        )
+    }
+}
+
+class AgeRatingFilter(defaultValue: String = "") : SelectFilter("Возрастной рейтинг", data, defaultValue) {
+    companion object {
+        private val data = listOf(
+            Pair("Все", ""),
+            Pair("Без 18+", "sfw"),
+            Pair("Только 18+", "adult"),
+        )
+    }
+}
+
+class TriStateFilter(name: String, val id: String) : Filter.TriState(name)
+
+abstract class TriStateGroup(
+    name: String,
+    options: List<Pair<String, String>>,
+) : Filter.Group<TriStateFilter>(
+    name,
+    options.map { TriStateFilter(it.first, it.second) },
+) {
+    val included get() = state.filter { it.isIncluded() }.map { it.id }.takeIf { it.isNotEmpty() }
+    val excluded get() = state.filter { it.isExcluded() }.map { it.id }.takeIf { it.isNotEmpty() }
+}
+
+class GenreFilter(data: List<Pair<String, String>>) : TriStateGroup("Жанры", data)

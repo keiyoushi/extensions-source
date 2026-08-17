@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "KivaraToons"
-    versionCode = 1
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

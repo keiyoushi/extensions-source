@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Manga Ball"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
@@ -26,9 +26,4 @@ keiyoushi {
         path("/title-detail/..*")
         path("/chapter-detail/..*")
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:cookieinterceptor"))
 }

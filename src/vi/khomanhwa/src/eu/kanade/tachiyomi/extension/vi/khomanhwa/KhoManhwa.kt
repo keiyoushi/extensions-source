@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.khomanhwa
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -148,28 +149,20 @@ abstract class KhoManhwa : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val response = client.get("$baseUrl${chapter.url}", ensureSuccess = false)
-        if (response.code == 403) {
+        if (!response.isSuccessful) {
+            val code = response.code
             response.close()
-            throw Exception("Đăng nhập Webview bằng tài khoản phù hợp để xem chương này")
+            if (code == 403) {
+                throw Exception("Đăng nhập Webview bằng tài khoản phù hợp để xem chương này")
+            }
+            throw HttpException(code)
         }
         val document = response.asJsoup()
-        val boxImages = document.selectFirst("#chapter_boxImages") ?: return emptyList()
-        val manga = boxImages.attr("data-manga")
-        val chapterSlug = boxImages.attr("data-chapter")
-        val token = boxImages.attr("data-token")
-        val endpoint = boxImages.attr("data-endpoint").ifEmpty { "/reader_images.php" }
 
-        val apiUrl = "$baseUrl$endpoint".toHttpUrl().newBuilder().apply {
-            addQueryParameter("manga", manga)
-            addQueryParameter("chapter", chapterSlug)
-            addQueryParameter("token", token)
-        }.build()
-
-        val apiResponse = client.get(apiUrl)
-        val data = apiResponse.parseAs<ReaderImagesResponse>()
-        if (!data.ok) return emptyList()
-
-        return data.images.map { Page(it.page - 1, imageUrl = it.url) }
+        return document.select("#chapter_boxImages img.chapter-page")
+            .mapIndexed { index, element ->
+                Page(index, imageUrl = element.absUrl("src"))
+            }
     }
 
     // ============================== Filters ===============================

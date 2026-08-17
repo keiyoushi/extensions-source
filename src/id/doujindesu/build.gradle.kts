@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Doujindesu"
-    versionCode = 19
+    versionCode = 20
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
 
@@ -21,5 +21,4 @@ keiyoushi {
 
 dependencies {
     implementation(project(":lib:randomua"))
-    implementation(project(":lib:cookieinterceptor"))
 }
