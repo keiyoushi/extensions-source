@@ -12,6 +12,7 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -23,11 +24,9 @@ import okhttp3.OkHttpClient
 @Source
 abstract class YomuComics : KeiSource() {
 
-    private val siteHost: String by lazy { baseUrl.toHttpUrl().host }
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(5) { it.host == baseUrl.toHttpUrl().host }
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(5) { it.host == siteHost }
-
-    private val rscHeaders: Headers by lazy { headers.newBuilder().set("RSC", "1").build() }
+    private val rscHeaders: Headers get() = headersBuilder().set("RSC", "1").build()
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, sort = "popular")
 
@@ -102,7 +101,13 @@ abstract class YomuComics : KeiSource() {
         return FilterList(SortFilter(), TypeFilter(), StatusFilter(), GenreFilter(genres))
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBefore('?')
+    override fun getChapterUrl(chapter: SChapter): String {
+        val slug = chapter.memo["slug"]?.stringOrNull
+        val number = chapter.memo["number"]?.stringOrNull
+        if (slug == null || number == null) throw Exception("Atualize a lista de capítulos")
+
+        return "$baseUrl/ler/$slug/$number"
+    }
 
     companion object {
         private const val PAGE_SIZE = 30

@@ -7,15 +7,17 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
-import java.time.LocalDate
-import java.time.ZoneOffset
+import kotlinx.serialization.json.put
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Instant
@@ -148,17 +150,17 @@ class SeriesChapterDto(
 ) {
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
         val label = number.formatted()
-        url = "/ler/$mangaSlug/$label?chapterId=$id"
+        url = id
         name = title?.takeIf(String::isNotBlank) ?: "Capítulo $label"
         chapter_number = number.toFloat()
-        date_upload = releaseAt?.let(Instant::parseOrNull)?.toEpochMilliseconds() ?: releaseDate.toTimestamp()
+        date_upload = Instant.tryParse(releaseAt).takeIf { it != 0L } ?: DATE_FORMAT.tryParseDate(releaseDate)
+        memo = buildJsonObject {
+            put("slug", mangaSlug)
+            put("number", label)
+        }
     }
 
     private fun Double.formatted(): String = toString().removeSuffix(".0")
-
-    private fun String?.toTimestamp(): Long = runCatching {
-        LocalDate.parse(this, DATE_FORMAT).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-    }.getOrDefault(0L)
 
     companion object {
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
