@@ -17,6 +17,7 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
@@ -68,19 +69,6 @@ abstract class Atsumaru :
 
     // =============================== Search ===============================
 
-    override fun getFilterList(data: JsonElement?) = FilterList(
-        Filter.Separator(),
-        GenreFilter(getGenresList()),
-        TagsFilter(getTagsList()),
-        TypeFilter(getTypesList()),
-        StatusFilter(getStatusList()),
-        YearFilter(),
-        MinChaptersFilter(),
-        SortFilter(),
-        AdultFilter(get18Mode().isNotEmpty()),
-        OfficialFilter(),
-    )
-
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/collections/manga/documents/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("q", query.ifEmpty { "*" })
@@ -111,11 +99,13 @@ abstract class Atsumaru :
                         }
                     }
 
-                    is TagsFilter -> {
-                        filter.state.forEachIndexed { index, state ->
-                            when (state.state) {
-                                Filter.TriState.STATE_INCLUDE -> includedTags.add(filter.tagIds[index])
-                                Filter.TriState.STATE_EXCLUDE -> excludedTags.add(filter.tagIds[index])
+                    is TagFilters -> {
+                        filter.state.forEach { letter ->
+                            letter.state.forEachIndexed { index, state ->
+                                when (state.state) {
+                                    Filter.TriState.STATE_INCLUDE -> includedTags.add(letter.tagIds[index])
+                                    Filter.TriState.STATE_EXCLUDE -> excludedTags.add(letter.tagIds[index])
+                                }
                             }
                         }
                     }
@@ -241,6 +231,29 @@ abstract class Atsumaru :
             fetchDetails = true,
             fetchChapters = false,
         ).manga.apply { initialized = true }
+    }
+
+    // =============================== Filters ===============================
+
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val filters = client.get("$baseUrl/api/explore/availableFilters").parseAs<FilterData>()
+        return filters.toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filters = data?.parseAs<FilterData>()?.getFilterList().orEmpty()
+
+        return FilterList(
+            filters + listOf(
+                YearFilter(),
+                MinChaptersFilter(),
+                SortFilter(),
+                AdultFilter(get18Mode().isNotEmpty()),
+                OfficialFilter(),
+            ),
+        )
     }
 
     // =========================== Manga Details ============================
