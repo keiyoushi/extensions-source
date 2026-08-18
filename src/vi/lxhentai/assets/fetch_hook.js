@@ -1,7 +1,57 @@
 // Fetch hook - intercepts /get_token, image URLs, and unblocks Turnstile
 // Injected via onPageStarted BEFORE any page scripts run
 (function() {
-    if (window.__lxHookInstalled) return;
+    var defineEarlyCallback = function(name) {
+        if (!/^[A-Za-z_$][\w$]{4,31}$/.test(name)) return;
+        if (typeof window[name] === 'undefined') window[name] = function() {};
+    };
+    var scanEarlyCallbacks = function(root) {
+        try {
+            var elements = [];
+            if (root && root.nodeType === 1 && (root.hasAttribute('onload') || root.hasAttribute('onerror'))) {
+                elements.push(root);
+            }
+            if (root && root.querySelectorAll) {
+                elements = elements.concat(Array.from(root.querySelectorAll('[onload], [onerror]')));
+            }
+            elements.forEach(function(element) {
+                ['onload', 'onerror'].forEach(function(attribute) {
+                    var handler = element.getAttribute(attribute) || '';
+                    var matches = handler.matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g);
+                    for (var match of matches) defineEarlyCallback(match[1]);
+                });
+            });
+        } catch(e) {}
+    };
+    var installEarlyCallbackObserver = function() {
+        if (!document.documentElement) {
+            setTimeout(installEarlyCallbackObserver, 10);
+            return;
+        }
+        scanEarlyCallbacks(document.documentElement);
+        try {
+            new MutationObserver(function(records) {
+                records.forEach(function(record) {
+                    record.addedNodes.forEach(scanEarlyCallbacks);
+                });
+            }).observe(document.documentElement, {childList: true, subtree: true});
+        } catch(e) {}
+    };
+    installEarlyCallbackObserver();
+    if (window.__lxChapterUrl && window.__lxChapterUrl !== location.href) {
+        window.__lxToken = null;
+        window.__lxImageUrls = [];
+        window.__lxCapturedUrls = null;
+        window.__lxLastUrlCount = 0;
+        window.__lxStableSince = 0;
+    }
+    window.__lxChapterUrl = location.href;
+    if (window.__lxHookInstalled) {
+        window.__lxToken = null;
+        window.__lxImageUrls = [];
+        window.__lxCapturedUrls = null;
+        window.__lxHookInstalled = false;
+    }
     window.__lxHookInstalled = true;
     window.__lxToken = null;
     window.__lxImageUrls = [];
@@ -11,9 +61,13 @@
     window.__lxRealFetch = _realFetch;
 
     try {
-        var _realHasFocus = Document.prototype.hasFocus;
-        Document.prototype.hasFocus = function() { return true; };
-        Document.prototype.hasFocus.toString = function() { return _realHasFocus.toString(); };
+        if (!Document.prototype.hasFocus.__lxWrapped) {
+            var _realHasFocus = Document.prototype.hasFocus;
+            var _lxHasFocus = function() { return true; };
+            _lxHasFocus.__lxWrapped = true;
+            _lxHasFocus.toString = function() { return _realHasFocus.toString(); };
+            Document.prototype.hasFocus = _lxHasFocus;
+        }
     } catch(e) {}
 
     var _origSlice = Array.prototype.slice;
@@ -27,12 +81,14 @@
                     }
                 }
                 if (urlValues.length > 0) {
-                    window.__lxCapturedUrls = urlValues;
+                    window.__lxCapturedUrls = (window.__lxCapturedUrls || []).concat(urlValues)
+                        .filter(function(url, index, all) { return all.indexOf(url) === index; });
                 }
             }
         } catch(e) {}
         return _origSlice.apply(this, arguments);
     };
+    try { Array.prototype.slice.toString = function() { return _origSlice.toString(); }; } catch(e) {}
 
     var _propTrapInterval = setInterval(function() {
         if (window.__lxPropTrapped) { clearInterval(_propTrapInterval); return; }
@@ -52,7 +108,10 @@
                                 _captured = val;
                                 if (Array.isArray(val) && val.length > 0 && !window.__lxCapturedUrls) {
                                     var urls = val.filter(function(item) { return typeof item === 'string' && isImageUrl(item); });
-                                    if (urls.length > 0) window.__lxCapturedUrls = urls.slice();
+                                    if (urls.length > 0) {
+                                        window.__lxCapturedUrls = (window.__lxCapturedUrls || []).concat(urls)
+                                            .filter(function(url, index, all) { return all.indexOf(url) === index; });
+                                    }
                                 }
                             }
                         });
@@ -65,9 +124,20 @@
     }, 50);
 
     var isImageUrl = function(value) {
-        return typeof value === 'string' &&
-            (value.indexOf('http') === 0 || value.indexOf('//') === 0) &&
-            (/page_\d+/i.test(value) || /\.(?:jpg|jpeg|png|webp)(?:[?#]|$)/i.test(value));
+        if (typeof value !== 'string' ||
+            (value.indexOf('http') !== 0 && value.indexOf('//') !== 0)) return false;
+
+        var lower = value.toLowerCase();
+        var isNormalPage = /\/page[_-]\d+\.(?:jpg|jpeg|png|webp)(?:[?#]|$)/i.test(value);
+        var isPuzzlePage = /^https?:\/\/s\d+\.lxmanga\.xyz\/.*\/\d+-[a-f0-9]+\.(?:jpg|jpeg|png|webp)(?:[?#]|$)/i.test(value);
+        return (isNormalPage || isPuzzlePage) &&
+            lower.indexOf('favicon') < 0 &&
+            lower.indexOf('/imgs/') < 0 &&
+            lower.indexOf('/images/') < 0 &&
+            lower.indexOf('cover') < 0 &&
+            lower.indexOf('logo') < 0 &&
+            lower.indexOf('background') < 0 &&
+            lower.indexOf('avatar') < 0;
     };
 
     var _wrapFetch = function(fetchImpl) {
@@ -80,13 +150,14 @@
             }
             if (init && init.headers) {
                 var headers = init.headers;
-                if (headers instanceof Headers) { token = headers.get('Token') || headers.get('token'); }
-                else if (typeof headers === 'object') { token = headers['Token'] || headers['token']; }
+                try {
+                    token = new Headers(headers).get('Token') || new Headers(headers).get('token');
+                } catch(e) {}
             }
 
-            if (token) {
+            if (token && isImageUrl(url)) {
                 window.__lxToken = token;
-                if (isImageUrl(url) && window.__lxImageUrls.indexOf(url) < 0) {
+                if (window.__lxImageUrls.indexOf(url) < 0) {
                     window.__lxImageUrls.push(url);
                 }
             }
@@ -102,7 +173,7 @@
                     }
                 }).catch(function() {});
                 return resp;
-            });
+            }).catch(function(error) { throw error; });
         };
 
         try { wrapped.toString = function() { return 'function fetch() { [native code] }'; }; } catch(e) {}
@@ -131,8 +202,24 @@
             return _xhrSetRequestHeader.apply(this, arguments);
         };
         XMLHttpRequest.prototype.send = function() {
+            var xhr = this;
+            if (this.__lxUrl && this.__lxUrl.indexOf('/get_token') >= 0 && !this.__lxTokenHooked) {
+                this.__lxTokenHooked = true;
+                try {
+                    this.addEventListener('load', function() {
+                        try {
+                            var data = JSON.parse(xhr.responseText || '{}');
+                            if (data && data.action_token) window.__lxToken = data.action_token;
+                        } catch(e) {}
+                    });
+                } catch(e) {}
+            }
             return _xhrSend.apply(this, arguments);
         };
+        XMLHttpRequest.prototype.open.toString = function() { return _xhrOpen.toString(); };
+        XMLHttpRequest.prototype.setRequestHeader.toString = function() { return _xhrSetRequestHeader.toString(); };
+        XMLHttpRequest.prototype.send.toString = function() { return _xhrSend.toString(); };
+
     } catch(e) {}
 
     var _replaceInterval = setInterval(function() {
@@ -147,4 +234,24 @@
         localStorage.removeItem('turnstile_blocked');
         localStorage.removeItem('turnstile_blocked_time');
     } catch(e) {}
+
+    var collectVisibleImages = function() {
+        try {
+            document.querySelectorAll('img').forEach(function(image) {
+                [image.currentSrc, image.src, image.getAttribute('data-src'), image.getAttribute('data-lazy-src')]
+                    .filter(isImageUrl)
+                    .forEach(function(url) {
+                        if (window.__lxImageUrls.indexOf(url) < 0) window.__lxImageUrls.push(url);
+                    });
+            });
+            if (window.performance && performance.getEntriesByType) {
+                performance.getEntriesByType('resource').forEach(function(entry) {
+                    if (isImageUrl(entry.name) && window.__lxImageUrls.indexOf(entry.name) < 0) {
+                        window.__lxImageUrls.push(entry.name);
+                    }
+                });
+            }
+        } catch(e) {}
+    };
+    setInterval(collectVisibleImages, 500);
 })();

@@ -40,7 +40,7 @@ import javax.crypto.spec.SecretKeySpec
 abstract class Dilar : KeiSource() {
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         add("X-DH-Pub", clientPubB64)
-        add("X-Crypto-Caps", "1,2,3,4,5,6")
+        add("X-Crypto-Caps", "1,2,3,4,5,6,7,8")
     }
 
     // Popular
@@ -178,6 +178,28 @@ abstract class Dilar : KeiSource() {
                     "dilar.response.ecies.v6|${data.e}|${data.iv}".toByteArray()
             }
 
+            7 -> {
+                hkdfSha256(
+                    ikm = iv,
+                    salt = serverPubRaw,
+                    info = "dilar.response.ecies.v7.salt".toByteArray(),
+                    length = 32,
+                ) to "dilar.response.ecies.v7|${data.e}".toByteArray()
+            }
+
+            8 -> {
+                sha256(
+                    joinBytes(
+                        u16(clientPubRaw.size),
+                        clientPubRaw,
+                        u16(serverPubRaw.size),
+                        serverPubRaw,
+                        u16(iv.size),
+                        iv,
+                    ),
+                ) to "dilar.response.ecies.v8|${data.e}|${iv.toHex()}".toByteArray()
+            }
+
             else -> error("Unsupported encryption protocol version: ${data.v}")
         }
 
@@ -196,6 +218,21 @@ abstract class Dilar : KeiSource() {
         }
 
         return cipher.doFinal(ct + tag).toString(Charsets.UTF_8)
+    }
+
+    private fun u16(n: Int): ByteArray = byteArrayOf(((n shr 8) and 0xFF).toByte(), (n and 0xFF).toByte())
+
+    private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
+
+    private fun joinBytes(vararg parts: ByteArray): ByteArray {
+        val size = parts.sumOf { it.size }
+        val result = ByteArray(size)
+        var offset = 0
+        for (p in parts) {
+            System.arraycopy(p, 0, result, offset, p.size)
+            offset += p.size
+        }
+        return result
     }
 
     private fun pointToRaw(publicKey: ECPublicKey): ByteArray {
