@@ -5,15 +5,14 @@ plugins {
 }
 
 keiyoushi {
-    name = "Mangas Brasuka"
-    versionCode = 55
+    name = "Manga NXY"
+    versionCode = 0
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "aurora"
 
     source {
         lang = "pt-BR"
-        baseUrl = "https://mangasbrasuka.com.br"
-        versionId = 2
+        baseUrl = "https://manganyx.com"
     }
 }

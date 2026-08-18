@@ -1,7 +1,7 @@
-package eu.kanade.tachiyomi.extension.pt.mangasbrasuka
+package eu.kanade.tachiyomi.extension.pt.manganyx
 
 import eu.kanade.tachiyomi.multisrc.aurora.Aurora
 import keiyoushi.annotation.Source
 
 @Source
-abstract class MangasBrasuka : Aurora()
+abstract class MangaNYX : Aurora()

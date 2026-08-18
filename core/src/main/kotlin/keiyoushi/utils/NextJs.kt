@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -349,8 +350,16 @@ internal inline fun <reified T> inferredNextJsPredicate(): (JsonElement) -> Bool
 
     val requiredKeys = (0 until elementDescriptor.elementsCount)
         .filterNot { elementDescriptor.isElementOptional(it) || elementDescriptor.getElementDescriptor(it).isNullable }
-        .map { elementDescriptor.getElementName(it) }
-        .toSet()
+        .map { i ->
+            val primaryName = elementDescriptor.getElementName(i)
+            val annotations = elementDescriptor.getElementAnnotations(i)
+
+            val jsonNames = annotations
+                .filterIsInstance<JsonNames>()
+                .flatMap { it.names.toSet() }
+
+            (setOf(primaryName) + jsonNames)
+        }.toSet()
 
     require(requiredKeys.isNotEmpty()) {
         "Cannot infer a predicate for ${elementDescriptor.serialName}: all fields are optional or nullable. Provide an explicit predicate instead."
@@ -361,12 +370,12 @@ internal inline fun <reified T> inferredNextJsPredicate(): (JsonElement) -> Bool
             element is JsonArray &&
                 element.isNotEmpty() &&
                 element.first() is JsonObject &&
-                requiredKeys.all { it in element.first().jsonObject }
+                requiredKeys.all { it.any { it in element.first().jsonObject } }
         }
     } else {
         { element ->
             element is JsonObject &&
-                requiredKeys.all { it in element }
+                requiredKeys.all { it.any { it in element } }
         }
     }
 }
