@@ -8,7 +8,9 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.lib.i18n.Intl
 import okhttp3.HttpUrl
-import java.util.Date
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 
 class MangaDexFilters {
 
@@ -236,15 +238,10 @@ class MangaDexFilters {
 
         override fun addQueryParameter(url: HttpUrl.Builder, dexLang: String) {
             val days = options[state].second.takeIf { it > 0 } ?: return
-            val since = Date(
-                (System.currentTimeMillis() - days * MILLIS_PER_DAY) / MILLIS_PER_HOUR * MILLIS_PER_HOUR,
-            )
+            val since = LocalDateTime.now(ZoneOffset.UTC)
+                .minusDays(days.toLong())
+                .truncatedTo(ChronoUnit.HOURS)
             url.addQueryParameter(queryParam, MDConstants.dateFormatterNoOffset.format(since))
-        }
-
-        companion object {
-            private const val MILLIS_PER_DAY = 24L * 60 * 60 * 1000
-            private const val MILLIS_PER_HOUR = 60L * 60 * 1000
         }
     }
 
