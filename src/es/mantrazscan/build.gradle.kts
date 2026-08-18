@@ -8,7 +8,7 @@ keiyoushi {
     name = "Mantraz Scan"
     versionCode = 69
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "es"
