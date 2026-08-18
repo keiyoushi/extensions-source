@@ -55,7 +55,7 @@ private fun appendFilter(builder: StringBuilder, filter: String) {
     builder.append(filter)
 }
 
-class SortFilter(default: String = "") :
+class SortFilter :
     UriPartFilter(
         "Sort",
         "sort",
@@ -65,7 +65,6 @@ class SortFilter(default: String = "") :
             Pair("Rating", "rating"),
             Pair("A-Z", "title"),
         ),
-        default,
     )
 
 class SortOrderFilter :
@@ -80,10 +79,11 @@ class SortOrderFilter :
     )
 
 class StatusFilter :
-    UriMultiSelectFilter(
+    UriPartFilter(
         "Status",
         "status",
         arrayOf(
+            Pair("Any", ""),
             Pair("On Going", "ongoing"),
             Pair("Completed", "completed"),
             Pair("Hiatus", "hiatus"),
@@ -92,10 +92,11 @@ class StatusFilter :
     )
 
 class FormatFilter :
-    UriMultiSelectFilter(
+    UriPartFilter(
         "Format",
         "format",
         arrayOf(
+            Pair("Any", ""),
             Pair("Manga", "manga"),
             Pair("Manhwa", "manhwa"),
             Pair("Manhua", "manhua"),
@@ -104,10 +105,11 @@ class FormatFilter :
     )
 
 class TypeFilter :
-    UriMultiSelectFilter(
+    UriPartFilter(
         "Type",
         "type",
         arrayOf(
+            Pair("Any", ""),
             Pair("Project", "project"),
             Pair("Mirror", "mirror"),
         ),

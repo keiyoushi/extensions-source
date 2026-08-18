@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.id.komikcast
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.DecimalFormat
@@ -123,7 +122,7 @@ private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale
 
 private fun parseChapterDate(dateString: String): Long {
     if (dateString.isBlank()) return 0L
-    return dateFormat.tryParse(dateString) ?: 0L
+    return dateFormat.parse(dateString)?.time ?: 0L
 }
 
 fun SManga.getSlug(baseUrl: String): String = "$baseUrl$url".toHttpUrl().pathSegments[1]
