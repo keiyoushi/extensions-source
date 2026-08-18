@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.post
@@ -32,8 +33,6 @@ abstract class MangaLivreOrg : KeiSource() {
     override fun Headers.Builder.configureHeaders(): Headers.Builder = this
         .add("Accept-Language", "pt-BR,pt;q=0.9,en;q=0.8")
         .add("Sec-Fetch-Site", "same-origin")
-        // Constant in the site's bundle. The chapter endpoint answers 404 without it.
-        .add("X-ML-Nonce", "7854d8e036b53cddefc539b61aa95e35")
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, "views", period = "ever")
 
@@ -101,9 +100,42 @@ abstract class MangaLivreOrg : KeiSource() {
         )
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/api/v1/chapters/${chapter.url}")
-        .parseAs<ChapterPagesDto>()
-        .toPageList()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val url = "$baseUrl/api/v1/chapters/${chapter.url}"
+
+        val response = client.get(url, nonceHeaders(), ensureSuccess = false)
+        if (response.isSuccessful) {
+            return response.parseAs<ChapterPagesDto>().toPageList()
+        }
+
+        response.close()
+        cachedNonce = null
+        return client.get(url, nonceHeaders()).parseAs<ChapterPagesDto>().toPageList()
+    }
+
+    private var cachedNonce: String? = null
+
+    private suspend fun nonceHeaders(): Headers {
+        val nonce = cachedNonce ?: fetchNonce().also { cachedNonce = it }
+        return headers.newBuilder().set("X-ML-Nonce", nonce).build()
+    }
+
+    // The site keeps the nonce as a constant in its bundle and rotates it on every rebuild.
+    private suspend fun fetchNonce(): String {
+        val scriptUrl = client.get(baseUrl).asJsoup()
+            .selectFirst("script[src*=\"/assets/index-\"]")
+            ?.absUrl("src")
+            ?: return DEFAULT_NONCE
+
+        val script = client.get(scriptUrl).use { it.body.string() }
+        val variable = NONCE_VARIABLE_REGEX.find(script)?.groupValues?.get(1) ?: return DEFAULT_NONCE
+
+        return Regex("""\b$variable\s*=\s*["'`]([0-9a-f]{32})["'`]""")
+            .find(script)
+            ?.groupValues
+            ?.get(1)
+            ?: DEFAULT_NONCE
+    }
 
     override val supportsFilterFetching: Boolean get() = true
 
@@ -133,5 +165,7 @@ abstract class MangaLivreOrg : KeiSource() {
 
     companion object {
         private val MANGA_PATH_SEGMENTS = listOf("manga", "ler")
+        private val NONCE_VARIABLE_REGEX = Regex("""X-ML-Nonce.{0,2}]\s*=\s*(\w+)""")
+        private const val DEFAULT_NONCE = "e4020328382d1d9254b3d095c1603a15"
     }
 }
