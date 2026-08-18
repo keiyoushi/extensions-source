@@ -1,12 +1,9 @@
 package eu.kanade.tachiyomi.extension.all.mangadex
 
 import keiyoushi.lib.i18n.Intl
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 import kotlin.time.Duration.Companion.minutes
 
-object MDConstants {
+object Constants {
 
     val uuidRegex =
         Regex("[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
@@ -33,9 +30,6 @@ object MDConstants {
     val whitespaceRegex = "\\s".toRegex()
 
     val mdAtHomeTokenLifespan = 5.minutes.inWholeMilliseconds
-
-    val dateFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss+SSS", Locale.US)
-        .apply { timeZone = TimeZone.getTimeZone("UTC") }
 
     const val PREFIX_ID_SEARCH = "id:"
     const val PREFIX_CH_SEARCH = "ch:"
@@ -88,10 +82,10 @@ object MDConstants {
     fun getContentRatingPrefKey(dexLang: String): String = "${CONTENT_RATING_PREF}_$dexLang"
 
     private const val ORIGINAL_LANGUAGE_PREF = "originalLanguage"
-    const val ORIGINAL_LANGUAGE_PREF_VAL_JAPANESE = MangaDexIntl.JAPANESE
-    const val ORIGINAL_LANGUAGE_PREF_VAL_CHINESE = MangaDexIntl.CHINESE
+    const val ORIGINAL_LANGUAGE_PREF_VAL_JAPANESE = MDIntl.JAPANESE
+    const val ORIGINAL_LANGUAGE_PREF_VAL_CHINESE = MDIntl.CHINESE
     const val ORIGINAL_LANGUAGE_PREF_VAL_CHINESE_HK = "zh-hk"
-    const val ORIGINAL_LANGUAGE_PREF_VAL_KOREAN = MangaDexIntl.KOREAN
+    const val ORIGINAL_LANGUAGE_PREF_VAL_KOREAN = MDIntl.KOREAN
     val originalLanguagePrefDefaults = emptySet<String>()
 
     fun getOriginalLanguagePrefKey(dexLang: String): String = "${ORIGINAL_LANGUAGE_PREF}_$dexLang"
@@ -145,9 +139,9 @@ object MDConstants {
     const val TAG_ONE_SHOT_UUID = "0234a31e-a729-4e28-9d6a-3f87c4966b9e"
 
     val romanizedLangCodes = mapOf(
-        MangaDexIntl.JAPANESE to "ja-ro",
-        MangaDexIntl.KOREAN to "ko-ro",
-        MangaDexIntl.CHINESE to "zh-ro",
+        MDIntl.JAPANESE to "ja-ro",
+        MDIntl.KOREAN to "ko-ro",
+        MDIntl.CHINESE to "zh-ro",
         "zh-hk" to "zh-ro",
     )
 }
