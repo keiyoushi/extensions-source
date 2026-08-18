@@ -37,6 +37,9 @@ object MDConstants {
     val dateFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss+SSS", Locale.US)
         .apply { timeZone = TimeZone.getTimeZone("UTC") }
 
+    val dateFormatterNoOffset = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+        .apply { timeZone = TimeZone.getTimeZone("UTC") }
+
     const val PREFIX_ID_SEARCH = "id:"
     const val PREFIX_CH_SEARCH = "ch:"
     const val PREFIX_GRP_SEARCH = "grp:"
