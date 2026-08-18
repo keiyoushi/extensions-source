@@ -117,7 +117,7 @@ internal object BannerChecker {
             ?: error("Unable to decode banner")
         if (bmp.width < expectedW || bmp.height < expectedH) {
             bmp.recycle()
-            error("Bitmap ${bmp.width}x${bmp.height} is smaller than expected ${expectedW}x${expectedH}")
+            error("Bitmap ${bmp.width}x${bmp.height} is smaller than expected ${expectedW}x$expectedH")
         }
         return try {
             createSignature(bmp, 0, 0, expectedW, expectedH)
