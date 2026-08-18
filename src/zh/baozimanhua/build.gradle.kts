@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Baozi Manhua"
-    versionCode = 28
+    versionCode = 29
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
@@ -30,6 +30,8 @@ keiyoushi {
                 "https://cn.dinnerku.com",
                 "https://tw.dinnerku.com",
                 "https://www.dinnerku.com",
+                "https://appcn.baozimh.com/baozimhapp",
+                "https://appgb.baozimh.com/baozimhapp",
             )
         }
         id = 5724751873601868259L
