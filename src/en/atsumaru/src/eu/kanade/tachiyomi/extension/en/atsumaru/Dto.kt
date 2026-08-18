@@ -133,7 +133,7 @@ class MangaDto(
                 add("**Year**: $releaseYear")
             }
 
-            // Can be Int or formatted String
+            // can be Int or formatted String
             views?.jsonPrimitive?.content?.let {
                 add("**Views**: $it")
             }
@@ -223,4 +223,25 @@ class PageDto(
 @Serializable
 class PageDataDto(
     val image: String,
+)
+
+@Serializable
+class FilterData(
+    val genres: List<Filter>?,
+    val tags: List<Filter>?,
+    val types: List<Filter>?,
+    val statuses: List<Filter>?,
+) {
+    fun getFilterList() = buildList {
+        genres?.let { add(GenreFilter(it.map { Genre(it.name, it.id) })) }
+        tags?.let { add(TagFilters(it.map { Tag(it.name, it.id) })) }
+        types?.let { add(TypeFilter(it.map { Type(it.name, it.id) })) }
+        statuses?.let { add(StatusFilter(it.map { Status(it.name, it.id) })) }
+    }
+}
+
+@Serializable
+class Filter(
+    val id: String,
+    val name: String,
 )
