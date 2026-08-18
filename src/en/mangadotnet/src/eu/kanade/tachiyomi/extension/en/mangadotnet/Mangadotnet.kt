@@ -181,17 +181,18 @@ abstract class Mangadotnet :
             }
         }
 
-        val url = "$baseUrl/search.data".toHttpUrl().newBuilder().apply {
+        // Use the clean JSON API endpoint instead of the RSC .data endpoint.
+        // The .data endpoint's RSC encoding breaks pagination on page 2+.
+        val url = "$baseUrl/api/search".toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
                 addQueryParameter("search", query)
             }
             addQueryParameter("page", page.toString())
-            addQueryParameter("perPage", "56")
 
             filters.firstInstanceOrNull<SortFilter>()?.also { filter ->
                 if (filter.sort == "" && query.isBlank()) {
                     addQueryParameter("sortBy", "latest")
-                } else {
+                } else if (filter.sort.isNotBlank()) {
                     addQueryParameter("sortBy", filter.sort)
                 }
                 addQueryParameter("sortOrder", if (filter.ascending) "asc" else "desc")
@@ -251,14 +252,19 @@ abstract class Mangadotnet :
             filters.firstInstanceOrNull<ArtistFilter>()?.state?.takeIf { it.isNotBlank() }?.also {
                 addQueryParameter("artist", it.trim())
             }
-
-            addQueryParameter("_routes", "pages/SearchPage")
         }.build()
 
-        val data = client.get(url).use { it.decodeRscAs<Data<SearchData>>().data.payload }
+        // Parse directly as MangaList — clean JSON, no RSC decoding
+        val data = client.get(url).use { it.parseAs<MangaList>() }
 
         val hideAdultCovers = adultModePref() == "none"
-        return MangasPage(data.mangaList.orEmpty().map { it.toSManga(baseUrl, hideAdultCovers) }, data.hasNextPage())
+        val mangaList = data.mangaList.orEmpty()
+        val hasNextPage = data.hasNextPage() && mangaList.isNotEmpty()
+
+        return MangasPage(
+            mangaList.map { it.toSManga(baseUrl, hideAdultCovers) },
+            hasNextPage,
+        )
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
