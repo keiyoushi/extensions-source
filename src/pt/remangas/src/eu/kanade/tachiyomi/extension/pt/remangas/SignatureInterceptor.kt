@@ -7,7 +7,7 @@ import okhttp3.Response
 import java.io.IOException
 import java.security.MessageDigest
 
-class SignatureInterceptor(private val baseUrl: String) : Interceptor {
+class SignatureInterceptor(private val baseUrl: () -> String) : Interceptor {
 
     @Volatile
     private var signer: Signer? = null
@@ -29,7 +29,7 @@ class SignatureInterceptor(private val baseUrl: String) : Interceptor {
 
     private fun Interceptor.Chain.fetchSigner(request: Request): Signer {
         val signerRequest = Request.Builder()
-            .url("$baseUrl$SIGNER_PATH")
+            .url("${baseUrl()}$SIGNER_PATH")
             .headers(request.headers)
             .build()
 

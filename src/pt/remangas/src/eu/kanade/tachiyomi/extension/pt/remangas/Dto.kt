@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.pt.remangas
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
@@ -99,7 +100,7 @@ class ChapterDto(
     @SerialName("published_at") private val publishedAt: String? = null,
 ) {
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
-        url = "/ler/$mangaSlug/$slug"
+        url = id
         name = buildString {
             append("Capítulo ", number.formatted())
             title?.trim()
@@ -107,8 +108,11 @@ class ChapterDto(
                 ?.let { append(" - ", it) }
         }
         chapter_number = number
-        date_upload = publishedAt?.let(Instant::parseOrNull)?.toEpochMilliseconds() ?: 0L
-        memo = buildJsonObject { put("id", id) }
+        date_upload = Instant.tryParse(publishedAt)
+        memo = buildJsonObject {
+            put("mangaSlug", mangaSlug)
+            put("slug", slug)
+        }
     }
 
     private fun Float.formatted(): String = toString().removeSuffix(".0")

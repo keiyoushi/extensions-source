@@ -28,7 +28,7 @@ abstract class NoxManga : KeiSource() {
     private val apiUrl get() = "$baseUrl/api/v1"
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
-        addInterceptor(SignatureInterceptor(baseUrl))
+        addInterceptor(SignatureInterceptor { baseUrl })
         rateLimit(3, 1.seconds) { it.encodedPath.startsWith("/api/") }
     }
 
@@ -109,13 +109,9 @@ abstract class NoxManga : KeiSource() {
         SMangaUpdate(manga = details.await(), chapters = chapterList.await())
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val id = chapter.memo["id"]?.stringOrNull ?: throw Exception("Atualize a lista de capítulos")
-
-        return client.get("$apiUrl/chapters/$id?skip_view=true")
-            .parseAs<ChapterPagesDto>()
-            .toPageList()
-    }
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/chapters/${chapter.url}?skip_view=true")
+        .parseAs<ChapterPagesDto>()
+        .toPageList()
 
     override val supportsFilterFetching: Boolean get() = true
 
@@ -139,7 +135,13 @@ abstract class NoxManga : KeiSource() {
         )
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/read/" + chapter.url.removePrefix("/ler/")
+    override fun getChapterUrl(chapter: SChapter): String {
+        val mangaSlug = chapter.memo["mangaSlug"]?.stringOrNull
+        val slug = chapter.memo["slug"]?.stringOrNull
+        if (mangaSlug == null || slug == null) throw Exception("Atualize a lista de capítulos")
+
+        return "$baseUrl/read/$mangaSlug/$slug"
+    }
 
     private val SManga.slug get() = url.substringAfterLast('/')
 
