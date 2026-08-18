@@ -34,11 +34,54 @@ abstract class VoraToon : KeiSource() {
         add("Accept-language", "en-US,en;q=0.9,id;q=0.8")
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseSeriesListResponse(client.get(popularSeriesRequest(page, "totalViews")))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseSeriesListResponse(
+        client.get(
+            "$apiUrl/series".toHttpUrl().newBuilder()
+                .addQueryParameter("includeMeta", "true")
+                .addQueryParameter("take", "12")
+                .addQueryParameter("page", page.toString())
+                .addQueryParameter("sort", "totalViews")
+                .addQueryParameter("sortOrder", "desc")
+                .build(),
+        ),
+    )
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseSeriesListResponse(client.get(popularSeriesRequest(page, "latest")))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseSeriesListResponse(
+        client.get(
+            "$apiUrl/series".toHttpUrl().newBuilder()
+                .addQueryParameter("includeMeta", "true")
+                .addQueryParameter("take", "12")
+                .addQueryParameter("page", page.toString())
+                .addQueryParameter("sort", "latest")
+                .addQueryParameter("sortOrder", "desc")
+                .build(),
+        ),
+    )
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = parseSeriesListResponse(client.get(searchSeriesRequest(page, query, filters)))
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = parseSeriesListResponse(
+        client.get(
+            "$apiUrl/series".toHttpUrl().newBuilder()
+                .addQueryParameter("includeMeta", "true")
+                .addQueryParameter("take", "12")
+                .addQueryParameter("page", page.toString())
+                .apply {
+                    if (query.isNotEmpty()) {
+                        addQueryParameter("title", query)
+                    }
+                    val filterBuilder = StringBuilder()
+                    filters.filterIsInstance<UriFilter>().forEach {
+                        it.addToFilter(filterBuilder)
+                    }
+                    if (filterBuilder.isNotEmpty()) {
+                        addQueryParameter("filter", filterBuilder.toString())
+                    }
+                    filters.filterIsInstance<UriQueryFilter>().forEach {
+                        it.addToQuery(this)
+                    }
+                }
+                .build(),
+        ),
+    )
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -72,34 +115,6 @@ abstract class VoraToon : KeiSource() {
         return client.get("$apiUrl/series/$slug/chapters/$chapterIndex").parseAs<ChapterDetailResponse>().data.toPageList()
     }
 
-    private fun seriesUrl(): HttpUrl.Builder = "$apiUrl/series".toHttpUrl().newBuilder()
-        .addQueryParameter("includeMeta", "true")
-        .addQueryParameter("take", "12")
-
-    private fun popularSeriesRequest(page: Int, sort: String): HttpUrl = seriesUrl()
-        .addQueryParameter("sort", sort)
-        .addQueryParameter("sortOrder", "desc")
-        .addQueryParameter("page", page.toString())
-        .build()
-
-    private fun searchSeriesRequest(page: Int, query: String, filters: FilterList): HttpUrl {
-        val url = seriesUrl().addQueryParameter("page", page.toString())
-        if (query.isNotEmpty()) {
-            url.addQueryParameter("title", query)
-        }
-        val filterBuilder = StringBuilder()
-        filters.filterIsInstance<UriFilter>().forEach {
-            it.addToFilter(filterBuilder)
-        }
-        if (filterBuilder.isNotEmpty()) {
-            url.addQueryParameter("filter", filterBuilder.toString())
-        }
-        filters.filterIsInstance<UriQueryFilter>().forEach {
-            it.addToQuery(url)
-        }
-        return url.build()
-    }
-
     private fun parseSeriesListResponse(response: Response): MangasPage {
         val result = response.parseAs<SeriesListResponse>()
         val mangas = result.data.map { it.toSManga() }
@@ -107,14 +122,25 @@ abstract class VoraToon : KeiSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        SortFilter(),
-        SortOrderFilter(),
-        StatusFilter(),
-        FormatFilter(),
-        TypeFilter(),
-        GenreFilter(getGenres()),
-    )
+    override val supportsFilterFetching: Boolean get() = true
+
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres").parseAs()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<GenreResponse>()?.data?.map { it.toPair() }
+        return FilterList(
+            buildList {
+                add(SortFilter())
+                add(SortOrderFilter())
+                add(StatusFilter())
+                add(FormatFilter())
+                add(TypeFilter())
+                if (!genres.isNullOrEmpty()) {
+                    add(GenreFilter(genres.toTypedArray()))
+                }
+            },
+        )
+    }
 
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
