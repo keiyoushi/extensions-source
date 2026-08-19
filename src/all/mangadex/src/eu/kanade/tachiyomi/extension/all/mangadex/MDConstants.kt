@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.mangadex
 
 import keiyoushi.lib.i18n.Intl
 import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.TimeZone
 import kotlin.time.Duration.Companion.minutes
@@ -36,6 +37,8 @@ object MDConstants {
 
     val dateFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss+SSS", Locale.US)
         .apply { timeZone = TimeZone.getTimeZone("UTC") }
+
+    val dateFormatterNoOffset = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
 
     const val PREFIX_ID_SEARCH = "id:"
     const val PREFIX_CH_SEARCH = "ch:"

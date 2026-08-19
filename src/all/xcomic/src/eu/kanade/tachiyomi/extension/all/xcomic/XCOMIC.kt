@@ -44,7 +44,46 @@ abstract class XCOMIC :
     // ========================= Popular & Latest ==========================
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(DefaultSortFilter("field_score")))
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(DefaultSortFilter("field_update")))
+    private var latestCursor: Long? = null
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        if (page == 1) {
+            latestCursor = null
+        }
+
+        val targetLang = if (lang == "all") null else mapLangCode(lang)
+        val accumulatedMangas = mutableListOf<SManga>()
+        val seenMangaUrls = mutableSetOf<String>()
+        var hasNextPage = true
+        var apiPageCount = 0
+
+        while (accumulatedMangas.isEmpty() && hasNextPage && apiPageCount < 10) {
+            apiPageCount++
+            val variables = ApiLatestUploadsSelect(
+                size = BROWSE_PAGE_SIZE,
+                before = latestCursor,
+            )
+            val payload = graphQLBody(query = COMIC_LATEST_QUERY, variables = ApiLatestUploadsWrapper(variables))
+            val response = client.post("$baseUrl/query/", payload)
+            val result = response.parseGraphQLAs<LatestUploadsData>().response
+
+            val filteredItems = result.items.filter { item ->
+                item.comic?.data != null && (targetLang == null || item.comic.data.translatedLanguage == targetLang)
+            }
+
+            filteredItems.forEach { item ->
+                val manga = item.comic!!.data!!.toSManga(baseUrl, ::cleanTitleIfNeeded)
+                if (seenMangaUrls.add(manga.url)) {
+                    accumulatedMangas.add(manga)
+                }
+            }
+
+            latestCursor = result.before
+            hasNextPage = latestCursor != null
+        }
+
+        return MangasPage(accumulatedMangas, hasNextPage)
+    }
 
     // ============================== Search ===============================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -274,17 +313,20 @@ abstract class XCOMIC :
 
     // ============================= Chapters ==============================
     private suspend fun getChapterList(manga: SManga): List<SChapter> = coroutineScope {
-        val firstPage = fetchChapterListPage(manga, 1)
+        val deduplicate = isDeduplicateChapters()
+        val pageSize = if (deduplicate) 1000 else 100
+
+        val firstPage = fetchChapterListPage(manga, 1, deduplicate, pageSize)
         val allChapters = firstPage.chapters.toMutableList()
         val totalItems = firstPage.total ?: 0
 
-        if (totalItems > 100 && firstPage.hasNextPage) {
-            val totalPages = (totalItems + 99) / 100
+        if (totalItems > pageSize && firstPage.hasNextPage) {
+            val totalPages = (totalItems + (pageSize - 1)) / pageSize
 
             (2..totalPages).chunked(3).forEach { batch ->
                 val deferredPages = batch.map { pageNum ->
                     async {
-                        fetchChapterListPage(manga, pageNum).chapters
+                        fetchChapterListPage(manga, pageNum, deduplicate, pageSize).chapters
                     }
                 }
                 allChapters.addAll(deferredPages.awaitAll().flatten())
@@ -294,15 +336,22 @@ abstract class XCOMIC :
         allChapters
     }
 
-    private suspend fun fetchChapterListPage(manga: SManga, page: Int): ChapterListPage {
+    private suspend fun fetchChapterListPage(manga: SManga, page: Int, deduplicate: Boolean, pageSize: Int): ChapterListPage {
         val select = ApiChapterListSelect(
             comicId = getMangaId(manga.url),
             page = page,
-            size = 100,
+            size = pageSize,
         )
-        val payload = graphQLBody(query = CHAPTER_LIST_QUERY, variables = ApiChapterListWrapper(select))
+
+        val query = if (deduplicate) CHAPTER_UNIQ_LIST_QUERY else CHAPTER_LIST_QUERY
+        val payload = graphQLBody(query = query, variables = ApiChapterListWrapper(select))
         val response = client.post("$baseUrl/query/", payload)
-        val data = response.parseGraphQLAs<ChapterListData>().response
+
+        val data = if (deduplicate) {
+            response.parseGraphQLAs<ChapterListUniqData>().response
+        } else {
+            response.parseGraphQLAs<ChapterListData>().response
+        }
 
         return ChapterListPage(
             chapters = data.items.map { it.data.toSChapter() },
@@ -400,11 +449,19 @@ abstract class XCOMIC :
             title = "Ignore WebView Genre Blocklist"
             setDefaultValue(false)
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = DEDUPLICATE_CHAPTERS_PREF
+            title = "Deduplicate Chapter List"
+            summary = "Use a deduplicated chapter list from server side.\nNote: May hide other scanlator uploads."
+            setDefaultValue(true)
+        }.also(screen::addPreference)
     }
 
     private fun isRemoveTitleVersion(): Boolean = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
     private fun customRemoveTitle(): String = preferences.getString(REMOVE_TITLE_CUSTOM_PREF, "")!!
     private fun isIgnoreGenreBlocklist(): Boolean = preferences.getBoolean(IGNORE_GENRE_BLOCKLIST_PREF, false)
+    private fun isDeduplicateChapters(): Boolean = preferences.getBoolean(DEDUPLICATE_CHAPTERS_PREF, true)
 
     private class DefaultSortFilter(val sort: String) : Filter.Header("")
 
@@ -419,6 +476,7 @@ abstract class XCOMIC :
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
         private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
         private const val IGNORE_GENRE_BLOCKLIST_PREF = "IGNORE_GENRE_BLOCKLIST"
+        private const val DEDUPLICATE_CHAPTERS_PREF = "DEDUPLICATE_CHAPTERS"
 
         private val idQueryRegex = Regex("^id\\s*:?\\s*([a-zA-Z0-9-_]+)\\s*$", RegexOption.IGNORE_CASE)
 

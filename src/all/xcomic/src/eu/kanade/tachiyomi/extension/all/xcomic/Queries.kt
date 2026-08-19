@@ -123,6 +123,7 @@ val COMIC_NODE_QUERY = $$"""
                 extraInfo {
                     text
                 }
+                readDirection
                 urlPath
                 urlCover
             }
@@ -190,12 +191,87 @@ val CHAPTER_LIST_QUERY = $$"""
     }
 """
 
+val CHAPTER_UNIQ_LIST_QUERY = $$"""
+    query get_comic_chapterList_uniqList($select: Select_Comic_ChapterList_UniqList) {
+        get_comic_chapterList_uniqList(select: $select) {
+            paging {
+                next
+                total
+            }
+            items {
+                id
+                data {
+                    id
+                    comicId
+                    dbStatus
+                    isFinal
+                    volume
+                    serial
+                    dname
+                    title
+                    urlPath
+                    sfw_result
+                    chaDuplications
+                    dateCreate
+                    datePublic
+                    dateModify
+                    chaNum
+                    volNum
+                    volIdx
+                    count_images
+                    is_new
+                    srcName
+                    srcTitle
+                    srcColor
+                    comments_topic
+                    comments_total
+                    views_login
+                    views_guest
+                    profileNodes {
+                        data {
+                            name
+                        }
+                    }
+                }
+            }
+        }
+    }
+"""
+
 val CHAPTER_PAGES_QUERY = $$"""
     query($id: ID!) {
         get_chapterNode(id: $id) {
             id
             data {
                 imageUrls
+            }
+        }
+    }
+"""
+
+val COMIC_LATEST_QUERY = $$"""
+    query get_comic_latestUploads($select: Comic_LatestUploads_Select) {
+        get_comic_latestUploads(select: $select) {
+            before
+            items {
+                comic {
+                    id
+                    data {
+                        id
+                        name
+                        urlPath
+                        urlCover
+                        translatedLanguage
+                        genres
+                    }
+                }
+                chapters(amount: 1) {
+                    id
+                    data {
+                        id
+                        datePublic
+                    }
+                }
             }
         }
     }
