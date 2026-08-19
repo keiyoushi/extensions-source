@@ -24,6 +24,8 @@
 
         var verificationActive = Boolean(window.__lxCaptchaShown || window.getTokenRequestInProgress);
         if (!window.__lxPollStarted) window.__lxPollStarted = Date.now();
+        if (!window.__lxPollCount) window.__lxPollCount = 0;
+        window.__lxPollCount++;
 
         if (!window.__lxCapturedUrls && !window.__lxToken && !verificationActive &&
             Date.now() - window.__lxPollStarted > 5000 && !window.__lxKgzFallbackTried) {
@@ -31,6 +33,15 @@
                 .filter(function(script) {
                     return !script.src && (script.textContent || '').indexOf('KGZ1') >= 0;
                 });
+
+            var isCfChallenge = location.href.indexOf('__cf_chl_rt_tk') >= 0 ||
+                (document.querySelectorAll('[id*="turnstile"], iframe[src*="challenges.cloudflare.com"]').length > 0 && kgzScripts.length === 0);
+            if (isCfChallenge) {
+                window.__lxKgzFallbackTried = true;
+            } else if (kgzScripts.length === 0 && Date.now() - window.__lxPollStarted > 10000) {
+                window.__lxKgzFallbackTried = true;
+            }
+
             if (kgzScripts.length > 0) {
                 window.__lxKgzFallbackTried = true;
                 kgzScripts.forEach(function(script, index) {
@@ -49,8 +60,7 @@
                                 window.__lxCapturedUrls = captured;
                             }
                         });
-                    } catch(e) {
-                    }
+                    } catch(e) {}
                 });
             }
         }
@@ -159,8 +169,124 @@
         }
         var stableLongEnough = window.__lxStableSince && Date.now() - window.__lxStableSince >= 2500;
 
-        if (!token && urls.length === 0 && !verificationActive && visibleDialogs.length === 0 &&
-            Date.now() - window.__lxPollStarted > 20000) {
+        if (!token && urls.length > 0 && stableLongEnough && !verificationActive &&
+            visibleDialogs.length === 0 && !window.__lxManualTokenTried) {
+            window.__lxManualTokenTried = true;
+
+            var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            var csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+            if (!csrfToken) {
+                var xsrfMatch = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+                if (xsrfMatch) {
+                    try { csrfToken = decodeURIComponent(xsrfMatch[1]); } catch(e) {}
+                }
+            }
+
+            var fetchFn = window.fetch || window.__lxRealFetch;
+            var headers = {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            };
+            if (csrfToken) {
+                headers['X-CSRF-TOKEN'] = csrfToken;
+            }
+
+            try {
+                fetchFn('/get_token', {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: headers
+                }).then(function(resp) {
+                    return resp.json();
+                }).then(function(data) {
+                    if (data && data.action_token) {
+                        window.__lxToken = data.action_token;
+                    } else if (data && (data.require_verification || data.is_bot)) {
+                        window.__lxCaptchaShown = true;
+                        window.getTokenRequestInProgress = true;
+                        window.__lxGetTokenResponse = data;
+
+                        var sitekeyMatch = document.documentElement.innerHTML.match(/sitekey['":\s]+([A-Za-z0-9_-]+)/i);
+                        var sitekey = sitekeyMatch ? sitekeyMatch[1] : '0x4AAAAAABmIZvltdaZbP-9a';
+
+                        var container = document.querySelector('#turnstile-container, [id*="cf-chl-widget"]');
+                        if (!container) {
+                            container = document.createElement('div');
+                            container.id = '__lx-turnstile-container';
+                            container.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:999999;background:#fff;padding:20px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.3);text-align:center;font-family:sans-serif;min-width:300px;';
+                            container.innerHTML = '<p style="margin:0 0 10px;font-size:14px;">Đang xác minh...</p><div id="__lx-turnstile-widget"></div>';
+                            document.body.appendChild(container);
+                        }
+
+                        var widgetTarget = container.querySelector('#__lx-turnstile-widget') || container;
+                        try {
+                            if (typeof turnstile !== 'undefined' && turnstile.render) {
+                                turnstile.render(widgetTarget, {
+                                    sitekey: sitekey,
+                                    callback: function(response) {
+                                        window.__lxTurnstileResponse = response;
+                                        var postFetch = window.__lxRealFetch || window.fetch;
+                                        var postHeaders = { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json', 'Accept': 'application/json' };
+                                        var postCsrf = document.querySelector('meta[name="csrf-token"]');
+                                        if (postCsrf) postHeaders['X-CSRF-TOKEN'] = postCsrf.getAttribute('content');
+                                        var postBody = JSON.stringify({ 'cf-turnstile-response': response });
+                                        postFetch('/get_token', {
+                                            method: 'POST',
+                                            credentials: 'same-origin',
+                                            headers: postHeaders,
+                                            body: postBody
+                                        }).then(function(resp) {
+                                            return resp.json();
+                                        }).then(function(postData) {
+                                            if (postData && postData.action_token) {
+                                                window.__lxToken = postData.action_token;
+                                                window.getTokenRequestInProgress = false;
+                                            } else {
+                                                var formBody = 'cf-turnstile-response=' + encodeURIComponent(response);
+                                                postFetch('/get_token', {
+                                                    method: 'POST',
+                                                    credentials: 'same-origin',
+                                                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+                                                    body: formBody
+                                                }).then(function(r2) { return r2.json(); }).then(function(d2) {
+                                                    if (d2 && d2.action_token) {
+                                                        window.__lxToken = d2.action_token;
+                                                        window.getTokenRequestInProgress = false;
+                                                    }
+                                                }).catch(function() {});
+                                            }
+                                        }).catch(function() {});
+                                    }
+                                });
+                            } else {
+                                var ts = document.createElement('script');
+                                ts.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+                                ts.onload = function() {
+                                    if (typeof turnstile !== 'undefined' && turnstile.render) {
+                                        turnstile.render(widgetTarget, {
+                                            sitekey: sitekey,
+                                            callback: function(response) {
+                                                window.__lxTurnstileResponse = response;
+                                            }
+                                        });
+                                    }
+                                };
+                                document.head.appendChild(ts);
+                            }
+                        } catch(e3) {}
+                    }
+                }).catch(function() {});
+            } catch(e) {}
+        }
+
+        if (!token && urls.length > 0 && !verificationActive && visibleDialogs.length === 0 &&
+            window.__lxManualTokenTried && !window.__lxTokenReloadTried &&
+            Date.now() - window.__lxPollStarted > 15000 &&
+            location.hash.indexOf('_lxretry') < 0) {
+            window.__lxTokenReloadTried = true;
+            location.hash = (location.hash || '') + '_lxretry';
+            location.reload();
+            return JSON.stringify({token: '', urls: [], reloading: true});
         }
 
         if (token && urls.length > 0 && stableLongEnough) {
