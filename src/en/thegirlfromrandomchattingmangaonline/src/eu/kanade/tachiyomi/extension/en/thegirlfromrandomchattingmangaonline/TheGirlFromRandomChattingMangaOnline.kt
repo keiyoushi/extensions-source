@@ -45,7 +45,10 @@ abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/manga/$MANGA_ID-chapter-${chapter.chapter_number.toInt()}"
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = throw UnsupportedOperationException()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+        .select("p > noscript > img")
+        .map { img -> img.attr("src") }
+        .mapIndexed { i, src -> Page(i, imageUrl = src) }
 
     private suspend fun createManga(): SManga {
         val mainPage = client.get(baseUrl).asJsoup()
