@@ -14,8 +14,4 @@ keiyoushi {
         baseUrl = "https://thegirlfromrandomchatting.com"
         lang = "en"
     }
-
-    deeplink {
-        path("/..*")
-    }
 }
