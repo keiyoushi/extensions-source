@@ -57,9 +57,10 @@ abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
         return SManga.create().apply {
             url = MANGA_ID
             title = "The Girl from Random Chatting"
-            thumbnail_url = (mainPage ?: client.get(baseUrl).asJsoup())
-                .selectFirst("figure.wp-block-gallery figure.wp-block-image:last-child noscript img")!!
-                .attr("src")
+            thumbnail_url =
+                mainPage
+                    .selectFirst("figure.wp-block-gallery figure.wp-block-image:last-child noscript img")
+                    ?.attr("src")
             artist = "Eun Hyuk, Park"
             author = "Eun Hyuk, Park"
             status = SManga.COMPLETED
