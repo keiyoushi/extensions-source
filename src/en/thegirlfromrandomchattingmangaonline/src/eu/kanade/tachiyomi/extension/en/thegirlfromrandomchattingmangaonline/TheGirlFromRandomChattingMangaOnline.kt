@@ -38,6 +38,8 @@ abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
         false,
     )
 
+    override fun getMangaUrl(manga: SManga) = baseUrl
+
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = throw UnsupportedOperationException()
