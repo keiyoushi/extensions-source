@@ -46,10 +46,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
-import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.TimeZone
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 
 @Source
 abstract class Mangadotnet :
@@ -181,17 +180,17 @@ abstract class Mangadotnet :
             }
         }
 
-        val url = "$baseUrl/search.data".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/api/search".toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
                 addQueryParameter("search", query)
             }
             addQueryParameter("page", page.toString())
-            addQueryParameter("perPage", "56")
+            addQueryParameter("limit", "56")
 
             filters.firstInstanceOrNull<SortFilter>()?.also { filter ->
                 if (filter.sort == "" && query.isBlank()) {
                     addQueryParameter("sortBy", "latest")
-                } else {
+                } else if (filter.sort.isNotBlank()) {
                     addQueryParameter("sortBy", filter.sort)
                 }
                 addQueryParameter("sortOrder", if (filter.ascending) "asc" else "desc")
@@ -202,46 +201,73 @@ abstract class Mangadotnet :
             }
 
             filters.firstInstanceOrNull<VolumesFilter>()?.selected?.takeIf { it.isNotBlank() }?.also {
-                addQueryParameter("volumes", it)
+                addQueryParameter("has_volumes", it)
             }
 
             filters.firstInstanceOrNull<ScanlatorFilter>()?.selected?.takeIf { it.isNotBlank() }?.also {
-                addQueryParameter("scanlator", it)
+                addQueryParameter("has_scanlator", it)
+            }
+
+            filters.firstInstanceOrNull<LibraryFilter>()?.selected?.takeIf { it.isNotBlank() }?.also {
+                addQueryParameter("library", it)
+            }
+
+            filters.firstInstanceOrNull<MinRatingFilter>()?.selected?.takeIf { it.isNotBlank() }?.also {
+                addQueryParameter("min_rating", it)
+            }
+
+            filters.firstInstanceOrNull<ContentRatingFilter>()?.also { filter ->
+                val included = filter.included
+                val excluded = filter.excluded
+                if (included.isNotEmpty() || excluded.isNotEmpty()) {
+                    val ratings = buildList {
+                        addAll(included)
+                        addAll(excluded.map { "-$it" })
+                    }
+                    addQueryParameter("content_rating", ratings.joinToString(","))
+                }
             }
 
             filters.firstInstanceOrNull<TypeFilter>()?.checked?.also { checked ->
                 if (checked.isNotEmpty() && checked.toSet() != allOrigins) {
-                    checked.forEach { origin ->
-                        addQueryParameter("origin", origin)
-                    }
+                    addQueryParameter("origin", checked.joinToString(","))
                 }
             }
 
-            filters.firstInstanceOrNull<DemographicFilter>()?.also { filter ->
-                filter.included.forEach { demo ->
-                    addQueryParameter("genre", demo)
+            val genres = buildList {
+                filters.firstInstanceOrNull<DemographicFilter>()?.also { filter ->
+                    addAll(filter.included)
+                    addAll(filter.excluded.map { "-$it" })
                 }
-                filter.excluded.forEach { demo ->
-                    addQueryParameter("genre", "-$demo")
-                }
-            }
-
-            filters.firstInstanceOrNull<GenreFilter>()?.also { filter ->
-                filter.included.forEach { genre ->
-                    addQueryParameter("genre", genre)
-                }
-                filter.excluded.forEach { genre ->
-                    addQueryParameter("genre", "-$genre")
+                filters.firstInstanceOrNull<GenreFilter>()?.also { filter ->
+                    addAll(filter.included)
+                    addAll(filter.excluded.map { "-$it" })
                 }
             }
+            if (genres.isNotEmpty()) {
+                addQueryParameter("genres", genres.joinToString(","))
+            }
 
-            filters.findTagFilters().forEach { filter ->
-                filter.included.forEach { tag ->
-                    addQueryParameter("tag", tag)
+            val tags = buildList {
+                filters.findTagFilters().forEach { filter ->
+                    addAll(filter.included)
+                    addAll(filter.excluded.map { "-$it" })
                 }
-                filter.excluded.forEach { tag ->
-                    addQueryParameter("tag", "-$tag")
-                }
+            }
+            if (tags.isNotEmpty()) {
+                addQueryParameter("tags", tags.joinToString(","))
+            }
+
+            filters.firstInstanceOrNull<MinYearFilter>()?.state?.takeIf { it.isNotBlank() }?.also {
+                addQueryParameter("year_min", it.trim())
+            }
+
+            filters.firstInstanceOrNull<MaxYearFilter>()?.state?.takeIf { it.isNotBlank() }?.also {
+                addQueryParameter("year_max", it.trim())
+            }
+
+            filters.firstInstanceOrNull<MinChaptersFilter>()?.state?.takeIf { it.isNotBlank() }?.also {
+                addQueryParameter("min_chapters", it.trim())
             }
 
             filters.firstInstanceOrNull<AuthorFilter>()?.state?.takeIf { it.isNotBlank() }?.also {
@@ -251,14 +277,18 @@ abstract class Mangadotnet :
             filters.firstInstanceOrNull<ArtistFilter>()?.state?.takeIf { it.isNotBlank() }?.also {
                 addQueryParameter("artist", it.trim())
             }
-
-            addQueryParameter("_routes", "pages/SearchPage")
         }.build()
 
-        val data = client.get(url).use { it.decodeRscAs<Data<MangaList>>().data }
+        val data = client.get(url).use { it.parseAs<MangaList>() }
 
         val hideAdultCovers = adultModePref() == "none"
-        return MangasPage(data.mangaList.orEmpty().map { it.toSManga(baseUrl, hideAdultCovers) }, data.hasNextPage())
+        val mangaList = data.mangaList.orEmpty()
+        val hasNextPage = data.hasNextPage() && mangaList.isNotEmpty()
+
+        return MangasPage(
+            mangaList.map { it.toSManga(baseUrl, hideAdultCovers) },
+            hasNextPage,
+        )
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -297,20 +327,28 @@ abstract class Mangadotnet :
     )
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
-        val searchUrl = "$baseUrl/search.data?page=1&_routes=pages/SearchPage".toHttpUrl()
+        val facetsUrl = "$baseUrl/api/search?facets=1".toHttpUrl()
+        val facetsResponse = runCatching {
+            client.get(facetsUrl).use { it.parseAs<MangaList>() }
+        }.getOrNull()
 
-        val searchData = client.get(searchUrl).use { it.decodeRscAs<Data<MangaList>>().data }
+        val genres = facetsResponse?.facets?.genres
+            ?.map { it.key }
+            ?.filter { it !in demographicNames }
+            ?.distinct()
+            ?.sortedBy { it.lowercase(Locale.ROOT) }
 
-        val genres = searchData.allGenres.filter { it !in demographicNames }
-            .distinct()
-            .sortedBy { it.lowercase(Locale.ROOT) }
-        val tags = searchData.allTags.asSequence()
-            .flatMap { it.tags }
-            .map { it.name.trim() }
-            .filter { it.isNotEmpty() }
-            .distinct()
-            .sortedBy { it.lowercase(Locale.ROOT) }
-            .toList()
+        val tagsUrl = "$baseUrl/api/manga/tags".toHttpUrl()
+        val tagsResponse = runCatching {
+            client.get(tagsUrl).use { it.parseAs<TagsResponse>() }
+        }.getOrNull()
+
+        val tags = tagsResponse?.categories
+            ?.flatMap { it.tags }
+            ?.map { it.name.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.distinct()
+            ?.sortedBy { it.lowercase(Locale.ROOT) }
 
         FilterDataDto(genres, tags).toJsonElement()
     }
@@ -324,8 +362,19 @@ abstract class Mangadotnet :
             StatusFilter(),
             VolumesFilter(),
             ScanlatorFilter(),
-            TypeFilter(),
-            DemographicFilter(excludedDemographicsPref()),
+            MinRatingFilter(),
+        )
+
+        if (isLoggedIn()) {
+            filters.add(LibraryFilter())
+        }
+
+        filters.addAll(
+            listOf(
+                ContentRatingFilter(includedContentRatingPref()),
+                TypeFilter(),
+                DemographicFilter(excludedDemographicsPref()),
+            ),
         )
 
         val genreList = dto?.genres?.sortedBy { it.lowercase(Locale.ROOT) }
@@ -365,6 +414,9 @@ abstract class Mangadotnet :
             }
         }
 
+        filters.add(MinYearFilter())
+        filters.add(MaxYearFilter())
+        filters.add(MinChaptersFilter())
         filters.add(AuthorFilter())
         filters.add(ArtistFilter())
 
@@ -471,7 +523,7 @@ abstract class Mangadotnet :
                                 name = "Volume ${(volume.volume ?: 0f).toString().removeSuffix(".0")}"
                                 chapter_number = 0f
                                 scanlator = (volume.group ?: volume.scanlator)?.takeIf { it.isNotBlank() }
-                                date_upload = dateFormat.tryParse(volume.date?.substringBefore("+"))
+                                date_upload = Instant.tryParse(volume.date?.replace(" ", "T"))
                             }
                         }
                 }
@@ -558,15 +610,11 @@ abstract class Mangadotnet :
                         }
                         chapter_number = chapter.number ?: 0f
                         scanlator = (chapter.group ?: chapter.scanlator)?.takeIf { it.isNotBlank() }
-                        date_upload = dateFormat.tryParse(chapter.date?.substringBefore("+"))
+                        date_upload = Instant.tryParse(chapter.date?.replace(" ", "T"))
                     }
                 }
                 .asReversed()
         }
-    }
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
     }
 
     // =============================== Pages ===============================
@@ -638,6 +686,8 @@ abstract class Mangadotnet :
     private fun chapterModePref() = preferences.getString(CHAPTER_MODE, "chapters")!!
 
     private fun excludedDemographicsPref(): Set<String> = preferences.getStringSet(EXCLUDE_DEMOGRAPHIC_PREF, emptySet())!!
+
+    private fun includedContentRatingPref(): Set<String> = preferences.getStringSet(CONTENT_RATING_PREF, emptySet())!!
 
     private fun excludedGenresPref(): Set<String> {
         val mode = adultModePref()
@@ -726,6 +776,16 @@ abstract class Mangadotnet :
         }
         screen.addPreference(nsfwPref)
 
+        val contentRatingPref = MultiSelectListPreference(screen.context).apply {
+            key = CONTENT_RATING_PREF
+            title = "Content Rating"
+            entries = contentRatings.map { it.first }.toTypedArray()
+            entryValues = contentRatings.map { it.second }.toTypedArray()
+            setDefaultValue(emptySet<String>())
+            summary = "Default content rating used on Search."
+        }
+        screen.addPreference(contentRatingPref)
+
         val browseTypePref = MultiSelectListPreference(screen.context).apply {
             key = BROWSE_TYPE_PREF
             title = "Type Blacklist"
@@ -757,7 +817,7 @@ abstract class Mangadotnet :
         val chapterModePref = ListPreference(screen.context).apply {
             key = CHAPTER_MODE
             title = "Chapter List Mode"
-            entries = arrayOf("Chapters only", "Volumes only", "Chapters + Volumes")
+            entries = arrayOf("Chapters Only", "Volumes Only", "Chapters + Volumes")
             entryValues = arrayOf("chapters", "volumes", "both")
             setDefaultValue("chapters")
             summary = "%s\nNote: Most titles don't have volumes. 'Volumes only' falls back to chapters if none are found."
@@ -889,4 +949,5 @@ private const val BROWSE_STATUS_PREF = "pref_browse_status"
 private const val DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
 private const val PREFERRED_SCANLATORS = "pref_preferred_scanlators"
 private const val EXCLUDE_DEMOGRAPHIC_PREF = "pref_exclude_demographic"
+private const val CONTENT_RATING_PREF = "pref_content_rating"
 private const val SHOW_TAGS_PREF = "pref_show_tags"
