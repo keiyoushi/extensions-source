@@ -60,46 +60,8 @@ class SortFilter :
 
 class GenreFilter(name: String) : Filter.TriState(name)
 
-class GenreFilterGroup :
+class GenreFilterGroup(genres: List<String>) :
     Filter.Group<GenreFilter>(
         "Genres",
-        listOf(
-            GenreFilter("Yaoi"),
-            GenreFilter("Doujinshi"),
-            GenreFilter("Shounen Ai"),
-            GenreFilter("Shoujo"),
-            GenreFilter("Yuri"),
-            GenreFilter("Romance"),
-            GenreFilter("Fantasy"),
-            GenreFilter("Comedy"),
-            GenreFilter("Smut"),
-            GenreFilter("Adult"),
-            GenreFilter("School Life"),
-            GenreFilter("Mystery"),
-            GenreFilter("One Shot"),
-            GenreFilter("Ecchi"),
-            GenreFilter("Shounen"),
-            GenreFilter("Martial Arts"),
-            GenreFilter("Shoujo Ai"),
-            GenreFilter("Supernatural"),
-            GenreFilter("Drama"),
-            GenreFilter("Action"),
-            GenreFilter("Adventure"),
-            GenreFilter("Harem"),
-            GenreFilter("Historical"),
-            GenreFilter("Horror"),
-            GenreFilter("Josei"),
-            GenreFilter("Mature"),
-            GenreFilter("Mecha"),
-            GenreFilter("Psychological"),
-            GenreFilter("Sci-fi"),
-            GenreFilter("Seinen"),
-            GenreFilter("Slice Of Life"),
-            GenreFilter("Sports"),
-            GenreFilter("Gender Bender"),
-            GenreFilter("Tragedy"),
-            GenreFilter("Bara"),
-            GenreFilter("Shotacon"),
-            GenreFilter("Webtoons"),
-        ),
+        genres.map(::GenreFilter),
     )

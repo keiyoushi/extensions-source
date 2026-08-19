@@ -12,7 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.addCookie
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -32,7 +32,12 @@ abstract class ReaderStore :
 
     override val client = network.client.newBuilder()
         .addInterceptor(ImageInterceptor())
-        .addNetworkInterceptor(CookieInterceptor(DOMAIN, listOf("safeSearch" to """{"safeAdultGenreFlg":false,"safeNonCherryFlg":false,"safeBLGenreFlg":false,"safeTLGenreFlg":false,"safeBikiniGenreFlg":false}""", "agelimit_auth" to "true")))
+        .addCookie(
+            listOf(
+                "safeSearch" to """{"safeAdultGenreFlg":false,"safeNonCherryFlg":false,"safeBLGenreFlg":false,"safeTLGenreFlg":false,"safeBikiniGenreFlg":false}""",
+                "agelimit_auth" to "true",
+            ),
+        )
         .addInterceptor {
             val request = it.request()
             val response = it.proceed(request)

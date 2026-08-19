@@ -25,6 +25,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       matrix: ${{ steps.generate-matrices.outputs.matrix }}
+      lint_modules: ${{ steps.generate-matrices.outputs.lint_modules }}
       delete: ${{ steps.generate-matrices.outputs.delete }}
     steps:
       - name: Checkout PR
@@ -36,7 +37,7 @@ jobs:
       - id: generate-matrices
         name: Generate build matrices
         run: |
-          python ./.github/scripts/generate-build-matrices.py origin/main Release
+          python ./.github/scripts/generate-build-matrices.py origin/main
 
   build:
     name: Build extensions (${{ matrix.chunk.number }})
@@ -67,7 +68,11 @@ jobs:
         env:
           MODULES: ${{ join(matrix.chunk.modules, ' ') }}
         run: |
-          ./gradlew $MODULES
+          TASKS=()
+          for module in $MODULES; do
+            TASKS+=("${module}:assembleRelease" "${module}:lintRelease")
+          done
+          ./gradlew "${TASKS[@]}"
 
       - name: Upload APKs (${{ matrix.chunk.number }})
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -78,3 +83,36 @@ jobs:
             **/build/outputs/apk/release/*.apk
             **/build/outputs/jar/release/*.jar
           retention-days: 1
+
+  lint-shared:
+    name: Lint shared modules
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: ${{ needs.prepare.outputs.lint_modules != '[]' }}
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-read-only: true
+
+      - name: Lint shared modules
+        env:
+          MODULES: ${{ join(fromJSON(needs.prepare.outputs.lint_modules), ' ') }}
+        run: |
+          TASKS=()
+          for module in $MODULES; do
+            TASKS+=("${module}:lintRelease")
+          done
+          ./gradlew "${TASKS[@]}"
