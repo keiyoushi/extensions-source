@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import okhttp3.HttpUrl
 import java.lang.UnsupportedOperationException
 
 @Source
@@ -43,8 +42,6 @@ abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = MangasPage(emptyList(), false)
-
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? = null
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
