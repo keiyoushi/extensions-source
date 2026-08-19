@@ -14,6 +14,8 @@ import java.lang.UnsupportedOperationException
 @Source
 abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
 
+    override val supportsLatest = false
+
     override suspend fun getPopularManga(page: Int): MangasPage = throw UnsupportedOperationException("oioiosdfqdfi")
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
