@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.parseAs
 
 @Source
 abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
@@ -29,7 +30,16 @@ abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = throw UnsupportedOperationException()
+    ): SMangaUpdate {
+        val updatedManga = if (fetchDetails) createManga() else manga
+        val updatedChapters = if (fetchChapters) {
+            client.get("$baseUrl/wp-json/mg/v1/chapters-list").parseAs<ChaptersListDto>().map(ChapterDto::toSChapter)
+        } else {
+            chapters
+        }
+
+        return SMangaUpdate(updatedManga, updatedChapters)
+    }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = throw UnsupportedOperationException()
 
