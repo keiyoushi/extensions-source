@@ -89,8 +89,8 @@ abstract class Leermanhwas : KeiSource() {
         val document = client.get(baseUrl + manga.url).asJsoup()
 
         return SMangaUpdate(
-            manga = if (fetchDetails) parseMangaDetails(document) else SManga.create(),
-            chapters = if (fetchChapters) parseChapterList(document) else emptyList(),
+            manga = parseMangaDetails(document),
+            chapters = parseChapterList(document),
         )
     }
 
