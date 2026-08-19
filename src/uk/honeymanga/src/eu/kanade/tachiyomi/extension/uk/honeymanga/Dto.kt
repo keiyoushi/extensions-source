@@ -86,7 +86,10 @@ class CompleteMangaDto(
 @Serializable
 class ChapterResponse(
     val data: List<ChapterResponseList>,
-)
+    private val cursorNext: JsonObject? = null, // Next page doesn't exist if it's null. Content doesn't matter
+) {
+    val hasNextPage: Boolean get() = cursorNext?.isEmpty() == false
+}
 
 @Serializable
 class ChapterResponseList(
