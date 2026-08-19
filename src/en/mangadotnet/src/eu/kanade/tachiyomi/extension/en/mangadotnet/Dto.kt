@@ -32,6 +32,7 @@ class MangaList(
     @JsonNames("results", "manga_list")
     val mangaList: List<BrowseManga>? = emptyList(),
     private val pagination: Pagination? = null,
+    val facets: FacetsData? = null,
 ) {
     fun hasNextPage() = when {
         pagination?.current != null && pagination?.total != null -> pagination.current < pagination.total
@@ -380,4 +381,29 @@ class TagItem(
 @Serializable
 class MangaItemsResponse(
     val items: List<BrowseManga> = emptyList(),
+)
+
+@Serializable
+class FacetsData(
+    val genres: List<FacetItem> = emptyList(),
+    val tags: List<FacetTagItem> = emptyList(),
+)
+
+@Serializable
+class FacetItem(
+    val key: String,
+    val count: Int? = null,
+)
+
+@Serializable
+class FacetTagItem(
+    val key: String,
+    val count: Int? = null,
+    @SerialName("is_adult")
+    val isAdult: Boolean = false,
+)
+
+@Serializable
+class TagsResponse(
+    val categories: List<TagCategory> = emptyList(),
 )

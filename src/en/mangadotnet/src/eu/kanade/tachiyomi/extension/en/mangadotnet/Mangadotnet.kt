@@ -181,8 +181,6 @@ abstract class Mangadotnet :
             }
         }
 
-        // Use the clean JSON API endpoint instead of the RSC .data endpoint.
-        // The .data endpoint's RSC encoding breaks pagination on page 2+.
         val url = "$baseUrl/api/search".toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
                 addQueryParameter("search", query)
@@ -202,14 +200,17 @@ abstract class Mangadotnet :
                 addQueryParameter("status", it)
             }
 
+            // VolumesFilter: "with" -> has_volumes=1, "without" -> has_volumes=0
             filters.firstInstanceOrNull<VolumesFilter>()?.selected?.takeIf { it.isNotBlank() }?.also {
-                addQueryParameter("volumes", it)
+                addQueryParameter("has_volumes", if (it == "with") "1" else "0")
             }
 
+            // ScanlatorFilter: "with" -> has_scanlator=1, "without" -> has_scanlator=0
             filters.firstInstanceOrNull<ScanlatorFilter>()?.selected?.takeIf { it.isNotBlank() }?.also {
-                addQueryParameter("scanlator", it)
+                addQueryParameter("has_scanlator", if (it == "with") "1" else "0")
             }
 
+            // TypeFilter: uses singular "origin" parameter
             filters.firstInstanceOrNull<TypeFilter>()?.checked?.also { checked ->
                 if (checked.isNotEmpty() && checked.toSet() != allOrigins) {
                     checked.forEach { origin ->
@@ -220,28 +221,28 @@ abstract class Mangadotnet :
 
             filters.firstInstanceOrNull<DemographicFilter>()?.also { filter ->
                 filter.included.forEach { demo ->
-                    addQueryParameter("genre", demo)
+                    addQueryParameter("genres", demo)
                 }
                 filter.excluded.forEach { demo ->
-                    addQueryParameter("genre", "-$demo")
+                    addQueryParameter("excludeGenres", demo)
                 }
             }
 
             filters.firstInstanceOrNull<GenreFilter>()?.also { filter ->
                 filter.included.forEach { genre ->
-                    addQueryParameter("genre", genre)
+                    addQueryParameter("genres", genre)
                 }
                 filter.excluded.forEach { genre ->
-                    addQueryParameter("genre", "-$genre")
+                    addQueryParameter("excludeGenres", genre)
                 }
             }
 
             filters.findTagFilters().forEach { filter ->
                 filter.included.forEach { tag ->
-                    addQueryParameter("tag", tag)
+                    addQueryParameter("tags", tag)
                 }
                 filter.excluded.forEach { tag ->
-                    addQueryParameter("tag", "-$tag")
+                    addQueryParameter("excludeTags", tag)
                 }
             }
 
@@ -254,7 +255,6 @@ abstract class Mangadotnet :
             }
         }.build()
 
-        // Parse directly as MangaList — clean JSON, no RSC decoding
         val data = client.get(url).use { it.parseAs<MangaList>() }
 
         val hideAdultCovers = adultModePref() == "none"
@@ -303,20 +303,30 @@ abstract class Mangadotnet :
     )
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
-        val searchUrl = "$baseUrl/search.data?page=1&_routes=pages/SearchPage".toHttpUrl()
+        // Fetch genres from facets endpoint
+        val facetsUrl = "$baseUrl/api/search?facets=1".toHttpUrl()
+        val facetsResponse = runCatching {
+            client.get(facetsUrl).use { it.parseAs<MangaList>() }
+        }.getOrNull()
 
-        val searchData = client.get(searchUrl).use { it.decodeRscAs<Data<SearchData>>().data }
+        val genres = facetsResponse?.facets?.genres
+            ?.map { it.key }
+            ?.filter { it !in demographicNames }
+            ?.distinct()
+            ?.sortedBy { it.lowercase(Locale.ROOT) }
 
-        val genres = searchData.allGenres.filter { it !in demographicNames }
-            .distinct()
-            .sortedBy { it.lowercase(Locale.ROOT) }
-        val tags = searchData.allTags.asSequence()
-            .flatMap { it.tags }
-            .map { it.name.trim() }
-            .filter { it.isNotEmpty() }
-            .distinct()
-            .sortedBy { it.lowercase(Locale.ROOT) }
-            .toList() ?: emptyList()
+        // Fetch ALL tags from dedicated tags endpoint
+        val tagsUrl = "$baseUrl/api/manga/tags".toHttpUrl()
+        val tagsResponse = runCatching {
+            client.get(tagsUrl).use { it.parseAs<TagsResponse>() }
+        }.getOrNull()
+
+        val tags = tagsResponse?.categories
+            ?.flatMap { it.tags }
+            ?.map { it.name.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.distinct()
+            ?.sortedBy { it.lowercase(Locale.ROOT) }
 
         FilterDataDto(genres, tags).toJsonElement()
     }
