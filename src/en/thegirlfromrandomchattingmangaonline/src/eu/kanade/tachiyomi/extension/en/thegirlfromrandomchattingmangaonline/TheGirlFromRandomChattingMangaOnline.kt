@@ -64,7 +64,7 @@ abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
             status = SManga.COMPLETED
             description =
                 "If you lived through – or are still living through – high school, you can relate to Joon-Woo. An outcast and a loner, his only joy comes from the hours he spends on his phone, randomly chatting with strangers. It’s all weird and meaningless, until Joon-Woo strikes gold – as he’s matched in a private chat with a pretty young girl his age. Jackpot! But when he discovers that this same pretty girl is actually his classmate Seung Ah, things get a little too real for a guy who’s never even remotely been kissed.\n(sourced from Webtoon)"
-            genre = "Drama"
+            genre = "Action, Drama, Comedy, Romance, Slice of Life, Shounen, Harem"
 
             // Details are provided with the first request so this prevents refetching them by themselves in fetchMangaUpdate
             initialized = true
