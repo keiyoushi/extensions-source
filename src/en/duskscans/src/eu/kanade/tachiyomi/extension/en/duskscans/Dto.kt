@@ -36,11 +36,17 @@ class ChapterDto(
     private val number: Float,
     private val title: String = "",
     private val releaseDate: String? = null,
+    private val freeDate: String? = null,
     private val price: Int = 0,
     private val requiresLogin: Boolean = false,
 ) {
     val isLocked: Boolean
-        get() = requiresLogin || price > 0
+        get() {
+            if (requiresLogin) return true
+            if (price <= 0) return false
+            val freeAt = Instant.tryParse(freeDate)
+            return freeAt == 0L || freeAt > System.currentTimeMillis()
+        }
 
     fun toSChapter(slug: String): SChapter = SChapter.create().apply {
         url = id

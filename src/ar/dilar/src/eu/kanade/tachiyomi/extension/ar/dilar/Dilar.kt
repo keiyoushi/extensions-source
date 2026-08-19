@@ -40,7 +40,7 @@ import javax.crypto.spec.SecretKeySpec
 abstract class Dilar : KeiSource() {
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         add("X-DH-Pub", clientPubB64)
-        add("X-Crypto-Caps", "1,2,3,4,5,6")
+        add("X-Crypto-Caps", "1,2,3,4,5,6,7,8,9")
     }
 
     // Popular
@@ -167,7 +167,7 @@ abstract class Dilar : KeiSource() {
             }
 
             5 -> {
-                hmacSha256(
+                hmac(
                     key = iv,
                     data = serverPubRaw + clientPubRaw,
                 ) to "dilar.response.ecies.v5|${data.e}".toByteArray()
@@ -176,6 +176,41 @@ abstract class Dilar : KeiSource() {
             6 -> {
                 sha256(sha256(clientPubRaw) + sha256(serverPubRaw) + iv) to
                     "dilar.response.ecies.v6|${data.e}|${data.iv}".toByteArray()
+            }
+
+            7 -> {
+                hkdfSha256(
+                    ikm = iv,
+                    salt = serverPubRaw,
+                    info = "dilar.response.ecies.v7.salt".toByteArray(),
+                    length = 32,
+                ) to "dilar.response.ecies.v7|${data.e}".toByteArray()
+            }
+
+            8 -> {
+                sha256(
+                    joinBytes(
+                        u16(clientPubRaw.size),
+                        clientPubRaw,
+                        u16(serverPubRaw.size),
+                        serverPubRaw,
+                        u16(iv.size),
+                        iv,
+                    ),
+                ) to "dilar.response.ecies.v8|${data.e}|${iv.toHex()}".toByteArray()
+            }
+
+            9 -> {
+                hmac(
+                    key = iv,
+                    data = joinBytes(
+                        u16(serverPubRaw.size),
+                        serverPubRaw,
+                        u16(clientPubRaw.size),
+                        clientPubRaw,
+                    ),
+                    algorithm = "HmacSHA512",
+                ).copyOfRange(0, 32) to "dilar.response.ecies.v9|${data.e}|${ sha256(iv).toHex().take(16)}".toByteArray()
             }
 
             else -> error("Unsupported encryption protocol version: ${data.v}")
@@ -196,6 +231,21 @@ abstract class Dilar : KeiSource() {
         }
 
         return cipher.doFinal(ct + tag).toString(Charsets.UTF_8)
+    }
+
+    private fun u16(n: Int): ByteArray = byteArrayOf(((n shr 8) and 0xFF).toByte(), (n and 0xFF).toByte())
+
+    private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
+
+    private fun joinBytes(vararg parts: ByteArray): ByteArray {
+        val size = parts.sumOf { it.size }
+        val result = ByteArray(size)
+        var offset = 0
+        for (p in parts) {
+            System.arraycopy(p, 0, result, offset, p.size)
+            offset += p.size
+        }
+        return result
     }
 
     private fun pointToRaw(publicKey: ECPublicKey): ByteArray {
@@ -226,21 +276,25 @@ abstract class Dilar : KeiSource() {
         }
     }
 
+    private fun hmac(
+        key: ByteArray,
+        data: ByteArray,
+        algorithm: String = "HmacSHA256",
+    ): ByteArray = Mac.getInstance(algorithm).apply {
+        init(SecretKeySpec(key, algorithm))
+    }.doFinal(data)
+
     // HKDF-SHA256
 
     private fun sha256(data: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").digest(data)
 
-    private fun hmacSha256(key: ByteArray, data: ByteArray): ByteArray = Mac.getInstance("HmacSHA256").apply {
-        init(SecretKeySpec(key, "HmacSHA256"))
-    }.doFinal(data)
-
     private fun hkdfSha256(ikm: ByteArray, salt: ByteArray, info: ByteArray, length: Int): ByteArray {
-        val prk = hmacSha256(salt, ikm)
+        val prk = hmac(salt, ikm)
         val okm = ByteArrayOutputStream()
         var t = ByteArray(0)
         var counter = 1
         while (okm.size() < length) {
-            t = hmacSha256(prk, t + info + byteArrayOf(counter.toByte()))
+            t = hmac(prk, t + info + byteArrayOf(counter.toByte()))
             okm.write(t)
             counter++
         }

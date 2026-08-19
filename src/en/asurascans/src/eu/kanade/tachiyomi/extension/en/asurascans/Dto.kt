@@ -147,9 +147,22 @@ class ChapterDto(
     private val number: Float,
     private val title: String? = null,
     @SerialName("created_at") private val createdAt: String = "",
-    @SerialName("is_locked") val isLocked: Boolean = false,
+    @SerialName("is_premium")
+    @JsonNames("is_locked")
+    private val isPremium: Boolean = false,
+    @SerialName("early_access_until")
+    private val earlyAccessUntil: String? = null,
     @SerialName("series_slug") private val seriesSlug: String? = null,
 ) {
+    val isLocked: Boolean
+        get() {
+            if (isPremium) return true
+            val until = earlyAccessUntil ?: return false
+            return runCatching {
+                Instant.parse(until).toEpochMilliseconds() > System.currentTimeMillis()
+            }.getOrDefault(false)
+        }
+
     fun toSChapter(randomMangaSlug: String) = SChapter.create().apply {
         val numberStr = number.toString().removeSuffix(".0")
         url = "/series/$seriesSlug/chapter/$numberStr"

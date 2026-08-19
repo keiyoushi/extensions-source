@@ -7,8 +7,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import org.jsoup.Jsoup
-import org.jsoup.nodes.TextNode
 
 @Serializable
 class XComicName(val name: String? = null)
@@ -58,7 +56,7 @@ class ComicNode(
     private val artists: List<String>? = null,
     private val artistNodes: List<XComicData<XComicName?>>? = null,
     private val originalLanguage: String? = null,
-    private val translatedLanguage: String? = null,
+    val translatedLanguage: String? = null,
     private val originalStatus: String? = null,
     private val originalPubFrom: DateYMD? = null,
     private val originalPubTill: DateYMD? = null,
@@ -74,6 +72,7 @@ class ComicNode(
     private val tagNodes: List<XComicData<XComicName?>>? = null,
     private val summary: XComicStrings? = null,
     private val extraInfo: XComicStrings? = null,
+    private val readDirection: String? = null,
     private val urlPath: String? = null,
     private val urlCover: String? = null,
     @SerialName("is_hot")
@@ -95,9 +94,7 @@ class ComicNode(
         title = cleanTitle(name)
 
         author = authorNodes?.mapNotNull { it.data?.name }?.takeIf { it.isNotEmpty() }?.joinToString()
-            ?: authors?.joinToString { cleanAuthorSlug(it) }
         artist = artistNodes?.mapNotNull { it.data?.name }?.takeIf { it.isNotEmpty() }?.joinToString()
-            ?: artists?.joinToString { cleanAuthorSlug(it) }
 
         genre = buildSet {
             type?.let { add(it.toTitleCase()) }
@@ -145,6 +142,16 @@ class ComicNode(
                     add("**Publication**: $originalPubFrom - $till")
                 }
                 originalPubZone?.takeIf { it.isNotEmpty() }?.let { add("**Region**: $it") }
+
+                readDirection?.let { dir ->
+                    val directionValues = listOf(
+                        "ttb" to "⬇️ Top To Bottom",
+                        "rtl" to "⬅️ Right To Left",
+                        "ltr" to "➡️ Left To Right",
+                    )
+                    val label = directionValues.firstOrNull { it.first == dir }?.second ?: dir
+                    add("**Read Direction**: $label")
+                }
             }
 
             if (metadata.isNotEmpty()) {
@@ -171,7 +178,7 @@ class ComicNode(
 
             val summaryText = summary?.text
             if (!summaryText.isNullOrEmpty()) {
-                append(summaryText.htmlToMarkdown(baseUrl))
+                append(summaryText.toMarkdownUrls())
             }
 
             val links = buildList {
@@ -212,42 +219,14 @@ class ComicNode(
             val extraInfoText = extraInfo?.text
             if (!extraInfoText.isNullOrEmpty()) {
                 if (isNotEmpty()) append("\n\n**Extra Info**:\n")
-                append(extraInfoText.htmlToMarkdown(baseUrl))
+                append(extraInfoText.toMarkdownUrls())
             }
         }
         initialized = originalStatus != null
     }
 }
 
-private val authorSlugRegex = Regex("^[a-zA-Z0-9]{4,}-(.*)$")
-
-private val urlRegex = Regex("""(?<![\[(])(https?://[^\s<"]+)""")
-
-private val spaceCollapseRegex = Regex("[ \\t]+")
-private val trailingSpaceRegex = Regex(" \\n")
-private val leadingSpaceRegex = Regex("\\n ")
-private val multiNewlineRegex = Regex("\\n{3,}")
-
 // ============================= Helpers ==============================
-
-private fun cleanAuthorSlug(slug: String): String {
-    val path = slug.substringAfterLast("/")
-
-    val match = authorSlugRegex.matchEntire(path)
-
-    return if (match != null) {
-        val namePart = match.groupValues[1]
-        namePart.replace("-", " ")
-            .split(" ")
-            .joinToString(" ") { word ->
-                word.lowercase().replaceFirstChar {
-                    if (it.isLowerCase()) it.titlecase() else it.toString()
-                }
-            }
-    } else {
-        slug
-    }
-}
 
 private fun String.toTitleCase(): String = this.replace("_", " ").split(" ").joinToString(" ") { word ->
     word.lowercase().replaceFirstChar {
@@ -255,34 +234,11 @@ private fun String.toTitleCase(): String = this.replace("_", " ").split(" ").joi
     }
 }
 
-private fun String.htmlToMarkdown(baseUrl: String): String = Jsoup.parseBodyFragment(this, baseUrl).body().let { body ->
-    body.select("a").forEach { a ->
-        val text = a.text()
-        val href = a.absUrl("href")
+private val urlRegex = Regex("""(?<![\[(])(https?://[^\s<"]+)""")
 
-        if (href.startsWith("http")) {
-            a.replaceWith(TextNode("[$text]($href)"))
-        } else {
-            a.replaceWith(TextNode(text))
-        }
-    }
-
-    body.select("br").forEach { br -> br.replaceWith(TextNode("\n")) }
-
-    body.select("p, div, li, blockquote, h1, h2, h3, h4, h5, h6").forEach { el ->
-        el.after("\n")
-    }
-
-    body.wholeText()
-        .replace(urlRegex) { match ->
-            val url = match.value
-            "[$url]($url)"
-        }
-        .replace(spaceCollapseRegex, " ")
-        .replace(trailingSpaceRegex, "\n")
-        .replace(leadingSpaceRegex, "\n")
-        .replace(multiNewlineRegex, "\n\n")
-        .trim()
+private fun String.toMarkdownUrls(): String = this.replace(urlRegex) { match ->
+    val url = match.value
+    "[$url]($url)"
 }
 
 // ============================= Search ===============================
@@ -312,6 +268,12 @@ class ComicNodeData(
 @Serializable
 class ChapterListData(
     @SerialName("get_comic_chapterList_fullList")
+    val response: ChapterListItems,
+)
+
+@Serializable
+class ChapterListUniqData(
+    @SerialName("get_comic_chapterList_uniqList")
     val response: ChapterListItems,
 )
 
@@ -375,7 +337,7 @@ class ChapterData(
     private val volume: JsonElement? = null,
     private val serial: Float? = null,
     @SerialName("dname")
-    private val displayName: String,
+    private val displayName: String = "",
     private val title: String? = null,
     private val urlPath: String? = null,
     @SerialName("sfw_result")
@@ -413,9 +375,12 @@ class ChapterData(
         name = buildString {
             val number = (chaNum ?: serial)?.toString()?.removeSuffix(".0")
             if (number != null && !displayName.contains(number)) {
-                append("Chapter ", number, ": ")
+                append("Chapter ", number)
             }
-            append(displayName)
+            if (displayName.isNotEmpty()) {
+                if (isNotEmpty()) append(": ")
+                append(displayName)
+            }
             if (!title.isNullOrEmpty()) {
                 if (isNotEmpty()) append(": ")
                 append(title)
@@ -438,6 +403,16 @@ class ChapterData(
 // ========================= Latest Uploads ===========================
 
 @Serializable
+class ApiLatestUploadsSelect(
+    val size: Int? = null,
+    val before: Long? = null,
+    val genre: String? = null,
+)
+
+@Serializable
+class ApiLatestUploadsWrapper(val select: ApiLatestUploadsSelect)
+
+@Serializable
 class LatestUploadsData(
     @SerialName("get_comic_latestUploads")
     val response: LatestUploadsResult,
@@ -445,14 +420,14 @@ class LatestUploadsData(
 
 @Serializable
 class LatestUploadsResult(
-    val before: Double? = null,
+    val before: Long? = null,
     val items: List<LatestUploadsItem>,
 )
 
 @Serializable
 class LatestUploadsItem(
-    val comic: XComicData<ComicNode>,
-    val chapters: List<XComicData<ChapterData>>,
+    val comic: XComicData<ComicNode?>? = null,
+    val chapters: List<XComicData<ChapterData?>>? = null,
 )
 
 @Serializable

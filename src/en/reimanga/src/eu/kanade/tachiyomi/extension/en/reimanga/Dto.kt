@@ -68,7 +68,7 @@ class MangaPage(
         @SerialName("main_name_url")
         private val mainNameUrl: String? = null,
     ) {
-        val resolvedId: Long get() = mainMangaId ?: id
+        val resolvedId: Long get() = mainMangaId?.takeIf { it > 0 } ?: id
 
         fun toSManga(baseUrl: String) = SManga.create().apply {
             url = "$slug-$id"
@@ -111,7 +111,7 @@ class MangaPage(
         fun chapterPageUrl(baseUrl: String): String {
             val mainId = mainMangaId
             val mainSlug = mainNameUrl
-            return if (mainId != null && !mainSlug.isNullOrBlank()) {
+            return if (mainId != null && mainId > 0 && !mainSlug.isNullOrBlank()) {
                 "$baseUrl/manga/$mainSlug-$mainId"
             } else {
                 "$baseUrl/manga/$slug-$id"
