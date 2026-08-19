@@ -1,44 +1,49 @@
 package eu.kanade.tachiyomi.extension.es.mantrazscan
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.OkHttpClient
+import org.jsoup.nodes.Document
 
 @Source
-abstract class ManhwaScan : HttpSource() {
+abstract class ManhwaScan : KeiSource() {
 
-    override val supportsLatest = true
-
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
-        .set("User-Agent", "Mozilla/5.0")
-        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-
-    override fun popularMangaRequest(page: Int): Request {
-        val url = if (page == 1) {
-            "$baseUrl/explorar/"
-        } else {
-            "$baseUrl/explorar/page/$page/"
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor { chain ->
+            chain.proceed(
+                chain.request().newBuilder()
+                    .header("Referer", "$baseUrl/")
+                    .header("User-Agent", "Mozilla/5.0")
+                    .header(
+                        "Accept",
+                        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    )
+                    .build(),
+            )
         }
-        return GET(url, headers)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = parseMangaPage(response)
+    override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page)
 
-    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(page)
 
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangaPage(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): MangasPage {
         val urlBuilder = "$baseUrl/explorar/".toHttpUrl().newBuilder()
 
         if (query.isNotBlank()) {
@@ -49,53 +54,67 @@ abstract class ManhwaScan : HttpSource() {
             urlBuilder.addQueryParameter("genero", genre)
         }
 
-        return GET(urlBuilder.build(), headers)
+        val document = client.get(urlBuilder.build()).asJsoup()
+
+        return parseMangaPage(document, page)
     }
 
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Filter.Header("Filtrar por género"),
         GenreFilter(),
     )
 
-    private class GenreFilter :
-        Filter.Select<String>(
-            "Género",
-            arrayOf(
-                "Todos", "Romance", "Drama", "Fantasía", "Comedia", "Acción", "Aventura",
-                "Harem", "Isekai", "Manhwa", "Manga", "Manhua", "Shounen", "Seinen",
-                "BL", "Yaoi", "Yuri", "+18", "Sin censura",
-            ),
-        )
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || !url.encodedPath.startsWith("/manga/")) {
+            throw Exception("URL no soportada")
+        }
 
-    private fun getGenreFilter(filters: FilterList): String? {
-        val genre = filters.filterIsInstance<Filter.Select<String>>().firstOrNull() ?: return null
-        return when (genre.state) {
-            1 -> "romance"
-            2 -> "drama"
-            3 -> "fantasia"
-            4 -> "comedia"
-            5 -> "accion"
-            6 -> "aventura"
-            7 -> "harem"
-            8 -> "isekai"
-            9 -> "manhwa"
-            10 -> "manga"
-            11 -> "manhua"
-            12 -> "shounen"
-            13 -> "seinen"
-            14 -> "bl"
-            15 -> "yaoi"
-            16 -> "yuri"
-            17 -> "18"
-            18 -> "sin-censura"
-            else -> null
+        val document = client.get(url).asJsoup()
+        return parseMangaDetails(document).apply {
+            setUrlWithoutDomain(url.toString())
         }
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = parseMangaPage(response)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url).asJsoup()
 
-    private fun parseMangaPage(response: Response): MangasPage {
-        val html = response.body.string()
+        return SMangaUpdate(
+            manga = parseMangaDetails(document),
+            chapters = parseChapterList(document),
+        )
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(baseUrl + chapter.url).asJsoup()
+
+        val imageRegex = Regex(
+            """https://img\.mantrazscan\.co[^"\\ ]+/WP-manga/[^"\\ ]+\.(?:webp|WEBP|jpg|JPG|jpeg|JPEG|png|PNG)""",
+        )
+
+        return imageRegex.findAll(document.html())
+            .map { it.value.replace("\\/", "/") }
+            .distinct()
+            .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
+            .toList()
+    }
+
+    private suspend fun getMangaList(page: Int): MangasPage {
+        val url = if (page == 1) {
+            "$baseUrl/explorar/"
+        } else {
+            "$baseUrl/explorar/page/$page/"
+        }
+
+        return parseMangaPage(client.get(url).asJsoup(), page)
+    }
+
+    private fun parseMangaPage(document: Document, page: Int): MangasPage {
+        val html = document.html()
 
         val cardRegex = Regex(
             """<div class="s-card">.*?<a class="s-card-imglink" href="([^"]+)">.*?<img src="([^"]+)".*?<a class="s-card-title" href="[^"]+">([^<]+)""",
@@ -113,18 +132,14 @@ abstract class ManhwaScan : HttpSource() {
             .distinctBy { it.url }
             .toList()
 
-        val currentPage = response.request.url.pathSegments
-            .lastOrNull { it.toIntOrNull() != null }
-            ?.toIntOrNull() ?: 1
-
-        val hasNextPage = html.contains("/explorar/page/${currentPage + 1}/")
-        return MangasPage(mangas, hasNextPage)
+        return MangasPage(
+            mangas = mangas,
+            hasNextPage = html.contains("/explorar/page/${page + 1}/"),
+        )
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val html = response.body.string()
+    private fun parseMangaDetails(document: Document): SManga {
+        val html = document.html()
 
         return SManga.create().apply {
             title = Regex("""<h1[^>]*>([^<]+)</h1>""")
@@ -152,10 +167,8 @@ abstract class ManhwaScan : HttpSource() {
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + manga.url, headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val html = response.body.string()
+    private fun parseChapterList(document: Document): List<SChapter> {
+        val html = document.html()
 
         val chapterRegex = Regex(
             """<a class="ch-row"[^>]* href="(/manga/[^"]+/capitulo-([0-9]+(?:\.[0-9]+)?)/?)"""",
@@ -174,21 +187,39 @@ abstract class ManhwaScan : HttpSource() {
             .toList()
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val html = response.body.string()
-
-        val imageRegex = Regex(
-            """https://img\.mantrazscan\.co[^"\\ ]+/WP-manga/[^"\\ ]+\.(?:webp|WEBP|jpg|JPG|jpeg|JPEG|png|PNG)""",
+    private class GenreFilter :
+        Filter.Select<String>(
+            "Género",
+            arrayOf(
+                "Todos", "Romance", "Drama", "Fantasía", "Comedia", "Acción", "Aventura",
+                "Harem", "Isekai", "Manhwa", "Manga", "Manhua", "Shounen", "Seinen",
+                "BL", "Yaoi", "Yuri", "+18", "Sin censura",
+            ),
         )
 
-        return imageRegex.findAll(html)
-            .map { it.value.replace("\\/", "/") }
-            .distinct()
-            .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
-            .toList()
-    }
+    private fun getGenreFilter(filters: FilterList): String? {
+        val genre = filters.filterIsInstance<GenreFilter>().firstOrNull() ?: return null
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+        return when (genre.state) {
+            1 -> "romance"
+            2 -> "drama"
+            3 -> "fantasia"
+            4 -> "comedia"
+            5 -> "accion"
+            6 -> "aventura"
+            7 -> "harem"
+            8 -> "isekai"
+            9 -> "manhwa"
+            10 -> "manga"
+            11 -> "manhua"
+            12 -> "shounen"
+            13 -> "seinen"
+            14 -> "bl"
+            15 -> "yaoi"
+            16 -> "yuri"
+            17 -> "18"
+            18 -> "sin-censura"
+            else -> null
+        }
+    }
 }
