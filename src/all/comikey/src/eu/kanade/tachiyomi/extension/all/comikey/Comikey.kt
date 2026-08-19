@@ -312,12 +312,18 @@ abstract class Comikey :
             val url = manifestUrl.newBuilder().apply {
                 removePathSegment(manifestUrl.pathSize - 1)
 
-                if (it.alternate.isNotEmpty() && it.height == 2048 && it.type == "image/jpeg") {
+                if (it.alternate.isNotEmpty()) {
                     addPathSegments(
-                        it.alternate.first { alt ->
-                            val dimension = if (isWebtoon) alt.width else alt.height
+                        if (it.height == 2048 && it.type == "image/jpeg") {
+                            it.alternate.first { alt ->
+                                val dimension = if (isWebtoon) alt.width else alt.height
 
-                            dimension <= 1536 && alt.type == "image/webp"
+                                dimension <= 1536 && alt.type == "image/webp"
+                            }
+                        } else {
+                            it.alternate.first { alt ->
+                                alt.type == "image/webp"
+                            }
                         }.href,
                     )
                 } else {
