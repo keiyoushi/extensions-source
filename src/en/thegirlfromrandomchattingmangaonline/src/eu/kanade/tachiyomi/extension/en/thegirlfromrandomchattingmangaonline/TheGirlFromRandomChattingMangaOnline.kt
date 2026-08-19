@@ -12,6 +12,8 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 
+const val MANGA_ID = "the-girl-from-random-chatting"
+
 @Source
 abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
 
@@ -41,13 +43,15 @@ abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/manga/$MANGA_ID-chapter-${chapter.chapter_number.toInt()}"
+
     override suspend fun getPageList(chapter: SChapter): List<Page> = throw UnsupportedOperationException()
 
     private suspend fun createManga(): SManga {
         val mainPage = client.get(baseUrl).asJsoup()
 
         return SManga.create().apply {
-            url = "the-girl-from-random-chatting"
+            url = MANGA_ID
             title = "The Girl from Random Chatting"
             thumbnail_url = (mainPage ?: client.get(baseUrl).asJsoup())
                 .selectFirst("figure.wp-block-gallery figure.wp-block-image:last-child noscript img")!!
