@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import java.lang.UnsupportedOperationException
 
 @Source
 abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
