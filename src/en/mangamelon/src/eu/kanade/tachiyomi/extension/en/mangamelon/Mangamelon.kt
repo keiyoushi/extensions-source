@@ -97,11 +97,17 @@ abstract class Mangamelon : KeiSource() {
     }
 
     private suspend fun fetchChapters(mangaId: String): List<SChapter> {
-        val response = api(
-            "api/chapter/list",
-            ChapterListRequest(target = mangaId, limit = CHAPTER_LIMIT),
-        ).parseAs<ChapterListResponse>()
-        return response.chapters
+        val chapters = mutableListOf<ChapterDto>()
+        var skip = 0
+        do {
+            val response = api(
+                "api/chapter/list",
+                ChapterListRequest(target = mangaId, limit = CHAPTER_LIMIT, skip = skip),
+            ).parseAs<ChapterListResponse>()
+            chapters += response.chapters
+            skip += response.chapters.size
+        } while (response.chapters.size == CHAPTER_LIMIT)
+        return chapters
             .sortedByDescending { it.seq }
             .map { it.toSChapter(mangaId) }
     }
@@ -119,6 +125,7 @@ abstract class Mangamelon : KeiSource() {
     // ================================ URLs ================================
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
         val segments = url.pathSegments
         val mangaId = when {
             segments.size >= 2 && segments[0] == "manga" -> segments[1]
