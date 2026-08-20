@@ -1,6 +1,4 @@
-@file:Suppress("SpellCheckingInspection")
-
-package eu.kanade.tachiyomi.extension.pt.sssscanlator
+package eu.kanade.tachiyomi.extension.pt.remangas
 
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
@@ -27,11 +25,12 @@ class SortFilter :
         "Ordenar por",
         "sort",
         listOf(
-            "Mais populares" to "popular",
-            "Maior avaliação" to "rating",
-            "Atualizados recentemente" to "recent",
-            "Novidades" to "new",
-            "A-Z" to "alphabetical",
+            "Populares" to "popular",
+            "Atualizados recentemente" to "latest",
+            "Adicionados recentemente" to "newest",
+            "Melhor avaliados" to "rating",
+            "Mais seguidos" to "followers",
+            "Mais vistos" to "views",
         ),
     )
 
@@ -44,15 +43,9 @@ class TypeFilter :
             "Mangá" to "manga",
             "Manhwa" to "manhwa",
             "Manhua" to "manhua",
-            "Novel" to "novel",
-            "Yaoi" to "yaoi",
-            "Yuri" to "yuri",
-            "Shoujo" to "shoujo",
-            "English" to "english",
             "Webtoon" to "webtoon",
-            "Doujinshi" to "doujinshi",
-            "Hentai" to "hentai",
             "Pornhwa" to "pornhwa",
+            "Novel" to "novel",
         ),
     )
 
@@ -62,16 +55,40 @@ class StatusFilter :
         "status",
         listOf(
             "Todos" to "",
-            "Em lançamento" to "ONGOING",
-            "Completo" to "COMPLETED",
-            "Hiato" to "HIATUS",
-            "Cancelado" to "CANCELED",
+            "Em andamento" to "ongoing",
+            "Completo" to "completed",
+            "Hiato" to "hiatus",
+            "Cancelado" to "cancelled",
         ),
     )
 
-class GenreFilter(genres: List<String>) :
+class DemographicFilter :
+    SelectFilter(
+        "Demografia",
+        "demographic",
+        listOf(
+            "Todas" to "",
+            "Shounen" to "shounen",
+            "Seinen" to "seinen",
+            "Shoujo" to "shoujo",
+            "Josei" to "josei",
+        ),
+    )
+
+class ContentFilter :
+    SelectFilter(
+        "Conteúdo",
+        "adult",
+        listOf(
+            "Todos" to "",
+            "Sem conteúdo adulto" to "false",
+            "Apenas conteúdo adulto" to "true",
+        ),
+    )
+
+class GenreFilter(genres: List<GenreDto>) :
     SelectFilter(
         "Gênero",
         "genre",
-        listOf("Todos" to "") + genres.map { it to it },
+        listOf("Todos" to "") + genres.map { it.name to it.slug },
     )
