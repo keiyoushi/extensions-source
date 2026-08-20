@@ -73,7 +73,7 @@ class CompleteMangaDto(
         artist = artists?.joinToString()
         author = authors?.joinToString()
         status = when (titleStatus.orEmpty()) {
-            "Онгоінг" -> SManga.ONGOING
+            "Онґоїнґ" -> SManga.ONGOING
             "Завершено" -> SManga.COMPLETED
             "Покинуто" -> SManga.CANCELLED
             "Призупинено" -> SManga.ON_HIATUS
