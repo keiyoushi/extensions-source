@@ -2,11 +2,9 @@ package eu.kanade.tachiyomi.extension.zh.baozimhorg
 
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import java.text.ParsePosition
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import kotlin.time.Instant
 
 @Serializable
 class ResponseDto<T>(val data: T)
@@ -41,25 +39,8 @@ class AttributesDto(
     fun toSChapter(mangaSlug: String, mangaId: String, chapterId: String) = SChapter.create().apply {
         url = "$mangaSlug/$slug#$mangaId/$chapterId"
         name = title
-        date_upload = parseDate(updatedAt)
+        date_upload = Instant.tryParse(updatedAt)
     }
-}
-
-private val formats = listOf(
-    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    },
-    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    },
-)
-
-fun parseDate(dateString: String): Long {
-    for (format in formats) {
-        val date = format.parse(dateString, ParsePosition(0)) ?: continue
-        return date.time
-    }
-    throw IllegalArgumentException("Unable to parse date: $dateString")
 }
 
 @Serializable
