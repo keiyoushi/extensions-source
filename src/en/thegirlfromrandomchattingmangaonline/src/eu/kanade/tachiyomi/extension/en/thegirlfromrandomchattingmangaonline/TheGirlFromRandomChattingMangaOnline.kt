@@ -44,7 +44,7 @@ abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/manga/$MANGA_ID-chapter-${chapter.chapter_number.toInt()}"
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/manga/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
         .select("p > noscript > img")
