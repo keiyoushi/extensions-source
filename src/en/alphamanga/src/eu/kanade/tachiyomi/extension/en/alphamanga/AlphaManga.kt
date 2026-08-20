@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.alphamanga
 
+import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -17,11 +18,13 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.readUShortLittleEndian
 import keiyoushi.utils.string
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 
 @Source
 abstract class AlphaManga :
@@ -29,6 +32,8 @@ abstract class AlphaManga :
     ConfigurableSource {
     override val supportsLatest = false
     private val preferences by getPreferencesLazy()
+
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList())
 
@@ -101,11 +106,32 @@ abstract class AlphaManga :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter), mobileHeaders).asJsoup()
-        val manga = document.selectFirst("viewer-manga-vertical")?.attr("v-bind:pages") ?: throw Exception("Log in via WebView and rent or purchase this chapter to read.")
-        val pages = manga.parseAs<List<String>>()
+        val viewer = document.selectFirst("viewer-manga-vertical") ?: throw Exception("Log in via WebView and rent or purchase this chapter to read.")
+
+        val pages = viewer.attr("v-bind:pages").parseAs<List<String>>()
+        val keys = viewer.attr("placeholder").extractKeys()
+
         return pages.filterNot { it == "first" || it == "last" }.mapIndexed { index, url ->
-            Page(index, imageUrl = url)
+            val keyEncoded = Base64.encodeToString(keys[index], Base64.NO_WRAP)
+            Page(index, imageUrl = "$url#key=$keyEncoded")
         }
+    }
+
+    private fun String.extractKeys(): List<ByteArray> {
+        val raw = Base64.decode(substringAfter("base64,"), Base64.DEFAULT)
+
+        val keys = mutableListOf<ByteArray>()
+        var pos = 33 // right after the PNG signature + IHDR chunk
+        while (pos + 2 <= raw.size) {
+            val count = raw.readUShortLittleEndian(pos)
+            val length = count * 8
+            val dataStart = pos + 2
+            val dataEnd = dataStart + length
+            if (dataEnd > raw.size) break
+            keys.add(raw.copyOfRange(dataStart, dataEnd))
+            pos = dataEnd
+        }
+        return keys
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(

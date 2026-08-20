@@ -3,7 +3,9 @@
 (function() {
     var defineEarlyCallback = function(name) {
         if (!/^[A-Za-z_$][\w$]{4,31}$/.test(name)) return;
-        if (typeof window[name] === 'undefined') window[name] = function() {};
+        if (typeof window[name] === 'undefined') {
+            window[name] = function() {};
+        }
     };
     var scanEarlyCallbacks = function(root) {
         try {
@@ -53,6 +55,7 @@
         window.__lxHookInstalled = false;
     }
     window.__lxHookInstalled = true;
+    window.__lxHookStartTime = Date.now();
     window.__lxToken = null;
     window.__lxImageUrls = [];
     window.__lxCapturedUrls = null;
@@ -92,6 +95,10 @@
 
     var _propTrapInterval = setInterval(function() {
         if (window.__lxPropTrapped) { clearInterval(_propTrapInterval); return; }
+        if (window.__lxHookInstalled && Date.now() - (window.__lxHookStartTime || Date.now()) > 10000) {
+            clearInterval(_propTrapInterval);
+            return;
+        }
         try {
             var scripts = document.querySelectorAll('script');
             for (var i = 0; i < scripts.length; i++) {

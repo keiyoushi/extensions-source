@@ -12,6 +12,8 @@ import java.util.TimeZone
 @Source
 abstract class KuroManga : MangaThemesia() {
 
+    override val dateFormat: SimpleDateFormat = KMdateFormat
+
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
