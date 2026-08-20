@@ -100,6 +100,10 @@ abstract class Mangadotnet :
                 .putStringSet(EXCLUDE_GENRE_ADULT_PREF, adultExcluded - demographics)
                 .apply()
         }
+
+        if (all[CONTENT_RATING_PREF] is Set<*>) {
+            edit().remove(CONTENT_RATING_PREF).apply()
+        }
     }
 
     private val officialPriorityPatterns = listOf(
@@ -327,28 +331,30 @@ abstract class Mangadotnet :
     )
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
-        val facetsUrl = "$baseUrl/api/search?facets=1".toHttpUrl()
-        val facetsResponse = runCatching {
+        val facetsDeferred = async {
+            val facetsUrl = "$baseUrl/api/search?facets=1".toHttpUrl()
             client.get(facetsUrl).use { it.parseAs<MangaList>() }
-        }.getOrNull()
+        }
+        val tagsDeferred = async {
+            val tagsUrl = "$baseUrl/api/manga/tags".toHttpUrl()
+            client.get(tagsUrl).use { it.parseAs<TagsResponse>() }
+        }
 
-        val genres = facetsResponse?.facets?.genres
+        val facetsResponse = facetsDeferred.await()
+        val tagsResponse = tagsDeferred.await()
+
+        val genres = facetsResponse.facets?.genres
             ?.map { it.key }
             ?.filter { it !in demographicNames }
             ?.distinct()
             ?.sortedBy { it.lowercase(Locale.ROOT) }
 
-        val tagsUrl = "$baseUrl/api/manga/tags".toHttpUrl()
-        val tagsResponse = runCatching {
-            client.get(tagsUrl).use { it.parseAs<TagsResponse>() }
-        }.getOrNull()
-
-        val tags = tagsResponse?.categories
-            ?.flatMap { it.tags }
-            ?.map { it.name.trim() }
-            ?.filter { it.isNotEmpty() }
-            ?.distinct()
-            ?.sortedBy { it.lowercase(Locale.ROOT) }
+        val tags = tagsResponse.categories
+            .flatMap { it.tags }
+            .map { it.name.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .sortedBy { it.lowercase(Locale.ROOT) }
 
         FilterDataDto(genres, tags).toJsonElement()
     }
@@ -687,7 +693,11 @@ abstract class Mangadotnet :
 
     private fun excludedDemographicsPref(): Set<String> = preferences.getStringSet(EXCLUDE_DEMOGRAPHIC_PREF, emptySet())!!
 
-    private fun includedContentRatingPref(): Set<String> = preferences.getStringSet(CONTENT_RATING_PREF, emptySet())!!
+    private fun includedContentRatingPref(): Set<String> {
+        val highest = preferences.getString(CONTENT_RATING_PREF, "suggestive")!!
+        val index = contentRatings.indexOfFirst { it.second == highest }.coerceAtLeast(0)
+        return contentRatings.take(index + 1).map { it.second }.toSet()
+    }
 
     private fun excludedGenresPref(): Set<String> {
         val mode = adultModePref()
@@ -776,13 +786,13 @@ abstract class Mangadotnet :
         }
         screen.addPreference(nsfwPref)
 
-        val contentRatingPref = MultiSelectListPreference(screen.context).apply {
+        val contentRatingPref = ListPreference(screen.context).apply {
             key = CONTENT_RATING_PREF
             title = "Content Rating"
-            entries = contentRatings.map { it.first }.toTypedArray()
+            entries = contentRatings.map { "Up to ${it.first}" }.toTypedArray()
             entryValues = contentRatings.map { it.second }.toTypedArray()
-            setDefaultValue(emptySet<String>())
-            summary = "Default content rating used on Search."
+            setDefaultValue("suggestive")
+            summary = "%s"
         }
         screen.addPreference(contentRatingPref)
 
