@@ -10,6 +10,7 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import okio.IOException
+import org.jsoup.nodes.Element
 
 @Source
 abstract class GoDaManhua : GoDa() {
@@ -22,6 +23,13 @@ abstract class GoDaManhua : GoDa() {
             throw IOException("请将此漫画重新迁移到本图源")
         },
     )
+
+    // Handle removed mangas
+    override fun getMangaId(doc: Element) = try {
+        super.getMangaId(doc)
+    } catch (_: Exception) {
+        throw IOException("該漫畫章節已下架，建议前往源站或官网訪問")
+    }
 
     override suspend fun fetchChapterList(mangaId: String): List<SChapter> {
         val response = client.get("https://api-get-v3.mgsearcher.com/api/manga/get?mid=$mangaId&mode=all", headers)

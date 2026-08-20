@@ -70,6 +70,8 @@ abstract class GoDa : KeiSource() {
     open fun parseSearchManga(response: Response) = parsePopularMangas(response)
 
     // Details + Chapters
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
+
     override val supportRelatedMangasBySearch = true
 
     override suspend fun fetchMangaUpdate(
@@ -79,7 +81,7 @@ abstract class GoDa : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
-        val mangaId = document.getMangaId()
+        val mangaId = getMangaId(document)
         val updatedChapters = if (fetchChapters) fetchChapterList(mangaId) else chapters
         return SMangaUpdate(
             manga = parseMangaDetails(document),
@@ -106,7 +108,7 @@ abstract class GoDa : KeiSource() {
             elements[2].children().drop(1).mapTo(this) { it.text().removeSuffix(" ,") }
             elements[3].children().mapTo(this) { it.text().removePrefix("#") }
         }.joinToString()
-        description = (elements[4].text() + "\n\nID: ${document.getMangaId()}").trim()
+        description = (elements[4].text() + "\n\nID: ${getMangaId(document)}").trim()
         thumbnail_url = document.selectFirst("img.object-cover")!!.attr("src")
     }
 
@@ -174,9 +176,7 @@ abstract class GoDa : KeiSource() {
     }
 
     // Utils
-    private fun getKey(link: String): String = link.substringAfter("/manga/").removeSuffix("/")
+    open fun getKey(link: String): String = link.substringAfter("/manga/").removeSuffix("/")
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
-
-    private fun Element.getMangaId() = selectFirst("#mangachapters")!!.attr("data-mid")
+    open fun getMangaId(doc: Element) = doc.selectFirst("#mangachapters")!!.attr("data-mid")
 }
