@@ -3,11 +3,12 @@ package eu.kanade.tachiyomi.extension.en.witchscans
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.string
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import java.time.Instant
+import kotlin.time.Instant
 
 @Serializable
 class BrowseDto(
@@ -60,9 +61,8 @@ class MangaDto(
     fun toSManga(baseUrl: String, manga: SManga): SManga = manga.apply {
         title = this@MangaDto.title
         thumbnail_url = coverUrl?.let { it.toAbsoluteUrl(baseUrl) }
-        url = "comic/$slug"
+        url = id
         memo = buildJsonObject {
-            put("type", "comic")
             put("slug", slug)
         }
         status = this@MangaDto.status.toSMangaStatus()
@@ -107,13 +107,11 @@ class ChapterDto(
     fun toSChapter(manga: SManga): SChapter = SChapter.create().apply {
         name = if (title.isNullOrBlank() || title == number.toString()) "Chapter $number" else title
         if (isLocked) name = "\uD83D\uDD12 $name"
-        date_upload = publishedAt?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrDefault(0L) } ?: 0L
+        date_upload = publishedAt?.let { Instant.tryParse(it) } ?: 0L
         chapter_number = number.toFloat()
-        url = id
+        val mangaSlug = manga.memo["slug"]?.string.orEmpty()
+        url = "comic/$mangaSlug/chapter/$number"
         memo = buildJsonObject {
-            put("type", manga.memo["type"]?.string ?: "comic")
-            put("slug", manga.memo["slug"]?.string ?: "")
-            put("number", number.toString())
             put("isLocked", isLocked)
         }
     }

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "WitchScans"
-    versionCode = 1
+    versionCode = 33
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
