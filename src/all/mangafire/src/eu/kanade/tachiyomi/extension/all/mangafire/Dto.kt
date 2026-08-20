@@ -129,7 +129,7 @@ class ChapterDto(
     }
 
     companion object {
-        private val chapterRegex = """(?:ch\.?|chapter)\s*\d+""".toRegex(RegexOption.IGNORE_CASE)
+        private val chapterRegex = """\bch(?:\.|apter)?\s*\d""".toRegex(RegexOption.IGNORE_CASE)
     }
 }
 
