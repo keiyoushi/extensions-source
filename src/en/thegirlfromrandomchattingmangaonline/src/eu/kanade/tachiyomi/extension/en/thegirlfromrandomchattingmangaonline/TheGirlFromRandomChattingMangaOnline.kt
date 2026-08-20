@@ -13,8 +13,6 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 
-const val MANGA_ID = "the-girl-from-random-chatting"
-
 @Source
 abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
 
@@ -55,7 +53,7 @@ abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
         val mainPage = client.get(baseUrl).asJsoup()
 
         return SManga.create().apply {
-            url = MANGA_ID
+            url = "the-girl-from-random-chatting"
             title = "The Girl from Random Chatting"
             thumbnail_url =
                 mainPage
