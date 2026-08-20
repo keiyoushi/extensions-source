@@ -54,7 +54,8 @@ abstract class YomuComics : KeiSource() {
             }
             .build()
 
-        return client.get(url).parseAs<JsonObject>().toMangasPage()
+        val result = client.get(url).parseAs<JsonObject>()
+        return decrypting { result.toMangasPage() }
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -73,9 +74,8 @@ abstract class YomuComics : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val series = client.get(baseUrl + manga.url, rscHeaders)
-            .use { it.body.string() }
-            .parseSeriesPage()
+        val body = client.get(baseUrl + manga.url, rscHeaders).use { it.body.string() }
+        val series = decrypting { body.parseSeriesPage() }
 
         return SMangaUpdate(manga = series.manga, chapters = series.chapters)
     }
@@ -85,7 +85,31 @@ abstract class YomuComics : KeiSource() {
             .extractNextJs<ChapterPayloadDto>()
             ?: throw Exception("Não foi possível ler as páginas do capítulo")
 
-        return payload.pages
+        return decrypting { payload.pages }
+    }
+
+    /** The site rotates its payload obfuscation every few weeks, so it is re-read on the first failure. */
+    private suspend fun <T> decrypting(block: () -> T): T = try {
+        block()
+    } catch (_: PayloadException) {
+        PayloadCipher.scheme = fetchScheme()
+        block()
+    }
+
+    private suspend fun fetchScheme(): PayloadScheme {
+        val search = client.get("$baseUrl/search").use { it.body.string() }
+        val slug = MANGA_SLUG_REGEX.find(search)?.groupValues?.get(1)
+            ?: throw Exception("Nenhuma obra encontrada para inspecionar o site")
+
+        val page = client.get("$baseUrl/obra/$slug", rscHeaders).use { it.body.string() }
+
+        return CHUNK_REGEX.findAll(page)
+            .map { it.value }
+            .distinct()
+            .firstNotNullOfOrNull { chunk ->
+                PayloadCipher.schemeFrom(client.get("$baseUrl/_next/$chunk").use { it.body.string() })
+            }
+            ?: throw Exception("Não foi possível descobrir como o site está cifrando as respostas")
     }
 
     override val supportsFilterFetching: Boolean get() = true
@@ -112,5 +136,7 @@ abstract class YomuComics : KeiSource() {
     companion object {
         private const val PAGE_SIZE = 30
         private val MANGA_PATH_SEGMENTS = listOf("obra", "ler")
+        private val MANGA_SLUG_REGEX = """/obra/([a-z0-9-]+)""".toRegex()
+        private val CHUNK_REGEX = """static/chunks/[^"\\]+\.js""".toRegex()
     }
 }

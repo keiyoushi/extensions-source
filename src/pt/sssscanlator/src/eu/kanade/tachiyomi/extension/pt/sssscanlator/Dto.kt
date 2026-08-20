@@ -4,7 +4,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -21,11 +20,6 @@ import kotlinx.serialization.json.put
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Instant
-
-private const val PASSPHRASE = "yomu_trolling_scrapers_v1"
-private const val ENCRYPTED_PREFIX = "U2FsdGVkX1"
-
-internal fun String.decryptPayload(): String = CryptoAES.decrypt(this, PASSPHRASE)
 
 @Serializable
 class LibraryPaginationDto(
@@ -51,11 +45,10 @@ class LibraryMangaDto(
 internal fun JsonObject.toMangasPage(): MangasPage {
     val mangas = values.asSequence()
         .mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
-        .filter { it.startsWith(ENCRYPTED_PREFIX) }
-        .map { it.decryptPayload() }
-        .firstOrNull(String::isNotEmpty)
-        ?.parseAs<List<LibraryMangaDto>>()
-        ?: throw Exception("Não foi possível ler a lista de obras")
+        .filter(PayloadCipher::isEncrypted)
+        .firstOrNull()
+        ?.let { PayloadCipher.decrypt(it).parseAs<List<LibraryMangaDto>>() }
+        ?: throw PayloadException()
 
     val pagination = get("pagination")?.parseAs<LibraryPaginationDto>() ?: LibraryPaginationDto()
     return MangasPage(mangas.map(LibraryMangaDto::toSManga), pagination.hasNextPage)
@@ -72,11 +65,9 @@ class SeriesPayloadDto(
     val status: String? = null,
 ) {
     val chapters: List<SChapter>
-        get() = encryptedChapters.decryptPayload()
-            .takeIf(String::isNotEmpty)
-            ?.parseAs<List<SeriesChapterDto>>()
-            ?.map { it.toSChapter(slug) }
-            ?: emptyList()
+        get() = PayloadCipher.decrypt(encryptedChapters)
+            .parseAs<List<SeriesChapterDto>>()
+            .map { it.toSChapter(slug) }
 }
 
 @Serializable
@@ -173,11 +164,9 @@ class ChapterPayloadDto(
     private val encryptedChapter: String,
 ) {
     val pages: List<Page>
-        get() = encryptedChapter.decryptPayload()
-            .takeIf(String::isNotEmpty)
-            ?.parseAs<ChapterImagesDto>()
-            ?.toPageList()
-            ?: emptyList()
+        get() = PayloadCipher.decrypt(encryptedChapter)
+            .parseAs<ChapterImagesDto>()
+            .toPageList()
 }
 
 @Serializable
