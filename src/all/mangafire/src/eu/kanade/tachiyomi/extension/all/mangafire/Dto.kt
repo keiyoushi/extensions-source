@@ -117,16 +117,19 @@ class ChapterDto(
     fun toSChapter(mangaUrl: String, langCode: String): SChapter = SChapter.create().apply {
         url = "$mangaUrl/$id-chapter-${number.toString().removeSuffix(".0")}-$langCode"
         chapter_number = number
-        name = buildString {
-            append("Ch. ")
-            append(number.toString().removeSuffix(".0"))
-            if (!this@ChapterDto.name.isNullOrBlank()) {
-                append(" - ")
-                append(this@ChapterDto.name)
-            }
+        name = if (this@ChapterDto.name.isNullOrBlank()) {
+            "Ch. ${number.toString().removeSuffix(".0")}"
+        } else if (this@ChapterDto.name.contains(chapterRegex)) {
+            this@ChapterDto.name
+        } else {
+            "Ch. ${number.toString().removeSuffix(".0")} - ${this@ChapterDto.name}"
         }
         scanlator = type ?: "Unknown"
         date_upload = createdAt?.times(1000L) ?: 0L
+    }
+
+    companion object {
+        private val chapterRegex = """(?:ch\.?|chapter)\s*\d+""".toRegex(RegexOption.IGNORE_CASE)
     }
 }
 
