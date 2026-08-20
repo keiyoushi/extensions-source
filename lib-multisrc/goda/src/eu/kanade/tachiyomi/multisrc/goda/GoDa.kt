@@ -10,9 +10,15 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.getString
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -80,16 +86,32 @@ abstract class GoDa : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
-        val mangaId = getMangaId(document)
-        val updatedChapters = if (fetchChapters) fetchChapterList(mangaId) else chapters
-        return SMangaUpdate(
-            manga = parseMangaDetails(document),
-            chapters = updatedChapters,
-        )
+        val mangaId = manga.memo.getStringOrNull("id")
+
+        return if (fetchChapters && mangaId != null) {
+            coroutineScope {
+                val deferredChapters = async { fetchChapterList(mangaId) }
+                val deferredManga = async { if (fetchDetails) getMangaDetails(manga) else manga }
+
+                SMangaUpdate(deferredManga.await(), deferredChapters.await())
+            }
+        } else {
+            val updatedManga = if (mangaId == null || fetchDetails) getMangaDetails(manga) else manga
+
+            val updatedChapters = if (fetchChapters) {
+                val mangaId = updatedManga.memo.getString("id")
+                fetchChapterList(mangaId)
+            } else {
+                chapters
+            }
+            SMangaUpdate(updatedManga, updatedChapters)
+        }
     }
 
+    open suspend fun getMangaDetails(manga: SManga) = parseMangaDetails(client.get(getMangaUrl(manga)).asJsoup())
+
     open fun parseMangaDetails(document: Document) = SManga.create().apply {
+        val mangaId = getMangaId(document)
         val document = document.selectFirst("main")!!
         val titleElement = document.selectFirst("h1")!!
         val elements = titleElement.parent()!!.parent()!!.children()
@@ -108,8 +130,12 @@ abstract class GoDa : KeiSource() {
             elements[2].children().drop(1).mapTo(this) { it.text().removeSuffix(" ,") }
             elements[3].children().mapTo(this) { it.text().removePrefix("#") }
         }.joinToString()
-        description = (elements[4].text() + "\n\nID: ${getMangaId(document)}").trim()
+        description = (elements[4].text() + "\n\nID: $mangaId").trim()
         thumbnail_url = document.selectFirst("img.object-cover")!!.attr("src")
+
+        memo = buildJsonObject {
+            put("id", mangaId)
+        }
     }
 
     open suspend fun fetchChapterList(mangaId: String): List<SChapter> {
