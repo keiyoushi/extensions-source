@@ -63,7 +63,7 @@ abstract class Guazimanhua : KeiSource() {
     private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select("article.card").map { element ->
             SManga.create().apply {
-                title = element.selectFirst("h3 a")?.text().orEmpty()
+                title = element.selectFirst("h3 a")!!.text()
                 setUrlWithoutDomain(element.selectFirst("a.cover-wrap")!!.attr("href"))
                 thumbnail_url = element.selectFirst("img.cover")?.attr("src")
             }
@@ -73,6 +73,7 @@ abstract class Guazimanhua : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
         if (!url.encodedPath.startsWith("/comic.php")) return null
         val manga = SManga.create().apply { setUrlWithoutDomain(url.toString()) }
         return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
