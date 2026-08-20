@@ -106,9 +106,10 @@ class ChapterResponseList(
         if (hideLocked && isMonetized) return null
         val prefix = if (isMonetized) "\uD83D\uDD12 " else ""
         val suffix = if (subChapterNum == 0) "" else ".$subChapterNum"
+        val titleCheck = if (title == "" || title.lowercase() == "title" || title.contains("Розділ", ignoreCase = true)) "" else " $title"
         return SChapter.create().apply {
             url = id // old format: "$baseUrl/read/$id/$mangaId"
-            name = "${prefix}Том $volume - Розділ $chapterNum$suffix $title".trim()
+            name = "${prefix}Том $volume - Розділ $chapterNum$suffix$titleCheck"
             chapter_number = if (subChapterNum == 0) {
                 chapterNum.toFloat()
             } else {
