@@ -73,7 +73,7 @@ class PageListInfoImagesDto(val images: String)
 
 @Serializable
 class ImageDto(private val url: String, private val order: Int) {
-    fun toPage() = Page(order, imageUrl = "https://f40-1-4.g-mh.online$url")
+    fun toPage() = Page(order, imageUrl = "https://c-nd2-1.6wm.top$url")
 }
 
 /**
