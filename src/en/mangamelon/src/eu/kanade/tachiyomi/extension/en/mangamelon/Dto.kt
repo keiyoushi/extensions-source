@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.mangamelon
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
 
@@ -72,17 +73,15 @@ class MangaDto(
     private val status: String? = null,
     private val authors: String? = null,
     private val genres: List<String> = emptyList(),
-    private val lang: String? = null,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
-        url = this@toSManga.id
-        this.title = this@toSManga.title
-        thumbnail_url = cover.orEmpty()
-        description = desc
-        author = authors
-        genre = genres.joinToString()
-        this.lang = this@toSManga.lang.orEmpty()
-        status = this@toSManga.status.toMangaStatus()
+        url = this@MangaDto.id
+        this.title = this@MangaDto.title
+        thumbnail_url = this@MangaDto.cover.orEmpty()
+        description = this@MangaDto.desc
+        author = this@MangaDto.authors
+        genre = this@MangaDto.genres.joinToString()
+        status = this@MangaDto.status.toMangaStatus()
     }
 }
 
@@ -90,14 +89,14 @@ class MangaDto(
 class ChapterDto(
     private val id: String,
     private val title: String,
-    private val seq: Int = 0,
+    val seq: Int = 0,
     private val updated: String? = null,
     val pages: List<PageDto> = emptyList(),
 ) {
     fun toSChapter(mangaId: String): SChapter = SChapter.create().apply {
-        name = this@toSChapter.title
-        url = "$mangaId/${this@toSChapter.id}"
-        date_upload = updated.takeUnless { it.isNullOrEmpty() || it.startsWith("0001-") }
+        name = this@ChapterDto.title
+        url = "$mangaId/${this@ChapterDto.id}"
+        date_upload = this@ChapterDto.updated.takeUnless { it.isNullOrEmpty() || it.startsWith("0001-") }
             ?.let { Instant.tryParse(it) }
             ?: 0L
     }

@@ -15,6 +15,7 @@ import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -29,6 +30,7 @@ abstract class Mangamelon : KeiSource() {
         const val PAGE_SIZE = 36
         const val CHAPTER_LIMIT = 1000
         val FORM_MEDIA_TYPE = "application/x-www-form-urlencoded".toMediaType()
+
         // Request bodies must include default-valued fields (e.g. includeNsfw), or the
         // server falls back to its own defaults and hides NSFW content.
         private val requestJson = Json { encodeDefaults = true }
@@ -36,11 +38,9 @@ abstract class Mangamelon : KeiSource() {
 
     // ================================ Browse ================================
 
-    override suspend fun getPopularManga(page: Int): MangasPage =
-        fetchMangaPage(sort = "popular", page = page)
+    override suspend fun getPopularManga(page: Int): MangasPage = fetchMangaPage(sort = "popular", page = page)
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage =
-        fetchMangaPage(sort = "latest", page = page)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = fetchMangaPage(sort = "latest", page = page)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val sort = filters.firstInstanceOrNull<SortFilter>()?.value ?: "latest"
@@ -56,6 +56,7 @@ abstract class Mangamelon : KeiSource() {
     ): MangasPage {
         val skip = (page - 1) * PAGE_SIZE
         val response = api(
+            "api/manga/list",
             MangaListRequest(search = search, genre = genre, sort = sort, limit = PAGE_SIZE, skip = skip),
         ).parseAs<MangaListResponse>()
         val mangas = response.list.map { it.toSManga() }
@@ -91,12 +92,13 @@ abstract class Mangamelon : KeiSource() {
     }
 
     private suspend fun fetchMangaDetails(mangaId: String): SManga {
-        val response = api(MangaGetRequest(target = mangaId)).parseAs<MangaGetResponse>()
+        val response = api("api/manga/get", MangaGetRequest(target = mangaId)).parseAs<MangaGetResponse>()
         return response.manga.toSManga()
     }
 
     private suspend fun fetchChapters(mangaId: String): List<SChapter> {
         val response = api(
+            "api/chapter/list",
             ChapterListRequest(target = mangaId, limit = CHAPTER_LIMIT),
         ).parseAs<ChapterListResponse>()
         return response.chapters
@@ -108,7 +110,7 @@ abstract class Mangamelon : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringAfterLast('/')
-        val response = api(ChapterGetRequest(target = chapterId)).parseAs<ChapterGetResponse>()
+        val response = api("api/chapter/get", ChapterGetRequest(target = chapterId)).parseAs<ChapterGetResponse>()
         return response.chapter.pages
             .sortedBy { it.seq }
             .mapIndexed { index, page -> Page(index, imageUrl = page.url) }
@@ -132,11 +134,11 @@ abstract class Mangamelon : KeiSource() {
 
     // ================================ Filters ================================
 
-    override fun getFilterList(): FilterList = FilterList(SortFilter(), GenreFilter())
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(SortFilter(), GenreFilter())
 
     // ================================ API ================================
 
-    private suspend fun <T> api(path: String, body: T): Response {
+    private suspend inline fun <reified T> api(path: String, body: T): Response {
         val data = body.toJsonString(requestJson).toByteArray().toByteString().base64()
         val formBody = "data=$data&sessionid=".toRequestBody(FORM_MEDIA_TYPE)
         return client.post("$API_BASE/$path", formBody)

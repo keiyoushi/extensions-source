@@ -6,7 +6,7 @@ private val SORT_OPTIONS = arrayOf("Latest", "Hot", "Top Rated", "New")
 private val SORT_VALUES = arrayOf("latest", "popular", "rating", "newest")
 
 class SortFilter : Filter.Sort("Sort", SORT_OPTIONS) {
-    val value: String get() = SORT_VALUES[state.index]
+    val value: String get() = SORT_VALUES[state?.index ?: 0]
 }
 
 // "All" is index 0 and maps to an empty genre string; the API filters by exact
