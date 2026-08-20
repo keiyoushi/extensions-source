@@ -8,7 +8,7 @@ keiyoushi {
     name = "DocTruyen3Q"
     versionCode = 30
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "wpcomics"
 
     source {
