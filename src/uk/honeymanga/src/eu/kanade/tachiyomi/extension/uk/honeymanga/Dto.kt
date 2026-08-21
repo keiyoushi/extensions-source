@@ -86,7 +86,10 @@ class CompleteMangaDto(
 @Serializable
 class ChapterResponse(
     val data: List<ChapterResponseList>,
-)
+    private val cursorNext: JsonObject? = null, // Next page doesn't exist if it's null. Content doesn't matter
+) {
+    val hasNextPage: Boolean get() = cursorNext?.isEmpty() == false
+}
 
 @Serializable
 class ChapterResponseList(
@@ -94,6 +97,7 @@ class ChapterResponseList(
     private val volume: Int,
     private val chapterNum: Int,
     private val subChapterNum: Int,
+    private val title: String,
     private val mangaId: String,
     private val lastUpdated: String,
     private val isMonetized: Boolean,
@@ -104,7 +108,7 @@ class ChapterResponseList(
         val suffix = if (subChapterNum == 0) "" else ".$subChapterNum"
         return SChapter.create().apply {
             url = id // old format: "$baseUrl/read/$id/$mangaId"
-            name = "${prefix}Том $volume - Розділ $chapterNum$suffix"
+            name = "${prefix}Том $volume - Розділ $chapterNum$suffix $title".trim()
             chapter_number = if (subChapterNum == 0) {
                 chapterNum.toFloat()
             } else {
