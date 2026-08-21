@@ -468,98 +468,71 @@ abstract class Comix :
         latestChapterId: Int?,
     ): List<SChapter> {
         val mangaSlug = manga.url.removePrefix("/")
+        val mangaId = manga.mangaId() ?: throw Exception("Refresh manga details")
+        val webViewDocument = document.clone()
+        val mainScript = webViewDocument.selectFirst(
+            "script[type=module][src*=\"/dist/main-\"]",
+        )
+        val mainScriptUrl = mainScript?.absUrl("src").orEmpty()
+        if (mainScriptUrl.isNotEmpty()) mainScript?.remove()
         val payload = runInWebView(
-            document = document,
+            document = webViewDocument,
             buildScript = {
                 $$"""
                     (function () {
                         const payloadKey = '__comixChapterPayload';
+                        const mangaId = $${JSONObject.quote(mangaId)};
+                        const mainScriptUrl = $${JSONObject.quote(mainScriptUrl)};
                         const latestChapterId = $${latestChapterId ?: "null"};
-                        if (window[payloadKey]?.installed) return null;
+                        if (window[payloadKey]) return null;
+                        window[payloadKey] = true;
 
-                        const state = window[payloadKey] = {
-                            installed: true,
-                            submitted: false,
-                            seen: new Set(),
-                            nextClicks: new Set(),
-                            items: []
-                        };
-                        const submit = () => {
-                            if (state.submitted) return;
-                            state.submitted = true;
-                            window.__comixPassPayload(JSON.stringify(state.items));
-                        };
-                        const findNextButton = page => {
-                            const buttons = [...document.querySelectorAll('.mchap-foot button')]
-                                .filter(button => !button.disabled);
-                            return buttons.find(button => {
-                                const label = [
-                                    button.getAttribute('aria-label'),
-                                    button.getAttribute('title'),
-                                    button.textContent
-                                ].filter(Boolean).join(' ');
-                                return /\bnext\b/i.test(label);
-                            }) || buttons.find(button => Number(button.textContent?.trim()) === page + 1);
-                        };
-                        const capture = parsed => {
+                        (async () => {
                             try {
-                                const items = parsed?.result?.items;
-                                const first = items?.[0];
-                                if (
-                                    state.submitted ||
-                                    !Array.isArray(items) ||
-                                    items.length === 0 ||
-                                    first?.id === undefined ||
-                                    first?.number === undefined
-                                ) return false;
+                                if (!mainScriptUrl) throw new Error('Could not find main bundle');
+                                const mainResponse = await fetch(mainScriptUrl);
+                                if (!mainResponse.ok) throw new Error('Could not load main bundle');
+                                const mainJavaScript = await mainResponse.text();
+                                const environmentFile = mainJavaScript.match(
+                                    /from\s*["']\.\/(env-[^"']+\.js)["']/
+                                )?.[1];
+                                if (!environmentFile) throw new Error('Could not find environment bundle');
 
-                                const meta = parsed.result.meta || parsed.result.pagination || {};
-                                const page = meta.page || 1;
-                                const lastPage = meta.lastPage || meta.last_page || page;
-                                const hasNext = meta.hasNext || page < lastPage;
-                                if (state.seen.has(page)) return true;
+                                const importBundle = new Function('url', 'return import(url)');
+                                const environment = await importBundle(
+                                    new URL(environmentFile, mainScriptUrl).href
+                                );
+                                const mangaApi = Object.values(environment).find(value =>
+                                    value &&
+                                    typeof value === 'object' &&
+                                    typeof value.chapters === 'function'
+                                );
+                                if (!mangaApi) throw new Error('Could not find manga API');
 
-                                state.seen.add(page);
-                                state.items.push(...items);
-                                const reachedKnown = items.some(item => item.id === latestChapterId);
-                                if (!reachedKnown && hasNext && !state.nextClicks.has(page)) {
-                                    state.nextClicks.add(page);
-                                    let tries = 0;
-                                    const interval = setInterval(() => {
-                                        const button = findNextButton(page);
-                                        if (button) {
-                                            button.click();
-                                            clearInterval(interval);
-                                        } else if (++tries > 50) {
-                                            clearInterval(interval);
-                                            submit();
-                                        }
-                                    }, 100);
-                                } else {
-                                    submit();
+                                const items = [];
+                                let page = 1;
+                                while (page <= $${MAX_CHAPTER_PAGES}) {
+                                    const response = await mangaApi.chapters(mangaId, {
+                                        page,
+                                        limit: 100,
+                                        order: { number: 'desc' }
+                                    });
+                                    const pageItems = response?.items;
+                                    if (!Array.isArray(pageItems) || pageItems.length === 0) break;
+
+                                    items.push(...pageItems);
+                                    if (pageItems.some(item => item.id === latestChapterId)) break;
+
+                                    const meta = response.meta || response.pagination || {};
+                                    const lastPage = meta.lastPage || meta.last_page || page;
+                                    if (!(meta.hasNext || page < lastPage)) break;
+                                    page++;
                                 }
-                                return true;
-                            } catch (e) {
-                                return false;
+                                window.__comixPassPayload(JSON.stringify(items));
+                            } catch (error) {
+                                window.__comixReject(error);
                             }
-                        };
-
-                        const originalParse = JSON.parse;
-                        const proxiedParse = new Proxy(originalParse, {
-                            apply(target, thisArg, args) {
-                                const parsed = Reflect.apply(target, thisArg, args);
-                                capture(parsed);
-                                return parsed;
-                            }
-                        });
-                        proxiedParse.__comixChapterCaptureInstalled = true;
-                        JSON.parse = proxiedParse;
-
-                        try {
-                            const raw = document.querySelector('script#initial-data')?.textContent;
-                            const queries = raw && originalParse(raw).queries;
-                            if (queries) Object.values(queries).some(capture);
-                        } catch (e) {}
+                        })();
                         return null;
                     })();
                 """.trimIndent()
@@ -824,9 +797,11 @@ abstract class Comix :
         val timeoutDeadline = AtomicLong(
             System.nanoTime() + WEBVIEW_TIMEOUT_SECONDS.seconds.inWholeNanoseconds,
         )
-        val bridgeName = (1..(10..20).random())
-            .map { (('a'..'z') + ('A'..'Z')).random() }
-            .joinToString("")
+        val (bridgeName, errorBridgeName) = List(2) {
+            (1..(10..20).random())
+                .map { (('a'..'z') + ('A'..'Z')).random() }
+                .joinToString("")
+        }
         val result = runWebView<String>(timeout = Duration.INFINITE) {
             userAgent = headers["User-Agent"].orEmpty()
             blockImages = true
@@ -852,6 +827,7 @@ abstract class Comix :
             }
 
             jsBridge(bridgeName) { resolve(it) }
+            jsBridge(errorBridgeName) { reject(Exception(it)) }
 
             val captureScript = buildScript()
             onPageStarted { evaluateJs(captureScript) }
@@ -887,6 +863,9 @@ abstract class Comix :
                             ? { sboxes, keys }
                             : null;
                         window.$bridgeName.post(JSON.stringify({ payload, material }));
+                    };
+                    window.__comixReject = function (error) {
+                        window.$errorBridgeName.post(String(error?.message || error));
                     };
                 })();
                 ${initializationScript.orEmpty()}
