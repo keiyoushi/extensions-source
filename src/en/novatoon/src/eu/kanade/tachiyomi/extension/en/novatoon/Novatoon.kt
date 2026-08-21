@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.en.novatoon
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -15,6 +16,7 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -54,7 +56,7 @@ abstract class Novatoon :
         page: Int,
         query: String,
         filters: FilterList,
-    ): MangasPage = fetchMangaList(searchUrl(page, query))
+    ): MangasPage = fetchMangaList(searchUrl(page, query, filters))
 
     private fun mangaListUrl(page: Int, order: String): HttpUrl = "$baseUrl/manga/".toHttpUrl().newBuilder()
         .addQueryParameter("order", order)
@@ -65,14 +67,41 @@ abstract class Novatoon :
         }
         .build()
 
-    private fun searchUrl(page: Int, query: String): HttpUrl = "$baseUrl/".toHttpUrl().newBuilder()
-        .addQueryParameter("s", query)
-        .apply {
-            if (page > 1) {
-                addPathSegments("page/$page/")
+    private fun searchUrl(page: Int, query: String, filters: FilterList): HttpUrl {
+        val builder = if (query.isBlank()) {
+            "$baseUrl/manga/".toHttpUrl().newBuilder()
+                .addFilterParams(filters)
+        } else {
+            "$baseUrl/".toHttpUrl().newBuilder()
+                .addQueryParameter("s", query)
+        }
+
+        if (page > 1) {
+            builder.addPathSegments("page/$page/")
+        }
+
+        return builder.build()
+    }
+
+    private fun HttpUrl.Builder.addFilterParams(filters: FilterList): HttpUrl.Builder = apply {
+        for (filter in filters) {
+            when (filter) {
+                is UriPartFilter -> filter.selected.takeIf { it.isNotEmpty() }?.let { addQueryParameter(filter.param, it) }
+                is GenreFilter -> filter.state.filter(GenreCheckBox::state).forEach { addQueryParameter("genre[]", it.value) }
+                else -> {}
             }
         }
-        .build()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        Filter.Header("NOTE: Ignored if using text search!"),
+        Filter.Separator(),
+        OrderFilter(),
+        StatusFilter(),
+        TypeFilter(),
+        Filter.Separator(),
+        GenreFilter(),
+    )
 
     private suspend fun fetchMangaList(url: HttpUrl): MangasPage {
         val response = client.get(url, ensureSuccess = false)
@@ -198,3 +227,79 @@ abstract class Novatoon :
         const val LOCK_ICON = "\uD83D\uDD12 "
     }
 }
+
+private open class UriPartFilter(
+    name: String,
+    val param: String,
+    private val parts: List<Pair<String, String>>,
+) : Filter.Select<String>(name, parts.map { it.first }.toTypedArray()) {
+    val selected: String get() = parts[state].second
+}
+
+private class OrderFilter :
+    UriPartFilter(
+        "Order",
+        "order",
+        listOf(
+            "Default" to "",
+            "A-Z" to "title",
+            "Z-A" to "titlereverse",
+            "Latest Update" to "update",
+            "Latest Added" to "latest",
+        ),
+    )
+
+private class StatusFilter :
+    UriPartFilter(
+        "Status",
+        "status",
+        listOf(
+            "All" to "",
+            "Ongoing" to "ongoing",
+            "Completed" to "completed",
+            "Hiatus" to "hiatus",
+        ),
+    )
+
+private class TypeFilter :
+    UriPartFilter(
+        "Type",
+        "type",
+        listOf(
+            "All" to "",
+            "Manga" to "manga",
+            "Manhwa" to "manhwa",
+            "Manhua" to "manhua",
+            "Comic" to "comic",
+            "Novel" to "novel",
+        ),
+    )
+
+private class GenreCheckBox(name: String, val value: String) : Filter.CheckBox(name)
+
+private class GenreFilter :
+    Filter.Group<GenreCheckBox>(
+        "Genre",
+        GENRES.map { GenreCheckBox(it.first, it.second) },
+    )
+
+private val GENRES = listOf(
+    "Action" to "action",
+    "Adventure" to "adventure",
+    "Comedy" to "comedy",
+    "Drama" to "drama",
+    "Fantasy" to "fantasy",
+    "Historical" to "historical",
+    "Horror" to "horror",
+    "Josei" to "josei",
+    "Martial Arts" to "martial-arts",
+    "Mecha" to "mecha",
+    "Psychological" to "psychological",
+    "Romance" to "romance",
+    "School Life" to "school-life",
+    "Seinen" to "seinen",
+    "Shounen" to "shounen",
+    "Slice of Life" to "slice-of-life",
+    "Supernatural" to "supernatural",
+    "Tragedy" to "tragedy",
+)
