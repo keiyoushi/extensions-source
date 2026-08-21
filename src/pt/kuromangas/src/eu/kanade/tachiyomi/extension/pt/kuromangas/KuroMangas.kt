@@ -206,7 +206,7 @@ abstract class KuroMangas :
     // ============================= Auth ===================================
 
     private fun checkLogin(): Boolean {
-        if (client.getCookie(baseUrl, SESSION_COOKIE) != null) return true
+        if (hasSession()) return true
 
         val email = preferences.getString(PREF_EMAIL, "") ?: ""
         val password = preferences.getString(PREF_PASSWORD, "") ?: ""
@@ -215,10 +215,13 @@ abstract class KuroMangas :
         }
         login(email, password)
 
-        return client.getCookie(baseUrl, SESSION_COOKIE) != null
+        return hasSession()
     }
 
-    // Implicit set-cookie: kuro_session + kuro_x
+    // The site rejects requests carrying a session without its matching nonce.
+    private fun hasSession(): Boolean = client.getCookie(baseUrl, SESSION_COOKIE) != null && client.getCookie(baseUrl, NONCE_COOKIE) != null
+
+    // Implicit set-cookie: kuro_session + _kn
     private fun login(email: String, password: String) {
         val payload = buildJsonObject {
             put("email", email)
