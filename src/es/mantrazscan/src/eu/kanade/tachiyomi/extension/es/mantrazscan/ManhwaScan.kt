@@ -12,27 +12,19 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 
 @Source
 abstract class ManhwaScan : KeiSource() {
 
-    override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor { chain ->
-            chain.proceed(
-                chain.request().newBuilder()
-                    .header("Referer", "$baseUrl/")
-                    .header("User-Agent", "Mozilla/5.0")
-                    .header(
-                        "Accept",
-                        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    )
-                    .build(),
-            )
-        }
+    override fun Headers.Builder.configureHeaders() = apply {
+        add(
+            "Accept",
+            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        )
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page)
@@ -114,77 +106,82 @@ abstract class ManhwaScan : KeiSource() {
     }
 
     private fun parseMangaPage(document: Document, page: Int): MangasPage {
-        val html = document.html()
+        val mangas = document.select("div.s-card")
+            .mapNotNull { element ->
+                val url = element.selectFirst("a.s-card-imglink")
+                    ?.attr("href")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
 
-        val cardRegex = Regex(
-            """<div class="s-card">.*?<a class="s-card-imglink" href="([^"]+)">.*?<img src="([^"]+)".*?<a class="s-card-title" href="[^"]+">([^<]+)""",
-            setOf(RegexOption.DOT_MATCHES_ALL),
-        )
+                val title = element.selectFirst("a.s-card-title")
+                    ?.text()
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
 
-        val mangas = cardRegex.findAll(html)
-            .map { match ->
                 SManga.create().apply {
-                    setUrlWithoutDomain(match.groupValues[1])
-                    thumbnail_url = match.groupValues[2]
-                    title = match.groupValues[3].trim()
+                    setUrlWithoutDomain(url)
+                    this.title = title
+                    thumbnail_url = element.selectFirst("img")
+                        ?.absUrl("src")
+                        ?.ifBlank {
+                            element.selectFirst("img")?.attr("src")
+                        }
                 }
             }
             .distinctBy { it.url }
-            .toList()
 
         return MangasPage(
             mangas = mangas,
-            hasNextPage = html.contains("/explorar/page/${page + 1}/"),
+            hasNextPage = document.selectFirst(
+                "a[href*=\"/explorar/page/${page + 1}/\"]",
+            ) != null,
         )
     }
 
-    private fun parseMangaDetails(document: Document): SManga {
-        val html = document.html()
+    private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h1")
+            ?.text()
+            ?.trim()
+            .orEmpty()
 
-        return SManga.create().apply {
-            title = Regex("""<h1[^>]*>([^<]+)</h1>""")
-                .find(html)?.groupValues?.get(1)?.trim().orEmpty()
+        thumbnail_url = document.selectFirst(".series-cover img")
+            ?.absUrl("src")
+            ?.ifBlank {
+                document.selectFirst(".series-cover img")?.attr("src")
+            }
 
-            thumbnail_url = Regex(
-                """class="series-cover".*?<img src="([^"]+)"""",
-                setOf(RegexOption.DOT_MATCHES_ALL),
-            ).find(html)?.groupValues?.get(1)
+        genre = document.select("a.genre-tag")
+            .map { it.text().trim() }
+            .filter { it.isNotBlank() }
+            .joinToString(", ")
 
-            genre = Regex(
-                """<a class="genre-tag"[^>]*>(.*?)</a>""",
-            )
-                .findAll(html)
-                .map { it.groupValues[1].replace(Regex("<[^>]+>"), "").trim() }
-                .filter { it.isNotBlank() }
-                .joinToString(", ")
-
-            description = Regex(
-                """class="series-desc[^"]*".*?>(.*?)</div>""",
-                setOf(RegexOption.DOT_MATCHES_ALL),
-            ).find(html)?.groupValues?.get(1)
-                ?.replace(Regex("""<[^>]+>"""), "")
-                ?.trim()
-        }
+        description = document.selectFirst(".series-desc")
+            ?.text()
+            ?.trim()
     }
 
     private fun parseChapterList(document: Document): List<SChapter> {
-        val html = document.html()
+        return document.select("a.ch-row")
+            .mapNotNull { element ->
+                val url = element.attr("href")
+                    .takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
 
-        val chapterRegex = Regex(
-            """<a class="ch-row"[^>]* href="(/manga/[^"]+/capitulo-([0-9]+(?:\.[0-9]+)?)/?)"""",
-        )
+                val number = Regex("""capitulo-([0-9]+(?:\.[0-9]+)?)""")
+                    .find(url)
+                    ?.groupValues
+                    ?.get(1)
+                    ?: return@mapNotNull null
 
-        return chapterRegex.findAll(html)
-            .map { match ->
                 SChapter.create().apply {
-                    setUrlWithoutDomain(match.groupValues[1])
-                    name = "Capítulo ${match.groupValues[2]}"
-                    chapter_number = match.groupValues[2].toFloatOrNull() ?: -1f
+                    setUrlWithoutDomain(url)
+                    name = "Capítulo $number"
+                    chapter_number = number.toFloatOrNull() ?: -1f
                 }
             }
             .distinctBy { it.url }
             .sortedByDescending { it.chapter_number }
-            .toList()
     }
 
     private class GenreFilter :
