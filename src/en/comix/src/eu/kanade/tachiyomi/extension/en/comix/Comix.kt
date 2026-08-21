@@ -41,6 +41,8 @@ import okhttp3.Request
 import okio.Buffer
 import org.json.JSONObject
 import org.jsoup.nodes.Document
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -819,10 +821,13 @@ abstract class Comix :
         initializationScript: String? = null,
         buildScript: () -> String,
     ): String {
+        val timeoutDeadline = AtomicLong(
+            System.nanoTime() + WEBVIEW_TIMEOUT_SECONDS.seconds.inWholeNanoseconds,
+        )
         val bridgeName = (1..(10..20).random())
             .map { (('a'..'z') + ('A'..'Z')).random() }
             .joinToString("")
-        val result = runWebView(timeout = WEBVIEW_TIMEOUT_SECONDS.seconds) {
+        val result = runWebView<String>(timeout = Duration.INFINITE) {
             userAgent = headers["User-Agent"].orEmpty()
             blockImages = true
 
@@ -831,6 +836,11 @@ abstract class Comix :
                 val requestUrl = request.url?.toString()?.toHttpUrlOrNull()
                     ?: return@interceptRequest emptyResponse
                 val sourceHost = baseUrl.toHttpUrl().host
+                if (requestUrl.isChapterListRequest()) {
+                    timeoutDeadline.set(
+                        System.nanoTime() + WEBVIEW_TIMEOUT_SECONDS.seconds.inWholeNanoseconds,
+                    )
+                }
                 val allowed = requestUrl.host == sourceHost ||
                     requestUrl.host.endsWith(".$sourceHost") ||
                     requestUrl.host == "comix.to" ||
@@ -847,7 +857,13 @@ abstract class Comix :
             onPageStarted { evaluateJs(captureScript) }
             onPageFinished { evaluateJs(captureScript) }
             poll(SCRIPT_RETRY_INTERVAL_MS.milliseconds) {
-                evaluateJs(captureScript)
+                if (
+                    System.nanoTime() >= timeoutDeadline.get()
+                ) {
+                    reject(Exception("Timed out waiting for WebView"))
+                } else {
+                    evaluateJs(captureScript)
+                }
             }
 
             val bootstrapScript = """
@@ -886,6 +902,12 @@ abstract class Comix :
         }
         return result.payload
     }
+
+    private fun HttpUrl.isChapterListRequest(): Boolean = pathSegments.size == 5 &&
+        pathSegments[0] == "api" &&
+        pathSegments[1] == "v1" &&
+        pathSegments[2] == "manga" &&
+        pathSegments[4] == "chapters"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
