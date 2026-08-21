@@ -138,7 +138,7 @@ abstract class Comix :
                     localStorage.setItem(key, JSON.stringify(settings));
                 })();
             """.trimIndent(),
-            buildScript = {
+            buildScript = { passPayloadName, _ ->
                 """
                     (function () {
                         const payloadKey = '__comixBrowsePayload';
@@ -155,7 +155,7 @@ abstract class Comix :
                                     (allowEmpty || parsed.result.items.length > 0)
                                 ) {
                                     window[payloadKey] = JSON.stringify(parsed);
-                                    window.__comixPassPayload(window[payloadKey]);
+                                    window.$passPayloadName(window[payloadKey]);
                                     return true;
                                 }
                             } catch (e) {}
@@ -489,7 +489,7 @@ abstract class Comix :
         if (mainScriptUrl.isNotEmpty()) mainScript?.remove()
         val payload = runInWebView(
             document = webViewDocument,
-            buildScript = {
+            buildScript = { passPayloadName, rejectName ->
                 $$"""
                     (function () {
                         const payloadKey = '__comixChapterPayload';
@@ -540,9 +540,9 @@ abstract class Comix :
                                     if (!(meta.hasNext || page < lastPage)) break;
                                     page++;
                                 }
-                                window.__comixPassPayload(JSON.stringify(items));
+                                window.$${passPayloadName}(JSON.stringify(items));
                             } catch (error) {
-                                window.__comixReject(error);
+                                window.$${rejectName}(error);
                             }
                         })();
                         return null;
@@ -667,7 +667,7 @@ abstract class Comix :
         val document = client.get(getChapterUrl(chapter)).asJsoup()
         val payload = runInWebView(
             document = document,
-            buildScript = {
+            buildScript = { passPayloadName, _ ->
                 """
                 (function () {
                     const payloadKey = '__comixPagePayload';
@@ -675,7 +675,7 @@ abstract class Comix :
                         try {
                             if (parsed && parsed.result && parsed.result.pages) {
                                 window[payloadKey] = JSON.stringify(parsed);
-                                window.__comixPassPayload(window[payloadKey]);
+                                window.$passPayloadName(window[payloadKey]);
                                 return true;
                             }
                         } catch (e) {}
@@ -804,12 +804,12 @@ abstract class Comix :
     private suspend fun runInWebView(
         document: Document,
         initializationScript: String? = null,
-        buildScript: () -> String,
+        buildScript: (passPayloadName: String, rejectName: String) -> String,
     ): String {
         val timeoutDeadline = AtomicLong(
             System.nanoTime() + WEBVIEW_TIMEOUT_SECONDS.seconds.inWholeNanoseconds,
         )
-        val (bridgeName, errorBridgeName) = List(2) {
+        val (bridgeName, errorBridgeName, passPayloadName, rejectName) = List(4) {
             (1..(10..20).random())
                 .map { (('a'..'z') + ('A'..'Z')).random() }
                 .joinToString("")
@@ -841,7 +841,7 @@ abstract class Comix :
             jsBridge(bridgeName) { resolve(it) }
             jsBridge(errorBridgeName) { reject(Exception(it)) }
 
-            val captureScript = buildScript()
+            val captureScript = buildScript(passPayloadName, rejectName)
             onPageStarted { evaluateJs(captureScript) }
             onPageFinished { evaluateJs(captureScript) }
             poll(SCRIPT_RETRY_INTERVAL_MS.milliseconds) {
@@ -868,7 +868,7 @@ abstract class Comix :
                         } catch (e) {}
                         return decoded;
                     };
-                    window.__comixPassPayload = function (payload) {
+                    window.$passPayloadName = function (payload) {
                         const sboxes = captures.filter(item => item.length === 256).slice(0, 3);
                         const keys = captures.filter(item => item.length === 24 || item.length === 32).slice(0, 3);
                         const material = sboxes.length === 3 && keys.length === 3
@@ -876,7 +876,7 @@ abstract class Comix :
                             : null;
                         window.$bridgeName.post(JSON.stringify({ payload, material }));
                     };
-                    window.__comixReject = function (error) {
+                    window.$rejectName = function (error) {
                         window.$errorBridgeName.post(String(error?.message || error));
                     };
                 })();
