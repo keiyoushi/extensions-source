@@ -11,15 +11,15 @@ import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okio.ByteString.Companion.toByteString
 
@@ -30,7 +30,6 @@ abstract class Mangamelon : KeiSource() {
         const val API_BASE = "https://api.mangamelon.com"
         const val PAGE_SIZE = 36
         const val CHAPTER_LIMIT = 1000
-        val FORM_MEDIA_TYPE = "application/x-www-form-urlencoded".toMediaType()
 
         // Request bodies must include default-valued fields (e.g. includeNsfw), or the
         // server falls back to its own defaults and hides NSFW content.
@@ -78,18 +77,14 @@ abstract class Mangamelon : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val mangaId = manga.url
-        return when {
-            fetchDetails && fetchChapters -> coroutineScope {
-                val details = async { fetchMangaDetails(mangaId) }
-                val chapterList = async { fetchChapters(mangaId) }
-                SMangaUpdate(details.await(), chapterList.await())
-            }
-            fetchDetails -> SMangaUpdate(fetchMangaDetails(mangaId), emptyList())
-            fetchChapters -> SMangaUpdate(manga, fetchChapters(mangaId))
-            else -> SMangaUpdate(manga, emptyList())
+    ): SMangaUpdate = coroutineScope {
+        val details = async {
+            if (fetchDetails) fetchMangaDetails(manga.url) else manga
         }
+        val chapterList = async {
+            if (fetchChapters) fetchChapters(manga.url) else chapters
+        }
+        SMangaUpdate(details.await(), chapterList.await())
     }
 
     private suspend fun fetchMangaDetails(mangaId: String): SManga {
@@ -116,8 +111,7 @@ abstract class Mangamelon : KeiSource() {
     // ================================ Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterId = chapter.url.substringAfterLast('/')
-        val response = api("api/chapter/get", ChapterGetRequest(target = chapterId)).parseAs<ChapterGetResponse>()
+        val response = api("api/chapter/get", ChapterGetRequest(target = chapter.url)).parseAs<ChapterGetResponse>()
         return response.chapter.pages
             .sortedBy { it.seq }
             .mapIndexed { index, page -> Page(index, imageUrl = page.url) }
@@ -138,7 +132,9 @@ abstract class Mangamelon : KeiSource() {
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
 
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/chapter/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/chapter/${chapter.mangaId()}/${chapter.url}"
+
+    private fun SChapter.mangaId(): String? = memo[MANGA_ID_MEMO]?.string
 
     // ================================ Filters ================================
 
@@ -148,7 +144,10 @@ abstract class Mangamelon : KeiSource() {
 
     private suspend inline fun <reified T> api(path: String, body: T): Response {
         val data = body.toJsonString(requestJson).toByteArray().toByteString().base64()
-        val formBody = "data=$data&sessionid=".toRequestBody(FORM_MEDIA_TYPE)
+        val formBody = FormBody.Builder()
+            .add("data", data)
+            .add("sessionid", "")
+            .build()
         return client.post("$API_BASE/$path", formBody)
     }
 }

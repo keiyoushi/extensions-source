@@ -4,7 +4,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.time.Instant
+
+// Chapter URLs only carry the chapter id; the manga id is kept in the chapter memo.
+const val MANGA_ID_MEMO = "mangaId"
 
 // ================================ Requests ================================
 
@@ -95,8 +100,10 @@ class ChapterDto(
 ) {
     fun toSChapter(mangaId: String): SChapter = SChapter.create().apply {
         name = this@ChapterDto.title
-        url = "$mangaId/${this@ChapterDto.id}"
-        date_upload = this@ChapterDto.updated.takeUnless { it.isNullOrEmpty() || it.startsWith("0001-") }
+        url = this@ChapterDto.id
+        memo = buildJsonObject { put(MANGA_ID_MEMO, mangaId) }
+        date_upload = this@ChapterDto.updated
+            ?.takeUnless { it.startsWith("0001-") }
             ?.let { Instant.tryParse(it) }
             ?: 0L
     }
