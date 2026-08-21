@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
+import fcntl
 import hashlib
 import json
 import os
@@ -15,8 +17,10 @@ from pathlib import Path
 from typing import Any
 
 
-LEGACY_LIBRARIES = frozenset({"1.4", "1.5"})
+LEGACY_LIBRARIES = frozenset({"1.4"})
 MODULE_PATTERN = re.compile(r"^[a-z0-9]+(?:\.[a-z0-9]+)+$")
+AT_FDCWD = -100
+RENAME_EXCHANGE = 0x2
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -36,7 +40,7 @@ def required_string(metadata: dict[str, Any], field: str, source: Path) -> str:
 
 def required_integer(metadata: dict[str, Any], field: str, source: Path) -> int:
     value = metadata.get(field)
-    if not isinstance(value, int):
+    if type(value) is not int:
         raise ValueError(f"{source}: {field} must be an integer")
     return value
 
@@ -58,8 +62,12 @@ def load_extension(metadata_path: Path, source_root: Path) -> tuple[dict[str, An
     if not MODULE_PATTERN.fullmatch(module):
         raise ValueError(f"{metadata_path}: module {module!r} is invalid")
     package_name = required_string(metadata, "packageName", metadata_path)
+    if package_name != f"eu.kanade.tachiyomi.extension.{module}":
+        raise ValueError(f"{metadata_path}: packageName must match module")
     name = required_string(metadata, "name", metadata_path)
     version_name = required_string(metadata, "versionName", metadata_path)
+    if "/" in version_name or "\\" in version_name:
+        raise ValueError(f"{metadata_path}: versionName must not contain a path separator")
     version_code = required_integer(metadata, "versionCode", metadata_path)
     content_warning = required_integer(metadata, "contentWarning", metadata_path)
     sources = metadata.get("sources")
@@ -71,7 +79,7 @@ def load_extension(metadata_path: Path, source_root: Path) -> tuple[dict[str, An
         if not isinstance(source, dict):
             raise ValueError(f"{metadata_path}: sources[{position}] must be an object")
         source_id = source.get("id")
-        if not isinstance(source_id, int):
+        if type(source_id) is not int:
             raise ValueError(f"{metadata_path}: sources[{position}].id must be an integer")
         legacy_sources.append(
             {
@@ -83,28 +91,32 @@ def load_extension(metadata_path: Path, source_root: Path) -> tuple[dict[str, An
         )
 
     apk_directory = metadata_path.parent / "outputs" / "apk" / "release"
-    apks = sorted(apk_directory.glob("*.apk"))
-    if len(apks) != 1:
-        raise ValueError(f"{metadata_path}: expected one release APK in {apk_directory}, found {len(apks)}")
+    apk_name = f"tachiyomi-{module}-v{version_name}.apk"
+    apk = apk_directory / apk_name
+    if not apk.is_file():
+        raise ValueError(f"{metadata_path}: expected release APK {apk_name}")
 
     module_path = Path(*module.split("."))
     icon = source_root / "src" / module_path / "res" / "mipmap-xhdpi" / "ic_launcher.png"
+    theme = metadata.get("theme")
+    if not icon.is_file() and theme is not None:
+        if not isinstance(theme, str) or not theme or "/" in theme or "\\" in theme:
+            raise ValueError(f"{metadata_path}: theme must be a simple non-empty string or null")
+        icon = source_root / "lib-multisrc" / theme / "res" / "mipmap-xhdpi" / "ic_launcher.png"
     if not icon.is_file():
         icon = source_root / "core" / "src" / "main" / "res" / "mipmap-xhdpi" / "ic_launcher.png"
-    if not icon.is_file():
-        raise ValueError(f"{metadata_path}: no icon found for {module}")
 
     legacy_entry = {
         "name": f"Tachiyomi: {name}",
         "pkg": package_name,
-        "apk": apks[0].name,
+        "apk": apk.name,
         "lang": module.split(".", maxsplit=1)[0],
         "code": version_code,
         "version": version_name,
         "nsfw": int(content_warning > 1),
         "sources": legacy_sources,
     }
-    return legacy_entry, apks[0], icon
+    return legacy_entry, apk, icon
 
 
 def sha256(path: Path) -> str:
@@ -113,6 +125,33 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: file.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+def replace_output_directory(staging: Path, output: Path, backup: Path) -> None:
+    lock_path = output.with_name(f".{output.name}.lock")
+    with lock_path.open("w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        if not output.exists():
+            os.replace(staging, output)
+            return
+
+        if backup.exists():
+            shutil.rmtree(backup)
+
+        libc = ctypes.CDLL(None, use_errno=True)
+        renameat2 = getattr(libc, "renameat2", None)
+        if renameat2 is None:
+            raise OSError("atomic directory replacement requires libc renameat2")
+        renameat2.argtypes = (ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
+        renameat2.restype = ctypes.c_int
+        if renameat2(AT_FDCWD, os.fsencode(staging), AT_FDCWD, os.fsencode(output), RENAME_EXCHANGE) != 0:
+            error = ctypes.get_errno()
+            raise OSError(error, os.strerror(error), output)
+
+        try:
+            os.replace(staging, backup)
+        except OSError:
+            # The exchange already published output. Keep the prior output in staging.
+            pass
 
 
 def build_repository(output: Path, source_root: Path, metadata_paths: list[Path]) -> int:
@@ -156,17 +195,10 @@ def build_repository(output: Path, source_root: Path, metadata_paths: list[Path]
             encoding="utf-8",
         )
 
-        if backup.exists():
-            shutil.rmtree(backup)
-        if output.exists():
-            os.replace(output, backup)
-        os.replace(staging, output)
-        if backup.exists():
-            shutil.rmtree(backup)
+        replace_output_directory(staging, output, backup)
     except Exception:
-        shutil.rmtree(staging, ignore_errors=True)
-        if backup.exists() and not output.exists():
-            os.replace(backup, output)
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
         raise
 
     print(f"Generated {len(extensions)} legacy extension entries in {output}")
@@ -177,7 +209,7 @@ def main() -> int:
     arguments = parse_arguments()
     try:
         return build_repository(arguments.output, arguments.source_root.resolve(), arguments.metadata)
-    except ValueError as error:
+    except (OSError, ValueError) as error:
         print(error, file=sys.stderr)
         return 1
 

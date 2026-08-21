@@ -1,0 +1,66 @@
+name: Publish Tachiyomi 0.15.x catalog
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/legacy-015x-pages.yml
+      - gradle/**
+      - gradle.properties
+      - legacy-modules.txt
+      - scripts/build_legacy_repo.py
+      - scripts/list_legacy_modules.py
+      - settings.gradle.kts
+      - src/**
+  schedule:
+    - cron: "27 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  pages: write
+
+concurrency:
+  group: legacy-015x-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Build verified legacy extensions
+        run: |
+          mapfile -t tasks < <(python scripts/list_legacy_modules.py --source-root .)
+          ./gradlew "${tasks[@]}"
+
+      - name: Build static catalog
+        run: |
+          metadata=()
+          while IFS= read -r task; do
+            module="${task#:src:}"
+            module="${module%:assembleRelease}"
+            metadata+=("src/${module//:/\/}/build/keiyoushi-source-info.json")
+          done < <(python scripts/list_legacy_modules.py --source-root .)
+          python scripts/build_legacy_repo.py --source-root . --output public "${metadata[@]}"
+
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        with:
+          path: public
+
+      - id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

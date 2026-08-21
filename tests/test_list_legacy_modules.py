@@ -20,12 +20,16 @@ class ListLegacyModulesTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def test_lists_only_extensions_in_legacy_library_band(self) -> None:
+    def write_selection(self, source_root: Path, *modules: str) -> None:
+        (source_root / "legacy-modules.txt").write_text("\n".join(modules) + "\n", encoding="utf-8")
+
+    def test_lists_only_verified_runtime_checked_modules(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             source_root = Path(temporary_directory)
             self.write_module(source_root, "en", "legacy", "1.4")
-            self.write_module(source_root, "all", "shared", "1.5")
-            self.write_module(source_root, "en", "modern", "1.6")
+            self.write_module(source_root, "all", "unverified", "1.4")
+            self.write_module(source_root, "all", "unsupported", "1.5")
+            self.write_selection(source_root, "en/legacy")
 
             result = subprocess.run(
                 [sys.executable, str(SELECTOR), "--source-root", str(source_root)],
@@ -37,11 +41,69 @@ class ListLegacyModulesTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(
                 result.stdout.splitlines(),
-                [
-                    ":src:all:shared:assembleRelease",
-                    ":src:en:legacy:assembleRelease",
-                ],
+                [":src:en:legacy:assembleRelease"],
             )
+
+    def test_rejects_verified_module_without_legacy_library(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            source_root = Path(temporary_directory)
+            self.write_module(source_root, "all", "unsupported", "1.5")
+            self.write_selection(source_root, "all/unsupported")
+
+            result = subprocess.run(
+                [sys.executable, str(SELECTOR), "--source-root", str(source_root)],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("extension library 1.4", result.stderr)
+
+    def test_rejects_missing_module_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            source_root = Path(temporary_directory)
+
+            result = subprocess.run(
+                [sys.executable, str(SELECTOR), "--source-root", str(source_root)],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing verified legacy module list", result.stderr)
+
+    def test_rejects_malformed_module_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            source_root = Path(temporary_directory)
+            self.write_selection(source_root, "en/not-valid")
+
+            result = subprocess.run(
+                [sys.executable, str(SELECTOR), "--source-root", str(source_root)],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("invalid legacy module", result.stderr)
+
+    def test_rejects_duplicate_module_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            source_root = Path(temporary_directory)
+            self.write_module(source_root, "en", "legacy", "1.4")
+            self.write_selection(source_root, "en/legacy", "en/legacy")
+
+            result = subprocess.run(
+                [sys.executable, str(SELECTOR), "--source-root", str(source_root)],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("duplicate module", result.stderr)
 
 
 if __name__ == "__main__":

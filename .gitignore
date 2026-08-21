@@ -7,8 +7,10 @@ build/
 .idea/
 *.iml
 repo/
+.repo.*
 apk/
 gen
 generated-src/
 .kotlin
 *.jks
+__pycache__/

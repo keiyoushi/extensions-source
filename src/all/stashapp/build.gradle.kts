@@ -17,3 +17,19 @@ keiyoushi {
         }
     }
 }
+
+android {
+    sourceSets.named("test") {
+        java.directories.add("test")
+        kotlin.directories.add("test")
+    }
+}
+
+dependencies {
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlin.stdlib)
+}
+
+tasks.matching { it.name == "kspDebugUnitTestKotlin" }.configureEach {
+    enabled = false
+}

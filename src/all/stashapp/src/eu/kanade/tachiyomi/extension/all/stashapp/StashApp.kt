@@ -19,7 +19,12 @@ import keiyoushi.utils.parseGraphQLAs
 import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
-import kotlin.time.Instant
+import java.time.Instant
+
+fun parseRFC3339Millis(value: String): Long {
+    // ISO 8601 covers RFC3339.
+    return runCatching { Instant.parse(value).toEpochMilli() }.getOrDefault(0L)
+}
 
 @Source
 abstract class StashApp :
@@ -180,10 +185,5 @@ abstract class StashApp :
             mangas = mangas,
             hasNextPage = mangas.size >= MANGA_BRIEF_PER_PAGE,
         )
-    }
-
-    private fun parseRFC3339Millis(value: String): Long {
-        // ISO 8601 covers RFC3339
-        return Instant.parseOrNull(value)?.toEpochMilliseconds() ?: 0L
     }
 }

@@ -4,6 +4,7 @@ coroutines = "1.7.3"
 serialization = "1.6.2"
 junit = "4.13.2"
 kotlin-gradle = "2.4.10"
+kotlin-runtime = "1.9.22"
 ksp = "2.3.9"
 kotlinpoet = "2.3.0"
 ktlint = "1.8.0"
@@ -31,7 +32,7 @@ jsoup = { module = "org.jsoup:jsoup", version = "1.22.2" }
 kotlin-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 kotlin-protobuf = { module = "org.jetbrains.kotlinx:kotlinx-serialization-protobuf", version.ref = "serialization" }
 kotlin-json-okio = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json-okio", version.ref = "serialization" }
-kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib-jdk8", version.ref = "kotlin-gradle" }
+kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib-jdk8", version.ref = "kotlin-runtime" }
 okhttp-core = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 okhttp-brotli = { module = "com.squareup.okhttp3:okhttp-brotli", version.ref = "okhttp" }
 okhttp-zstd = { module = "com.squareup.okhttp3:okhttp-zstd", version.ref = "okhttp" }
