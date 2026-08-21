@@ -1,91 +1,163 @@
 package eu.kanade.tachiyomi.extension.id.mikoroku
 
-import eu.kanade.tachiyomi.multisrc.zeistmanga.Genre
-import eu.kanade.tachiyomi.multisrc.zeistmanga.Status
-import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import okhttp3.Response
+import keiyoushi.network.get
+import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 
 @Source
-abstract class MikoRoku : ZeistManga() {
+abstract class MikoRoku : KeiSource() {
 
-    override fun popularMangaRequest(page: Int) = latestUpdatesRequest(page)
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(4) {
+        it.host == MANGA_FEED_HOST || it.host == CHAPTER_FEED_HOST
+    }
 
-    override val hasFilters = true
-    override val hasLanguageFilter = false
-    override val hasTypeFilter = false
+    override suspend fun getPopularManga(page: Int): MangasPage = getMangaPage(page)
 
-    override fun getStatusList() = listOf(
-        Status("Semua", ""),
-        Status("Ongoing", "Ongoing"),
-        Status("Completed", "Completed"),
-        Status("Hiatus", "Hiatus"),
-        Status("Dropped", "Dropped"),
-    )
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaPage(page)
 
-    override fun getGenreList() = listOf(
-        Genre("Action", "Action"),
-        Genre("Adventure", "Adventure"),
-        Genre("Comedy", "Comedy"),
-        Genre("Dark Fantasy", "Dark Fantasy"),
-        Genre("Drama", "Drama"),
-        Genre("Fantasy", "Fantasy"),
-        Genre("Historical", "Historical"),
-        Genre("Horror", "Horror"),
-        Genre("Isekai", "Isekai"),
-        Genre("Magic", "Magic"),
-        Genre("Mecha", "Mecha"),
-        Genre("Military", "Military"),
-        Genre("Mystery", "Mystery"),
-        Genre("Psychological", "Psychological"),
-        Genre("Romance", "Romance"),
-        Genre("School Life", "School Life"),
-        Genre("Sci-Fi", "Sci-Fi"),
-        Genre("Seinen", "Seinen"),
-        Genre("Shounen", "Shounen"),
-        Genre("Slice of Life", "Slice of Life"),
-        Genre("Supernatural", "Supernatural"),
-        Genre("Survival", "Survival"),
-        Genre("Tragedy", "Tragedy"),
-    )
+    override suspend fun getSearchMangaList(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): MangasPage = getMangaPage(page, query.takeIf(String::isNotEmpty))
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        val header = document.selectFirst("header[itemprop=mainEntity]")
-            ?: document.selectFirst("header.bg-white")!!
+    private suspend fun getMangaPage(page: Int, query: String? = null): MangasPage {
+        val startIndex = (page - 1) * MANGA_PAGE_SIZE + 1
+        val response = client.get(
+            feedUrl(
+                MANGA_FEED_URL,
+                startIndex = startIndex,
+                maxResults = MANGA_PAGE_SIZE,
+                query = query,
+            ),
+        ).parseAs<BloggerFeedResponse>()
+        val mangas = response.feed.entry.map { it.toSManga() }
+        val hasNextPage = response.feed.entry.size == MANGA_PAGE_SIZE
 
-        return SManga.create().apply {
-            thumbnail_url = header.selectFirst("img.thumb")?.attr("abs:src")
-            title = header.selectFirst("h1[itemprop=name]")?.text()!!
-            status = parseStatus(header.selectFirst("span[data-status]")?.text()!!)
-            description = document.selectFirst("#synopsis")?.ownText()?.trim()
-            author = document.select("#extra-info .y6x11p")
-                .firstOrNull { it.ownText().contains("Author", ignoreCase = true) }
-                ?.selectFirst("span.dt")?.text()
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.pathSegments.lastOrNull() !in setOf("detail", "detail.html")) return null
+
+        val slug = url.queryParameter("slug")?.takeIf(String::isNotEmpty) ?: return null
+        return getMangaEntry(slug.replace('-', ' '), slug)?.toSMangaDetails(slug)
+    }
+
+    override fun getMangaUrl(manga: SManga): String = baseUrl.toHttpUrl().newBuilder()
+        .addPathSegment("detail")
+        .addQueryParameter("slug", manga.url)
+        .build()
+        .toString()
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val mangaAsync = async {
+            if (fetchDetails) {
+                getMangaEntry(manga.title, manga.url)?.toSMangaDetails(manga.url)
+                    ?: throw Exception("Manga not found: ${manga.title}")
+            } else {
+                manga
+            }
+        }
+
+        val chaptersAsync = async {
+            if (fetchChapters) {
+                getChapterList(manga.title)
+            } else {
+                chapters
+            }
+        }
+
+        SMangaUpdate(mangaAsync.await(), chaptersAsync.await())
+    }
+
+    private suspend fun getMangaEntry(title: String, slug: String): BloggerEntry? {
+        val response = client.get(
+            feedUrl(
+                MANGA_FEED_URL,
+                startIndex = 1,
+                maxResults = DETAIL_SEARCH_SIZE,
+                query = title,
+            ),
+        ).parseAs<BloggerFeedResponse>()
+
+        return response.feed.entry.firstOrNull { it.slug == slug }
+    }
+
+    private suspend fun getChapterList(mangaTitle: String): List<SChapter> {
+        val response = client.get(
+            feedUrl(
+                CHAPTER_FEED_URL,
+                startIndex = 1,
+                maxResults = MAX_CHAPTER_RESULTS,
+                query = mangaTitle,
+            ),
+        ).parseAs<BloggerFeedResponse>()
+
+        return response.feed.entry
+            .filter { entry -> entry.isChapterFor(mangaTitle) }
+            .mapNotNull { entry -> entry.toSChapter() }
+            .distinctBy { chapter -> chapter.chapter_number }
+            .sortedByDescending { chapter -> chapter.chapter_number }
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String = CHAPTER_WEB_URL.toHttpUrl().resolve(chapter.url.substringBefore('#'))!!.toString()
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val postId = chapter.url.substringAfterLast('#').takeIf(String::isNotEmpty)
+            ?: return emptyList()
+        val url = "$CHAPTER_FEED_URL/$postId".toHttpUrl().newBuilder()
+            .addQueryParameter("alt", "json")
+            .build()
+        val entry = client.get(url).parseAs<BloggerEntryResponse>().entry
+
+        return entry.pageUrls().mapIndexed { index, imageUrl ->
+            Page(index, imageUrl = imageUrl)
         }
     }
 
-    override val chapterCategory: String = "Chapter"
-
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val images = when {
-            document.selectFirst("div.check-box") != null ->
-                document.select("div.check-box div.separator img[src]")
-            document.selectFirst("div[data=imageProtection]") != null ->
-                document.select("div[data=imageProtection] div.separator img[src]")
-            document.selectFirst("#post-body div.separator") != null ->
-                document.select("#post-body div.separator img[src]")
-            else ->
-                document.select(".post-body div.separator img[src]")
+    private fun feedUrl(
+        endpoint: String,
+        startIndex: Int,
+        maxResults: Int,
+        query: String?,
+    ): HttpUrl = endpoint.toHttpUrl().newBuilder()
+        .addQueryParameter("alt", "json")
+        .addQueryParameter("orderby", "updated")
+        .addQueryParameter("start-index", startIndex.toString())
+        .addQueryParameter("max-results", maxResults.toString())
+        .apply {
+            query?.let { addQueryParameter("q", it) }
         }
+        .build()
 
-        return images.mapIndexed { index, img ->
-            Page(index, imageUrl = img.attr("abs:src"))
-        }
+    companion object {
+        private const val MANGA_FEED_HOST = "www.mikoroku.top"
+        private const val CHAPTER_FEED_HOST = "www.mikodrive.my.id"
+        private const val MANGA_FEED_URL = "https://$MANGA_FEED_HOST/feeds/posts/default"
+        private const val CHAPTER_FEED_URL = "https://$CHAPTER_FEED_HOST/feeds/posts/default"
+        private const val CHAPTER_WEB_URL = "https://$CHAPTER_FEED_HOST/"
+        private const val MANGA_PAGE_SIZE = 20
+        private const val DETAIL_SEARCH_SIZE = 20
+        private const val MAX_CHAPTER_RESULTS = 500
     }
 }
