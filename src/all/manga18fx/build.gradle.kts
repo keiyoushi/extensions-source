@@ -10,9 +10,12 @@ keiyoushi {
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
-    source {
-        lang = "en"
-        baseUrl = "https://manga18fx.com"
-        id = 3157287889751723714L
+    listOf("all", "en").forEach { language ->
+        source {
+            lang = language
+            baseUrl = "https://manga18fx.com"
+
+            if (language == "en") id = 3157287889751723714L
+        }
     }
 }
