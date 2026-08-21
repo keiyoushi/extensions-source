@@ -20,9 +20,9 @@ import java.time.ZoneOffset
 
 const val HOSTNAME_PART = "kuromangas.com::v2"
 const val ANTIBOT = "x9_4v2_b"
-const val DEFAULT_ENC_KEY = "2i3ato8l674shksfE2oMmieshonuYTusF4jKdqEwhUEft9dsadcxzde3"
-const val VERIFY_COOKIE = "kuro_x"
-const val VERIFY_HEADER = "X-Kuro-Verify"
+const val DEFAULT_ENC_KEY = "2i3ato8l6sai74shksfE2oMmieshoforanuYTusF4jKdqEwhUEft9dsadcxzde3"
+const val NONCE_COOKIE = "_kn"
+const val NONCE_HEADER = "X-Session-Nonce"
 
 private val encKeyRegex = Regex("""ENCRYPTION_KEY\s*[:=]\s*["']([^"']+)["']""")
 
@@ -32,9 +32,9 @@ class KuroMangasDecryptor(val baseUrl: String, val client: OkHttpClient) {
     fun vSecureInterceptor() = Interceptor { chain ->
 
         fun newRequest(): Request {
-            val verifyToken = client.getCookie(baseUrl, VERIFY_COOKIE) ?: return chain.request()
+            val nonce = client.getCookie(baseUrl, NONCE_COOKIE) ?: return chain.request()
             return chain.request().newBuilder()
-                .header(VERIFY_HEADER, verifyToken)
+                .header(NONCE_HEADER, nonce)
                 .build()
         }
 

@@ -73,7 +73,7 @@ class CompleteMangaDto(
         artist = artists?.joinToString()
         author = authors?.joinToString()
         status = when (titleStatus.orEmpty()) {
-            "Онгоінг" -> SManga.ONGOING
+            "Онґоїнґ" -> SManga.ONGOING
             "Завершено" -> SManga.COMPLETED
             "Покинуто" -> SManga.CANCELLED
             "Призупинено" -> SManga.ON_HIATUS
@@ -102,13 +102,15 @@ class ChapterResponseList(
     private val lastUpdated: String,
     private val isMonetized: Boolean,
 ) {
+    private val invalidTitles = setOf("", "-", "--", "title", "Title")
     fun toSChapter(hideLocked: Boolean): SChapter? {
         if (hideLocked && isMonetized) return null
         val prefix = if (isMonetized) "\uD83D\uDD12 " else ""
         val suffix = if (subChapterNum == 0) "" else ".$subChapterNum"
+        val titleCheck = if (title in invalidTitles || title.contains("Розділ", ignoreCase = true)) "" else " $title"
         return SChapter.create().apply {
             url = id // old format: "$baseUrl/read/$id/$mangaId"
-            name = "${prefix}Том $volume - Розділ $chapterNum$suffix $title".trim()
+            name = "${prefix}Том $volume - Розділ $chapterNum$suffix$titleCheck"
             chapter_number = if (subChapterNum == 0) {
                 chapterNum.toFloat()
             } else {

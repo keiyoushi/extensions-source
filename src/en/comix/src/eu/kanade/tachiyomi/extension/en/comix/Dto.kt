@@ -4,9 +4,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.Calendar
+
+const val MANGA_ID_MEMO = "mangaId"
+const val CHAPTER_ID_MEMO = "chapterId"
+const val CHAPTER_LIST_DEDUPLICATED_MEMO = "chapterListDeduplicated"
 
 @Serializable
 class Term(
@@ -93,6 +99,7 @@ class Manga(
         showTags: Boolean = false,
     ) = SManga.create().apply {
         url = this@Manga.url?.substringAfter("/title") ?: "/$hid"
+        memo = buildJsonObject { put(MANGA_ID_MEMO, hid) }
         title = this@Manga.title
 
         val actualAuthors = authors ?: authorOld
@@ -146,6 +153,7 @@ class Manga(
 
     fun toBasicSManga(posterQuality: String?) = SManga.create().apply {
         url = this@Manga.url?.substringAfter("/title") ?: "/$hid"
+        memo = buildJsonObject { put(MANGA_ID_MEMO, hid) }
         title = this@Manga.title
         thumbnail_url = this@Manga.poster?.from(posterQuality)
     }
@@ -161,12 +169,7 @@ class Manga(
         followsTotal.takeIf { it > 0 }?.let { add("Followed by: $it") }
     }
 
-    // The site has separate `genres`, `tags`, `formats`, and `demographics`
-    // groupings but only the curated `genres` (plus the type and demographics)
-    // belong in Mihon's "genre" chips by default — the `tags` list is dozens
-    // of narrative descriptors and the site doesn't surface them in its own
-    // detail layout. Users who want them back can flip the
-    // "Show tags in genre chips" preference.
+    // Tags are separate from the curated genres in the site's detail UI.
     private fun getGenres(showTags: Boolean) = buildList {
         when (type) {
             "manhwa" -> add("Manhwa")
@@ -270,6 +273,7 @@ class Chapter(
                 "title/$mangaSlug/$id-chapter-${number.toString().removeSuffix(".0")}"
             }
         }
+        memo = buildJsonObject { put(CHAPTER_ID_MEMO, id) }
         name = buildString {
             append("Chapter ")
             append(this@Chapter.number.toString().removeSuffix(".0"))
