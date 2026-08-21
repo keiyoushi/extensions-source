@@ -20,6 +20,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.int
@@ -387,7 +388,11 @@ abstract class Comix :
             return client.get(getMangaUrl(manga)).asJsoup().also { cachedDocument = it }
         }
 
-        val fetchUntilKnown = fetchChapters && preferences.fetchChaptersUntilKnown()
+        val deduplicateChapters = preferences.deduplicateChapters()
+        val storedDeduplicateChapters = manga.memo[CHAPTER_LIST_DEDUPLICATED_MEMO]?.booleanOrNull
+        val fetchUntilKnown = fetchChapters &&
+            preferences.fetchChaptersUntilKnown() &&
+            storedDeduplicateChapters == deduplicateChapters
         val latestChapterId = chapters.firstOrNull()
             ?.takeIf { fetchUntilKnown }
             ?.chapterId()
@@ -411,6 +416,13 @@ abstract class Comix :
             mergeChapters(fetched)
         } else {
             chapters
+        }
+        val chapterListMode = if (fetchChapters) deduplicateChapters else storedDeduplicateChapters
+        if (chapterListMode != null) {
+            updatedManga.memo = buildJsonObject {
+                updatedManga.memo.forEach { (key, value) -> put(key, value) }
+                put(CHAPTER_LIST_DEDUPLICATED_MEMO, chapterListMode)
+            }
         }
         SMangaUpdate(updatedManga, updatedChapters)
     }
