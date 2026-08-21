@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.network.CacheControlInterceptor
+import keiyoushi.network.CloudflareSolverInterceptor
 import keiyoushi.network.RateLimitInterceptor
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
@@ -110,7 +111,7 @@ abstract class KeiSource : HttpSource() {
                 val cloudflareInterceptor = firstOrNull { it.javaClass.simpleName == "CloudflareInterceptor" }
                 if (cloudflareInterceptor != null) {
                     remove(cloudflareInterceptor)
-                    add(cloudflareInterceptor)
+                    add(CloudflareSolverInterceptor(build(), cloudflareInterceptor))
                 }
             }
 
