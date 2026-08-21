@@ -120,7 +120,7 @@ abstract class Comikey :
 
         return SMangaUpdate(
             manga = parseMangaDetails(document),
-            chapters = parseChapterList(document),
+            chapters = if (fetchChapters) parseChapterList(document) else chapters,
         )
     }
 
@@ -239,20 +239,18 @@ abstract class Comikey :
     @SuppressLint("SetJavaScriptEnabled")
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val interfaceName = randomString()
-        var payload: Payload? = null
         var manifestRedirect: HttpUrl? = null
 
-        mutexLock.withLock {
+        val payload = mutexLock.withLock {
             try {
-                runWebView<Unit>(timeout = 15.seconds) {
+                runWebView<Payload>(timeout = 30.seconds) {
                     userAgent = headers["User-Agent"]!!
                     blockImages = true
                     javaScriptEnabled = true
                     domStorageEnabled = true
 
                     jsBridge(interfaceName) { message ->
-                        payload = message.parseAs<Payload>()
-                        resolve(Unit)
+                        resolve(message.parseAs<Payload>())
                     }
 
                     onPageStarted {
@@ -300,7 +298,7 @@ abstract class Comikey :
             }
         }
 
-        payload!!.error?.let { error(it) }
+        payload.error?.let { error(it) }
 
         val manifestUrl = manifestRedirect ?: payload.manifestUrl!!.toHttpUrl()
 
