@@ -19,16 +19,11 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl
-import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 @Source
 abstract class BlackManga : KeiSource() {
-
-    override fun OkHttpClient.Builder.configureClient() = apply {
-        // CF handled by app-level parser
-    }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = if (page <= 1) "$baseUrl/" else "$baseUrl/page/$page/"
@@ -38,7 +33,7 @@ abstract class BlackManga : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val sep = if (page > 1) "?page=$page&order=update" else "?order=update"
-        val url = "$baseUrl/manga/$sep&_cb=${System.currentTimeMillis()}"
+        val url = "$baseUrl/manga/$sep"
         val response = client.get(url, ensureSuccess = false)
         return response.use { parseMangaList(it.asJsoup()) }
     }
@@ -96,11 +91,15 @@ abstract class BlackManga : KeiSource() {
         val response = client.get(url, ensureSuccess = false)
         return response.use {
             val doc = it.asJsoup()
-            val sManga = mangaDetailsParse(doc).apply { this.url = manga.url }
+            val sManga = if (fetchDetails) {
+                mangaDetailsParse(doc).apply { this.url = manga.url }
+            } else {
+                manga
+            }
             val sChapters = if (fetchChapters) {
                 doc.select("#chapterlist .clstyle li[data-num]")
                     .filter { el -> el.attr("data-num").toFloatOrNull() != null }
-                    .map(::chapterFromElement)
+                    .mapNotNull(::chapterFromElement)
             } else {
                 emptyList()
             }
@@ -111,7 +110,9 @@ abstract class BlackManga : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = baseUrl + chapter.url
         val response = client.get(url, ensureSuccess = false)
-        val html = response.use { it.body!!.string() }
+        val html = response.use {
+            it.body?.string() ?: throw Exception("Empty response body at: $url (code: ${it.code})")
+        }
 
         val readerRegex = Regex("""ts_reader\.run\((\{.*?\})\)""", RegexOption.DOT_MATCHES_ALL)
         val match = readerRegex.find(html)
@@ -180,14 +181,18 @@ abstract class BlackManga : KeiSource() {
             .joinToString()
     }
 
-    private fun chapterFromElement(element: Element) = SChapter.create().apply {
-        val link = element.select(".eph-num a").first()!!
-        setUrlWithoutDomain(link.absUrl("href"))
-        val numText = element.attr("data-num")
-        chapter_number = numText.toFloatOrNull() ?: 0F
-        name = "ตอนที่ $numText"
-        element.select(".chapterdate").first()?.text()?.let { dateStr ->
-            date_upload = parseChapterDate(dateStr)
+    private fun chapterFromElement(element: Element): SChapter? {
+        val link = element.selectFirst(".eph-num a") ?: return null
+        return SChapter.create().apply {
+            setUrlWithoutDomain(link.absUrl("href"))
+            val numText = element.attr("data-num")
+            chapter_number = numText.toFloatOrNull() ?: 0F
+            name = element.selectFirst(".chapternum")?.text()
+                ?.takeIf { it.isNotEmpty() }
+                ?: "ตอนที่ $numText"
+            element.selectFirst(".chapterdate")?.text()?.let { dateStr ->
+                date_upload = parseChapterDate(dateStr)
+            }
         }
     }
 
@@ -201,7 +206,7 @@ abstract class BlackManga : KeiSource() {
             arrayOf(
                 "Default" to "",
                 "A-Z" to "title",
-                "Z-A" to "title&order=desc",
+                "Z-A" to "titlereverse",
                 "Latest" to "latest",
                 "Most Added" to "added",
                 "Popular" to "popular",
@@ -226,21 +231,34 @@ abstract class BlackManga : KeiSource() {
             arrayOf(
                 "All" to "",
                 "Action" to "action",
+                "Adult" to "adult",
                 "Adventure" to "adventure",
                 "Comedy" to "comedy",
                 "Drama" to "drama",
+                "Ecchi" to "ecchi",
                 "Fantasy" to "fantasy",
+                "Gender Bender" to "gender-bender",
+                "Harem" to "harem",
+                "Historical" to "historical",
                 "Horror" to "horror",
+                "Isekai" to "isekai",
+                "Josei" to "josei",
+                "Martial Arts" to "martial-arts",
+                "Mature" to "mature",
                 "Mystery" to "mystery",
+                "Psychological" to "psychological",
                 "Romance" to "romance",
+                "School Life" to "school-life",
                 "Sci-Fi" to "sci-fi",
-                "Thriller" to "thriller",
-                "Supernatural" to "supernatural",
-                "War" to "war",
-                "Wuxia" to "wuxia",
                 "Seinen" to "seinen",
                 "Shoujo" to "shoujo",
+                "Shoujo Ai" to "shoujo-ai",
                 "Shounen" to "shounen",
+                "Slice of Life" to "slice-of-life",
+                "Smut" to "smut",
+                "Sports" to "sports",
+                "Supernatural" to "supernatural",
+                "Tragedy" to "tragedy",
             ),
         )
 
