@@ -6,6 +6,7 @@ import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 @Serializable
 class SearchResponse(
@@ -43,7 +44,7 @@ class MangaFull(
         author = this@MangaFull.author.takeIf { it.isNotBlank() }
     }
 
-    fun toSChapters() = chapters.map {
+    fun toSChapters(mangaUrl: String) = chapters.map {
         SChapter.create().apply {
             val prefix = if (it.value.volume.isBlank()) "" else "Том ${it.value.volume} "
             val suffix = if (it.value.title.isBlank()) "" else " ${it.value.title}"
@@ -53,6 +54,7 @@ class MangaFull(
             date_upload = it.value.lastUpdated.toLongOrNull()?.times(1000L) ?: 0L
             memo = buildJsonObject {
                 put("pages", it.value.groups.sub.toJsonElement())
+                put("mangaId", mangaUrl)
             }
         }
     }

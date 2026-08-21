@@ -88,6 +88,8 @@ abstract class PureSkill : KeiSource() {
     }
 
     // =========================== Manga ============================
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/chapters?title=${manga.url}"
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -98,12 +100,14 @@ abstract class PureSkill : KeiSource() {
         val data = client.get("$baseUrl/cubari/$mangaUrl.json").parseAs<MangaFull>()
 
         val newManga = data.toSManga(mangaUrl)
-        val newChapters = data.toSChapters().sortedByDescending { it.chapter_number }
+        val newChapters = data.toSChapters(mangaUrl).sortedByDescending { it.chapter_number }
 
         return SMangaUpdate(newManga, newChapters)
     }
 
     // =========================== Pages ============================
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader?title=${chapter.memo["mangaId"]!!.string}&chapter=${chapter.url}"
+
     override suspend fun getPageList(chapter: SChapter): List<Page> = chapter.memo["pages"]!!.array.mapIndexed { index, element ->
         Page(index, imageUrl = element.string)
     }
