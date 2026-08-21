@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
@@ -32,11 +31,12 @@ abstract class NewManhwa : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage = popularMangaParse(response.asJsoup())
 
     private fun popularMangaParse(document: Document): MangasPage {
-        val mangas = document.select("a.series-card").map { element ->
+        val mangas = document.select("article.series-card").map { element ->
             SManga.create().apply {
-                setUrlWithoutDomain(element.attr("abs:href"))
-                title = element.selectFirst("strong")!!.text().removeTitleRank()
-                thumbnail_url = element.selectFirst("img")?.let {
+                val coverLink = element.selectFirst("a.series-card-cover")!!
+                setUrlWithoutDomain(coverLink.attr("abs:href"))
+                title = element.selectFirst("div.series-card-body h2 a")!!.text().removeTitleRank()
+                thumbnail_url = coverLink.selectFirst("img")?.let {
                     it.attr("abs:data-src").ifEmpty { it.attr("abs:src") }
                 }
             }
@@ -63,7 +63,7 @@ abstract class NewManhwa : HttpSource() {
         }
 
         val url = baseHttpUrl.newBuilder().apply {
-            addPathSegment("search")
+            addPathSegment("series")
             addQueryParameter("q", query)
             filters.forEach { filter ->
                 when (filter) {
@@ -119,40 +119,54 @@ abstract class NewManhwa : HttpSource() {
 
     private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("h1")!!.text()
-        description = document.selectFirst("section.summary-inline p")?.text()
-        author = document.selectFirst("dt:contains(Author) + dd a span")?.text()
-        artist = document.selectFirst("dt:contains(Artist) + dd a span")?.text()
-        status = when (document.selectFirst("dt:contains(Status) + dd span")?.text()?.lowercase()) {
+        description = document.selectFirst("div.series-v72-description")
+            ?.text()
+            ?.let { TAGS_MARKER_REGEX.split(it, limit = 2).first() }
+            ?.trim()
+        author = metaValue(document, "Author")
+        artist = metaValue(document, "Artist")
+        status = when (metaValue(document, "Status")?.lowercase()) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
+            "hiatus" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
         thumbnail_url = document.selectFirst("aside.series-left .cover-card img")?.attr("abs:src")
 
-        val jsonLd = document.select("script[type=application/ld+json]")
-            .find { it.data().contains("\"@type\":\"ComicSeries\"") }
-            ?.data()
+        val sidebarGenres = document.select("div.series-v72-genres a").eachText()
+        if (sidebarGenres.isNotEmpty()) {
+            genre = sidebarGenres.joinToString()
+        } else {
+            // Fallback for pages where the sidebar genre list is missing/empty.
+            val jsonLd = document.select("script[type=application/ld+json]")
+                .find { it.data().contains("\"@type\":\"ComicSeries\"") }
+                ?.data()
 
-        if (jsonLd != null) {
-            GENRE_REGEX.find(jsonLd)?.groupValues?.get(1)?.let { genresString ->
-                genre = genresString.replace("\"", "").split(",").map { it.trim() }.joinToString()
+            jsonLd?.let {
+                GENRE_REGEX.find(it)?.groupValues?.get(1)?.let { genresString ->
+                    genre = genresString.replace("\"", "").split(",").map { g -> g.trim() }.joinToString()
+                }
             }
         }
     }
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
+    private fun metaValue(document: Document, label: String): String? = document.select("aside.series-v72-sidebar .series-v72-meta span")
+        .find { it.text().equals(label, ignoreCase = true) }
+        ?.parent()
+        ?.selectFirst("strong")
+        ?.text()
+
     // ========================= Chapters =========================
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select(".chapter-list .chapter-row").map { element ->
+        return document.select("div.series-v72-chapter-list a.series-v72-chapter-row").map { element ->
             SChapter.create().apply {
-                val link = element.selectFirst("a.chapter-main")!!
-
-                setUrlWithoutDomain(link.attr("abs:href"))
-                name = link.selectFirst(".chapter-name strong")!!.text()
-                date_upload = element.selectFirst(".chapter-age")?.text()?.let {
-                    DATE_FORMAT.tryParse(it)
+                setUrlWithoutDomain(element.attr("abs:href"))
+                name = element.selectFirst(".series-chapter-number-text")!!.text()
+                date_upload = element.selectFirst("time.series-chapter-date")?.attr("datetime")?.let {
+                    runCatching { java.time.OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrDefault(0L)
                 } ?: 0L
             }
         }
@@ -163,7 +177,7 @@ abstract class NewManhwa : HttpSource() {
     // ========================= Pages =========================
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("main#reader img.chapter-page").mapIndexed { i, element ->
+        return document.select("div.reader-pages img").mapIndexed { i, element ->
             val url = element.attr("abs:data-src").ifEmpty { element.attr("abs:src") }
             Page(i, "", url)
         }
@@ -187,5 +201,6 @@ abstract class NewManhwa : HttpSource() {
         private val DATE_FORMAT = SimpleDateFormat("MMM dd, yyyy", Locale.US)
         private val GENRE_REGEX = "\"genre\":\\s*\\[(.*?)\\]".toRegex()
         private val TITLE_RANK_REGEX = "^#\\d+\\s+".toRegex()
+        private val TAGS_MARKER_REGEX = "\\s*\\bTags\\b\\s*".toRegex()
     }
 }
