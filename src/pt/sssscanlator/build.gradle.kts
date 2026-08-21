@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Yomu Comics"
-    versionCode = 55
+    versionCode = 56
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
