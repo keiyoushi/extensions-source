@@ -14,6 +14,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
+import java.io.IOException
 
 class BingTranslator(private val client: OkHttpClient, private val headers: Headers) : TranslatorEngine {
 
@@ -24,8 +25,6 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
     private val json: Json by injectLazy()
 
     private var tokens: TokenGroup = TokenGroup()
-
-    override val capacity: Int = 1000
 
     private val attempts = 3
 
@@ -44,8 +43,15 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
         return text
     }
 
-    private fun fetchTranslatedText(request: Request): String = client.newCall(request).execute().parseAs<List<TranslateDto>>()
-        .firstOrNull()!!.text
+    private fun fetchTranslatedText(request: Request): String {
+        client.newCall(request).execute().use { response ->
+            val text = response.parseAs<List<TranslateDto>>().firstOrNull()?.text
+            if (text.isNullOrBlank()) {
+                throw IOException("Empty Bing translation response")
+            }
+            return text
+        }
+    }
 
     private fun refreshTokens(): Boolean {
         tokens = loadTokens()
@@ -55,7 +61,6 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
     private fun translatorRequest(from: String, to: String, text: String): Request {
         val url = "$baseUrl/ttranslatev3".toHttpUrl().newBuilder()
             .addQueryParameter("isVertical", "1")
-            .addQueryParameter("", "") // Present in Bing URL
             .addQueryParameter("IG", tokens.ig)
             .addQueryParameter("IID", tokens.iid)
             .build()
@@ -80,7 +85,7 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
     }
 
     private fun loadTokens(): TokenGroup {
-        val document = client.newCall(GET(translatorUrl, headers)).execute().asJsoup()
+        val document = client.newCall(GET(translatorUrl, headers)).execute().use { it.asJsoup() }
 
         val scripts = document.select("script")
             .map(Element::data)

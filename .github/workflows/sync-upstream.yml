@@ -1,0 +1,35 @@
+name: Sync with upstream
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Rebase onto upstream/main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/keiyoushi/extensions-source.git
+          git fetch upstream main
+          git rebase -X theirs upstream/main || { git rebase --abort; echo "::error::Rebase failed, manual fix needed"; exit 1; }
+
+      - name: Push
+        run: git push --force-with-lease origin main
+
+      - name: Trigger personal repo build
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build-personal-repo.yml --ref main

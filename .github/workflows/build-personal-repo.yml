@@ -1,0 +1,81 @@
+name: Build personal extension repo
+
+on:
+  schedule:
+    - cron: "30 4 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: build-personal-repo
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Java
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+
+      - name: Prepare signing key
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        run: echo "$SIGNING_KEY" | base64 -d > signingkey.jks
+
+      - name: Build extensions
+        env:
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ./gradlew \
+            src:en:novatoon:assembleRelease \
+            src:th:blackmanga:assembleRelease \
+            src:ko:jjaptoon:assembleRelease \
+            src:all:manhuarm:assembleRelease \
+            src:en:comick:assembleRelease \
+            src:en:witchscans:assembleRelease \
+            src:ko:wolfdotcom:assembleRelease \
+            src:ru:remanga:assembleRelease
+
+      - name: Generate index
+        env:
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+        run: |
+          FINGERPRINT=$(keytool -list -v -keystore signingkey.jks -alias "$ALIAS" -storepass "$KEY_STORE_PASSWORD" | grep "SHA256:" | head -1 | sed 's/.*SHA256: *//' | tr -d ':' | tr 'A-F' 'a-f')
+          echo "Fingerprint: $FINGERPRINT"
+          SIGNING_FINGERPRINT="$FINGERPRINT" python ./.github/scripts/build-personal-repo.py
+
+      - name: Publish to extensions repo
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_REPO_TOKEN }}
+        run: |
+          git clone --depth 1 --branch repo "https://x-access-token:${GH_TOKEN}@github.com/TeTKiK15/uzantilar.git" publish
+          find publish -maxdepth 1 -name "*.apk" -delete
+          cp -r personal-repo/* publish/
+          cd publish
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Update extensions repo"
+            git push
+          else
+            echo "No changes to publish"
+          fi
+
+      - name: Clean up signing key
+        if: always()
+        run: rm -f signingkey.jks

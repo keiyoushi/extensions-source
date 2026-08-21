@@ -16,9 +16,12 @@ import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
 class TranslationInterceptor(
-    val language: Language,
+    private val languageProvider: () -> Language,
     private val translator: TranslatorEngine,
 ) : Interceptor {
+
+    private val language: Language
+        get() = languageProvider()
 
     private val json: Json by injectLazy()
 
@@ -30,7 +33,8 @@ class TranslationInterceptor(
             return chain.proceed(request)
         }
 
-        val dialogues = request.url.fragment?.parseAs<List<Dialog>>()
+        val dialogues = runCatching { request.url.fragment?.parseAs<List<Dialog>>() }
+            .getOrNull()
             ?: return chain.proceed(request)
 
         val translated = runBlocking(Dispatchers.IO) {
@@ -43,8 +47,9 @@ class TranslationInterceptor(
             }.awaitAll()
         }
 
+        val newFragment = json.encodeToString(translated).replace("#", "*")
         val newRequest = request.newBuilder()
-            .url("${url.substringBeforeLast("#")}#${json.encodeToString(translated)}")
+            .url("${url.substringBeforeLast("#")}#$newFragment")
             .build()
 
         return chain.proceed(newRequest)

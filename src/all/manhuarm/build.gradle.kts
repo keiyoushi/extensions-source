@@ -6,10 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Manhuarm"
-    versionCode = 25
+    versionCode = 26
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
-    theme = "madara"
+    libVersion = "1.6"
 
     listOf("ar", "en", "es", "fr", "id", "it", "pt-BR").forEach {
         source {

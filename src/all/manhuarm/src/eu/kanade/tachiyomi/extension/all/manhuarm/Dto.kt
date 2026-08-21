@@ -13,6 +13,11 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.IOException
 
+internal val MARKER_REGEX = Regex(
+    """^\[(?:DRAFT_)?[A-Z]{2,}(?:_[A-Z]{2,})*\]:?\s*""",
+    RegexOption.IGNORE_CASE,
+)
+
 @Serializable
 class PageDto(
     @SerialName("image")
@@ -35,7 +40,7 @@ data class Dialog(
     val height: Float get() = scale * _height
     val width: Float get() = scale * _width
 
-    val text: String get() = textByLanguage["text"] ?: throw Exception("Dialog not found")
+    val text: String get() = textByLanguage["text"] ?: textByLanguage.values.firstOrNull().orEmpty()
     fun getTextBy(language: Language) = when {
         !language.disableTranslator -> textByLanguage[language.origin]
         else -> textByLanguage[language.target]
@@ -98,7 +103,5 @@ private object DialogListSerializer :
         }
     }
 
-    private val JsonElement.isArray get() = this is JsonArray
-    private val JsonElement.isObject get() = this is JsonObject
-    private val JsonElement.isString get() = this.isObject.not() && this.isArray.not() && this.jsonPrimitive.isString
+    private val JsonElement.isString get() = this !is JsonArray && this !is JsonObject && this.jsonPrimitive.isString
 }

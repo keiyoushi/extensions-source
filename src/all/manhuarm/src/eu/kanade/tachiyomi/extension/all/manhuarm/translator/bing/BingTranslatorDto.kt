@@ -2,8 +2,6 @@ package eu.kanade.tachiyomi.extension.all.manhuarm.translator.bing
 
 import kotlinx.serialization.Serializable
 
-class BingTranslatorDto
-
 class TokenGroup(
     val token: String = "",
     val key: String = "",

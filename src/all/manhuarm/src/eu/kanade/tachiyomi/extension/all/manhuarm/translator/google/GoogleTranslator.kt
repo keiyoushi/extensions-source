@@ -26,8 +26,6 @@ class GoogleTranslator(private val client: OkHttpClient, private val headers: He
 
     private val translatorUrl = "$baseUrl/translate_a/single"
 
-    override val capacity: Int = 5000
-
     private val json: Json by injectLazy()
 
     override fun translate(from: String, to: String, text: String): String {
@@ -65,18 +63,19 @@ class GoogleTranslator(private val client: OkHttpClient, private val headers: He
         }
 
     private fun fetchTranslatedText(request: Request): String {
-        val response = client.newCall(request).execute()
+        client.newCall(request).execute().use { response ->
+            if (response.isSuccessful.not()) {
+                throw IOException("Request failed: ${response.code}")
+            }
 
-        if (response.isSuccessful.not()) {
-            throw IOException("Request failed: ${response.code}")
+            return response.parseJson().let(::extractTranslatedText)
         }
-
-        return response.parseJson().let(::extractTranslatedText)
     }
 
     private fun Response.parseJson(): JsonElement = json.parseToJsonElement(this.body.string())
 
-    private fun extractTranslatedText(data: JsonElement): String = data.jsonArray[0].jsonArray.joinToString("") {
-        it.jsonArray[0].jsonPrimitive.content
+    private fun extractTranslatedText(data: JsonElement): String {
+        val sentences = data.jsonArray.getOrNull(0)?.jsonArray ?: return ""
+        return sentences.mapNotNull { it.jsonArray.getOrNull(0)?.jsonPrimitive?.content }.joinToString("")
     }
 }

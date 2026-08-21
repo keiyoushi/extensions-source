@@ -13,22 +13,27 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import eu.kanade.tachiyomi.extension.all.manhuarm.Dialog
 import eu.kanade.tachiyomi.extension.all.manhuarm.Language
+import eu.kanade.tachiyomi.extension.all.manhuarm.MARKER_REGEX
 import eu.kanade.tachiyomi.extension.all.manhuarm.Manhuarm.Companion.PAGE_REGEX
 import keiyoushi.utils.parseAs
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import org.jsoup.Jsoup
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.max
 
 // The Interceptor joins the dialogues and pages of the manga.
 class ComposedImageInterceptor(
-    val language: Language,
+    private val languageProvider: () -> Language,
 ) : Interceptor {
+
+    private val language: Language
+        get() = languageProvider()
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -38,8 +43,13 @@ class ComposedImageInterceptor(
             return chain.proceed(request)
         }
 
-        val dialogues = request.url.fragment?.parseAs<List<Dialog>>()
-            ?: emptyList()
+        val dialogues = runCatching { request.url.fragment?.parseAs<List<Dialog>>() }
+            .getOrNull()
+            .orEmpty()
+
+        if (dialogues.isEmpty()) {
+            return chain.proceed(request)
+        }
 
         val imageRequest = request.newBuilder()
             .url(url)
@@ -51,8 +61,15 @@ class ComposedImageInterceptor(
             return response
         }
 
-        val bitmap = BitmapFactory.decodeStream(response.body.byteStream())!!
-            .copy(Bitmap.Config.ARGB_8888, true)
+        val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
+            ?.copy(Bitmap.Config.ARGB_8888, true)
+
+        if (bitmap == null) {
+            response.close()
+            return chain.proceed(
+                request.newBuilder().url(url.substringBefore("#")).build(),
+            )
+        }
 
         val canvas = Canvas(bitmap)
 
@@ -60,13 +77,13 @@ class ComposedImageInterceptor(
             dialog.scale = language.dialogBoxScale
             val textPaint = createTextPaint(selectFontFamily())
             val dialogBox = createDialogBox(dialog, textPaint)
-            val y = getYAxis(textPaint, dialog, dialogBox)
-            canvas.draw(textPaint, dialogBox, dialog, dialog.x, y)
+            canvas.draw(textPaint, dialogBox, dialog)
         }
 
         val output = ByteArrayOutputStream()
 
         val ext = url.substringBefore("#")
+            .substringBefore("?")
             .substringAfterLast(".")
             .lowercase()
         val format = when (ext) {
@@ -96,11 +113,13 @@ class ComposedImageInterceptor(
         }
     }
 
+    private val typefaceCache = ConcurrentHashMap<String, Typeface?>()
+
     private fun selectFontFamily(): Typeface? {
         if (language.disableFontSettings) {
             return null
         }
-        return loadFont("${language.fontName}.ttf")
+        return typefaceCache.computeIfAbsent(language.fontName) { loadFont("$it.ttf") }
     }
 
     /**
@@ -123,32 +142,27 @@ class ComposedImageInterceptor(
     }
 
     private fun InputStream.toTypeface(fontName: String): Typeface? {
-        val fontFile = File.createTempFile(fontName, fontName.substringAfter("."))
-        this.copyTo(FileOutputStream(fontFile))
-        return Typeface.createFromFile(fontFile)
-    }
-
-    /**
-     * Adjust the text to the center of the dialog box when feasible.
-     */
-    private fun getYAxis(textPaint: TextPaint, dialog: Dialog, dialogBox: StaticLayout): Float {
-        val fontHeight = textPaint.fontMetrics.let { it.bottom - it.top }
-
-        val dialogBoxLineCount = dialog.height / fontHeight
-
-        // Centers text in y for dialogues smaller than the dialog box
-        return when {
-            dialogBox.lineCount < dialogBoxLineCount -> dialog.centerY - dialogBox.lineCount / 2f * fontHeight
-            else -> dialog.y
+        val fontFile = File.createTempFile(fontName, ".${fontName.substringAfter(".")}")
+        try {
+            this.copyTo(FileOutputStream(fontFile))
+            return Typeface.createFromFile(fontFile)
+        } finally {
+            fontFile.delete()
         }
     }
 
+    /**
+     * Builds the text layout so that it always fits entirely inside the balloon,
+     * both horizontally and vertically, with a small padding around the edges.
+     */
     private fun createDialogBox(dialog: Dialog, textPaint: TextPaint): StaticLayout {
         var dialogBox = createBoxLayout(dialog, textPaint)
+        val targetWidth = dialog.innerWidth()
+        val targetHeight = dialog.innerHeight()
 
-        // The best way I've found to adjust the text in the dialog box (Especially in long dialogues)
-        while (dialogBox.height > dialog.height) {
+        while (dialogBox.height > targetHeight || hasLineOverflow(dialogBox, targetWidth)) {
             textPaint.textSize -= 0.5f
+            if (textPaint.textSize <= MIN_TEXT_SIZE) break
             dialogBox = createBoxLayout(dialog, textPaint)
         }
 
@@ -158,10 +172,17 @@ class ComposedImageInterceptor(
         return dialogBox
     }
 
+    private fun hasLineOverflow(layout: StaticLayout, targetWidth: Float): Boolean {
+        for (i in 0 until layout.lineCount) {
+            if (layout.getLineWidth(i) > targetWidth + 1f) return true
+        }
+        return false
+    }
+
     private fun createBoxLayout(dialog: Dialog, textPaint: TextPaint): StaticLayout {
         val text = dialog.getTextBy(language).cleanUp()
 
-        return StaticLayout.Builder.obtain(text, 0, text.length, textPaint, dialog.width.toInt()).apply {
+        return StaticLayout.Builder.obtain(text, 0, text.length, textPaint, max(1, dialog.innerWidth().toInt())).apply {
             setAlignment(Layout.Alignment.ALIGN_CENTER)
             setIncludePad(language.disableFontSettings)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -176,12 +197,21 @@ class ComposedImageInterceptor(
         }.build()
     }
 
-    private fun String.cleanUp(): String = Jsoup.parse(this).text()
+    private fun String.cleanUp(): String = replace(HTML_TAG_REGEX, "").trim().replaceFirst(MARKER_REGEX, "").trim()
 
-    private fun Canvas.draw(textPaint: TextPaint, layout: StaticLayout, dialog: Dialog, x: Float, y: Float) {
+    private fun Dialog.padX(): Float = width * PAD_RATIO
+
+    private fun Dialog.padY(): Float = height * PAD_RATIO
+
+    private fun Dialog.innerWidth(): Float = width - 2f * padX()
+
+    private fun Dialog.innerHeight(): Float = height - 2f * padY()
+
+    private fun Canvas.draw(textPaint: TextPaint, layout: StaticLayout, dialog: Dialog) {
         save()
-        translate(x, y)
+        translate(dialog.x + dialog.width / 2f, dialog.y + dialog.height / 2f)
         rotate(dialog.angle)
+        translate(-layout.width / 2f, -layout.height / 2f)
         drawTextOutline(textPaint, layout)
         drawText(textPaint, layout)
         restore()
@@ -196,7 +226,7 @@ class ComposedImageInterceptor(
         val foregroundColor = textPaint.color
         val style = textPaint.style
 
-        textPaint.strokeWidth = 5F
+        textPaint.strokeWidth = max(1.5f, textPaint.textSize * 0.06f)
         textPaint.color = textPaint.bgColor
         textPaint.style = Paint.Style.FILL_AND_STROKE
 
@@ -213,5 +243,9 @@ class ComposedImageInterceptor(
         // w3: Absolute Lengths [...](https://www.w3.org/TR/css3-values/#absolute-lengths)
         const val SCALED_DENSITY = 0.75f // 1px = 0.75pt
         val mediaType = "image/png".toMediaType()
+
+        private const val PAD_RATIO = 0.06f
+        private const val MIN_TEXT_SIZE = 6f
+        private val HTML_TAG_REGEX = Regex("<[^>]*>")
     }
 }
