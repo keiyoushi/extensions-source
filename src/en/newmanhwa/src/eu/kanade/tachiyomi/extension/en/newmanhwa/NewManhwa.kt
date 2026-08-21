@@ -196,9 +196,7 @@ abstract class NewManhwa : HttpSource() {
     private fun String.removeTitleRank(): String = replace(TITLE_RANK_REGEX, "").trim()
 
     companion object {
-        private val MIRROR_HOSTS = listOf("newmanhwa.com", "fullmanhwa.com")
-
-        private val DATE_FORMAT = SimpleDateFormat("MMM dd, yyyy", Locale.US)
+        private val MIRROR_HOSTS = listOf("saymanhwa.com")
         private val GENRE_REGEX = "\"genre\":\\s*\\[(.*?)\\]".toRegex()
         private val TITLE_RANK_REGEX = "^#\\d+\\s+".toRegex()
         private val TAGS_MARKER_REGEX = "\\s*\\bTags\\b\\s*".toRegex()
