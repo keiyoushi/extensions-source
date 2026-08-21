@@ -140,10 +140,7 @@ abstract class ManhwaScan : KeiSource() {
     }
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h1")
-            ?.text()
-            ?.trim()
-            .orEmpty()
+        title = document.selectFirst("h1")!!.text()
 
         thumbnail_url = document.selectFirst(".series-cover img")
             ?.absUrl("src")
@@ -152,13 +149,12 @@ abstract class ManhwaScan : KeiSource() {
             }
 
         genre = document.select("a.genre-tag")
-            .map { it.text().trim() }
+            .map { it.text() }
             .filter { it.isNotBlank() }
             .joinToString(", ")
 
         description = document.selectFirst(".series-desc")
             ?.text()
-            ?.trim()
     }
 
     private fun parseChapterList(document: Document): List<SChapter> {
