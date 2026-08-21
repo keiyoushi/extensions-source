@@ -366,7 +366,7 @@ abstract class Comix :
             .addPathSegment("tags")
             .addPathSegment("search")
             .addQueryParameter("type", type)
-            .addQueryParameter("keyword", name)
+            .addQueryParameter("q", name)
             .build()
 
         val ids = runCatching {
