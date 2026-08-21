@@ -26,6 +26,7 @@ import io.github.keiyoushi.gradle.tasks.GenerateKeepRulesTask
 import io.github.keiyoushi.gradle.tasks.GenerateManifestTask
 import io.github.keiyoushi.gradle.tasks.GenerateSourceInfoTask
 import io.github.keiyoushi.gradle.tasks.SignExtensionJarTask
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -267,7 +268,7 @@ class ExtensionPlugin : Plugin<Project> {
             }
             val translationsFile = project(":core").projectDir.resolve("translations/strings.json")
             extensions.configure<KspExtension> {
-                arg("kei_sources", Json.encodeToString<List<ResolvedSource>>(resolvedSources))
+                arg("kei_sources", Json.encodeToString(ListSerializer(ResolvedSource.serializer()), resolvedSources))
                 arg("kei_translations", translationsFile.absolutePath)
             }
             tasks.matching { it.name.startsWith("ksp") }.configureEach {
@@ -290,6 +291,7 @@ class ExtensionPlugin : Plugin<Project> {
 
             val sourceInfoJsonProvider = versionCodeProvider.zip(versionNameProvider) { code, name ->
                 Json.encodeToString(
+                    ExtensionMetadata.serializer(),
                     ExtensionMetadata(
                         module = applicationIdSuffix,
                         theme = keiyoushi.theme.orNull,

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Webtoons.com"
-    versionCode = 57
+    versionCode = 58
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
 
