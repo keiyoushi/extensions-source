@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.vi.truyentranhdammy
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import keiyoushi.annotation.Source
-linkimport java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
