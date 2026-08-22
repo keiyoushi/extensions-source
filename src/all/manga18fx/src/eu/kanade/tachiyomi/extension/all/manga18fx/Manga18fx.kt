@@ -202,6 +202,14 @@ abstract class Manga18fx : KeiSource() {
         }
     }
 
+    override fun getChapterUrl(chapter: SChapter): String {
+        if (chapter.url.startsWith(baseUrl)) {
+            // Legacy Madara URL is absolute and has suffix `?style=list`
+            return chapter.url
+        }
+        return super.getChapterUrl(chapter)
+    }
+
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
