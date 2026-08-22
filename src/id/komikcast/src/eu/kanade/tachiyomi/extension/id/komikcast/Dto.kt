@@ -8,8 +8,8 @@ import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
-import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Instant
 
 @Serializable
 class SeriesListResponse(
@@ -60,6 +60,19 @@ class GenreData(
 class GenreInfo(
     val name: String,
 )
+
+@Serializable
+class GenreResponse(
+    val data: List<GenreItem>,
+)
+
+@Serializable
+class GenreItem(
+    val id: Int,
+    private val data: GenreInfo,
+) {
+    fun toPair(): Pair<String, String> = data.name to id.toString()
+}
 
 @Serializable
 class Meta(
@@ -119,12 +132,7 @@ private val chapterNumberFormatter = DecimalFormat(
     DecimalFormatSymbols.getInstance(Locale.US),
 )
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.ROOT)
-
-private fun parseChapterDate(dateString: String): Long {
-    if (dateString.isBlank()) return 0L
-    return dateFormat.tryParse(dateString) ?: 0L
-}
+private fun parseChapterDate(dateString: String): Long = Instant.tryParse(dateString)
 
 fun SManga.getSlug(baseUrl: String): String = "$baseUrl$url".toHttpUrl().pathSegments[1]
 

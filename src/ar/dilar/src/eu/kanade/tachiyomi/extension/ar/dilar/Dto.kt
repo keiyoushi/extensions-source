@@ -18,6 +18,11 @@ class SeriesListDto(
 }
 
 @Serializable
+class RankingsDto(
+    val topSeries: List<SeriesDto>,
+)
+
+@Serializable
 class SeriesDto(
     private val id: String,
     private val title: String,
@@ -26,15 +31,16 @@ class SeriesDto(
     private val staff: List<StaffDto> = emptyList(),
     private val categories: List<NameDto> = emptyList(),
     @SerialName("translation_status") private val translationStatus: String? = null,
-    @SerialName("series_type_id") private val seriesTypeId: String? = null,
+    private val seriesType: SeriesTypeDto? = null,
 ) {
 
-    fun isNovel() = seriesTypeId == "99" // 99 is Novel ID
+    fun isNovel() = seriesType?.title == "رواية"
 
-    fun toSManga(createThumbnail: (String, String) -> String) = SManga.create().apply {
+    context(source: Dilar)
+    fun toSManga() = SManga.create().apply {
         title = this@SeriesDto.title
         url = "$id/$title"
-        thumbnail_url = cover?.let { createThumbnail(id, it) }
+        thumbnail_url = cover?.let { source.createThumbnail(id, it) }
         description = summary
 
         author = staff.filter { it.staff?.role == "Author" }.joinToString { it.name }
@@ -54,6 +60,11 @@ class SeriesDto(
 class StaffDto(
     val name: String,
     @SerialName("Staff") val staff: RoleDto? = null,
+)
+
+@Serializable
+class SeriesTypeDto(
+    val title: String,
 )
 
 @Serializable
@@ -120,6 +131,21 @@ class PageListDto(
 class PageDto(
     val url: String,
     val order: Int,
+)
+
+@Serializable
+class UnlockDto(
+    val token: String,
+)
+
+@Serializable
+class EncryptedResponseDto(
+    val v: Int,
+    val epk: String,
+    val e: Int,
+    val iv: String,
+    val ct: String,
+    val tag: String,
 )
 
 // common

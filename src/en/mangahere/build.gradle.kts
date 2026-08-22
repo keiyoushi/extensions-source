@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Mangahere"
-    versionCode = 23
+    versionCode = 24
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
@@ -15,9 +15,4 @@ keiyoushi {
         baseUrl = "https://www.mangahere.cc"
         id = 2L
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:cookieinterceptor"))
 }

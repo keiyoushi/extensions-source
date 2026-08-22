@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.atsumaru
 
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -15,8 +16,10 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
@@ -45,8 +48,10 @@ abstract class Atsumaru :
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
+        val offset = (page - 1) * BROWSE_LIMIT
         val data = client.get(
-            "$baseUrl/api/infinite/trending?page=${page - 1}&types=Manga,Manwha,Manhua,OEL${get18Mode()}",
+            "$baseUrl/api/home2/popular?offset=$offset&limit=$BROWSE_LIMIT" +
+                "&types=Manga,Manwha,Manhua,OEL&mediums=Comic&timeframe=daily${get18Mode()}${excludedGenresQuery()}",
         ).parseAs<BrowseMangaDto>()
 
         return MangasPage(data.items.map { it.toSManga(baseUrl) }, true)
@@ -55,27 +60,16 @@ abstract class Atsumaru :
     // =============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val offset = (page - 1) * BROWSE_LIMIT
         val data = client.get(
-            "$baseUrl/api/infinite/recentlyUpdated?page=${page - 1}&types=Manga,Manwha,Manhua,OEL${get18Mode()}",
+            "$baseUrl/api/home2/recentlyUpdated?offset=$offset&limit=$BROWSE_LIMIT" +
+                "&types=Manga,Manwha,Manhua,OEL&mediums=Comic${get18Mode()}${excludedGenresQuery()}",
         ).parseAs<BrowseMangaDto>()
 
         return MangasPage(data.items.map { it.toSManga(baseUrl) }, true)
     }
 
     // =============================== Search ===============================
-
-    override fun getFilterList(data: JsonElement?) = FilterList(
-        Filter.Separator(),
-        GenreFilter(getGenresList()),
-        TagsFilter(getTagsList()),
-        TypeFilter(getTypesList()),
-        StatusFilter(getStatusList()),
-        YearFilter(),
-        MinChaptersFilter(),
-        SortFilter(),
-        AdultFilter(get18Mode().isNotEmpty()),
-        OfficialFilter(),
-    )
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/collections/manga/documents/search".toHttpUrl().newBuilder().apply {
@@ -107,11 +101,13 @@ abstract class Atsumaru :
                         }
                     }
 
-                    is TagsFilter -> {
-                        filter.state.forEachIndexed { index, state ->
-                            when (state.state) {
-                                Filter.TriState.STATE_INCLUDE -> includedTags.add(filter.tagIds[index])
-                                Filter.TriState.STATE_EXCLUDE -> excludedTags.add(filter.tagIds[index])
+                    is TagFilters -> {
+                        filter.state.forEach { letter ->
+                            letter.state.forEachIndexed { index, state ->
+                                when (state.state) {
+                                    Filter.TriState.STATE_INCLUDE -> includedTags.add(letter.tagIds[index])
+                                    Filter.TriState.STATE_EXCLUDE -> excludedTags.add(letter.tagIds[index])
+                                }
                             }
                         }
                     }
@@ -196,6 +192,7 @@ abstract class Atsumaru :
             }
 
             filterBy.add("(mbContentRating:=[`Safe`,`Suggestive`,`Erotica`] || mbContentRating:!=*)")
+            filterBy.add("medium:!=[`Novel`]")
             filterBy.add("views:>0")
 
             addQueryParameter("filter_by", filterBy.joinToString(" && "))
@@ -236,6 +233,30 @@ abstract class Atsumaru :
             fetchDetails = true,
             fetchChapters = false,
         ).manga.apply { initialized = true }
+    }
+
+    // =============================== Filters ===============================
+
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val filters = client.get("$baseUrl/api/explore/availableFilters").parseAs<FilterData>()
+        return filters.toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val excludedGenres = prefs.getStringSet(PREF_EXCLUDE_GENRES, emptySet()).orEmpty()
+        val filters = data?.parseAs<FilterData>()?.getFilterList(excludedGenres).orEmpty()
+
+        return FilterList(
+            filters + listOf(
+                YearFilter(),
+                MinChaptersFilter(),
+                SortFilter(),
+                AdultFilter(get18Mode().isNotEmpty()),
+                OfficialFilter(),
+            ),
+        )
     }
 
     // =========================== Manga Details ============================
@@ -337,6 +358,12 @@ abstract class Atsumaru :
         return if (isEnabled) "&adult=1" else ""
     }
 
+    private fun excludedGenresQuery(): String {
+        val ids = prefs.getStringSet(PREF_EXCLUDE_GENRES, emptySet()).orEmpty()
+        if (ids.isEmpty()) return ""
+        return "&excludedTags=${ids.joinToString(",")}"
+    }
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_SHOW_18
@@ -344,10 +371,47 @@ abstract class Atsumaru :
             summaryOff = "Safe (default)"
             summaryOn = "+18"
         }.let(screen::addPreference)
+
+        val genreFilter = getFilterList().firstInstanceOrNull<GenreFilter>()
+        val genres = genreFilter?.state.orEmpty()
+        val genreIds = genreFilter?.genreIds.orEmpty()
+
+        MultiSelectListPreference(screen.context).apply {
+            key = PREF_EXCLUDE_GENRES
+            title = "Exclude Genres from Browse"
+            entries = genres.map { it.name }.toTypedArray()
+            entryValues = genreIds.toTypedArray()
+            setDefaultValue(emptySet<String>())
+            setEnabled(genres.isNotEmpty())
+
+            fun updateSummary(pref: MultiSelectListPreference, selected: Set<String>?) {
+                pref.summary = if (selected.isNullOrEmpty()) {
+                    "None"
+                } else {
+                    val entryMap = pref.entryValues.zip(pref.entries).toMap()
+                    selected.joinToString { entryMap[it] ?: it }
+                }
+            }
+
+            updateSummary(this, prefs.getStringSet(PREF_EXCLUDE_GENRES, emptySet()))
+
+            setOnPreferenceChangeListener { pref, newValue ->
+                @Suppress("UNCHECKED_CAST")
+                val updated = pref as MultiSelectListPreference
+
+                @Suppress("UNCHECKED_CAST")
+                val newSet = newValue as Set<String>
+
+                updateSummary(updated, newSet)
+                true
+            }
+        }.let(screen::addPreference)
     }
 
     companion object {
         private const val PREF_SHOW_18 = "pref_18_mode"
+        private const val PREF_EXCLUDE_GENRES = "pref_exclude_genres"
+        private const val BROWSE_LIMIT = 40
 
         private val PROTOCOL_REGEX = Regex("^https?:?//")
     }

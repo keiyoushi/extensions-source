@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "MangaSpark"
-    versionCode = 7
+    versionCode = 8
     contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "madara"
 
     source {
         lang = "ar"
-        baseUrl = "https://manga-spark.net"
+        baseUrl = "https://sparkmanga.net"
     }
 }

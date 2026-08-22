@@ -6,7 +6,15 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -109,12 +117,24 @@ class GreenShitPageSrcDto(
     val mime: String? = null,
 )
 
+private object PageListSerializer :
+    JsonTransformingSerializer<List<GreenShitPageSrcDto>>(ListSerializer(GreenShitPageSrcDto.serializer())) {
+    override fun transformDeserialize(element: JsonElement) = JsonArray(
+        element.jsonArray.map { page ->
+            when (page) {
+                is JsonPrimitive -> buildJsonObject { put("src", page.content) }
+                else -> page
+            }
+        },
+    )
+}
+
 @Serializable
 class GreenShitChapterDetailDto(
     @SerialName("cap_id") private val id: Int,
     @SerialName("cap_nome") private val name: String,
     @SerialName("cap_numero") private val number: Float? = null,
-    @SerialName("cap_paginas") private val pages: List<GreenShitPageSrcDto> = emptyList(),
+    @SerialName("cap_paginas") @Serializable(PageListSerializer::class) private val pages: List<GreenShitPageSrcDto> = emptyList(),
     @SerialName("obra") private val manga: GreenShitMangaDto? = null,
 ) {
     fun toPageList(cdnUrl: String): List<Page> {

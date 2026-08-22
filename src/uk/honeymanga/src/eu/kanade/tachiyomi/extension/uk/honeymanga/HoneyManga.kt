@@ -180,16 +180,25 @@ abstract class HoneyManga :
 
         val chaptersAsync = async {
             if (fetchChapters) {
-                val body = ChapterRequestBody(
-                    mangaId = mangaId,
-                    page = 1,
-                    pageSize = 10000,
-                    sortOrder = "DESC",
-                ).toJsonRequestBody()
+                val fetchedChapters = mutableListOf<SChapter>()
+                var page = 1
                 val chaptersUrl = "$apiUrl/v2/chapter/cursor-list"
-                val data = client.post(chaptersUrl, body).use { it.parseAs<ChapterResponse>().data }
                 val hideLocked = hideLocked()
-                data.mapNotNull { it.toSChapter(hideLocked) }
+
+                do {
+                    val body = ChapterRequestBody(
+                        mangaId = mangaId,
+                        page = page,
+                        pageSize = 1000,
+                        sortOrder = "DESC",
+                    ).toJsonRequestBody()
+
+                    val data = client.post(chaptersUrl, body).parseAs<ChapterResponse>()
+                    fetchedChapters.addAll(data.data.mapNotNull { it.toSChapter(hideLocked) })
+                    page++
+                } while (data.hasNextPage)
+
+                fetchedChapters
             } else {
                 chapters
             }

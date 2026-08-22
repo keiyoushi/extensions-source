@@ -2,8 +2,6 @@ package eu.kanade.tachiyomi.extension.ru.desu
 
 import android.widget.Toast
 import androidx.preference.ListPreference
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,52 +9,45 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.float
-import kotlinx.serialization.json.floatOrNull
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Desu :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     private val preferences by getPreferencesLazy()
 
-    override val supportsLatest = true
-
-    private val json: Json by injectLazy()
-
-    override fun headersBuilder() = Headers.Builder().apply {
-        add("User-Agent", "Tachiyomi")
-        add("Referer", baseUrl)
+    override fun Headers.Builder.configureHeaders() = apply {
+        set("User-Agent", "Mihon (+https://github.com/keiyoushi/extensions-source)")
     }
 
-    override val client: OkHttpClient =
-        network.client.newBuilder()
-            .rateLimit(3) { it.host == baseUrlHost }
-            .build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
+    }
 
-    private fun MangaDetDto.toSManga(genresStr: String? = "", authorsStr: String? = null): SManga {
-        val ratingValue = score!!
+    // ============================== Manga Details ===============================
+    private fun MangaDetDto.toSManga(
+        genresStr: String? = genres?.joinToString { it.name } ?: "",
+        authorsStr: String? = authors?.joinToString { it.name },
+    ): SManga {
+        val ratingValue = score?.value ?: 0.0f
         val ratingStar = when {
             ratingValue > 9.5 -> "★★★★★"
             ratingValue > 8.5 -> "★★★★✬"
@@ -71,12 +62,12 @@ abstract class Desu :
             else -> "☆☆☆☆☆"
         }
 
-        val rawAgeStop = when (age_limit!!) {
+        val rawAgeStop = when (content_rating) {
             "no" -> ""
-            else -> age_limit.replace("_plus", "+")
+            else -> content_rating?.replace("_plus", "+") ?: ""
         }
 
-        val category = when (kind!!) {
+        val category = when (kind) {
             "manga" -> "Манга"
             "manhwa" -> "Манхва"
             "manhua" -> "Маньхуа"
@@ -89,31 +80,32 @@ abstract class Desu :
 
         if (!synonyms.isNullOrEmpty()) {
             altName = "Альтернативные названия:\n" +
-                synonyms.replace("/", " / ") +
+                synonyms.joinToString(separator = " / ") +
                 "\n\n"
         }
 
-        return SManga.create().apply {
-            title = if (isEng.equals("rus")) {
+        return SManga.create().also { manga ->
+            manga.title = if (isEng.equals("rus")) {
                 russian
             } else {
                 name
             }
-            url = "/$id"
-            thumbnail_url = image.original
-            description = if (isEng.equals("rus")) {
+            manga.url = "/$id"
+            manga.thumbnail_url = cover.preview
+            val totalVotes = score?.votes ?: 0L
+            manga.description = if (isEng.equals("rus")) {
                 name
             } else {
                 russian
             } + "\n" + ratingStar + " " + ratingValue + " (голосов: " +
-                score_users + ")\n" + altName + this@toSManga.description
-            genre = ("$category, $rawAgeStop, $genresStr").split(", ").filter { it.isNotEmpty() }.joinToString { it.trim() }
-            status = when (trans_status) {
+                totalVotes + ")\n" + altName + description
+            manga.genre = ("$category, $rawAgeStop, $genresStr").split(", ").filter { it.isNotEmpty() }.joinToString { it.trim() }
+            manga.status = when (trans_status) {
                 "continued" -> SManga.ONGOING
 
                 "completed" -> SManga.COMPLETED
 
-                else -> when (this@toSManga.status) {
+                else -> when (status) {
                     "ongoing" -> SManga.ONGOING
 
                     "released" -> SManga.COMPLETED
@@ -122,29 +114,23 @@ abstract class Desu :
                     else -> SManga.UNKNOWN
                 }
             }
-            author = authorsStr
+            manga.author = authorsStr
         }
     }
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl$API_URL/?limit=50&order=popular&page=$page", headers)
-
-    override fun popularMangaParse(response: Response) = searchMangaParse(response)
-
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl$API_URL/?limit=50&order=updated&page=$page", headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl$API_URL/".toHttpUrl().newBuilder()
+    // ============================== Search ===============================
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$baseUrl$API_URL/catalog/?page=$page".toHttpUrl().newBuilder()
             .addQueryParameter("limit", "20")
             .addQueryParameter("page", page.toString())
-
         val types = mutableListOf<Type>()
+        val statuses = mutableListOf<Status>()
         val genres = mutableListOf<Genre>()
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+        filters.forEach { filter ->
             when (filter) {
-                is OrderBy -> url.addQueryParameter("order", arrayOf("popular", "updated", "name")[filter.state])
+                is OrderBy -> url.addQueryParameter("order_by", arrayOf("popular", "updated", "id", "name")[filter.state])
                 is TypeList -> filter.state.forEach { type -> if (type.state) types.add(type) }
+                is StatusList -> filter.state.forEach { status -> if (status.state) statuses.add(status) }
                 is GenreList -> filter.state.forEach { genre -> if (genre.state) genres.add(genre) }
                 else -> {}
             }
@@ -156,135 +142,127 @@ abstract class Desu :
         if (genres.isNotEmpty()) {
             url.addQueryParameter("genres", genres.joinToString(",") { it.id })
         }
+        if (statuses.isNotEmpty()) {
+            url.addQueryParameter("status", statuses.joinToString(",") { it.id })
+        }
         if (query.isNotEmpty()) {
             url.addQueryParameter("search", query)
         }
-        return GET(url.build(), headers)
+
+        val response = client.get(url.build())
+
+        val page = response.parseAs<PageWrapperDto<MangaDetDto>>()
+
+        val mangas = page.mangas.map { it.toSManga() }
+
+        return MangasPage(mangas, page.pagination.last_page > page.pagination.current_page)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val page = json.decodeFromString<PageWrapperDto<MangaDetDto>>(response.body.string())
-        val mangas = page.response.map {
-            it.toSManga()
-        }
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", getFilterList(null))
 
-        return MangasPage(mangas, page.pageNavParams.count > page.pageNavParams.page * page.pageNavParams.limit)
-    }
+    override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", getFilterList(null))
 
-    private fun titleDetailsRequest(manga: SManga): Request = GET(baseUrl + API_URL + manga.url + "/", headers)
-
-    // Workaround to allow "Open in browser" use the real URL.
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(titleDetailsRequest(manga))
-        .asObservableSuccess()
-        .map { response ->
-            mangaDetailsParse(response).apply { initialized = true }
-        }
-
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + "/manga" + manga.url, headers)
-
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val responseString = response.body.string()
-        val series = json.decodeFromString<SeriesWrapperDto<MangaDetDto>>(responseString)
-        val genresStr = json.decodeFromString<SeriesWrapperDto<MangaDetGenresDto>>(responseString).response.genres!!.joinToString { it.russian }
-        val authorsStr = if (responseString.contains("people_name")) {
-            json.decodeFromString<SeriesWrapperDto<MangaDetAuthorsDto>>(responseString).response.authors!!.joinToString { it.people_name }
+    // ============================== Manga/Chapters ===============================
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val mangaDeferred = if (fetchDetails) {
+            async {
+                val responseManga = client.get("$baseUrl$API_URL${manga.url}/")
+                responseManga.parseAs<InfoWrapperDto<MangaDetDto>>().manga.toSManga()
+            }
         } else {
             null
         }
-        return series.response.toSManga(genresStr, authorsStr)
-    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val obj = json.parseToJsonElement(response.body.string())
-            .jsonObject["response"]!!
-            .jsonObject
-
-        val cid = obj["id"]!!.jsonPrimitive.int
-        val objChapter = obj["chapters"]!!
-        return objChapter.jsonObject["list"]!!.jsonArray.filterNot { it.jsonObject["vol"]!!.jsonPrimitive.floatOrNull!! == objChapter.jsonObject["last"]!!.jsonObject["vol"]!!.jsonPrimitive.float && it.jsonObject["ch"]!!.jsonPrimitive.floatOrNull!! > objChapter.jsonObject["last"]!!.jsonObject["ch"]!!.jsonPrimitive.float }.map {
-            val chapterObj = it.jsonObject
-            val ch = chapterObj["ch"]!!.jsonPrimitive.content
-            val vol = chapterObj["vol"]!!.jsonPrimitive.content
-            val fullNumStr = "$vol. Глава $ch"
-            val title = chapterObj["title"]!!.jsonPrimitive.contentOrNull ?: ""
-
-            SChapter.create().apply {
-                name = "$fullNumStr $title"
-                // #apiChapter - JSON API url to automatically delete when chapter is opened in browser
-                url = "/manga/$cid/vol$vol/ch$ch/rus" + "#apiChapter/$cid/chapter/${chapterObj["id"]!!.jsonPrimitive.int}"
-                chapter_number = ch.toFloatOrNull() ?: -1f
-                date_upload = chapterObj["date"]!!.jsonPrimitive.long * 1000L
-            }
-        }
-    }
-
-    override fun chapterListRequest(manga: SManga): Request = titleDetailsRequest(manga)
-
-    override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + API_URL + chapter.url.substringAfterLast("#apiChapter"), headers)
-
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBeforeLast("#apiChapter")
-
-    override fun pageListParse(response: Response): List<Page> {
-        val obj = json.parseToJsonElement(response.body.string())
-            .jsonObject["response"]!!
-            .jsonObject
-
-        return obj["pages"]!!.jsonObject["list"]!!.jsonArray
-            .mapIndexed { i, jsonEl ->
-                Page(i, "", jsonEl.jsonObject["img"]!!.jsonPrimitive.content.replace(Regex("(?<=\\.)desu\\..+(?=/manga/)"), baseUrl.substringAfter("://")))
-            }
-    }
-
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    private fun searchMangaByIdRequest(id: String): Request = GET("$baseUrl$API_URL/$id", headers)
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith("https://")) {
-            val url = query.toHttpUrl()
-            if (url.host != baseUrlHost) {
-                throw Exception("Unsupported url")
-            }
-            val titleid = url.pathSegments[1]
-            return fetchSearchManga(page, "$PREFIX_SLUG_SEARCH$titleid", filters)
-        }
-        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
-            val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
-            client.newCall(searchMangaByIdRequest(realQuery))
-                .asObservableSuccess()
-                .map { response ->
-                    val details = mangaDetailsParse(response)
-                    details.url = "/$realQuery"
-                    MangasPage(listOf(details), false)
+        val chaptersDeferred = if (fetchChapters) {
+            async {
+                val responseChapter = client.get("$baseUrl$API_URL${manga.url}/chapters")
+                val objChapter = responseChapter.parseAs<SeriesWrapperDto<List<ChaptersDto>>>().chapters
+                objChapter.map { chapter ->
+                    val fullNumStr = "${chapter.volume}. Глава ${chapter.number}"
+                    SChapter.create().apply {
+                        name = chapter.title?.let { "$fullNumStr $it" } ?: fullNumStr
+                        url = chapter.id.toString()
+                        memo = buildJsonObject {
+                            put("mangaUrl", manga.url)
+                            put("viewUrl", chapter.view_url)
+                        }
+                        chapter_number = chapter.number.toFloatOrNull() ?: -1f
+                        date_upload = chapter.publish_date.times(1000L)
+                    }
                 }
+            }
         } else {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response ->
-                    searchMangaParse(response)
-                }
+            null
+        }
+
+        val finalManga = mangaDeferred?.await() ?: manga
+        val finalChapters = chaptersDeferred?.await() ?: chapters
+
+        SMangaUpdate(finalManga, finalChapters)
+    }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga${manga.url}"
+
+    // ============================== Chapters Images ===============================
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val titleId = chapter.memo["mangaUrl"]!!.string.removePrefix("/")
+        val chapterId = chapter.url
+        val url = "$baseUrl$API_URL$titleId/chapters/$chapterId"
+
+        val response = client.get(url.toHttpUrl())
+
+        val result = response.parseAs<ChapterWrapperDto<ChapterDataDto>>()
+
+        return result.chapter.pages.mapIndexed { index, page ->
+            Page(index, imageUrl = page.url)
         }
     }
 
+    override fun getChapterUrl(chapter: SChapter): String {
+        val viewUrl = chapter.memo["viewUrl"]?.string
+            ?: throw Exception("Обновите список глав!")
+        return viewUrl
+    }
+
+    // =========================== Deeplink (Manga from Browser) ============================
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "manga" && url.pathSegments[1].length > 1) {
+            val tmpManga = SManga.create().apply {
+                this.url = "/${url.pathSegments[1].substringAfterLast(".")}"
+            }
+            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        }
+        return null
+    }
+
+    // ============================== Filters ===============================
     private class OrderBy :
         Filter.Select<String>(
             "Сортировка",
-            arrayOf("Популярность", "Дата", "Имя"),
+            arrayOf("По популярности", "По обновлению", "По добавлению", "По алфавиту"),
         )
 
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Жанр", genres)
 
     private class TypeList(types: List<Type>) : Filter.Group<Type>("Тип", types)
 
-    private class Type(name: String, val id: String) : Filter.CheckBox(name)
+    private class StatusList(statuses: List<Status>) : Filter.Group<Status>("Статус", statuses)
 
     private class Genre(name: String, val id: String) : Filter.CheckBox(name)
+    private class Type(name: String, val id: String) : Filter.CheckBox(name)
+    private class Status(name: String, val id: String) : Filter.CheckBox(name)
 
-    override fun getFilterList() = FilterList(
-        OrderBy(),
-        TypeList(getTypeList()),
-        GenreList(getGenreList()),
-    )
+//    override fun getFilterList() = FilterList(
+//        OrderBy(),
+//        TypeList(getTypeList()),
+//        GenreList(getGenreList()),
+//        StatusList(getStatusList()),
+//    )
 
     private fun getTypeList() = listOf(
         Type("Манга", "manga"),
@@ -292,6 +270,13 @@ abstract class Desu :
         Type("Маньхуа", "manhua"),
         Type("Ваншот", "one_shot"),
         Type("Комикс", "comics"),
+    )
+
+    private fun getStatusList() = listOf(
+        Status("Выходит", "ongoing"),
+        Status("Издано", "released"),
+        Status("Переводится", "continued"),
+        Status("Завершено", "completed"),
     )
 
     private fun getGenreList() = listOf(
@@ -342,6 +327,7 @@ abstract class Desu :
         Genre("Яой", "Yaoi"),
     )
 
+    // ============================== Preference ===============================
     private var isEng: String? = preferences.getString(LANGUAGE_PREF, "eng")
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
@@ -361,8 +347,7 @@ abstract class Desu :
     }
 
     companion object {
-        const val PREFIX_SLUG_SEARCH = "slug:"
         private const val LANGUAGE_PREF = "DesuTitleLanguage"
-        private const val API_URL = "/manga/api"
+        private const val API_URL = "/api/manga/"
     }
 }

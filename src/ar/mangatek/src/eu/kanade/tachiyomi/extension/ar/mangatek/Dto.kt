@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.ar.mangatek
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
@@ -57,9 +58,7 @@ class Chapter(
             it.isNotBlank()
         } ?: "Chapter $chapterNumber"
         url = "/reader/$mangaSlug/$chapterNumber"
-        date_upload = createdAt?.let {
-            Instant.parseOrNull(it)?.toEpochMilliseconds()
-        } ?: 0L
+        date_upload = Instant.tryParse(createdAt)
     }
 }
 
@@ -69,19 +68,33 @@ class Tag(
 )
 
 @Serializable
-class PageDTO(
-    val imageUrl: String,
-    val bubbles: List<Bubble> = emptyList(),
-) {
-    fun hasSpeechBubbles() = bubbles.isNotEmpty()
-}
+class OverlayData(
+    val pages: List<OverlayPage> = emptyList(),
+)
+
+@Serializable
+class OverlayPage(
+    @SerialName("page_number") val pageNumber: Int,
+    val overlays: List<Bubble> = emptyList(),
+)
 
 @Serializable
 class Bubble(
-    val text: String = "",
-    val left: Float = 0.0f,
-    val top: Float = 0.0f,
-    val width: Float = 0.0f,
-    val height: Float = 0.0f,
-    val angle: Float = 0.0f,
+    val text: String,
+    val x: Float,
+    val y: Float,
+    val w: Float,
+    val h: Float,
+    val angle: Float = 0f,
+    val color: String = "#000000",
+    @SerialName("stroke_color") val strokeColor: String = "#ffffff",
+    @SerialName("font_size_px") val fontSizePx: Float = 37.3f,
+    @SerialName("line_height") val lineHeight: Float = 1.1f,
+    @SerialName("stroke_width_px") val strokeWidthPx: Float = 3f,
+)
+
+@Serializable
+class ChapterProps(
+    val imageUrls: List<String>,
+    val overlayBlob: String?,
 )
