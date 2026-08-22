@@ -55,7 +55,7 @@ abstract class NewManhwa : KeiSource() {
         val response = client.get(searchUrl)
         val document = response.asJsoup()
 
-        // Some queries resolve directly to a details page instead of a result list.
+
         if (document.selectFirst("aside.series-left") != null) {
             val manga = parseMangaDetails(document).apply {
                 url = response.request.url.encodedPath
@@ -71,6 +71,8 @@ abstract class NewManhwa : KeiSource() {
         addQueryParameter("q", query)
         filters.forEach { filter ->
             when (filter) {
+                //To Do: Completed uses en/completed but ongoing and hiatus isn't currently supported by the source.
+                // Completed also doesn't work with Search queries as of now but wroks with genre baseurl/en/completed?q=&genre=comic
                 is StatusFilter -> {
                     if (filter.state > 0) {
                         addQueryParameter("status", filter.values[filter.state])
@@ -104,8 +106,6 @@ abstract class NewManhwa : KeiSource() {
         }
     }.build()
 
-    // Handles pasted URLs (own domain or a known mirror) — KeiSource routes any
-    // URL-shaped query here automatically instead of treating it as free text.
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host && url.host !in MIRROR_HOSTS) return null
 
@@ -172,8 +172,7 @@ abstract class NewManhwa : KeiSource() {
         }
     }
 
-    // Replaces the old parseMangaDetails/parseChapterList pair — fetches the
-    // details page once and parses whichever pieces were actually requested.
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
