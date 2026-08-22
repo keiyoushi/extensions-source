@@ -17,9 +17,9 @@ class ComickUrlActivity : Activity() {
             pathSegments == null || pathSegments.isEmpty() || pathSegments[0] != "comic" -> null
             pathSegments.size == 2 -> pathSegments[1]
             pathSegments.size >= 3 -> {
-                // /comic/<slug>/<hid>-chapter-<n>  → hid is prefix before first '-'
-                val last = pathSegments.last()
-                last.substringBefore("-").substringBefore("?").substringBefore("#")
+                // /comic/<slug>/<hid>-chapter-<n>  → hid is at index 2
+                val chapterSegment = pathSegments[2]
+                chapterSegment.substringBefore("-")
                     .takeIf { it.isNotBlank() } ?: pathSegments[1]
             }
             else -> null

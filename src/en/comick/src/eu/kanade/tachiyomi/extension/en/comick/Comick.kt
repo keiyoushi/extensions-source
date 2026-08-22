@@ -288,9 +288,8 @@ abstract class Comick :
         val url = "$baseUrl/chapter/$hid".toHttpUrl().newBuilder().build()
         val response = client.get(url, headers)
         val data = response.parseAs<ChapterPagesResponse>()
-        val images = data.chapter?.images
-            ?: data.chapter?.mdImages
-            ?: emptyList()
+        val chapter = data.chapter
+        val images = chapter?.images?.takeIf { it.isNotEmpty() } ?: chapter?.mdImages ?: emptyList()
 
         return images.mapIndexed { index, img ->
             val imageUrl = when {
