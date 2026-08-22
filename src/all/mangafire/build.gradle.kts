@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "MangaFire"
-    versionCode = 29
+    versionCode = 30
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

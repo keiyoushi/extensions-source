@@ -16,7 +16,7 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import okhttp3.FormBody
@@ -26,8 +26,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import java.net.URLEncoder
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.time.format.DateTimeFormatter
 
 @Source
 abstract class BatCave : KeiSource() {
@@ -38,10 +37,27 @@ abstract class BatCave : KeiSource() {
     }
 
     // ============================== Popular ==============================
-    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.POPULAR)
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", SortFilter.POPULAR)
 
     // ============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.LATEST)
+    override suspend fun getLatestUpdates(page: Int) = parseLatestMangas(client.get("$baseUrl/page/$page"))
+
+    private fun parseLatestMangas(response: Response): MangasPage {
+        val document = response.asJsoup()
+
+        val entries = document.select("#content-load > .latest.grid-item").map { element ->
+            SManga.create().apply {
+                with(element.selectFirst(".latest__title > a")!!) {
+                    setUrlWithoutDomain(absUrl("href"))
+                    title = ownText()
+                }
+                thumbnail_url = element.selectFirst(".latest__img img")?.absUrl("src")
+            }
+        }
+        val hasNextPage = document.selectFirst("li.pagination a[href]") != null
+
+        return MangasPage(entries, hasNextPage)
+    }
 
     // ============================== Search ===============================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -195,12 +211,12 @@ abstract class BatCave : KeiSource() {
                 url = "/reader/${data.comicId}/${chap.id}${data.xhash}"
                 name = chap.title
                 chapter_number = chap.number
-                date_upload = dateFormat.tryParse(chap.date)
+                date_upload = dateFormat.tryParseDate(chap.date)
             }
         }
     }
 
-    private val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.US)
+    private val dateFormat = DateTimeFormatter.ofPattern("d.M.yyyy")
 
     // ============================== Related ==============================
     override val supportsRelatedMangas get() = true

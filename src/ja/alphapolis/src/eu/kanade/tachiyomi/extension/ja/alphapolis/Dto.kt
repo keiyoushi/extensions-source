@@ -1,11 +1,13 @@
 package eu.kanade.tachiyomi.extension.ja.alphapolis
 
 import eu.kanade.tachiyomi.source.model.SChapter
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Serializable
@@ -25,16 +27,17 @@ class Episode(
 
     fun toSChapter(baseUrl: String) = SChapter.create().apply {
         val mangaUrl = (baseUrl + this@Episode.url).toHttpUrl()
-        val mangaId = mangaUrl.pathSegments[2]
-        val episodeId = mangaUrl.pathSegments[3]
         val lock = if (isLocked) "🔒 " else ""
-        url = "$mangaId#$episodeId"
+        url = mangaUrl.pathSegments[3]
         name = lock + mainTitle
-        date_upload = dateFormat.tryParse(upTime)
+        date_upload = dateFormat.tryParseDate(upTime)
+        memo = buildJsonObject {
+            put("mangaId", mangaUrl.pathSegments[2].toInt())
+        }
     }
 }
 
-private val dateFormat = SimpleDateFormat("yyyy.MM.dd'更新'", Locale.ROOT)
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy.MM.dd'更新'", Locale.ROOT)
 
 @Serializable
 class Rental(
@@ -45,7 +48,7 @@ class Rental(
 @Suppress("unused")
 @Serializable
 class ChapterRequestBody(
-    @SerialName("manga_id") val mangaId: Int,
+    @SerialName("manga_id") private val mangaId: Int,
 )
 
 @Serializable
@@ -55,6 +58,7 @@ class ViewerResponse(
 
 @Serializable
 class ViewerPage(
+    val placeholder: String,
     val images: List<ViewerImage>,
 )
 
@@ -66,9 +70,9 @@ class ViewerImage(
 @Suppress("unused")
 @Serializable
 class ViewerRequestBody(
-    @SerialName("episode_no") val episodeNo: Int,
-    @SerialName("hide_page") val hidePage: Boolean,
-    @SerialName("manga_sele_id") val mangaSeleId: Int,
-    val preview: Boolean,
-    val resolution: String,
+    @SerialName("episode_no") private val episodeNo: Int,
+    @SerialName("hide_page") private val hidePage: Boolean,
+    @SerialName("manga_sele_id") private val mangaSeleId: Int,
+    private val preview: Boolean,
+    private val resolution: String,
 )
