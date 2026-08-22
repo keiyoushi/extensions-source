@@ -16,7 +16,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.CountDownLatch
@@ -34,106 +33,103 @@ internal class CloudflareSolverInterceptor(
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
-        return if (response.header("cf-mitigated") == "challenge") {
-            val handler = Handler(Looper.getMainLooper())
-            val latch = CountDownLatch(1)
-            var webView: WebView? = null
 
-            handler.post {
-                Toast.makeText(application, "Attempting to solve Cloudflare challenge", Toast.LENGTH_SHORT).show()
+        if (response.header("cf-mitigated") != "challenge") {
+            return response
+        }
 
-                val view = WebView(application)
-                webView = view
+        val handler = Handler(Looper.getMainLooper())
+        val latch = CountDownLatch(1)
+        var webView: WebView? = null
 
-                with(view.settings) {
-                    javaScriptEnabled = true
-                    domStorageEnabled = true
-                    databaseEnabled = true
-                    loadWithOverviewMode = true
-                    useWideViewPort = true
-                    blockNetworkImage = false
-                    userAgentString = request.header("User-Agent")
-                }
+        handler.post {
+            Toast.makeText(application, "Attempting to solve Cloudflare challenge", Toast.LENGTH_SHORT).show()
 
-                val isFirstRequest = AtomicBoolean(true)
-                val challengeCompleted = AtomicBoolean(false)
+            val view = WebView(application)
+            webView = view
 
-                view.webViewClient = object : WebViewClient() {
-                    override fun shouldInterceptRequest(
-                        view: WebView,
-                        webResourceRequest: WebResourceRequest,
-                    ): WebResourceResponse? = run {
-                        val requestUrl = webResourceRequest.url?.toString()?.toHttpUrlOrNull()
-                            ?: return super.shouldInterceptRequest(view, webResourceRequest)
-
-                        when (webResourceRequest.method) {
-                            "GET" if requestUrl.host == request.url.host &&
-                                requestUrl.encodedPath == request.url.encodedPath -> {
-                                if (isFirstRequest.getAndSet(false)) {
-                                    response.injectJS(OUTER_SCRIPT).toWebResourceResponse()
-                                } else {
-                                    super.shouldInterceptRequest(view, webResourceRequest)
-                                }
-                            }
-
-                            "POST" if requestUrl.host == request.url.host &&
-                                requestUrl.encodedPath == request.url.encodedPath -> {
-                                challengeCompleted.set(true)
-                                super.shouldInterceptRequest(view, webResourceRequest)
-                            }
-
-                            "GET" if requestUrl.toString().startsWith("https://challenges.cloudflare.com/cdn-cgi/challenge-platform/") -> {
-                                client
-                                    .newCall(webResourceRequest.toRequest())
-                                    .execute()
-                                    .injectJS(INNER_SCRIPT)
-                                    .toWebResourceResponse()
-                            }
-
-                            else -> super.shouldInterceptRequest(view, webResourceRequest)
-                        }
-                    }
-
-                    override fun onPageFinished(view: WebView?, url: String?) {
-                        if (challengeCompleted.get()) {
-                            latch.countDown()
-                        }
-                        super.onPageFinished(view, url)
-                    }
-                }
-
-                // Somewhat useful if you need to debug WebView issues. Don't delete.
-                /*view.webChromeClient = object : WebChromeClient() {
-                    override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-                        if (consoleMessage == null) {
-                            return false
-                        }
-                        val logContent = "wv: ${consoleMessage.message()} (${consoleMessage.sourceId()}, line ${consoleMessage.lineNumber()})"
-                        when (consoleMessage.messageLevel()) {
-                            ConsoleMessage.MessageLevel.DEBUG -> Log.d("cloudflare", logContent)
-                            ConsoleMessage.MessageLevel.ERROR -> Log.e("cloudflare", logContent)
-                            ConsoleMessage.MessageLevel.LOG -> Log.i("cloudflare", logContent)
-                            ConsoleMessage.MessageLevel.TIP -> Log.i("cloudflare", logContent)
-                            ConsoleMessage.MessageLevel.WARNING -> Log.w("cloudflare", logContent)
-                            else -> Log.d("cloudflare", logContent)
-                        }
-
-                        return true
-                    }
-                }*/
-
-                view.loadUrl(request.url.toString(), request.headers.toMap())
+            with(view.settings) {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+                loadWithOverviewMode = true
+                useWideViewPort = true
+                blockNetworkImage = false
+                userAgentString = request.header("User-Agent")
             }
 
-            latch.await(30, TimeUnit.SECONDS)
-            handler.post { webView?.destroy() }
-            response.close()
+            val challengeCompleted = AtomicBoolean(false)
 
-            // Use the original Cloudflare interceptor in case the solver failed
-            cloudflareInterceptor.intercept(chain)
-        } else {
-            response
+            view.webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(
+                    view: WebView,
+                    webResourceRequest: WebResourceRequest,
+                ): WebResourceResponse? = run {
+                    val requestUrl = webResourceRequest.url?.toString()?.toHttpUrlOrNull()
+                        ?: return super.shouldInterceptRequest(view, webResourceRequest)
+
+                    when (webResourceRequest.method) {
+                        "GET" if requestUrl.toString().startsWith("https://challenges.cloudflare.com/cdn-cgi/challenge-platform/") -> {
+                            client
+                                .newCall(webResourceRequest.toRequest())
+                                .execute()
+                                .injectJS(INNER_SCRIPT)
+                                .toWebResourceResponse()
+                        }
+
+                        "POST" if requestUrl.host == request.url.host &&
+                            requestUrl.encodedPath == request.url.encodedPath -> {
+                            challengeCompleted.set(true)
+                            super.shouldInterceptRequest(view, webResourceRequest)
+                        }
+
+                        else -> super.shouldInterceptRequest(view, webResourceRequest)
+                    }
+                }
+
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    if (challengeCompleted.get()) {
+                        latch.countDown()
+                    }
+                    super.onPageFinished(view, url)
+                }
+            }
+
+            // Somewhat useful if you need to debug WebView issues. Don't delete.
+            /*view.webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                    if (consoleMessage == null) {
+                        return false
+                    }
+                    val logContent = "wv: ${consoleMessage.message()} (${consoleMessage.sourceId()}, line ${consoleMessage.lineNumber()})"
+                    when (consoleMessage.messageLevel()) {
+                        ConsoleMessage.MessageLevel.DEBUG -> Log.d("cloudflare", logContent)
+                        ConsoleMessage.MessageLevel.ERROR -> Log.e("cloudflare", logContent)
+                        ConsoleMessage.MessageLevel.LOG -> Log.i("cloudflare", logContent)
+                        ConsoleMessage.MessageLevel.TIP -> Log.i("cloudflare", logContent)
+                        ConsoleMessage.MessageLevel.WARNING -> Log.w("cloudflare", logContent)
+                        else -> Log.d("cloudflare", logContent)
+                    }
+
+                    return true
+                }
+            }*/
+
+            view.loadDataWithBaseURL(
+                request.url.toString(),
+                response.body.string().injectJS(OUTER_SCRIPT),
+                "text/html",
+                "UTF-8",
+                null,
+            )
         }
+
+        latch.await(30, TimeUnit.SECONDS)
+        handler.post { webView?.destroy() }
+        response.close()
+
+        // Use the original Cloudflare interceptor in case the solver failed
+        return cloudflareInterceptor.intercept(chain)
     }
 
     private fun WebResourceRequest.toRequest(): Request = Request.Builder().apply {
@@ -153,17 +149,27 @@ internal class CloudflareSolverInterceptor(
     )
 
     /**
-     * Returns a new response with the injected JavaScript code.
+     * Returns a new HTML string with the injected JavaScript code.
      *
      * The injected script element is prepended to the HTML, and all `Error` classes are patched so that the injected code doesn't appear in
      * stack traces and that the line numbers correspond to the original unpatched HTML.
      */
+    private fun String.injectJS(js: String, nonce: String = ""): String = "<script nonce=\"$nonce\">document.currentScript.remove();(()=>{$js;$ERROR_PATCHER_SCRIPT;errorPatcher(${
+        BASE_LINE_COUNT + js.count { it == '\n' }
+    });})();</script>\n$this"
+
+    /**
+     * Returns a new response with the injected JavaScript code.
+     */
     private fun Response.injectJS(js: String): Response = newBuilder().body(
         body.contentType().let { contentType ->
-            val nonce = header("Content-Security-Policy")?.let { nonceRegex.find(it) }?.value.orEmpty()
-            val lines = BASE_LINE_COUNT + js.count { it == '\n' }
-
-            "<script nonce=\"$nonce\">document.currentScript.remove();(()=>{$js;$ERROR_PATCHER_SCRIPT;errorPatcher($lines);})();</script>\n${body.string()}".toResponseBody(contentType)
+            body
+                .string()
+                .injectJS(
+                    js,
+                    header("Content-Security-Policy")?.let { nonceRegex.find(it) }?.value.orEmpty(),
+                )
+                .toResponseBody(contentType)
         },
     ).build()
 
