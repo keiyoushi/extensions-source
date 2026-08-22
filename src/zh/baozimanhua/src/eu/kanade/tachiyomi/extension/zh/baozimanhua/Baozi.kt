@@ -23,7 +23,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
@@ -120,9 +119,7 @@ abstract class Baozi :
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val response = client.get("$baseUrl/classify?page=$page")
-        // Use manual parse to ensure baseUri is correct, and filter template ghost cards
-        val body = response.body.string()
-        val document = Jsoup.parse(body, response.request.url.toString())
+        val document = response.asJsoup()
 
         val mangas = parseMangaCards(document)
             .filter { it.title.isNotEmpty() && !it.title.contains("{{") }
@@ -223,9 +220,7 @@ abstract class Baozi :
 
         while (true) {
             val (document, responseUrl) = client.get(requestUrl).use { resp ->
-                val responseUrlInner = resp.request.url.toString()
-                val bodyString = resp.body.string()
-                Jsoup.parse(bodyString, responseUrlInner) to responseUrlInner
+                resp.asJsoup() to resp.request.url.toString()
             }
 
             val pageImages = document.select(
@@ -365,8 +360,8 @@ abstract class Baozi :
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
         return SMangaUpdate(
-            manga = if (fetchDetails) mangaDetailsParse(document).apply { url = manga.url } else manga,
-            chapters = if (fetchChapters) chapterListParse(document) else chapters,
+            manga = mangaDetailsParse(document).apply { url = manga.url },
+            chapters = chapterListParse(document),
         )
     }
 
