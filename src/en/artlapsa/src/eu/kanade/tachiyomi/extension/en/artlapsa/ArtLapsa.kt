@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -27,15 +26,24 @@ abstract class ArtLapsa : Keyoapp() {
 
     override fun genresRequest() = GET("$baseUrl/search", headers)
 
-    override fun parseGenres(document: Document): List<Genre> = document.select("[wire:model.live=genre] option:not(:contains(All))").map { Genre(it.text(), it.attr("value")) }
+    override fun parseGenres(document: Document): List<Genre> = document.parseSelect("genre").map { (id, name) -> Genre(name, id) }
+
+    override fun parseTypes(document: Document): List<Type> = document.parseSelect("type")
+        .map { (id, name) -> Type(name, id) }
+        .filterNot { excludeNovels && it.id.equals("novel", true) }
+
+    override fun parseStatuses(document: Document): List<Status> = document.parseSelect("status").map { (id, name) -> Status(name, id) }
+
+    private fun Document.parseSelect(name: String): List<Pair<String, String>> = select("select[wire:model.live=$name] option[value~=.]").map { it.attr("value") to it.text() }
+
+    // The search dropdowns are single-value `<select>`s
+    override fun getFilterList(): FilterList = singleSelectFilterList()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
             if (page > 1) addQueryParameter("page", page.toString())
             if (query.isNotBlank()) addQueryParameter("title", query)
-            filters.firstInstanceOrNull<GenreList>()?.state
-                ?.filter { it.state }
-                ?.forEach { addQueryParameter("genre", it.id) }
+            addSelectedTo(filters)
         }.build()
         return GET(url, headers)
     }
@@ -45,8 +53,9 @@ abstract class ArtLapsa : Keyoapp() {
     override fun searchMangaParse(response: Response): MangasPage {
         runCatching { fetchGenres() }
         val document = response.asJsoup()
-        val mangas = document.select(searchMangaSelector()).map(::searchMangaFromElement)
-        return MangasPage(mangas, hasNextPage = mangas.size >= 20)
+        val entries = document.select(searchMangaSelector())
+        val mangas = entries.withoutNovels().map(::searchMangaFromElement)
+        return MangasPage(mangas, hasNextPage = entries.size >= 20)
     }
 
     override val altNameSelector: String = "div.font-medium:containsOwn(Alternative titles) ~ div span.select-all"
