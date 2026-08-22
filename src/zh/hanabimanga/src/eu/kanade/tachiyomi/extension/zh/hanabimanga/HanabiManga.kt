@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.zh.hanabimanga
 
+import android.os.Build
+import android.util.Log
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -20,7 +22,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.add
+import kotlinx.serialization.json.addAll
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
@@ -31,14 +33,20 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.io.IOException
+import java.security.MessageDigest
 import java.util.Locale
-import kotlin.getValue
+import javax.crypto.Mac.getInstance
+import javax.crypto.spec.SecretKeySpec
 
-const val ANONYMOUS_TOKEN =
+private const val ANONYMOUS_TOKEN =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVoa3ZxcnhtY2FwZ3Rwc3BnbHJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5NjgzMjksImV4cCI6MjA3OTU0NDMyOX0.uuHr888lp14ObW5eWowJrHPJGgQf3sF2l7NPmFN84g4"
-const val COMIC_BODY =
+private const val COMIC_BODY =
     "id,title,summary,cover_url,release_date,is_finished,authors,region,latest_chapter_title,tags(id,name),categories(id,name)"
-const val PAGE_SIZE = 20
+private const val APP_VERSION = "2.4.9"
+private const val APP_VERSION_CODE = 2040999
+private const val CERT_FINGERPRINT = "13a8c9fbdaf19115f39b48dc0f3a7c99568ebb0c91ba1a71218c76f53f7877a8"
+private const val NATIVE_SECRET = "7c6cb7f919a688c4c1f5eacf047d97dcd542cae8e3fc84d926160ad879bf3845"
+private const val PAGE_SIZE = 20
 
 @Source
 abstract class HanabiManga :
@@ -48,7 +56,6 @@ abstract class HanabiManga :
     override fun getHomeUrl() = "https://web.hanabimanga.com/zh-CN"
 
     override fun Headers.Builder.configureHeaders() = apply {
-        // add("Authorization", ANONYMOUS_TOKEN)
         add("apikey", ANONYMOUS_TOKEN)
         removeAll("Referer")
         removeAll("Origin")
@@ -73,6 +80,8 @@ abstract class HanabiManga :
     }
 
     // Customize
+
+    private val signatureKey by lazy { sha256Bytes(NATIVE_SECRET.hexToBytes() + CERT_FINGERPRINT.hexToBytes()) }
 
     private suspend fun token(): String {
         val httpUrl = getHomeUrl().toHttpUrl()
@@ -131,6 +140,43 @@ abstract class HanabiManga :
             if (fetchChapters) append("chapters(id,idx,title,image_count,category,updated_at)")
         },
     )
+
+    private fun mobilePageRequest(chapter: SChapter): JsonObject {
+        val comicId = chapter.memo["cid"]!!.int
+        val pages = List(chapter.memo["size"]!!.int) { "%03d".format(Locale.ROOT, it + 1) }
+        val timestamp = System.currentTimeMillis() / 1000
+        val canonicalPayload = "v1|comic_id=$comicId|chapter_id=${chapter.url}|pages=${pages.joinToString(",")}|timestamp=$timestamp"
+        val signature = getInstance("HmacSHA256").run {
+            init(SecretKeySpec(signatureKey, this.algorithm))
+            doFinal(canonicalPayload.encodeToByteArray()).toHex()
+        }
+        return buildJsonObject {
+            put("comic_id", comicId)
+            put("chapter_id", chapter.url)
+            putJsonArray("pages") { addAll(pages) }
+            put("timestamp", timestamp)
+            put("signature", signature)
+            putJsonObject("client_diag") {
+                put("native_status", "ok")
+                put("native_fingerprint_prefix", CERT_FINGERPRINT.take(8))
+                put("canonical_payload_sha256", sha256Bytes(canonicalPayload.encodeToByteArray()).toHex())
+                put("signature_prefix", signature.take(16))
+                put("app_version", APP_VERSION)
+                put("app_version_code", APP_VERSION_CODE)
+                put("brand", Build.BRAND)
+                put("manufacturer", Build.MANUFACTURER)
+                put("model", Build.MODEL)
+                put("product", Build.PRODUCT)
+                put("sdk_int", Build.VERSION.SDK_INT)
+            }
+        }
+    }
+
+    private fun sha256Bytes(value: ByteArray) = MessageDigest.getInstance("SHA-256").digest(value)
+
+    private fun String.hexToBytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+
+    private fun ByteArray.toHex() = joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
 
     // Popular
 
@@ -211,16 +257,12 @@ abstract class HanabiManga :
     // Page
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val body = buildJsonObject {
-            put("comic_id", chapter.memo["cid"]!!.int)
-            put("chapter_id", chapter.url)
-            putJsonArray("pages") {
-                repeat(chapter.memo["size"]!!.int) { add(String.format(Locale.getDefault(), "%03d", it + 1)) }
-            }
-        }
-        val label = if (pref.getBoolean(PREF_AI_SR, false)) "vip" else "sd"
-        val authHeader = headers.newBuilder().add("Authorization", "Bearer ${token()}").build()
-        val response = client.post("$baseUrl/functions/v1/$label-image-url", authHeader, body.toJsonRequestBody(), false)
+        val response = client.post(
+            "$baseUrl/functions/v1/${if (pref.getBoolean(PREF_AI_SR, false)) "vip" else "sd"}-image-url",
+            headers.newBuilder().add("Authorization", "Bearer ${token()}").build(),
+            mobilePageRequest(chapter).toJsonRequestBody(),
+            false,
+        )
         if (response.code == 401) response.use { throw Exception("请先在插件设置中登录") }
         if (response.code == 429) {
             when (response.parseAs<JsonObject>().getString("code")) {
@@ -228,8 +270,15 @@ abstract class HanabiManga :
                 "FREE_QUOTA_EXCEEDED" -> throw Exception("今日超分额度已用完")
             }
         }
-        val result = response.parseAs<PagesResult>()
-        val info = with(result.scrambleInfo) { "$ticket|$nonce|$cols|$rows" }
-        return result.urls.mapIndexed { i, o -> Page(i, imageUrl = "${o.getString("url")}#$info") }
+        return response.parseAs<PagesResult>().let { result ->
+            if (result.scrambleInfo == null) {
+                Log.v("HanabiManga", "移动端 | comicId: ${chapter.memo["cid"]!!.int}, chapterId: ${chapter.url}")
+                result.urls.mapIndexed { i, p -> Page(i, imageUrl = p.getString("url")) }
+            } else {
+                Log.v("HanabiManga", "网页端 | comicId: ${chapter.memo["cid"]!!.int}, chapterId: ${chapter.url}")
+                val info = with(result.scrambleInfo) { "$ticket|$nonce|$cols|$rows" }
+                result.urls.mapIndexed { i, p -> Page(i, imageUrl = "${p.getString("url")}#$info") }
+            }
+        }
     }
 }
