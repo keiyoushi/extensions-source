@@ -55,7 +55,6 @@ abstract class NewManhwa : KeiSource() {
         val response = client.get(searchUrl)
         val document = response.asJsoup()
 
-
         if (document.selectFirst("aside.series-left") != null) {
             val manga = parseMangaDetails(document).apply {
                 url = response.request.url.encodedPath
@@ -71,7 +70,7 @@ abstract class NewManhwa : KeiSource() {
         addQueryParameter("q", query)
         filters.forEach { filter ->
             when (filter) {
-                //To Do: Completed uses en/completed but ongoing and hiatus isn't currently supported by the source.
+                // To Do: Completed uses en/completed but ongoing and hiatus isn't currently supported by the source.
                 // Completed also doesn't work with Search queries as of now but wroks with genre baseurl/en/completed?q=&genre=comic
                 is StatusFilter -> {
                     if (filter.state > 0) {
@@ -171,7 +170,6 @@ abstract class NewManhwa : KeiSource() {
             } ?: 0L
         }
     }
-
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
