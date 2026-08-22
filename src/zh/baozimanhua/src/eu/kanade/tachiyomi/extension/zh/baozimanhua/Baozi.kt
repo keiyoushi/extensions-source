@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.baozimanhua
 
-import android.content.SharedPreferences
 import androidx.preference.CheckBoxPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -17,15 +16,16 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
@@ -33,10 +33,13 @@ abstract class Baozi :
     KeiSource(),
     ConfigurableSource {
 
-    private val preferences: SharedPreferences = getPreferences()
+    private val preferences by getPreferencesLazy()
 
-    private val basePath: String
-        get() = baseUrl.toHttpUrl().encodedPath.trimEnd('/')
+    private val isAppMirror: Boolean
+        get() = baseUrl.toHttpUrl().host.startsWith("app")
+
+    private val siteBaseUrl: String
+        get() = if (isAppMirror) "$baseUrl/baozimhapp" else baseUrl
 
     private val bannerInterceptor = BaoziBannerInterceptor(
         level = preferences.getString(BaoziBannerInterceptor.PREF, DEFAULT_LEVEL)!!.toInt(),
@@ -52,7 +55,7 @@ abstract class Baozi :
     private fun normalizeRelativeUrl(url: String): String {
         val resolvedUrl = baseUrl.toHttpUrl().resolve(url) ?: return url
         return buildString {
-            append(resolvedUrl.encodedPath.removePrefix(basePath))
+            append(resolvedUrl.encodedPath.removePrefix("/baozimhapp"))
             resolvedUrl.encodedQuery?.let { append('?').append(it) }
         }
     }
@@ -80,9 +83,12 @@ abstract class Baozi :
             if (isNotEmpty()) {
                 val date = document.selectFirst("em")?.text().orEmpty()
                 if (date.contains('年')) {
-                    this[0].date_upload = DATE_FORMAT.tryParse(
-                        date.removePrefix("(").removeSuffix(" 更新)"),
-                    )
+                    this[0].date_upload = runCatching {
+                        LocalDate.parse(
+                            date.removePrefix("(").removeSuffix(" 更新)"),
+                            DATE_FORMAT,
+                        ).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+                    }.getOrDefault(0L)
                 }
             }
         }
@@ -118,7 +124,7 @@ abstract class Baozi :
     // --- Listings (popular/latest/search results) ---
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrl/classify?page=$page")
+        val response = client.get("$siteBaseUrl/classify?page=$page")
         val document = response.asJsoup()
 
         val mangas = parseMangaCards(document)
@@ -127,7 +133,7 @@ abstract class Baozi :
         return MangasPage(mangas, mangas.size >= 36)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = if (basePath.isNotEmpty()) {
+    override suspend fun getLatestUpdates(page: Int): MangasPage = if (isAppMirror) {
         getPopularManga(page)
     } else {
         val document = client.get("$baseUrl/list/new").asJsoup()
@@ -198,11 +204,11 @@ abstract class Baozi :
         var chapterUrl = if (chapter.url.startsWith("http")) {
             chapter.url
         } else {
-            baseUrl + chapter.url
+            siteBaseUrl + chapter.url
         }
 
         // Only convert/quickpage on app mirrors (to avoid breaking web mirrors)
-        if (basePath.isNotEmpty() && isQuickPage) {
+        if (isAppMirror && isQuickPage) {
             chapterUrl = quickPageUrl(chapterUrl)
         }
 
@@ -213,7 +219,7 @@ abstract class Baozi :
             false
         }
 
-        val shouldSkipPagination = basePath.isNotEmpty() && isQuickPage && isAlreadyAppFormat
+        val shouldSkipPagination = isAppMirror && isQuickPage && isAlreadyAppFormat
 
         var requestUrl = chapterUrl
         var lastImageId: Int? = null
@@ -272,7 +278,7 @@ abstract class Baozi :
         return if (isAppFormat) {
             url
         } else {
-            baseUrl.toHttpUrl().newBuilder().apply {
+            siteBaseUrl.toHttpUrl().newBuilder().apply {
                 addPathSegments("comic/chapter")
                 httpUrl.queryParameter("comic_id")?.let { addPathSegment(it) }
                 val section = httpUrl.queryParameter("section_slot")
@@ -322,7 +328,7 @@ abstract class Baozi :
                 .toString()
         } else {
             val parts = filters.filterIsInstance<UriPartFilter>().joinToString("&") { it.toUriPart() }
-            "$baseUrl/classify?page=$page&$parts"
+            "$siteBaseUrl/classify?page=$page&$parts"
         }
 
         val response = client.get(requestUrl)
@@ -347,10 +353,12 @@ abstract class Baozi :
             url.pathSegments.getOrNull(comicIndex + 1)
         } ?: return null
 
-        return mangaDetailsParse(client.get("$baseUrl/comic/$id").asJsoup()).apply {
+        return mangaDetailsParse(client.get("$siteBaseUrl/comic/$id").asJsoup()).apply {
             this.url = normalizeRelativeUrl("/comic/$id")
         }
     }
+
+    override fun getMangaUrl(manga: SManga): String = siteBaseUrl + manga.url
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -440,7 +448,7 @@ abstract class Baozi :
         private const val CHAPTER_ORDER_ENABLED = "1"
         private const val CHAPTER_ORDER_AGGRESSIVE = "2"
 
-        private val DATE_FORMAT by lazy { SimpleDateFormat("yyyy年MM月dd日", Locale.ENGLISH) }
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy年MM月dd日", Locale.ENGLISH)
 
         private const val QUICK_PAGES_PREF = "QUICK_PAGES"
         private const val REMOVE_DUPLICATE_IMAGES_PREF = "REMOVE_DUPLICATE_IMAGES"
