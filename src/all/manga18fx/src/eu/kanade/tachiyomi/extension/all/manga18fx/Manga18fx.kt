@@ -217,23 +217,11 @@ abstract class Manga18fx : KeiSource() {
 
     // Related
     override val supportsRelatedMangas = true
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        // Using `memo` to skip extra request if already initialized
-        val relatedMangas = manga.memo["relatedMangas"]?.parseAs<List<RelatedManga>>()
-            ?: run {
-                val mangaUpdate = fetchMangaUpdate(
-                    manga = manga,
-                    chapters = emptyList(),
-                    fetchDetails = true,
-                    fetchChapters = false,
-                )
-                mangaUpdate.manga.memo["relatedMangas"]?.parseAs<List<RelatedManga>>()
-            }
-
-        return relatedMangas
-            ?.map { it.toSManga() }
-            ?: emptyList()
-    }
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = manga
+        .memo["relatedMangas"]
+        ?.parseAs<List<RelatedManga>>()
+        ?.map { it.toSManga() }
+        ?: emptyList()
 
     @Serializable
     class RelatedManga(
