@@ -42,30 +42,36 @@ class LibraryMangaDto(
     }
 }
 
-internal fun JsonObject.toMangasPage(): MangasPage {
-    val mangas = values.asSequence()
-        .mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
-        .filter(PayloadCipher::isEncrypted)
-        .firstOrNull()
-        ?.let { PayloadCipher.decrypt(it).parseAs<List<LibraryMangaDto>>() }
-        ?: throw PayloadException()
+/** The site keeps flipping between sending payloads as plain JSON and as an encrypted string. */
+internal fun JsonElement.decrypted(): JsonElement {
+    val encrypted = (this as? JsonPrimitive)?.contentOrNull ?: return this
 
+    return PayloadCipher.decrypt(encrypted).parseAs()
+}
+
+internal fun JsonObject.toMangasPage(): MangasPage {
+    val payload = values.firstOrNull { it is JsonArray }
+        ?: values.firstOrNull { (it as? JsonPrimitive)?.contentOrNull?.let(PayloadCipher::isEncrypted) == true }
+        ?: throw Exception("Não foi possível ler a lista de obras")
+
+    val mangas = payload.decrypted().parseAs<List<LibraryMangaDto>>()
     val pagination = get("pagination")?.parseAs<LibraryPaginationDto>() ?: LibraryPaginationDto()
+
     return MangasPage(mangas.map(LibraryMangaDto::toSManga), pagination.hasNextPage)
 }
 
 @Serializable
 class SeriesPayloadDto(
     val slug: String,
-    private val encryptedChapters: String,
+    private val chapters: JsonElement,
     val description: String? = null,
     val author: String? = null,
     val artist: String? = null,
     val coverImage: String? = null,
     val status: String? = null,
 ) {
-    val chapters: List<SChapter>
-        get() = PayloadCipher.decrypt(encryptedChapters)
+    val chapterList: List<SChapter>
+        get() = chapters.decrypted()
             .parseAs<List<SeriesChapterDto>>()
             .map { it.toSChapter(slug) }
 }
@@ -86,7 +92,7 @@ internal fun String.parseSeriesPage(): SeriesPage {
     extractNextJsRsc<JsonElement> { element ->
         when (element) {
             is JsonObject -> {
-                if (payload == null && "encryptedChapters" in element && "slug" in element) {
+                if (payload == null && "chapters" in element && "slug" in element) {
                     payload = element.parseAs()
                 }
                 if (title == null && "seriesId" in element && "title" in element) {
@@ -118,7 +124,7 @@ internal fun String.parseSeriesPage(): SeriesPage {
         }
     }
 
-    return SeriesPage(manga, series.chapters)
+    return SeriesPage(manga, series.chapterList)
 }
 
 private fun JsonArray.genreBadgeOrNull(): String? {
@@ -161,10 +167,10 @@ class SeriesChapterDto(
 @Serializable
 class ChapterPayloadDto(
     val seriesSlug: String,
-    private val encryptedChapter: String,
+    private val chapter: JsonElement,
 ) {
     val pages: List<Page>
-        get() = PayloadCipher.decrypt(encryptedChapter)
+        get() = chapter.decrypted()
             .parseAs<ChapterImagesDto>()
             .toPageList()
 }
