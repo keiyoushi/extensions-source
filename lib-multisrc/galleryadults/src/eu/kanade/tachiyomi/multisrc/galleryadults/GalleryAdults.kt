@@ -484,7 +484,7 @@ abstract class GalleryAdults :
             mangaTitle("h1")?.let { title = it }
             thumbnail_url = getCover()
             genre = getInfo("Tags")
-            author = getInfo("Artists")
+            author = getInfo("Artists").ifEmpty { getInfo("Groups") }
             description = getDescription(document)
         }
     }
@@ -511,11 +511,11 @@ abstract class GalleryAdults :
         }
 
     protected open fun Element.getDescription(document: Document? = null): String = (
-        listOf("Parodies", "Characters", "Languages", "Categories", "Category")
+        listOf("Parodies", "Characters", "Groups", "Languages", "Categories", "Category")
             .mapNotNull { tag ->
                 getInfo(tag)
                     .takeIf { it.isNotBlank() }
-                    ?.let { "$tag: $it" }
+                    ?.let { "**$tag**: $it" }
             } +
             listOfNotNull(
                 getInfoPages(document),
@@ -527,13 +527,13 @@ abstract class GalleryAdults :
 
     protected open fun Element.getInfoPages(document: Document? = null): String? = document?.inputIdValueOf(totalPagesSelector)
         ?.takeIf { it.isNotBlank() }
-        ?.let { "Pages: $it" }
+        ?.let { "**Pages**: $it" }
 
     protected open fun Element.getInfoAlternativeTitle(): String? = selectFirst("h1 + h2, .subtitle")?.ownText()
         .takeIf { !it.isNullOrBlank() }
-        ?.let { "Alternative title: $it" }
+        ?.let { "**Alternative title**: $it" }
 
-    protected open fun Element.getInfoFullTitle(): String? = if (preferences.shortTitle) "Full title: ${mangaFullTitle("h1")}" else null
+    protected open fun Element.getInfoFullTitle(): String? = if (preferences.shortTitle) "**Full title**: ${mangaFullTitle("h1")}" else null
 
     protected open fun Element.getTime(): Long = selectFirst(".uploaded")
         ?.ownText()
