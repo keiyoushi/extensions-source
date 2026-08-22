@@ -4,6 +4,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -285,9 +287,9 @@ private fun demographicLabel(id: Int): String? = when (id) {
  * Title selection for the details page.
  *
  * When "Translated title" is on, ordered resolution:
- * 1. Webtoons/Tapas URLs → match against English md_titles → use the md_title
- * 2. engtl URL → match against English md_titles → use the md_title
- * 3. English md_titles → pick closest to 12 chars
+ * 1. Resmi İngilizce link (engtl) → türetilen başlık alternatif İngilizce başlıklarla eşleştir → eşleşen alternatif
+ * 2. links / referrers içindeki diğer http URL'ler → aynı eşleştirme
+ * 3. Alternatif başlıklar — boşluk hariç 12 karakter kuralı (tam 12 → >12 en küçüğü → <12 en büyüğü)
  * 4. API comic.title
  *
  * When "Translated title" is off, return API title directly.
@@ -310,11 +312,12 @@ private fun isHttpUrl(value: String): Boolean = value.startsWith("http://", igno
     value.startsWith("https://", ignoreCase = true)
 
 /**
- * Ordered title resolution:
- * 1. Webtoons/Tapas URL-derived titles → match against English md_titles
- * 2. engtl URL-derived title → match against English md_titles
- * 3. English md_titles → closest to 12 characters
- * 4. API title
+ * Ordered title resolution (user spec):
+ * 1. İlk resmi İngilizce linkteki başlığı türet, alternatif İngilizce başlıklarla eşleştir ve eşleşen alternatifi döndür.
+ * 2. Resmi İngilizce link yoksa; sitedeki links / referrers içindeki tüm http URL'leri tara, aynı eşleştirmeyi dene.
+ * 3. Hiçbiri eşleşmezse alternatif başlıklar arasından boşluk hariç uzunluğa göre seç:
+ *    tam 12 karakter → yoksa >12 içinde en küçüğü (12'ye en yakın) → yoksa <12 içinde en büyüğü.
+ * 4. Alternatif yoksa API başlığı.
  */
 private fun pickTitle(
     apiTitle: String?,
@@ -330,53 +333,103 @@ private fun pickTitle(
         ?.filterNot { isNumericIdTitle(it) }
         .orEmpty()
 
-    fun matchOrUse(derivedTitle: String): String = enTitles.firstOrNull { titlesAreClose(it, derivedTitle) }
-        ?: derivedTitle
-
-    // 1. Webtoons / Tapas URLs
-    val preferredUrls = links?.mapNotNull { (_, el) ->
-        (el as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { isHttpUrl(it) }
-    }?.filter { url ->
-        val host = url.toHttpUrlOrNull()?.host?.lowercase() ?: return@filter false
-        host == "webtoons.com" || host.endsWith(".webtoons.com") ||
-            host == "tapas.io" || host.endsWith(".tapas.io")
-    }.orEmpty()
-    for (url in preferredUrls) {
-        val derived = titleFromOfficialUrl(url)
-        if (derived != null) return matchOrUse(derived)
+    fun findMatchingAlt(derivedTitle: String): String? {
+        val normDerived = normalizeTitleForMatch(derivedTitle)
+        // 1) exact normalized equality
+        enTitles.firstOrNull { normalizeTitleForMatch(it) == normDerived }?.let { return it }
+        // 2) tolerant close check on normalized forms
+        return enTitles.firstOrNull { titlesAreClose(it, derivedTitle) }
     }
 
-    // 2. engtl URL
-    val engtlUrl = (links?.get("engtl") as? JsonPrimitive)?.contentOrNull?.trim()
-    if (engtlUrl != null && isHttpUrl(engtlUrl)) {
-        val derived = titleFromOfficialUrl(engtlUrl)
-        if (derived != null) return matchOrUse(derived)
+    // 1. Resmi İngilizce link(ler) — engtl string + urls.engtl[]
+    val officialUrls = extractOfficialEnglishUrls(links)
+    for (url in officialUrls) {
+        val derived = titleFromOfficialUrl(url) ?: continue
+        findMatchingAlt(derived)?.let { return it }
     }
 
-    // 3. English md_titles → closest to 12 characters
+    // 2. links / referrers içindeki diğer http URL'ler
+    if (links != null) {
+        val otherUrls = extractOtherUrls(links, officialUrls.toSet())
+        for (url in otherUrls) {
+            val derived = titleFromOfficialUrl(url) ?: continue
+            findMatchingAlt(derived)?.let { return it }
+        }
+    }
+
+    // 3. Alternatif başlıklar — boşluk hariç uzunluk kuralı
     if (enTitles.isNotEmpty()) {
-        return enTitles.minWithOrNull(
-            compareBy(
-                { abs(it.length - 12) },
-                { -it.length },
-            ),
-        )
+        fun nonSpaceLen(s: String) = s.count { !it.isWhitespace() }
+        val exact12 = enTitles.filter { nonSpaceLen(it) == 12 }
+        if (exact12.isNotEmpty()) {
+            return exact12.minWithOrNull(compareBy({ it.length }, { it }))
+        }
+        val over12 = enTitles.filter { nonSpaceLen(it) > 12 }
+        if (over12.isNotEmpty()) {
+            return over12.minWithOrNull(compareBy({ nonSpaceLen(it) }, { it.length }))
+        }
+        val under12 = enTitles.filter { nonSpaceLen(it) < 12 }
+        if (under12.isNotEmpty()) {
+            return under12.maxWithOrNull(compareBy({ nonSpaceLen(it) }, { it.length }))
+        }
+        return enTitles.first()
     }
 
     // 4. API title
     return apiTitle
 }
 
+private fun extractOfficialEnglishUrls(links: JsonObject?): List<String> {
+    if (links == null) return emptyList()
+    val result = mutableListOf<String>()
+    (links["engtl"] as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { isHttpUrl(it) }?.let { result.add(it) }
+    val urlsObj = links["urls"] as? JsonObject
+    val engtlArray = urlsObj?.get("engtl") as? JsonArray
+    engtlArray?.forEach { el ->
+        val url = (el as? JsonObject)?.get("url") as? JsonPrimitive
+        url?.contentOrNull?.trim()?.takeIf { isHttpUrl(it) }?.let { result.add(it) }
+    }
+    return result.distinct()
+}
+
+private fun extractOtherUrls(links: JsonObject?, exclude: Set<String>): List<String> {
+    if (links == null) return emptyList()
+    val all = mutableListOf<String>()
+    fun collect(el: JsonElement) {
+        when (el) {
+            is JsonPrimitive -> el.contentOrNull?.trim()?.takeIf { isHttpUrl(it) }?.let { all.add(it) }
+            is JsonObject -> el.values.forEach { collect(it) }
+            is JsonArray -> el.forEach { collect(it) }
+        }
+    }
+    collect(links)
+    return all.filterNot { it in exclude }.distinct()
+}
+
+private fun normalizeTitleForMatch(title: String): String {
+    return title.lowercase(Locale.ROOT)
+        .replace("'", "")
+        .replace("’", "")
+        .replace("`", "")
+        .replace(Regex("[^a-z0-9]+"), " ")
+        .trim()
+        .replace(Regex("\\s+"), " ")
+}
+
 /**
- * Check if two titles refer to the same work.
- * Matches when first words are identical and lengths differ by ≤20%.
+ * Check if two titles refer to the same work (normalized).
+ * Matches when first words identical and normalized lengths differ by ≤20%, or exact equality.
  */
 private fun titlesAreClose(title1: String, title2: String): Boolean {
-    val words1 = title1.lowercase().split(Regex("\\s+"))
-    val words2 = title2.lowercase().split(Regex("\\s+"))
+    val n1 = normalizeTitleForMatch(title1)
+    val n2 = normalizeTitleForMatch(title2)
+    if (n1.isEmpty() || n2.isEmpty()) return false
+    if (n1 == n2) return true
+    val words1 = n1.split(Regex("\\s+"))
+    val words2 = n2.split(Regex("\\s+"))
     if (words1.firstOrNull() != words2.firstOrNull()) return false
-    val maxLen = maxOf(title1.length, title2.length)
-    return abs(title1.length - title2.length) <= maxLen * 0.2
+    val maxLen = maxOf(n1.length, n2.length)
+    return abs(n1.length - n2.length) <= maxLen * 0.2
 }
 
 /** e.g. .../comic/Trading-Snacks-for-Gold-in-the-Apocalypse/69cb... -> "Trading Snacks For Gold In The Apocalypse" */
