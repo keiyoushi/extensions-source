@@ -43,6 +43,7 @@ abstract class MangaFire :
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(2)
         addInterceptor(VrfSigner().interceptor())
+        addInterceptor(ChallengeSolverInterceptor)
     }
 
     override fun Headers.Builder.configureHeaders() = apply {
