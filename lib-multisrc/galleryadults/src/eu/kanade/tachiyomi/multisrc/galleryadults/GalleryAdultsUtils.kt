@@ -1,9 +1,11 @@
 package eu.kanade.tachiyomi.multisrc.galleryadults
 
+import keiyoushi.utils.tryParse
 import keiyoushi.utils.tryParseDate
 import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
+import kotlin.time.Instant
 
 // any space except after a comma (we're going to replace spaces only between words)
 val regexSpaceNotAfterComma = Regex("""(?<!,)\s+""")
@@ -52,8 +54,9 @@ fun String?.toDate(formatter: DateTimeFormatter?): Long {
     }
 }
 
-private fun parseDate(date: String?): Long {
-    date ?: return 0L
+private fun parseDate(date: String): Long {
+    val parsed = Instant.tryParse(date)
+    if (parsed != 0L) return parsed
 
     return when {
         // Handle 'yesterday' and 'today', using midnight

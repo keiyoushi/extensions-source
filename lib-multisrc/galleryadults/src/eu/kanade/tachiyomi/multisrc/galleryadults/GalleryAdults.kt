@@ -76,7 +76,7 @@ abstract class GalleryAdults :
     // Default to [mangaLang] won't filter anything
     protected open fun Element.mangaLang() = mangaLang
 
-    protected open fun String.addPageUri(page: Int) = "$this${if ('?' in this) "&" else "/?"}page=$page"
+    protected open fun String.addPageUri(page: Int) = "${this.trim('/')}${if ('?' in this) "&" else "/?"}page=$page"
 
     /* Popular */
     protected open val popularMangaUrl get() = buildString {
@@ -177,6 +177,8 @@ abstract class GalleryAdults :
     protected open val useBasicSearch: Boolean
         get() = !useIntermediateSearch
 
+    protected open val searchPopularPath = "popular"
+
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.toIntOrNull() != null) return MangasPage(listOf(getMangaById(query)), false)
 
@@ -225,7 +227,7 @@ abstract class GalleryAdults :
     /**
      * Browsing user's personal favorites saved on site. This requires login in view WebView.
      */
-    protected open suspend fun searchFavoriteFilter(page: Int, query: String, filters: FilterList): MangasPage = parseSearchManga(
+    protected open suspend fun searchFavoriteFilter(page: Int, query: String, filters: FilterList) = parseSearchManga(
         client.post(
             "$baseUrl/$favoritePath",
             xhrHeaders,
@@ -377,7 +379,7 @@ abstract class GalleryAdults :
         return baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("tag")
             addPathSegment(selectedGenres.single().uri)
-            if (sortOrderFilter?.state == 0) addPathSegment("popular")
+            if (sortOrderFilter?.state == 0) addPathSegment(searchPopularPath)
         }
             .build().toString()
     }
@@ -393,7 +395,7 @@ abstract class GalleryAdults :
         return baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("language")
             addPathSegment(LANGUAGE_SPEECHLESS)
-            if (sortOrderFilter?.state == 0) addPathSegment("popular")
+            if (sortOrderFilter?.state == 0) addPathSegment(searchPopularPath)
         }.build().toString()
     }
 
