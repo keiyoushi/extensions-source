@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.manhwaz
 
-import android.util.Log
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,11 +11,11 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.jsonInstance
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.encodeToJsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -104,9 +103,8 @@ abstract class ManhwaZ : KeiSource() {
             }.build()
         } else {
             baseUrl.toHttpUrl().newBuilder().apply {
-                val filterList = filters.ifEmpty { getFilterList() }
-                val genreFilter = filterList.find { it is GenreFilter } as? GenreFilter
-                val orderByFilter = filterList.find { it is OrderByFilter } as? OrderByFilter
+                val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
+                val orderByFilter = filters.firstInstanceOrNull<OrderByFilter>()
                 val genreId = genreFilter?.options?.get(genreFilter.state)?.id
 
                 if (genreFilter != null && genreFilter.state != 0) {
@@ -208,20 +206,13 @@ abstract class ManhwaZ : KeiSource() {
                 it.absUrl("href").toHttpUrl().encodedPath.removePrefix("/"),
             )
         }
-        return jsonInstance.encodeToJsonElement(genres)
+        return genres.toJsonElement()
     }
 
     protected open fun genreListSelector() = "ul.page-genres li a"
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val genres = data?.let {
-            try {
-                jsonInstance.decodeFromJsonElement<List<SelectOption>>(it)
-            } catch (e: Exception) {
-                Log.e("ManhwaZ/$name", "Failed to decode genres", e)
-                null
-            }
-        }
+        val genres = data?.parseAs<List<SelectOption>>()
 
         val filters = buildList {
             add(Filter.Header(intl["filter_ignored_warning"]))
