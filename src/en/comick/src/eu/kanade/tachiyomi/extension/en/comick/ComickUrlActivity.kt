@@ -13,11 +13,21 @@ class ComickUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size > 1 && pathSegments[0] == "comic") {
-            val slug = pathSegments[1]
+        val hidOrSlug = when {
+            pathSegments == null || pathSegments.isEmpty() || pathSegments[0] != "comic" -> null
+            pathSegments.size == 2 -> pathSegments[1]
+            pathSegments.size >= 3 -> {
+                // /comic/<slug>/<hid>-chapter-<n>  → hid is prefix before first '-'
+                val last = pathSegments.last()
+                last.substringBefore("-").substringBefore("?").substringBefore("#")
+                    .takeIf { it.isNotBlank() } ?: pathSegments[1]
+            }
+            else -> null
+        }
+        if (hidOrSlug != null) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Comick.SLUG_SEARCH_PREFIX}$slug")
+                putExtra("query", "${Comick.SLUG_SEARCH_PREFIX}$hidOrSlug")
                 putExtra("filter", packageName)
             }
             try {

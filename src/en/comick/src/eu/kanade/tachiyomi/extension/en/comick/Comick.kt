@@ -54,7 +54,7 @@ abstract class Comick :
     override fun Headers.Builder.configureHeaders() = apply {
         set(
             "User-Agent",
-            "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+            "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36",
         )
         set("Referer", "$WEB_BASE_URL/")
         set("Accept", "application/json")
@@ -79,11 +79,11 @@ abstract class Comick :
         showScore = Preferences.showScore(preferences),
     )
 
-    // ============================== Popular ==============================
+    // ============================== Popular / Latest =========================
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
+    private suspend fun fetchBySort(sort: String, page: Int): MangasPage {
         val url = "$baseUrl/v1.0/search".toHttpUrl().newBuilder()
-            .addQueryParameter("sort", "follow")
+            .addQueryParameter("sort", sort)
             .addQueryParameter("lang", "en")
             .addQueryParameter("limit", LIMIT.toString())
             .addQueryParameter("page", page.coerceAtLeast(1).toString())
@@ -98,29 +98,14 @@ abstract class Comick :
         return MangasPage(mangas, hasNextPage = result.size >= LIMIT)
     }
 
-    // ============================== Latest ===============================
+    override suspend fun getPopularManga(page: Int): MangasPage = fetchBySort("follow", page)
 
     /**
      * Latest updates via search sorted by last upload.
      * Uses the same endpoint/pagination as Search + "Last updated"
      * (the /chapter feed does not paginate reliably for infinite scroll).
      */
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = "$baseUrl/v1.0/search".toHttpUrl().newBuilder()
-            .addQueryParameter("sort", "uploaded")
-            .addQueryParameter("lang", "en")
-            .addQueryParameter("limit", LIMIT.toString())
-            .addQueryParameter("page", page.coerceAtLeast(1).toString())
-            .addQueryParameter("tachiyomi", "true")
-            .let { applyContentRating(it) }
-            .build()
-
-        val response = client.get(url, headers)
-        val result = response.parseAs<List<SearchMangaDto>>()
-        val prefs = detailsPrefs()
-        val mangas = result.map { it.toSManga(prefs) }
-        return MangasPage(mangas, hasNextPage = result.size >= LIMIT)
-    }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = fetchBySort("uploaded", page)
 
     // ============================== Search ===============================
 
@@ -297,24 +282,15 @@ abstract class Comick :
         val hid = chapter.url.substringAfterLast('/').takeIf { it.isNotBlank() }
             ?: return emptyList()
 
-        suspend fun fetchImages(withTachiyomiParam: Boolean): List<PageImageDto> {
-            val url = "$baseUrl/chapter/$hid".toHttpUrl().newBuilder().apply {
-                if (withTachiyomiParam) addQueryParameter("tachiyomi", "true")
-            }.build()
-
-            val response = client.get(url, headers)
-            val data = response.parseAs<ChapterPagesResponse>()
-            return data.chapter?.images
-                ?: data.chapter?.mdImages
-                ?: emptyList()
-        }
-
-        // The canonical response (no tachiyomi=true) carries md_images for
-        // announcement/News chapters, which tachiyomi=true omits. Fall back
-        // to the legacy tachiyomi=true shape when the canonical one is empty.
-        val images = fetchImages(withTachiyomiParam = false).ifEmpty {
-            fetchImages(withTachiyomiParam = true)
-        }
+        // Tracker: api.comick.dev serves no page images — return empty list
+        // without an extra fallback request. News / announcement chapters
+        // may carry a single md_image; handle both shapes in one request.
+        val url = "$baseUrl/chapter/$hid".toHttpUrl().newBuilder().build()
+        val response = client.get(url, headers)
+        val data = response.parseAs<ChapterPagesResponse>()
+        val images = data.chapter?.images
+            ?: data.chapter?.mdImages
+            ?: emptyList()
 
         return images.mapIndexed { index, img ->
             val imageUrl = when {

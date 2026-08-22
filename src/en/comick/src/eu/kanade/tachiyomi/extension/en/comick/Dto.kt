@@ -101,7 +101,6 @@ class ComicDetailsResponse(
     val comic: ComicDetailsDto? = null,
     val authors: List<PersonDto>? = null,
     val artists: List<PersonDto>? = null,
-    val genres: List<PersonDto>? = null,
     val demographic: String? = null,
 )
 
@@ -114,6 +113,7 @@ class ComicDetailsDto(
     val status: Int? = null,
     val country: String? = null,
     val year: Int? = null,
+    val demographic: Int? = null,
     @SerialName("bayesian_rating") val bayesianRating: String? = null,
     @SerialName("rating_count") val ratingCount: Int? = null,
     val links: JsonObject? = null,
@@ -121,6 +121,7 @@ class ComicDetailsDto(
     @SerialName("md_covers") val mdCovers: List<CoverDto>? = null,
     @SerialName("cover_url") val coverUrl: String? = null,
     @SerialName("md_comic_md_genres") val genres: List<GenreWrapperDto>? = null,
+    @SerialName("mu_comic_categories") val muComicCategories: List<MuCategoryEntryDto?>? = null,
     @SerialName("mu_comics") val muComics: MuComicsDto? = null,
 )
 
@@ -229,22 +230,27 @@ fun ComicDetailsResponse.toSManga(original: SManga, prefs: DetailsPrefs = Detail
             val name = g.name?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
             name to g.group.orEmpty()
         }
-        // Site "Tags" chips: MangaUpdates categories under mu_comics
-        // ComickFun path: mu_comics.mu_comic_categories[].mu_categories.title
-        val muTags = c.muComics?.categories.orEmpty().mapNotNull {
+        // Site "Tags" chips: MangaUpdates categories — handle both shapes:
+        // - nested: mu_comics.mu_comic_categories[].mu_categories.title
+        // - flat:   comic.mu_comic_categories[].mu_categories.title
+        val muTagsNested = c.muComics?.categories.orEmpty().mapNotNull {
             it?.category?.title?.takeIf { t -> t.isNotBlank() }
         }
-        // Top-level genres from details response (ComickFun)
-        val topGenres = genres.orEmpty().mapNotNull { it.name?.takeIf { n -> n.isNotBlank() } }
+        val muTagsFlat = c.muComicCategories.orEmpty().mapNotNull {
+            it?.category?.title?.takeIf { t -> t.isNotBlank() }
+        }
+        val muTags = (muTagsNested + muTagsFlat).distinct()
         val selected = when (prefs.tagMode) {
             "basic" -> mdTags.filter { (_, group) ->
                 group.isEmpty() || group.equals("Genre", ignoreCase = true)
-            }.map { it.first } + topGenres
-            else -> mdTags.map { it.first } + topGenres + muTags
+            }.map { it.first }
+            else -> mdTags.map { it.first } + muTags
         }
+        val demogLabel = demographic?.takeIf { it.isNotBlank() }
+            ?: c.demographic?.let { demographicLabel(it) }
         genre = buildList {
             originLabel?.let { add(it) }
-            demographic?.takeIf { it.isNotBlank() }?.let { add(it) }
+            demogLabel?.let { add(it) }
             addAll(selected)
         }.distinct().joinToString(", ")
 
@@ -264,6 +270,15 @@ private fun formatScore(rating: Double, count: Int?): String {
     val stars = "★".repeat(filled) + "☆".repeat(5 - filled)
     val votes = if (count != null && count > 0) " (${"%,d".format(Locale.US, count)} ratings)" else ""
     return "$stars $rating$votes"
+}
+
+private fun demographicLabel(id: Int): String? = when (id) {
+    1 -> "Shounen"
+    2 -> "Shoujo"
+    3 -> "Seinen"
+    4 -> "Josei"
+    5 -> "None"
+    else -> null
 }
 
 /**
