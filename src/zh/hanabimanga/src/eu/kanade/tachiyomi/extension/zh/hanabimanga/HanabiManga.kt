@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.zh.hanabimanga
 
 import android.os.Build
+import android.util.Log
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -271,8 +272,10 @@ abstract class HanabiManga :
         }
         return response.parseAs<PagesResult>().let { result ->
             if (result.scrambleInfo == null) {
+                Log.v("HanabiManga", "移动端 | comicId: ${chapter.memo["cid"]!!.int}, chapterId: ${chapter.url}")
                 result.urls.mapIndexed { i, p -> Page(i, imageUrl = p.getString("url")) }
             } else {
+                Log.v("HanabiManga", "网页端 | comicId: ${chapter.memo["cid"]!!.int}, chapterId: ${chapter.url}")
                 val info = with(result.scrambleInfo) { "$ticket|$nonce|$cols|$rows" }
                 result.urls.mapIndexed { i, p -> Page(i, imageUrl = "${p.getString("url")}#$info") }
             }
