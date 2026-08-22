@@ -11,6 +11,7 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
@@ -36,16 +37,14 @@ abstract class NHentaiTo : GalleryAdults() {
             val frag = request.url.fragment.orEmpty()
             var response = chain.proceed(request)
 
-            if ((!response.isSuccessful && !response.peekBody(64).string().contains("<html", true)) ||
-                !frag.startsWith("fallback")
-            ) {
+            if (!frag.startsWith("fallback") || response.isRealSuccess()) {
                 return@addInterceptor response
             }
 
             frag.substringAfter("fallback").parseAs<List<String>>().forEach {
                 response.close()
                 response = chain.proceed(request.newBuilder().url(it).build())
-                if (response.isSuccessful) return@addInterceptor response
+                if (response.isRealSuccess()) return@addInterceptor response
             }
             response
         }
@@ -98,7 +97,7 @@ abstract class NHentaiTo : GalleryAdults() {
 
     override fun Element.mangaUrl() = absUrl("href")
 
-    override fun Element.getCover() = selectFirst(".cover img")?.withFallback()
+    override fun Element.getCover() = selectFirst("#cover img")?.withFallback()
 
     override fun Element.mangaThumbnail() = selectFirst("img")?.withFallback()
 
@@ -109,11 +108,11 @@ abstract class NHentaiTo : GalleryAdults() {
     }
 
     // Details
-    override val mangaDetailInfoSelector = "#info-block"
+    override val mangaDetailInfoSelector = "#bigcontainer"
     override val idPrefixUri = "g"
 
     // Tags
-    override fun getInfoSelector(tag: String) = ".field-name:contains($tag) .tags a"
+    override fun getInfoSelector(tag: String) = "#info-block .field-name:contains($tag) .tags a"
     override fun Element.infoTagName() = selectFirst(".name")?.ownText() ?: ""
 
     // Pages
@@ -145,4 +144,6 @@ abstract class NHentaiTo : GalleryAdults() {
         "Most favorited" to "most-favorited",
         "Most Liked" to "most-liked",
     )
+
+    fun Response.isRealSuccess() = isSuccessful && !peekBody(64).string().contains("<html", true)
 }
