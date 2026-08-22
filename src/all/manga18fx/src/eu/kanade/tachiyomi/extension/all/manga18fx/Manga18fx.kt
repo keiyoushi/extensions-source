@@ -14,7 +14,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
@@ -22,14 +22,13 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 // Similar to Madara, but not really
 @Source
 abstract class Manga18fx : KeiSource() {
-    // DateTimeFormatter does not support 2-digit years
-    private val chapterDateFormat = SimpleDateFormat("dd MMM yy", Locale.ENGLISH)
+    private val chapterDateFormat = DateTimeFormatter.ofPattern("dd MMM yy", Locale.ENGLISH)
 
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -199,7 +198,7 @@ abstract class Manga18fx : KeiSource() {
         return SChapter.create().apply {
             setUrlWithoutDomain(chapterLink.absUrl("href"))
             name = chapterLink.text()
-            date_upload = chapterDateFormat.tryParse(chapterDateStr)
+            date_upload = chapterDateFormat.tryParseDate(chapterDateStr)
         }
     }
 
