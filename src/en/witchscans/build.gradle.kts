@@ -6,13 +6,12 @@ plugins {
 
 keiyoushi {
     name = "WitchScans"
-    versionCode = 0
+    versionCode = 33
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "mangathemesia"
+    libVersion = "1.6"
 
     source {
         lang = "en"
-        baseUrl = "https://witchscans.com"
+        baseUrl = "https://witchtoons.net"
     }
 }
