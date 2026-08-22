@@ -8,19 +8,14 @@ keiyoushi {
     name = "New Manhwa"
     versionCode = 35
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "en"
-        baseUrl {
-            mirrors(
-                "https://saymanhwa.com",
-            )
-        }
+        baseUrl = "https://saymanhwa.com"
     }
 
     deeplink {
-        host("saymanhwa.com")
         path("/..*")
     }
 }
