@@ -6,24 +6,21 @@ import android.widget.Button
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
+import keiyoushi.utils.tryParseDate
 import java.text.ParseException
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import java.time.format.DateTimeFormatter
 
-val formatterDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-    .apply { timeZone = TimeZone.getTimeZone("UTC") }
-val formatterDateTime = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
-    .apply { timeZone = TimeZone.getTimeZone("UTC") }
+private val formatterDate = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+private val formatterDateTime = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
 
 fun parseDate(date: String): Long = try {
-    formatterDate.parse(date)!!.time
+    formatterDate.tryParseDate(date)
 } catch (_: ParseException) {
     0L
 }
 
 fun parseDateTime(date: String) = try {
-    formatterDateTime.parse(date)!!.time
+    formatterDateTime.tryParseDate(date)
 } catch (_: ParseException) {
     0L
 }
@@ -32,12 +29,14 @@ fun PreferenceScreen.addEditTextPreference(
     title: String,
     default: String,
     summary: String,
+    getSummary: (String) -> String = { summary },
     dialogMessage: String? = null,
     inputType: Int? = null,
     validate: ((String) -> Boolean)? = null,
     validationMessage: String? = null,
     key: String = title,
     restartRequired: Boolean = false,
+    onComplete: (String) -> Unit = {},
 ) {
     EditTextPreference(context).apply {
         this.key = key
@@ -84,6 +83,10 @@ fun PreferenceScreen.addEditTextPreference(
                     Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
                 }
 
+                if (result) {
+                    onComplete(text)
+                    this.summary = getSummary(text)
+                }
                 result
             } catch (e: Exception) {
                 e.printStackTrace()
