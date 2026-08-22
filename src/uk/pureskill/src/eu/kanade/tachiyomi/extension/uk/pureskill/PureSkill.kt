@@ -100,7 +100,7 @@ abstract class PureSkill : KeiSource() {
         val data = client.get("$baseUrl/cubari/$mangaUrl.json").parseAs<MangaFull>()
 
         val newManga = data.toSManga(mangaUrl)
-        val newChapters = data.toSChapters(mangaUrl).sortedByDescending { it.chapter_number }
+        val newChapters = data.toSChapters(mangaUrl).asReversed()
 
         return SMangaUpdate(newManga, newChapters)
     }
