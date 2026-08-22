@@ -5,14 +5,18 @@ plugins {
 }
 
 keiyoushi {
-    name = "HanabiManga"
-    versionCode = 2
+    name = "MangaMelon"
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
-        name = "花火漫画"
-        lang = "zh"
-        baseUrl = "https://uhkvqrxmcapgtpspglrp.moedot.net"
+        baseUrl = "https://mangamelon.com"
+        lang = "en"
+    }
+
+    deeplink {
+        path("/manga/..*")
+        path("/chapter/..*")
     }
 }
