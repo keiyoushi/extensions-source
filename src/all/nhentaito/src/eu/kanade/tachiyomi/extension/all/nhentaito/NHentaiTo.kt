@@ -4,11 +4,13 @@ import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
 import eu.kanade.tachiyomi.multisrc.galleryadults.SortOrderFilter
 import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
 import eu.kanade.tachiyomi.multisrc.galleryadults.toDate
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -50,14 +52,6 @@ abstract class NHentaiTo : GalleryAdults() {
         }
     }
 
-    private val languages: List<Pair<String, String>> = listOf(
-        Pair(LANGUAGE_ENGLISH, "19"),
-        Pair(LANGUAGE_JAPANESE, "2"),
-        Pair(LANGUAGE_CHINESE, "10197"),
-        Pair(LANGUAGE_KOREAN, "84916"),
-    )
-    private val langCode = languages.firstOrNull { lang -> lang.first == mangaLang }?.second
-
     // popular
 
     override val popularMangaUrl get() = basicSearchUrl(
@@ -81,16 +75,6 @@ abstract class NHentaiTo : GalleryAdults() {
                 },
         ),
     )
-
-    override fun Element.mangaLang(): String {
-        val tags = attr("data-tags").orEmpty().split(" ")
-
-        return when {
-            langCode in tags -> mangaLang
-            "10314" in tags -> LANGUAGE_SPEECHLESS
-            else -> "other"
-        }
-    }
 
     override fun popularMangaSelector() = ".gallery a:not([rel~=sponsored])"
     override fun popularMangaNextPageSelector() = "a.next"
@@ -127,10 +111,12 @@ abstract class NHentaiTo : GalleryAdults() {
     // search
     override fun basicSearchUrl(page: Int, query: String, filters: FilterList): String {
         val sortOrderFilter = filters.firstInstanceOrNull<SortOrderFilter>()
+        val excludeTags = filters.firstInstanceOrNull<ExcludeFilter>()
 
         return "$baseUrl/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("q", query.ifEmpty { "*" })
             sortOrderFilter?.state?.let { addQueryParameter("sort", getSortOrderURIs()[it].second) }
+            excludeTags?.state?.let { addQueryParameter("exclude", it) }
             addQueryParameter("lang", mangaLang)
         }.build().toString()
     }
@@ -138,12 +124,20 @@ abstract class NHentaiTo : GalleryAdults() {
     // Filters
     override val supportsFilterFetching = false
 
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        listOf(
+            ExcludeFilter(),
+        ) + super.getFilterList(data).list,
+    )
+
     override fun getSortOrderURIs() = listOf(
         "Relevance" to "relevance",
         "Newest" to "newest",
         "Most favorited" to "most-favorited",
         "Most Liked" to "most-liked",
     )
+
+    class ExcludeFilter : Filter.Text("Exclude Tags (seperate by comma)")
 
     fun Response.isRealSuccess() = isSuccessful && !peekBody(64).string().contains("<html", true)
 }
