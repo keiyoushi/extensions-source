@@ -22,6 +22,7 @@ abstract class Madara : MadaraBase() {
     override suspend fun getPopularManga(page: Int) = ajaxList(page, BrowseMode.Popular)
     override suspend fun getLatestUpdates(page: Int) = ajaxList(page, BrowseMode.Latest)
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = ajaxList(page, BrowseMode.Search, query, filters)
+    override fun getHomeUrl() = "$baseUrl/$mangaSubString/?m_orderby=views"
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data.genreRoutes()
