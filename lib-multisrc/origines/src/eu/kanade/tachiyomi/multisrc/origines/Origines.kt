@@ -268,8 +268,12 @@ abstract class Origines : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get("$baseUrl/$mangaPath/${chapter.url.toChapterSlug()}/").asJsoup()
 
-        return document.select("div.reading-content img.wp-manga-chapter-img").mapIndexed { index, image ->
-            Page(index, imageUrl = image.attr("src").trim())
+        return document.select("div.reading-content img.wp-manga-chapter-img").mapIndexed { index, img ->
+            val image = when {
+                img.hasAttr("data-src") -> img.absUrl("data-src").trim()
+                else -> img.absUrl("src").trim()
+            }
+            Page(index, imageUrl = image)
         }
     }
 
