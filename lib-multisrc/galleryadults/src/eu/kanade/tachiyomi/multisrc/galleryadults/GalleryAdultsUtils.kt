@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.multisrc.galleryadults
 
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
 
 // any space except after a comma (we're going to replace spaces only between words)
@@ -11,7 +11,6 @@ val regexSpaceNotAfterComma = Regex("""(?<!,)\s+""")
 // extract preceding minus (-) and term
 val regexExcludeTerm = Regex("""^(-?)"?(.+)"?""")
 
-val regexTagCountNumber = Regex("\\([0-9,]*\\)")
 val regexDateSuffix = Regex("""\d(st|nd|rd|th)""")
 val regexDate = Regex("""\d\D\D""")
 val regexNotNumber = Regex("""\D""")
@@ -25,19 +24,16 @@ fun Element.imgAttr() = when {
     else -> absUrl("src")
 }
 
-fun Element.cleanTag(): String = text().cleanTag()
-fun String.cleanTag(): String = replace(regexTagCountNumber, "").trim()
-
 // convert thumbnail URLs to full image URLs
 fun String.thumbnailToFull(): String {
     val ext = substringAfterLast(".")
     return replace("t.$ext", ".$ext")
 }
 
-fun String?.toDate(simpleDateFormat: SimpleDateFormat?): Long {
+fun String?.toDate(formatter: DateTimeFormatter?): Long {
     this ?: return 0L
 
-    return if (simpleDateFormat != null) {
+    return if (formatter != null) {
         if (contains(regexDateSuffix)) {
             // Clean date (e.g. 5th December 2019 to 5 December 2019) before parsing it
             split(" ").map {
@@ -47,9 +43,9 @@ fun String?.toDate(simpleDateFormat: SimpleDateFormat?): Long {
                     it
                 }
             }
-                .let { simpleDateFormat.tryParse(it.joinToString(" ")) }
+                .let { formatter.tryParseDate(it.joinToString(" ")) }
         } else {
-            simpleDateFormat.tryParse(this)
+            formatter.tryParseDate(this)
         }
     } else {
         parseDate(this)
