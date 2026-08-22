@@ -32,12 +32,14 @@ fun PreferenceScreen.addEditTextPreference(
     title: String,
     default: String,
     summary: String,
+    getSummary: (String) -> String = { summary },
     dialogMessage: String? = null,
     inputType: Int? = null,
     validate: ((String) -> Boolean)? = null,
     validationMessage: String? = null,
     key: String = title,
     restartRequired: Boolean = false,
+    onComplete: (String) -> Unit = {},
 ) {
     EditTextPreference(context).apply {
         this.key = key
@@ -84,6 +86,10 @@ fun PreferenceScreen.addEditTextPreference(
                     Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
                 }
 
+                if (result) {
+                    onComplete(text)
+                    this.summary = getSummary(text)
+                }
                 result
             } catch (e: Exception) {
                 e.printStackTrace()

@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.all.komga
 
+import android.app.Application
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
 import android.text.InputType
+import android.widget.Toast
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.AppInfo
@@ -29,20 +33,28 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Credentials
 import okhttp3.Dns
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.apache.commons.text.StringSubstitutor
-import uy.kohesive.injekt.injectLazy
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.util.Locale
 
 @Source
@@ -51,15 +63,7 @@ abstract class Komga :
     ConfigurableSource,
     UnmeteredSource {
 
-    internal val preferences: SharedPreferences by getPreferencesLazy {
-        val oldUrl = getString("Address", "").orEmpty()
-        if (oldUrl.isEmpty()) return@getPreferencesLazy
-
-        edit().apply {
-            putString("overrideBaseUrl", oldUrl)
-            remove("Address")
-        }.apply()
-    }
+    internal val preferences: SharedPreferences by getPreferencesLazy()
 
     private val displayName by lazy { preferences.getString(PREF_DISPLAY_NAME, "")!! }
 
@@ -78,16 +82,20 @@ abstract class Komga :
 
     override val supportsLatest = true
 
-    private val username by lazy { preferences.getString(PREF_USERNAME, "")!! }
+    override val baseUrl
+        get() = preferences.getString(PREF_ADDRESS, "")!!.removeSuffix("/")
 
-    private val password by lazy { preferences.getString(PREF_PASSWORD, "")!! }
+    private val username
+        get() = preferences.getString(PREF_USERNAME, "")!!
 
-    private val apiKey by lazy { preferences.getString(PREF_API_KEY, "")!! }
+    private val password
+        get() = preferences.getString(PREF_PASSWORD, "")!!
+
+    private val apiKey
+        get() = preferences.getString(PREF_API_KEY, "")!!
 
     private val defaultLibraries
         get() = preferences.getStringSet(PREF_DEFAULT_LIBRARIES, emptySet())!!
-
-    private val json: Json by injectLazy()
 
     override fun Headers.Builder.configureHeaders() = apply {
         set("User-Agent", "TachiyomiKomga/${AppInfo.getVersionName()}")
@@ -355,7 +363,78 @@ abstract class Komga :
         return FilterList(filters)
     }
 
+    private val SharedPreferences.libraries
+        get() = getString(PREF_LIBRARY_LIST, "[]")!!
+
+    private fun clearCredentials() {
+        preferences.edit()
+            .putString(PREF_LIBRARY_LIST, "[]")
+            .putStringSet(PREF_DEFAULT_LIBRARIES, emptySet<String>())
+            .apply()
+    }
+
+    private var loginJob: Job? = null
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val handler = Handler(Looper.getMainLooper())
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        fun defaultLibrarySummary(apiKey: String, username: String): String = if (apiKey.isNotBlank() || username.isNotBlank()) {
+            "Show content from selected libraries by default."
+        } else {
+            "Currently not logged in"
+        }
+        val libraries = preferences.libraries.parseAs<List<LibraryDto>>()
+        val defaultLibraryPref = MultiSelectListPreference(screen.context).apply {
+            key = PREF_DEFAULT_LIBRARIES
+            title = "Default libraries"
+            summary = defaultLibrarySummary(apiKey, username)
+            entries = libraries.map { it.name }.toTypedArray()
+            entryValues = libraries.map { it.id }.toTypedArray()
+            setDefaultValue(emptySet<String>())
+            setEnabled(preferences.libraries != "[]")
+        }
+
+        fun onCompleteLogin(result: Boolean) {
+            defaultLibraryPref.setEnabled(result)
+            defaultLibraryPref.summary = if (result) defaultLibrarySummary("unused", "unused") else "Failed to log in"
+            defaultLibraryPref.values = emptySet<String>()
+
+            if (result) {
+                val libraryList = preferences.libraries.parseAs<List<LibraryDto>>()
+                defaultLibraryPref.entries = libraryList.map { it.name }.toTypedArray()
+                defaultLibraryPref.entryValues = libraryList.map { it.id }.toTypedArray()
+            } else {
+                clearCredentials()
+            }
+        }
+
+        fun logIn() {
+            defaultLibraryPref.setEnabled(false)
+            defaultLibraryPref.summary = "Loading..."
+            clearCredentials()
+
+            loginJob?.cancel()
+            loginJob = scope.launch {
+                try {
+                    val libraries = client.get("$baseUrl/api/v1/libraries").parseAs<List<LibraryDto>>()
+                    handler.post {
+                        preferences.edit()
+                            .putString(PREF_LIBRARY_LIST, libraries.toJsonString())
+                            .apply()
+                        onCompleteLogin(true)
+                    }
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+
+                    handler.post {
+                        val context = Injekt.get<Application>()
+                        Toast.makeText(context, e.message, Toast.LENGTH_SHORT).show()
+                        onCompleteLogin(false)
+                    }
+                }
+            }
+        }
+
         screen.addEditTextPreference(
             title = "Source display name",
             default = "",
@@ -363,48 +442,79 @@ abstract class Komga :
             key = PREF_DISPLAY_NAME,
             restartRequired = true,
         )
+
+        val addressSummary: (String) -> String = {
+            it.ifBlank { "The server address" }
+        }
+        screen.addEditTextPreference(
+            title = "Address",
+            default = "",
+            summary = addressSummary(baseUrl),
+            getSummary = addressSummary,
+            dialogMessage = "The address must not end with a forward slash.",
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI,
+            validate = { it.toHttpUrlOrNull() != null && !it.endsWith("/") },
+            validationMessage = "The URL is invalid, malformed, or ends with a slash",
+            key = PREF_ADDRESS,
+        ) {
+            if (apiKey.isNotBlank() || (username.isNotBlank() && password.isNotBlank())) {
+                logIn()
+            }
+        }
+
         // API key preference (takes precedence over username/password)
+        val apiKeySummary: (String) -> String = {
+            if (it.isBlank()) {
+                "Optional: Use an API key for authentication"
+            } else {
+                "*".repeat(it.length)
+            }
+        }
         screen.addEditTextPreference(
             title = "API key",
             default = "",
-            summary = if (apiKey.isBlank()) "Optional: Use an API key for authentication" else "*".repeat(apiKey.length),
+            summary = apiKeySummary(apiKey),
+            getSummary = apiKeySummary,
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
             key = PREF_API_KEY,
-            restartRequired = true,
-        )
+        ) {
+            if (baseUrl.isNotBlank()) {
+                logIn()
+            }
+        }
         // Only show username/password if API key is not set
         if (apiKey.isBlank()) {
+            val usernameSummary: (String) -> String = { it.ifBlank { "The user account email" } }
             screen.addEditTextPreference(
                 title = "Username",
                 default = "",
-                summary = username.ifBlank { "The user account email" },
+                summary = usernameSummary(username),
+                getSummary = usernameSummary,
                 key = PREF_USERNAME,
-                restartRequired = true,
-            )
+            ) {
+                if (baseUrl.isNotBlank() && apiKey.isBlank() && password.isNotBlank()) {
+                    logIn()
+                }
+            }
+
+            val passwordSummary: (String) -> String = {
+                if (it.isBlank()) "The user account password" else "*".repeat(it.length)
+            }
             screen.addEditTextPreference(
                 title = "Password",
                 default = "",
-                summary = if (password.isBlank()) "The user account password" else "*".repeat(password.length),
+                summary = passwordSummary(password),
+                getSummary = passwordSummary,
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
                 key = PREF_PASSWORD,
-                restartRequired = true,
-            )
-        }
-
-        MultiSelectListPreference(screen.context).apply {
-            key = PREF_DEFAULT_LIBRARIES
-            title = "Default libraries"
-            summary = buildString {
-                append("Show content from selected libraries by default.")
-
-                if (libraries.isEmpty()) {
-                    append(" Exit and enter the settings menu to load options.")
+            ) {
+                if (baseUrl.isNotBlank() && apiKey.isBlank() && username.isNotBlank()) {
+                    logIn()
                 }
             }
-            entries = libraries.map { it.name }.toTypedArray()
-            entryValues = libraries.map { it.id }.toTypedArray()
-            setDefaultValue(emptySet<String>())
-        }.also(screen::addPreference)
+        }
+
+        screen.addPreference(defaultLibraryPref)
 
         val values = hashMapOf(
             "title" to "",
@@ -498,9 +608,11 @@ abstract class Komga :
 private val INSTANCE_IDS = listOf(4508733312114627536L, 8074481155021144106L, 5132811728275817394L)
 
 private const val PREF_DISPLAY_NAME = "Source display name"
+private const val PREF_ADDRESS = "Address"
 private const val PREF_USERNAME = "Username"
 private const val PREF_PASSWORD = "Password"
 private const val PREF_API_KEY = "API key"
+private const val PREF_LIBRARY_LIST = "library_list"
 private const val PREF_DEFAULT_LIBRARIES = "Default libraries"
 private const val PREF_CHAPTER_NAME_TEMPLATE = "Chapter name template"
 private const val PREF_CHAPTER_NAME_TEMPLATE_DEFAULT = "{number} - {title} ({size})"
