@@ -187,7 +187,7 @@ abstract class MangaCloud : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$API_URL/comic/browse"
+        val url = "$API_URL/comic/library"
 
         if (query.isNotBlank() && query.length < 3) {
             throw Exception("Search query must be more than 3 characters!")
