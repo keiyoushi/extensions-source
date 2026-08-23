@@ -30,10 +30,8 @@ abstract class MangaYi : KeiSource() {
     // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val payload = SearchRequestDto(t = 1)
-        val response = client.post("$baseUrl/api/search", payload.toJsonRequestBody())
-        val mangas = response.parseAs<SearchResponseDto>().results.map { it.toSManga() }
-        return MangasPage(mangas, false)
+        val payload = SearchRequestDto(p = page, t = 1)
+        return fetchMangasPage(payload, page)
     }
 
     // ============================== Latest ===============================
@@ -43,10 +41,19 @@ abstract class MangaYi : KeiSource() {
     // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val payload = SearchRequestDto(s = query)
+        val payload = SearchRequestDto(p = page, s = query)
+        return fetchMangasPage(payload, page)
+    }
+
+    private suspend fun fetchMangasPage(payload: SearchRequestDto, page: Int): MangasPage {
         val response = client.post("$baseUrl/api/search", payload.toJsonRequestBody())
-        val mangas = response.parseAs<SearchResponseDto>().results.map { it.toSManga() }
-        return MangasPage(mangas, false)
+        val dto = response.parseAs<SearchResponseDto>()
+
+        pageSize = maxOf(pageSize, dto.results.size)
+
+        val mangas = dto.results.map { it.toSManga() }
+        val hasNextPage = page * pageSize < dto.total
+        return MangasPage(mangas, hasNextPage)
     }
 
     // ============================== Updates ==============================
@@ -92,6 +99,8 @@ abstract class MangaYi : KeiSource() {
     }
 
     // ============================= Utilities =============================
+
+    private var pageSize = 24
 
     companion object {
         private val dateFormat = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.ENGLISH).withZone(ZoneId.of("UTC"))
