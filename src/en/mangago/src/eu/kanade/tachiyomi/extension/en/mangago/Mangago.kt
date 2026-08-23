@@ -6,8 +6,6 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
 import android.util.LruCache
-import android.widget.Toast
-import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import app.cash.quickjs.QuickJs
@@ -37,7 +35,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -69,12 +66,6 @@ abstract class Mangago :
         addInterceptor(::imageDescrambler)
         addCookie("_m_superu" to "1")
         rateLimit(1) { it.host == baseUrl.toHttpUrl().host }
-    }
-
-    override fun Headers.Builder.configureHeaders() = apply {
-        preferences.getString(PREF_KEY_CUSTOM_UA, null)
-            ?.takeIf { it.isNotBlank() }
-            ?.let { set("User-Agent", it) }
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -537,31 +528,11 @@ abstract class Mangago :
                 "To update existing entries, enable 'update library manga title' in advanced settings of app"
             setDefaultValue(false)
         }.let(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
-            key = PREF_KEY_CUSTOM_UA
-            title = "Custom user agent string"
-            summary = "Leave blank to use the default user agent string"
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    Headers.headersOf("User-Agent", newValue as String)
-                    true
-                } catch (error: IllegalArgumentException) {
-                    Toast.makeText(
-                        screen.context,
-                        "Invalid user agent string: ${error.message}",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                    false
-                }
-            }
-        }.also(screen::addPreference)
     }
 }
 
 private const val REMOVE_RAW_PREF = "pref_remove_raw"
 private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
-private const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua_"
 private const val ALT_NAME_PREFIX = "Alternative Names:"
 
 private val DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
