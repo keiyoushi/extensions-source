@@ -55,7 +55,7 @@ class ChallengeSolverInterceptor(
         response.close()
 
         if (!doSolve()) {
-            throw IOException("Shape-selecting captcha detected. Open in WebView to solve or turn on the setting to solve automatically.")
+            throw IOException("Shape-selecting captcha detected. Open in WebView to solve manually or turn on the setting to solve automatically.")
         }
 
         // We are solving the challenge in a WebView instead of directly in Kotlin because the solver depends on OpenCV, which is >100 MB
