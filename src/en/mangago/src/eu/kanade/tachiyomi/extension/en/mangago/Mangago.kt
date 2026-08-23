@@ -202,7 +202,7 @@ abstract class Mangago :
         }
     }
 
-    private fun parseChapterList(document: Document): List<SChapter> = document.select("table#chapter_table > tbody > tr, table.uk-table > tbody > tr")
+    private fun parseChapterList(document: Document): List<SChapter> = document.select(":is(table#raws_table, table#chapter_table) > tbody > tr, table.uk-table > tbody > tr")
         .mapNotNull { element ->
             val link = element.selectFirst("a.chico") ?: return@mapNotNull null
             if (link.attr("href").contains("/raw/") && removeRaws) return@mapNotNull null
