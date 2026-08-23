@@ -1,18 +1,18 @@
 package eu.kanade.tachiyomi.extension.pt.portalyaoi
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class PortalYaoi : Madara() {
-    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
+abstract class PortalYaoi : MadaraNoAjax() {
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale("pt", "BR"))
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2.seconds)
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 2.seconds) {
+        !it.encodedPath.startsWith("/wp-content/uploads/")
+    }
 }

@@ -8,7 +8,7 @@ keiyoushi {
     name = "Manga18Free"
     versionCode = 1
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "madara"
 
     source {

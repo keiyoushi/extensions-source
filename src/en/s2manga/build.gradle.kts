@@ -8,7 +8,7 @@ keiyoushi {
     name = "S2Manga"
     versionCode = 4
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "madara"
 
     source {
