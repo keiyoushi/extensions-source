@@ -169,7 +169,7 @@ abstract class Mangago :
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
         document.selectFirst(".w-title h1")?.text()?.let {
-            title = if (isRemoveTitleVersion()) it.replace(TITLE_REGEX, "") else it
+            title = if (removeTitleVersion) it.replace(TITLE_REGEX, "") else it
         }
 
         document.getElementById("information")?.let { info ->
@@ -214,6 +214,7 @@ abstract class Mangago :
     private fun parseChapterList(document: Document): List<SChapter> = document.select("table#chapter_table > tbody > tr, table.uk-table > tbody > tr")
         .mapNotNull { element ->
             val link = element.selectFirst("a.chico") ?: return@mapNotNull null
+            if (link.attr("href").contains("/raw/") && removeRaws) return@mapNotNull null
             val name = link.text().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
             val date = DATE_FORMAT.tryParseDate(element.select("td:last-child").text(), ZoneOffset.UTC)
             val scanlator = element.selectFirst("td.no a, td.uk-table-shrink a")
@@ -518,9 +519,16 @@ abstract class Mangago :
         .joinToString("") { "%02x".format(it) }
         .takeLast(10)
 
-    private fun isRemoveTitleVersion() = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
+    private val removeRaws get() = preferences.getBoolean(REMOVE_RAW_PREF, true)
+    private val removeTitleVersion get() = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = REMOVE_RAW_PREF
+            title = "Hide RAW chapters"
+            setDefaultValue(true)
+        }.let(screen::addPreference)
+
         SwitchPreferenceCompat(screen.context).apply {
             key = REMOVE_TITLE_VERSION_PREF
             title = "Remove version information from entry titles"
@@ -551,6 +559,7 @@ abstract class Mangago :
     }
 }
 
+private const val REMOVE_RAW_PREF = "pref_remove_raw"
 private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
 private const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua_"
 private const val ALT_NAME_PREFIX = "Alternative Names:"
