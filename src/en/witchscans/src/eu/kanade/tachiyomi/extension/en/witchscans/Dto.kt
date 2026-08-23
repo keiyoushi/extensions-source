@@ -109,9 +109,10 @@ class ChapterDto(
         if (isLocked) name = "\uD83D\uDD12 $name"
         date_upload = publishedAt?.let { Instant.tryParse(it) } ?: 0L
         chapter_number = number.toFloat()
-        val mangaSlug = manga.memo["slug"]?.string.orEmpty()
-        url = "comic/$mangaSlug/chapter/$number"
+        url = id
         memo = buildJsonObject {
+            put("slug", manga.memo["slug"]!!.string)
+            put("number", number.toString())
             put("isLocked", isLocked)
         }
     }

@@ -48,11 +48,11 @@ abstract class WitchScans :
 
     // ------------------------- Browse (Popular) -------------------------
 
-    override suspend fun getPopularManga(page: Int): MangasPage = getMangasPage(client.get("$baseUrl/series?sort=popular&page=$page", headers = rscHeaders))
+    override suspend fun getPopularManga(page: Int): MangasPage = getMangasPage(client.get("$baseUrl/series?sort=popular&page=$page", rscHeaders))
 
     // ------------------------- Latest -------------------------
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangasPage(client.get("$baseUrl/series?page=$page", headers = rscHeaders))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangasPage(client.get("$baseUrl/series?page=$page", rscHeaders))
 
     private suspend fun getMangasPage(response: Response): MangasPage {
         val dto = response.extractNextJs<BrowseDto> { it is JsonObject && "initialSeries" in it }
@@ -72,7 +72,7 @@ abstract class WitchScans :
                 addQueryParameter("page", page.toString())
             }
             .build()
-        return getMangasPage(client.get(url, headers = rscHeaders))
+        return getMangasPage(client.get(url, rscHeaders))
     }
 
     // ------------------------- Filter -------------------------
@@ -104,7 +104,7 @@ abstract class WitchScans :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga), headers = rscHeaders).extractNextJs<DetailDto> { it is JsonObject && "series" in it && "chapters" in it }
+        val document = client.get(getMangaUrl(manga), rscHeaders).extractNextJs<DetailDto> { it is JsonObject && "series" in it && "chapters" in it }
 
         val updatedManga = if (fetchDetails) document?.series?.toSManga(baseUrl, manga) ?: manga else manga
         val updatedChapters = if (fetchChapters) fetchAllChapters(manga, document) else chapters
@@ -118,7 +118,7 @@ abstract class WitchScans :
         val totalPages = document.totalPages.coerceAtLeast(1)
         val extraChapters = if (totalPages > 1) {
             (2..totalPages).map { page ->
-                client.get("${getMangaUrl(manga)}?page=$page", headers = rscHeaders)
+                client.get("${getMangaUrl(manga)}?page=$page", rscHeaders)
                     .extractNextJs<DetailDto> { it is JsonObject && "series" in it && "chapters" in it }
                     ?.chapters.orEmpty()
             }.flatten()
@@ -137,7 +137,7 @@ abstract class WitchScans :
         if (chapter.memo["isLocked"]?.jsonPrimitive?.booleanOrNull == true) {
             throw Exception("This chapter is locked and requires coins to read")
         }
-        val response = client.get(getChapterUrl(chapter), headers = rscHeaders)
+        val response = client.get(getChapterUrl(chapter), rscHeaders)
         val dto = response.extractNextJs<ChapterDetailDto> { it is JsonObject && "chapter" in it }
         return dto?.chapter?.pages.orEmpty().mapIndexedNotNull { index, pageDto ->
             pageDto.imageUrl?.let { Page(index, imageUrl = it.toAbsoluteUrl(baseUrl)) }
@@ -147,13 +147,13 @@ abstract class WitchScans :
     // ------------------------- URL helpers -------------------------
 
     override fun getMangaUrl(manga: SManga): String {
-        val slug = manga.memo["slug"]?.string.orEmpty()
+        val slug = manga.memo["slug"]!!.string
         return "$baseUrl/series/comic/$slug"
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val path = chapter.url.substringBeforeLast("/chapter/")
-        val number = chapter.url.substringAfterLast("/")
-        return "$baseUrl/series/$path/chapter/$number"
+        val slug = chapter.memo["slug"]!!.string
+        val number = chapter.memo["number"]!!.string
+        return "$baseUrl/series/comic/$slug/chapter/$number"
     }
 }
