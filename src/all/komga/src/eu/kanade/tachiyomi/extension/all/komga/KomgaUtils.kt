@@ -7,23 +7,15 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import keiyoushi.utils.tryParseDate
-import java.text.ParseException
+import keiyoushi.utils.tryParseDateTime
 import java.time.format.DateTimeFormatter
 
 private val formatterDate = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 private val formatterDateTime = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
 
-fun parseDate(date: String): Long = try {
-    formatterDate.tryParseDate(date)
-} catch (_: ParseException) {
-    0L
-}
+fun parseDate(date: String): Long = formatterDate.tryParseDate(date)
 
-fun parseDateTime(date: String) = try {
-    formatterDateTime.tryParseDate(date)
-} catch (_: ParseException) {
-    0L
-}
+fun parseDateTime(date: String) = formatterDateTime.tryParseDateTime(date)
 
 fun PreferenceScreen.addEditTextPreference(
     title: String,

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.komga
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
@@ -30,6 +29,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -53,8 +53,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.apache.commons.text.StringSubstitutor
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.util.Locale
 
 @Source
@@ -427,8 +425,7 @@ abstract class Komga :
                     if (e is CancellationException) throw e
 
                     handler.post {
-                        val context = Injekt.get<Application>()
-                        Toast.makeText(context, e.message, Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, e.message, Toast.LENGTH_SHORT).show()
                         onCompleteLogin(false)
                     }
                 }
