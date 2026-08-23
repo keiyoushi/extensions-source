@@ -3,17 +3,14 @@ package eu.kanade.tachiyomi.extension.tr.yaoiflix
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
-import java.text.SimpleDateFormat
+import okhttp3.OkHttpClient
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class YaoiFlix : Madara() {
-    override val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr"))
-    override val client = super.client.newBuilder()
-        .rateLimit(3)
-        .build()
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.forLanguageTag("tr"))
+    override val chapterMode = ChapterMode.MangaAjax
 
-    override val useNewChapterEndpoint = true
-
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3) { !it.encodedPath.startsWith("/wp-content/uploads/") }
 }
