@@ -10,32 +10,14 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 
 @Source
 abstract class MangaPdf : KeiSource() {
 
-    private val apiUrl by lazy { API_BASE_URL.toHttpUrl() }
-
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
-        val request = chain.request()
-        val isApiRequest =
-            request.url.scheme == apiUrl.scheme &&
-                request.url.host == apiUrl.host &&
-                request.url.port == apiUrl.port
-
-        if (isApiRequest) {
-            chain.proceed(
-                request.newBuilder()
-                    .header("X-Client", "mihon-extension")
-                    .build(),
-            )
-        } else {
-            chain.proceed(request)
-        }
-    }
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = add("X-Client", "mihon-extension")
 
     override suspend fun getPopularManga(page: Int): MangasPage = client.get(
         popularUrl(page),
