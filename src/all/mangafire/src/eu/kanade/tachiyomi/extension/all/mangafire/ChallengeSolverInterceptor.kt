@@ -12,11 +12,14 @@ import kotlinx.serialization.Serializable
 import okhttp3.Interceptor
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
+import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.getValue
 
-object ChallengeSolverInterceptor : Interceptor {
+class ChallengeSolverInterceptor(
+    private val doSolve: () -> Boolean,
+) : Interceptor {
     private val application by injectLazy<Application>()
     private val html by lazy { javaClass.getResource("/assets/solver.html")!!.readText() }
 
@@ -24,6 +27,18 @@ object ChallengeSolverInterceptor : Interceptor {
     private data class ErrorResponse(
         val error: String?,
     )
+
+    private class JsInterface {
+        val latch = CountDownLatch(1)
+        var solved: Boolean = false
+
+        @Suppress("unused")
+        @JavascriptInterface
+        fun resolve(solved: Boolean) {
+            this.solved = solved
+            latch.countDown()
+        }
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -39,18 +54,17 @@ object ChallengeSolverInterceptor : Interceptor {
 
         response.close()
 
+        if (!doSolve()) {
+            throw IOException("Shape-selecting captcha detected. Open in WebView to solve or turn on the setting to solve automatically.")
+        }
+
         // We are solving the challenge in a WebView instead of directly in Kotlin because the solver depends on OpenCV, which is >100 MB
         // as a Kotlin dependency. Also, the OpenCV binaries would be in the storage of the extension app, making them inaccessible to the
         // reader app.
         // Using a WebView instead makes it possible to dynamically request OpenCV.js, keeping the app size small.
 
         val handler = Handler(Looper.getMainLooper())
-        val latch = object : CountDownLatch(1) {
-            @JavascriptInterface
-            override fun countDown() {
-                super.countDown()
-            }
-        }
+        val jsInterface = JsInterface()
         var webView: WebView? = null
 
         handler.post {
@@ -89,7 +103,7 @@ object ChallengeSolverInterceptor : Interceptor {
                 }
             }*/
 
-            view.addJavascriptInterface(latch, "latch")
+            view.addJavascriptInterface(jsInterface, "jsInterface")
 
             view.loadDataWithBaseURL(
                 "https://mangafire.to/@waf/solver",
@@ -100,8 +114,12 @@ object ChallengeSolverInterceptor : Interceptor {
             )
         }
 
-        latch.await(30, TimeUnit.SECONDS)
+        jsInterface.latch.await(30, TimeUnit.SECONDS)
         handler.post { webView?.destroy() }
+
+        if (!jsInterface.solved) {
+            throw IOException("Failed to solve shape-selecting captcha. Open in WebView to solve manually.")
+        }
 
         return chain.proceed(request)
     }
