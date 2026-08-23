@@ -14,6 +14,7 @@ import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -52,10 +53,12 @@ abstract class YomuComics : KeiSource() {
             }
             .build()
 
-        val mangas = client.get(url, rscHeaders).extractNextJs<List<LibraryMangaDto>>(::isSeriesList)
+        val series = client.get(url, rscHeaders).extractNextJs<JsonArray>(::isSeriesList)
             ?: throw Exception("Não foi possível ler a lista de obras")
 
-        return MangasPage(mangas.map(LibraryMangaDto::toSManga), mangas.size >= PAGE_SIZE)
+        val mangas = series.filter(::isSeriesEntry).map { it.parseAs<LibraryMangaDto>().toSManga() }
+
+        return MangasPage(mangas, mangas.size >= PAGE_SIZE)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
