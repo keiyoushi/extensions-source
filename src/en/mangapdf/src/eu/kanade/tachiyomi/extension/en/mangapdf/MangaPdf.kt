@@ -17,56 +17,85 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class MangaPdf : KeiSource() {
 
+    private val apiUrl = "https://api.coffeemanga.shop".toHttpUrl()
+
+    private fun apiBuilder(): HttpUrl.Builder = apiUrl.newBuilder()
+        .addPathSegment("api")
+        .addPathSegment("v1")
+        .addPathSegment("mihon")
+
     override fun Headers.Builder.configureHeaders(): Headers.Builder = add("X-Client", "mihon-extension")
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get(
-        popularUrl(page),
-    ).parseAs<MangaListResponse>()
-        .toMangasPage()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = apiBuilder()
+            .addPathSegment("popular")
+            .addQueryParameter("page", page.toString())
+            .build()
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get(
-        latestUrl(page),
-    ).parseAs<MangaListResponse>()
-        .toMangasPage()
+        return client.get(url).parseAs<MangaListResponse>().toMangasPage()
+    }
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val url = apiBuilder()
+            .addPathSegment("latest")
+            .addQueryParameter("page", page.toString())
+            .build()
+
+        return client.get(url).parseAs<MangaListResponse>().toMangasPage()
+    }
 
     override suspend fun getSearchMangaList(
         page: Int,
         query: String,
         filters: FilterList,
-    ): MangasPage = client.get(
-        searchUrl(query, page),
-    ).parseAs<MangaListResponse>()
-        .toMangasPage()
+    ): MangasPage {
+        val url = apiBuilder()
+            .addPathSegment("search")
+            .addQueryParameter("q", query)
+            .addQueryParameter("page", page.toString())
+            .build()
+
+        return client.get(url).parseAs<MangaListResponse>().toMangasPage()
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = client.get(
-        mangaUrl(manga.url),
-    ).parseAs<MangaUpdateResponse>()
-        .toSMangaUpdate()
+    ): SMangaUpdate {
+        val url = apiBuilder()
+            .addPathSegment("manga")
+            .addPathSegment(manga.url)
+            .build()
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(
-        pagesUrl(chapter.url),
-    ).parseAs<PageListResponse>()
-        .toPages()
+        return client.get(url).parseAs<MangaUpdateResponse>().toSMangaUpdate()
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val url = apiBuilder()
+            .addPathSegment("chapter")
+            .addPathSegment(chapter.url)
+            .addPathSegment("pages")
+            .build()
+
+        return client.get(url).parseAs<PageListResponse>().toPages()
+    }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url}"
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        val websiteHost = baseUrl.toHttpUrl().host
-        if (url.host != websiteHost) return null
+        if (url.host != apiUrl.host) return null
 
         val id = url.pathSegments.lastOrNull { it.isNotBlank() } ?: return null
 
-        return client.get(
-            mangaUrl(id),
-        ).parseAs<MangaUpdateResponse>()
-            .toSMangaUpdate()
-            .manga
+        val apiUrl = apiBuilder()
+            .addPathSegment("manga")
+            .addPathSegment(id)
+            .build()
+
+        return client.get(apiUrl).parseAs<MangaUpdateResponse>().toSMangaUpdate().manga
     }
 }
