@@ -12,7 +12,7 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl = "https://vgperson.com/other/mangaviewer.php"
+        baseUrl = "https://vgperson.com"
     }
 
     deeplink {

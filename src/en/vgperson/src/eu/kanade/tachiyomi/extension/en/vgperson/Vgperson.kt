@@ -23,6 +23,8 @@ abstract class Vgperson : KeiSource() {
 
     override val supportsLatest = false
 
+    private val homeUrl = "$baseUrl/other/mangaviewer.php"
+
     private val userAgent =
         "Mozilla/5.0 (Android ${VERSION.RELEASE}; Mobile) Tachiyomi/${AppInfo.getVersionName()}"
 
@@ -30,8 +32,10 @@ abstract class Vgperson : KeiSource() {
         set("User-Agent", userAgent)
     }
 
+    override fun getHomeUrl(): String = homeUrl
+
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(homeUrl).asJsoup()
 
         val mangas = document.select(".content a[href^=?m]").map { element ->
             SManga.create().apply {
@@ -49,7 +53,7 @@ abstract class Vgperson : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(homeUrl + manga.url).asJsoup()
 
         val manga = SManga.create().apply {
             title = document.selectFirst(".title")!!.text()
@@ -88,7 +92,7 @@ abstract class Vgperson : KeiSource() {
                     name += " - ${it.text().substringAfter("- ")}"
                 }
 
-                val fullUrl = "$baseUrl$url".toHttpUrl()
+                val fullUrl = "$homeUrl$url".toHttpUrl()
 
                 // hardcode special chapter numbers for Three Days of Happiness
                 chapter_number = fullUrl.queryParameter("c")?.toFloat()
@@ -100,8 +104,12 @@ abstract class Vgperson : KeiSource() {
         return SMangaUpdate(manga, chapters)
     }
 
+    override fun getMangaUrl(manga: SManga): String = homeUrl + manga.url
+
+    override fun getChapterUrl(chapter: SChapter): String = homeUrl + chapter.url
+
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(homeUrl + chapter.url).asJsoup()
 
         return document.select("img").mapIndexed { i, img ->
             Page(i, imageUrl = img.attr("abs:src"))
