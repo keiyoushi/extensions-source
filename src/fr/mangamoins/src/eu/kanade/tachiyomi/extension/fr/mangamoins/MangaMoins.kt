@@ -201,7 +201,7 @@ abstract class MangaMoins : HttpSource() {
         val data = response.parseAs<ScanResponse>()
         val salts = getSalts(data.pagesBaseUrl)
 
-        val baseUrl = salts.fold(data.pagesBaseUrl.removeSuffix("/")) { url, salt ->
+        val baseUrl = salts.fold(data.pagesBaseUrl.removeSuffix("/").removeSuffix("_b")) { url, salt ->
             url.replace(salt, "")
         }
 

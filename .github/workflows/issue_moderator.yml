@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Moderate issues
-        uses: keiyoushi/issue-moderator-action@47efd0d5433617dd41614d0a00257fb5d3d59fbf
+        uses: keiyoushi/issue-moderator-action@fdebb7c986daa261c6ace7093e000280e74741a7
         with:
           repo-token: ${{ github.token }}
           member-token: ${{ secrets.MEMBER_TOKEN }}
@@ -40,7 +40,7 @@ jobs:
           existing-check-enabled: true
           existing-check-labels: |
             ["Source request", "Domain changed"]
-          existing-check-repo-url: https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json
+          existing-check-repo-url: https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.json
 
           url-search-sections: |
             ["Source link", "Source new URL"]

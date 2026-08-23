@@ -55,7 +55,7 @@ abstract class HentaiClub : HttpSource() {
                 .addPathSegment(query.trim())
                 .build()
                 .toString()
-            val url = if (page > 1) "$searchUrl/page/$page/" else "$searchUrl/"
+            val url = if (page > 1) "$searchUrl/$page/" else "$searchUrl/"
             return GET(url, headers)
         }
 

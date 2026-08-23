@@ -17,8 +17,12 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.serialization.json.JsonElement
+import okhttp3.CacheControl
+import okhttp3.Cookie
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -43,7 +47,7 @@ abstract class BiliManga :
     }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(ChapterInterceptor())
+        addNetworkInterceptor(ChapterInterceptor())
         val split = pref.getString(PREF_RATE_LIMIT, "10/10")!!.split("/")
         rateLimit(split[0].toInt(), split[1].toInt().seconds)
     }
@@ -100,12 +104,33 @@ abstract class BiliManga :
         return desc.toString()
     }
 
+    private suspend fun ensureSearchTicket() {
+        val names = client.cookieJar.loadForRequest(baseUrl.toHttpUrl()).map { it.name }
+        if (!names.contains("jieqiSearchCss") || !names.contains("jieqiSearchJs")) {
+            coroutineScope {
+                launch { client.get("$baseUrl/search.html?search_guard=css").close() }
+                launch {
+                    COOKIE_REGEX.find(client.get("$baseUrl/search.html?search_guard=js").body.string())
+                        ?.groupValues?.get(1)
+                        ?.let { cookie ->
+                            val url = baseUrl.toHttpUrl()
+                            Cookie.parse(url, cookie)?.let { client.cookieJar.saveFromResponse(url, listOf(it)) }
+                        }
+                }
+            }
+        }
+        client.get("$baseUrl/search.html?search_guard=redeem", CacheControl.FORCE_NETWORK)
+        val cookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
+        if (cookies.find { it.name == "jieqiSearchTicket" }?.value.isNullOrEmpty()) throw Exception("獲取搜索憑證失敗，請稍後重試")
+    }
+
     companion object {
         val NEWLINE_REGEX = Regex("(?:\n\r\n)+")
         val META_REGEX = Regex("收藏|推薦|連載中|已完結")
         val DATE_REGEX = Regex("\\d{4}-\\d{1,2}-\\d{1,2}")
         val PAGE_REGEX = Regex("第(\\d+)/(\\d+)页")
         val MANGA_ID_REGEX = Regex("/detail/(\\d+)\\.html")
+        val COOKIE_REGEX = Regex("cookie=\"(.*?)\";")
         val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.CHINESE)
     }
 
@@ -162,18 +187,18 @@ abstract class BiliManga :
         initialized = true
     }
 
-    // Popular Page
+    // Popular
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val suffix = pref.getString(PREF_POPULAR_MANGA_DISPLAY, "/top/weekvisit/%d.html")!!
         return mangaPageParse(client.get(baseUrl + String.format(suffix, page)))
     }
 
-    // Latest Page
+    // Latest
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = mangaPageParse(client.get("$baseUrl/top/lastupdate/$page.html"))
 
-    // Search Page
+    // Search
 
     override fun getFilterList(data: JsonElement?) = buildFilterList()
 
@@ -186,6 +211,7 @@ abstract class BiliManga :
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder()
         if (query.isNotBlank()) {
+            ensureSearchTicket()
             url.addPathSegment("search").addPathSegment("${query}_$page.html")
         } else {
             url.addPathSegment("filter")
@@ -198,11 +224,7 @@ abstract class BiliManga :
         return mangaPageParse(response)
     }
 
-    // Manga Detail Page
-
-    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
-
-    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
+    // Manga Detail & Chapter
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -235,7 +257,7 @@ abstract class BiliManga :
         SMangaUpdate(asyncManga.await(), asyncChapters.await())
     }
 
-    override val supportsRelatedMangas get() = true
+    override val supportsRelatedMangas = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val doc = client.get(getMangaUrl(manga)).asJsoup()
@@ -248,7 +270,7 @@ abstract class BiliManga :
         } ?: emptyList()
     }
 
-    // Manga View Page
+    // Page
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val response = client.get(baseUrl + chapter.url)

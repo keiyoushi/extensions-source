@@ -12,7 +12,11 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
+import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
+import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -22,6 +26,7 @@ import org.jsoup.select.Elements
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class HentaiCB : Madara() {
@@ -166,19 +171,62 @@ abstract class HentaiCB : Madara() {
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
         val chapterUrl = chapter.url
 
-        val webViewResult = ImagesIntercept.resolve(chapterUrl)
-        val imageUrls = webViewResult.srcs.filter { it.isNotBlank() }
+        val imageUrls = try {
+            runBlocking {
+                runWebView<List<String>>(timeout = 60.seconds) {
+                    loadWithOverviewMode = true
+                    useWideViewPort = true
 
-        if (imageUrls.isEmpty()) {
-            throw Exception("Không tìm thấy dữ liệu ảnh")
+                    var lastCount = 0
+                    var stableCount = 0
+
+                    poll(1.seconds) {
+                        evaluateJs(extractPageImagesScript) { value ->
+                            val urls = runCatching { value.parseAs<List<String>>() }.getOrDefault(emptyList())
+                            if (urls.isEmpty()) return@evaluateJs
+
+                            if (urls.size == lastCount) {
+                                stableCount++
+                            } else {
+                                lastCount = urls.size
+                                stableCount = 0
+                            }
+
+                            if (stableCount >= 3) {
+                                resolve(urls)
+                            }
+                        }
+                    }
+
+                    loadUrl(chapterUrl, headers.toMap())
+                }
+            }
+        } catch (_: WebViewTimeoutException) {
+            emptyList()
         }
 
-        imageUrls.mapIndexed { i, imageUrl ->
+        imageUrls.distinct().mapIndexed { i, imageUrl ->
             Page(i, chapterUrl, imageUrl)
         }
     }
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+
+    private val extractPageImagesScript = """
+        (function() {
+            var images = Array.prototype.slice.call(document.querySelectorAll('img.manga-page, img.protected-manga-image'));
+            images.forEach(function(img) {
+                img.loading = 'eager';
+                img.removeAttribute('loading');
+            });
+            window.scrollTo(0, document.body.scrollHeight);
+            return Array.from(new Set(images.map(function(img) {
+                return img.currentSrc || img.src || img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('data-original') || '';
+            }).filter(function(src) {
+                return /^https?:\/\//.test(src);
+            })));
+        })()
+    """.trimIndent()
 
     companion object {
         private const val BASE_URL_PREF = "overrideBaseUrl"

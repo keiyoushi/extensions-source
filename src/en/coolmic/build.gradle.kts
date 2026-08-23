@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Coolmic"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
@@ -14,9 +14,4 @@ keiyoushi {
         lang = "en"
         baseUrl = "https://coolmic.me"
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:cookieinterceptor"))
 }

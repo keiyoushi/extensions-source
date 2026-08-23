@@ -25,23 +25,29 @@ class MangaList(
     @JsonNames("results", "manga_list")
     val mangaList: List<BrowseManga>? = emptyList(),
     private val pagination: Pagination? = null,
-    val allGenres: List<String> = emptyList(),
-    val allTags: List<TagCategory> = emptyList(),
+    val facets: FacetsData? = null,
 ) {
     fun hasNextPage() = when {
         pagination?.current != null && pagination.total != null -> pagination.current < pagination.total
-        pagination?.nextCursor != null -> true
+        !pagination?.nextCursor.isNullOrEmpty() -> true
         else -> false
     }
 
     @Serializable
     class Pagination(
         @SerialName("total_pages")
+        @JsonNames("totalPages", "last_page", "lastPage")
         val total: Int? = null,
         @SerialName("current_page")
+        @JsonNames("currentPage", "page")
         val current: Int? = null,
         @SerialName("next_cursor")
+        @JsonNames("nextCursor", "cursor")
         val nextCursor: String? = null,
+        @SerialName("per_page")
+        val perPage: Int? = null,
+        @SerialName("total_results")
+        val totalResults: Int? = null,
     )
 }
 
@@ -194,10 +200,10 @@ class Manga(
                 null
             }
         }
-        author = authors?.let {
+        author = authors?.let { it ->
             runCatching { it.parseAs<List<String>>().joinToString() }.getOrNull()?.let { "\u200B$it" }
         }
-        artist = artists?.let {
+        artist = artists?.let { it ->
             runCatching { it.parseAs<List<String>>().joinToString() }.getOrNull()?.let { "\u200B\u200B$it" }
         }
         genre = buildList {
@@ -241,6 +247,10 @@ class Manga(
             }
             if (metaInfo.isNotEmpty()) {
                 append(metaInfo.joinToString(" · "), "\n\n")
+            }
+
+            if (isNotEmpty()) {
+                append("---\n\n")
             }
 
             this@Manga.description?.let {
@@ -366,6 +376,31 @@ class TagItem(
 )
 
 @Serializable
-class ForYouResponse(
+class MangaItemsResponse(
     val items: List<BrowseManga> = emptyList(),
+)
+
+@Serializable
+class FacetsData(
+    val genres: List<FacetItem> = emptyList(),
+    val tags: List<FacetTagItem> = emptyList(),
+)
+
+@Serializable
+class FacetItem(
+    val key: String,
+    val count: Int? = null,
+)
+
+@Serializable
+class FacetTagItem(
+    val key: String,
+    val count: Int? = null,
+    @SerialName("is_adult")
+    val isAdult: Boolean = false,
+)
+
+@Serializable
+class TagsResponse(
+    val categories: List<TagCategory> = emptyList(),
 )

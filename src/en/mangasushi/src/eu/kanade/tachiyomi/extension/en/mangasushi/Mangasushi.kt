@@ -5,5 +5,5 @@ import keiyoushi.annotation.Source
 
 @Source
 abstract class Mangasushi : Madara() {
-    override val useNewChapterEndpoint: Boolean = true
+    override val chapterMode = ChapterMode.MangaAjax
 }

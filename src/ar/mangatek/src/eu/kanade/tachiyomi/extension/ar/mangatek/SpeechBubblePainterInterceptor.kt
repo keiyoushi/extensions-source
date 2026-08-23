@@ -16,10 +16,9 @@ import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import org.jsoup.Jsoup
 import java.io.ByteArrayOutputStream
 
-class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
+class SpeechBubblePainterInterceptor : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -29,67 +28,67 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
             return chain.proceed(request)
         }
 
-        val speechBubbles = request.url.fragment?.parseAs<List<Bubble>>()
-            ?: emptyList()
+        val speechBubbles = request.url.fragment?.parseAs<List<Bubble>>().orEmpty()
 
-        val imageRequest = request.newBuilder()
-            .url(url)
-            .build()
-
-        val response = chain.proceed(imageRequest)
-
-        if (response.isSuccessful.not()) {
+        val response = chain.proceed(request.newBuilder().url(url).build())
+        if (!response.isSuccessful || speechBubbles.isEmpty()) {
             return response
         }
 
-        val bitmap = BitmapFactory.decodeStream(response.body.byteStream())!!
-            .copy(Bitmap.Config.ARGB_8888, true)
+        val options = BitmapFactory.Options().apply {
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+            inMutable = true
+        }
+
+        val bitmap = BitmapFactory.decodeStream(response.body.byteStream(), null, options)!!
 
         val canvas = Canvas(bitmap)
 
-        val imageWidth = bitmap.width.toFloat()
-        val imageHeight = bitmap.height.toFloat()
-
+        val textPaint = TextPaint().apply {
+            isAntiAlias = true
+        }
         speechBubbles.forEach { speechBubble ->
-            val pxX = (speechBubble.left / 100f) * imageWidth
-            val pxY = (speechBubble.top / 100f) * imageHeight
-            val pxWidth = (speechBubble.width / 100f) * imageWidth
-            val pxHeight = (speechBubble.height / 100f) * imageHeight
+            val pxX = speechBubble.x
+            val pxY = speechBubble.y
+            val pxWidth = speechBubble.w
+            val pxHeight = speechBubble.h
             val pxCenterY = pxY + (pxHeight / 2f)
 
-            val textPaint = createTextPaint(fontSize)
+            textPaint.color = Color.parseColor(speechBubble.color)
+            textPaint.bgColor = Color.parseColor(speechBubble.strokeColor)
+            textPaint.textSize = speechBubble.fontSizePx
+            textPaint.strokeWidth = speechBubble.strokeWidthPx
+
             val bubble = createBubble(pxHeight, pxWidth, speechBubble, textPaint)
             val finalY = getYAxis(pxY, pxHeight, pxCenterY, textPaint, bubble)
             canvas.draw(textPaint, bubble, speechBubble.angle, pxX, finalY)
         }
 
-        val output = ByteArrayOutputStream()
-
         val ext = url.substringBefore("#")
+            .substringBefore("?")
             .substringAfterLast(".")
             .lowercase()
         val format = when (ext) {
             "png" -> Bitmap.CompressFormat.PNG
             "jpeg", "jpg" -> Bitmap.CompressFormat.JPEG
-            else -> Bitmap.CompressFormat.WEBP
+            else -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Bitmap.CompressFormat.WEBP_LOSSY
+            } else {
+                @Suppress("DEPRECATION")
+                Bitmap.CompressFormat.WEBP
+            }
         }
 
-        bitmap.compress(format, 100, output)
+        val output = ByteArrayOutputStream().use { stream ->
+            bitmap.compress(format, 100, stream)
+            stream.toByteArray()
+        }
 
-        val responseBody = output.toByteArray().toResponseBody(mediaType)
+        bitmap.recycle()
 
         return response.newBuilder()
-            .body(responseBody)
+            .body(output.toResponseBody(mediaType))
             .build()
-    }
-
-    private fun createTextPaint(fontSize: Int): TextPaint {
-        val defaultTextSize = fontSize.pt
-        return TextPaint().apply {
-            color = Color.BLACK
-            textSize = defaultTextSize
-            isAntiAlias = true
-        }
     }
 
     private fun getYAxis(
@@ -114,31 +113,32 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
         textPaint: TextPaint,
     ): StaticLayout {
         var bubble = createBubbleLayout(pxWidth, dialog, textPaint)
+
+        if (bubble.height <= pxHeight) {
+            return bubble
+        }
+
         while (bubble.height > pxHeight) {
             textPaint.textSize -= 0.5f
             bubble = createBubbleLayout(pxWidth, dialog, textPaint)
         }
 
-        textPaint.color = Color.BLACK
-        textPaint.bgColor = Color.WHITE
-
         return bubble
     }
 
     private fun createBubbleLayout(pxWidth: Float, dialog: Bubble, textPaint: TextPaint): StaticLayout {
-        val text = dialog.text.cleanUp()
+        val text = dialog.text
 
         return StaticLayout.Builder.obtain(text, 0, text.length, textPaint, pxWidth.toInt()).apply {
             setAlignment(Layout.Alignment.ALIGN_CENTER)
             setIncludePad(true)
+            setLineSpacing(0f, dialog.lineHeight.coerceAtLeast(0.5f))
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 setBreakStrategy(LineBreaker.BREAK_STRATEGY_BALANCED)
                 setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_FULL)
             }
         }.build()
     }
-
-    private fun String.cleanUp(): String = Jsoup.parse(this).text()
 
     private fun Canvas.draw(textPaint: TextPaint, layout: StaticLayout, angle: Float, x: Float, y: Float) {
         save()
@@ -151,6 +151,7 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
 
     private fun Canvas.drawText(textPaint: TextPaint, layout: StaticLayout) {
         textPaint.style = Paint.Style.FILL
+        textPaint.strokeWidth = 0f
         layout.draw(this)
     }
 
@@ -158,7 +159,6 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
         val foregroundColor = textPaint.color
         val style = textPaint.style
 
-        textPaint.strokeWidth = 5F
         textPaint.color = textPaint.bgColor
         textPaint.style = Paint.Style.FILL_AND_STROKE
 
@@ -168,10 +168,7 @@ class SpeechBubblePainterInterceptor(val fontSize: Int) : Interceptor {
         textPaint.style = style
     }
 
-    private val Int.pt: Float get() = this / SCALED_DENSITY
-
     companion object {
-        const val SCALED_DENSITY = 0.75f // 1px = 0.75pt
         val mediaType = "image/png".toMediaType()
     }
 }

@@ -49,7 +49,7 @@ abstract class KuroMangas :
         network.client.newBuilder()
             .apply {
                 addInterceptor { chain ->
-                    checkLogin() ?: throw IOException(LOGIN_REQUIRED_MESSAGE)
+                    if (!checkLogin()) throw IOException(LOGIN_REQUIRED_MESSAGE)
                     return@addInterceptor chain.proceed(chain.request())
                 }
 
@@ -205,20 +205,23 @@ abstract class KuroMangas :
 
     // ============================= Auth ===================================
 
-    private fun checkLogin(): Boolean? {
-        client.getCookie(baseUrl, "kuro_session")?.also { return true }
+    private fun checkLogin(): Boolean {
+        if (hasSession()) return true
 
         val email = preferences.getString(PREF_EMAIL, "") ?: ""
         val password = preferences.getString(PREF_PASSWORD, "") ?: ""
         if (email.isEmpty() || password.isEmpty()) {
-            return null
+            return false
         }
         login(email, password)
 
-        return client.getCookie(baseUrl, "kuro_session").let { true }
+        return hasSession()
     }
 
-    // Implicit set-cookie: kuro_session + kuro_csrf
+    // The site rejects requests carrying a session without its matching nonce.
+    private fun hasSession(): Boolean = client.getCookie(baseUrl, SESSION_COOKIE) != null && client.getCookie(baseUrl, NONCE_COOKIE) != null
+
+    // Implicit set-cookie: kuro_session + _kn
     private fun login(email: String, password: String) {
         val payload = buildJsonObject {
             put("email", email)
@@ -226,7 +229,7 @@ abstract class KuroMangas :
         }.toString()
         val requestBody = payload.toRequestBody(JSON_MEDIA_TYPE)
         val request = POST("$apiUrl/auth/login", headers, requestBody)
-        val response = network.client.newCall(request).execute()
+        network.client.newCall(request).execute().close()
     }
 
     // ============================= Preferences ============================
@@ -265,6 +268,7 @@ abstract class KuroMangas :
         private const val API_HOST = "beta.kuromangas.com"
         private const val PREF_EMAIL = "kuromangas_email"
         private const val PREF_PASSWORD = "kuromangas_password"
+        private const val SESSION_COOKIE = "kuro_session"
         private const val LOGIN_REQUIRED_MESSAGE = "Faça login no WebView ou insira email e senha nas configurações e tente novamente."
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }

@@ -8,7 +8,7 @@ keiyoushi {
     name = "Com-X"
     versionCode = 39
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         baseUrl {
@@ -19,5 +19,9 @@ keiyoushi {
         }
         lang = "ru"
         id = 1114173092141608635L
+    }
+
+    deeplink {
+        path("/..*")
     }
 }

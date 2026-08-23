@@ -73,6 +73,12 @@ class AllTitlesGroup(
 @Serializable
 class WebHomeView(
     @ProtoNumber(2) val groups: List<UpdatedTitleGroup> = emptyList(),
+    @ProtoNumber(7) val featured: FeaturedUpdate?,
+)
+
+@Serializable
+class FeaturedUpdate(
+    @ProtoNumber(2) val title: UpdatedTitle,
 )
 
 @Serializable
@@ -82,10 +88,9 @@ class UpdatedTitleGroup(
 
 @Serializable
 class UpdatedTitle(
-    @ProtoNumber(3) private val latestChapter: LatestChapter? = null,
-) {
-    val title: Title? get() = latestChapter?.title
-}
+    @ProtoNumber(3) val latestChapters: List<LatestChapter>,
+    @ProtoNumber(6) val updatedAt: Int,
+)
 
 @Serializable
 class LatestChapter(

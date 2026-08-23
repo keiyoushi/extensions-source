@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Honeytoon"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.4"
 
@@ -29,7 +29,5 @@ keiyoushi {
 }
 
 dependencies {
-
-    implementation(project(":lib:cookieinterceptor"))
     implementation(project(":lib:i18n"))
 }

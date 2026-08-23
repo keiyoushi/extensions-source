@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.text.LineBreaker
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
@@ -205,7 +206,7 @@ abstract class DbMultiverse : HttpSource() {
 
             val layout = StaticLayout.Builder.obtain(b.text, 0, b.text.length, textPaint, w)
                 .setAlignment(Layout.Alignment.ALIGN_CENTER)
-                .setBreakStrategy(Layout.BREAK_STRATEGY_HIGH_QUALITY)
+                .setBreakStrategy(LineBreaker.BREAK_STRATEGY_HIGH_QUALITY)
                 .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_FULL)
                 .build()
 

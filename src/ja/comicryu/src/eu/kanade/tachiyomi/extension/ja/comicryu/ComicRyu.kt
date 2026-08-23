@@ -1,31 +1,31 @@
 package eu.kanade.tachiyomi.extension.ja.comicryu
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.boolean
 import keiyoushi.utils.firstInstance
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
 
 @Source
-abstract class ComicRyu : HttpSource() {
-    override val supportsLatest = true
-
+abstract class ComicRyu : KeiSource() {
     private val domain = baseUrl.toHttpUrl().host
-    private val subDomain = "https://unicorn.$domain"
+    private val subUrl = "https://unicorn.$domain"
+    private val subDomain = subUrl.toHttpUrl().host
 
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get(baseUrl).asJsoup()
         val mangas = document.select(".m-ranking-list.m-list-sakuhin-list.is-week .m-ranking-list-item").map {
             SManga.create().apply {
                 title = it.selectFirst(".sakuhin-article-title")!!.text()
@@ -36,10 +36,8 @@ abstract class ComicRyu : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get(baseUrl).asJsoup()
         val mangas = document.select(".m-list-recent .m-list-sakuhin-list-item").map {
             SManga.create().apply {
                 title = it.selectFirst(".sakuhin-article-title")!!.text()
@@ -50,46 +48,46 @@ abstract class ComicRyu : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val filter = filters.firstInstance<StatusFilter>()
-        val path = filter.values[filter.state].value
-        val url = if (path.startsWith(subDomain)) {
-            path.toHttpUrl()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val category = filters.firstInstance<CategoryFilter>()
+        val requestUrl = if (category.state == 2) {
+            "$subUrl/${category.value}/"
         } else {
-            baseUrl.toHttpUrl().newBuilder()
-                .addPathSegment(path)
-                .build()
+            "$baseUrl/${category.value}/"
         }
-        return GET(url, headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
+        val document = client.get(requestUrl).asJsoup()
         val mangas = document.select(".m-series-list .m-list-sakuhin-list-item").map {
             SManga.create().apply {
                 title = it.selectFirst(".sakuhin-article-title")!!.text()
                 val href = it.selectFirst("a")!!.absUrl("href")
-                if (href.startsWith(baseUrl)) {
-                    setUrlWithoutDomain(href)
-                } else {
-                    url = href
-                }
+                setUrlWithoutDomain(href)
                 thumbnail_url = it.selectFirst(".sakuhin-article-thumbnail")?.absUrl("src")
+                if (href.toHttpUrl().host == subDomain) {
+                    memo = buildJsonObject {
+                        put("unicorn", true)
+                    }
+                }
             }
         }
         return MangasPage(mangas, false)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = if (manga.url.startsWith(subDomain)) {
-        GET(manga.url, headers)
+    override fun getMangaUrl(manga: SManga): String = if (manga.memo["unicorn"]?.boolean == true) {
+        subUrl + manga.url
     } else {
-        super.mangaDetailsRequest(manga)
+        baseUrl + manga.url
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val url = getMangaUrl(manga)
+        val document = client.get(url).asJsoup()
         val info = document.selectFirst(".m-aside .sakuhin-article")!!
-        return SManga.create().apply {
+        val mangas = SManga.create().apply {
             title = info.selectFirst(".sakuhin-article-title")!!.text()
             val authorText = info.selectFirst(".sakuhin-article-author")?.text()?.replace("著者", "")
             if (!authorText.isNullOrEmpty() && authorText.contains("原作：") && authorText.contains("漫画：")) {
@@ -101,65 +99,66 @@ abstract class ComicRyu : HttpSource() {
             }
             description = info.selectFirst(".sakuhin-article-description")?.text()
             thumbnail_url = info.selectFirst(".sakuhin-article-thumbnail")?.absUrl("src")
-            status = SManga.UNKNOWN
+            if (url.toHttpUrl().host == subDomain) {
+                memo = buildJsonObject {
+                    put("unicorn", true)
+                }
+            }
         }
-    }
 
-    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val chapters = document.select(".m-main a.sakuhin-episode-link").mapNotNull {
+        val chapterList = document.select(".m-main a.sakuhin-episode-link").mapNotNull {
             val article = it.selectFirst("article.sakuhin-episode") ?: return@mapNotNull null
             if (article.hasClass("is-episode-publish-end")) return@mapNotNull null
             SChapter.create().apply {
                 name = article.selectFirst(".sakuhin-episode-title")!!.text()
                 val href = it.absUrl("href")
-                if (href.startsWith(baseUrl)) {
-                    setUrlWithoutDomain(href)
-                } else {
-                    url = href
+                setUrlWithoutDomain(href)
+                if (href.toHttpUrl().host == subDomain) {
+                    memo = buildJsonObject {
+                        put("unicorn", true)
+                    }
                 }
             }
         }
-        return if (response.request.url.host.contains("unicorn")) {
-            chapters
-        } else {
-            chapters.reversed()
-        }
+
+        return SMangaUpdate(
+            mangas,
+            chapterList.let {
+                if (manga.memo["unicorn"]?.boolean == true) it else it.reversed()
+            },
+        )
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = if (chapter.url.startsWith(subDomain)) {
-        GET(chapter.url, headers)
+    override fun getChapterUrl(chapter: SChapter): String = if (chapter.memo["unicorn"]?.boolean == true) {
+        subUrl + chapter.url
     } else {
-        super.pageListRequest(chapter)
+        baseUrl + chapter.url
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        return document.select(".wp-block-gallery figure.wp-block-image img").mapIndexed { i, img ->
-            Page(i, imageUrl = img.absUrl("src"))
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        return document.select(".wp-block-gallery figure.wp-block-image img").mapIndexed { index, page ->
+            Page(index, imageUrl = page.absUrl("src"))
         }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun getFilterList() = FilterList(
+    override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Search query is not available"),
-        StatusFilter(),
+        CategoryFilter(),
     )
 
-    private inner class StatusFilter :
-        Filter.Select<FilterOption>(
-            "Status",
+    private class CategoryFilter :
+        SelectFilter(
+            "Category",
             arrayOf(
-                FilterOption("連載中", "シリーズ一覧-連載中"),
-                FilterOption("完結作品", "完結作品"),
-                FilterOption("(ユニコーン) 連載中", "$subDomain/シリーズ一覧-連載中"),
+                "連載中" to "シリーズ一覧-連載中",
+                "完結作品" to "完結作品",
+                "(ユニコーン) 連載中" to "シリーズ一覧-連載中",
             ),
         )
 
-    private class FilterOption(private val name: String, val value: String) {
-        override fun toString() = name
+    private open class SelectFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+        val value: String
+            get() = vals[state].second
     }
 }

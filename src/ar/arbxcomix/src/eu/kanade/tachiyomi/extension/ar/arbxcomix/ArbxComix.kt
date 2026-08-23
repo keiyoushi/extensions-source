@@ -5,7 +5,5 @@ import keiyoushi.annotation.Source
 
 @Source
 abstract class ArbxComix : Madara() {
-    override fun searchMangaSelector() = popularMangaSelector()
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-    override val useNewChapterEndpoint = true
+    override val chapterMode = ChapterMode.MangaAjax
 }

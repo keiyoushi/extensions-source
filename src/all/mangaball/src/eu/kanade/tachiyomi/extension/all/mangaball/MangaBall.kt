@@ -15,7 +15,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cookieinterceptor.CookieInterceptor
+import keiyoushi.network.addCookie
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -86,14 +86,11 @@ abstract class MangaBall :
             else -> listOf(lang)
         }
 
-    private val domain get() = baseUrl.removePrefix("https://")
     override val supportsLatest = true
     private val preferences by getPreferencesLazy()
 
     override val client = network.client.newBuilder()
-        .addNetworkInterceptor(
-            CookieInterceptor(domain, "show18PlusContent" to hideNsfwPreference().not().toString()),
-        )
+        .addCookie { listOf("show18PlusContent" to hideNsfwPreference().not().toString()) }
         .addInterceptor { chain ->
             var request = chain.request()
             if (request.url.pathSegments[0] == "api") {
