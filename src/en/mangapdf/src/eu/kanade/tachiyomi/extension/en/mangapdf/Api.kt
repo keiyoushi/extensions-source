@@ -25,65 +25,59 @@ internal fun normalizeBaseUrl(raw: String): String {
     return "https://$s"
 }
 
-private fun apiBuilder(baseUrl: String): HttpUrl.Builder =
-    normalizeBaseUrl(baseUrl)
-        .toHttpUrl()
-        .newBuilder()
-        .addPathSegment("api")
-        .addPathSegment("v1")
+private fun apiBuilder(baseUrl: String): HttpUrl.Builder = normalizeBaseUrl(baseUrl)
+    .toHttpUrl()
+    .newBuilder()
+    .addPathSegment("api")
+    .addPathSegment("v1")
 
 internal fun popularUrl(
     baseUrl: String,
     page: Int,
-): HttpUrl =
-    apiBuilder(baseUrl)
-        .addPathSegment("mihon")
-        .addPathSegment("popular")
-        .addQueryParameter("page", page.toString())
-        .build()
+): HttpUrl = apiBuilder(baseUrl)
+    .addPathSegment("mihon")
+    .addPathSegment("popular")
+    .addQueryParameter("page", page.toString())
+    .build()
 
 internal fun latestUrl(
     baseUrl: String,
     page: Int,
-): HttpUrl =
-    apiBuilder(baseUrl)
-        .addPathSegment("mihon")
-        .addPathSegment("latest")
-        .addQueryParameter("page", page.toString())
-        .build()
+): HttpUrl = apiBuilder(baseUrl)
+    .addPathSegment("mihon")
+    .addPathSegment("latest")
+    .addQueryParameter("page", page.toString())
+    .build()
 
 internal fun searchUrl(
     baseUrl: String,
     query: String,
     page: Int,
-): HttpUrl =
-    apiBuilder(baseUrl)
-        .addPathSegment("mihon")
-        .addPathSegment("search")
-        .addQueryParameter("q", query)
-        .addQueryParameter("page", page.toString())
-        .build()
+): HttpUrl = apiBuilder(baseUrl)
+    .addPathSegment("mihon")
+    .addPathSegment("search")
+    .addQueryParameter("q", query)
+    .addQueryParameter("page", page.toString())
+    .build()
 
 internal fun mangaUrl(
     baseUrl: String,
     mangaId: String,
-): HttpUrl =
-    apiBuilder(baseUrl)
-        .addPathSegment("mihon")
-        .addPathSegment("manga")
-        .addPathSegment(mangaId)
-        .build()
+): HttpUrl = apiBuilder(baseUrl)
+    .addPathSegment("mihon")
+    .addPathSegment("manga")
+    .addPathSegment(mangaId)
+    .build()
 
 internal fun pagesUrl(
     baseUrl: String,
     chapterId: String,
-): HttpUrl =
-    apiBuilder(baseUrl)
-        .addPathSegment("mihon")
-        .addPathSegment("chapter")
-        .addPathSegment(chapterId)
-        .addPathSegment("pages")
-        .build()
+): HttpUrl = apiBuilder(baseUrl)
+    .addPathSegment("mihon")
+    .addPathSegment("chapter")
+    .addPathSegment(chapterId)
+    .addPathSegment("pages")
+    .build()
 
 internal fun mangaIdFromUrl(
     baseUrl: String,

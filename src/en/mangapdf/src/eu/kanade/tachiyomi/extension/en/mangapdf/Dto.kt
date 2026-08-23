@@ -15,11 +15,10 @@ class MangaListResponse(
     @SerialName("has_next")
     private val hasNext: Boolean,
 ) {
-    fun toMangasPage(): MangasPage =
-        MangasPage(
-            mangas = items.map { it.toSManga() },
-            hasNextPage = hasNext,
-        )
+    fun toMangasPage(): MangasPage = MangasPage(
+        mangas = items.map { it.toSManga() },
+        hasNextPage = hasNext,
+    )
 }
 
 @Serializable
@@ -29,12 +28,11 @@ class MangaSummaryDto(
     @SerialName("thumbnail_url")
     private val thumbnailUrl: String? = null,
 ) {
-    fun toSManga(): SManga =
-        SManga.create().apply {
-            url = id
-            this.title = this@MangaSummaryDto.title
-            thumbnail_url = thumbnailUrl
-        }
+    fun toSManga(): SManga = SManga.create().apply {
+        url = id
+        this.title = this@MangaSummaryDto.title
+        thumbnail_url = thumbnailUrl
+    }
 }
 
 @Serializable
@@ -42,11 +40,10 @@ class MangaUpdateResponse(
     private val manga: MangaDto,
     private val chapters: List<ChapterDto>,
 ) {
-    fun toSMangaUpdate(): SMangaUpdate =
-        SMangaUpdate(
-            manga = manga.toSManga(),
-            chapters = chapters.map { it.toSChapter() },
-        )
+    fun toSMangaUpdate(): SMangaUpdate = SMangaUpdate(
+        manga = manga.toSManga(),
+        chapters = chapters.map { it.toSChapter() },
+    )
 }
 
 @Serializable
@@ -61,17 +58,16 @@ class MangaDto(
     private val genres: List<String> = emptyList(),
     private val status: String = "unknown",
 ) {
-    fun toSManga(): SManga =
-        SManga.create().apply {
-            url = id
-            this.title = this@MangaDto.title
-            thumbnail_url = thumbnailUrl
-            author = this@MangaDto.author
-            artist = this@MangaDto.artist
-            description = this@MangaDto.description
-            genre = genres.takeIf { it.isNotEmpty() }?.joinToString()
-            this.status = this@MangaDto.status.toMihonStatus()
-        }
+    fun toSManga(): SManga = SManga.create().apply {
+        url = id
+        this.title = this@MangaDto.title
+        thumbnail_url = thumbnailUrl
+        author = this@MangaDto.author
+        artist = this@MangaDto.artist
+        description = this@MangaDto.description
+        genre = genres.takeIf { it.isNotEmpty() }?.joinToString()
+        this.status = this@MangaDto.status.toMihonStatus()
+    }
 }
 
 @Serializable
@@ -83,26 +79,24 @@ class ChapterDto(
     @SerialName("uploaded_at")
     private val uploadedAt: String? = null,
 ) {
-    fun toSChapter(): SChapter =
-        SChapter.create().apply {
-            url = id
-            this.name = this@ChapterDto.name
-            chapter_number = number ?: -1f
-            this.scanlator = this@ChapterDto.scanlator
-            date_upload = uploadedAt
-                ?.let { runCatching { Instant.parse(it).toEpochMilliseconds() }.getOrNull() }
-                ?: 0L
-        }
+    fun toSChapter(): SChapter = SChapter.create().apply {
+        url = id
+        this.name = this@ChapterDto.name
+        chapter_number = number ?: -1f
+        this.scanlator = this@ChapterDto.scanlator
+        date_upload = uploadedAt
+            ?.let { runCatching { Instant.parse(it).toEpochMilliseconds() }.getOrNull() }
+            ?: 0L
+    }
 }
 
 @Serializable
 class PageListResponse(
     private val pages: List<PageDto>,
 ) {
-    fun toPages(): List<Page> =
-        pages.mapIndexed { index, page ->
-            page.toPage(index)
-        }
+    fun toPages(): List<Page> = pages.mapIndexed { index, page ->
+        page.toPage(index)
+    }
 }
 
 @Serializable
@@ -110,20 +104,18 @@ class PageDto(
     @SerialName("image_url")
     private val imageUrl: String,
 ) {
-    fun toPage(listIndex: Int): Page =
-        Page(
-            index = listIndex,
-            imageUrl = imageUrl,
-        )
+    fun toPage(listIndex: Int): Page = Page(
+        index = listIndex,
+        imageUrl = imageUrl,
+    )
 }
 
-private fun String.toMihonStatus(): Int =
-    when (lowercase()) {
-        "ongoing" -> SManga.ONGOING
-        "completed" -> SManga.COMPLETED
-        "licensed" -> SManga.LICENSED
-        "publishing_finished" -> SManga.PUBLISHING_FINISHED
-        "cancelled" -> SManga.CANCELLED
-        "on_hiatus" -> SManga.ON_HIATUS
-        else -> SManga.UNKNOWN
-    }
+private fun String.toMihonStatus(): Int = when (lowercase()) {
+    "ongoing" -> SManga.ONGOING
+    "completed" -> SManga.COMPLETED
+    "licensed" -> SManga.LICENSED
+    "publishing_finished" -> SManga.PUBLISHING_FINISHED
+    "cancelled" -> SManga.CANCELLED
+    "on_hiatus" -> SManga.ON_HIATUS
+    else -> SManga.UNKNOWN
+}

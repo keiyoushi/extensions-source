@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "MANGAPDF"
     versionCode = 3
-    contentWarning = ContentWarning.MIXED
+    contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
