@@ -16,6 +16,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParseDate
 import okhttp3.OkHttpClient
+import org.jsoup.nodes.Document
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -60,25 +61,27 @@ abstract class MangaYi : KeiSource() {
 
     override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
         val document = client.get("$baseUrl/read/${manga.url}/").asJsoup()
-        val manga2 = SManga.create().apply {
-            title = document.selectFirst("h1.m-title")!!.text()
-            author = document.selectFirst(".m-authors")?.text()
-            description = document.select(".m-summary p").joinToString("\n") { it.text() }
-            genre = document.select(".m-genres .pill").joinToString { it.text() }
-            status = document.selectFirst(".m-stat:contains(Status) .value")?.text().parseStatus()
-            thumbnail_url = document.selectFirst(".cover-wrap img.cover-image")?.attr("abs:src")
-        }
+        return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
+    }
 
+    private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h1.m-title")!!.text()
+        author = document.selectFirst(".m-authors")?.text()
+        description = document.select(".m-summary p").joinToString("\n") { it.text() }
+        genre = document.select(".m-genres .pill").joinToString { it.text() }
+        status = document.selectFirst(".m-stat:contains(Status) .value")?.text().parseStatus()
+        thumbnail_url = document.selectFirst(".cover-wrap img.cover-image")?.attr("abs:src")
+    }
+
+    private fun parseChapterList(document: Document): List<SChapter> {
         val chapters = document.select("div.chapters-list a.c:not(.unreleased)")
-        val chapters2 = chapters.map { element ->
+        return chapters.map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
                 name = element.selectFirst(".t")!!.text()
                 date_upload = dateFormat.tryParseDate(element.selectFirst(".chapter-d")?.text())
             }
         }
-
-        return SMangaUpdate(manga2, chapters2)
     }
 
     private fun String?.parseStatus(): Int = when (this?.lowercase()) {
