@@ -37,8 +37,7 @@ internal fun isSeriesEntry(element: JsonElement) = element is JsonObject &&
     "slug" in element &&
     "title" in element
 
-internal fun isSeriesList(element: JsonElement) = element is JsonArray &&
-    element.count(::isSeriesEntry) * 2 > element.size
+internal fun isSeriesList(element: JsonElement) = element is JsonArray && element.any(::isSeriesEntry)
 
 @Serializable
 class SeriesPayloadDto(
