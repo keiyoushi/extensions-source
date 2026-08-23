@@ -5,16 +5,16 @@ plugins {
 }
 
 keiyoushi {
-    name = "HentaiZap"
-    versionCode = 1
+    name = "NHentai.to"
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "galleryadults"
 
-    listOf("en", "ja", "es", "fr", "ko", "de", "ru", "all").forEach { language ->
+    listOf("en", "ja", "zh", "ko", "all").forEach { language ->
         source {
             lang = language
-            baseUrl = "https://hentaizap.com"
+            baseUrl = "https://nhentai.to"
         }
     }
 }
