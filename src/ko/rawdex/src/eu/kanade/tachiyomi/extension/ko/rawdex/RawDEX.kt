@@ -19,11 +19,9 @@ import org.jsoup.nodes.Element
 @Source
 abstract class RawDEX : KeiSource() {
 
-    override suspend fun getPopularManga(page: Int): MangasPage =
-        fetchBrowsePage("$baseUrl/manga/page/$page/?m_orderby=views")
+    override suspend fun getPopularManga(page: Int): MangasPage = fetchBrowsePage("$baseUrl/manga/page/$page/?m_orderby=views")
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage =
-        fetchBrowsePage("$baseUrl/manga/page/$page/?m_orderby=latest")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = fetchBrowsePage("$baseUrl/manga/page/$page/?m_orderby=latest")
 
     // The site ignores m_orderby=popular, views is its de facto most-read ordering.
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -108,25 +106,24 @@ abstract class RawDEX : KeiSource() {
     }
 
     // Chapters render newest first, matching the descending order the app expects.
-    private fun parseChapterList(document: Document): List<SChapter> =
-        document.select(CHAPTER_LIST_SELECTOR).mapNotNull { element ->
-            val name = element.selectFirst(CHAPTER_NAME_SELECTOR)?.text()
-                ?.takeIf { it.isNotEmpty() }
-                ?: return@mapNotNull null
+    private fun parseChapterList(document: Document): List<SChapter> = document.select(CHAPTER_LIST_SELECTOR).mapNotNull { element ->
+        val name = element.selectFirst(CHAPTER_NAME_SELECTOR)?.text()
+            ?.takeIf { it.isNotEmpty() }
+            ?: return@mapNotNull null
 
-            SChapter.create().apply {
-                setUrlWithoutDomain(element.absUrl("href"))
-                this.name = name
-                date_upload = element.selectFirst(CHAPTER_DATE_SELECTOR)?.text()
-                    ?.let(::parseRelativeDate)
-                    ?: 0L
-                chapter_number = CHAPTER_NUMBER_REGEX.find(name)
-                    ?.groupValues
-                    ?.get(1)
-                    ?.toFloatOrNull()
-                    ?: -1f
-            }
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.absUrl("href"))
+            this.name = name
+            date_upload = element.selectFirst(CHAPTER_DATE_SELECTOR)?.text()
+                ?.let(::parseRelativeDate)
+                ?: 0L
+            chapter_number = CHAPTER_NUMBER_REGEX.find(name)
+                ?.groupValues
+                ?.get(1)
+                ?.toFloatOrNull()
+                ?: -1f
         }
+    }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
