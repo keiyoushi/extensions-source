@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangapdf
 
-import eu.kanade.tachiyomi.source.UnmeteredSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -16,9 +15,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 
 @Source
-abstract class MangaPdf :
-    KeiSource(),
-    UnmeteredSource {
+abstract class MangaPdf : KeiSource() {
 
     private val apiUrl by lazy { API_BASE_URL.toHttpUrl() }
 
