@@ -17,13 +17,13 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -83,12 +83,10 @@ abstract class Baozi :
             if (isNotEmpty()) {
                 val date = document.selectFirst("em")?.text().orEmpty()
                 if (date.contains('年')) {
-                    this[0].date_upload = runCatching {
-                        LocalDate.parse(
-                            date.removePrefix("(").removeSuffix(" 更新)"),
-                            DATE_FORMAT,
-                        ).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-                    }.getOrDefault(0L)
+                    this[0].date_upload = DATE_FORMAT.tryParseDate(
+                        date.removePrefix("(").removeSuffix(" 更新)"),
+                        ZoneOffset.UTC,
+                    )
                 }
             }
         }
@@ -153,37 +151,45 @@ abstract class Baozi :
             document.select("div.pure-g div a.comics-card__poster")
         }
 
-        return elements.map { mangaFromElement(it) }
+        return elements.mapNotNull { mangaFromElement(it) }
     }
 
-    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
+    private fun mangaFromElement(element: Element): SManga? {
         // element may be the wrapper div.comics-card OR the <a.comics-card__poster> itself
         val poster = element.selectFirst(".comics-card__poster")
             ?: element.takeIf { it.tagName() == "a" && it.hasClass("comics-card__poster") }
 
-        val href = poster?.attr("href").orEmpty()
-        if (href.isNotBlank()) {
-            url = normalizeRelativeUrl(href)
-        } else {
+        val mangaUrl = if (poster?.attr("href").isNullOrBlank()) {
             // app sometimes only has onclick
             val onclick = poster?.attr("onclick").orEmpty()
             val slug = onclick.substringAfter("'comic', '").substringBefore("'")
-            url = normalizeRelativeUrl("/comic/$slug")
+            normalizeRelativeUrl("/comic/$slug")
+        } else {
+            normalizeRelativeUrl(poster!!.attr("href"))
         }
 
         val titleElement = element.selectFirst(".comics-card__title")
-        title = titleElement?.text()?.trim()
-            ?: poster?.attr("title")?.trim()
-            ?: ""
+        val mangaTitle = titleElement?.text()
+            ?.takeIf(String::isNotBlank)
+            ?: poster?.attr("title")?.takeIf(String::isNotBlank)
+            ?: return null
 
-        val img = element.selectFirst("img, amp-img")
-        thumbnail_url = img?.absUrl("data-src")?.ifEmpty { img.absUrl("src") }
+        return SManga.create().apply {
+            url = mangaUrl
+            title = mangaTitle.trim()
+
+            val img = element.selectFirst("img, amp-img")
+            thumbnail_url = img?.absUrl("data-src")?.ifEmpty { img.absUrl("src") }
+        }
     }
 
     // --- Details ---
 
     private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h1.comics-detail__title")?.text().orEmpty()
+        title = document.selectFirst("h1.comics-detail__title")?.text()
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: error("Missing manga title")
         thumbnail_url = document.selectFirst("meta[name=og:image]")?.attr("content")
             ?: document.selectFirst("div.pure-g div > amp-img, div.pure-g div > img")?.absUrl("src")
         author = document.selectFirst("h2.comics-detail__author")?.text().orEmpty()
