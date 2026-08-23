@@ -33,9 +33,12 @@ class LibraryMangaDto(
     }
 }
 
+internal fun isSeriesEntry(element: JsonElement) = element is JsonObject &&
+    "slug" in element &&
+    "title" in element
+
 internal fun isSeriesList(element: JsonElement) = element is JsonArray &&
-    element.isNotEmpty() &&
-    element.all { it is JsonObject && "slug" in it && "title" in it }
+    element.count(::isSeriesEntry) * 2 > element.size
 
 @Serializable
 class SeriesPayloadDto(
