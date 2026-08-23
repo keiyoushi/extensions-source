@@ -22,14 +22,6 @@ import java.util.Locale
 import kotlin.time.Instant
 
 @Serializable
-class LibraryPaginationDto(
-    private val page: Int = 1,
-    private val totalPages: Int = 1,
-) {
-    val hasNextPage get() = page < totalPages
-}
-
-@Serializable
 class LibraryMangaDto(
     private val title: String,
     private val slug: String,
@@ -42,38 +34,26 @@ class LibraryMangaDto(
     }
 }
 
-/** The site keeps flipping between sending payloads as plain JSON and as an encrypted string. */
-internal fun JsonElement.decrypted(): JsonElement {
-    val encrypted = (this as? JsonPrimitive)?.contentOrNull ?: return this
-
-    return PayloadCipher.decrypt(encrypted).parseAs()
-}
-
-internal fun JsonObject.toMangasPage(): MangasPage {
-    val payload = values.firstOrNull { it is JsonArray }
-        ?: values.firstOrNull { (it as? JsonPrimitive)?.contentOrNull?.let(PayloadCipher::isEncrypted) == true }
-        ?: throw Exception("Não foi possível ler a lista de obras")
-
-    val mangas = payload.decrypted().parseAs<List<LibraryMangaDto>>()
-    val pagination = get("pagination")?.parseAs<LibraryPaginationDto>() ?: LibraryPaginationDto()
-
-    return MangasPage(mangas.map(LibraryMangaDto::toSManga), pagination.hasNextPage)
+@Serializable
+class SearchPayloadDto(
+    private val initialData: List<LibraryMangaDto>,
+    private val currentPage: Int = 1,
+    private val totalPages: Int = 1,
+) {
+    fun toMangasPage() = MangasPage(initialData.map(LibraryMangaDto::toSManga), currentPage < totalPages)
 }
 
 @Serializable
 class SeriesPayloadDto(
     val slug: String,
-    private val chapters: JsonElement,
+    private val chapters: List<SeriesChapterDto>,
     val description: String? = null,
     val author: String? = null,
     val artist: String? = null,
     val coverImage: String? = null,
     val status: String? = null,
 ) {
-    val chapterList: List<SChapter>
-        get() = chapters.decrypted()
-            .parseAs<List<SeriesChapterDto>>()
-            .map { it.toSChapter(slug) }
+    val chapterList: List<SChapter> get() = chapters.map { it.toSChapter(slug) }
 }
 
 @Serializable
@@ -167,12 +147,9 @@ class SeriesChapterDto(
 @Serializable
 class ChapterPayloadDto(
     val seriesSlug: String,
-    private val chapter: JsonElement,
+    private val chapter: ChapterImagesDto,
 ) {
-    val pages: List<Page>
-        get() = chapter.decrypted()
-            .parseAs<ChapterImagesDto>()
-            .toPageList()
+    val pages: List<Page> get() = chapter.toPageList()
 }
 
 @Serializable
