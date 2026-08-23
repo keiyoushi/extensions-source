@@ -31,7 +31,8 @@ abstract class MangaYi : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val payload = SearchRequestDto(t = 1)
-        val mangas = response.parseAs<List<MangaDto>>().map { it.toSManga() }
+        val response = client.post("$baseUrl/api/search", payload.toJsonRequestBody())
+        val mangas = response.parseAs<SearchResponseDto>().results.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
@@ -43,7 +44,8 @@ abstract class MangaYi : KeiSource() {
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val payload = SearchRequestDto(s = query)
-        val mangas = response.parseAs<List<MangaDto>>().map { it.toSManga() }
+        val response = client.post("$baseUrl/api/search", payload.toJsonRequestBody())
+        val mangas = response.parseAs<SearchResponseDto>().results.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
@@ -52,20 +54,20 @@ abstract class MangaYi : KeiSource() {
     override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
         val document = client.get("$baseUrl/read/${manga.url}/").asJsoup()
         val manga2 = SManga.create().apply {
-            title = document.selectFirst("h1.title")!!.text()
-            author = document.selectFirst(".authors")?.text()
-            description = document.select(".summary p").joinToString("\n") { it.text() }
-            genre = document.select(".genres .pill").joinToString { it.text() }
-            status = document.selectFirst(".stat:contains(Status) .value")?.text().parseStatus()
-            thumbnail_url = document.selectFirst(".cover-wrapper img.cover-image")?.attr("abs:src")
+            title = document.selectFirst("h1.m-title")!!.text()
+            author = document.selectFirst(".m-authors")?.text()
+            description = document.select(".m-summary p").joinToString("\n") { it.text() }
+            genre = document.select(".m-genres .pill").joinToString { it.text() }
+            status = document.selectFirst(".m-stat:contains(Status) .value")?.text().parseStatus()
+            thumbnail_url = document.selectFirst(".cover-wrap img.cover-image")?.attr("abs:src")
         }
 
-        val chapters = document.select("div.chapters a.c:not(.unreleased)")
+        val chapters = document.select("div.chapters-list a.c:not(.unreleased)")
         val chapters2 = chapters.map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
                 name = element.selectFirst(".t")!!.text()
-                date_upload = dateFormat.tryParseDate(element.selectFirst(".chapter-date")?.text())
+                date_upload = dateFormat.tryParseDate(element.selectFirst(".chapter-d")?.text())
             }
         }
 
@@ -84,7 +86,7 @@ abstract class MangaYi : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
-        return document.select("div.images img").mapIndexed { index, img ->
+        return document.select("div.c-images img").mapIndexed { index, img ->
             Page(index, imageUrl = img.attr("abs:src"))
         }
     }

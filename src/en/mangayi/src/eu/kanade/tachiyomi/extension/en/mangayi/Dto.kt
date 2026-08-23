@@ -11,6 +11,11 @@ class SearchRequestDto(
 )
 
 @Serializable
+class SearchResponseDto(
+    val results: List<MangaDto>,
+)
+
+@Serializable
 class MangaDto(
     @SerialName("i") private val slug: String,
     @SerialName("t") private val title: String,
