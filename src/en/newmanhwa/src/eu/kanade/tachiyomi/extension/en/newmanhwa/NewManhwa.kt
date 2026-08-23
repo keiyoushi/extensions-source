@@ -106,7 +106,7 @@ abstract class NewManhwa : KeiSource() {
     }.build()
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host && url.host !in MIRROR_HOSTS) return null
+        if (url.host != baseUrl.toHttpUrl().host && url.host != MIRROR_HOSTS) return null
 
         val newUrl = baseUrl.toHttpUrl().newBuilder()
             .encodedPath(url.encodedPath)
@@ -179,11 +179,10 @@ abstract class NewManhwa : KeiSource() {
     ): SMangaUpdate {
         val response = client.get(baseUrl + manga.url)
         val document = response.asJsoup()
-
-        val updatedManga = if (fetchDetails) parseMangaDetails(document) else manga
-        val updatedChapters = if (fetchChapters) parseChapterList(document) else chapters
-
-        return SMangaUpdate(manga = updatedManga, chapters = updatedChapters)
+        return SMangaUpdate(
+            manga = parseMangaDetails(document),
+            chapters = parseChapterList(document),
+        )
     }
 
     // ========================= Pages =========================
@@ -231,7 +230,7 @@ abstract class NewManhwa : KeiSource() {
     private fun String.removeTitleRank(): String = replace(TITLE_RANK_REGEX, "").trim()
 
     companion object {
-        private val MIRROR_HOSTS = listOf("saymanhwa.com")
+        private val MIRROR_HOSTS = "saymanhwa.com"
         private val GENRE_REGEX = "\"genre\":\\s*\\[(.*?)\\]".toRegex()
         private val TITLE_RANK_REGEX = "^#\\d+\\s+".toRegex()
         private val TAGS_MARKER_REGEX = "\\s*\\bTags\\b\\s*".toRegex()
