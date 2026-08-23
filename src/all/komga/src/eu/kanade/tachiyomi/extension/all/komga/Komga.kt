@@ -56,8 +56,10 @@ import org.apache.commons.text.StringSubstitutor
 import java.util.Locale
 
 @Source
-abstract class Komga :
-    KeiSource(),
+class Komga(
+    override val lang: String,
+    override val id: Long,
+) : KeiSource(),
     ConfigurableSource,
     UnmeteredSource {
 
