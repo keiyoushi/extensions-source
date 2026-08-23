@@ -175,7 +175,7 @@ abstract class Mangago :
         document.getElementById("information")?.let { info ->
             thumbnail_url = info.selectFirst("img")?.attr("abs:src")
             description = info.selectFirst(".manga_summary")
-                ?.ownText()
+                ?.text()
                 ?.takeIf { it.isNotEmpty() && !it.equals("not found...", ignoreCase = true) }
 
             info.select(".manga_info li, .manga_right tr").forEach { element ->
