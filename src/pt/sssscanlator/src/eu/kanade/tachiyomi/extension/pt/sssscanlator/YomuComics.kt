@@ -52,8 +52,10 @@ abstract class YomuComics : KeiSource() {
             }
             .build()
 
-        return client.get(url, rscHeaders).extractNextJs<SearchPayloadDto>()?.toMangasPage()
+        val mangas = client.get(url, rscHeaders).extractNextJs<List<LibraryMangaDto>>(::isSeriesList)
             ?: throw Exception("Não foi possível ler a lista de obras")
+
+        return MangasPage(mangas.map(LibraryMangaDto::toSManga), mangas.size >= PAGE_SIZE)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -108,6 +110,7 @@ abstract class YomuComics : KeiSource() {
     }
 
     companion object {
+        private const val PAGE_SIZE = 30
         private val MANGA_PATH_SEGMENTS = listOf("obra", "ler")
     }
 }
