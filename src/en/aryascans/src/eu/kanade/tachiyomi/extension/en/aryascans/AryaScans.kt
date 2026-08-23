@@ -7,13 +7,10 @@ import org.jsoup.nodes.Document
 
 @Source
 abstract class AryaScans : Madara() {
-    override val useNewChapterEndpoint = true
-
-    override val popularMangaUrlSelector = "${super.popularMangaUrlSelector}:not([href=New]):not([target=_self])"
-
+    override val chapterMode = ChapterMode.MangaAjax
     override val altNameSelector = "noSelector"
 
-    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
+    override fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga = super.parseDetails(document, id, preserveUrl).apply {
         author = null
         artist = null
     }

@@ -15,7 +15,6 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -30,7 +29,7 @@ abstract class YomuComics : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, sort = "popular")
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(page, sort = "recent")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(page, sort = "newest")
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getMangaList(page, query, filters)
 
@@ -40,13 +39,12 @@ abstract class YomuComics : KeiSource() {
         filters: FilterList = FilterList(),
         sort: String? = null,
     ): MangasPage {
-        val url = "$baseUrl/api/library".toHttpUrl().newBuilder()
+        val url = "$baseUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
-            .addQueryParameter("limit", PAGE_SIZE.toString())
             .apply {
                 sort?.let { addQueryParameter("sort", it) }
                 if (query.isNotBlank()) {
-                    addQueryParameter("search", query)
+                    addQueryParameter("q", query)
                 }
                 filters.filterIsInstance<UrlFilter>()
                     .filterNot { sort != null && it is SortFilter }
@@ -54,7 +52,10 @@ abstract class YomuComics : KeiSource() {
             }
             .build()
 
-        return client.get(url).parseAs<JsonObject>().toMangasPage()
+        val mangas = client.get(url, rscHeaders).extractNextJs<List<LibraryMangaDto>>(::isSeriesList)
+            ?: throw Exception("Não foi possível ler a lista de obras")
+
+        return MangasPage(mangas.map(LibraryMangaDto::toSManga), mangas.size >= PAGE_SIZE)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -73,9 +74,8 @@ abstract class YomuComics : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val series = client.get(baseUrl + manga.url, rscHeaders)
-            .use { it.body.string() }
-            .parseSeriesPage()
+        val body = client.get(baseUrl + manga.url, rscHeaders).use { it.body.string() }
+        val series = body.parseSeriesPage()
 
         return SMangaUpdate(manga = series.manga, chapters = series.chapters)
     }

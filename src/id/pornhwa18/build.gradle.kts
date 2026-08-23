@@ -9,7 +9,7 @@ keiyoushi {
     versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.4"
-    theme = "madara"
+    theme = "madaralegacy"
 
     source {
         lang = "id"

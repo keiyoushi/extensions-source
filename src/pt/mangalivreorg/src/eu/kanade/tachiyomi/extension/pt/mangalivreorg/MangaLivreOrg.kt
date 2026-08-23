@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivreorg
 
+import android.util.Base64
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -123,18 +124,30 @@ abstract class MangaLivreOrg : KeiSource() {
     // The site keeps the nonce as a constant in its bundle and rotates it on every rebuild.
     private suspend fun fetchNonce(): String {
         val scriptUrl = client.get(baseUrl).asJsoup()
-            .selectFirst("script[src*=\"/assets/index-\"]")
+            .selectFirst("script[type=module][src*=/assets/]")
             ?.absUrl("src")
             ?: return DEFAULT_NONCE
 
         val script = client.get(scriptUrl).use { it.body.string() }
         val variable = NONCE_VARIABLE_REGEX.find(script)?.groupValues?.get(1) ?: return DEFAULT_NONCE
 
-        return Regex("""\b$variable\s*=\s*["'`]([0-9a-f]{32})["'`]""")
-            .find(script)
-            ?.groupValues
-            ?.get(1)
+        // The minifier reuses variable names, so try every assignment until one decodes.
+        return Regex("""\b$variable\s*=\s*""").findAll(script)
+            .map { script.substring(it.range.last + 1).take(ASSIGNMENT_LENGTH).substringBefore(';') }
+            .firstNotNullOfOrNull(::decodeNonce)
             ?: DEFAULT_NONCE
+    }
+
+    // The bundle inlines the nonce, or hides it behind base64 or a list of char codes, sometimes reversed.
+    private fun decodeNonce(assignment: String): String? {
+        val decoded = NONCE_LITERAL_REGEX.find(assignment)?.groupValues?.get(1)
+            ?: NONCE_BASE64_REGEX.find(assignment)?.let { String(Base64.decode(it.groupValues[1], Base64.DEFAULT)) }
+            ?: NONCE_CHAR_CODE_REGEX.find(assignment)?.let { match ->
+                match.groupValues[1].split(",").mapNotNull { it.trim().toIntOrNull()?.toChar() }.joinToString("")
+            }
+            ?: return null
+
+        return if ("reverse()" in assignment) decoded.reversed() else decoded
     }
 
     override val supportsFilterFetching: Boolean get() = true
@@ -165,7 +178,13 @@ abstract class MangaLivreOrg : KeiSource() {
 
     companion object {
         private val MANGA_PATH_SEGMENTS = listOf("manga", "ler")
-        private val NONCE_VARIABLE_REGEX = Regex("""X-ML-Nonce.{0,2}]\s*=\s*(\w+)""")
-        private const val DEFAULT_NONCE = "e4020328382d1d9254b3d095c1603a15"
+        private const val ASSIGNMENT_LENGTH = 300
+
+        // Matches both the plain header name and the array the bundle joins it from.
+        private val NONCE_VARIABLE_REGEX = Regex("""(?:X-ML-Nonce|Nonce"]\.join\("-"\))"?]\s*=\s*(\w+)""")
+        private val NONCE_LITERAL_REGEX = Regex("""["'`]([0-9a-f]{32})["'`]""")
+        private val NONCE_BASE64_REGEX = Regex("""atob\(\s*["']([A-Za-z0-9+/=]+)["']""")
+        private val NONCE_CHAR_CODE_REGEX = Regex("""fromCharCode\(([\d,\s]+)\)""")
+        private const val DEFAULT_NONCE = "3dce95d4540e54086a970da4ea44cf46"
     }
 }

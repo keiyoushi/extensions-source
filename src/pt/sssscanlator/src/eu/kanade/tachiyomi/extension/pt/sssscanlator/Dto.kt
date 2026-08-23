@@ -1,10 +1,8 @@
 package eu.kanade.tachiyomi.extension.pt.sssscanlator
 
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -22,19 +20,6 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Instant
 
-private const val PASSPHRASE = "yomu_trolling_scrapers_v1"
-private const val ENCRYPTED_PREFIX = "U2FsdGVkX1"
-
-internal fun String.decryptPayload(): String = CryptoAES.decrypt(this, PASSPHRASE)
-
-@Serializable
-class LibraryPaginationDto(
-    private val page: Int = 1,
-    private val totalPages: Int = 1,
-) {
-    val hasNextPage get() = page < totalPages
-}
-
 @Serializable
 class LibraryMangaDto(
     private val title: String,
@@ -48,35 +33,21 @@ class LibraryMangaDto(
     }
 }
 
-internal fun JsonObject.toMangasPage(): MangasPage {
-    val mangas = values.asSequence()
-        .mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
-        .filter { it.startsWith(ENCRYPTED_PREFIX) }
-        .map { it.decryptPayload() }
-        .firstOrNull(String::isNotEmpty)
-        ?.parseAs<List<LibraryMangaDto>>()
-        ?: throw Exception("Não foi possível ler a lista de obras")
-
-    val pagination = get("pagination")?.parseAs<LibraryPaginationDto>() ?: LibraryPaginationDto()
-    return MangasPage(mangas.map(LibraryMangaDto::toSManga), pagination.hasNextPage)
-}
+internal fun isSeriesList(element: JsonElement) = element is JsonArray &&
+    element.isNotEmpty() &&
+    element.all { it is JsonObject && "slug" in it && "title" in it }
 
 @Serializable
 class SeriesPayloadDto(
     val slug: String,
-    private val encryptedChapters: String,
+    private val chapters: List<SeriesChapterDto>,
     val description: String? = null,
     val author: String? = null,
     val artist: String? = null,
     val coverImage: String? = null,
     val status: String? = null,
 ) {
-    val chapters: List<SChapter>
-        get() = encryptedChapters.decryptPayload()
-            .takeIf(String::isNotEmpty)
-            ?.parseAs<List<SeriesChapterDto>>()
-            ?.map { it.toSChapter(slug) }
-            ?: emptyList()
+    val chapterList: List<SChapter> get() = chapters.map { it.toSChapter(slug) }
 }
 
 @Serializable
@@ -95,7 +66,7 @@ internal fun String.parseSeriesPage(): SeriesPage {
     extractNextJsRsc<JsonElement> { element ->
         when (element) {
             is JsonObject -> {
-                if (payload == null && "encryptedChapters" in element && "slug" in element) {
+                if (payload == null && "chapters" in element && "slug" in element) {
                     payload = element.parseAs()
                 }
                 if (title == null && "seriesId" in element && "title" in element) {
@@ -127,7 +98,7 @@ internal fun String.parseSeriesPage(): SeriesPage {
         }
     }
 
-    return SeriesPage(manga, series.chapters)
+    return SeriesPage(manga, series.chapterList)
 }
 
 private fun JsonArray.genreBadgeOrNull(): String? {
@@ -170,14 +141,9 @@ class SeriesChapterDto(
 @Serializable
 class ChapterPayloadDto(
     val seriesSlug: String,
-    private val encryptedChapter: String,
+    private val chapter: ChapterImagesDto,
 ) {
-    val pages: List<Page>
-        get() = encryptedChapter.decryptPayload()
-            .takeIf(String::isNotEmpty)
-            ?.parseAs<ChapterImagesDto>()
-            ?.toPageList()
-            ?: emptyList()
+    val pages: List<Page> get() = chapter.toPageList()
 }
 
 @Serializable
