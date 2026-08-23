@@ -6,15 +6,12 @@ plugins {
 
 keiyoushi {
     name = "MANGAPDF"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
         lang = "en"
-
-        baseUrl {
-            custom("https://api.coffeemanga.shop")
-        }
+        baseUrl = "https://mangapdf.org"
     }
 }

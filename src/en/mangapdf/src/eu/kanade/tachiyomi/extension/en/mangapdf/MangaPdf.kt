@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangapdf
 
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.UnmeteredSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -20,36 +18,35 @@ import okhttp3.OkHttpClient
 @Source
 abstract class MangaPdf :
     KeiSource(),
-    ConfigurableSource,
     UnmeteredSource {
+
+    private val apiUrl by lazy { API_BASE_URL.toHttpUrl() }
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
         val request = chain.request()
-        val configuredBase = normalizeBaseUrl(baseUrl).toHttpUrl()
+        val isApiRequest =
+            request.url.scheme == apiUrl.scheme &&
+                request.url.host == apiUrl.host &&
+                request.url.port == apiUrl.port
 
-        val sameOrigin =
-            request.url.scheme == configuredBase.scheme &&
-                request.url.host == configuredBase.host &&
-                request.url.port == configuredBase.port
-
-        if (!sameOrigin) {
-            chain.proceed(request)
-        } else {
+        if (isApiRequest) {
             chain.proceed(
                 request.newBuilder()
                     .header("X-Client", "mihon-extension")
                     .build(),
             )
+        } else {
+            chain.proceed(request)
         }
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage = client.get(
-        popularUrl(baseUrl, page),
+        popularUrl(page),
     ).parseAs<MangaListResponse>()
         .toMangasPage()
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = client.get(
-        latestUrl(baseUrl, page),
+        latestUrl(page),
     ).parseAs<MangaListResponse>()
         .toMangasPage()
 
@@ -58,7 +55,7 @@ abstract class MangaPdf :
         query: String,
         filters: FilterList,
     ): MangasPage = client.get(
-        searchUrl(baseUrl, query, page),
+        searchUrl(query, page),
     ).parseAs<MangaListResponse>()
         .toMangasPage()
 
@@ -68,28 +65,29 @@ abstract class MangaPdf :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = client.get(
-        mangaUrl(baseUrl, manga.url),
+        mangaUrl(manga.url),
     ).parseAs<MangaUpdateResponse>()
         .toSMangaUpdate()
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(
-        pagesUrl(baseUrl, chapter.url),
+        pagesUrl(chapter.url),
     ).parseAs<PageListResponse>()
         .toPages()
 
-    override fun getMangaUrl(manga: SManga): String = mangaUrl(baseUrl, manga.url).toString()
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
-    override fun getChapterUrl(chapter: SChapter): String = pagesUrl(baseUrl, chapter.url).toString()
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url}"
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        val id = mangaIdFromUrl(baseUrl, url) ?: return null
+        val websiteHost = baseUrl.toHttpUrl().host
+        if (url.host != websiteHost) return null
+
+        val id = url.pathSegments.lastOrNull { it.isNotBlank() } ?: return null
 
         return client.get(
-            mangaUrl(baseUrl, id),
+            mangaUrl(id),
         ).parseAs<MangaUpdateResponse>()
             .toSMangaUpdate()
             .manga
     }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {}
 }
