@@ -62,7 +62,7 @@ abstract class MangaCloud : HttpSource() {
         }
     }
 
-    override fun popularMangaParse(response: Response): MangasPage = if (response.request.url.pathSegments.last() == "browse") {
+    override fun popularMangaParse(response: Response): MangasPage = if (response.request.url.pathSegments.last() == "library") {
         searchMangaParse(response)
     } else {
         val data = response.parseAs<Data<DataList<BrowseManga>>>()
