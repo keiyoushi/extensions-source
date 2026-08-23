@@ -270,7 +270,7 @@ abstract class MangaCloud : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.parseAs<ChapterUrl>().chapterId
 
-        return GET("$API_URL/chapter5/$chapterId", headers)
+        return GET("$API_URL/chapters/$chapterId", headers)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
