@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.sssscanlator
 
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -34,14 +33,9 @@ class LibraryMangaDto(
     }
 }
 
-@Serializable
-class SearchPayloadDto(
-    private val initialData: List<LibraryMangaDto>,
-    private val currentPage: Int = 1,
-    private val totalPages: Int = 1,
-) {
-    fun toMangasPage() = MangasPage(initialData.map(LibraryMangaDto::toSManga), currentPage < totalPages)
-}
+internal fun isSeriesList(element: JsonElement) = element is JsonArray &&
+    element.isNotEmpty() &&
+    element.all { it is JsonObject && "slug" in it && "title" in it }
 
 @Serializable
 class SeriesPayloadDto(
