@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
@@ -84,9 +85,7 @@ class ChapterDto(
         this.name = this@ChapterDto.name
         chapter_number = number ?: -1f
         this.scanlator = this@ChapterDto.scanlator
-        date_upload = uploadedAt
-            ?.let { runCatching { Instant.parse(it).toEpochMilliseconds() }.getOrNull() }
-            ?: 0L
+        date_upload = Instant.tryParse(uploadedAt)
     }
 }
 
