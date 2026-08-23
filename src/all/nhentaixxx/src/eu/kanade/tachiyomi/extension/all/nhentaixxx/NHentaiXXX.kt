@@ -20,7 +20,7 @@ abstract class NHentaiXXX : GalleryAdults() {
     }
 
     // This site treats all Speechless as English
-    override val supportSpeechless: Boolean = mangaLang == LANGUAGE_ENGLISH
+    override val supportSpeechless = mangaLang == LANGUAGE_ENGLISH
 
     private val languages: List<Pair<String, String>> = listOf(
         Pair(LANGUAGE_ENGLISH, "1"),
@@ -38,7 +38,7 @@ abstract class NHentaiXXX : GalleryAdults() {
 
     override fun Element.mangaThumbnail() = selectFirst(".gallery_item img, .fav_item img")?.imgAttr()
 
-    override val popularMangaUrl = if (mangaLang.isBlank()) { // LANGUAGE_MULTI
+    override val popularMangaUrl get() = if (mangaLang.isBlank()) { // LANGUAGE_MULTI
         val popularFilter = SortOrderFilter(getSortOrderURIs())
             .apply {
                 state = 0

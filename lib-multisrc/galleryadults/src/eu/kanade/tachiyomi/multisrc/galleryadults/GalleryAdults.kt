@@ -501,7 +501,7 @@ abstract class GalleryAdults :
      * Parsing document to extract info related to [tag].
      */
     protected open fun Element.getInfo(tag: String): String = select(getInfoSelector(tag))
-        .joinToString {
+        .map {
             listOf(
                 it.infoTagName(),
                 it.select(".split_tag").text()
@@ -511,6 +511,8 @@ abstract class GalleryAdults :
                 .filter(String::isNotBlank)
                 .joinToString()
         }
+        .sorted()
+        .joinToString()
 
     protected open fun Element.getDescription(document: Document? = null): String = (
         listOf("Parodies", "Characters", "Groups", "Languages", "Categories", "Category")
