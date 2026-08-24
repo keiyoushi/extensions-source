@@ -13,7 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.annotation.Source
-import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
@@ -37,7 +37,19 @@ abstract class InkStory :
     override val supportsLatest = true
 
     private val apiBaseUrl = "https://api.inkstory.net"
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val preferences: SharedPreferences = getPreferences {
+        if (contains("inkstory_image_quality")) {
+            edit().remove("inkstory_image_quality").apply()
+        }
+
+        if (contains("inkstory_image_type")) {
+            edit().remove("inkstory_image_type").apply()
+        }
+
+        if (contains("inkstory_image_width")) {
+            edit().remove("inkstory_image_width").apply()
+        }
+    }
 
     override val client = network.client.newBuilder()
         .addInterceptor(ImageDecryptInterceptor())
