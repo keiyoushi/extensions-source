@@ -91,7 +91,7 @@ abstract class InkStory :
     override fun popularMangaParse(response: Response): MangasPage = booksParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request = GET(
-        "$apiBaseUrl/v2/chapter-update-feed?page=${(page - 1).coerceAtLeast(0)}&size=$PAGE_SIZE",
+        "$apiBaseUrl/v2/chapter-update-feed?onlyBorderChapters=true&page=${(page - 1).coerceAtLeast(0)}&size=$PAGE_SIZE",
         headers,
     )
 
