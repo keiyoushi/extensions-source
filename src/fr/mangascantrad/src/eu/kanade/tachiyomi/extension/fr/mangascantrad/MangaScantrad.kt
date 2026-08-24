@@ -9,5 +9,5 @@ import java.util.Locale
 @Source
 abstract class MangaScantrad : Madara() {
     override val chapterMode = ChapterMode.MangaAjax
-    override val chapterDateFormat = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.FRANCE)
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.FRANCE)
 }
