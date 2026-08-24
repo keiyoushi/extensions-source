@@ -7,9 +7,9 @@ plugins {
 keiyoushi {
     name = "Coffee Manga"
     theme = "madara"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         baseUrl = "https://coffeemanga.net"
