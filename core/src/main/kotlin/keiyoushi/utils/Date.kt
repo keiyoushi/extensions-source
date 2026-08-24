@@ -31,13 +31,13 @@ fun SimpleDateFormat.tryParse(date: String?): Long {
  */
 fun DateTimeFormatter.tryParseDate(
     date: String?,
-    zone: ZoneId = ZoneId.systemDefault(),
+    zone: ZoneId? = null,
 ): Long {
     date ?: return 0L
 
     return runCatching {
         LocalDate.parse(date, this)
-            .atStartOfDay(zone)
+            .atStartOfDay(zone ?: this.zone ?: ZoneId.systemDefault())
             .toInstant()
             .toEpochMilli()
     }.getOrDefault(0L)
@@ -58,13 +58,13 @@ fun DateTimeFormatter.tryParseDate(
  */
 fun DateTimeFormatter.tryParseDateTime(
     date: String?,
-    zone: ZoneId = ZoneId.systemDefault(),
+    zone: ZoneId? = null,
 ): Long {
     date ?: return 0L
 
     return runCatching {
         LocalDateTime.parse(date, this)
-            .atZone(zone)
+            .atZone(zone ?: this.zone ?: ZoneId.systemDefault())
             .toInstant()
             .toEpochMilli()
     }.getOrDefault(0L)

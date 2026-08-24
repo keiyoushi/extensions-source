@@ -1,10 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.ero18x
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import keiyoushi.annotation.Source
 
 @Source
-abstract class Ero18x : Madara() {
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-    override val useNewChapterEndpoint = true
+abstract class Ero18x : MadaraNoAjax() {
+    override val chapterMode = ChapterMode.MangaAjax
 }

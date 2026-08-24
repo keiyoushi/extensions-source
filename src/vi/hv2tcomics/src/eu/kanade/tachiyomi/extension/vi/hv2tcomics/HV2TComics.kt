@@ -224,7 +224,7 @@ abstract class HV2TComics : KeiSource() {
                             window.scrollTo(0, document.body.scrollHeight);
                             var urls = [];
                             images.forEach(function(img) {
-                                if (img.src && img.src.includes('/media/')) {
+                                if (img.src && (img.src.includes('/free-images/') || img.src.includes('/media/'))) {
                                     urls.push(img.src);
                                 }
                             });
