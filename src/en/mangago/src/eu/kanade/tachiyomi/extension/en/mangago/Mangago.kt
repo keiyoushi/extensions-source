@@ -6,8 +6,6 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import android.util.Base64
 import android.util.LruCache
-import android.widget.Toast
-import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import app.cash.quickjs.QuickJs
@@ -37,7 +35,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -69,12 +66,6 @@ abstract class Mangago :
         addInterceptor(::imageDescrambler)
         addCookie("_m_superu" to "1")
         rateLimit(1) { it.host == baseUrl.toHttpUrl().host }
-    }
-
-    override fun Headers.Builder.configureHeaders() = apply {
-        preferences.getString(PREF_KEY_CUSTOM_UA, null)
-            ?.takeIf { it.isNotBlank() }
-            ?.let { set("User-Agent", it) }
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -169,13 +160,13 @@ abstract class Mangago :
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
         document.selectFirst(".w-title h1")?.text()?.let {
-            title = if (isRemoveTitleVersion()) it.replace(TITLE_REGEX, "") else it
+            title = if (removeTitleVersion) it.replace(TITLE_REGEX, "") else it
         }
 
         document.getElementById("information")?.let { info ->
             thumbnail_url = info.selectFirst("img")?.attr("abs:src")
             description = info.selectFirst(".manga_summary")
-                ?.ownText()
+                ?.text()
                 ?.takeIf { it.isNotEmpty() && !it.equals("not found...", ignoreCase = true) }
 
             info.select(".manga_info li, .manga_right tr").forEach { element ->
@@ -211,9 +202,10 @@ abstract class Mangago :
         }
     }
 
-    private fun parseChapterList(document: Document): List<SChapter> = document.select("table#chapter_table > tbody > tr, table.uk-table > tbody > tr")
+    private fun parseChapterList(document: Document): List<SChapter> = document.select(":is(table#raws_table, table#chapter_table) > tbody > tr, table.uk-table > tbody > tr")
         .mapNotNull { element ->
             val link = element.selectFirst("a.chico") ?: return@mapNotNull null
+            if (link.attr("href").contains("/raw/") && removeRaws) return@mapNotNull null
             val name = link.text().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
             val date = DATE_FORMAT.tryParseDate(element.select("td:last-child").text(), ZoneOffset.UTC)
             val scanlator = element.selectFirst("td.no a, td.uk-table-shrink a")
@@ -518,9 +510,16 @@ abstract class Mangago :
         .joinToString("") { "%02x".format(it) }
         .takeLast(10)
 
-    private fun isRemoveTitleVersion() = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
+    private val removeRaws get() = preferences.getBoolean(REMOVE_RAW_PREF, true)
+    private val removeTitleVersion get() = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = REMOVE_RAW_PREF
+            title = "Hide RAW chapters"
+            setDefaultValue(true)
+        }.let(screen::addPreference)
+
         SwitchPreferenceCompat(screen.context).apply {
             key = REMOVE_TITLE_VERSION_PREF
             title = "Remove version information from entry titles"
@@ -529,30 +528,11 @@ abstract class Mangago :
                 "To update existing entries, enable 'update library manga title' in advanced settings of app"
             setDefaultValue(false)
         }.let(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
-            key = PREF_KEY_CUSTOM_UA
-            title = "Custom user agent string"
-            summary = "Leave blank to use the default user agent string"
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    Headers.headersOf("User-Agent", newValue as String)
-                    true
-                } catch (error: IllegalArgumentException) {
-                    Toast.makeText(
-                        screen.context,
-                        "Invalid user agent string: ${error.message}",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                    false
-                }
-            }
-        }.also(screen::addPreference)
     }
 }
 
+private const val REMOVE_RAW_PREF = "pref_remove_raw"
 private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
-private const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua_"
 private const val ALT_NAME_PREFIX = "Alternative Names:"
 
 private val DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
