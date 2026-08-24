@@ -86,7 +86,7 @@ class KuroMangasDecryptor(
         execute(newRequest(), false)
     }
 
-    /** O site assina cada chamada com `base64url(HMAC-SHA256(segredo, "METODO|caminho|epoch")).epoch`. */
+    /** The site signs every call with `base64url(HMAC-SHA256(secret, "METHOD|path|epoch")).epoch`. */
     private fun signature(secret: String, method: String, path: String): String {
         val timestamp = System.currentTimeMillis() / 1000
         val mac = Mac.getInstance(HMAC_ALGORITHM).apply {
@@ -104,7 +104,7 @@ class KuroMangasDecryptor(
     private fun String.decodeHex(): ByteArray = ByteArray(length / 2) { substring(it * 2, it * 2 + 2).toInt(16).toByte() }
 
     fun reloadCredentials() {
-        // O segredo só é emitido para uma sessão viva, então um cookie recusado exige novo login.
+        // The secret is only issued to a live session, so a rejected cookie requires a fresh login.
         sessionSecret = fetchSecret() ?: if (relogin()) fetchSecret() else null
 
         val indexJsUrl = client.newCall(GET(baseUrl)).execute()
