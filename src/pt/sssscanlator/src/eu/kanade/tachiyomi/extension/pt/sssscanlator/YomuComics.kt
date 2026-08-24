@@ -10,13 +10,10 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -24,9 +21,7 @@ import okhttp3.OkHttpClient
 @Source
 abstract class YomuComics : KeiSource() {
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(5) { it.host == baseUrl.toHttpUrl().host }
-
-    private val rscHeaders: Headers get() = headersBuilder().set("RSC", "1").build()
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(5) { it.host == API_URL.toHttpUrl().host }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, sort = "popular")
 
@@ -40,7 +35,7 @@ abstract class YomuComics : KeiSource() {
         filters: FilterList = FilterList(),
         sort: String? = null,
     ): MangasPage {
-        val url = "$baseUrl/search".toHttpUrl().newBuilder()
+        val url = "$API_URL/list".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .apply {
                 sort?.let { addQueryParameter("sort", it) }
@@ -53,12 +48,9 @@ abstract class YomuComics : KeiSource() {
             }
             .build()
 
-        val series = client.get(url, rscHeaders).extractNextJs<JsonArray>(::isSeriesList)
-            ?: throw Exception("Não foi possível ler a lista de obras")
+        val result = client.get(url).parseAs<ListDto>()
 
-        val mangas = series.filter(::isSeriesEntry).map { it.parseAs<LibraryMangaDto>().toSManga() }
-
-        return MangasPage(mangas, mangas.size >= PAGE_SIZE)
+        return MangasPage(result.series.map(SeriesDto::toSManga), result.hasNextPage)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -77,23 +69,21 @@ abstract class YomuComics : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val body = client.get(baseUrl + manga.url, rscHeaders).use { it.body.string() }
-        val series = body.parseSeriesPage()
+        val slug = manga.url.substringAfterLast('/')
+        val details = client.get("$API_URL/manga/$slug").parseAs<MangaDto>()
 
-        return SMangaUpdate(manga = series.manga, chapters = series.chapters)
+        return SMangaUpdate(manga = details.toSManga(), chapters = details.chapterList)
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val payload = client.get(getChapterUrl(chapter), rscHeaders)
-            .extractNextJs<ChapterPayloadDto>()
-            ?: throw Exception("Não foi possível ler as páginas do capítulo")
+        val (slug, number) = chapter.location()
 
-        return payload.pages
+        return client.get("$API_URL/chapter/$slug/$number").parseAs<PagesDto>().toPageList()
     }
 
     override val supportsFilterFetching: Boolean get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres")
+    override suspend fun fetchFilterData(): JsonElement = client.get("$API_URL/genres")
         .parseAs<List<String>>()
         .toJsonElement()
 
@@ -104,16 +94,24 @@ abstract class YomuComics : KeiSource() {
         return FilterList(SortFilter(), TypeFilter(), StatusFilter(), GenreFilter(genres))
     }
 
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+
     override fun getChapterUrl(chapter: SChapter): String {
-        val slug = chapter.memo["slug"]?.stringOrNull
-        val number = chapter.memo["number"]?.stringOrNull
-        if (slug == null || number == null) throw Exception("Atualize a lista de capítulos")
+        val (slug, number) = chapter.location()
 
         return "$baseUrl/ler/$slug/$number"
     }
 
+    private fun SChapter.location(): Pair<String, String> {
+        val slug = memo["slug"]?.stringOrNull
+        val number = memo["number"]?.stringOrNull
+        if (slug == null || number == null) throw Exception("Atualize a lista de capítulos")
+
+        return slug to number
+    }
+
     companion object {
-        private const val PAGE_SIZE = 30
+        private const val API_URL = "https://yomu.tauruus.com"
         private val MANGA_PATH_SEGMENTS = listOf("obra", "ler")
     }
 }
