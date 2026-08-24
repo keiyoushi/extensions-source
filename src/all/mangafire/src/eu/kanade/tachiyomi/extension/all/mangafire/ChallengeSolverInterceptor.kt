@@ -1,123 +1,90 @@
 package eu.kanade.tachiyomi.extension.all.mangafire
 
 import android.annotation.SuppressLint
-import android.app.Application
-import android.os.Handler
-import android.os.Looper
-import android.webkit.JavascriptInterface
-import android.webkit.WebView
-import android.widget.Toast
+import eu.kanade.tachiyomi.network.NetworkHelper
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebViewBlocking
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
+import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.IOException
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.withLock
 import kotlin.getValue
 
 class ChallengeSolverInterceptor(
     private val doSolve: () -> Boolean,
 ) : Interceptor {
-    private val application by injectLazy<Application>()
     private val html by lazy { javaClass.getResource("/assets/solver.html")!!.readText() }
+
+    private val lock = ReentrantReadWriteLock()
+
+    private val cookieJar by lazy { Injekt.get<NetworkHelper>().client.cookieJar }
+
+    private fun clearance(url: HttpUrl) = cookieJar.loadForRequest(url).find { it.name == "waf_pass" }?.value
 
     @Serializable
     private data class ErrorResponse(
         val error: String?,
     )
 
-    private class JsInterface {
-        val latch = CountDownLatch(1)
-        var solved: Boolean = false
-
-        @Suppress("unused")
-        @JavascriptInterface
-        fun resolve(solved: Boolean) {
-            this.solved = solved
-            latch.countDown()
-        }
-    }
-
     @SuppressLint("SetJavaScriptEnabled")
     override fun intercept(chain: Interceptor.Chain): Response {
+        val call = chain.call()
         val request = chain.request()
-        val response = chain.proceed(request)
+        val url = request.url
 
-        if (
-            response.code != 403 ||
-            response.peekBody(Long.MAX_VALUE).byteStream().parseAs<ErrorResponse>().error != "captcha_required"
-        ) {
-            return response
+        val oldClearance = lock.readLock().withLock {
+            // We can't just check cookies first because we might need to bypass Cloudflare
+            val response = chain.proceed(request)
+            if (
+                response.code != 403 ||
+                try {
+                    response.peekBody(Long.MAX_VALUE).byteStream().parseAs<ErrorResponse>().error != "captcha_required"
+                } catch (_: SerializationException) {
+                    true
+                }
+            ) {
+                return response
+            }
+            response.close()
+
+            if (!doSolve()) {
+                throw IOException("Shape-selecting captcha detected. Open in WebView to solve manually or turn on the setting to solve automatically.")
+            }
+
+            clearance(url)
         }
 
-        response.close()
-
-        if (!doSolve()) {
-            throw IOException("Shape-selecting captcha detected. Open in WebView to solve manually or turn on the setting to solve automatically.")
+        if (call.isCanceled()) {
+            throw IOException("Canceled")
         }
 
         // We are solving the challenge in a WebView instead of directly in Kotlin because the solver depends on OpenCV, which is >100 MB
         // as a Kotlin dependency. Also, the OpenCV binaries would be in the storage of the extension app, making them inaccessible to the
         // reader app.
         // Using a WebView instead makes it possible to dynamically request OpenCV.js, keeping the app size small.
-
-        val handler = Handler(Looper.getMainLooper())
-        val jsInterface = JsInterface()
-        var webView: WebView? = null
-
-        handler.post {
-            Toast.makeText(application, "Attempting to solve MangaFire challenge", Toast.LENGTH_SHORT).show()
-
-            val view = WebView(application)
-            webView = view
-
-            with(view.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                loadWithOverviewMode = true
-                useWideViewPort = true
-                blockNetworkImage = false
-                userAgentString = request.header("User-Agent")
+        val solved = lock.writeLock().withLock {
+            if (call.isCanceled()) {
+                throw IOException("Canceled")
             }
 
-            // Somewhat useful if you need to debug WebView issues. Don't delete.
-            /*view.webChromeClient = object : WebChromeClient() {
-                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-                    if (consoleMessage == null) {
-                        return false
-                    }
-                    val logContent = "wv: ${consoleMessage.message()} (${consoleMessage.sourceId()}, line ${consoleMessage.lineNumber()})"
-                    when (consoleMessage.messageLevel()) {
-                        ConsoleMessage.MessageLevel.DEBUG -> Log.d("mangafire", logContent)
-                        ConsoleMessage.MessageLevel.ERROR -> Log.e("mangafire", logContent)
-                        ConsoleMessage.MessageLevel.LOG -> Log.i("mangafire", logContent)
-                        ConsoleMessage.MessageLevel.TIP -> Log.i("mangafire", logContent)
-                        ConsoleMessage.MessageLevel.WARNING -> Log.w("mangafire", logContent)
-                        else -> Log.d("mangafire", logContent)
-                    }
+            if (clearance(url).let { it != oldClearance && !it.isNullOrBlank() }) {
+                // Captcha solved in another call, skip
+                return@withLock true
+            }
 
-                    return true
-                }
-            }*/
-
-            view.addJavascriptInterface(jsInterface, "jsInterface")
-
-            view.loadDataWithBaseURL(
-                "https://mangafire.to/@waf/solver",
-                html,
-                "text/html",
-                "UTF-8",
-                null,
-            )
+            runWebViewBlocking(call) {
+                jsBridge("bridge") { resolve(it == "true") }
+                loadData("https://${request.url.host}/@waf/solver", html)
+            }
         }
 
-        jsInterface.latch.await(30, TimeUnit.SECONDS)
-        handler.post { webView?.destroy() }
-
-        if (!jsInterface.solved) {
+        if (!solved) {
             throw IOException("Failed to solve shape-selecting captcha. Open in WebView to solve manually.")
         }
 
