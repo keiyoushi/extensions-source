@@ -32,7 +32,6 @@ class ChallengeSolverInterceptor(
         val error: String?,
     )
 
-    @SuppressLint("SetJavaScriptEnabled")
     override fun intercept(chain: Interceptor.Chain): Response {
         val call = chain.call()
         val request = chain.request()
