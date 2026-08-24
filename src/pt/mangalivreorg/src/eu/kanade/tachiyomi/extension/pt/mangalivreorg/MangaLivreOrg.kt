@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
-import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -20,7 +19,6 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
-import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -29,30 +27,24 @@ import okhttp3.OkHttpClient
 @Source
 abstract class MangaLivreOrg : KeiSource() {
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2) { it.host == API_URL.toHttpUrl().host }
 
+    // The API rejects any Sec-Fetch-Site value now that it lives on its own host.
     override fun Headers.Builder.configureHeaders(): Headers.Builder = this
         .add("Accept-Language", "pt-BR,pt;q=0.9,en;q=0.8")
-        .add("Sec-Fetch-Site", "same-origin")
 
-    override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, "views", period = "ever")
+    override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, order = "views", period = "ever")
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(page, "updates")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(page, order = "updates")
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
-            val body = FormBody.Builder()
-                .add("search", query)
-                .build()
-            val results = client.post("$baseUrl/lib/search/series.json", body)
-                .parseAs<Map<String, List<SearchItemDto>>>()
-
-            return MangasPage(results.values.flatten().map(SearchItemDto::toSManga), hasNextPage = false)
+            return getMangaList(page, query = query)
         }
 
         val category = filters.firstInstanceOrNull<CategoryFilter>()?.selectedValue
         if (!category.isNullOrEmpty()) {
-            val url = "$baseUrl/categories/series_list.json".toHttpUrl().newBuilder()
+            val url = "$API_URL/categories/series_list.json".toHttpUrl().newBuilder()
                 .addQueryParameter("id_category", category)
                 .build()
             val results = client.get(url).parseAs<CategoryListDto>()
@@ -66,10 +58,18 @@ abstract class MangaLivreOrg : KeiSource() {
         return getMangaList(page, order, period)
     }
 
-    private suspend fun getMangaList(page: Int, order: String, period: String? = null): MangasPage {
-        val url = "$baseUrl/api/v1/mangas/list".toHttpUrl().newBuilder()
-            .addQueryParameter("order", order)
-            .apply { period?.let { addQueryParameter("period", it) } }
+    private suspend fun getMangaList(
+        page: Int,
+        order: String? = null,
+        period: String? = null,
+        query: String? = null,
+    ): MangasPage {
+        val url = "$API_URL/mangas/list".toHttpUrl().newBuilder()
+            .apply {
+                query?.let { addQueryParameter("filter", it) }
+                order?.let { addQueryParameter("order", it) }
+                period?.let { addQueryParameter("period", it) }
+            }
             .addQueryParameter("page", page.toString())
             .build()
 
@@ -93,7 +93,7 @@ abstract class MangaLivreOrg : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = client.get("$baseUrl/api/v1/mangas/${manga.url}").parseAs<MangaDetailsDto>()
+        val details = client.get("$API_URL/mangas/${manga.url}").parseAs<MangaDetailsDto>()
 
         return SMangaUpdate(
             manga = details.manga.toSManga(),
@@ -102,7 +102,7 @@ abstract class MangaLivreOrg : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val url = "$baseUrl/api/v1/chapters/${chapter.url}"
+        val url = "$API_URL/chapters/${chapter.url}"
 
         val response = client.get(url, nonceHeaders(), ensureSuccess = false)
         if (response.isSuccessful) {
@@ -153,7 +153,7 @@ abstract class MangaLivreOrg : KeiSource() {
     override val supportsFilterFetching: Boolean get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val genres = client.get("$baseUrl/api/v1/genres").parseAs<List<GenreDto>>()
+        val genres = client.get("$API_URL/genres").parseAs<List<GenreDto>>()
         return FilterData(genres).toJsonElement()
     }
 
@@ -177,6 +177,7 @@ abstract class MangaLivreOrg : KeiSource() {
     }
 
     companion object {
+        private const val API_URL = "https://api.mangalivre.org/api/v1"
         private val MANGA_PATH_SEGMENTS = listOf("manga", "ler")
         private const val ASSIGNMENT_LENGTH = 300
 
