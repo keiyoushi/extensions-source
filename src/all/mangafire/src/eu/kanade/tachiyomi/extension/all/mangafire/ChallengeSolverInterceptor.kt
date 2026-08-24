@@ -77,7 +77,7 @@ class ChallengeSolverInterceptor(
 
             runWebViewBlocking(call) {
                 jsBridge("bridge") { resolve(it == "true") }
-                loadData("https://${request.url.host}/@waf/solver", html)
+                loadData("https://${url.host}/@waf/solver", html)
             }
         }
 
