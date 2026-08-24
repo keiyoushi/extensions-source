@@ -1,28 +1,27 @@
 package eu.kanade.tachiyomi.extension.all.mangafire
 
-import eu.kanade.tachiyomi.network.NetworkHelper
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebViewBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
+import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.withLock
 import kotlin.getValue
 
 class ChallengeSolverInterceptor(
+    getCookieJar: () -> CookieJar,
     private val doSolve: () -> Boolean,
 ) : Interceptor {
     private val html by lazy { javaClass.getResource("/assets/solver.html")!!.readText() }
 
     private val lock = ReentrantReadWriteLock()
 
-    private val cookieJar by lazy { Injekt.get<NetworkHelper>().client.cookieJar }
+    private val cookieJar by lazy { getCookieJar() }
 
     private fun clearance(url: HttpUrl) = cookieJar.loadForRequest(url).find { it.name == "waf_pass" }?.value
 
