@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mangafire
 
-import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.network.NetworkHelper
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebViewBlocking
