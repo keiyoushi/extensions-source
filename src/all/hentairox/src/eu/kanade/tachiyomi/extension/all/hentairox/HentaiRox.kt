@@ -66,5 +66,5 @@ abstract class HentaiRox : GalleryAdults() {
                     .removeSuffix("/").substringAfterLast('/')
         }
 
-    override fun relatedMangaSelector() = ".related_galleries ${popularMangaSelector()}"
+    override fun relatedMangaSelector() = ".related_galleries ~ ${popularMangaSelector()}"
 }

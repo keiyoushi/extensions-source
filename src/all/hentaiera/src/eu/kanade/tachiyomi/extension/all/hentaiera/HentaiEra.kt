@@ -47,7 +47,7 @@ abstract class HentaiEra : GalleryAdults() {
             }
         }
 
-    override val popularMangaUrl = if (mangaLang.isBlank()) { // LANGUAGE_MULTI popular
+    override val popularMangaUrl get() = if (mangaLang.isBlank()) { // LANGUAGE_MULTI popular
         val popularFilter = SortOrderFilter(getSortOrderURIs()).apply { state = 0 }
         basicSearchUrl(0, "", FilterList(popularFilter))
     } else {

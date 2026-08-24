@@ -188,7 +188,7 @@ abstract class GalleryAdults :
         // Basic search
         val sortOrderFilter = filters.firstInstanceOrNull<SortOrderFilter>()
         val genresFilter = filters.firstInstanceOrNull<GenresFilter>()
-        val selectedGenres = genresFilter?.state?.filter { it.state } ?: emptyList()
+        val selectedGenres = genresFilter?.selected ?: emptyList()
         val favoriteFilter = filters.firstInstanceOrNull<FavoriteFilter>()
 
         // Speechless
@@ -246,7 +246,7 @@ abstract class GalleryAdults :
         // Basic search
         val sortOrderFilter = filters.firstInstanceOrNull<SortOrderFilter>()
         val genresFilter = filters.firstInstanceOrNull<GenresFilter>()
-        val selectedGenres = genresFilter?.state?.filter { it.state } ?: emptyList()
+        val selectedGenres = genresFilter?.selected ?: emptyList()
 
         return baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("search/")
@@ -265,7 +265,7 @@ abstract class GalleryAdults :
         // Basic search
         val sortOrderFilter = filters.firstInstanceOrNull<SortOrderFilter>()
         val genresFilter = filters.firstInstanceOrNull<GenresFilter>()
-        val selectedGenres = genresFilter?.state?.filter { it.state } ?: emptyList()
+        val selectedGenres = genresFilter?.selected ?: emptyList()
 
         // Intermediate search
         val categoryFilters = filters.firstInstanceOrNull<CategoryFilters>()
@@ -299,7 +299,7 @@ abstract class GalleryAdults :
         // Basic search
         val sortOrderFilter = filters.firstInstanceOrNull<SortOrderFilter>()
         val genresFilter = filters.firstInstanceOrNull<GenresFilter>()
-        val selectedGenres = genresFilter?.state?.filter { it.state } ?: emptyList()
+        val selectedGenres = genresFilter?.selected ?: emptyList()
 
         // Intermediate search
         val categoryFilters = filters.firstInstanceOrNull<CategoryFilters>()
@@ -373,7 +373,7 @@ abstract class GalleryAdults :
         // Basic search
         val sortOrderFilter = filters.firstInstanceOrNull<SortOrderFilter>()
         val genresFilter = filters.firstInstanceOrNull<GenresFilter>()
-        val selectedGenres = genresFilter?.state?.filter { it.state } ?: emptyList()
+        val selectedGenres = genresFilter?.selected ?: emptyList()
 
         // Browsing single tag's catalog
         return baseUrl.toHttpUrl().newBuilder().apply {
@@ -501,16 +501,17 @@ abstract class GalleryAdults :
      * Parsing document to extract info related to [tag].
      */
     protected open fun Element.getInfo(tag: String): String = select(getInfoSelector(tag))
-        .joinToString {
+        .flatMap {
             listOf(
                 it.infoTagName(),
                 it.select(".split_tag").text()
                     .removePrefix("| ")
                     .trim(),
             )
-                .filter(String::isNotBlank)
-                .joinToString()
         }
+        .filter(String::isNotBlank)
+        .sorted()
+        .joinToString()
 
     protected open fun Element.getDescription(document: Document? = null): String = (
         listOf("Parodies", "Characters", "Groups", "Languages", "Categories", "Category")
@@ -761,7 +762,7 @@ abstract class GalleryAdults :
 
     /* Filters */
 
-    protected open val maxTagPages = 3
+    protected open val maxTagPages = 5
 
     protected open val tagsPath = "tags/popular"
 

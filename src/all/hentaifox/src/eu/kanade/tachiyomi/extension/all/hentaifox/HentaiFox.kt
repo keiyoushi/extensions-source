@@ -108,8 +108,6 @@ abstract class HentaiFox : GalleryAdults() {
 
     private fun Element.sidebarMangaThumbnail() = selectFirst("img")?.imgAttr()
 
-    override fun tagsParser(document: Document) = super.tagsParser(document)
-
     private var csrfToken: String? = null
 
     private fun Document.storeCsrf() {
