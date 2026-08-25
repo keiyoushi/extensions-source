@@ -389,12 +389,16 @@ abstract class Comix :
         }
 
         val deduplicateChapters = preferences.deduplicateChapters()
+        val scanlatorBlacklist = preferences.scanlatorBlacklist()
+        val blacklistSignature = scanlatorBlacklist.sorted().joinToString(",")
         val storedDeduplicateChapters = manga.memo[CHAPTER_LIST_DEDUPLICATED_MEMO]?.booleanOrNull
+        val storedBlacklistSignature = manga.memo[CHAPTER_LIST_BLACKLIST_MEMO]?.string
         val storedChaptersMatchMode = !deduplicateChapters ||
             chapters.distinctBy(SChapter::chapter_number).size == chapters.size
         val fetchUntilKnown = fetchChapters &&
             preferences.fetchChaptersUntilKnown() &&
             storedDeduplicateChapters == deduplicateChapters &&
+            storedBlacklistSignature == blacklistSignature &&
             storedChaptersMatchMode
         val latestChapterId = chapters.firstOrNull()
             ?.takeIf { fetchUntilKnown }
@@ -413,7 +417,14 @@ abstract class Comix :
         }
 
         val nativeChapters = if (fetchChapters && cipher != null) {
-            async { getNativeChapterList(manga, latestChapterId, deduplicateChapters) }
+            async {
+                getNativeChapterList(
+                    manga,
+                    latestChapterId,
+                    deduplicateChapters,
+                    scanlatorBlacklist,
+                )
+            }
         } else {
             null
         }
@@ -421,16 +432,24 @@ abstract class Comix :
         val updatedManga = if (fetchDetails) parseMangaDetails(getDocument()) else manga
         val updatedChapters = if (fetchChapters) {
             val fetched = nativeChapters?.await()
-                ?: getWebViewChapterList(manga, getDocument(), latestChapterId, deduplicateChapters)
+                ?: getWebViewChapterList(
+                    manga,
+                    getDocument(),
+                    latestChapterId,
+                    deduplicateChapters,
+                    scanlatorBlacklist,
+                )
             mergeChapters(fetched)
         } else {
             chapters
         }
         val chapterListMode = if (fetchChapters) deduplicateChapters else storedDeduplicateChapters
-        if (chapterListMode != null) {
+        val chapterListBlacklist = if (fetchChapters) blacklistSignature else storedBlacklistSignature
+        if (chapterListMode != null && chapterListBlacklist != null) {
             updatedManga.memo = buildJsonObject {
                 updatedManga.memo.forEach { (key, value) -> put(key, value) }
                 put(CHAPTER_LIST_DEDUPLICATED_MEMO, chapterListMode)
+                put(CHAPTER_LIST_BLACKLIST_MEMO, chapterListBlacklist)
             }
         }
         SMangaUpdate(updatedManga, updatedChapters)
@@ -487,7 +506,8 @@ abstract class Comix :
         manga: SManga,
         document: Document,
         latestChapterId: Int?,
-        completeChapterBoundary: Boolean,
+        deduplicateChapters: Boolean,
+        scanlatorBlacklist: Set<String>,
     ): List<SChapter> {
         val mangaSlug = manga.url.removePrefix("/")
         val mangaId = manga.mangaId() ?: throw Exception("Refresh manga details")
@@ -506,7 +526,7 @@ abstract class Comix :
                         const mangaId = $${JSONObject.quote(mangaId)};
                         const mainScriptUrl = $${JSONObject.quote(mainScriptUrl)};
                         const latestChapterId = $${latestChapterId ?: "null"};
-                        const completeChapterBoundary = $$completeChapterBoundary;
+                        const completeChapterBoundary = $$deduplicateChapters;
                         if (window[payloadKey]) return null;
                         window[payloadKey] = true;
 
@@ -578,12 +598,21 @@ abstract class Comix :
             },
         )
 
-        return buildChapters(payload.parseAs(), mangaSlug)
+        return buildChapters(
+            payload.parseAs(),
+            mangaSlug,
+            deduplicateChapters,
+            scanlatorBlacklist,
+        )
     }
 
-    private fun buildChapters(allChapters: List<Chapter>, mangaSlug: String): List<SChapter> {
-        val blacklist = preferences.scanlatorBlacklist()
-        val filteredChapters = if (blacklist.isNotEmpty()) {
+    private fun buildChapters(
+        allChapters: List<Chapter>,
+        mangaSlug: String,
+        shouldDeduplicate: Boolean,
+        scanlatorBlacklist: Set<String>,
+    ): List<SChapter> {
+        val filteredChapters = if (scanlatorBlacklist.isNotEmpty()) {
             allChapters.filter { ch ->
                 val scanlatorName = when {
                     ch.group != null -> ch.group.name
@@ -593,13 +622,13 @@ abstract class Comix :
                 val nameNormalized = scanlatorName.trim().lowercase()
                 val idStr = ch.group?.id?.toString()
 
-                nameNormalized !in blacklist && idStr !in blacklist
+                nameNormalized !in scanlatorBlacklist && idStr !in scanlatorBlacklist
             }
         } else {
             allChapters
         }
 
-        val finalChapters: List<Chapter> = if (preferences.deduplicateChapters()) {
+        val finalChapters: List<Chapter> = if (shouldDeduplicate) {
             val chapterMap = LinkedHashMap<Number, Chapter>()
             deduplicateChapters(chapterMap, filteredChapters)
             chapterMap.values.toList()
@@ -644,7 +673,8 @@ abstract class Comix :
     private suspend fun getNativeChapterList(
         manga: SManga,
         latestChapterId: Int?,
-        completeChapterBoundary: Boolean,
+        deduplicateChapters: Boolean,
+        scanlatorBlacklist: Set<String>,
     ): List<SChapter>? {
         if (cipher == null) return null
         val mangaSlug = getMangaUrl(manga).toHttpUrl().pathSegments.getOrNull(1) ?: return null
@@ -674,7 +704,7 @@ abstract class Comix :
                 chapters += pageItems
                 val reachedKnown = pageItems.any { it.id == latestChapterId }
                 if (reachedKnown) {
-                    if (!completeChapterBoundary || !hasNext) break
+                    if (!deduplicateChapters || !hasNext) break
                     boundaryNumber = pageItems.last().number
                 } else if (!hasNext) {
                     break
@@ -682,7 +712,12 @@ abstract class Comix :
             }
             page++
         }
-        return buildChapters(chapters, mangaSlug)
+        return buildChapters(
+            chapters,
+            mangaSlug,
+            deduplicateChapters,
+            scanlatorBlacklist,
+        )
     }
 
     // V3 grid-scramble pages must NOT send Origin — the server withholds X-Scramble-Seed when

@@ -13,6 +13,7 @@ import java.util.Calendar
 const val MANGA_ID_MEMO = "mangaId"
 const val CHAPTER_ID_MEMO = "chapterId"
 const val CHAPTER_LIST_DEDUPLICATED_MEMO = "chapterListDeduplicated"
+const val CHAPTER_LIST_BLACKLIST_MEMO = "chapterListBlacklist"
 
 @Serializable
 class Term(
