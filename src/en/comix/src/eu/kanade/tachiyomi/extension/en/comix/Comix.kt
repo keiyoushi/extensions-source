@@ -390,15 +390,24 @@ abstract class Comix :
 
         val deduplicateChapters = preferences.deduplicateChapters()
         val storedDeduplicateChapters = manga.memo[CHAPTER_LIST_DEDUPLICATED_MEMO]?.booleanOrNull
+        val storedChaptersMatchMode = !deduplicateChapters ||
+            chapters.distinctBy(SChapter::chapter_number).size == chapters.size
         val fetchUntilKnown = fetchChapters &&
             preferences.fetchChaptersUntilKnown() &&
-            storedDeduplicateChapters == deduplicateChapters
+            storedDeduplicateChapters == deduplicateChapters &&
+            storedChaptersMatchMode
         val latestChapterId = chapters.firstOrNull()
             ?.takeIf { fetchUntilKnown }
             ?.chapterId()
 
         fun mergeChapters(fetched: List<SChapter>) = if (fetchUntilKnown) {
-            (fetched + chapters).distinctBy(SChapter::url)
+            val merged = fetched + chapters
+            val distinct = if (deduplicateChapters) {
+                merged.distinctBy(SChapter::chapter_number)
+            } else {
+                merged.distinctBy(SChapter::url)
+            }
+            distinct.sortedByDescending(SChapter::chapter_number)
         } else {
             fetched
         }
