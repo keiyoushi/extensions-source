@@ -44,7 +44,8 @@ abstract class SayManhwa : KeiSource() {
         val url = "$baseUrl/$saymanhwaLang/popular".toHttpUrl().newBuilder()
             .apply { if (page != 1) addQueryParameter("page", page.toString()) }
             .build()
-        return parseMangaPage(client.get(url).asJsoup(), page)
+        val document = client.get(url).asJsoup()
+        return parseMangaPage(document, page)
     }
 
     // ============================== Latest ===============================
@@ -61,6 +62,7 @@ abstract class SayManhwa : KeiSource() {
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
         val selectedGenre = genreFilter?.vals?.getOrNull(genreFilter.state)
+            ?.takeUnless { it == "__all__" }
 
         val url = "$baseUrl/$saymanhwaLang/series".toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
@@ -80,20 +82,14 @@ abstract class SayManhwa : KeiSource() {
     private fun parseMangaPage(document: Document, page: Int): MangasPage {
         val mangas = document
             .select("article.series-card")
-            .mapNotNull(::mangaFromElement)
+            .map(::mangaFromElement)
 
-        val hasNextPage = document.select("nav.pagination a").any { link ->
-            val href = link.attr("href")
-            href.substringAfter("page=", "")
-                .substringBefore("&")
-                .toIntOrNull()
-                ?.let { it > page } == true
-        }
+        val hasNextPage = document.select("nav.pagination span + a").isNotEmpty()
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun mangaFromElement(element: Element): SManga? = SManga.create().apply {
-        val mangaLink = element.selectFirst(".series-card-body h2 a") ?: return null
+    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
+        val mangaLink = element.selectFirst(".series-card-body h2 a")!!
         setUrlWithoutDomain(mangaLink.absUrl("href"))
         title = mangaLink.text()
         thumbnail_url = element.selectFirst(".series-card-cover img, a img")?.absUrl("src")
@@ -131,26 +127,26 @@ abstract class SayManhwa : KeiSource() {
 
     private fun mangaDetailsParse(document: Document, mangaUrl: String): SManga = SManga.create().apply {
         setUrlWithoutDomain(mangaUrl.substringBefore("/chapter-"))
-        title = document.selectFirst("h1")?.ownText().orEmpty()
+        title = document.selectFirst("h1")?.ownText()!!
         thumbnail_url = document.selectFirst(".series-v72-cover img")?.absUrl("src")
 
         val creatorRows = document.select(".series-v72-meta-row strong.series-creator-links")
-        author = creatorRows.getOrNull(0)?.select("a")?.joinToString { it.text() }.orEmpty()
-        artist = creatorRows.getOrNull(1)?.select("a")?.joinToString { it.text() }.orEmpty()
+        author = creatorRows.getOrNull(0)?.select("a")?.joinToString { it.text() }
+        artist = creatorRows.getOrNull(1)?.select("a")?.joinToString { it.text() }
 
-        status = document.selectFirst(".series-v72-meta-pair > div:first-child strong")?.ownText()?.trim().toStatus(saymanhwaLang)
+        status = document.selectFirst(".series-v72-meta-pair > div:first-child strong")?.ownText().toStatus(saymanhwaLang)
 
-        val type = document.selectFirst(".series-v72-meta-pair > div:nth-child(2) strong")?.ownText()?.trim()
+        val type = document.selectFirst(".series-v72-meta-pair > div:nth-child(2) strong")?.ownText()
         val genresContent = document.select("a[href*='/genres/']").map { it.text() }
         genre = (listOfNotNull(type) + genresContent)
             .distinct()
             .joinToString()
 
-        description = document.selectFirst(".series-seo-context p")?.wholeText()?.trim().orEmpty()
+        description = document.selectFirst(".series-seo-context p")?.wholeText().orEmpty()
     }
 
     private fun String?.toStatus(langPath: String): Int {
-        val text = this?.trim()?.lowercase()
+        val text = this
         if (text.isNullOrEmpty()) return SManga.UNKNOWN
 
         val (ongoingWords, completedWords) = when (langPath) {
@@ -169,18 +165,18 @@ abstract class SayManhwa : KeiSource() {
         }
 
         return when {
-            ongoingWords.any { text.contains(it) } -> SManga.ONGOING
-            completedWords.any { text.contains(it) } -> SManga.COMPLETED
+            ongoingWords.any { text.contains(it, ignoreCase = true) } -> SManga.ONGOING
+            completedWords.any { text.contains(it, ignoreCase = true) } -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
     }
 
     private fun chapterListParse(document: Document): List<SChapter> = document
         .select(".series-v72-chapter-list > a.series-v72-chapter-row")
-        .mapNotNull(::chapterFromElement)
+        .map(::chapterFromElement)
 
-    private fun chapterFromElement(element: Element): SChapter? {
-        val chapterName = element.selectFirst(".series-chapter-number-text")?.ownText() ?: return null
+    private fun chapterFromElement(element: Element): SChapter {
+        val chapterName = element.selectFirst(".series-chapter-number-text")!!.ownText()
         val isVip = element.selectFirst(".chapter-mini-lock") != null
         val dateStr = element.selectFirst("time")?.attr("datetime")
         return SChapter.create().apply {
@@ -193,7 +189,7 @@ abstract class SayManhwa : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter), ensureSuccess = false).asJsoup()
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select(".reader-pages img").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("src"))
         }
@@ -209,7 +205,7 @@ abstract class SayManhwa : KeiSource() {
             val link = element.selectFirst("h3 a") ?: return@mapNotNull null
             SManga.create().apply {
                 setUrlWithoutDomain(link.absUrl("href"))
-                title = link.text().trim()
+                title = link.text()
                 thumbnail_url = element.selectFirst("img")?.absUrl("src")
             }
         }
@@ -224,7 +220,7 @@ abstract class SayManhwa : KeiSource() {
         val document = client.get(url).asJsoup()
         val genres = document.select("select[name=genre] option").mapNotNull { option ->
             val value = option.attr("value")
-            val text = option.text().trim()
+            val text = option.text()
             if (value.isEmpty() || text.isEmpty()) {
                 null
             } else {
@@ -254,6 +250,6 @@ abstract class SayManhwa : KeiSource() {
             title,
             arrayOf("All") + genres.map { it.name }.toTypedArray(),
         ) {
-        val vals = arrayOf("") + genres.map { it.value }.toTypedArray()
+        val vals = arrayOf("__all__") + genres.map { it.value }.toTypedArray()
     }
 }
