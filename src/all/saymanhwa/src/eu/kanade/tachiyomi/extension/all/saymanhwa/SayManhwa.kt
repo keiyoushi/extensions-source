@@ -29,17 +29,7 @@ import kotlin.time.Instant
 abstract class SayManhwa : KeiSource() {
     private val saymanhwaLang: String
         get() = when (lang) {
-            "ar" -> "ar"
-            "de" -> "de"
-            "en" -> "en"
-            "es" -> "es"
-            "fil" -> "fil"
-            "fr" -> "fr"
-            "id" -> "id"
-            "ja" -> "ja"
             "pt" -> "pt-br"
-            "th" -> "th"
-            "vi" -> "vi"
             "zh" -> "zh-cn"
             else -> lang
         }
