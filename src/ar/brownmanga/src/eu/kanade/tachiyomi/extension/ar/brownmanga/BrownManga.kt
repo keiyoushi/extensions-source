@@ -11,6 +11,7 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
@@ -18,37 +19,32 @@ abstract class BrownManga : KeiSource() {
     private val apiUrl: String
         get() = baseUrl.replace("https://", "https://cdn.")
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
+    private val pageSize = 20
+
+    private suspend fun fetchMangaPage(page: Int, buildQuery: HttpUrl.Builder.() -> Unit): MangasPage {
         val url = "$apiUrl/rest/v1/manhwa".toHttpUrl().newBuilder().apply {
             addQueryParameter("select", "*")
-            addQueryParameter("order", "views .desc")
+            addQueryParameter("limit", pageSize.toString())
+            addQueryParameter("offset", ((page - 1) * pageSize).toString())
+            buildQuery()
         }.build()
 
-        val entries = client.get(url).parseAs<List<ManhwaDto>>().map { it.toSManga() }
+        val entries = client.get(url).parseAs<List<ManhwaDto>>()
+            .map { it.toSManga() }
 
-        return MangasPage(entries, false)
+        return MangasPage(entries, entries.size == pageSize)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = "$apiUrl/rest/v1/manhwa".toHttpUrl().newBuilder().apply {
-            addQueryParameter("select", "*")
-            addQueryParameter("order", "updated_at.desc")
-        }.build()
-
-        val entries = client.get(url).parseAs<List<ManhwaDto>>().map { it.toSManga() }
-
-        return MangasPage(entries, false)
+    override suspend fun getPopularManga(page: Int) = fetchMangaPage(page) {
+        addQueryParameter("order", "views.desc")
     }
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = "$apiUrl/rest/v1/manhwa".toHttpUrl().newBuilder().apply {
-            addQueryParameter("select", "*")
-            addQueryParameter("or", "(title.ilike.*$query*,title_ar.ilike.*$query*)")
-        }.build()
+    override suspend fun getLatestUpdates(page: Int) = fetchMangaPage(page) {
+        addQueryParameter("order", "updated_at.desc")
+    }
 
-        val entries = client.get(url).parseAs<List<ManhwaDto>>().map { it.toSManga() }
-
-        return MangasPage(entries, false)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = fetchMangaPage(page) {
+        addQueryParameter("or", "(title.ilike.*$query*,title_ar.ilike.*$query*)")
     }
 
     override fun getMangaUrl(manga: SManga): String {
