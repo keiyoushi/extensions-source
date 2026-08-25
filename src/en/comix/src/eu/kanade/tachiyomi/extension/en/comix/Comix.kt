@@ -413,7 +413,7 @@ abstract class Comix :
         }
 
         val nativeChapters = if (fetchChapters && cipher != null) {
-            async { getNativeChapterList(manga, latestChapterId) }
+            async { getNativeChapterList(manga, latestChapterId, deduplicateChapters) }
         } else {
             null
         }
@@ -421,7 +421,7 @@ abstract class Comix :
         val updatedManga = if (fetchDetails) parseMangaDetails(getDocument()) else manga
         val updatedChapters = if (fetchChapters) {
             val fetched = nativeChapters?.await()
-                ?: getWebViewChapterList(manga, getDocument(), latestChapterId)
+                ?: getWebViewChapterList(manga, getDocument(), latestChapterId, deduplicateChapters)
             mergeChapters(fetched)
         } else {
             chapters
@@ -487,6 +487,7 @@ abstract class Comix :
         manga: SManga,
         document: Document,
         latestChapterId: Int?,
+        completeChapterBoundary: Boolean,
     ): List<SChapter> {
         val mangaSlug = manga.url.removePrefix("/")
         val mangaId = manga.mangaId() ?: throw Exception("Refresh manga details")
@@ -505,6 +506,7 @@ abstract class Comix :
                         const mangaId = $${JSONObject.quote(mangaId)};
                         const mainScriptUrl = $${JSONObject.quote(mainScriptUrl)};
                         const latestChapterId = $${latestChapterId ?: "null"};
+                        const completeChapterBoundary = $$completeChapterBoundary;
                         if (window[payloadKey]) return null;
                         window[payloadKey] = true;
 
@@ -532,6 +534,7 @@ abstract class Comix :
 
                                 const items = [];
                                 let page = 1;
+                                let boundaryNumber = null;
                                 while (page <= $${MAX_CHAPTER_PAGES}) {
                                     const response = await mangaApi.chapters(mangaId, {
                                         page,
@@ -541,12 +544,27 @@ abstract class Comix :
                                     const pageItems = response?.items;
                                     if (!Array.isArray(pageItems) || pageItems.length === 0) break;
 
-                                    items.push(...pageItems);
-                                    if (pageItems.some(item => item.id === latestChapterId)) break;
-
                                     const meta = response.meta || response.pagination || {};
                                     const lastPage = meta.lastPage || meta.last_page || page;
-                                    if (!(meta.hasNext || page < lastPage)) break;
+                                    const hasNext = meta.hasNext || page < lastPage;
+                                    if (boundaryNumber !== null) {
+                                        const boundaryItems = pageItems.filter(
+                                            item => item.number === boundaryNumber
+                                        );
+                                        items.push(...boundaryItems);
+                                        if (boundaryItems.length < pageItems.length || !hasNext) break;
+                                    } else {
+                                        items.push(...pageItems);
+                                        const reachedKnown = pageItems.some(
+                                            item => item.id === latestChapterId
+                                        );
+                                        if (reachedKnown) {
+                                            if (!completeChapterBoundary || !hasNext) break;
+                                            boundaryNumber = pageItems[pageItems.length - 1].number;
+                                        } else if (!hasNext) {
+                                            break;
+                                        }
+                                    }
                                     page++;
                                 }
                                 window.$${passPayloadName}(JSON.stringify(items));
@@ -623,12 +641,17 @@ abstract class Comix :
         }
     }
 
-    private suspend fun getNativeChapterList(manga: SManga, latestChapterId: Int?): List<SChapter>? {
+    private suspend fun getNativeChapterList(
+        manga: SManga,
+        latestChapterId: Int?,
+        completeChapterBoundary: Boolean,
+    ): List<SChapter>? {
         if (cipher == null) return null
         val mangaSlug = getMangaUrl(manga).toHttpUrl().pathSegments.getOrNull(1) ?: return null
         val mangaId = manga.mangaId() ?: return null
         val chapters = mutableListOf<Chapter>()
         var page = 1
+        var boundaryNumber: Double? = null
         while (page <= MAX_CHAPTER_PAGES) {
             val response = getSigned<ChapterDetailsResponse>(
                 "/api/v1/manga/$mangaId/chapters",
@@ -638,9 +661,25 @@ abstract class Comix :
                     "page" to listOf(page.toString()),
                 ),
             ) ?: return null
-            chapters += response.result.items
-            val reachedKnown = response.result.items.any { it.id == latestChapterId }
-            if (reachedKnown || !response.result.hasNextPage() || response.result.items.isEmpty()) break
+            val pageItems = response.result.items
+            if (pageItems.isEmpty()) break
+
+            val hasNext = response.result.hasNextPage()
+            val boundary = boundaryNumber
+            if (boundary != null) {
+                val boundaryItems = pageItems.takeWhile { it.number == boundary }
+                chapters += boundaryItems
+                if (boundaryItems.size < pageItems.size || !hasNext) break
+            } else {
+                chapters += pageItems
+                val reachedKnown = pageItems.any { it.id == latestChapterId }
+                if (reachedKnown) {
+                    if (!completeChapterBoundary || !hasNext) break
+                    boundaryNumber = pageItems.last().number
+                } else if (!hasNext) {
+                    break
+                }
+            }
             page++
         }
         return buildChapters(chapters, mangaSlug)
