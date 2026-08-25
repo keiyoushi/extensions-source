@@ -391,14 +391,15 @@ abstract class Comix :
         val deduplicateChapters = preferences.deduplicateChapters()
         val scanlatorBlacklist = preferences.scanlatorBlacklist()
         val blacklistSignature = scanlatorBlacklist.sorted().joinToString(",")
+        val chapterSelectionSignature = "$CHAPTER_SELECTION_VERSION:$blacklistSignature"
         val storedDeduplicateChapters = manga.memo[CHAPTER_LIST_DEDUPLICATED_MEMO]?.booleanOrNull
-        val storedBlacklistSignature = manga.memo[CHAPTER_LIST_BLACKLIST_MEMO]?.string
+        val storedChapterSelectionSignature = manga.memo[CHAPTER_LIST_SELECTION_SIGNATURE_MEMO]?.string
         val storedChaptersMatchMode = !deduplicateChapters ||
             chapters.distinctBy(SChapter::chapter_number).size == chapters.size
         val fetchUntilKnown = fetchChapters &&
             preferences.fetchChaptersUntilKnown() &&
             storedDeduplicateChapters == deduplicateChapters &&
-            storedBlacklistSignature == blacklistSignature &&
+            storedChapterSelectionSignature == chapterSelectionSignature &&
             storedChaptersMatchMode
         val latestChapterId = chapters.firstOrNull()
             ?.takeIf { fetchUntilKnown }
@@ -444,12 +445,16 @@ abstract class Comix :
             chapters
         }
         val chapterListMode = if (fetchChapters) deduplicateChapters else storedDeduplicateChapters
-        val chapterListBlacklist = if (fetchChapters) blacklistSignature else storedBlacklistSignature
-        if (chapterListMode != null && chapterListBlacklist != null) {
+        val chapterListSelectionSignature = if (fetchChapters) {
+            chapterSelectionSignature
+        } else {
+            storedChapterSelectionSignature
+        }
+        if (chapterListMode != null && chapterListSelectionSignature != null) {
             updatedManga.memo = buildJsonObject {
                 updatedManga.memo.forEach { (key, value) -> put(key, value) }
                 put(CHAPTER_LIST_DEDUPLICATED_MEMO, chapterListMode)
-                put(CHAPTER_LIST_BLACKLIST_MEMO, chapterListBlacklist)
+                put(CHAPTER_LIST_SELECTION_SIGNATURE_MEMO, chapterListSelectionSignature)
             }
         }
         SMangaUpdate(updatedManga, updatedChapters)
@@ -697,7 +702,7 @@ abstract class Comix :
             val hasNext = response.result.hasNextPage()
             val boundary = boundaryNumber
             if (boundary != null) {
-                val boundaryItems = pageItems.takeWhile { it.number == boundary }
+                val boundaryItems = pageItems.filter { it.number == boundary }
                 chapters += boundaryItems
                 if (boundaryItems.size < pageItems.size || !hasNext) break
             } else {
@@ -987,9 +992,10 @@ abstract class Comix :
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_FETCH_CHAPTERS_UNTIL_KNOWN
             title = "Faster chapter list fetching"
-            summary = "Enabled: Uses fewer requests, but may miss newly added older chapters " +
-                "(e.g. chapter 5.5 when the latest known chapter is 150).\n\n" +
-                "Disabled: Finds older chapter additions, but fetching large chapter lists is slower."
+            summary = "Stops after the newest known chapter, plus any pages needed to finish " +
+                "duplicate ranking. Faster on long lists, but may miss chapters added below the " +
+                "latest known chapter (e.g. chapter 5.5 when chapter 150 is known). Disable to " +
+                "always fetch the complete list."
             setDefaultValue(true)
         }.let(screen::addPreference)
 
@@ -1046,9 +1052,11 @@ abstract class Comix :
         SwitchPreferenceCompat(screen.context).apply {
             key = DEDUPLICATE_CHAPTERS
             title = "Deduplicate Chapters"
-            summary = "Remove duplicate chapters from the chapter list.\n" +
-                "Official chapters (Comix-marked) are preferred, followed by the highest-voted or most recent.\n" +
-                "Warning: It can be slow on large lists."
+            summary = "Keep one upload for each exact chapter number. Comix-marked official and " +
+                "recognized official-group uploads are preferred, then the highest-voted and " +
+                "newest upload. Other scanlator uploads are hidden.\n\n" +
+                "After changing this setting or the scanlator blacklist, the next chapter refresh " +
+                "automatically fetches the complete list before fast fetching resumes."
             setDefaultValue(false)
         }.let(screen::addPreference)
 
@@ -1157,6 +1165,7 @@ abstract class Comix :
         private const val WEBVIEW_TIMEOUT_SECONDS = 120L
         private const val SCRIPT_RETRY_INTERVAL_MS = 100L
         private const val MAX_CHAPTER_PAGES = 200
+        private const val CHAPTER_SELECTION_VERSION = 1
         private const val HEX = "0123456789ABCDEF"
         private const val URI_COMPONENT_SAFE_CHARS = "-_.!~*'()"
         private const val TAG_ID_CACHE_SIZE = 50
