@@ -109,8 +109,8 @@ abstract class SayManhwa : KeiSource() {
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
         return SMangaUpdate(
-            if (fetchDetails) mangaDetailsParse(document, getMangaUrl(manga)) else manga,
-            if (fetchChapters) chapterListParse(document) else chapters,
+            mangaDetailsParse(document, getMangaUrl(manga)),
+            chapterListParse(document),
         )
     }
 
@@ -186,7 +186,7 @@ abstract class SayManhwa : KeiSource() {
         return SChapter.create().apply {
             setUrlWithoutDomain(element.absUrl("href"))
             name = if (isVip) "🔒 " + chapterName else chapterName
-            date_upload = dateStr?.let { Instant.tryParse(it) } ?: 0L
+            date_upload = Instant.tryParse(dateStr)
         }
     }
 
