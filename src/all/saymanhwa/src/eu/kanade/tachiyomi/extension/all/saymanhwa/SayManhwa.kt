@@ -62,7 +62,6 @@ abstract class SayManhwa : KeiSource() {
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
         val selectedGenre = genreFilter?.vals?.getOrNull(genreFilter.state)
-            ?.takeUnless { it == "__all__" }
 
         val url = "$baseUrl/$saymanhwaLang/series".toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
@@ -242,7 +241,7 @@ abstract class SayManhwa : KeiSource() {
     @Serializable
     class GenreOption(
         val name: String,
-        val value: String,
+        val value: String?,
     )
 
     class GenreFilter(title: String, genres: List<GenreOption>) :
@@ -250,6 +249,6 @@ abstract class SayManhwa : KeiSource() {
             title,
             arrayOf("All") + genres.map { it.name }.toTypedArray(),
         ) {
-        val vals = arrayOf("__all__") + genres.map { it.value }.toTypedArray()
+        val vals = arrayOf<String?>(null) + genres.map { it.value }.toTypedArray()
     }
 }
