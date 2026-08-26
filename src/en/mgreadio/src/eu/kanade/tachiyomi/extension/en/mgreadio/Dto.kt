@@ -4,7 +4,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -32,13 +31,11 @@ class ChapterDto(
             ?.let { "Chapter $chapterName - $it" }
             ?: "Chapter $chapterName"
         chapter_number = number
-        date_upload = REST_CHAPTER_DATE_FORMAT.tryParseDateTime(createdAt, ZoneId.of("Asia/Bangkok"))
-    }
-
-    companion object {
-        private val REST_CHAPTER_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
+        date_upload = REST_CHAPTER_DATE_FORMAT.tryParseDateTime(createdAt)
     }
 }
+
+private val REST_CHAPTER_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
 
 @Serializable
 class MgreadSearchDto(
