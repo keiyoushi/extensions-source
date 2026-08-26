@@ -2,8 +2,7 @@ package eu.kanade.tachiyomi.extension.vi.hentaicube
 
 import android.content.SharedPreferences
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,29 +10,24 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.runWebView
-import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
-import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import kotlin.time.Duration.Companion.seconds
+import java.net.URLEncoder
+import java.security.SecureRandom
 
 @Source
 abstract class HentaiCB : Madara() {
-    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("vi"))
-
-    override val client: OkHttpClient = network.client.newBuilder()
-        .followRedirects(false)
+    override fun OkHttpClient.Builder.configureClient() = followRedirects(false)
         .addInterceptor { chain ->
             val maxRedirects = 5
             var request = chain.request()
@@ -63,7 +57,6 @@ abstract class HentaiCB : Madara() {
             response
         }
         .rateLimit(3)
-        .build()
 
     private val preferences: SharedPreferences = getPreferences()
     private val prefsLock = Any()
@@ -76,30 +69,7 @@ abstract class HentaiCB : Madara() {
 
     private val thumbnailOriginalUrlRegex = Regex("-\\d+x\\d+(\\.[a-zA-Z]+)$")
 
-    override fun popularMangaFromElement(element: Element): SManga = super.popularMangaFromElement(element).apply {
-        val img = element.selectFirst("img")
-        thumbnail_url = imageFromElement(img!!)?.replace(thumbnailOriginalUrlRegex, "$1")
-    }
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith(URL_SEARCH_PREFIX)) {
-            val mangaUrl = baseUrl.toHttpUrl().newBuilder().apply {
-                addPathSegment(mangaSubString)
-                addPathSegment(query.substringAfter(URL_SEARCH_PREFIX))
-                addPathSegment("")
-            }.build()
-            return client.newCall(GET(mangaUrl, headers))
-                .asObservableSuccess().map { response ->
-                    val manga = mangaDetailsParse(response).apply {
-                        setUrlWithoutDomain(mangaUrl.toString())
-                        initialized = true
-                    }
-
-                    MangasPage(listOf(manga), false)
-                }
-        }
-
-        // Special characters causing search to fail
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val queryFixed = query
             .replace("–", "-")
             .replace("’", "'")
@@ -107,24 +77,21 @@ abstract class HentaiCB : Madara() {
             .replace("”", "\"")
             .replace("…", "...")
 
-        return super.fetchSearchManga(page, queryFixed, filters)
+        return super.getSearchMangaList(page, queryFixed, filters)
     }
 
-    private val oldMangaUrlRegex by lazy { Regex("^$baseUrl/\\w+/") }
+    override fun archiveManga(element: Element, id: String): SManga? = super.archiveManga(element, id)?.apply {
+        thumbnail_url = thumbnail_url?.replace(thumbnailOriginalUrlRegex, "$1")
+    }
 
-    // Change old entries from mangaSubString
-    override fun getMangaUrl(manga: SManga): String = super.getMangaUrl(manga)
-        .replace(oldMangaUrlRegex, "$baseUrl/$mangaSubString/")
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    override suspend fun fetchChapters(mangaPath: String, id: String, mangaPage: org.jsoup.nodes.Document?): List<SChapter> {
+        val document = mangaPage ?: error("Manga page is required for this chapter mode")
         val chaptersWrapper = document.select("div[id^=manga-chapters-holder]")
-
         var chapterElements = document.select(chapterListSelector())
 
-        if (chapterElements.isEmpty() && !chaptersWrapper.isNullOrEmpty()) {
+        if (chapterElements.isEmpty() && !chaptersWrapper.isEmpty()) {
             val mangaUrl = document.location().removeSuffix("/")
-            val mangaId = chaptersWrapper.attr("data-id")
+            val mangaId = chaptersWrapper.attr("data-id").ifBlank { id }
 
             val allChapters = Elements()
             var page = 1
@@ -136,16 +103,19 @@ abstract class HentaiCB : Madara() {
                 // Newer Madara versions throws HTTP 400 when using the old endpoint.
                 if (xhrResponse.code == 400 && page == 1) {
                     xhrResponse.close()
-                    val oldRequest = oldXhrChaptersRequest(mangaId)
+                    val oldRequest = Request.Builder()
+                        .url("$baseUrl/wp-admin/admin-ajax.php")
+                        .headers(xhrHeaders)
+                        .post(FormBody.Builder().add("action", "manga_get_chapters").add("manga", mangaId).build())
+                        .build()
                     xhrResponse = client.newCall(oldRequest).execute()
                 }
 
                 val xhrDocument = xhrResponse.asJsoup()
+                xhrResponse.close()
                 allChapters.addAll(xhrDocument.select(chapterListSelector()))
 
                 val hasNextPage = xhrDocument.selectFirst("div.pagination a[data-page='${page + 1}']") != null
-                xhrResponse.close()
-
                 if (!hasNextPage) {
                     break
                 }
@@ -154,81 +124,71 @@ abstract class HentaiCB : Madara() {
             chapterElements = allChapters
         }
 
-        return chapterElements.map(::chapterFromElement)
+        return chapterElements.mapNotNull { chapterFromElement(it, mangaPath) }
     }
 
     private fun xhrChaptersRequest(mangaUrl: String, page: Int): Request {
-        val request = xhrChaptersRequest(mangaUrl)
-        if (page <= 1) return request
-
-        val url = request.url.newBuilder()
-            .addQueryParameter("t", page.toString())
-            .build()
-
-        return request.newBuilder().url(url).build()
+        val url = mangaUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("ajax/chapters/")
+            addQueryParameter("t", page.toString())
+        }.build()
+        return POST(url.toString(), xhrHeaders)
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
-        val chapterUrl = chapter.url
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterUrl = getChapterUrl(chapter)
+        val document = client.get(chapterUrl).asJsoup()
 
-        val imageUrls = try {
-            runBlocking {
-                runWebView<List<String>>(timeout = 60.seconds) {
-                    loadWithOverviewMode = true
-                    useWideViewPort = true
+        val readerElement = document.selectFirst(".masr2-reader[data-masr2-token]")
+            ?: error("Reader element not found")
 
-                    var lastCount = 0
-                    var stableCount = 0
+        val token = readerElement.attr("data-masr2-token")
+        if (token.isEmpty()) error("Token not found in reader element")
 
-                    poll(1.seconds) {
-                        evaluateJs(extractPageImagesScript) { value ->
-                            val urls = runCatching { value.parseAs<List<String>>() }.getOrDefault(emptyList())
-                            if (urls.isEmpty()) return@evaluateJs
+        val clientId = generateClientId()
+        val apiHeaders = headersBuilder()
+            .set("Accept", "application/json")
+            .set("Referer", chapterUrl)
+            .build()
 
-                            if (urls.size == lastCount) {
-                                stableCount++
-                            } else {
-                                lastCount = urls.size
-                                stableCount = 0
-                            }
+        val imageUrls = mutableListOf<String>()
+        var currentToken = token
 
-                            if (stableCount >= 3) {
-                                resolve(urls)
-                            }
-                        }
-                    }
+        do {
+            val url = buildApiUrl(currentToken, clientId)
+            val response = client.get(url, apiHeaders)
+            val data = response.parseAs<ReaderPageResponse>()
 
-                    loadUrl(chapterUrl, headers.toMap())
-                }
-            }
-        } catch (_: WebViewTimeoutException) {
-            emptyList()
-        }
+            imageUrls.addAll(data.items)
 
-        imageUrls.distinct().mapIndexed { i, imageUrl ->
+            if (data.done || data.nextToken.isNullOrEmpty()) break
+            currentToken = data.nextToken
+        } while (true)
+
+        return imageUrls.mapIndexed { i, imageUrl ->
             Page(i, chapterUrl, imageUrl)
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+    private fun generateClientId(): String {
+        val bytes = ByteArray(16)
+        SecureRandom().nextBytes(bytes)
+        return bytes.joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    }
 
-    private val extractPageImagesScript = """
-        (function() {
-            var images = Array.prototype.slice.call(document.querySelectorAll('img.manga-page, img.protected-manga-image'));
-            images.forEach(function(img) {
-                img.loading = 'eager';
-                img.removeAttribute('loading');
-            });
-            window.scrollTo(0, document.body.scrollHeight);
-            return Array.from(new Set(images.map(function(img) {
-                return img.currentSrc || img.src || img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('data-original') || '';
-            }).filter(function(src) {
-                return /^https?:\/\//.test(src);
-            })));
-        })()
-    """.trimIndent()
+    private fun buildApiUrl(token: String, clientId: String): String = "$baseUrl$PAGES_URL" +
+        "?token=" + URLEncoder.encode(token, "UTF-8") +
+        "&cid=" + clientId
+
+    @Serializable
+    private class ReaderPageResponse(
+        @SerialName("items") val items: List<String>,
+        @SerialName("done") val done: Boolean,
+        @SerialName("next_token") val nextToken: String? = null,
+    )
 
     companion object {
         private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val PAGES_URL = "/wp-json/manga-reader/v2/pages"
     }
 }
