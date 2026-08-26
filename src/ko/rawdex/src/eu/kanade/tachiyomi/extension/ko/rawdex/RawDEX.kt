@@ -35,22 +35,22 @@ abstract class RawDEX : KeiSource() {
 
     private suspend fun fetchBrowsePage(url: String): MangasPage {
         val document = client.get(url, ensureSuccess = false).asJsoup()
-        val mangas = document.select(BROWSE_CARD_SELECTOR).mapNotNull(::browseMangaFromElement)
+        val mangas = document.select("article.rdx-library-card").mapNotNull(::browseMangaFromElement)
 
         // Pagination links claim more pages than actually exist near the end of the
         // archive; requesting them yields a 404 with zero cards, handled above.
-        val hasNextPage = mangas.isNotEmpty() && document.selectNextPageSelector() != null
+        val hasNextPage = mangas.isNotEmpty() && document.selectFirst("a.next.page-numbers") != null
         return MangasPage(mangas, hasNextPage)
     }
 
     private fun browseMangaFromElement(element: Element): SManga? {
-        val link = element.selectFirst(BROWSE_TITLE_LINK_SELECTOR) ?: return null
+        val link = element.selectFirst(".rdx-library-card__body h2 a") ?: return null
         val title = link.text().takeIf { it.isNotEmpty() } ?: return null
 
         return SManga.create().apply {
             setUrlWithoutDomain(link.absUrl("href"))
             this.title = title
-            thumbnail_url = element.selectFirst(BROWSE_COVER_SELECTOR)?.attr("abs:src")
+            thumbnail_url = element.selectFirst(".rdx-library-card__cover img")?.attr("abs:src")
         }
     }
 
@@ -65,16 +65,16 @@ abstract class RawDEX : KeiSource() {
     }
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst(DETAILS_TITLE_SELECTOR)?.text()
+        title = document.selectFirst(".rdx-manga-heading h1")?.text()
             ?: error("Failed to parse title")
-        thumbnail_url = document.selectFirst(DETAILS_COVER_SELECTOR)?.attr("abs:src")
-        status = when (document.selectFirst(DETAILS_STATUS_SELECTOR)?.text()?.lowercase()) {
+        thumbnail_url = document.selectFirst("img.rdx-manga-cover")?.attr("abs:src")
+        status = when (document.selectFirst(".rdx-manga-status")?.text()?.lowercase()) {
             "on-going" -> SManga.ONGOING
             "end" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
 
-        document.select(DETAILS_META_SELECTOR).forEach { element ->
+        document.select("dl.rdx-manga-meta div").forEach { element ->
             val value = element.selectFirst("dd")?.text().orEmpty()
             when (element.selectFirst("dt")?.text()?.lowercase()) {
                 "author" -> author = value
@@ -82,18 +82,18 @@ abstract class RawDEX : KeiSource() {
             }
         }
 
-        genre = document.select(DETAILS_GENRE_SELECTOR)
+        genre = document.select(".rdx-manga-tags a")
             .joinToString { it.text() }
             .takeIf { it.isNotEmpty() }
 
-        val altNames = document.selectFirst(DETAILS_ALT_NAMES_SELECTOR)?.text()
+        val altNames = document.selectFirst(".rdx-manga-alternative")?.text()
             ?.split('/', ';')
             ?.map(String::trim)
             ?.filter(String::isNotEmpty)
             .orEmpty()
 
         description = buildString {
-            document.selectFirst(DETAILS_SUMMARY_SELECTOR)?.text()
+            document.selectFirst(".rdx-manga-summary")?.text()
                 ?.takeIf { it.isNotEmpty() }
                 ?.let(::append)
             if (altNames.isNotEmpty()) {
@@ -106,15 +106,15 @@ abstract class RawDEX : KeiSource() {
     }
 
     // Chapters render newest first, matching the descending order the app expects.
-    private fun parseChapterList(document: Document): List<SChapter> = document.select(CHAPTER_LIST_SELECTOR).mapNotNull { element ->
-        val name = element.selectFirst(CHAPTER_NAME_SELECTOR)?.text()
+    private fun parseChapterList(document: Document): List<SChapter> = document.select(".rdx-chapter-list > a.rdx-chapter-row").mapNotNull { element ->
+        val name = element.selectFirst(".rdx-chapter-row__label")?.text()
             ?.takeIf { it.isNotEmpty() }
             ?: return@mapNotNull null
 
         SChapter.create().apply {
             setUrlWithoutDomain(element.absUrl("href"))
             this.name = name
-            date_upload = element.selectFirst(CHAPTER_DATE_SELECTOR)?.text()
+            date_upload = element.selectFirst(".rdx-chapter-row__date")?.text()
                 ?.let(::parseRelativeDate)
                 ?: 0L
             chapter_number = CHAPTER_NUMBER_REGEX.find(name)
@@ -127,7 +127,7 @@ abstract class RawDEX : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter)).asJsoup()
-        return document.select(PAGE_IMAGE_SELECTOR).mapIndexed { index, img ->
+        return document.select(".rdx-reader-page img").mapIndexed { index, img ->
             Page(index, imageUrl = img.attr("abs:src"))
         }.ifEmpty { error("No pages found") }
     }
@@ -149,24 +149,7 @@ abstract class RawDEX : KeiSource() {
     }
 }
 
-private const val BROWSE_CARD_SELECTOR = "article.rdx-library-card"
-private const val BROWSE_TITLE_LINK_SELECTOR = ".rdx-library-card__body h2 a"
-private const val BROWSE_COVER_SELECTOR = ".rdx-library-card__cover img"
-private const val DETAILS_TITLE_SELECTOR = ".rdx-manga-heading h1"
-private const val DETAILS_COVER_SELECTOR = "img.rdx-manga-cover"
-private const val DETAILS_STATUS_SELECTOR = ".rdx-manga-status"
-private const val DETAILS_META_SELECTOR = "dl.rdx-manga-meta div"
-private const val DETAILS_GENRE_SELECTOR = ".rdx-manga-tags a"
-private const val DETAILS_SUMMARY_SELECTOR = ".rdx-manga-summary"
-private const val DETAILS_ALT_NAMES_SELECTOR = ".rdx-manga-alternative"
-private const val CHAPTER_LIST_SELECTOR = ".rdx-chapter-list > a.rdx-chapter-row"
-private const val CHAPTER_NAME_SELECTOR = ".rdx-chapter-row__label"
-private const val CHAPTER_DATE_SELECTOR = ".rdx-chapter-row__date"
-private const val PAGE_IMAGE_SELECTOR = ".rdx-reader-page img"
-
 private const val ALT_NAME_PREFIX = "Alternative Names:"
-
-private fun Document.selectNextPageSelector() = selectFirst("a.next.page-numbers")
 
 private val CHAPTER_NUMBER_REGEX = Regex("""(\d+(?:\.\d+)?)""")
 private val RELATIVE_DATE_REGEX = Regex("""(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago""")
