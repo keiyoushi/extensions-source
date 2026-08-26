@@ -193,17 +193,21 @@ abstract class MgreadIo : KeiSource() {
         .map { GenreOption(it.attr("data-genre-name"), it.attr("value")) }
         .toJsonElement()
 
-    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        Filter.Header("Filters are only applied when the search text is empty."),
-        TypeFilter(),
-        StatusFilter(),
-        AgeRatingFilter(),
-        RatingMinFilter(),
-        RatingMaxFilter(),
-        SortFilter(),
-        Filter.Separator(),
-        GenreFilter(data?.parseAs<List<GenreOption>>().orEmpty()),
-    )
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filters = mutableListOf(
+            Filter.Header("Filters are only applied when the search text is empty."),
+            TypeFilter(),
+            StatusFilter(),
+            AgeRatingFilter(),
+            RatingMinFilter(),
+            RatingMaxFilter(),
+            SortFilter(),
+        )
+        data?.parseAs<List<GenreOption>>()?.takeIf { it.isNotEmpty() }?.let {
+            filters += GenreFilter(it)
+        }
+        return FilterList(filters)
+    }
 
     // Helpers
 
