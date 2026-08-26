@@ -24,9 +24,13 @@ import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import java.net.URLEncoder
 import java.security.SecureRandom
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Source
 abstract class HentaiCB : Madara() {
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
+
     override fun OkHttpClient.Builder.configureClient() = followRedirects(false)
         .addInterceptor { chain ->
             val maxRedirects = 5
