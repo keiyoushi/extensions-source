@@ -110,7 +110,7 @@ abstract class KomikuCom : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        val comicId = manga.memo["id"]!!.string.toInt()
+        val comicId = manga.memo["id"]!!.string
         val slug = manga.url.substringAfter("/manga/")
         val details = if (fetchDetails) async { client.get("$apiUrl/comics/$slug") } else null
         val chapterList = if (fetchChapters) async { client.get("$apiUrl/comics/$comicId/chapters") } else null
@@ -119,7 +119,7 @@ abstract class KomikuCom : KeiSource() {
         val chapterDtos = chapterList?.await()?.parseAs<List<ChapterDto>>()
         SMangaUpdate(
             manga = comicDto?.toSManga() ?: manga,
-            chapters = chapterDtos?.map { it.toSChapter(comicId) } ?: chapters,
+            chapters = chapterDtos?.map { it.toSChapter(comicId.toInt()) } ?: chapters,
         )
     }
 
