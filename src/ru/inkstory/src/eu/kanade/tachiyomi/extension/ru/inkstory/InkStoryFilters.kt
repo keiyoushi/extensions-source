@@ -86,14 +86,14 @@ internal data class InkStorySearchFilters(
         private fun normalizeDecimal(rawValue: String?, min: Double, max: Double): String? {
             val value = rawValue?.trim()?.replace(',', '.')?.takeIf(String::isNotEmpty) ?: return null
             val parsed = value.toDoubleOrNull() ?: return null
-            if (parsed < min || parsed > max) return null
+            if (parsed !in min..max) return null
             return if (parsed % 1.0 == 0.0) parsed.toLong().toString() else parsed.toString()
         }
 
         private fun normalizeInt(rawValue: String?, min: Int, max: Int): String? {
             val value = rawValue?.trim()?.takeIf(String::isNotEmpty) ?: return null
             val parsed = value.toIntOrNull() ?: return null
-            if (parsed < min || parsed > max) return null
+            if (parsed !in min..max) return null
             return parsed.toString()
         }
     }
