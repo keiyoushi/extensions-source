@@ -70,7 +70,7 @@ abstract class Picacomic :
         }
     }
 
-    private val basicHeaders = mapOf(
+    private val basicHeaders get() = mapOf(
         "api-key" to "C69BAF41DA5ABD1FFEDC6D2FEA56B",
         "app-channel" to channel,
         "app-version" to "2.2.1.3.3.4",
@@ -269,24 +269,18 @@ abstract class Picacomic :
         .split(',').map { it.trim() }
     private val username get() = preferences.getString("USERNAME", "")!!
     private val password get() = preferences.getString("PASSWORD", "")!!
-    private val quality get() = preferences.getString("IMAGE_QUALITY", "high")!!
+    private val quality get() = preferences.getString("IMAGE_QUALITY", "original")!!
     private val channel get() = preferences.getString(APP_CHANNEL, "2")!!
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
             key = "USERNAME"
             title = "用户名"
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString("USERNAME", newValue as String).commit()
-            }
         }.let(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
             key = "PASSWORD"
             title = "密码"
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString("PASSWORD", newValue as String).commit()
-            }
         }.let(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
@@ -296,10 +290,6 @@ abstract class Picacomic :
             dialogMessage = "根据关键词过滤漫画，关键词之间用','分离。" +
                 "关键词分为分类和标签两种，在热门和最新中只能按分类过滤（即在filter的类型中出现的词），" +
                 "而在搜索中两者都可以"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString("BLOCK_GENRES", newValue as String).commit()
-            }
         }.let(screen::addPreference)
 
         ListPreference(screen.context).apply {
@@ -308,10 +298,6 @@ abstract class Picacomic :
             entries = arrayOf("原图", "低", "中", "高")
             entryValues = arrayOf("original", "low", "medium", "high")
             setDefaultValue("original")
-
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(key, newValue as String).commit()
-            }
         }.let(screen::addPreference)
 
         ListPreference(screen.context).apply {
@@ -320,10 +306,6 @@ abstract class Picacomic :
             entries = arrayOf("1", "2", "3")
             entryValues = entries
             setDefaultValue("1")
-
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(key, newValue as String).commit()
-            }
         }.let(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
@@ -331,9 +313,6 @@ abstract class Picacomic :
             title = "分流url"
             summary =
                 "自定义用于获取分流2、3的目标地址；分流1不受影响；（如果之前获取成功了需要重启才能生效，如果出现超时可以多重试几次）"
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(APP_CHANNEL_URL, newValue as String).commit()
-            }
         }.let(screen::addPreference)
     }
 
