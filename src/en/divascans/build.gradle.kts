@@ -6,13 +6,14 @@ plugins {
 
 keiyoushi {
     name = "Diva Scans"
-    versionCode = 25
+    versionCode = 2
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
+    theme = "vinetheme"
 
     source {
         lang = "en"
         baseUrl = "https://divascans.org"
-        id = 5481739102875145368L
+        versionId = 2
     }
 }

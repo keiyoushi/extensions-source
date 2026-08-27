@@ -1,7 +1,7 @@
-package eu.kanade.tachiyomi.extension.en.divascans
+package eu.kanade.tachiyomi.extension.en.witchscans
 
 import eu.kanade.tachiyomi.multisrc.vinetheme.VineTheme
 import keiyoushi.annotation.Source
 
 @Source
-abstract class DivaScans : VineTheme()
+abstract class WitchScans : VineTheme()
