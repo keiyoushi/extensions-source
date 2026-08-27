@@ -266,7 +266,7 @@ abstract class Comix :
             val values = url.queryParameterValues(name).filterNotNull()
             if (values.isNotEmpty()) {
                 put(
-                    name.removeSuffix("[]"),
+                    name,
                     if (name == "content_rating") values.flatMap { it.split(',') } else values,
                 )
             }

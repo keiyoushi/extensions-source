@@ -158,7 +158,9 @@ class Filters(
     ),
         UriFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
-            builder.addQueryParameter(param, vals[state].second)
+            vals[state].second.takeIf { it.isNotEmpty() }?.let {
+                builder.addQueryParameter(param, it)
+            }
         }
     }
 
