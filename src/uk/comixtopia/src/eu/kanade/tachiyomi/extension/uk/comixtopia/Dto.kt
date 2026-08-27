@@ -9,6 +9,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.Locale
+import kotlin.collections.map
+import kotlin.collections.orEmpty
 import kotlin.time.Instant
 
 private const val IMG_HOST = "https://comicbookstorage.fra1.cdn.digitaloceanspaces.com"
@@ -42,6 +44,7 @@ class MangaFull(
     private val publishers: List<NameDto>? = null,
     private val genres: List<NameDto>? = null,
     private val votes: List<RatingDto>? = null,
+    private val issues: List<ChapterDto>? = null,
 ) {
     fun toSManga() = SManga.create().apply {
         url = slug
@@ -67,6 +70,20 @@ class MangaFull(
             else -> SManga.UNKNOWN
         }
     }
+
+    fun toSChapter(mangaUrl: String) = issues?.map { chapter ->
+        SChapter.create().apply {
+            url = chapter.id.toString()
+            name = "Розділ #${chapter.number}"
+            chapter_number = chapter.number.toFloat()
+            date_upload = Instant.tryParse(chapter.createdAt)
+            scanlator = chapter.translator.takeIf { it.isNotBlank() }
+            memo = buildJsonObject {
+                put("pages", chapter.images.orEmpty().map { "$IMG_HOST/$it" }.toJsonElement())
+                put("mangaId", mangaUrl)
+            }
+        }
+    }.orEmpty()
 }
 
 @Serializable
@@ -82,24 +99,12 @@ class RatingDto(
 // =========================== Chapters ============================
 @Serializable
 class ChapterDto(
-    private val id: Int,
-    @SerialName("issue_no") private val number: Int,
-    private val translator: String,
-    @SerialName("created_at") private val createdAt: String,
-    @SerialName("image_list") private val images: List<String>? = null,
-) {
-    fun toSChapter(mangaUrl: String) = SChapter.create().apply {
-        url = id.toString()
-        name = "Розділ #$number"
-        chapter_number = number.toFloat()
-        date_upload = Instant.tryParse(createdAt)
-        scanlator = translator.takeIf { it.isNotBlank() }
-        memo = buildJsonObject {
-            put("pages", images.orEmpty().map { "$IMG_HOST/$it" }.toJsonElement())
-            put("mangaId", mangaUrl)
-        }
-    }
-}
+    val id: Int,
+    @SerialName("issue_no") val number: Int,
+    val translator: String,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("image_list") val images: List<String>? = null,
+)
 
 // =========================== Filters ============================
 @Serializable

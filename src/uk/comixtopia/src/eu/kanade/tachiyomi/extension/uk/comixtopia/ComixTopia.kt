@@ -109,40 +109,29 @@ abstract class ComixTopia : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaUrl = manga.url
 
-        val mangaAsync = async {
-            if (fetchDetails) {
-                val url = apiUrl.toHttpUrl().newBuilder().apply {
-                    addPathSegment("comics")
-                    addQueryParameter("select", "slug,original_name,ukrainian_name,release_year,comic_status,age_limit,description,cover,authors:authors!inner(name),publishers:publishers!inner(name),genres:genres!inner(name),votes:votes!inner(rating)")
-                    addQueryParameter("slug", "eq.$mangaUrl")
-                }.build()
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("comics")
+            addQueryParameter(
+                "select",
+                "slug,original_name,ukrainian_name,release_year,comic_status,age_limit,description,cover," +
+                    "authors:authors!inner(name)," +
+                    "publishers:publishers!inner(name)," +
+                    "genres:genres!inner(name)," +
+                    "votes:votes!inner(rating)," +
+                    "issues:issues!inner(id,issue_no,translator,created_at,image_list,metadata:issues_metadata!inner(state))",
+            )
+            addQueryParameter("slug", "eq.$mangaUrl")
+            addQueryParameter("issues.metadata.state", "eq.approved")
+        }.build()
 
-                client.get(url, apiHeaders).parseAs<List<MangaFull>>().first().toSManga()
-            } else {
-                manga
-            }
-        }
+        val data = client.get(url, apiHeaders).parseAs<List<MangaFull>>().first()
+        val newManga = data.toSManga()
+        val newChapters = data.toSChapter(mangaUrl).asReversed()
 
-        val chaptersAsync = async {
-            if (fetchChapters) {
-                val chapterUrl = apiUrl.toHttpUrl().newBuilder().apply {
-                    addPathSegment("issues")
-                    addQueryParameter("select", "id,issue_no,translator,created_at,image_list,comic:comics!inner(slug),metadata:issues_metadata!inner(state)")
-                    addQueryParameter("comic.slug", "eq.$mangaUrl")
-                    addQueryParameter("metadata.state", "eq.approved")
-                    addQueryParameter("order", "issue_no.desc")
-                }.build()
-
-                client.get(chapterUrl, apiHeaders).parseAs<List<ChapterDto>>().map { it.toSChapter(mangaUrl) }
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(mangaAsync.await(), chaptersAsync.await())
+        return SMangaUpdate(newManga, newChapters)
     }
 
     // =========================== Pages ============================
