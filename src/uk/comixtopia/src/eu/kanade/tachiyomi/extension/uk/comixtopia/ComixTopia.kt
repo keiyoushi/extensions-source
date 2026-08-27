@@ -22,7 +22,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import kotlin.collections.isNotEmpty
 
 @Source
 abstract class ComixTopia : KeiSource() {
@@ -129,7 +128,9 @@ abstract class ComixTopia : KeiSource() {
 
         val data = client.get(url, apiHeaders).parseAs<List<MangaFull>>().first()
         val newManga = data.toSManga()
-        val newChapters = data.toSChapter(mangaUrl).asReversed()
+        val newChapters = data.toSChapter(mangaUrl).sortedWith(
+            compareByDescending<SChapter> { it.chapter_number }.thenByDescending { it.date_upload },
+        )
 
         return SMangaUpdate(newManga, newChapters)
     }

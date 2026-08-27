@@ -9,8 +9,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.Locale
-import kotlin.collections.map
-import kotlin.collections.orEmpty
 import kotlin.time.Instant
 
 private const val IMG_HOST = "https://comicbookstorage.fra1.cdn.digitaloceanspaces.com"
