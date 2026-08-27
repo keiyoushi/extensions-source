@@ -7,14 +7,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
-import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
-import okhttp3.FormBody
 import okhttp3.OkHttpClient
-import org.jsoup.nodes.Document
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -26,21 +23,7 @@ abstract class TruyenTuoiTho : Madara() {
 
     override val filterNonMangaItems = false
 
-    override val chapterMode = ChapterMode.MangaAjax
-
-    override suspend fun fetchChapters(mangaPath: String, id: String, mangaPage: Document?): List<SChapter> {
-        val normalizedMangaUrl = "$baseUrl${mangaPath.removeSuffix("/")}"
-        val chapterHeaders = xhrHeaders.newBuilder()
-            .set("Referer", "$normalizedMangaUrl/")
-            .set("Origin", baseUrl)
-            .build()
-        val document = client.post(
-            "$normalizedMangaUrl/ajax/chapters/?t=1",
-            chapterHeaders,
-            FormBody.Builder().build(),
-        ).asJsoup()
-        return parseChapterList(document, mangaPath)
-    }
+    override val chapterMode = ChapterMode.MangaAjaxPaginated
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
