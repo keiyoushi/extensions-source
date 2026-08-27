@@ -167,8 +167,9 @@ class Filters(
     private open class UriMultiSelectFilter(
         name: String,
         private val param: String,
-        vals: Array<Pair<String, String>>,
-        selectedValues: Set<String> = emptySet(),
+        private val vals: Array<Pair<String, String>>,
+        private val selectedValues: Set<String> = emptySet(),
+        private val onlyIfSome: Boolean = false,
     ) : Filter.Group<UriMultiSelectOption>(
         name,
         vals.map { (name, value) ->
@@ -178,6 +179,9 @@ class Filters(
         UriFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
             val checked = state.filter { it.state }
+            // Ignore when no explicit inclusion (default)
+            if (onlyIfSome && checked.size == vals.size) return
+
             checked.forEach {
                 builder.addQueryParameter(param, it.value)
             }
@@ -195,6 +199,7 @@ class Filters(
         "demographics[]",
         demographics,
         selectedValues,
+        true,
     ),
         PreferenceFilter
 
@@ -204,6 +209,7 @@ class Filters(
             "types[]",
             getTypes(),
             selectedValues,
+            true,
         ),
         PreferenceFilter
 
@@ -357,6 +363,7 @@ class Filters(
                     selected
                 }
                 val value = if (state!!.ascending) "asc" else "desc"
+
                 builder.addQueryParameter("order[$order]", value)
             }
         }
