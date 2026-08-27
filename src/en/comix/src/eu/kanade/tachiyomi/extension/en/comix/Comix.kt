@@ -912,9 +912,9 @@ abstract class Comix :
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_FETCH_CHAPTERS_UNTIL_KNOWN
             title = "Faster chapter list fetching"
-            summary = "Stops after the newest known chapter. Faster on long lists, but may miss " +
-                "chapters added below the latest known chapter (e.g. chapter 5.5 when chapter 150 " +
-                "is known). Disable to always fetch the complete list."
+            summary = "Enabled: Uses fewer requests, but may miss newly added older chapters " +
+                "(e.g. chapter 5.5 when the latest known chapter is 150).\n\n" +
+                "Disabled: Finds older chapter additions, but fetching large chapter lists is slower."
             setDefaultValue(true)
         }.let(screen::addPreference)
 
@@ -971,11 +971,9 @@ abstract class Comix :
         SwitchPreferenceCompat(screen.context).apply {
             key = DEDUPLICATE_CHAPTERS
             title = "Deduplicate Chapters"
-            summary = "Keep one upload for each exact chapter number. Comix-marked official and " +
-                "recognized official-group uploads are preferred, then the highest-voted and " +
-                "newest upload. Other scanlator uploads are hidden.\n\n" +
-                "After changing this setting or the scanlator blacklist, the next chapter refresh " +
-                "automatically fetches the complete list before fast fetching resumes."
+            summary = "Remove duplicate chapters from the chapter list.\n" +
+                "Official chapters (Comix-marked) are preferred, followed by the highest-voted or most recent.\n" +
+                "Warning: It can be slow on large lists."
             setDefaultValue(false)
         }.let(screen::addPreference)
 
