@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.witchscans
+package eu.kanade.tachiyomi.multisrc.vinetheme
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -14,6 +14,17 @@ import kotlin.time.Instant
 class BrowseDto(
     val initialSeries: List<MangaDto>,
     val initialHasMore: Boolean = false,
+)
+
+@Serializable
+class ApiSeriesResponse(
+    val data: List<MangaDto> = emptyList(),
+    val meta: ApiPagination? = null,
+)
+
+@Serializable
+class ApiPagination(
+    val hasMore: Boolean = false,
 )
 
 @Serializable
@@ -52,9 +63,18 @@ class MangaDto(
     val coverUrl: String? = null,
     val slug: String = "",
     val status: String = "",
+    val type: String = "",
+    val origin: String = "",
+    val rating: Double = 0.0,
+    val isHot: Boolean = false,
+    val isMature: Boolean = false,
+    val salePercent: Int? = null,
+    val originalTitle: String? = null,
+    val aliases: List<String> = emptyList(),
     val description: String? = null,
     val genres: List<GenreDto> = emptyList(),
     val team: TeamDto? = null,
+    val similarSeries: List<MangaDto> = emptyList(),
 ) {
     fun toSManga(baseUrl: String): SManga = toSManga(baseUrl, SManga.create())
 
@@ -63,12 +83,41 @@ class MangaDto(
         thumbnail_url = coverUrl?.let { it.toAbsoluteUrl(baseUrl) }
         url = id
         memo = buildJsonObject {
+            put("id", id)
             put("slug", slug)
         }
         status = this@MangaDto.status.toSMangaStatus()
         author = team?.name
-        genre = genres.joinToString { it.displayName }
-        description = this@MangaDto.description
+        genre = buildList {
+            type.takeIf { it.isNotBlank() }?.let(::add)
+            origin.takeIf { it.isNotBlank() }?.let(::add)
+            if (isMature) add("Mature")
+            addAll(genres.map { it.displayName })
+        }.distinct().joinToString()
+        description = buildString {
+            this@MangaDto.description?.let(::append)
+            val info = buildList {
+                rating.takeIf { it > 0 }?.let { add("Rating: $it") }
+                type.takeIf { it.isNotBlank() }?.let { add("Type: $it") }
+                origin.takeIf { it.isNotBlank() }?.let { add("Origin: $it") }
+                if (isHot) add("Featured")
+                if (isMature) add("Mature")
+                salePercent?.takeIf { it > 0 }?.let { add("Sale: $it%") }
+            }
+            if (info.isNotEmpty()) {
+                if (isNotEmpty()) append("\n\n")
+                append(info.joinToString("\n"))
+            }
+            val altTitles = (listOfNotNull(originalTitle) + aliases)
+                .map(String::trim)
+                .filter { it.isNotEmpty() && !it.equals(title, ignoreCase = true) }
+                .distinct()
+            if (altTitles.isNotEmpty()) {
+                if (isNotEmpty()) append("\n\n")
+                append("Alternative titles: ")
+                append(altTitles.joinToString())
+            }
+        }.ifEmpty { null }
     }
 }
 
@@ -98,20 +147,24 @@ class TeamDto(
 @Serializable
 class ChapterDto(
     val id: String,
-    val number: Int,
+    val number: Double,
     val title: String? = null,
     val publishedAt: String? = null,
     @SerialName("isLocked")
     val isLocked: Boolean = false,
 ) {
     fun toSChapter(manga: SManga): SChapter = SChapter.create().apply {
-        name = if (title.isNullOrBlank() || title == number.toString()) "Chapter $number" else title
+        val numberString = number.toString().removeSuffix(".0")
+        name = if (title.isNullOrBlank() || title == numberString) "Chapter $numberString" else title
         if (isLocked) name = "\uD83D\uDD12 $name"
         date_upload = publishedAt?.let { Instant.tryParse(it) } ?: 0L
         chapter_number = number.toFloat()
         val mangaSlug = manga.memo["slug"]?.string.orEmpty()
-        url = "comic/$mangaSlug/chapter/$number"
+        url = id
         memo = buildJsonObject {
+            put("id", id)
+            put("slug", mangaSlug)
+            put("number", numberString)
             put("isLocked", isLocked)
         }
     }
