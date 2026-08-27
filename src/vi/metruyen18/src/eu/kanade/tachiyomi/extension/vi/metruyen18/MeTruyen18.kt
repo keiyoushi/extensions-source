@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.metruyen18
 
 import eu.kanade.tachiyomi.multisrc.madara.GenreRoute
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -19,11 +19,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class MeTruyen18 : Madara() {
+abstract class MeTruyen18 : MadaraNoAjax() {
     override val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
-    override val chapterMode = ChapterMode.MangaPage
     override val supportsRelatedMangas = false
-    override val mangaSubString = "danh-sach"
     override val genreDirectory = "the-loai"
     override fun chapterListSelector() = "#chapterlist li.a-h"
     override val chapterDateSelector = ".chapter-time"
