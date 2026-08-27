@@ -69,7 +69,8 @@ class MangaFull(
         }
     }
 
-    fun toSChapters(mangaUrl: String) = issues?.filter { it.metadata?.state == "approved" }?.map { chapter ->
+    fun toSChapters(mangaUrl: String) = issues?.mapNotNull { chapter ->
+        if (chapter.metadata?.state != "approved") return@mapNotNull null
         SChapter.create().apply {
             url = chapter.id.toString()
             name = "Розділ #${chapter.number}"
