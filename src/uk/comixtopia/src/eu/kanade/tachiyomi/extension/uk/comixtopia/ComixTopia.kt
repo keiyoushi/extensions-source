@@ -27,7 +27,7 @@ import kotlin.collections.isNotEmpty
 @Source
 abstract class ComixTopia : KeiSource() {
 
-    private val apiUrl by lazy { "https://supa.${baseUrl.toHttpUrl().host}/rest/v1" }
+    private val apiUrl get() = "https://supa.${baseUrl.toHttpUrl().host}/rest/v1"
 
     private val apiHeaders: Headers get() = headersBuilder()
         .set("apikey", API_KEY)
