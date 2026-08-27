@@ -5,17 +5,19 @@ plugins {
 }
 
 keiyoushi {
-    name = "Mgread.io"
-    versionCode = 2
+    name = "TeleTruyen"
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
-        lang = "en"
-        baseUrl = "https://mgread.io"
+        lang = "vi"
+        baseUrl {
+            custom("https://teletruyen.com")
+        }
     }
 
     deeplink {
-        path("/manga/..*")
+        path("/.*")
     }
 }
