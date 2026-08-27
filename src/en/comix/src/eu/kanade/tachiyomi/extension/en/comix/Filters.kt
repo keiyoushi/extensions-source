@@ -357,11 +357,7 @@ class Filters(
                     selected
                 }
                 val value = if (state!!.ascending) "asc" else "desc"
-                if (order == "relevance") {
-                    builder.addQueryParameter("sort", "relevance:$value")
-                } else {
-                    builder.addQueryParameter("order[$order]", value)
-                }
+                builder.addQueryParameter("order[$order]", value)
             }
         }
     }
