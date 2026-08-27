@@ -309,7 +309,11 @@ class Filters(
         override fun addToUri(builder: HttpUrl.Builder) {
             Filters.getContentRatingsUpTo(CONTENT_RATING_OPTIONS[state].second)
                 .takeIf { it.isNotEmpty() }
-                ?.let { builder.addQueryParameter("content_rating[]", it.joinToString(",")) }
+                ?.let { ratings ->
+                    ratings.map {
+                        builder.addQueryParameter("content_rating[]", it)
+                    }
+                }
         }
     }
 

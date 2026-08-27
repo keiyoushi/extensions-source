@@ -750,7 +750,7 @@ abstract class Comix :
         return runCatching {
             val entries = canonicalEntries(params)
             val query = entries.joinToString("&") { (name, value) ->
-                "$name=$value"
+                "$name=${value.trim()}"
             }
             val url = baseUrl.toHttpUrl().newBuilder()
                 .addPathSegments(path.trimStart('/'))
