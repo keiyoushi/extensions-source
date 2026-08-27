@@ -1,171 +1,88 @@
 package eu.kanade.tachiyomi.extension.zh.hikarinagi
 
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.getObject
+import keiyoushi.utils.getString
+import keiyoushi.utils.getStringOrNull
+import keiyoushi.utils.obj
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-
-// ---- /api/v3/mangas 列表 ----
-
-@Serializable
-class MangaListResponse(
-    val success: Boolean = true,
-    val data: MangaListData = MangaListData(),
-)
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlin.collections.firstOrNull
+import kotlin.time.Instant
 
 @Serializable
-class MangaListData(
-    val items: List<MangaItem> = emptyList(),
-)
+class MangaData(
+    val manga: MangaItem,
+    val chapters: List<ChapterItem>,
+    private val people: JsonArray,
+    // private val producers: JsonArray,
+    private val tags: JsonArray,
+) {
+    fun people() = people.associate {
+        with(it.obj) {
+            val role = getString("role")
+            val value = with(getObject("person")) { getStringOrNull("trans_name") ?: getString("name") }
+            role to value
+        }
+    }.takeIf { it.isNotEmpty() }
+
+    // fun producers() = producers.map { it.obj.getObject("producer").getString("name") }
+
+    fun tags() = tags.map { it.obj.getObject("tag").getString("name") }
+}
 
 @Serializable
 class MangaItem(
-    val id: Long,
-    val name: String = "",
-    @SerialName("name_cn") val nameCn: String? = null,
-    @SerialName("other_names") val otherNames: List<String>? = null,
-    val covers: List<MangaCover> = emptyList(),
-    val nsfw: Boolean = false,
-    @SerialName("serial_status") val serialStatus: String? = null,
-    @SerialName("publication_date") val publicationDate: String? = null,
-    @SerialName("latest_chapter_at") val latestChapterAt: String? = null,
-    val summary: String? = null,
-    @SerialName("summary_cn") val summaryCn: String? = null,
-    @SerialName("origin_country") val originCountry: String? = null,
-    @SerialName("reading_mode") val readingMode: String? = null,
-    @SerialName("publication_end_date") val publicationEndDate: String? = null,
-)
-
-@Serializable
-class MangaCover(
-    val media: Media? = null,
-)
-
-@Serializable
-class Media(
-    val id: Long = 0,
-    val src: String = "",
-    val width: Int? = null,
-    val height: Int? = null,
-)
-
-// ---- /api/v3/mangas/{id} 详情 ----
-
-@Serializable
-class MangaDetailResponse(
-    val success: Boolean = true,
-    val data: MangaItem? = null,
-)
-
-// ---- /api/v3/mangas/{id}/chapters ----
-
-@Serializable
-class ChaptersResponse(
-    val success: Boolean = true,
-    val data: List<ChapterItem> = emptyList(),
-)
+    val id: Int,
+    val name: String,
+    @SerialName("name_cn") val nameCn: String?,
+    private val covers: JsonArray,
+    // val status: String?,
+    @SerialName("serial_status") val serialStatus: String?,
+    @SerialName("latest_chapter_at") val latestChapterAt: String?,
+    val summary: String?,
+) {
+    fun toSManga(people: Map<String, String>? = null, tags: List<String>? = null) = SManga.create().apply {
+        url = id.toString()
+        title = nameCn ?: name
+        author = people?.getOrDefault("ORIGINAL_CREATOR", people["AUTHOR"])
+        artist = people?.get("ART")
+        thumbnail_url = covers.firstOrNull()?.obj?.getObject("media")?.getString("src")?.let {
+            if (it.startsWith("http")) it else "${Hikarinagi.IMAGE_BASR_URL}/$it"
+        }
+        description = summary
+        genre = tags?.joinToString()
+        status = when (serialStatus) {
+            "SERIALIZING" -> SManga.ONGOING
+            "FINISHED" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+        memo = buildJsonObject { put("updateAt", Instant.tryParse(latestChapterAt)) }
+    }
+}
 
 @Serializable
 class ChapterItem(
-    val id: Long,
-    val chapterType: String? = null,
-    @SerialName("chapter_number") val chapterNumber: String? = null,
-    @SerialName("volume_number") val volumeNumber: String? = null,
-    @SerialName("sort_key") val sortKey: Double? = null,
-    val name: String = "",
-    @SerialName("name_cn") val nameCn: String? = null,
-    @SerialName("publication_date") val publicationDate: String? = null,
-    @SerialName("page_count") val pageCount: Int? = null,
-    val cover: Media? = null,
-    @SerialName("sources_count") val sourcesCount: Int? = null,
-    val readable: Boolean = true,
-)
+    val id: Int,
+    val name: String,
+    @SerialName("page_count") val size: Int,
+    @SerialName("chapter_type") val chapterType: String, // SERIALIZATION - 连载 | EXTRA - 番外
+    // @SerialName("chapter_number") val chapterNumber: String?,
+    // @SerialName("volume_number") val volumeNumber: String?,
+    // val readable: Boolean,
+) {
+    fun String.toFullWidthDigits() = this.map { if (it in '0'..'9') (it.code + 0xFEE0).toChar() else it }.joinToString("")
 
-// ---- /api/v3/mangas/{id}/tags ----
-
-@Serializable
-class TagsResponse(
-    val success: Boolean = true,
-    val data: List<TagItem> = emptyList(),
-)
-
-@Serializable
-class TagItem(
-    val likes: Long = 0,
-    val tag: Tag? = null,
-)
-
-@Serializable
-class Tag(
-    val id: Long = 0,
-    val name: String = "",
-)
-
-// ---- 详情页 SSR payload（Nuxt 3 __NUXT_DATA__）----
-
-@Serializable
-class DetailPayload(
-    val manga: MangaItem? = null,
-    val chapters: List<ChapterItem>? = null,
-    val people: List<Staff>? = null,
-    val producers: List<Staff>? = null,
-    val tags: List<TagItem>? = null,
-)
-
-@Serializable
-class Staff(
-    val role: String? = null,
-    val note: String? = null,
-    val person: Person? = null,
-    val producer: Person? = null,
-)
-
-@Serializable
-class Person(
-    val id: Long = 0,
-    val name: String = "",
-    @SerialName("trans_name") val transName: String? = null,
-)
-
-// ---- /api/pages/mangas/browse 列表/搜索 ----
-
-@Serializable
-class BrowseResponse(
-    val list: BrowseList = BrowseList(),
-    val state: BrowseState = BrowseState(),
-)
-
-@Serializable
-class BrowseList(
-    val items: List<BrowseItem> = emptyList(),
-    val meta: BrowseMeta = BrowseMeta(),
-)
-
-@Serializable
-class BrowseMeta(
-    val page: Int = 1,
-    @SerialName("page_size") val pageSize: Int = 24,
-    @SerialName("total_items") val totalItems: Long = 0,
-    @SerialName("item_count") val itemCount: Int = 0,
-    @SerialName("total_pages") val totalPages: Int = 0,
-)
-
-@Serializable
-class BrowseItem(
-    val id: Long,
-    val name: String = "",
-    @SerialName("name_cn") val nameCn: String? = null,
-    val covers: List<MangaCover> = emptyList(),
-    val nsfw: Boolean = false,
-    @SerialName("serial_status") val serialStatus: String? = null,
-    @SerialName("publication_date") val publicationDate: String? = null,
-    @SerialName("latest_chapter_at") val latestChapterAt: String? = null,
-)
-
-@Serializable
-class BrowseState(
-    val page: Int = 1,
-    @SerialName("page_size") val pageSize: Int = 24,
-    val search: String? = null,
-    @SerialName("sort_field") val sortField: String? = null,
-    @SerialName("sort_order") val sortOrder: String? = null,
-    val genre: List<String> = emptyList(),
-)
+    fun toSChapter(cid: String, timestamp: Long) = SChapter.create().apply {
+        url = id.toString()
+        name = if (chapterType == "EXTRA") this@ChapterItem.name.toFullWidthDigits() else this@ChapterItem.name
+        scanlator = "${size}P"
+        date_upload = timestamp
+        memo = buildJsonObject { put("cid", cid) }
+    }
+}

@@ -1,29 +1,21 @@
 package eu.kanade.tachiyomi.extension.zh.hikarinagi
 
 import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.source.model.FilterList
 
 /** 排序方式：与站点「漫画图鉴」下拉选项一致。 */
 private val SORTS = listOf(
-    SortPair("最新更新", "latest_chapter_at:desc"),
-    SortPair("最热", "heat:desc"),
-    SortPair("最新收录", "created_at:desc"),
-    SortPair("开始时间 新→旧", "publication_date:desc"),
+    SortPair("更新时间", "latest_chapter_at:desc"),
+    SortPair("热度", "heat:desc"),
+    SortPair("收录时间", "created_at:desc"),
+    SortPair("发布时间", "publication_date:desc"),
     SortPair("开始时间 旧→新", "publication_date:asc"),
     SortPair("标题", "title:asc"),
 )
 
 private data class SortPair(val name: String, val value: String)
 
-open class SortFilter(
-    select: Filter.Sort.Selection? = null,
-) : Filter.Sort(
-    "排序",
-    SORTS.map { it.name }.toTypedArray(),
-    select,
-) {
-    val activeValue: String?
-        get() = SORTS.getOrNull(state?.index ?: 0)?.value
+open class SortFilter(select: Selection? = null) : Filter.Sort("排序", SORTS.map { it.name }.toTypedArray(), select) {
+    val activeValue = SORTS.getOrNull(state?.index ?: 0)?.value
 }
 
 /** 类型：站点「漫画图鉴」的 genre 参数。 */
