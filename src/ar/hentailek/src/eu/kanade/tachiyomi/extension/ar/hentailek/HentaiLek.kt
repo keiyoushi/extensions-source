@@ -1,0 +1,164 @@
+package eu.kanade.tachiyomi.extension.ar.hentailek
+
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
+import okhttp3.Response
+import org.jsoup.nodes.Element
+import java.util.Calendar
+
+@Source
+abstract class HentaiLek : HttpSource() {
+    override val supportsLatest = true
+
+    // ============================== Popular ===============================
+    override fun popularMangaRequest(page: Int) = GET(listingUrl("popular", page), headers)
+
+    override fun popularMangaParse(response: Response): MangasPage = parseListing(response)
+
+    // =============================== Latest ===============================
+    override fun latestUpdatesRequest(page: Int) = GET(listingUrl("latest", page), headers)
+
+    override fun latestUpdatesParse(response: Response): MangasPage = parseListing(response)
+
+    // =============================== Search ===============================
+    // The site's search does not paginate ("page" returns 0 results beyond 1).
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$baseUrl/search".toHttpUrl().newBuilder()
+            .addQueryParameter("q", query.trim())
+            .build()
+        return GET(url, headers)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage = parseListing(response)
+
+    private fun listingUrl(mode: String, page: Int): String = "$baseUrl/library".toHttpUrl().newBuilder()
+        .apply {
+            if (mode == "popular") addQueryParameter("sort", "popular")
+            if (page > 1) addQueryParameter("page", page.toString())
+        }
+        .build().toString()
+
+    private fun parseListing(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("a[href*='/manga/']:not([href*='/chapter-'])")
+            .mapNotNull { it.toManga() }
+        val current = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
+        val hasNextPage = document.select("a[href*='page=']")
+            .any { link ->
+                val page = link.attr("href").substringAfter("page=", "").substringBefore("&").toIntOrNull()
+                page != null && page == current + 1
+            }
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    private fun Element.toManga(): SManga? {
+        val link = absUrl("href")
+        if (link.isBlank() || !link.contains("/manga/") || link.contains("/chapter-")) return null
+        val img = selectFirst("img[src]")
+        val title = selectFirst("h3")?.text()
+            ?: attr("aria-label").ifBlank { img?.attr("alt") }
+            ?: return null
+        return SManga.create().apply {
+            setUrlWithoutDomain(link)
+            this.title = title.trim()
+            thumbnail_url = img?.attr("abs:src")
+        }
+    }
+
+    // =========================== Manga Details ============================
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        val content = document.selectFirst("main, .content") ?: document
+        return SManga.create().apply {
+            title = content.selectFirst("h1")?.text() ?: ""
+            thumbnail_url = content.selectFirst("img[src*='cover']")?.attr("abs:src")
+                ?: document.selectFirst("meta[property='og:image']")?.attr("content")
+            status = infoValue(document, "الحالة").parseStatus()
+            author = infoValue(document, "المؤلف")
+            artist = infoValue(document, "الرسم")
+            genre = infoValue(document, "التصنيفات")
+            description = document.select("p.border-t.text-sm.leading-relaxed")
+                .maxByOrNull { it.text().length }
+                ?.text()
+            initialized = true
+        }
+    }
+
+    private fun infoValue(document: org.jsoup.nodes.Document, key: String): String? = document.selectFirst("dt:contains($key) + dd")?.text()?.trim()?.ifBlank { null }
+
+    private fun String?.parseStatus() = when {
+        this == null -> SManga.UNKNOWN
+        contains("مكتمل", ignoreCase = true) -> SManga.COMPLETED
+        contains("مستمر", ignoreCase = true) -> SManga.ONGOING
+        contains("متوقف", ignoreCase = true) -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
+    }
+
+    // ============================== Chapters ==============================
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("a[href*='/chapter-'][class*='group']")
+            .mapNotNull { it.toChapter() }
+    }
+
+    private fun Element.toChapter(): SChapter? {
+        val url = absUrl("href")
+        if (url.isBlank()) return null
+        return SChapter.create().apply {
+            setUrlWithoutDomain(url)
+            name = select("span:containsOwn(الفصل)").firstOrNull()
+                ?.ownText()
+                ?.trim()
+                ?.ifBlank { null }
+                ?: url.substringAfterLast("/")
+            date_upload = selectFirst("span.text-xs.text-muted")?.text().parseArabicDate()
+        }
+    }
+
+    // =============================== Pages ================================
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select(".reader-page img[src], .reader-page img[data-src], .on-canvas img")
+            .mapIndexedNotNull { index, item ->
+                val imageUrl = item.attr("abs:src").ifBlank { item.attr("abs:data-src") }
+                if (imageUrl.isBlank()) null else Page(index = index, imageUrl = imageUrl)
+            }
+    }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    override fun getFilterList(): FilterList = FilterList()
+
+    // ========================= Date helpers ===============================
+    private val arabicMonths = mapOf(
+        "يناير" to 1, "فبراير" to 2, "مارس" to 3, "أبريل" to 4,
+        "مايو" to 5, "يونيو" to 6, "يوليو" to 7, "أغسطس" to 8,
+        "سبتمبر" to 9, "أكتوبر" to 10, "نوفمبر" to 11, "ديسمبر" to 12,
+    )
+
+    private fun String?.parseArabicDate(): Long {
+        if (this.isNullOrBlank()) return 0L
+        val parts = split(Regex("\\s+"))
+        if (parts.size < 3) return 0L
+        val day = parts[0].toIntOrNull() ?: return 0L
+        val month = arabicMonths[parts[1].trim()] ?: return 0L
+        val year = parts[2].toIntOrNull() ?: return 0L
+        return try {
+            Calendar.getInstance().apply {
+                set(year, month - 1, day, 0, 0, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+        } catch (_: Exception) {
+            0L
+        }
+    }
+}
