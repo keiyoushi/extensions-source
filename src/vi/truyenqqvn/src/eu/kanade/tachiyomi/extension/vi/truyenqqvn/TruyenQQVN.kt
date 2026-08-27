@@ -13,6 +13,8 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -89,9 +91,11 @@ abstract class TruyenQQVN : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
 
-        val slug = url.pathSegments.singleOrNull()
-            ?.takeIf { it.isNotEmpty() && it !in RESERVED_PATHS }
-            ?: return null
+        // Series live at /<slug> and their chapters at /<slug>/chapter-<n>; both resolve to the series.
+        val segments = url.pathSegments.filter { it.isNotEmpty() }
+        if (segments.size > 2) return null
+
+        val slug = segments.firstOrNull()?.takeIf { it !in RESERVED_PATHS } ?: return null
         val path = "/$slug"
 
         return parseMangaDetails(client.get("$baseUrl$path").asJsoup()).apply {
@@ -120,7 +124,8 @@ abstract class TruyenQQVN : KeiSource() {
         title = document.selectFirst("h1[itemprop=name]")!!.text()
         thumbnail_url = document.selectFirst(".book-info .poster img")?.absUrl("src")
         description = document.selectFirst("[itemprop=description]")?.text()
-        author = document.metaResult("Tác giả")?.text()?.takeIf { it.isNotEmpty() && it != PLACEHOLDER_VALUE }
+        // The site writes this placeholder into the author field when it has no real value.
+        author = document.metaResult("Tác giả")?.text()?.takeIf { it.isNotEmpty() && it != "Đang cập nhật" }
         genre = document.select(".book-meta a[href*=/the-loai/]").joinToString { it.text() }
         status = when (document.selectFirst(".label-status")?.text()?.lowercase()) {
             "đang ra" -> SManga.ONGOING
@@ -182,16 +187,40 @@ abstract class TruyenQQVN : KeiSource() {
 
     // ============================== Filters ===============================
 
-    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        Filter.Header("Bộ lọc bị bỏ qua khi tìm kiếm bằng tên"),
-        ListFilter(),
-        GenreFilter(),
-    )
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement = client.get(baseUrl).asJsoup()
+        .select("a[href*=/the-loai/]")
+        .mapNotNull { element ->
+            val slug = element.absUrl("href").toHttpUrlOrNull()
+                ?.pathSegments?.getOrNull(1)
+                ?.takeIf { it.isNotEmpty() }
+                ?: return@mapNotNull null
+            val name = element.text().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+
+            Genre(name, slug)
+        }
+        .distinctBy { it.slug }
+        .sortedBy { it.name }
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<List<Genre>>().orEmpty()
+
+        return FilterList(
+            buildList {
+                add(Filter.Header("Bộ lọc bị bỏ qua khi tìm kiếm bằng tên"))
+                add(ListFilter())
+                if (genres.isNotEmpty()) {
+                    add(GenreFilter(genres))
+                }
+            },
+        )
+    }
 
     companion object {
         private const val POPULAR_PATH = "/truyen-hot"
         private const val LATEST_PATH = "/truyen-moi"
-        private const val PLACEHOLDER_VALUE = "Đang cập nhật"
 
         private val RESERVED_PATHS = setOf("tim-kiem", "truyen-hot", "truyen-moi", "truyen-full", "the-loai")
         private val TIME_ZONE: ZoneId = ZoneId.of("Asia/Ho_Chi_Minh")
