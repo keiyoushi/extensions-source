@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.os.Handler
 import android.os.Looper
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
@@ -20,6 +21,7 @@ object DleGuardResolver {
     private const val TIMEOUT_SECONDS = 30L
     private const val POLL_INTERVAL_MS = 250L
     private const val FAILURE_RETRY_DELAY_MS = 5_000L
+    private const val TACHIMANGA_PACKAGE = "app.tachimanga"
 
     private val htmlMediaType = "text/html; charset=UTF-8".toMediaType()
 
@@ -126,8 +128,12 @@ object DleGuardResolver {
                     if (!userAgent.isNullOrBlank()) userAgentString = userAgent
                 }
 
-                // runWebViewBlocking assigns a WebViewClient, which makes Tachimanga intercept
-                // the challenge requests instead of letting the WebView handle them.
+                // Android needs a client to keep guard redirects inside the WebView. Tachimanga
+                // intercepts the challenge requests whenever one is assigned.
+                if (applicationContext.packageName != TACHIMANGA_PACKAGE) {
+                    wv.webViewClient = WebViewClient()
+                }
+
                 val pollTask = object : Runnable {
                     override fun run() {
                         if (latch.count == 0L || call.isCanceled()) {
