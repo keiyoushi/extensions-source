@@ -45,8 +45,16 @@ abstract class KManga :
         addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
-            if (response.code == 400 && request.url.pathSegments.last().contains("viewer")) {
-                throw IOException("Log in via WebView and rent or purchase this chapter to read.")
+            if (response.code == 400) {
+                response.close()
+                val error = if (request.url.pathSegments.last().contains("viewer")) {
+                    "Log in via WebView and rent or purchase this chapter to read."
+                } else {
+                    reloadUserId = true
+                    "Open WebView and retry"
+                }
+
+                throw IOException(error)
             }
             response
         }
@@ -220,9 +228,10 @@ abstract class KManga :
     }
 
     private var userId: Int? = null
+    private var reloadUserId = false
 
     private suspend fun hashedReq(url: HttpUrl, body: FormBody? = null): Response {
-        if (userId == null) setUserId()
+        if (reloadUserId || userId == null) setUserId()
 
         val (birthday, expires) = getBirthdayCookie(url)
         val params = if (body != null) {
@@ -248,6 +257,7 @@ abstract class KManga :
     }
 
     private suspend fun setUserId() {
+        reloadUserId = false
         val account = getLocalStorage(baseUrl, "account")?.parseAs<LocalStorageAccount>()
         userId = if (account?.isLoggedIn == true) {
             account.checkedTicketExpiredList?.firstOrNull()?.userId ?: 0
