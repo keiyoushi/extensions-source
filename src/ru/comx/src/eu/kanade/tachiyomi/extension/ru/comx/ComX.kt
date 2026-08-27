@@ -181,7 +181,7 @@ abstract class ComX :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get("$baseUrl/${manga.url}", ensureSuccess = false).use { response ->
+        val doc = client.get(getMangaUrl(manga), ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 if (response.code == 403) {
                     throw Exception("Контент не доступен. Возможно может помочь авторизация через WebView")
