@@ -123,27 +123,11 @@ abstract class ComixTopia : KeiSource() {
                     "issues:issues!inner(id,issue_no,translator,created_at,image_list,metadata:issues_metadata!inner(state))",
             )
             addQueryParameter("slug", "eq.$mangaUrl")
-            addQueryParameter("issues.metadata.state", "eq.approved")
         }.build()
 
-        val data = client.get(url, apiHeaders).parseAs<List<MangaFull>>().ifEmpty {
-            // if it's empty - comix exists, but has no approved chapters
-            val url = apiUrl.toHttpUrl().newBuilder().apply {
-                addPathSegment("comics")
-                addQueryParameter(
-                    "select",
-                    "slug,original_name,ukrainian_name,release_year,comic_status,age_limit,description,cover," +
-                        "authors:authors!inner(name)," +
-                        "publishers:publishers!inner(name)," +
-                        "genres:genres!inner(name)," +
-                        "votes:votes!inner(rating)",
-                )
-                addQueryParameter("slug", "eq.$mangaUrl")
-            }.build()
-            client.get(url, apiHeaders).parseAs<List<MangaFull>>()
-        }.first()
+        val data = client.get(url, apiHeaders).parseAs<List<MangaFull>>().first()
         val newManga = data.toSManga()
-        val newChapters = data.toSChapter(mangaUrl).sortedWith(
+        val newChapters = data.toSChapters(mangaUrl).sortedWith(
             compareByDescending<SChapter> { it.chapter_number }.thenByDescending { it.date_upload },
         )
 

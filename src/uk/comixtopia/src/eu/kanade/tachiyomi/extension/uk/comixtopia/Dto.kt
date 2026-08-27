@@ -69,7 +69,7 @@ class MangaFull(
         }
     }
 
-    fun toSChapter(mangaUrl: String) = issues?.map { chapter ->
+    fun toSChapters(mangaUrl: String) = issues?.filter { it.metadata?.state == "approved" }?.map { chapter ->
         SChapter.create().apply {
             url = chapter.id.toString()
             name = "Розділ #${chapter.number}"
@@ -102,6 +102,12 @@ class ChapterDto(
     val translator: String,
     @SerialName("created_at") val createdAt: String,
     @SerialName("image_list") val images: List<String>? = null,
+    val metadata: MetadataDto? = null,
+)
+
+@Serializable
+class MetadataDto(
+    val state: String? = null,
 )
 
 // =========================== Filters ============================
