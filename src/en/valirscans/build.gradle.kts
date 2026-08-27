@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Valir Scans"
-    versionCode = 2
+    versionCode = 22
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "vinetheme"
