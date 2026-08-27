@@ -1,22 +1,17 @@
 package eu.kanade.tachiyomi.extension.pt.nebulosascan
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.madara.MadaraBase.ChapterMode
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class NebulosaScan : Madara() {
-    override val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.ROOT)
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(3, 1.seconds)
-        .build()
-
-    override val useNewChapterEndpoint = true
-
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override val chapterMode = ChapterMode.MangaAjax
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.ROOT)
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 1.seconds) { !it.encodedPath.startsWith("/wp-content/uploads/") }
 }

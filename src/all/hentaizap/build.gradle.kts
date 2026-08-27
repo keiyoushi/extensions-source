@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "HentaiZap"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "galleryadults"
 
     listOf("en", "ja", "es", "fr", "ko", "de", "ru", "all").forEach { language ->

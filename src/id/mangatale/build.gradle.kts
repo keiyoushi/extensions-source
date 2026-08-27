@@ -8,7 +8,7 @@ keiyoushi {
     name = "Ikiru"
     versionCode = 49
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "natsuid"
 
     source {

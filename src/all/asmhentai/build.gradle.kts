@@ -8,7 +8,7 @@ keiyoushi {
     name = "AsmHentai"
     versionCode = 2
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "galleryadults"
 
     listOf("en", "ja", "zh", "all").forEach { language ->

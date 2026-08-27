@@ -8,7 +8,7 @@ keiyoushi {
     name = "Webtoon Hatti"
     versionCode = 7
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "madara"
 
     source {

@@ -1,22 +1,15 @@
 package eu.kanade.tachiyomi.extension.all.manhwadashraw
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import keiyoushi.annotation.Source
-import okhttp3.Response
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class ManhwaDashRaw : Madara() {
-    override val dateFormat = SimpleDateFormat("dd/MM/yyy", Locale.ROOT)
-    override val useNewChapterEndpoint = true
+abstract class ManhwaDashRaw : MadaraNoAjax() {
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
 
     override val mangaDetailsSelectorStatus = "div.post-content_item:contains(Status) > div.summary-content"
     override val mangaDetailsSelectorDescription = "div.post-content_item:contains(Summary) div.summary-container"
     override val pageListParseSelector = "div.page-break img.wp-manga-chapter-img"
-
-    override fun latestUpdatesParse(response: Response): MangasPage = MangasPage(super.latestUpdatesParse(response).mangas, true)
-    override fun popularMangaParse(response: Response): MangasPage = MangasPage(super.popularMangaParse(response).mangas, true)
-    override fun searchMangaParse(response: Response): MangasPage = MangasPage(super.searchMangaParse(response).mangas, true)
 }
