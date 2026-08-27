@@ -114,8 +114,8 @@ class MangaDto(
                 .distinct()
             if (altTitles.isNotEmpty()) {
                 if (isNotEmpty()) append("\n\n")
-                append("Alternative titles: ")
-                append(altTitles.joinToString())
+                append("Alternative titles: \n")
+                append(altTitles.joinToString("\n") { "- $it" })
             }
         }.ifEmpty { null }
     }
@@ -157,7 +157,7 @@ class ChapterDto(
         val numberString = number.toString().removeSuffix(".0")
         name = if (title.isNullOrBlank() || title == numberString) "Chapter $numberString" else title
         if (isLocked) name = "\uD83D\uDD12 $name"
-        date_upload = publishedAt?.let { Instant.tryParse(it) } ?: 0L
+        date_upload = Instant.tryParse(publishedAt)
         chapter_number = number.toFloat()
         val mangaSlug = manga.memo["slug"]?.string.orEmpty()
         url = id
