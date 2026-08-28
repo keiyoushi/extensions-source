@@ -71,16 +71,14 @@ class ChapterItem(
     val id: Int,
     val name: String,
     @SerialName("page_count") val size: Int,
-    @SerialName("chapter_type") val chapterType: String, // SERIALIZATION - 连载 | EXTRA - 番外
+    // @SerialName("chapter_type") val chapterType: String, // SERIALIZATION - 连载 | EXTRA - 番外
     // @SerialName("chapter_number") val chapterNumber: String?,
     // @SerialName("volume_number") val volumeNumber: String?,
     // val readable: Boolean,
 ) {
-    fun String.toFullWidthDigits() = this.map { if (it in '0'..'9') (it.code + 0xFEE0).toChar() else it }.joinToString("")
-
     fun toSChapter(cid: String, timestamp: Long) = SChapter.create().apply {
         url = id.toString()
-        name = if (chapterType == "EXTRA") this@ChapterItem.name.toFullWidthDigits() else this@ChapterItem.name
+        name = this@ChapterItem.name
         scanlator = "${size}P"
         date_upload = timestamp
         memo = buildJsonObject { put("cid", cid) }
