@@ -17,7 +17,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class MangaPdf : KeiSource() {
 
-    private val apiUrl = "https://api.coffeemanga.shop".toHttpUrl()
+    private val apiUrl get() = "https://api.coffeemanga.shop".toHttpUrl()
 
     private fun apiBuilder(): HttpUrl.Builder = apiUrl.newBuilder()
         .addPathSegment("api")
