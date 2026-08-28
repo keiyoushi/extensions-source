@@ -22,6 +22,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import okhttp3.FormBody
@@ -31,8 +32,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.LocalDate
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
@@ -181,7 +180,7 @@ abstract class ComX :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get("$baseUrl/${manga.url}", ensureSuccess = false).use { response ->
+        val doc = client.get(baseUrl + manga.url, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 if (response.code == 403) {
                     throw Exception("Контент не доступен. Возможно может помочь авторизация через WebView")
@@ -254,9 +253,10 @@ abstract class ComX :
     }
 
     // ============================== Manga Utilities ===============================
-    private fun Document.getPageListItem(label: String): String? = selectFirst(".page__list > li:has(> div:contains($label))")
-        ?.ownText()
-        ?.takeIf { it.isNotBlank() }
+    private fun Document.getPageListItem(label: String): String? = selectFirst(".page__list > li:has(> div:contains($label))")?.let { element ->
+        element.selectFirst("a")?.text() ?: element.ownText()
+    }?.takeIf { it.isNotBlank() }
+
     private fun parseStatus(element: String?): Int = when {
         element.isNullOrBlank() -> SManga.UNKNOWN
         element.contains("Продолжается") || element.contains(" из ") || element.contains("Онгоинг") -> SManga.ONGOING
@@ -291,9 +291,7 @@ abstract class ComX :
         return data.chapters.asReversed().map { chap ->
             SChapter.create().apply {
                 url = "/reader/${data.comicId}/${chap.id}"
-                date_upload = runCatching {
-                    LocalDate.parse(chap.date, dateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-                }.getOrDefault(0L)
+                date_upload = dateFormat.tryParseDate(chap.date)
 
                 val matchNumber = chapterNumberRegex.find(chap.title)?.groupValues[1]?.toFloatOrNull()
                 val anyNumber = chapterAnyNumberRegex.find(chap.title)?.groupValues[1]?.toFloatOrNull()
