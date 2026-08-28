@@ -8,13 +8,12 @@ keiyoushi {
     name = "Drake Scans"
     versionCode = 16
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "mangathemesia"
+    libVersion = "1.6"
+    theme = "vinetheme"
 
     source {
         lang = "en"
-        baseUrl = "https://drakecomic.org"
-        // madara -> mangathemesia
-        versionId = 2
+        baseUrl = "https://drakecomic.net"
+        versionId = 3
     }
 }
