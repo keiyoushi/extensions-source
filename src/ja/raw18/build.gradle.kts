@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Raw18"
-    versionCode = 8
+    versionCode = 9
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "wpcomics"
@@ -14,7 +14,7 @@ keiyoushi {
     source {
         lang = "ja"
         baseUrl {
-            custom("https://raw18.casa")
+            custom("https://raw18.quest")
         }
     }
 }

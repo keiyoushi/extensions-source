@@ -58,7 +58,7 @@ class MangaDto(
     val author: String? = null,
     val artist: String? = null,
     val alternativeNames: String? = null,
-    val categories: List<CategoryDto> = emptyList(),
+    val categories: List<String> = emptyList(),
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
         url = MangaUrl(slug, id).toJsonString()
@@ -71,14 +71,9 @@ class MangaDto(
         author = this@MangaDto.author
         artist = this@MangaDto.artist
         status = parseStatus(this@MangaDto.status)
-        genre = categories.joinToString { it.name }
+        genre = categories.joinToString()
     }
 }
-
-@Serializable
-class CategoryDto(
-    val name: String,
-)
 
 @Serializable
 class ChapterListDataDto(
