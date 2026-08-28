@@ -2,12 +2,11 @@ package eu.kanade.tachiyomi.extension.en.kmanga
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 private val chapterNameRegex = Regex("""(?i)(?:chapter|ch|episode|ep|第).?\s*(\d+(?:\.\d+)?)(?:\s*[(（](\d+)[)）])?""")
 private val splitChapterRegex = Regex("""(\d+(?:\.\d+)?)\s*[(（](\d+)[)）]""")
@@ -151,13 +150,13 @@ class Episode(
         }
 
         name = lock + parsedName
-        date_upload = dateFormat.tryParse(startTime)
+        date_upload = dateFormat.tryParseDateTime(startTime)
     }
 }
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {
-    timeZone = TimeZone.getTimeZone("America/Chicago")
-}
+private val dateFormat = DateTimeFormatter
+    .ofPattern("yyyy-MM-dd HH:mm:ss")
+    .withZone(ZoneId.of("America/Chicago"))
 
 // Viewer
 @Serializable
@@ -172,4 +171,15 @@ class ViewerApiResponse(
 class BirthdayCookie(
     val value: String,
     val expires: Long,
+)
+
+@Serializable
+class LocalStorageAccount(
+    val isLoggedIn: Boolean?,
+    val checkedTicketExpiredList: List<CheckedTicketExpired>?,
+)
+
+@Serializable
+class CheckedTicketExpired(
+    val userId: Int,
 )
