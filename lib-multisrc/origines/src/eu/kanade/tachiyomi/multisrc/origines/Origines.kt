@@ -223,7 +223,7 @@ abstract class Origines : KeiSource() {
             SChapter.create().apply {
                 url = link.attr("href").toChapterSlug()
                 name = element.selectFirst("span.ori-chl-nom")?.text() ?: link.text()
-                date_upload = parseChapterDate(element.selectFirst("span.ori-chl-date")?.text())
+                date_upload = parseChapterDate(element.selectFirst("span.ori-chl-date")?.attr("title"))
             }
         }
     }
