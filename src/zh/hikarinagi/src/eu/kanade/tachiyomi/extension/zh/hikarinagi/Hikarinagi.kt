@@ -29,22 +29,17 @@ abstract class Hikarinagi : KeiSource() {
 
     companion object {
         const val IMAGE_BASR_URL = "https://imagesp.yurari.moe"
+        val FILTER_PARAMS = arrayOf("sort", "region", "audience", "status", "decade", "magazine_id")
     }
 
-    // override fun OkHttpClient.Builder.configureClient() = apply {
-    //     rateLimit(4) { it.host == baseUrl.toHttpUrl().host }
-    //     rateLimit(4) { it.host == "images.yurari.moe" }
-    // }
+    private fun String?.ifNotBlank(action: (String) -> Unit) = this?.takeIf(String::isNotBlank)?.let(action)
 
     private fun browseUrl(page: Int, query: String?, filters: FilterList): HttpUrl {
         val url = "$baseUrl/api/pages/mangas/browse".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("page_size", "24")
-
-        query?.takeIf(String::isNotBlank)?.let { url.addQueryParameter("search", it) }
-        filters.filterIsInstance<SortFilter>().firstOrNull()?.activeValue?.let { url.addQueryParameter("sort", it) }
-        filters.filterIsInstance<GenreFilter>().firstOrNull()?.activeValue?.let { url.addQueryParameter("genre", it) }
-
+        query.ifNotBlank { url.addQueryParameter("search", it) }
+        filters.forEachIndexed { i, filter -> filter.toString().ifNotBlank { url.addQueryParameter(FILTER_PARAMS[i], it) } }
         return url.build()
     }
 
@@ -67,7 +62,14 @@ abstract class Hikarinagi : KeiSource() {
         return parseBrowse(response)
     }
 
-    override fun getFilterList(data: JsonElement?) = FilterList(SortFilter(), GenreFilter())
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        SortFilter(),
+        RegionFilter(),
+        AudienceFilter(),
+        StatusFilter(),
+        DecadeFilter(),
+        MagazineFilter(),
+    )
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val response = client.get(browseUrl(page, query, filters))
@@ -91,7 +93,8 @@ abstract class Hikarinagi : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$baseUrl/api/pages/mangas/reader/${chapter.memo.getString("cid")}/${chapter.url}")
+        val response = client.get("$baseUrl/api/pages/mangas/reader/${chapter.memo.getString("cid")}/${chapter.url}", ensureSuccess = false)
+        if (response.code == 401) throw Exception("请先在 WebView 中登录")
         val urls = response.parseAs<JsonObject>().getObject("manifest").getArray("pages").map { it.obj.getString("src") }
         return List(urls.size) { Page(it, imageUrl = urls[it]) }
     }
