@@ -8,11 +8,12 @@ keiyoushi {
     name = "WitchScans"
     versionCode = 0
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
-    theme = "mangathemesia"
+    libVersion = "1.6"
+    theme = "vinetheme"
 
     source {
         lang = "en"
-        baseUrl = "https://witchscans.com"
+        baseUrl = "https://witchtoons.net"
+        versionId = 2
     }
 }
