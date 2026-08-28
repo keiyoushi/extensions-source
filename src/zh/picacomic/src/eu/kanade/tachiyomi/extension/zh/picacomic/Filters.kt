@@ -21,12 +21,10 @@ internal class SortFilter :
         ),
     )
 
-internal class Category(name: String) : Filter.CheckBox(name)
-
 internal class CategoryFilter :
-    Filter.Group<Filter.CheckBox>(
+    UriPartFilter(
         "类型",
-        listOf(
+        listOf("全部" to "") + listOf(
             "大家都在看", "牛牛不哭", "那年今天", "官方都在看",
             "嗶咔漢化", "全彩", "長篇", "同人", "短篇", "圓神領域",
             "碧藍幻想", "CG雜圖", "純愛", "百合花園", "後宮閃光", "單行本", "姐姐系",
@@ -35,7 +33,7 @@ internal class CategoryFilter :
             "東方", "禁書目錄", "Cosplay",
             "英語 ENG", "生肉", "性轉換", "足の恋", "非人類",
             "耽美花園", "偽娘哲學", "扶他樂園", "重口地帶", "歐美", "WEBTOON",
-        ).map { Category(it) },
+        ).map { it to it },
     )
 
 internal class RankFilter :
