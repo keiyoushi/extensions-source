@@ -111,14 +111,14 @@ abstract class Picacomic :
     // Search
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         var sort: String? = null
-        var categories: List<String>? = null
+        var category: String? = null
         var rankPath: String? = null
 
         // parse filters
         for (filter in filters) {
             when (filter) {
                 is SortFilter -> sort = filter.toUriPart()
-                is CategoryFilter -> categories = filter.state.filter { it.state }.map { it.name }
+                is CategoryFilter -> category = filter.toUriPart()
                 is RankFilter -> rankPath = filter.toUriPart()
                 else -> {}
             }
@@ -129,10 +129,22 @@ abstract class Picacomic :
             return singlePageParse(client.get("$apiUrl$rankPath"))
         }
 
+        if (query.isEmpty()) {
+            val url = "$apiUrl/comics".toHttpUrl().newBuilder()
+                .addQueryParameter("page", page.toString())
+                .addQueryParameter("s", sort ?: "dd")
+                .apply {
+                    category?.takeIf(String::isNotEmpty)?.let { addQueryParameter("c", it) }
+                }
+                .build()
+
+            return parseSearchManga(client.get(url))
+        }
+
         // return comics from some search
         val url = "$apiUrl/comics/advanced-search?page=$page"
 
-        val body = PicaSearchPayload(query, sort ?: "dd", categories).toJsonString().toRequestBody()
+        val body = PicaSearchPayload(query, sort ?: "dd").toJsonString().toRequestBody()
 
         return parseSearchManga(client.post(url, body))
     }
@@ -360,6 +372,7 @@ abstract class Picacomic :
     }
 
     private suspend fun OkHttpClient.get(url: String) = get(url, picaHeaders(url))
+    private suspend fun OkHttpClient.get(url: HttpUrl) = get(url, picaHeaders(url.toString()))
     private suspend fun OkHttpClient.post(url: String, body: RequestBody) = post(url, picaHeaders(url, "POST"), body)
 
     private fun Request.applyToken() = newBuilder().header("Authorization", token).build()
