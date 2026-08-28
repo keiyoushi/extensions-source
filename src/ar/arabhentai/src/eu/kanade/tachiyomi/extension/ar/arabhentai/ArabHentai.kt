@@ -1,22 +1,24 @@
 package eu.kanade.tachiyomi.extension.ar.arabhentai
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
-import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 @Source
-abstract class ArabHentai : HttpSource() {
+abstract class ArabHentai : KeiSource() {
     override val supportsLatest = true
 
     // The site sorts by popularity for a time period via the "sort" parameter.
@@ -24,17 +26,19 @@ abstract class ArabHentai : HttpSource() {
     private val latestSort = "13"
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int) = GET(listingUrl(popularSort, page), headers)
-
-    override fun popularMangaParse(response: Response): MangasPage = parseListing(response)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get(listingUrl(popularSort, page).toHttpUrl()).asJsoup()
+        return parseListing(document)
+    }
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int) = GET(listingUrl(latestSort, page), headers)
-
-    override fun latestUpdatesParse(response: Response): MangasPage = parseListing(response)
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val document = client.get(listingUrl(latestSort, page).toHttpUrl()).asJsoup()
+        return parseListing(document)
+    }
 
     // =============================== Search ===============================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/search/manga".toHttpUrl().newBuilder()
             .addQueryParameter("keyword", query.trim())
             .apply {
@@ -45,10 +49,8 @@ abstract class ArabHentai : HttpSource() {
                 statusFilter?.state?.filter { it.state }?.forEach { addQueryParameter("status", it.uriPart) }
             }
             .build()
-        return GET(url, headers)
+        return parseListing(client.get(url).asJsoup())
     }
-
-    override fun searchMangaParse(response: Response): MangasPage = parseListing(response)
 
     private fun listingUrl(sort: String, page: Int): String = "$baseUrl/search/manga".toHttpUrl().newBuilder()
         .addQueryParameter("status", "-1")
@@ -56,8 +58,7 @@ abstract class ArabHentai : HttpSource() {
         .apply { if (page > 1) addQueryParameter("page", page.toString()) }
         .build().toString()
 
-    private fun parseListing(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun parseListing(document: Document): MangasPage {
         val mangas = document.select("a[href*='/manga/']:not([href*='/chapter-'])")
             .mapNotNull { it.toManga() }
         // A "›" (next) pagination arrow link exists when there is a following page.
@@ -80,23 +81,37 @@ abstract class ArabHentai : HttpSource() {
         }
     }
 
-    // =========================== Manga Details ============================
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        return SManga.create().apply {
-            title = document.selectFirst("h1.font-haffer, h1")?.text() ?: ""
-            thumbnail_url = document.selectFirst("img[src*='mangaonl.com'], img[src*='covers/']")
-                ?.attr("abs:src")
-                ?: document.selectFirst("meta[property='og:image']")?.attr("content")
-            status = document.selectFirst("p:contains(الحالة)")?.selectFirst("span[class]")?.text()
-                .parseStatus()
-            author = document.selectFirst("p:contains(المؤلف)")?.selectFirst("span[class]")?.text()
-                ?.trim()?.ifBlank { null }
-            genre = document.select("a[href*='genre=']").joinToString { it.text().trim() }
-            description = document.selectFirst("article[class*='bg-background-detail'], .description, .synopsis, .about")
-                ?.text()
-            initialized = true
-        }
+    // =============================== Details ==============================
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val document = client.get(url).asJsoup()
+        return parseMangaDetails(document)
+    }
+
+    // ===================== Details + Chapters (update) ====================
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga).toHttpUrl()).asJsoup()
+        return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
+    }
+
+    private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
+        title = document.selectFirst("h1.font-haffer, h1")?.text() ?: ""
+        thumbnail_url = document.selectFirst("img[src*='mangaonl.com'], img[src*='covers/']")
+            ?.attr("abs:src")
+            ?: document.selectFirst("meta[property='og:image']")?.attr("content")
+        status = document.selectFirst("p:contains(الحالة)")?.selectFirst("span[class]")?.text()
+            .parseStatus()
+        author = document.selectFirst("p:contains(المؤلف)")?.selectFirst("span[class]")?.text()
+            ?.trim()?.ifBlank { null }
+        genre = document.select("a[href*='genre=']").joinToString { it.text().trim() }
+        description = document.selectFirst(
+            "article[class*='bg-background-detail'], .description, .synopsis, .about",
+        )?.text()
+        initialized = true
     }
 
     private fun String?.parseStatus() = when {
@@ -108,8 +123,7 @@ abstract class ArabHentai : HttpSource() {
     }
 
     // ============================== Chapters ==============================
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    private fun parseChapterList(document: Document): List<SChapter> {
         // Exclude the "قراءة من البداية" and "قراءة الأحدث" buttons, which also link
         // to /chapter- pages but carry a rounded-2xl class, unlike real chapter entries.
         return document.select("a[href*='/chapter-']:not([class*='rounded-2xl'])").mapNotNull { it.toChapter() }
@@ -128,8 +142,8 @@ abstract class ArabHentai : HttpSource() {
     }
 
     // =============================== Pages ================================
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter).toHttpUrl()).asJsoup()
         return document.select("img[alt^='Page'], img[src*='mangaonl.com']")
             .mapIndexedNotNull { index, item ->
                 val imageUrl = item.attr("abs:src").ifBlank { item.attr("abs:data-original") }
@@ -137,10 +151,8 @@ abstract class ArabHentai : HttpSource() {
             }
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
     // =============================== Filters ==============================
-    override fun getFilterList(): FilterList = FilterList(
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         GenreFilter(),
         StatusFilter(),
     )
