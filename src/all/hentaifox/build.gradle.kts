@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "HentaiFox"
-    versionCode = 7
+    versionCode = 8
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
     theme = "galleryadults"
 
     listOf("en", "ja", "zh", "ko", "all").forEach { language ->

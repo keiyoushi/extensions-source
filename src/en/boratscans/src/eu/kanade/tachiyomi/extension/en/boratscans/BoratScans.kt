@@ -5,6 +5,5 @@ import keiyoushi.annotation.Source
 
 @Source
 abstract class BoratScans : Madara() {
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-    override val useNewChapterEndpoint = true
+    override val chapterMode = ChapterMode.MangaAjax
 }

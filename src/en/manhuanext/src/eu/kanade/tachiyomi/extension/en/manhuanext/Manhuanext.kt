@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.en.manhuanext
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.madara.MadaraBase.ChapterMode
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
@@ -11,7 +12,7 @@ import keiyoushi.utils.getPreferencesLazy
 abstract class Manhuanext :
     Madara(),
     ConfigurableSource {
-    override val useNewChapterEndpoint = true
+    override val chapterMode = ChapterMode.MangaAjax
     private val preferences by getPreferencesLazy()
     private val hideChapters = if (preferences.getBoolean(HIDE_PREMIUM, true)) {
         "li.wp-manga-chapter:not(.premium-block)"

@@ -7,5 +7,5 @@ import okhttp3.OkHttpClient
 
 @Source
 abstract class Natsu : NatsuId() {
-    override fun OkHttpClient.Builder.customizeClient() = rateLimit(4).build().newBuilder()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(4)
 }

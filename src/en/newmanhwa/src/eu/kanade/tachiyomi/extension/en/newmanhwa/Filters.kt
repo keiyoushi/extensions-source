@@ -1,20 +1,14 @@
 package eu.kanade.tachiyomi.extension.en.newmanhwa
 
 import eu.kanade.tachiyomi.source.model.Filter
+import keiyoushi.utils.parseAs
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 class StatusFilter :
     Filter.Select<String>(
         "Status",
         arrayOf("All", "Ongoing", "Completed", "Hiatus"),
-    )
-
-class GenreFilter :
-    Filter.Select<String>(
-        "Genre",
-        arrayOf(
-            "All", "Action", "Drama", "Ecchi", "Fantasy", "Harem", "Historical",
-            "Martial Arts", "Mature", "Mystery", "Psychological", "Romance", "School Life",
-        ),
     )
 
 class SortFilter :
@@ -23,3 +17,30 @@ class SortFilter :
         arrayOf("Updated", "Popular", "Most Chapters", "Newest", "A-Z", "Z-A"),
         0,
     )
+
+class Genre(val name: String, val value: String) {
+    override fun toString(): String = name
+}
+
+class GenreFilter(genres: List<Genre>) :
+    Filter.Select<Genre>(
+        "Genre",
+        (listOf(Genre("All", "")) + genres).toTypedArray(),
+    )
+
+@Serializable
+data class GenreDto(val name: String, val slug: String)
+
+@Serializable
+data class GenreResponseDto(val genres: List<GenreDto> = emptyList())
+
+fun getGenreList(data: JsonElement? = null): List<Genre> {
+    val items = data
+        ?.let { runCatching { it.parseAs<GenreResponseDto>() }.getOrNull() }
+        ?.genres
+        .orEmpty()
+
+    return items.map { item ->
+        Genre(name = item.name, value = item.slug)
+    }
+}
