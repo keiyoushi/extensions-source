@@ -266,7 +266,7 @@ abstract class Comix :
             val values = url.queryParameterValues(name).filterNotNull()
             if (values.isNotEmpty()) {
                 put(
-                    name.removeSuffix("[]"),
+                    name,
                     if (name == "content_rating") values.flatMap { it.split(',') } else values,
                 )
             }
@@ -750,7 +750,7 @@ abstract class Comix :
         return runCatching {
             val entries = canonicalEntries(params)
             val query = entries.joinToString("&") { (name, value) ->
-                "$name=${encodeURIComponent(value)}"
+                "$name=${value.trim()}"
             }
             val url = baseUrl.toHttpUrl().newBuilder()
                 .addPathSegments(path.trimStart('/'))
