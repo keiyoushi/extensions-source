@@ -191,7 +191,7 @@ abstract class MadaraBase : KeiSource() {
 
     protected open fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga = SManga.create().apply {
         url = preserveUrl?.takeIf { !it.all(Char::isDigit) } ?: id
-        title = document.selectFirst(mangaDetailsSelectorTitle)!!.text()
+        title = document.selectFirst(mangaDetailsSelectorTitle)!!.ownText()
         author = document.select(mangaDetailsSelectorAuthor).eachText().filterNot(::isUpdating).joinToString().ifBlank { null }
         artist = document.select(mangaDetailsSelectorArtist).eachText().filterNot(::isUpdating).joinToString().ifBlank { null }
         description = document.selectFirst(mangaDetailsSelectorDescription)?.let { element ->
