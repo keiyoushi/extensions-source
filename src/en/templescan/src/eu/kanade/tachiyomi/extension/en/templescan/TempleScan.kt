@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.templescan
 
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -9,58 +8,52 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.network.get
 import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
-import okhttp3.Request
-import okhttp3.Response
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 import org.jsoup.safety.Safelist
-import rx.Observable
 import kotlin.math.min
 
 @Source
 abstract class TempleScan :
-    HttpSource(),
+    KeiSource(),
     ConfigurableSource {
 
-    override val supportsLatest = true
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        rateLimit(1)
+    }
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("referer", "$baseUrl/")
-        .set("origin", baseUrl)
-        .setRandomUserAgent()
+    override fun Headers.Builder.configureHeaders() = apply {
+        setRandomUserAgent()
+    }
 
     private val rscHeaders = headersBuilder()
         .set("rsc", "1")
         .build()
 
-    override val client = network.client.newBuilder()
-        .rateLimit(1)
-        .build()
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", OrderFilter.POPULAR)
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = fetchSearchManga(page, "", OrderFilter.POPULAR)
-
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = fetchSearchManga(page, "", OrderFilter.LATEST)
+    override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", OrderFilter.LATEST)
 
     private lateinit var seriesCache: List<BrowseSeries>
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (page == 1) {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .execute()
-                .use(::parseSearchResponse)
+            val response = client.get("$baseUrl/comics", rscHeaders)
+            seriesCache = response.extractNextJs<List<BrowseSeries>>()!!
         }
-        return Observable.just(parseDirectory(page, query, filters))
-    }
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/comics", rscHeaders)
-
-    private fun parseSearchResponse(response: Response) {
-        seriesCache = response.extractNextJs<List<BrowseSeries>>()!!
+        return parseDirectory(page, query, filters)
     }
 
     private fun parseDirectory(page: Int, query: String, filters: FilterList): MangasPage {
@@ -92,13 +85,39 @@ abstract class TempleScan :
         )
     }
 
-    override fun getFilterList() = getFilters()
+    override fun getFilterList(data: JsonElement?) = getFilters()
 
-    // =========================== Manga Details ============================
-    override fun mangaDetailsParse(response: Response): SManga {
-        val details = response.extractNextJs<SeriesDetails>()!!
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "comic") {
+            return null
+        }
 
-        return SManga.create().apply {
+        val mangaUrl = "/comic/${url.pathSegments[1]}"
+        val manga = SManga.create().apply {
+            this.url = mangaUrl
+        }
+
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+            .manga
+            .apply {
+                initialized = true
+                this.url = mangaUrl
+            }
+    }
+
+    // =========================== Manga Updates ============================
+
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val details = client.get(baseUrl + manga.url, rscHeaders).extractNextJs<SeriesDetails>()!!
+
+        val manga = SManga.create().apply {
             url = "/comic/${details.slug}"
             title = details.title
             thumbnail_url = details.thumbnail
@@ -138,25 +157,13 @@ abstract class TempleScan :
                 }
             }.filterNotNull().joinToString()
         }
-    }
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
-
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", rscHeaders)
-
-    // ============================== Chapters ==============================
-    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", rscHeaders)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val chapters = response.extractNextJs<ChapterList>() ?: return emptyList()
-        val mangaSlug = response.request.url.pathSegments.last()
-
-        return chapters.seasons.flatMap { season ->
+        val chapters = details.seasons?.flatMap { season ->
             season.chapters.filter {
                 it.price == 0
             }.map { chapter ->
                 SChapter.create().apply {
-                    url = "/comic/$mangaSlug/${chapter.slug}"
+                    url = "/comic/${manga.url.substringAfterLast('/')}/${chapter.slug}"
                     name = buildString {
                         append(chapter.name)
                         if (!chapter.title.isNullOrBlank()) {
@@ -166,14 +173,15 @@ abstract class TempleScan :
                     date_upload = chapter.created
                 }
             }
-        }
+        } ?: chapters
+
+        return SMangaUpdate(manga, chapters)
     }
 
     // =============================== Pages ================================
-    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}", rscHeaders)
 
-    override fun pageListParse(response: Response): List<Page> {
-        val data = response.extractNextJs<PagesList>() ?: return emptyList()
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val data = client.get(baseUrl + chapter.url, rscHeaders).extractNextJs<PagesList>() ?: return emptyList()
         return data.pages.mapIndexed { idx, url ->
             Page(idx, imageUrl = url)
         }
@@ -184,13 +192,6 @@ abstract class TempleScan :
     }
 
     private inline fun <reified T : Filter<*>> FilterList.get(): T? = filterIsInstance<T>().firstOrNull()
-
-    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     companion object {
         private val TEXT_TAGS_REGEX = """(?i)#(\w+)""".toRegex()
