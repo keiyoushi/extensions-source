@@ -16,7 +16,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import java.net.URLEncoder
 import java.security.SecureRandom
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -123,9 +122,12 @@ abstract class HentaiCB : Madara() {
         return bytes.joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
 
-    private fun buildApiUrl(token: String, clientId: String): String = "$baseUrl$PAGES_URL" +
-        "?token=" + URLEncoder.encode(token, "UTF-8") +
-        "&cid=" + clientId
+    private fun buildApiUrl(token: String, clientId: String): String = "$baseUrl$PAGES_URL".toHttpUrl()
+        .newBuilder()
+        .addQueryParameter("token", token)
+        .addQueryParameter("cid", clientId)
+        .build()
+        .toString()
 
     @Serializable
     private class ReaderPageResponse(
