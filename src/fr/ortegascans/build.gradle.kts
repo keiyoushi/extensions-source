@@ -6,9 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Ortega Scans"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "fr"
