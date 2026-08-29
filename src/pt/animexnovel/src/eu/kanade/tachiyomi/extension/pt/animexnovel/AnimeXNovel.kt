@@ -18,6 +18,7 @@ import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -91,6 +92,19 @@ abstract class AnimeXNovel : KeiSource() {
         }
 
         return MangasPage(mangas, hasNextPage = hasNextPage)
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.filter { it.isNotEmpty() }.size != 2 || !baseUrl.endsWith(url.host, ignoreCase = true)) {
+            return null
+        }
+        val manga = SManga.create().apply { setUrlWithoutDomain(url.toString()) }
+        return fetchMangaUpdate(
+            manga,
+            emptyList(),
+            fetchDetails = true,
+            fetchChapters = false,
+        ).manga
     }
 
     override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
