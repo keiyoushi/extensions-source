@@ -161,10 +161,7 @@ abstract class Keyoapp :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val doc = client.get(getMangaUrl(manga)).asJsoup()
-        return SMangaUpdate(
-            manga = if (fetchDetails) mangaDetailsParse(doc) else manga,
-            chapters = if (fetchChapters) chapterListParse(doc) else chapters,
-        )
+        return SMangaUpdate(mangaDetailsParse(doc), chapterListParse(doc))
     }
 
     protected open val descriptionSelector: String = "#expand_content p"
