@@ -389,19 +389,17 @@ abstract class Comix :
         }
 
         val deduplicateChapters = preferences.deduplicateChapters()
+        val scanlatorBlacklist = preferences.scanlatorBlacklist()
+        val blacklistSignature = scanlatorBlacklist.sorted().joinToString(",")
         val storedDeduplicateChapters = manga.memo[CHAPTER_LIST_DEDUPLICATED_MEMO]?.booleanOrNull
+        val storedBlacklistSignature = manga.memo[CHAPTER_LIST_BLACKLIST_MEMO]?.string
         val fetchUntilKnown = fetchChapters &&
             preferences.fetchChaptersUntilKnown() &&
-            storedDeduplicateChapters == deduplicateChapters
+            storedDeduplicateChapters == deduplicateChapters &&
+            storedBlacklistSignature == blacklistSignature
         val latestChapterId = chapters.firstOrNull()
             ?.takeIf { fetchUntilKnown }
             ?.chapterId()
-
-        fun mergeChapters(fetched: List<SChapter>) = if (fetchUntilKnown) {
-            (fetched + chapters).distinctBy(SChapter::url)
-        } else {
-            fetched
-        }
 
         val nativeChapters = if (fetchChapters && cipher != null) {
             async { getNativeChapterList(manga, latestChapterId) }
@@ -413,15 +411,22 @@ abstract class Comix :
         val updatedChapters = if (fetchChapters) {
             val fetched = nativeChapters?.await()
                 ?: getWebViewChapterList(manga, getDocument(), latestChapterId)
-            mergeChapters(fetched)
+            val candidates = if (fetchUntilKnown) fetched + chapters else fetched
+            selectChapters(candidates, deduplicateChapters, scanlatorBlacklist)
         } else {
             chapters
         }
         val chapterListMode = if (fetchChapters) deduplicateChapters else storedDeduplicateChapters
-        if (chapterListMode != null) {
+        val chapterListBlacklist = if (fetchChapters) {
+            blacklistSignature
+        } else {
+            storedBlacklistSignature
+        }
+        if (chapterListMode != null && chapterListBlacklist != null) {
             updatedManga.memo = buildJsonObject {
                 updatedManga.memo.forEach { (key, value) -> put(key, value) }
                 put(CHAPTER_LIST_DEDUPLICATED_MEMO, chapterListMode)
+                put(CHAPTER_LIST_BLACKLIST_MEMO, chapterListBlacklist)
             }
         }
         SMangaUpdate(updatedManga, updatedChapters)
@@ -551,68 +556,71 @@ abstract class Comix :
             },
         )
 
-        return buildChapters(payload.parseAs(), mangaSlug)
+        return payload.parseAs<List<Chapter>>().map { it.toSChapter(mangaSlug) }
     }
 
-    private fun buildChapters(allChapters: List<Chapter>, mangaSlug: String): List<SChapter> {
-        val blacklist = preferences.scanlatorBlacklist()
-        val filteredChapters = if (blacklist.isNotEmpty()) {
-            allChapters.filter { ch ->
-                val scanlatorName = when {
-                    ch.group != null -> ch.group.name
-                    ch.isOfficial -> "Official"
-                    else -> "Unknown"
-                }
-                val nameNormalized = scanlatorName.trim().lowercase()
-                val idStr = ch.group?.id?.toString()
-
-                nameNormalized !in blacklist && idStr !in blacklist
-            }
+    private fun selectChapters(
+        allChapters: List<SChapter>,
+        shouldDeduplicate: Boolean,
+        scanlatorBlacklist: Set<String>,
+    ): List<SChapter> {
+        val uniqueChapters = allChapters.distinctBy(SChapter::url)
+        val filteredChapters = if (scanlatorBlacklist.isEmpty()) {
+            uniqueChapters
         } else {
-            allChapters
+            uniqueChapters.filter { chapter ->
+                chapter.scanlator.orEmpty().trim().lowercase() !in scanlatorBlacklist &&
+                    chapter.groupId()?.toString() !in scanlatorBlacklist
+            }
         }
 
-        val finalChapters: List<Chapter> = if (preferences.deduplicateChapters()) {
-            val chapterMap = LinkedHashMap<Number, Chapter>()
+        val finalChapters = if (shouldDeduplicate) {
+            val chapterMap = LinkedHashMap<Float, SChapter>()
             deduplicateChapters(chapterMap, filteredChapters)
             chapterMap.values.toList()
         } else {
             filteredChapters
         }
 
-        return finalChapters.map { it.toSChapter(mangaSlug) }
+        return finalChapters.sortedByDescending(SChapter::chapter_number)
     }
 
     private fun deduplicateChapters(
-        chapterMap: LinkedHashMap<Number, Chapter>,
-        items: List<Chapter>,
+        chapterMap: LinkedHashMap<Float, SChapter>,
+        items: List<SChapter>,
     ) {
         for (ch in items) {
-            val key = ch.number
+            val key = ch.chapter_number
             val current = chapterMap[key]
             if (current == null) {
                 chapterMap[key] = ch
             } else {
-                val newIsOfficial = ch.isOfficial
-                val currentIsOfficial = current.isOfficial
-                val newIsGroup10702 = ch.group?.id == 10702
-                val currentIsGroup10702 = current.group?.id == 10702
+                val newIsOfficial = ch.isOfficial()
+                val currentIsOfficial = current.isOfficial()
+                val newIsOfficialGroup = ch.groupId() == OFFICIAL_GROUP_ID
+                val currentIsOfficialGroup = current.groupId() == OFFICIAL_GROUP_ID
 
                 val better = when {
                     newIsOfficial && !currentIsOfficial -> true
                     !newIsOfficial && currentIsOfficial -> false
-                    newIsGroup10702 && !currentIsGroup10702 -> true
-                    !newIsGroup10702 && currentIsGroup10702 -> false
+                    newIsOfficialGroup && !currentIsOfficialGroup -> true
+                    !newIsOfficialGroup && currentIsOfficialGroup -> false
                     else -> when {
-                        ch.votes > current.votes -> true
-                        ch.votes < current.votes -> false
-                        else -> ch.id > current.id
+                        ch.votes() > current.votes() -> true
+                        ch.votes() < current.votes() -> false
+                        else -> (ch.chapterId() ?: 0) > (current.chapterId() ?: 0)
                     }
                 }
                 if (better) chapterMap[key] = ch
             }
         }
     }
+
+    private fun SChapter.votes(): Int = memo[CHAPTER_VOTES_MEMO]?.int ?: 0
+
+    private fun SChapter.isOfficial(): Boolean = memo[CHAPTER_OFFICIAL_MEMO]?.booleanOrNull == true
+
+    private fun SChapter.groupId(): Int? = memo[CHAPTER_GROUP_ID_MEMO]?.int
 
     private suspend fun getNativeChapterList(manga: SManga, latestChapterId: Int?): List<SChapter>? {
         if (cipher == null) return null
@@ -634,7 +642,7 @@ abstract class Comix :
             if (reachedKnown || !response.result.hasNextPage() || response.result.items.isEmpty()) break
             page++
         }
-        return buildChapters(chapters, mangaSlug)
+        return chapters.map { it.toSChapter(mangaSlug) }
     }
 
     // V3 grid-scramble pages must NOT send Origin — the server withholds X-Scramble-Seed when
@@ -1074,6 +1082,7 @@ abstract class Comix :
         private const val WEBVIEW_TIMEOUT_SECONDS = 120L
         private const val SCRIPT_RETRY_INTERVAL_MS = 100L
         private const val MAX_CHAPTER_PAGES = 200
+        private const val OFFICIAL_GROUP_ID = 10702
         private const val HEX = "0123456789ABCDEF"
         private const val URI_COMPONENT_SAFE_CHARS = "-_.!~*'()"
         private const val TAG_ID_CACHE_SIZE = 50
