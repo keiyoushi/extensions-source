@@ -15,22 +15,21 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.util.Calendar
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 @Source
 abstract class HentaiLek : KeiSource() {
-    override val supportsLatest = true
-
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get(listingUrl("popular", page).toHttpUrl()).asJsoup()
-        return parseListing(document)
+        return parseListing(document, page)
     }
 
     // =============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val document = client.get(listingUrl("latest", page).toHttpUrl()).asJsoup()
-        return parseListing(document)
+        return parseListing(document, page)
     }
 
     // =============================== Search ===============================
@@ -39,7 +38,7 @@ abstract class HentaiLek : KeiSource() {
         val url = "$baseUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("q", query.trim())
             .build()
-        return parseListing(client.get(url).asJsoup())
+        return parseListing(client.get(url).asJsoup(), page)
     }
 
     private fun listingUrl(mode: String, page: Int): String = "$baseUrl/library".toHttpUrl().newBuilder()
@@ -49,14 +48,13 @@ abstract class HentaiLek : KeiSource() {
         }
         .build().toString()
 
-    private fun parseListing(document: Document): MangasPage {
+    private fun parseListing(document: Document, page: Int): MangasPage {
         val mangas = document.select("a[href*='/manga/']:not([href*='/chapter-'])")
             .mapNotNull { it.toManga() }
-        val current = document.location().substringAfter("page=", "").substringBefore("&").toIntOrNull() ?: 1
         val hasNextPage = document.select("a[href*='page=']")
             .any { link ->
-                val page = link.attr("href").substringAfter("page=", "").substringBefore("&").toIntOrNull()
-                page != null && page == current + 1
+                val linkPage = link.attr("href").substringAfter("page=", "").substringBefore("&").toIntOrNull()
+                linkPage != null && linkPage == page + 1
             }
         return MangasPage(mangas, hasNextPage)
     }
@@ -77,6 +75,8 @@ abstract class HentaiLek : KeiSource() {
 
     // =============================== Details ==============================
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val urlString = url.toString()
+        if (!urlString.contains("/manga/") || urlString.contains("/chapter-")) return null
         val document = client.get(url).asJsoup()
         return parseMangaDetails(document)
     }
@@ -88,7 +88,7 @@ abstract class HentaiLek : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga).toHttpUrl()).asJsoup()
+        val document = client.get(getMangaUrl(manga)).asJsoup()
         return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
     }
 
@@ -135,7 +135,7 @@ abstract class HentaiLek : KeiSource() {
 
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter).toHttpUrl()).asJsoup()
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select(".reader-page img[src], .reader-page img[data-src], .on-canvas img")
             .mapIndexedNotNull { index, item ->
                 val imageUrl = item.attr("abs:src").ifBlank { item.attr("abs:data-src") }
@@ -161,10 +161,10 @@ abstract class HentaiLek : KeiSource() {
         val month = arabicMonths[parts[1].trim()] ?: return 0L
         val year = parts[2].toIntOrNull() ?: return 0L
         return try {
-            Calendar.getInstance().apply {
-                set(year, month - 1, day, 0, 0, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
+            LocalDate.of(year, month, day)
+                .atStartOfDay(ZoneOffset.UTC)
+                .toInstant()
+                .toEpochMilli()
         } catch (_: Exception) {
             0L
         }
