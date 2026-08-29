@@ -354,6 +354,7 @@ At least one `source {}` block is required for every extension.
 | `contentWarning` | Content safety classification. Must be set explicitly to one of `ContentWarning.SAFE`, `ContentWarning.MIXED`, or `ContentWarning.NSFW`.                                                                                                  |
 | `libVersion`     | The extension library version. All new extensions must set this to `"1.6"` and implement `KeiSource` (see [Extension main class](#extension-main-class)). `"1.4"` is legacy and only found in extensions that have not yet been migrated. |
 | `theme`          | Name of a multi-source theme from `lib-multisrc/` to inherit from (e.g. `"madara"`). When set, the extension's version code is `theme.baseVersionCode + versionCode`.                                                                     |
+| `pkgName`        | Overrides the application ID suffix (defaults to `<lang>.<source dir>` derived from the module path). Only needed when moving a module to a different directory - see [Moving a source to a different directory](#moving-a-source-to-a-different-directory). |
 | `source {}`      | Declares one source (or multiple, for multi-language or multi-mirror extensions) using KSP code generation. This block is mandatory. See [Source declaration](#source-declaration).                                                       |
 | `deeplink {}`    | Declares a URL deeplink intent filter. See [URL intent filter](#url-intent-filter).                                                                                                                                                       |
 
@@ -362,7 +363,7 @@ With the example used above, the version would be `1.6.1`.
 
 ### Source declaration
 
-Sources are registered through `source {}` blocks in `build.gradle.kts`, combined with the `@Source` annotation on your source class. The build system uses KSP to generate a subclass (`ExtensionGenerated`) that automatically injects `name`, `lang`, `id`, and `baseUrl`- you no longer need to declare them manually in Kotlin.
+Sources are registered through `source {}` blocks in `build.gradle.kts`, combined with the `@Source` annotation on your source class. The build system uses KSP to generate an entry-point subclass (`keiyoushi.source.Generated`) that automatically injects `name`, `lang`, `id`, and `baseUrl`- you no longer need to declare them manually in Kotlin.
 
 #### Annotate your source class
 
@@ -491,7 +492,7 @@ keiyoushi {
 }
 ```
 
-The generated `ExtensionGenerated` class implements `SourceFactory` automatically. You do not need to implement `SourceFactory` yourself.
+The generated `keiyoushi.source.Generated` class implements `SourceFactory` automatically. You do not need to implement `SourceFactory` yourself.
 
 ### Core dependencies
 
@@ -1046,7 +1047,7 @@ extending `HttpSource` directly are legacy (`libVersion = "1.4"`); do not use `H
 for new sources.
 
 > [!NOTE]
-> `className` is set to `ExtensionGenerated` automatically by the build system.
+> `className` is set to `keiyoushi.source.Generated` automatically by the build system.
 
 | Class              | Description                                                                                                                                                                                     |
 |--------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -1503,6 +1504,28 @@ The `id` also must be explicitly set to the old value if you change the `lang` a
 > If the source has also changed its theme, you can simply change
 > the `name` field in the source class and the Gradle file. By doing so,
 > a new `id` is generated and users will be forced to migrate.
+
+##### Moving a source to a different directory
+
+The application ID is derived from the module path (`src/<lang>/<name>` becomes
+`eu.kanade.tachiyomi.extension.<lang>.<name>`). When moving a source to a different directory
+(e.g. `en` to `all`, or a rename of the module directory), set `pkgName` in the new
+module's `build.gradle.kts` to the old path-derived suffix so the package name stays the same:
+
+```kotlin
+keiyoushi {
+    name = "New Name"
+    pkgName = "en.oldname" // <old lang>.<old dir name>
+    // ...
+}
+```
+
+The published APK keeps its old package name and file name, so users receive the move as a
+regular update instead of having to uninstall and reinstall. The Kotlin `package` declarations
+of the source code don't participate in the published identity - the entry point is generated
+at the fixed location `keiyoushi.source.Generated` - so they may be updated to match the new
+directory or left as-is. A PR check (`.github/scripts/audit-packages.py`) fails the build if
+two modules would produce the same application ID.
 
 ## Multi-source themes
 

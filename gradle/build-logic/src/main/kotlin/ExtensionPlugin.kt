@@ -22,7 +22,6 @@ import io.github.keiyoushi.gradle.internal.extensions.libs
 import io.github.keiyoushi.gradle.internal.extensions.plugins
 import io.github.keiyoushi.gradle.internal.toMetadata
 import io.github.keiyoushi.gradle.tasks.CreateExtensionJarTask
-import io.github.keiyoushi.gradle.tasks.GenerateKeepRulesTask
 import io.github.keiyoushi.gradle.tasks.GenerateManifestTask
 import io.github.keiyoushi.gradle.tasks.GenerateSourceInfoTask
 import io.github.keiyoushi.gradle.tasks.SignExtensionJarTask
@@ -30,7 +29,6 @@ import kotlinx.serialization.json.Json
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE
-import org.gradle.api.plugins.BasePluginExtension
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.create
 import org.gradle.kotlin.dsl.dependencies
@@ -51,14 +49,11 @@ class ExtensionPlugin : Plugin<Project> {
         }
 
         val keiyoushi = extensions.create<KeiyoushiExtension>("keiyoushi")
-        val applicationIdSuffix = "${project.parent?.name}.${project.name}"
+        val dirSuffix = "${project.parent?.name}.${project.name}"
+        val pkgName = keiyoushi.pkgName.orElse(dirSuffix)
 
         android {
             namespace = "eu.kanade.tachiyomi.extension"
-
-            defaultConfig {
-                this.applicationIdSuffix = applicationIdSuffix
-            }
 
             sourceSets {
                 named("main") {
@@ -178,22 +173,21 @@ class ExtensionPlugin : Plugin<Project> {
         androidComponents {
             val bootClasspath = sdkComponents.bootClasspath
 
+            finalizeDsl {
+                val suffix = pkgName.get()
+                check(APPLICATION_ID_SUFFIX_REGEX.matches(suffix)) {
+                    "pkgName '$suffix' is invalid. Expected dot-separated alphanumeric segments (e.g. '$dirSuffix')."
+                }
+                it.defaultConfig.applicationIdSuffix = suffix
+            }
+
             onVariants { variant ->
                 val variantName = variant.name.replaceFirstChar { it.uppercase() }
-
-                @Suppress("UnstableApiUsage")
-                val keepRules = variant.sources.keepRules
-                if (keepRules != null) {
-                    val task = tasks.register<GenerateKeepRulesTask>("generate${variantName}KeepRules") {
-                        this.applicationId.set(variant.applicationId)
-                    }
-                    keepRules.addGeneratedSourceDirectory(task) { it.outputDir }
-                }
 
                 variant.sources.manifests.addStaticManifestFile("AndroidManifest.xml")
                 variant.sources.manifests.addGeneratedManifestFile(manifestTask) { it.outputFile }
 
-                val filenameProvider = versionNameProvider.map { "tachiyomi-$applicationIdSuffix-v$it" }
+                val filenameProvider = versionNameProvider.map { "tachiyomi-${pkgName.get()}-v$it" }
 
                 variant.outputs.forEach { output ->
                     output.versionCode.set(versionCodeProvider)
@@ -274,7 +268,7 @@ class ExtensionPlugin : Plugin<Project> {
                 inputs.file(translationsFile)
             }
 
-            val packageName = "eu.kanade.tachiyomi.extension.$applicationIdSuffix"
+            val packageName = "eu.kanade.tachiyomi.extension.${pkgName.get()}"
             val sourceInfos = resolvedSources.map { source ->
                 SourceMetadata(
                     id = source.id,
@@ -291,7 +285,9 @@ class ExtensionPlugin : Plugin<Project> {
             val sourceInfoJsonProvider = versionCodeProvider.zip(versionNameProvider) { code, name ->
                 Json.encodeToString(
                     ExtensionMetadata(
-                        module = applicationIdSuffix,
+                        // Always the module directory (e.g. "en.example"), even when pkgName
+                        // is overridden - the publish pipeline derives the icon path from it.
+                        module = dirSuffix,
                         theme = keiyoushi.theme.orNull,
                         packageName = packageName,
                         name = extName,
@@ -315,6 +311,8 @@ class ExtensionPlugin : Plugin<Project> {
         }
     }
 }
+
+private val APPLICATION_ID_SUFFIX_REGEX = Regex("""^\w+(\.\w+)+$""")
 
 private fun computeSourceId(name: String, lang: String, versionId: Int = 1): Long {
     val key = "${name.lowercase()}/$lang/$versionId"

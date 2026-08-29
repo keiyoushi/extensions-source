@@ -34,6 +34,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Audit package names
+        run: |
+          python ./.github/scripts/audit-packages.py
+
       - id: generate-matrices
         name: Generate build matrices
         run: |
