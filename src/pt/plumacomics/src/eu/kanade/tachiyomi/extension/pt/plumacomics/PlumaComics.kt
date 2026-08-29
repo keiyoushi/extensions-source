@@ -58,7 +58,7 @@ abstract class PlumaComics : KeiSource() {
     override fun getMangaUrl(manga: SManga) = "$baseUrl/title/${manga.memo["slug"]!!.string}"
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.pathSize != 2 || !baseUrl.contains(url.host, ignoreCase = true)) {
+        if (url.pathSegments.filter(String::isNotEmpty).size != 2 || !baseUrl.endsWith(url.host, ignoreCase = true)) {
             return null
         }
 
