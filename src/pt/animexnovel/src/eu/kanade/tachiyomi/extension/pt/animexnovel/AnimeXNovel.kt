@@ -29,23 +29,23 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class AnimeXNovel : KeiSource() {
 
-    override val supportsLatest: Boolean = true
-
     override val supportsFilterFetching: Boolean = true
 
     override fun OkHttpClient.Builder.configureClient() = readTimeout(1.minutes)
         .callTimeout(1.minutes)
         .rateLimit(3, 1.seconds)
 
-    private val popularFilter = FilterList(
-        listOf(
-            BoxList("", supportsTypeSource.map { BoxValue("", it) }).apply {
-                state.forEach { it.state = true }
-            },
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(
+        page,
+        "",
+        FilterList(
+            listOf(
+                BoxList("", supportsTypeSource.map { BoxValue("", it) }).apply {
+                    state.forEach { it.state = true }
+                },
+            ),
         ),
     )
-
-    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", popularFilter)
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val mangas = client.get(baseUrl).asJsoup()
@@ -76,7 +76,7 @@ abstract class AnimeXNovel : KeiSource() {
                     .forEach { filter -> add("terms[]", filter.id) }
             }
             .build()
-        val response = client.post("$baseUrl/wp-admin/admin-ajax.php", headers, form)
+        val response = client.post("$baseUrl/wp-admin/admin-ajax.php", form)
 
         val mangas = response.asJsoup().select("a.axn-card").map(::mangaFromElement).toMutableList()
         val hasNextPage = mangas.isNotEmpty() && mangas.size > 1
@@ -95,14 +95,20 @@ abstract class AnimeXNovel : KeiSource() {
 
     override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()
-        val manga = document.selectFirst("#axn-data")!!.data()
-            .parseAs<MangaDto>()
-            .toSManga()
-            .apply {
-                setUrlWithoutDomain(document.location())
-            }
 
-        return SMangaUpdate(manga, getChapterList(document))
+        val mangaUpdate = when {
+            fetchDetails -> document.selectFirst("#axn-data")!!.data()
+                .parseAs<MangaDto>().toSManga().apply {
+                    setUrlWithoutDomain(document.location())
+                }
+            else -> manga
+        }
+        val chaptersUpdate = when {
+            fetchChapters -> getChapterList(document)
+            else -> chapters
+        }
+
+        return SMangaUpdate(mangaUpdate, chaptersUpdate)
     }
 
     override fun getChapterUrl(chapter: SChapter): String = chapter.memo["link"]!!.string
