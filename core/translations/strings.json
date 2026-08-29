@@ -23,6 +23,9 @@
   "ja": {
     "filterFetchHint": "「リセット」をタップしてフィルターを読み込む"
   },
+  "pt-BR": {
+    "filterFetchHint": "Toque em 'Redefinir' para carregar os filtros"
+  },
   "ru": {
     "mirrorTitle": "Домен",
     "customUrlTitle": "Домен",
