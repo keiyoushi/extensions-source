@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Comic Room Base"
     versionCode = 0
-    contentWarning = ContentWarning.MIXED
+    contentWarning = ContentWarning.SAFE
     libVersion = "1.4"
     theme = "comiciviewer"
 
