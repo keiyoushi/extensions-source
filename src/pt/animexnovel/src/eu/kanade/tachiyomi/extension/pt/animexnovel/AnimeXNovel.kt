@@ -95,7 +95,7 @@ abstract class AnimeXNovel : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.pathSegments.filter { it.isNotEmpty() }.size != 2 || !baseUrl.endsWith(url.host, ignoreCase = true)) {
+        if (url.pathSegments.filter(String::isNotEmpty).size != 2 || !baseUrl.endsWith(url.host, ignoreCase = true)) {
             return null
         }
         val manga = SManga.create().apply { setUrlWithoutDomain(url.toString()) }
