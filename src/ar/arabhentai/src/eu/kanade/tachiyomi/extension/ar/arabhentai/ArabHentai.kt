@@ -19,23 +19,17 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class ArabHentai : KeiSource() {
-    override val supportsLatest = true
-
     // The site sorts by popularity for a time period via the "sort" parameter.
     private val popularSort = "11"
     private val latestSort = "13"
 
     // ============================== Popular ===============================
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(listingUrl(popularSort, page).toHttpUrl()).asJsoup()
-        return parseListing(document)
-    }
+    override suspend fun getPopularManga(page: Int): MangasPage =
+        parseListing(client.get(listingUrl(popularSort, page).toHttpUrl()).asJsoup())
 
     // =============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get(listingUrl(latestSort, page).toHttpUrl()).asJsoup()
-        return parseListing(document)
-    }
+    override suspend fun getLatestUpdates(page: Int): MangasPage =
+        parseListing(client.get(listingUrl(latestSort, page).toHttpUrl()).asJsoup())
 
     // =============================== Search ===============================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -94,12 +88,12 @@ abstract class ArabHentai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga).toHttpUrl()).asJsoup()
+        val document = client.get(getMangaUrl(manga)).asJsoup()
         return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
     }
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h1.font-haffer, h1")?.text() ?: ""
+        title = document.selectFirst("h1.font-haffer, h1")!!.text()
         thumbnail_url = document.selectFirst("img[src*='mangaonl.com'], img[src*='covers/']")
             ?.attr("abs:src")
             ?: document.selectFirst("meta[property='og:image']")?.attr("content")
