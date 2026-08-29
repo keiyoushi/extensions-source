@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Pluma Comics"
-    versionCode = 50
+    versionCode = 51
     contentWarning = ContentWarning.SAFE
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "pt-BR"
         baseUrl = "https://plumacomics.cloud"
-        versionId = 5
+        versionId = 6
     }
 }

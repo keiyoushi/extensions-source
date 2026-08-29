@@ -2,11 +2,11 @@ package eu.kanade.tachiyomi.extension.pt.plumacomics
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-
-val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import java.time.format.DateTimeFormatter
 
 @Serializable
 class Mangas(
@@ -17,14 +17,24 @@ class Mangas(
 
 @Serializable
 class Manga(
+    val id: Long,
     val title: String,
     val slug: String,
-    val coverPath: String,
+    val status: String? = null,
+    val coverPath: String? = null,
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
         title = this@Manga.title
-        thumbnail_url = "$baseUrl/api/cover/${coverPath.trim('/')}"
-        url = "/series/$slug"
+        thumbnail_url = coverPath.takeUnless(String?::isNullOrBlank)?.let { "$baseUrl/api/cover/${it.trim('/')}" }
+        status = when (this@Manga.status?.lowercase()) {
+            "ongoing" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+        url = id.toString()
+        memo = buildJsonObject {
+            put("slug", slug)
+        }
     }
 }
 
@@ -47,8 +57,14 @@ class Chapter(
             append(title ?: "Capítulo ${number.toInt()}")
         }
         chapter_number = number
-        date_upload = publishedAt?.removePrefix("\$D")?.let { dateFormat.tryParse(it) } ?: 0L
-        url = "$id"
+        date_upload = dateFormat.tryParseDate(publishedAt)
+        url = id.toString()
+        memo = buildJsonObject {
+            put("id", id)
+        }
+    }
+    companion object {
+        val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSX")
     }
 }
 
