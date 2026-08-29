@@ -104,7 +104,7 @@ abstract class OrtegaScans :
 
         return section.select("a[href^=\"/serie/\"]").mapNotNull { element ->
             SManga.create().apply {
-                url = element.attr("href").removePrefix("/serie/")
+                url = element.absUrl("href").toHttpUrl().pathSegments[1]
                 title = element.selectFirst("h3")?.text() ?: return@mapNotNull null
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
