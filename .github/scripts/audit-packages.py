@@ -4,11 +4,12 @@ from pathlib import Path
 
 EXTENSION_PREFIX = "eu.kanade.tachiyomi.extension"
 PKG_NAME_REGEX = re.compile(r"""pkgName\s*=\s*["']([^"']+)["']""")
-SUFFIX_REGEX = re.compile(r"^[a-z0-9_]+(\.[a-z0-9_]+)+$")
+SUFFIX_REGEX = re.compile(r"^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$")
 
 
-def audit() -> list[str]:
+def audit() -> tuple[list[str], list[str]]:
     errors: list[str] = []
+    warnings: list[str] = []
     owners: dict[str, str] = {}
 
     build_files = sorted(Path("src").glob("*/*/build.gradle.kts"))
@@ -30,9 +31,16 @@ def audit() -> list[str]:
             if not SUFFIX_REGEX.match(suffix):
                 errors.append(
                     f"{build_file}: invalid pkgName '{suffix}' - expected "
-                    f"lowercase dot-separated segments (e.g. '{default}')"
+                    f"dot-separated alphanumeric segments (e.g. '{default}')"
                 )
                 continue
+
+        if suffix != suffix.lower():
+            warnings.append(
+                f"{build_file.parent.as_posix()}: suffix '{suffix}' contains "
+                f"uppercase characters - prefer renaming the module directory "
+                f"(keeping the package with pkgName) or a lowercase pkgName"
+            )
 
         if suffix in owners:
             errors.append(
@@ -42,11 +50,14 @@ def audit() -> list[str]:
         else:
             owners[suffix] = build_file.parent.as_posix()
 
-    return errors
+    return errors, warnings
 
 
 def main() -> None:
-    errors = audit()
+    errors, warnings = audit()
+
+    for warning in warnings:
+        print(f"warning: {warning}")
 
     if errors:
         for error in errors:

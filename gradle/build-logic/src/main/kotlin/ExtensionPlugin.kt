@@ -176,7 +176,7 @@ class ExtensionPlugin : Plugin<Project> {
             finalizeDsl {
                 val suffix = pkgName.get()
                 check(APPLICATION_ID_SUFFIX_REGEX.matches(suffix)) {
-                    "pkgName '$suffix' is invalid. Expected lowercase dot-separated segments (e.g. '$dirSuffix')."
+                    "pkgName '$suffix' is invalid. Expected dot-separated alphanumeric segments (e.g. '$dirSuffix')."
                 }
                 it.defaultConfig.applicationIdSuffix = suffix
             }
@@ -312,7 +312,7 @@ class ExtensionPlugin : Plugin<Project> {
     }
 }
 
-private val APPLICATION_ID_SUFFIX_REGEX = Regex("^[a-z0-9_]+(\\.[a-z0-9_]+)+$")
+private val APPLICATION_ID_SUFFIX_REGEX = Regex("^[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+$")
 
 private fun computeSourceId(name: String, lang: String, versionId: Int = 1): Long {
     val key = "${name.lowercase()}/$lang/$versionId"
