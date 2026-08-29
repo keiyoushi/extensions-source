@@ -127,7 +127,7 @@ abstract class AnimeXNovel : KeiSource() {
     }
 
     private fun Response.getChapterList(): List<SChapter> = parseAs<List<ChapterDto>>().map(ChapterDto::toSChapter)
-        .filter { it.name.contains(ChapterNameSuffixRegex) }
+        .filter { it.name.contains(chapterNameSuffixRegex) }
 
     private val pageContainerSelector = ".spice-block-img-gallery, .wp-block-gallery, .spnc-entry-content, .leitor-cascata"
 
@@ -188,6 +188,6 @@ abstract class AnimeXNovel : KeiSource() {
 
     companion object {
         val supportsTypeSource = setOf("Mangá", "Manhwa", "Manhua")
-        val ChapterNameSuffixRegex = """Cap.tulo""".toRegex(RegexOption.IGNORE_CASE)
+        val chapterNameSuffixRegex = """Cap.tulo""".toRegex(RegexOption.IGNORE_CASE)
     }
 }
