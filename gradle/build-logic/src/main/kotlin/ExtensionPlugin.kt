@@ -130,6 +130,12 @@ class ExtensionPlugin : Plugin<Project> {
             versionCodeProvider.map { "$libVersion.$it" }
         }
 
+        val androidVersionCodeProvider = keiyoushi.libVersion.flatMap { libVersion ->
+            versionCodeProvider.map { versionCode ->
+                libVersion.split(".").joinToString("") { it.padStart(2, '0') }.toInt().times(1000) + versionCode
+            }
+        }
+
         val themeDeeplinks = themeExtension
             .flatMap { it.deeplinks }
             .orElse(emptyList())
@@ -190,7 +196,7 @@ class ExtensionPlugin : Plugin<Project> {
                 val filenameProvider = versionNameProvider.map { "tachiyomi-${pkgName.get()}-v$it" }
 
                 variant.outputs.forEach { output ->
-                    output.versionCode.set(versionCodeProvider)
+                    output.versionCode.set(androidVersionCodeProvider)
                     output.versionName.set(versionNameProvider)
                     @Suppress("UnstableApiUsage")
                     output.outputFileName.set(filenameProvider.map { "$it.apk" })
