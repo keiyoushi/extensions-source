@@ -135,7 +135,7 @@ abstract class HentaiLek : KeiSource() {
 
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter).toHttpUrl()).asJsoup()
+        val document = client.get(getChapterUrl(chapter)).asJsoup()
         return document.select(".reader-page img[src], .reader-page img[data-src], .on-canvas img")
             .mapIndexedNotNull { index, item ->
                 val imageUrl = item.attr("abs:src").ifBlank { item.attr("abs:data-src") }
