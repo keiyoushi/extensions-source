@@ -24,6 +24,9 @@
     "filterFetchHint": "「リセット」をタップしてフィルターを読み込む"
   },
   "pt-BR": {
+    "mirrorTitle": "Domínio preferido",
+    "customUrlTitle": "URL base personalizada",
+    "customUrlDialogMessage": "Deixe em branco para usar a URL padrão",
     "filterFetchHint": "Toque em 'Redefinir' para carregar os filtros"
   },
   "ru": {
