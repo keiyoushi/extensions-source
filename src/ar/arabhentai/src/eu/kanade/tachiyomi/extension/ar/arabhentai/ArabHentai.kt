@@ -24,12 +24,10 @@ abstract class ArabHentai : KeiSource() {
     private val latestSort = "13"
 
     // ============================== Popular ===============================
-    override suspend fun getPopularManga(page: Int): MangasPage =
-        parseListing(client.get(listingUrl(popularSort, page).toHttpUrl()).asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseListing(client.get(listingUrl(popularSort, page).toHttpUrl()).asJsoup())
 
     // =============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int): MangasPage =
-        parseListing(client.get(listingUrl(latestSort, page).toHttpUrl()).asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseListing(client.get(listingUrl(latestSort, page).toHttpUrl()).asJsoup())
 
     // =============================== Search ===============================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
