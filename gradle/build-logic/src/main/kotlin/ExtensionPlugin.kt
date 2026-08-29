@@ -312,7 +312,7 @@ class ExtensionPlugin : Plugin<Project> {
     }
 }
 
-private val APPLICATION_ID_SUFFIX_REGEX = Regex("^[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+$")
+private val APPLICATION_ID_SUFFIX_REGEX = Regex("""^\w+(\.\w+)+$""")
 
 private fun computeSourceId(name: String, lang: String, versionId: Int = 1): Long {
     val key = "${name.lowercase()}/$lang/$versionId"
