@@ -16,6 +16,9 @@ import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.int
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import kotlin.time.Duration.Companion.seconds
@@ -53,6 +56,23 @@ abstract class PlumaComics : KeiSource() {
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/title/${manga.memo["slug"]!!.string}"
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSize != 2 || !baseUrl.contains(url.host, ignoreCase = true)) {
+            return null
+        }
+
+        val document = client.get(url).asJsoup()
+        val dto = document.extractNextJs<Series>() ?: return null
+
+        return SManga.create().apply {
+            title = document.selectFirst("h1")!!.text()
+            this.url = dto.seriesId.toString()
+            memo = buildJsonObject {
+                put("slug", dto.seriesSlug)
+            }
+        }
+    }
 
     override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
         val document = client.get(getMangaUrl(manga)).asJsoup()

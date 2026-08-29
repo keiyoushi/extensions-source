@@ -78,3 +78,9 @@ class PageItem(
     val i: Int,
     val u: String,
 )
+
+@Serializable
+class Series(
+    val seriesId: Long,
+    val seriesSlug: String,
+)
