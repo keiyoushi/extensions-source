@@ -390,6 +390,7 @@ abstract class AsuraScans :
     private fun JsonElement.unwrapAstro(): JsonElement = when (this) {
         is JsonArray -> when {
             isEmpty() -> JsonNull
+            size == 1 && this[0] is JsonArray -> JsonArray(listOf(this[0].unwrapAstro()))
             size == 1 -> JsonNull
             size == 2 && this[0] is JsonPrimitive -> this[1].unwrapAstro()
             else -> JsonArray(map { it.unwrapAstro() })
